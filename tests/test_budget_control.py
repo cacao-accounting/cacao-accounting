@@ -47,7 +47,7 @@ def app_ctx():
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         from cacao_accounting.datos.dev import master_data
 
-        if not database.session.execute(database.select(Entity).filter_by(code="cacao")).first():
+        if not database.session.execute(database.select(Entity).filter_by(code="CACAO")).first():
             master_data()
         yield app
 
@@ -56,15 +56,15 @@ def test_budget_control_validate_transaction(app_ctx):
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
 
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO", is_primary=True).first()
     if not book:
-        book = database.session.query(Book).filter_by(entity="cacao").first()
+        book = database.session.query(Book).filter_by(entity="CACAO").first()
 
     # Create approved budget
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "CTRL-2026",
@@ -74,8 +74,8 @@ def test_budget_control_validate_transaction(app_ctx):
         str(admin_user.id),
     )
 
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     service.add_budget_line(
@@ -93,7 +93,7 @@ def test_budget_control_validate_transaction(app_ctx):
 
     # GLEntry actual commit of 300
     gl_entry = GLEntry(
-        company="cacao",
+        company="CACAO",
         ledger_id=book.id,
         account_id=acc.id,
         account_code=acc.code,
@@ -110,7 +110,7 @@ def test_budget_control_validate_transaction(app_ctx):
     )
     database.session.add(gl_entry)
     closing_entry = GLEntry(
-        company="cacao",
+        company="CACAO",
         ledger_id=book.id,
         account_id=acc.id,
         account_code=acc.code,
@@ -131,7 +131,7 @@ def test_budget_control_validate_transaction(app_ctx):
     # Validation scenario
     # Requested 500. Total budget: 1000. Committed: 300. Available: 700. Requested: 500. Exceeded: False
     res = service.validate_transaction(
-        company="cacao",
+        company="CACAO",
         date_val=per.start,
         account_id=acc.id,
         cost_center_id=cc.id,
@@ -149,7 +149,7 @@ def test_budget_control_validate_transaction(app_ctx):
 
     # Requested 800. Exceeded: True, excess: 100
     res_exceeded = service.validate_transaction(
-        company="cacao",
+        company="CACAO",
         date_val=per.start,
         account_id=acc.id,
         cost_center_id=cc.id,
@@ -177,7 +177,7 @@ def test_budget_control_config_views(app_ctx):
 
         # POST config to enable block
         response_post = client.post(
-            "/settings/budget-control", data={"company": "cacao", "enabled": "on", "action_on_exceeded": "block"}
+            "/settings/budget-control", data={"company": "CACAO", "enabled": "on", "action_on_exceeded": "block"}
         )
         assert response_post.status_code == 302
 
@@ -190,15 +190,15 @@ def test_budget_control_config_views(app_ctx):
 def test_budget_control_scenarios_po_pr(app_ctx):
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO", is_primary=True).first()
     if not book:
-        book = database.session.query(Book).filter_by(entity="cacao").first()
+        book = database.session.query(Book).filter_by(entity="CACAO").first()
 
     # Create approved budget with 1000 NIO
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "SCENARIOS-2026",
@@ -208,8 +208,8 @@ def test_budget_control_scenarios_po_pr(app_ctx):
         str(admin_user.id),
     )
 
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     service.add_budget_line(
@@ -230,19 +230,19 @@ def test_budget_control_scenarios_po_pr(app_ctx):
 
     item = database.session.query(Item).filter_by(is_active=True).first()
     # Map item to budgeted account and cost center
-    item_acc = ItemAccount(item_code=item.code, company="cacao", expense_account_id=acc.id, cost_center_code=cc.code)
+    item_acc = ItemAccount(item_code=item.code, company="CACAO", expense_account_id=acc.id, cost_center_code=cc.code)
     database.session.add(item_acc)
 
     # Supplier
     supplier = database.session.query(Party).filter_by(is_supplier=True).first()
     # CompanyParty
-    cp = database.session.query(CompanyParty).filter_by(company="cacao", party_id=supplier.id).first()
+    cp = database.session.query(CompanyParty).filter_by(company="CACAO", party_id=supplier.id).first()
     if cp:
         cp.allow_purchase_invoice_without_order = True
         cp.allow_purchase_invoice_without_receipt = True
     else:
         cp = CompanyParty(
-            company="cacao",
+            company="CACAO",
             party_id=supplier.id,
             allow_purchase_invoice_without_order=True,
             allow_purchase_invoice_without_receipt=True,
@@ -254,11 +254,11 @@ def test_budget_control_scenarios_po_pr(app_ctx):
     from cacao_accounting.compras import check_budget_control
 
     # Test Case 1: Budget Control is OFF
-    set_setup_value("budget_control_enabled_cacao", "0")
+    set_setup_value("budget_control_enabled_CACAO", "0")
     database.session.commit()
 
     po = PurchaseOrder(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         supplier_name=supplier.name,
         posting_date=per.start,
@@ -286,8 +286,8 @@ def test_budget_control_scenarios_po_pr(app_ctx):
         )
 
     # Test Case 2: Budget Control is ON, Mode = do_nothing
-    set_setup_value("budget_control_enabled_cacao", "1")
-    set_setup_value("budget_control_action_cacao", "do_nothing")
+    set_setup_value("budget_control_enabled_CACAO", "1")
+    set_setup_value("budget_control_action_CACAO", "do_nothing")
     database.session.commit()
 
     with app_ctx.test_request_context():
@@ -309,7 +309,7 @@ def test_budget_control_scenarios_po_pr(app_ctx):
     assert "do_nothing" in audit.comment
 
     # Test Case 3: Budget Control is ON, Mode = notify
-    set_setup_value("budget_control_action_cacao", "notify")
+    set_setup_value("budget_control_action_CACAO", "notify")
     database.session.commit()
 
     # Call direct check_budget_control - should not raise exception
@@ -324,7 +324,7 @@ def test_budget_control_scenarios_po_pr(app_ctx):
         )
 
     # Test Case 4: Budget Control is ON, Mode = block
-    set_setup_value("budget_control_action_cacao", "block")
+    set_setup_value("budget_control_action_CACAO", "block")
     database.session.commit()
 
     # Call direct check_budget_control - should raise ValueError
@@ -353,15 +353,15 @@ def test_budget_control_multi_ledger(app_ctx):
     """Test that budget control avoids mixing/summing across multiple books/ledgers."""
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
 
     # Get/Create Primary Book (NIO)
-    primary_book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    primary_book = database.session.query(Book).filter_by(entity="CACAO", is_primary=True).first()
     if not primary_book:
         primary_book = Book(
             code="NIO-P",
             name="Primary NIO Book",
-            entity="cacao",
+            entity="CACAO",
             currency="NIO",
             is_primary=True,
             default=True,
@@ -373,7 +373,7 @@ def test_budget_control_multi_ledger(app_ctx):
     secondary_book = Book(
         code="USD-S",
         name="Secondary USD Book",
-        entity="cacao",
+        entity="CACAO",
         currency="USD",
         is_primary=False,
         default=False,
@@ -381,14 +381,14 @@ def test_budget_control_multi_ledger(app_ctx):
     database.session.add(secondary_book)
     database.session.flush()
 
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     # 1. Create NIO budget (amount = 1000)
     nio_budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": primary_book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "NIO-BGT-2026",
@@ -412,7 +412,7 @@ def test_budget_control_multi_ledger(app_ctx):
     # 2. Create USD budget (amount = 50)
     usd_budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": secondary_book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "USD-BGT-2026",
@@ -435,7 +435,7 @@ def test_budget_control_multi_ledger(app_ctx):
 
     # 3. Add a Primary Book GLEntry (amount = 300)
     nio_entry = GLEntry(
-        company="cacao",
+        company="CACAO",
         ledger_id=primary_book.id,
         account_id=acc.id,
         account_code=acc.code,
@@ -454,7 +454,7 @@ def test_budget_control_multi_ledger(app_ctx):
 
     # 4. Add a Secondary Book GLEntry (amount = 15)
     usd_entry = GLEntry(
-        company="cacao",
+        company="CACAO",
         ledger_id=secondary_book.id,
         account_id=acc.id,
         account_code=acc.code,
@@ -474,7 +474,7 @@ def test_budget_control_multi_ledger(app_ctx):
 
     # Test Validation on NIO ledger explicitly
     nio_val = service.validate_transaction(
-        company="cacao",
+        company="CACAO",
         date_val=per.start,
         account_id=acc.id,
         cost_center_id=cc.id,
@@ -489,7 +489,7 @@ def test_budget_control_multi_ledger(app_ctx):
 
     # Test Validation on USD ledger explicitly
     usd_val = service.validate_transaction(
-        company="cacao",
+        company="CACAO",
         date_val=per.start,
         account_id=acc.id,
         cost_center_id=cc.id,
@@ -504,7 +504,7 @@ def test_budget_control_multi_ledger(app_ctx):
 
     # Test Validation without specifying ledger_id (should default to primary book)
     default_val = service.validate_transaction(
-        company="cacao",
+        company="CACAO",
         date_val=per.start,
         account_id=acc.id,
         cost_center_id=cc.id,
@@ -521,15 +521,15 @@ def test_budget_control_inactive_ledger_resolution(app_ctx):
     """Test that inactive books are ignored when resolving the implicit validation ledger."""
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
 
     # Get/Create Primary Book (NIO)
-    primary_book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    primary_book = database.session.query(Book).filter_by(entity="CACAO", is_primary=True).first()
     if not primary_book:
         primary_book = Book(
             code="NIO-P2",
             name="Primary NIO Book 2",
-            entity="cacao",
+            entity="CACAO",
             currency="NIO",
             is_primary=True,
             default=True,
@@ -539,17 +539,17 @@ def test_budget_control_inactive_ledger_resolution(app_ctx):
 
     # Deactivate the primary book and any other pre-existing books of "cacao" to ensure our new book is resolved
     primary_book.status = "inactivo"
-    for other_b in database.session.query(Book).filter_by(entity="cacao").all():
+    for other_b in database.session.query(Book).filter_by(entity="CACAO").all():
         if other_b.id != primary_book.id:
             other_b.status = "inactivo"
     database.session.commit()
 
-    secondary_book = database.session.query(Book).filter_by(entity="cacao", code="USD-S2").first()
+    secondary_book = database.session.query(Book).filter_by(entity="CACAO", code="USD-S2").first()
     if not secondary_book:
         secondary_book = Book(
             code="USD-S2",
             name="Secondary USD Book 2",
-            entity="cacao",
+            entity="CACAO",
             currency="USD",
             is_primary=False,
             default=False,
@@ -560,14 +560,14 @@ def test_budget_control_inactive_ledger_resolution(app_ctx):
         secondary_book.status = "activo"
     database.session.commit()
 
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     # Create budget on the active secondary book
     usd_budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": secondary_book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "USD-BGT-INACTIVE-TEST",
@@ -592,7 +592,7 @@ def test_budget_control_inactive_ledger_resolution(app_ctx):
     # Call validate_transaction without ledger_id.
     # Since the primary book is deactivated, it must fall back to the active secondary book.
     val_res = service.validate_transaction(
-        company="cacao",
+        company="CACAO",
         date_val=per.start,
         account_id=acc.id,
         cost_center_id=cc.id,
@@ -605,11 +605,11 @@ def test_budget_control_inactive_ledger_resolution(app_ctx):
     print("DEBUG TEST INFO:")
     from sqlalchemy import or_
 
-    all_books = database.session.query(Book).filter_by(entity="cacao").all()
+    all_books = database.session.query(Book).filter_by(entity="CACAO").all()
     print("all_books:", [(b.code, b.status, b.is_primary) for b in all_books])
     rli = (
         database.session.query(Book)
-        .filter(Book.entity == "cacao", or_(Book.status == "activo", Book.status.is_(None)))
+        .filter(Book.entity == "CACAO", or_(Book.status == "activo", Book.status.is_(None)))
         .order_by(Book.is_primary.desc(), Book.code)
         .first()
     )
@@ -627,14 +627,14 @@ def test_budget_control_default_policy_is_notify(app_ctx):
 
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO", is_primary=True).first()
     if not book:
-        book = database.session.query(Book).filter_by(entity="cacao").first()
+        book = database.session.query(Book).filter_by(entity="CACAO").first()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "DEFAULT-POLICY-2026",
@@ -643,8 +643,8 @@ def test_budget_control_default_policy_is_notify(app_ctx):
         },
         str(admin_user.id),
     )
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     service.add_budget_line(
@@ -660,15 +660,15 @@ def test_budget_control_default_policy_is_notify(app_ctx):
     service.approve_budget(budget.id, str(admin_user.id))
 
     item = database.session.query(Item).filter_by(is_active=True).first()
-    item_acc = ItemAccount(item_code=item.code, company="cacao", expense_account_id=acc.id, cost_center_code=cc.code)
+    item_acc = ItemAccount(item_code=item.code, company="CACAO", expense_account_id=acc.id, cost_center_code=cc.code)
     database.session.add(item_acc)
     database.session.commit()
 
-    set_setup_value("budget_control_enabled_cacao", "1")
+    set_setup_value("budget_control_enabled_CACAO", "1")
     database.session.commit()
 
     pr = PurchaseRequest(
-        company="cacao",
+        company="CACAO",
         posting_date=per.start,
         docstatus=0,
         grand_total=Decimal("800"),
@@ -710,11 +710,11 @@ def test_budget_control_admin_warning_do_nothing(app_ctx):
 
         response_post = client.post(
             "/settings/budget-control",
-            data={"company": "cacao", "enabled": "on", "action_on_exceeded": "do_nothing"},
+            data={"company": "CACAO", "enabled": "on", "action_on_exceeded": "do_nothing"},
         )
         assert response_post.status_code == 302
 
-        response = client.get("/settings/budget-control?company=cacao")
+        response = client.get("/settings/budget-control?company=CACAO")
         assert response.status_code == 200
         html = response.data.decode()
         assert "do_nothing" in html
@@ -725,14 +725,14 @@ def test_budget_control_pr_approval_blocks_on_policy(app_ctx):
     """Verifica que la aprobación de solicitud de compra bloquea cuando la política es 'block'."""
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO", is_primary=True).first()
     if not book:
-        book = database.session.query(Book).filter_by(entity="cacao").first()
+        book = database.session.query(Book).filter_by(entity="CACAO").first()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "PR-BLOCK-2026",
@@ -741,8 +741,8 @@ def test_budget_control_pr_approval_blocks_on_policy(app_ctx):
         },
         str(admin_user.id),
     )
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     service.add_budget_line(
@@ -758,18 +758,18 @@ def test_budget_control_pr_approval_blocks_on_policy(app_ctx):
     service.approve_budget(budget.id, str(admin_user.id))
 
     item = database.session.query(Item).filter_by(is_active=True).first()
-    item_acc = ItemAccount(item_code=item.code, company="cacao", expense_account_id=acc.id, cost_center_code=cc.code)
+    item_acc = ItemAccount(item_code=item.code, company="CACAO", expense_account_id=acc.id, cost_center_code=cc.code)
     database.session.add(item_acc)
     database.session.commit()
 
-    set_setup_value("budget_control_enabled_cacao", "1")
-    set_setup_value("budget_control_action_cacao", "block")
+    set_setup_value("budget_control_enabled_CACAO", "1")
+    set_setup_value("budget_control_action_CACAO", "block")
     database.session.commit()
 
     from cacao_accounting.compras import check_budget_control
 
     pr = PurchaseRequest(
-        company="cacao",
+        company="CACAO",
         posting_date=per.start,
         docstatus=0,
         grand_total=Decimal("500"),

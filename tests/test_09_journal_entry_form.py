@@ -1038,7 +1038,7 @@ def test_entity_creation_uses_setup_defaults_and_creates_required_book_cost_cent
     response = client.post(
         "/accounting/entity/new",
         data={
-            "id": "mapco",
+            "id": "MAPCO",
             "razon_social": "Mapping Company",
             "nombre_comercial": "Mapping Company",
             "id_fiscal": "J-MAP",
@@ -1053,18 +1053,18 @@ def test_entity_creation_uses_setup_defaults_and_creates_required_book_cost_cent
 
     assert response.status_code == 302
 
-    entity = database.session.execute(database.select(Entity).filter_by(code="mapco")).scalar_one()
-    book = database.session.execute(database.select(Book).filter_by(entity="mapco", default=True)).scalar_one()
-    cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="mapco", code="MAIN")).scalar_one()
+    entity = database.session.execute(database.select(Entity).filter_by(code="MAPCO")).scalar_one()
+    book = database.session.execute(database.select(Book).filter_by(entity="MAPCO", default=True)).scalar_one()
+    cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="MAPCO", code="MAIN")).scalar_one()
     period = (
-        database.session.execute(database.select(AccountingPeriod).filter_by(entity="mapco").order_by(AccountingPeriod.start))
+        database.session.execute(database.select(AccountingPeriod).filter_by(entity="MAPCO").order_by(AccountingPeriod.start))
         .scalars()
         .all()
     )
     series = database.session.execute(
-        database.select(NamingSeries).filter_by(company="mapco", entity_type="journal_entry")
+        database.select(NamingSeries).filter_by(company="MAPCO", entity_type="journal_entry")
     ).scalar_one_or_none()
-    defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="mapco")).scalar_one_or_none()
+    defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="MAPCO")).scalar_one_or_none()
 
     assert entity.country == "NI"
     assert entity.currency == "NIO"

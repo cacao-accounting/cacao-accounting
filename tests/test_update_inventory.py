@@ -61,7 +61,7 @@ def login(client, username, password):
     return client.post("/login", data={"usuario": username, "acceso": password}, follow_redirects=True)
 
 
-def _setup_inventory_context(company="cacao"):
+def _setup_inventory_context(company="CACAO"):
     """Configura el contexto de inventario necesario para DN posting."""
     from cacao_accounting.database import Entity
 
@@ -102,7 +102,7 @@ def _ensure_default_warehouse(item, warehouse):
     database.session.flush()
 
 
-def _seed_valuation_layer(item, warehouse, company="cacao", qty=Decimal("100"), rate=Decimal("10")):
+def _seed_valuation_layer(item, warehouse, company="CACAO", qty=Decimal("100"), rate=Decimal("10")):
     """Crea una capa de valuación para que el posting de DN funcione."""
     layer = StockValuationLayer(
         item_code=item.code,
@@ -145,7 +145,7 @@ def test_submit_with_update_inventory_creates_delivery_note(app_ctx):
         id="SI-INV-01",
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
         transaction_currency="NIO",
@@ -191,7 +191,7 @@ def test_auto_delivery_note_copies_invoice_currency_context(app_ctx):
         id="SI-INV-FX-DN",
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
         transaction_currency="USD",
@@ -236,7 +236,7 @@ def test_auto_delivery_note_rejects_default_warehouse_from_another_company(app_c
         id="SI-INV-FOREIGN-WH",
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
         transaction_currency="NIO",
@@ -268,7 +268,7 @@ def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
     )
 
     warehouse, item, cogs_account, inventory_account = _setup_inventory_context()
-    original = DeliveryNote(company="cacao", posting_date=date(2026, 5, 1), docstatus=1)
+    original = DeliveryNote(company="CACAO", posting_date=date(2026, 5, 1), docstatus=1)
     database.session.add(original)
     database.session.flush()
     database.session.add(
@@ -276,7 +276,7 @@ def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
             posting_date=original.posting_date,
             item_code=item.code,
             warehouse=warehouse.code,
-            company="cacao",
+            company="CACAO",
             qty_change=Decimal("-1"),
             qty_after_transaction=Decimal("0"),
             valuation_rate=Decimal("60"),
@@ -287,7 +287,7 @@ def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
         )
     )
     returned = DeliveryNote(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 2),
         transaction_currency="NIO",
         base_currency="NIO",
@@ -314,7 +314,7 @@ def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
     assert movement.valuation_rate == Decimal("60")
     assert movement.stock_value_difference == Decimal("60.0000")
     assert line._inventory_cost_amount == Decimal("60.0000")
-    gl_entries = _create_delivery_note_gl_entries(returned, "cacao", None)
+    gl_entries = _create_delivery_note_gl_entries(returned, "CACAO", None)
     assert any(entry.account_id == inventory_account.id and entry.debit == Decimal("60.0000") for entry in gl_entries)
     assert any(entry.account_id == cogs_account.id and entry.credit == Decimal("60.0000") for entry in gl_entries)
 
@@ -339,7 +339,7 @@ def test_delivery_return_fifo_multilayer_cost(app_ctx):
     layer1 = StockValuationLayer(
         item_code=item.code,
         warehouse=warehouse.code,
-        company="cacao",
+        company="CACAO",
         qty=Decimal("5"),
         rate=Decimal("8"),
         remaining_qty=Decimal("0"),
@@ -352,7 +352,7 @@ def test_delivery_return_fifo_multilayer_cost(app_ctx):
     layer2 = StockValuationLayer(
         item_code=item.code,
         warehouse=warehouse.code,
-        company="cacao",
+        company="CACAO",
         qty=Decimal("5"),
         rate=Decimal("12"),
         remaining_qty=Decimal("0"),
@@ -365,7 +365,7 @@ def test_delivery_return_fifo_multilayer_cost(app_ctx):
     database.session.add_all([layer1, layer2])
     database.session.flush()
 
-    original = DeliveryNote(company="cacao", posting_date=date(2026, 5, 1), docstatus=1)
+    original = DeliveryNote(company="CACAO", posting_date=date(2026, 5, 1), docstatus=1)
     database.session.add(original)
     database.session.flush()
 
@@ -374,7 +374,7 @@ def test_delivery_return_fifo_multilayer_cost(app_ctx):
             posting_date=original.posting_date,
             item_code=item.code,
             warehouse=warehouse.code,
-            company="cacao",
+            company="CACAO",
             qty_change=Decimal("-10"),
             qty_after_transaction=Decimal("0"),
             valuation_rate=Decimal("10"),
@@ -388,7 +388,7 @@ def test_delivery_return_fifo_multilayer_cost(app_ctx):
         StockValuationLayer(
             item_code=item.code,
             warehouse=warehouse.code,
-            company="cacao",
+            company="CACAO",
             qty=Decimal("-10"),
             rate=Decimal("10"),
             stock_value_difference=Decimal("-100"),
@@ -409,7 +409,7 @@ def test_delivery_return_fifo_multilayer_cost(app_ctx):
     database.session.flush()
 
     returned = DeliveryNote(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 2),
         transaction_currency="NIO",
         base_currency="NIO",
@@ -437,7 +437,7 @@ def test_delivery_return_fifo_multilayer_cost(app_ctx):
     assert movement.stock_value_difference == Decimal("40.0000"), f"Expected value 40, got {movement.stock_value_difference}"
     assert line._inventory_cost_amount == Decimal("40.0000"), f"Expected cost 40, got {line._inventory_cost_amount}"
 
-    gl_entries = _create_delivery_note_gl_entries(returned, "cacao", None)
+    gl_entries = _create_delivery_note_gl_entries(returned, "CACAO", None)
     assert any(
         entry.account_id == inventory_account.id and entry.debit == Decimal("40.0000") for entry in gl_entries
     ), f"Inventory debit 40 not found in GL: {[(e.account_id, e.debit, e.credit) for e in gl_entries]}"
@@ -475,7 +475,7 @@ def test_delivery_return_fifo_multilayer_cost_end_to_end_posting(app_ctx):
 
     # Step 1: Add two incoming stock entries
     entry1 = StockEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         purpose="material_receipt",
         to_warehouse=warehouse.code,
@@ -501,7 +501,7 @@ def test_delivery_return_fifo_multilayer_cost_end_to_end_posting(app_ctx):
     submit_document(entry1)
 
     entry2 = StockEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         purpose="material_receipt",
         to_warehouse=warehouse.code,
@@ -528,7 +528,7 @@ def test_delivery_return_fifo_multilayer_cost_end_to_end_posting(app_ctx):
 
     # Step 2: Submit an outgoing DeliveryNote for 10 units
     outgoing_dn = DeliveryNote(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 2),
         transaction_currency="NIO",
         base_currency="NIO",
@@ -553,7 +553,7 @@ def test_delivery_return_fifo_multilayer_cost_end_to_end_posting(app_ctx):
     outgoing_svl = (
         database.session.execute(
             database.select(StockValuationLayer).filter_by(
-                company="cacao",
+                company="CACAO",
                 voucher_type="delivery_note",
                 voucher_id=outgoing_dn.id,
                 item_code=item.code,
@@ -575,7 +575,7 @@ def test_delivery_return_fifo_multilayer_cost_end_to_end_posting(app_ctx):
 
     # Step 4: Submit a partial DeliveryNote return for 5 units
     return_dn = DeliveryNote(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 3),
         transaction_currency="NIO",
         base_currency="NIO",
@@ -602,7 +602,7 @@ def test_delivery_return_fifo_multilayer_cost_end_to_end_posting(app_ctx):
     return_svl = (
         database.session.execute(
             database.select(StockValuationLayer).filter_by(
-                company="cacao",
+                company="CACAO",
                 voucher_type="delivery_note",
                 voucher_id=return_dn.id,
                 item_code=item.code,
@@ -647,7 +647,7 @@ def test_delivery_return_preserves_adjusted_rate_after_valuation_adjustment(app_
 
     # 1. Incoming receipt: 10 units @ 10 = 100
     entry1 = StockEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         purpose="material_receipt",
         to_warehouse=warehouse.code,
@@ -674,7 +674,7 @@ def test_delivery_return_preserves_adjusted_rate_after_valuation_adjustment(app_
 
     # 2. Valuation adjustment (+20 value, 0 qty) increasing effective rate to 12
     adj = StockEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         purpose="adjustment_positive",
         to_warehouse=warehouse.code,
@@ -701,7 +701,7 @@ def test_delivery_return_preserves_adjusted_rate_after_valuation_adjustment(app_
 
     # 3. Outgoing Delivery Note of 10 units at adjusted rate 12 (total 120)
     outgoing_dn = DeliveryNote(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 2),
         transaction_currency="NIO",
         base_currency="NIO",
@@ -725,7 +725,7 @@ def test_delivery_return_preserves_adjusted_rate_after_valuation_adjustment(app_
     outgoing_svl = (
         database.session.execute(
             database.select(StockValuationLayer).filter_by(
-                company="cacao",
+                company="CACAO",
                 voucher_type="delivery_note",
                 voucher_id=outgoing_dn.id,
                 item_code=item.code,
@@ -742,7 +742,7 @@ def test_delivery_return_preserves_adjusted_rate_after_valuation_adjustment(app_
 
     # 4. Return 5 units - should be valued at adjusted rate 12 = 60
     return_dn = DeliveryNote(
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 3),
         transaction_currency="NIO",
         base_currency="NIO",
@@ -768,7 +768,7 @@ def test_delivery_return_preserves_adjusted_rate_after_valuation_adjustment(app_
     return_svl = (
         database.session.execute(
             database.select(StockValuationLayer).filter_by(
-                company="cacao",
+                company="CACAO",
                 voucher_type="delivery_note",
                 voucher_id=return_dn.id,
                 item_code=item.code,
@@ -804,7 +804,7 @@ def test_submit_without_update_inventory_does_not_create_dn(app_ctx):
         id="SI-INV-02",
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
         transaction_currency="NIO",
@@ -848,7 +848,7 @@ def test_sales_debit_note_never_creates_delivery_note_from_update_inventory_flag
         id="SI-DEBIT-NO-STOCK",
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         document_type="sales_debit_note",
         transaction_currency="NIO",
@@ -901,7 +901,7 @@ def test_cancel_with_update_inventory_cancels_linked_dn(app_ctx):
         id="SI-INV-03",
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
         transaction_currency="NIO",
@@ -956,7 +956,7 @@ def test_submit_fails_when_item_has_no_default_warehouse(app_ctx):
         id="SI-INV-04",
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
         update_inventory=True,

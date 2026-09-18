@@ -114,6 +114,7 @@ from cacao_accounting.decorators import (  # noqa: F401
     exige_acceso_compania,
     exige_acceso_compania_cualquiera,
     modulo_activo,
+    resolve_required_company,
     verifica_acceso as verifica_acceso,
     verifica_permiso,
 )
@@ -1623,7 +1624,7 @@ def compras_proveedor_lista():
 @login_required
 def compras_purchase_reconciliation():
     """Report pending purchase reconciliation lines."""
-    company = request.args.get("company", "cacao")
+    company = resolve_required_company(request.args.get("company"), "purchases")
     exige_acceso_compania("purchases", company, "consultar")
     rows = get_purchase_reconciliation_pending(company=company)
     order_status_report = get_purchase_order_status_report(company=company)
@@ -1646,7 +1647,7 @@ def compras_purchase_reconciliation():
 @login_required
 def compras_reconciliation_panel():
     """Panel de conciliacion de compras agrupado por orden de compra."""
-    company = request.args.get("company", "cacao")
+    company = resolve_required_company(request.args.get("company"), "purchases")
     exige_acceso_compania("purchases", company, "consultar")
     groups = get_purchase_reconciliation_panel_groups(company=company)
     titulo = _("Panel de Conciliación de Compras") + " - " + APPNAME

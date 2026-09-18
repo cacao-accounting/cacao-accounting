@@ -22,6 +22,7 @@ from werkzeug.routing import BuildError
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import Accounts, AccountingPeriod, Book, Entity, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.decorators import resolve_required_company
 from cacao_accounting.reportes.services import (
     FinancialReportFilters,
     OperationalReportFilters,
@@ -446,8 +447,8 @@ def _preferred_group_by_from_view(report_code: str, view_key: str) -> str:
     return ""
 
 
-def _resolve_company(company_code: str) -> str:
-    requested_company = company_code or "cacao"
+def _resolve_company(company_code: str | None, modulo: str = "accounting") -> str:
+    requested_company = resolve_required_company(company_code, modulo)
     company_exists = database.session.execute(
         database.select(Entity.code).where(Entity.code == requested_company)
     ).scalar_one_or_none()
@@ -456,7 +457,7 @@ def _resolve_company(company_code: str) -> str:
     default_company = database.session.execute(
         database.select(Entity.code).order_by(Entity.default.desc(), Entity.code.asc())
     ).scalar_one_or_none()
-    return default_company or "cacao"
+    return default_company or requested_company
 
 
 def _default_ledger_for_company(company_code: str) -> str | None:
@@ -901,7 +902,7 @@ def _financial_period_filters(company_code: str) -> tuple[str | None, str | None
 
 
 def _financial_filters() -> FinancialReportFilters:
-    company_code = _resolve_company(request.args.get("company", "cacao"))
+    company_code = _resolve_company(request.args.get("company"))
     show_cancellations = _bool_arg("show_cancellations")
     requested_status = request.args.get("status") or "submitted"
     status = None if show_cancellations else requested_status
@@ -1402,7 +1403,7 @@ def _render_operational_framework(
         return str(url_for(endpoint, **query))  # type: ignore[arg-type]
 
     total_pages = max((total_rows + page_size - 1) // page_size, 1)
-    company = str(filter_state.get("company") or request.args.get("company", "cacao"))
+    company = str(filter_state.get("company") or resolve_required_company(request.args.get("company"), "accounting"))
     period_picker = _period_picker_payload(
         company,
         str(filter_state.get("accounting_period_from") or ""),
@@ -1438,9 +1439,9 @@ def _render_operational_framework(
     )
 
 
-def _operational_filters() -> OperationalReportFilters:
+def _operational_filters(modulo: str = "accounting") -> OperationalReportFilters:
     period_from, period_to = _period_params()
-    company = request.args.get("company", "cacao")
+    company = resolve_required_company(request.args.get("company"), modulo)
     date_from, date_to = _resolve_date_bounds(company)
     return OperationalReportFilters(
         company=company,
@@ -1454,8 +1455,8 @@ def _operational_filters() -> OperationalReportFilters:
     )
 
 
-def _render_operational_report(report_name: str, report):
-    company = request.args.get("company", "cacao")
+def _render_operational_report(report_name: str, report, modulo: str = "accounting"):
+    company = resolve_required_company(request.args.get("company"), modulo)
     period_picker = _period_picker_payload(company)
     return render_template(
         REPORT_TABLE_HTML,

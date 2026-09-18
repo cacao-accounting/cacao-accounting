@@ -56,7 +56,7 @@ def test_journal_entry_full_lifecycle_exhaustive(client, app):
 
         # 1. Create Draft
         payload = {
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": date.today().isoformat(),
             "memo": "Exhaustive Test Journal",
             "lines": [
@@ -142,7 +142,7 @@ def test_rbac_manager_vs_auxiliar_vs_user(client, app):
         # 1. Auxiliar (contaj) creates draft
         login(client, "contaj", "contaj")
         payload = {
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": date.today().isoformat(),
             "memo": "Auxiliar Draft",
             "lines": [
@@ -195,7 +195,7 @@ def test_journal_validation_unbalanced(client, app):
     with app.app_context():
         login(client, "admin", "admin")
         payload = {
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": date.today().isoformat(),
             "memo": "Unbalanced Journal",
             "lines": [
@@ -214,12 +214,12 @@ def test_journal_validation_missing_cost_center(client, app):
         # We need to ensure account 52.01.001 exists and is set as expense in DB
         from cacao_accounting.database import Accounts, database
 
-        acc = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="52.01.001")).scalar_one()
+        acc = database.session.execute(database.select(Accounts).filter_by(entity="CACAO", code="52.01.001")).scalar_one()
         acc.account_type = "expense"
         database.session.commit()
 
         payload = {
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": date.today().isoformat(),
             "memo": "Missing Cost Center",
             "lines": [

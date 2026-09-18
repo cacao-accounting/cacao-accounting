@@ -38,7 +38,7 @@ def test_cas18_draft_payment_rejected_by_target_amount(app_ctx):
     """CAS-18: _target_amount must reject draft payments."""
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         party_type="supplier",
         party_id=supplier.id,
         payment_type="pay",
@@ -57,7 +57,7 @@ def test_cas18_cancelled_payment_rejected_by_target_amount(app_ctx):
     """CAS-18: _target_amount must reject cancelled payments."""
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         party_type="supplier",
         party_id=supplier.id,
         payment_type="pay",
@@ -76,7 +76,7 @@ def test_cas18_submitted_payment_accepted(app_ctx):
     """CAS-18: _target_amount must accept submitted payments."""
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         party_type="supplier",
         party_id=supplier.id,
         payment_type="pay",
@@ -95,7 +95,7 @@ def test_cas18_draft_payment_rejected_by_target_company(app_ctx):
     """CAS-18: _target_company must reject draft payments."""
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         party_type="supplier",
         party_id=supplier.id,
         payment_type="pay",

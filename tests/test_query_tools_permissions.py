@@ -44,7 +44,7 @@ def app_instance():
             database.session.add(
                 Entity(
                     id="permissions_company",
-                    code="cacao",
+                    code="CACAO",
                     company_name="Cacao",
                     tax_id="J0001",
                     currency="NIO",
@@ -97,7 +97,7 @@ def test_validate_company_access_denied_by_context(app_instance):
         # company_ids is not empty, and requested company_id is not in list
         ctx = QueryContext(user_id="user1", company_ids=["EMP001"])
         with pytest.raises(QueryToolError) as exc:
-            validate_company_access(ctx, "cacao")
+            validate_company_access(ctx, "CACAO")
         assert exc.value.code == ErrorCode.COMPANY_ACCESS_DENIED
 
 
@@ -112,16 +112,16 @@ def test_validate_company_access_nonexistent(app_instance):
 
 def test_validate_company_access_success(app_instance):
     with app_instance.app_context():
-        ctx = QueryContext(user_id="user1", company_ids=["cacao"])
-        # "cacao" company exists from init_test_db/setup
-        validate_company_access(ctx, "cacao")
+        ctx = QueryContext(user_id="user1", company_ids=["CACAO"])
+        # "CACAO" company exists from init_test_db/setup
+        validate_company_access(ctx, "CACAO")
 
 
 def test_empty_company_scope_is_fail_closed(app_instance):
     with app_instance.app_context():
         ctx = QueryContext(user_id="user1", company_ids=[])
         with pytest.raises(QueryToolError) as exc:
-            validate_company_access(ctx, "cacao")
+            validate_company_access(ctx, "CACAO")
         assert exc.value.code == ErrorCode.COMPANY_ACCESS_DENIED
 
 
@@ -198,11 +198,11 @@ def test_validate_permission_combined_success(app_instance):
         ctx = QueryContext(
             user_id=user_uuid,  # use the actual user UUID so that Permisos can load it
             permissions={"accounting.reports.read"},
-            company_ids=["cacao"],
+            company_ids=["CACAO"],
         )
         validate_permission(
             ctx,
             required_permission="accounting.reports.read",
             required_module="accounting",
-            company_id="cacao",
+            company_id="CACAO",
         )

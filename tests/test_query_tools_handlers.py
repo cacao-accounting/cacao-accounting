@@ -55,7 +55,7 @@ def app_instance():
     )
     with _app.app_context():
         init_test_db(_app)
-        # Ensure 'cacao' user is admin classification
+        # Ensure 'CACAO' user is admin classification
         cacao_user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one_or_none()
         if cacao_user:
             cacao_user.classification = "admin"
@@ -141,7 +141,7 @@ def test_list_companies_handler(app_instance):
         res = h_companies.list_companies.handler(context=ctx, page=1, page_size=10)
         assert "items" in res
         assert res["total_items"] > 0
-        assert any(c["code"] == "cacao" for c in res["items"])
+        assert any(c["code"] == "CACAO" for c in res["items"])
 
         # Test filter by company_ids
         ctx_restricted = QueryContext(user_id=user.id, company_ids=["nonexistent"])
@@ -152,13 +152,13 @@ def test_list_companies_handler(app_instance):
 def test_list_accounting_periods_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["cacao"])
+        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["CACAO"])
 
         # Seed an accounting period
         period = AccountingPeriod(
             id="test_period_123",
             name="2026-05",
-            entity="cacao",
+            entity="CACAO",
             is_closed=False,
             start=date(2026, 5, 1),
             end=date(2026, 5, 31),
@@ -169,23 +169,23 @@ def test_list_accounting_periods_handler(app_instance):
         database.session.commit()
 
         # List all
-        res = h_accounting.list_accounting_periods.handler(context=ctx, company_id="cacao")
+        res = h_accounting.list_accounting_periods.handler(context=ctx, company_id="CACAO")
         assert res["total_items"] > 0
         assert any(p["id"] == "test_period_123" for p in res["items"])
 
         # List filtered by status=open
-        res_open = h_accounting.list_accounting_periods.handler(context=ctx, company_id="cacao", status="open")
+        res_open = h_accounting.list_accounting_periods.handler(context=ctx, company_id="CACAO", status="open")
         assert res_open["total_items"] > 0
 
         # List filtered by status=closed
-        res_closed = h_accounting.list_accounting_periods.handler(context=ctx, company_id="cacao", status="closed")
+        res_closed = h_accounting.list_accounting_periods.handler(context=ctx, company_id="CACAO", status="closed")
         assert not any(p["id"] == "test_period_123" for p in res_closed["items"])
 
 
 def test_search_accounts_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["cacao"])
+        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["CACAO"])
 
         # Seed an account
         acc = Accounts(
@@ -195,36 +195,36 @@ def test_search_accounts_handler(app_instance):
             classification="Activo",
             type_="Asset",
             account_type="cash",
-            entity="cacao",
+            entity="CACAO",
             active=True,
         )
         database.session.add(acc)
         database.session.commit()
 
         # Search by code query
-        res = h_accounting.search_accounts.handler(context=ctx, company_id="cacao", query="110101-T")
+        res = h_accounting.search_accounts.handler(context=ctx, company_id="CACAO", query="110101-T")
         assert res["total_items"] > 0
         assert res["items"][0]["code"] == "110101-T"
 
         # Search by name query
-        res_name = h_accounting.search_accounts.handler(context=ctx, company_id="cacao", query="Chica")
+        res_name = h_accounting.search_accounts.handler(context=ctx, company_id="CACAO", query="Chica")
         assert res_name["total_items"] > 0
 
         # Search by classification
-        res_class = h_accounting.search_accounts.handler(context=ctx, company_id="cacao", classification="Activo")
+        res_class = h_accounting.search_accounts.handler(context=ctx, company_id="CACAO", classification="Activo")
         assert res_class["total_items"] > 0
 
 
 def test_get_trial_balance_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["cacao"])
+        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["CACAO"])
 
         # Seed account and GLEntries
-        acc = database.session.execute(database.select(Accounts).filter_by(entity="cacao")).scalars().first()
+        acc = database.session.execute(database.select(Accounts).filter_by(entity="CACAO")).scalars().first()
         if acc:
             gl = GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id="standard",
                 account_id=acc.id,
                 debit=Decimal("150.00"),
@@ -238,7 +238,7 @@ def test_get_trial_balance_handler(app_instance):
 
             res = h_accounting.get_trial_balance.handler(
                 context=ctx,
-                company_id="cacao",
+                company_id="CACAO",
                 ledger_id="standard",
                 date_from="2026-05-01",
                 date_to="2026-05-31",
@@ -250,13 +250,13 @@ def test_get_trial_balance_handler(app_instance):
 def test_get_general_ledger_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["cacao"])
+        ctx = QueryContext(user_id=user.id, permissions={"accounting.reports.read"}, company_ids=["CACAO"])
 
-        acc = database.session.execute(database.select(Accounts).filter_by(entity="cacao")).scalars().first()
+        acc = database.session.execute(database.select(Accounts).filter_by(entity="CACAO")).scalars().first()
         if acc:
             res = h_accounting.get_general_ledger.handler(
                 context=ctx,
-                company_id="cacao",
+                company_id="CACAO",
                 ledger_id="standard",
                 account_id=acc.id,
                 date_from="2026-05-01",
@@ -268,11 +268,11 @@ def test_get_general_ledger_handler(app_instance):
 def test_get_document_timeline_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"audit.reports.read"}, company_ids=["cacao"])
+        ctx = QueryContext(user_id=user.id, permissions={"audit.reports.read"}, company_ids=["CACAO"])
 
         res = h_audit_trail.get_document_timeline_handler.handler(
             context=ctx,
-            company_id="cacao",
+            company_id="CACAO",
             document_type="purchase_order",
             document_id="some_id",
         )
@@ -282,7 +282,7 @@ def test_get_document_timeline_handler(app_instance):
 def test_get_banking_accounts_and_transactions_handlers(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"banking.reports.read"}, company_ids=["cacao"])
+        ctx = QueryContext(user_id=user.id, permissions={"banking.reports.read"}, company_ids=["CACAO"])
 
         # Seed bank first
         bank = Bank(id="test_bank_id", name="BAC Test", swift_code="BAC", is_active=True)
@@ -293,7 +293,7 @@ def test_get_banking_accounts_and_transactions_handlers(app_instance):
         bank_acc = BankAccount(
             id="test_bank_acc_id",
             bank_id="test_bank_id",
-            company="cacao",
+            company="CACAO",
             account_name="Savings Account",
             account_no="123456789",
             currency="NIO",
@@ -316,14 +316,14 @@ def test_get_banking_accounts_and_transactions_handlers(app_instance):
         database.session.commit()
 
         # Test get_banking_accounts
-        res_acc = h_banking.get_banking_accounts.handler(context=ctx, company_id="cacao")
+        res_acc = h_banking.get_banking_accounts.handler(context=ctx, company_id="CACAO")
         assert res_acc["total_items"] > 0
         assert any(item["account_number"] == "123456789" for item in res_acc["items"])
 
         # Test get_banking_transactions
         res_tx = h_banking.get_banking_transactions.handler(
             context=ctx,
-            company_id="cacao",
+            company_id="CACAO",
             bank_account_id="test_bank_acc_id",
             date_from="2026-05-01",
             date_to="2026-05-31",
@@ -335,7 +335,7 @@ def test_get_banking_accounts_and_transactions_handlers(app_instance):
 def test_get_document_flow_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"documents.reports.read"}, company_ids=["cacao"])
+        ctx = QueryContext(user_id=user.id, permissions={"documents.reports.read"}, company_ids=["CACAO"])
 
         # Seed a DocumentRelation
         relation = DocumentRelation(
@@ -345,14 +345,14 @@ def test_get_document_flow_handler(app_instance):
             target_id="PR-001",
             relation_type="reference",
             qty=Decimal("10"),
-            company="cacao",
+            company="CACAO",
         )
         database.session.add(relation)
         database.session.commit()
 
         res = h_documents.get_document_flow.handler(
             context=ctx,
-            company_id="cacao",
+            company_id="CACAO",
             document_type="purchase_order",
             document_id="PO-001",
         )
@@ -363,12 +363,12 @@ def test_get_document_flow_handler(app_instance):
 def test_payables_handlers(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"payables.reports.read"}, company_ids=["cacao"])
+        ctx = QueryContext(user_id=user.id, permissions={"payables.reports.read"}, company_ids=["CACAO"])
 
         # Seed active purchase invoice with docstatus=1
         invoice = PurchaseInvoice(
             document_no="TEST-PI-PAY",
-            company="cacao",
+            company="CACAO",
             supplier_id="SUP-TEST",
             supplier_name="Supplier Test",
             posting_date=date(2026, 5, 10),
@@ -386,7 +386,7 @@ def test_payables_handlers(app_instance):
         # Test get_payables_aging
         res_aging = h_payables.get_payables_aging.handler(
             context=ctx,
-            company_id="cacao",
+            company_id="CACAO",
             as_of_date="2026-05-31",
             party_id="SUP-TEST",
         )
@@ -396,7 +396,7 @@ def test_payables_handlers(app_instance):
         # Test get_payables_open_documents
         res_open = h_payables.get_payables_open_documents.handler(
             context=ctx,
-            company_id="cacao",
+            company_id="CACAO",
             party_id="SUP-TEST",
         )
         assert res_open["total_items"] > 0
@@ -405,12 +405,12 @@ def test_payables_handlers(app_instance):
 def test_receivables_handlers(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
-        ctx = QueryContext(user_id=user.id, permissions={"receivables.reports.read"}, company_ids=["cacao"])
+        ctx = QueryContext(user_id=user.id, permissions={"receivables.reports.read"}, company_ids=["CACAO"])
 
         # Seed active sales invoice with docstatus=1
         invoice = SalesInvoice(
             document_no="TEST-SI-REC",
-            company="cacao",
+            company="CACAO",
             customer_id="CUST-TEST",
             customer_name="Customer Test",
             posting_date=date(2026, 5, 10),
@@ -428,7 +428,7 @@ def test_receivables_handlers(app_instance):
         # Test get_receivables_aging
         res_aging = h_receivables.get_receivables_aging.handler(
             context=ctx,
-            company_id="cacao",
+            company_id="CACAO",
             as_of_date="2026-05-31",
             party_id="CUST-TEST",
         )
@@ -438,7 +438,7 @@ def test_receivables_handlers(app_instance):
         # Test get_receivables_open_documents
         res_open = h_receivables.get_receivables_open_documents.handler(
             context=ctx,
-            company_id="cacao",
+            company_id="CACAO",
             party_id="CUST-TEST",
         )
         assert res_open["total_items"] > 0

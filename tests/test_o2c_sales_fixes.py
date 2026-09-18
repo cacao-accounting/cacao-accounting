@@ -40,7 +40,7 @@ def test_sales_invoice_line_validation_accepts_net_amount_after_discount(app_ctx
     """Invoice validation compares the stored net amount with the discounted gross amount."""
     from cacao_accounting.ventas.services import _validate_sales_invoice_line_amounts
 
-    invoice = SalesInvoice(company="cacao", document_type="sales_invoice", docstatus=0)
+    invoice = SalesInvoice(company="CACAO", document_type="sales_invoice", docstatus=0)
     line = SalesInvoiceItem(
         item_code="ITEM-DISCOUNT",
         qty=Decimal("10"),
@@ -69,10 +69,10 @@ def app_ctx():
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         master_data()
 
-        books = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        books = database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
         book_codes = [b.code for b in books]
         if "USD_BOOK" not in book_codes:
-            database.session.add(Book(code="USD_BOOK", name="Dólares", entity="cacao", currency="USD", status="activo"))
+            database.session.add(Book(code="USD_BOOK", name="Dólares", entity="CACAO", currency="USD", status="activo"))
         today = date.today()
         for r in (ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.5"), date=today),):
             exists = (
@@ -104,9 +104,9 @@ def _ensure_customer(code, name):
         database.session.add(customer)
         database.session.flush()
     if not database.session.execute(
-        database.select(CompanyParty).filter_by(party_id=customer.id, company="cacao")
+        database.select(CompanyParty).filter_by(party_id=customer.id, company="CACAO")
     ).scalar_one_or_none():
-        database.session.add(CompanyParty(party_id=customer.id, company="cacao", is_active=True))
+        database.session.add(CompanyParty(party_id=customer.id, company="CACAO", is_active=True))
         database.session.commit()
     return customer
 
@@ -126,7 +126,7 @@ def test_sales_order_new_handles_unexpected_error(app_ctx):
             "/sales/sales-order/new",
             method="POST",
             data={
-                "company": "cacao",
+                "company": "CACAO",
                 "customer_id": customer.id,
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ART-O2C",
@@ -153,9 +153,9 @@ def test_sales_customer_creation_respects_unchecked_active_box(app_ctx):
     """A customer created without the active checkbox must remain inactive."""
     from cacao_accounting.ventas import _handle_cliente_create
 
-    form = {"name": "Cliente inactivo de prueba", "company": "cacao"}
+    form = {"name": "Cliente inactivo de prueba", "company": "CACAO"}
     with app_ctx.test_request_context("/sales/customer/new", method="POST", data=form):
-        response = _handle_cliente_create(form, "cacao", [], None, "Nuevo Cliente")
+        response = _handle_cliente_create(form, "CACAO", [], None, "Nuevo Cliente")
 
     assert response.status_code == 302
     customer = database.session.execute(database.select(Party).where(Party.name == "Cliente inactivo de prueba")).scalar_one()
@@ -167,9 +167,9 @@ def test_sales_invoice_form_exposes_company_warehouses(app_ctx):
     client = app_ctx.test_client()
     client.post("/login", data={"usuario": "cacao", "acceso": "cacao"}, follow_redirects=True)
 
-    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="cacao")).scalars().first()
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="CACAO")).scalars().first()
     assert warehouse is not None
-    response = client.get("/sales/sales-invoice/new?company=cacao")
+    response = client.get("/sales/sales-invoice/new?company=CACAO")
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
@@ -182,7 +182,7 @@ def test_sales_document_totals_convert_transaction_currency(app_ctx):
     from cacao_accounting.ventas import _sales_base_amount, _set_sales_document_totals
 
     order = SalesOrder(
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         transaction_currency="USD",
     )
@@ -203,11 +203,11 @@ def test_sales_order_items_reject_duplicate_item_codes(app_ctx):
     """Una misma referencia no puede ocupar dos líneas del mismo documento."""
     from cacao_accounting.ventas import _save_sales_order_items
 
-    order = SalesOrder(company="cacao", posting_date=date.today(), docstatus=0)
+    order = SalesOrder(company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(order)
     database.session.flush()
     item = _ensure_item("ART-O2C-DUP")
-    price_list = PriceList(name="Default O2C Duplicate", company="cacao", is_selling=True, is_default=True, is_active=True)
+    price_list = PriceList(name="Default O2C Duplicate", company="CACAO", is_selling=True, is_default=True, is_active=True)
     database.session.add(price_list)
     database.session.flush()
     database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, uom="UND", price=Decimal("10")))
@@ -243,7 +243,7 @@ def test_sales_request_items_reject_nonexistent_item_code(app_ctx, item_code):
     """El pedido de venta rechaza líneas con un código de artículo inexistente."""
     from cacao_accounting.ventas import _save_sales_request_items
 
-    sr = SalesRequest(company="cacao", posting_date=date.today(), docstatus=0)
+    sr = SalesRequest(company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(sr)
     database.session.flush()
 
@@ -251,7 +251,7 @@ def test_sales_request_items_reject_nonexistent_item_code(app_ctx, item_code):
         "/sales/sales-request/new",
         method="POST",
         data={
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": date.today().isoformat(),
             "item_code_0": item_code,
             "qty_0": "1",
@@ -270,7 +270,7 @@ def test_sales_request_items_reject_inactive_item(app_ctx):
 
     item = _ensure_item("ART-O2C-INACTIVE")
     item.is_active = False
-    sr = SalesRequest(company="cacao", posting_date=date.today(), docstatus=0)
+    sr = SalesRequest(company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(sr)
     database.session.commit()
 
@@ -278,7 +278,7 @@ def test_sales_request_items_reject_inactive_item(app_ctx):
         "/sales/sales-request/new",
         method="POST",
         data={
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": date.today().isoformat(),
             "item_code_0": item.code,
             "qty_0": "1",
@@ -297,7 +297,7 @@ def test_sales_request_items_reject_non_sale_item(app_ctx):
 
     item = _ensure_item("ART-O2C-NON-SALE")
     item.is_sale_item = False
-    sr = SalesRequest(company="cacao", posting_date=date.today(), docstatus=0)
+    sr = SalesRequest(company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(sr)
     database.session.commit()
 
@@ -305,7 +305,7 @@ def test_sales_request_items_reject_non_sale_item(app_ctx):
         "/sales/sales-request/new",
         method="POST",
         data={
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": date.today().isoformat(),
             "item_code_0": item.code,
             "qty_0": "1",
@@ -323,10 +323,10 @@ def test_sales_request_items_accept_valid_line(app_ctx):
     from cacao_accounting.ventas import _save_sales_request_items
 
     item = _ensure_item("ART-O2C-VALID")
-    sr = SalesRequest(company="cacao", posting_date=date.today(), docstatus=0)
+    sr = SalesRequest(company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(sr)
     database.session.flush()
-    price_list = PriceList(name="Default O2C Valid", company="cacao", is_selling=True, is_default=True, is_active=True)
+    price_list = PriceList(name="Default O2C Valid", company="CACAO", is_selling=True, is_default=True, is_active=True)
     database.session.add(price_list)
     database.session.flush()
     database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, uom="UND", price=Decimal("10")))
@@ -336,7 +336,7 @@ def test_sales_request_items_accept_valid_line(app_ctx):
         "/sales/sales-request/new",
         method="POST",
         data={
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": date.today().isoformat(),
             "item_code_0": item.code,
             "qty_0": "1",
@@ -361,7 +361,7 @@ def test_flow_source_line_is_loaded_with_a_submission_lock(app_ctx):
     from cacao_accounting.database import SalesOrder, SalesOrderItem, database
     from cacao_accounting.ventas.services import _lock_flow_source_item
 
-    order = SalesOrder(company="cacao", posting_date=date.today(), docstatus=1)
+    order = SalesOrder(company="CACAO", posting_date=date.today(), docstatus=1)
     database.session.add(order)
     database.session.flush()
     item = SalesOrderItem(sales_order_id=order.id, item_code="ART-O2C-LOCK", qty=Decimal("1"), rate=Decimal("1"))
@@ -409,7 +409,7 @@ def test_o2c_sales_order_to_invoice_relation_manual_balances(app_ctx, ordered_qt
     customer = _ensure_customer(f"CUST-O2C-FULL-{ordered_qty}-{billed_qty}", "Cliente O2C full")
     rate = Decimal(rate_raw)
     order = SalesOrder(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date(2026, 8, 1),
         docstatus=1,
@@ -426,7 +426,7 @@ def test_o2c_sales_order_to_invoice_relation_manual_balances(app_ctx, ordered_qt
         amount=Decimal(ordered_qty) * rate,
     )
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date(2026, 8, 2),
         docstatus=1,
@@ -481,14 +481,14 @@ def test_validate_invoice_prices_warns_without_raising(app_ctx):
     _ensure_item("ART-O2C06")
     customer = _ensure_customer("CUST-O2C06", "Cliente O2C06")
 
-    so = SalesOrder(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=1)
+    so = SalesOrder(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=1)
     database.session.add(so)
     database.session.flush()
     so_item = SalesOrderItem(sales_order_id=so.id, item_code="ART-O2C06", qty=Decimal("1"), rate=Decimal("100"))
     database.session.add(so_item)
     database.session.flush()
 
-    si = SalesInvoice(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=0)
+    si = SalesInvoice(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(si)
     database.session.flush()
     si_item = SalesInvoiceItem(sales_invoice_id=si.id, item_code="ART-O2C06", qty=Decimal("1"), rate=Decimal("110"))
@@ -508,7 +508,7 @@ def test_validate_invoice_prices_warns_without_raising(app_ctx):
         )
     )
     database.session.add(
-        SalesMatchingConfig(company="cacao", allow_price_difference=False, price_tolerance_value=Decimal("0"))
+        SalesMatchingConfig(company="CACAO", allow_price_difference=False, price_tolerance_value=Decimal("0"))
     )
     database.session.commit()
 
@@ -524,10 +524,10 @@ def test_sales_invoice_requires_sales_order_when_configured(app_ctx):
     from cacao_accounting.ventas import _validate_sales_order_requirement
 
     customer = _ensure_customer("CUST-O2C-REQUIRE-OV", "Cliente requiere OV")
-    database.session.add(SalesMatchingConfig(company="cacao", require_sales_order=True))
+    database.session.add(SalesMatchingConfig(company="CACAO", require_sales_order=True))
     invoice = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         document_type="sales_invoice",
         is_return=False,
@@ -547,7 +547,7 @@ def test_edit_invoice_rejects_reversal_of_on_customer_change(app_ctx):
     customer_b = _ensure_customer("CUST-O2C18B", "Cliente O2C18B")
 
     source = SalesInvoice(
-        customer_id=customer_a.id, company="cacao", posting_date=date.today(), docstatus=1, document_type="sales_invoice"
+        customer_id=customer_a.id, company="CACAO", posting_date=date.today(), docstatus=1, document_type="sales_invoice"
     )
     database.session.add(source)
     database.session.flush()
@@ -559,7 +559,7 @@ def test_edit_invoice_rejects_reversal_of_on_customer_change(app_ctx):
 
     invoice = SalesInvoice(
         customer_id=customer_a.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=0,
         document_type="sales_credit_note",
@@ -578,7 +578,7 @@ def test_edit_invoice_rejects_reversal_of_on_customer_change(app_ctx):
     response = client.post(
         f"/sales/sales-invoice/{invoice.id}/edit",
         data={
-            "company": "cacao",
+            "company": "CACAO",
             "customer_id": customer_b.id,
             "posting_date": date.today().isoformat(),
             "item_code_0": "ART-O2C18",
@@ -600,7 +600,7 @@ def test_credit_note_cannot_exceed_cumulative_source_balance(app_ctx):
     customer = _ensure_customer("CUST-O2C-CAP", "Cliente limite NC")
     source = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         document_type="sales_invoice",
@@ -608,7 +608,7 @@ def test_credit_note_cannot_exceed_cumulative_source_balance(app_ctx):
     )
     previous_note = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         document_type="sales_credit_note",
@@ -635,7 +635,7 @@ def test_credit_note_cannot_exceed_cumulative_source_balance(app_ctx):
         _validate_reversal_of(
             source.id,
             customer.id,
-            "cacao",
+            "CACAO",
             note_amount=Decimal("41"),
             document_type="sales_credit_note",
             posting_date=date.today(),
@@ -644,7 +644,7 @@ def test_credit_note_cannot_exceed_cumulative_source_balance(app_ctx):
     _validate_reversal_of(
         source.id,
         customer.id,
-        "cacao",
+        "CACAO",
         note_amount=Decimal("40"),
         document_type="sales_credit_note",
         posting_date=date.today(),
@@ -658,7 +658,7 @@ def test_credit_note_limit_uses_current_outstanding_not_backdated_balance(app_ct
     customer = _ensure_customer("CUST-O2C-CURRENT-OUT", "Cliente saldo actual")
     source = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 1, 1),
         docstatus=1,
         document_type="sales_invoice",
@@ -672,7 +672,7 @@ def test_credit_note_limit_uses_current_outstanding_not_backdated_balance(app_ct
             _validate_reversal_of(
                 source.id,
                 customer.id,
-                "cacao",
+                "CACAO",
                 note_amount=Decimal("100"),
                 document_type="sales_credit_note",
                 posting_date=date(2026, 2, 15),
@@ -688,13 +688,13 @@ def test_create_document_relation_rejects_cancelled_source(app_ctx):
     _ensure_item("ART-O2C13")
     customer = _ensure_customer("CUST-O2C13", "Cliente O2C13")
 
-    so = SalesOrder(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=2)
+    so = SalesOrder(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=2)
     database.session.add(so)
     database.session.flush()
     so_item = SalesOrderItem(sales_order_id=so.id, item_code="ART-O2C13", qty=Decimal("5"), rate=Decimal("10"))
     database.session.add(so_item)
 
-    si = SalesInvoice(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=0)
+    si = SalesInvoice(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(si)
     database.session.flush()
     si_item = SalesInvoiceItem(sales_invoice_id=si.id, item_code="ART-O2C13", qty=Decimal("2"), rate=Decimal("10"))
@@ -734,7 +734,7 @@ def test_over_delivery_validation(app_ctx):
     customer = _ensure_customer("CUST-O2C25", "Cliente O2C25")
 
     # 1. Crear y aprobar una Orden de Venta por 10 unidades.
-    so = SalesOrder(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=1)
+    so = SalesOrder(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=1)
     database.session.add(so)
     database.session.flush()
     so_item = SalesOrderItem(sales_order_id=so.id, item_code="ART-RESERVE", qty=Decimal("10"), rate=Decimal("5"))
@@ -742,7 +742,7 @@ def test_over_delivery_validation(app_ctx):
     database.session.flush()
 
     # 2. Crear una Nota de Entrega asociada a esta Orden de Venta por 12 unidades (invalida).
-    dn = DeliveryNote(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=0)
+    dn = DeliveryNote(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(dn)
     database.session.flush()
     dn_item = DeliveryNoteItem(delivery_note_id=dn.id, item_code="ART-RESERVE", qty=Decimal("12"), rate=Decimal("5"))
@@ -796,14 +796,14 @@ def test_over_billing_validation(app_ctx):
     customer = _ensure_customer("CUST-O2C26", "Cliente O2C26")
 
     # Flow 1: Direct sales order billing over-billing
-    so = SalesOrder(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=1)
+    so = SalesOrder(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=1)
     database.session.add(so)
     database.session.flush()
     so_item = SalesOrderItem(sales_order_id=so.id, item_code="ART-RESERVE", qty=Decimal("10"), rate=Decimal("5"))
     database.session.add(so_item)
     database.session.flush()
 
-    si1 = SalesInvoice(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=0)
+    si1 = SalesInvoice(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(si1)
     database.session.flush()
     si1_item = SalesInvoiceItem(sales_invoice_id=si1.id, item_code="ART-RESERVE", qty=Decimal("11"), rate=Decimal("5"))
@@ -830,14 +830,14 @@ def test_over_billing_validation(app_ctx):
     assert "Sobre-facturación" in str(excinfo.value)
 
     # Flow 2: Delivery Note billing over-billing
-    dn = DeliveryNote(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=1)
+    dn = DeliveryNote(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=1)
     database.session.add(dn)
     database.session.flush()
     dn_item = DeliveryNoteItem(delivery_note_id=dn.id, item_code="ART-RESERVE", qty=Decimal("5"), rate=Decimal("5"))
     database.session.add(dn_item)
     database.session.flush()
 
-    si2 = SalesInvoice(customer_id=customer.id, company="cacao", posting_date=date.today(), docstatus=0)
+    si2 = SalesInvoice(customer_id=customer.id, company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(si2)
     database.session.flush()
     si2_item = SalesInvoiceItem(sales_invoice_id=si2.id, item_code="ART-RESERVE", qty=Decimal("7"), rate=Decimal("5"))
@@ -867,7 +867,7 @@ def test_over_billing_validation(app_ctx):
     # the quantity invoiced by the source line.
     source_invoice = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         document_type="sales_invoice",
@@ -883,7 +883,7 @@ def test_over_billing_validation(app_ctx):
     )
     credit_note = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=0,
         document_type="sales_credit_note",
@@ -990,14 +990,14 @@ def test_delivery_note_preserves_discount_from_source(app_ctx):
 
     item = _ensure_item("ART-DISC")
     customer = _ensure_customer("CUST-DISC", "Cliente Descuento")
-    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="cacao")).scalars().first()
-    price_list = PriceList(name="Default Disc", company="cacao", is_selling=True, is_default=True, is_active=True)
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="CACAO")).scalars().first()
+    price_list = PriceList(name="Default Disc", company="CACAO", is_selling=True, is_default=True, is_active=True)
     database.session.add(price_list)
     database.session.flush()
     database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, uom="UND", price=Decimal("100")))
     database.session.commit()
 
-    note = DeliveryNote(company="cacao", posting_date=date.today(), docstatus=0, customer_id=customer.id)
+    note = DeliveryNote(company="CACAO", posting_date=date.today(), docstatus=0, customer_id=customer.id)
     database.session.add(note)
     database.session.flush()
 
@@ -1005,7 +1005,7 @@ def test_delivery_note_preserves_discount_from_source(app_ctx):
         "/sales/delivery-note/new",
         method="POST",
         data={
-            "company": "cacao",
+            "company": "CACAO",
             "customer_id": customer.id,
             "posting_date": date.today().isoformat(),
             "item_code_0": "ART-DISC",
@@ -1030,12 +1030,12 @@ def test_order_delivery_note_invoice_preserves_net_discount(app_ctx):
 
     item = _ensure_item("ART-DISC-FLOW")
     customer = _ensure_customer("CUST-DISC-FLOW", "Cliente Flujo Descuento")
-    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="cacao")).scalars().first()
-    price_list = PriceList(name="Default Disc Flow", company="cacao", is_selling=True, is_default=True, is_active=True)
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="CACAO")).scalars().first()
+    price_list = PriceList(name="Default Disc Flow", company="CACAO", is_selling=True, is_default=True, is_active=True)
     database.session.add(price_list)
     database.session.flush()
     database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, uom="UND", price=Decimal("100")))
-    order = SalesOrder(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1)
+    order = SalesOrder(company="CACAO", customer_id=customer.id, posting_date=date.today(), docstatus=1)
     database.session.add(order)
     database.session.flush()
     order_item = SalesOrderItem(
@@ -1051,7 +1051,7 @@ def test_order_delivery_note_invoice_preserves_net_discount(app_ctx):
     database.session.add(order_item)
     database.session.flush()
     note = DeliveryNote(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         sales_order_id=order.id,
         posting_date=date.today(),
@@ -1064,7 +1064,7 @@ def test_order_delivery_note_invoice_preserves_net_discount(app_ctx):
         "/sales/delivery-note/new",
         method="POST",
         data={
-            "company": "cacao",
+            "company": "CACAO",
             "customer_id": customer.id,
             "from_order": order.id,
             "posting_date": date.today().isoformat(),
@@ -1084,7 +1084,7 @@ def test_order_delivery_note_invoice_preserves_net_discount(app_ctx):
     assert note_item.discount_percentage == Decimal("10")
 
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         delivery_note_id=note.id,
         posting_date=date.today(),
@@ -1096,7 +1096,7 @@ def test_order_delivery_note_invoice_preserves_net_discount(app_ctx):
         "/sales/sales-invoice/new",
         method="POST",
         data={
-            "company": "cacao",
+            "company": "CACAO",
             "customer_id": customer.id,
             "from_note": note.id,
             "posting_date": date.today().isoformat(),
@@ -1120,7 +1120,7 @@ def test_delivery_note_validation_passes_with_discount(app_ctx):
     """Refs: #820 - Validation must accept DeliveryNoteItem with discount fields."""
     from cacao_accounting.ventas.services import _validate_sales_invoice_line_amounts
 
-    note = DeliveryNote(company="cacao", docstatus=0)
+    note = DeliveryNote(company="CACAO", docstatus=0)
     line = DeliveryNoteItem(
         item_code="ART-DISC",
         qty=Decimal("10"),
@@ -1136,7 +1136,7 @@ def test_delivery_note_validation_supports_legacy_items_without_discount_fields(
     """Refs: #820 - Shared validation accepts delivery lines from legacy models."""
     from cacao_accounting.ventas.services import _validate_sales_invoice_line_amounts
 
-    note = DeliveryNote(company="cacao", docstatus=0)
+    note = DeliveryNote(company="CACAO", docstatus=0)
     legacy_line = SimpleNamespace(item_code="ART-LEGACY", qty=Decimal("10"), rate=Decimal("100"), amount=Decimal("1000"))
 
     _validate_sales_invoice_line_amounts(note, [legacy_line])

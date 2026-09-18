@@ -107,11 +107,11 @@ USUARIO_ROLES = [
 def _make_unidades() -> tuple:
     """Crea instancias frescas de Unidades de Negocio."""
     return (
-        Unit(name="Casa Matriz", entity="cacao", code="matriz", status="active"),
-        Unit(name="Movil", entity="cacao", code="movil", status="active"),
-        Unit(name="Masaya", entity="cacao", code="masaya", status="inactive"),
-        Unit(name="Logistica", entity="cacao", code="logistica", status="active"),
-        Unit(name="Ventas Norte", entity="cacao", code="ventas_n", status="active"),
+        Unit(name="Casa Matriz", entity="CACAO", code="matriz", status="active"),
+        Unit(name="Movil", entity="CACAO", code="movil", status="active"),
+        Unit(name="Masaya", entity="CACAO", code="masaya", status="inactive"),
+        Unit(name="Logistica", entity="CACAO", code="logistica", status="active"),
+        Unit(name="Ventas Norte", entity="CACAO", code="ventas_n", status="active"),
     )
 
 
@@ -120,7 +120,7 @@ def _make_entidades() -> tuple:
     return (
         Entity(
             id="01J092PXHEBF4M129A7GZZ48E2",
-            code="cacao",
+            code="CACAO",
             company_name="Choco Sonrisas Sociedad Anonima",
             name="Choco Sonrisas",
             tax_id="J0310000000000",
@@ -137,7 +137,7 @@ def _make_entidades() -> tuple:
         ),
         Entity(
             id="01J092PXHEBF4M129A7GZZ48I2",
-            code="cafe",
+            code="CAFE",
             company_name="Mundo Cafe Sociedad Anonima",
             name="Mundo Cafe",
             tax_id="J0310000000001",
@@ -154,7 +154,7 @@ def _make_entidades() -> tuple:
         ),
         Entity(
             id="01J092PXHEBF4M129A7GZZ48A2",
-            code="dulce",
+            code="DULCE",
             company_name="Mundo Sabor Sociedad Anonima",
             name="Dulce Sabor",
             tax_id="J0310000000002",
@@ -180,18 +180,18 @@ def _make_series() -> tuple:
 def _make_cuentas() -> tuple:
     """Crea instancias frescas de Cuentas contables de prueba."""
     return (
-        Accounts(active=True, enabled=True, entity="cacao", code="6", name="Cuenta Prueba Nivel 0", group=True, parent=None),
-        Accounts(active=True, enabled=True, entity="cacao", code="6.1", name="Cuenta Prueba Nivel 1", group=True, parent="6"),
+        Accounts(active=True, enabled=True, entity="CACAO", code="6", name="Cuenta Prueba Nivel 0", group=True, parent=None),
+        Accounts(active=True, enabled=True, entity="CACAO", code="6.1", name="Cuenta Prueba Nivel 1", group=True, parent="6"),
         Accounts(
-            active=True, enabled=True, entity="cacao", code="6.1.1", name="Cuenta Prueba Nivel 2", group=True, parent="6.1"
+            active=True, enabled=True, entity="CACAO", code="6.1.1", name="Cuenta Prueba Nivel 2", group=True, parent="6.1"
         ),
         Accounts(
-            active=True, enabled=True, entity="cacao", code="6.1.1.1", name="Cuenta Prueba Nivel 3", group=True, parent="6.1.1"
+            active=True, enabled=True, entity="CACAO", code="6.1.1.1", name="Cuenta Prueba Nivel 3", group=True, parent="6.1.1"
         ),
         Accounts(
             active=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             code="6.1.1.1.1",
             name="Cuenta Prueba Nivel 4",
             group=True,
@@ -200,7 +200,7 @@ def _make_cuentas() -> tuple:
         Accounts(
             active=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             code="6.1.1.1.1.1",
             name="Cuenta Prueba Nivel 5",
             group=True,
@@ -209,7 +209,7 @@ def _make_cuentas() -> tuple:
         Accounts(
             active=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             code="6.1.1.1.1.1.1",
             name="Cuenta Prueba Nivel 6",
             group=True,
@@ -218,7 +218,7 @@ def _make_cuentas() -> tuple:
         Accounts(
             active=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             code="6.1.1.1.1.1.1.1",
             name="Cuenta Prueba Nivel 7",
             group=True,
@@ -227,7 +227,7 @@ def _make_cuentas() -> tuple:
         Accounts(
             active=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             code="6.1.1.1.1.1.1.1.1",
             name="Cuenta Prueba Nivel 8",
             group=True,
@@ -236,7 +236,7 @@ def _make_cuentas() -> tuple:
         Accounts(
             active=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             code="6.1.1.1.1.1.1.1.1.1",
             name="Cuenta Prueba Nivel 9",
             group=False,
@@ -252,7 +252,7 @@ def _make_centros_de_costos() -> tuple:
             active=True,
             default=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             group=False,
             code="A00000",
             name="Centro Costos Predeterminado",
@@ -262,7 +262,7 @@ def _make_centros_de_costos() -> tuple:
             active=True,
             default=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             group=True,
             code="B00000",
             name="Centro Costos Nivel 0",
@@ -272,7 +272,7 @@ def _make_centros_de_costos() -> tuple:
             active=True,
             default=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             group=True,
             code="B00001",
             name="Centro Costos Nivel 1",
@@ -283,7 +283,7 @@ def _make_centros_de_costos() -> tuple:
             active=True,
             default=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             group=True,
             code="B00011",
             name="Centro Costos Nivel 2",
@@ -294,7 +294,7 @@ def _make_centros_de_costos() -> tuple:
             active=True,
             default=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             group=True,
             code="B00111",
             name="Centro Costos Nivel 3",
@@ -305,7 +305,7 @@ def _make_centros_de_costos() -> tuple:
             active=True,
             default=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             group=True,
             code="B01111",
             name="Centro Costos Nivel 4",
@@ -316,7 +316,7 @@ def _make_centros_de_costos() -> tuple:
             active=True,
             default=True,
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             group=False,
             code="B11111",
             name="Centro Costos Nivel 5",
@@ -325,7 +325,7 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            entity="cacao",
+            entity="CACAO",
             code="ADM",
             name="Administración",
             group=False,
@@ -333,7 +333,7 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            entity="cacao",
+            entity="CACAO",
             code="VTAS",
             name="Ventas",
             group=False,
@@ -341,7 +341,7 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            entity="cacao",
+            entity="CACAO",
             code="OPS",
             name="Operaciones",
             group=False,
@@ -351,7 +351,7 @@ def _make_centros_de_costos() -> tuple:
             active=True,
             default=True,
             enabled=True,
-            entity="cafe",
+            entity="CAFE",
             group=False,
             code="A00000",
             name="Centro de Costos Predeterminado",
@@ -361,7 +361,7 @@ def _make_centros_de_costos() -> tuple:
             active=True,
             default=True,
             enabled=True,
-            entity="dulce",
+            entity="DULCE",
             group=False,
             code="A00000",
             name="Centro de Costos Predeterminados",
@@ -375,7 +375,7 @@ def _make_proyectos() -> tuple:
     return (
         Project(
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             code="PTO001",
             name="Proyecto Prueba",
             start=date(year=2020, month=6, day=5),
@@ -386,7 +386,7 @@ def _make_proyectos() -> tuple:
         ),
         Project(
             enabled=True,
-            entity="dulce",
+            entity="DULCE",
             code="PTO002",
             name="Proyecto Demo",
             start=date(year=2024, month=6, day=5),
@@ -397,7 +397,7 @@ def _make_proyectos() -> tuple:
         ),
         Project(
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             code="PTO003",
             name="Proyecto Demostracion",
             start=date(year=2024, month=6, day=5),
@@ -408,7 +408,7 @@ def _make_proyectos() -> tuple:
         ),
         Project(
             enabled=True,
-            entity="cacao",
+            entity="CACAO",
             code="EXPANSION",
             name="Expansión Regional",
             start=date(year=date.today().year, month=1, day=1),
@@ -435,7 +435,7 @@ def _make_comprobantes_contables() -> list:
     today = date.today()
     return [
         {
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": today.isoformat(),
             "books": ["LOCAL"],
             "transaction_currency": "NIO",
@@ -448,7 +448,7 @@ def _make_comprobantes_contables() -> list:
             ],
         },
         {
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": today.isoformat(),
             "books": ["FIN"],
             "transaction_currency": "USD",
@@ -461,7 +461,7 @@ def _make_comprobantes_contables() -> list:
             ],
         },
         {
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": today.isoformat(),
             "books": ["MGMT"],
             "transaction_currency": "EUR",
@@ -474,7 +474,7 @@ def _make_comprobantes_contables() -> list:
             ],
         },
         {
-            "company": "cacao",
+            "company": "CACAO",
             "posting_date": today.isoformat(),
             "books": ["LOCAL", "FIN", "MGMT"],
             "transaction_currency": "NIO",
@@ -496,7 +496,7 @@ def _make_recurring_templates() -> list:
         {
             "data": {
                 "code": "RENT-MONTHLY",
-                "company": "cacao",
+                "company": "CACAO",
                 "name": "Pago de Renta Mensual",
                 "description": "Plantilla para pago recurrente de renta",
                 "start_date": today,
@@ -516,7 +516,7 @@ def _make_periodos() -> tuple:
     """Crea instancias frescas de Periodos Contables."""
     return (
         AccountingPeriod(
-            entity="cacao",
+            entity="CACAO",
             name=str(datetime.now().year),
             status="open",
             enabled=False,
@@ -524,7 +524,7 @@ def _make_periodos() -> tuple:
             end=date(year=datetime.now().year, month=12, day=31),
         ),
         AccountingPeriod(
-            entity="cacao",
+            entity="CACAO",
             name=str(int(datetime.now().year) - 1),
             status="closed",
             enabled=False,
@@ -588,8 +588,8 @@ def _make_articulos() -> tuple:
 def _make_bodegas() -> tuple:
     """Crea instancias frescas de Bodegas."""
     return (
-        Warehouse(code="PRINCIPAL", name="Bodega Principal", company="cacao", is_active=True),
-        Warehouse(code="SUCURSAL", name="Bodega Sucursal", company="cacao", is_active=True),
+        Warehouse(code="PRINCIPAL", name="Bodega Principal", company="CACAO", is_active=True),
+        Warehouse(code="SUCURSAL", name="Bodega Sucursal", company="CACAO", is_active=True),
     )
 
 
@@ -608,7 +608,7 @@ def _make_documentos() -> tuple:
         PurchaseOrder(
             id=PURCHASE_ORDER_ID,
             document_no="POR-DEMO-2025-001",
-            company="cacao",
+            company="CACAO",
             supplier_id=DEMO_SUPPLIER_ID,
             supplier_name=DEMO_SUPPLIER_NAME,
             posting_date=date(2025, 1, 15),
@@ -618,7 +618,7 @@ def _make_documentos() -> tuple:
         PurchaseReceipt(
             id=PURCHASE_RECEIPT_ID,
             document_no="REC-DEMO-2025-001",
-            company="cacao",
+            company="CACAO",
             supplier_id=DEMO_SUPPLIER_ID,
             supplier_name=DEMO_SUPPLIER_NAME,
             posting_date=date(2025, 1, 20),
@@ -629,7 +629,7 @@ def _make_documentos() -> tuple:
         SalesOrder(
             id=SALES_ORDER_ID,
             document_no="SOV-DEMO-2025-001",
-            company="cacao",
+            company="CACAO",
             posting_date=date(2025, 1, 15),
             docstatus=1,
             remarks="Orden de venta de demostración",
@@ -637,7 +637,7 @@ def _make_documentos() -> tuple:
         DeliveryNote(
             id=DELIVERY_NOTE_ID,
             document_no="ENT-DEMO-2025-001",
-            company="cacao",
+            company="CACAO",
             posting_date=date(2025, 1, 22),
             sales_order_id=SALES_ORDER_ID,
             docstatus=1,
@@ -646,7 +646,7 @@ def _make_documentos() -> tuple:
         PurchaseInvoice(
             id=PURCHASE_INVOICE_ID,
             document_no="FCC-DEMO-2025-001",
-            company="cacao",
+            company="CACAO",
             supplier_id=DEMO_SUPPLIER_ID,
             supplier_name=DEMO_SUPPLIER_NAME,
             posting_date=date(2025, 1, 25),
@@ -660,7 +660,7 @@ def _make_documentos() -> tuple:
         SalesInvoice(
             id=SALES_INVOICE_ID,
             document_no="FCV-DEMO-2025-001",
-            company="cacao",
+            company="CACAO",
             posting_date=date(2025, 1, 25),
             sales_order_id=SALES_ORDER_ID,
             delivery_note_id=DELIVERY_NOTE_ID,

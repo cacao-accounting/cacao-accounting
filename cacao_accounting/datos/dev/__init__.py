@@ -144,7 +144,7 @@ def cargar_catalogo_de_cuentas():
     from cacao_accounting.runtime_mode import force_single_entity
 
     log.debug("Cargando catalogos de cuentas.")
-    companies = ("cacao",) if force_single_entity() else ("cacao", "dulce", "cafe")
+    companies = ("CACAO",) if force_single_entity() else ("CACAO", "DULCE", "CAFE")
     for company in companies:
         cargar_catalogos(base, company)
         apply_catalog_default_mapping(company, base.file)
@@ -173,8 +173,8 @@ def demo_libros():
     from cacao_accounting.database import Book
 
     libros = [
-        Book(code="FIN", name="Financiero", entity="cacao", currency="USD", is_primary=False, default=False, status="activo"),
-        Book(code="MGMT", name="Gerencia", entity="cacao", currency="EUR", is_primary=False, default=False, status="activo"),
+        Book(code="FIN", name="Financiero", entity="CACAO", currency="USD", is_primary=False, default=False, status="activo"),
+        Book(code="MGMT", name="Gerencia", entity="CACAO", currency="EUR", is_primary=False, default=False, status="activo"),
     ]
     for lib in libros:
         database.session.add(lib)
@@ -238,13 +238,13 @@ def cargar_bancos():
     database.session.flush()
 
     ensure_global_naming_series()
-    ensure_default_naming_series_for_company("cacao", ["payment_entry"])
-    ensure_default_naming_series_for_company("cacao", list(PAYMENT_TYPE_TO_ENTITY_TYPE.values()))
+    ensure_default_naming_series_for_company("CACAO", ["payment_entry"])
+    ensure_default_naming_series_for_company("CACAO", list(PAYMENT_TYPE_TO_ENTITY_TYPE.values()))
 
     payment_series = (
         database.session.execute(
             database.select(NamingSeries)
-            .filter_by(company="cacao", entity_type="payment_entry", is_active=True)
+            .filter_by(company="CACAO", entity_type="payment_entry", is_active=True)
             .order_by(NamingSeries.is_default.desc(), NamingSeries.name)
         )
         .scalars()
@@ -276,7 +276,7 @@ def cargar_bancos():
     ]
     for data in bank_accounts_data:
         counter = ExternalCounter(
-            company="cacao",
+            company="CACAO",
             name=data["counter_name"],
             counter_type="checkbook",
             prefix=data["counter_prefix"],
@@ -289,7 +289,7 @@ def cargar_bancos():
         database.session.flush()
         bank_account = BankAccount(
             bank_id=data["bank"].id,
-            company="cacao",
+            company="CACAO",
             account_name=data["account_name"],
             account_no=data["account_no"],
             currency=data["currency"],
@@ -311,7 +311,7 @@ def cargar_bancos():
             naming_series = (
                 database.session.execute(
                     database.select(NamingSeries)
-                    .filter_by(company="cacao", entity_type=entity_type, is_active=True)
+                    .filter_by(company="CACAO", entity_type=entity_type, is_active=True)
                     .order_by(NamingSeries.is_default.desc())
                 )
                 .scalars()
@@ -337,7 +337,7 @@ def cargar_terceros():
     for t in _make_terceros():
         database.session.add(t)
         database.session.flush()
-        database.session.add(CompanyParty(company="cacao", party_id=t.id, is_active=True))
+        database.session.add(CompanyParty(company="CACAO", party_id=t.id, is_active=True))
     database.session.commit()
 
 
@@ -363,7 +363,7 @@ def cargar_bodegas():
     from cacao_accounting.database import Accounts, WarehouseCompanyAccount
 
     inv_account = (
-        database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="11.03.001")).scalars().first()
+        database.session.execute(database.select(Accounts).filter_by(entity="CACAO", code="11.03.001")).scalars().first()
     )
     warehouses = []
     for b in _make_bodegas():

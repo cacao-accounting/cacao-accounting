@@ -55,7 +55,7 @@ def test_purchase_order_cancel_blocked_with_active_receipt(app_ctx):
 
     order = PurchaseOrder(
         id="PO-CANCEL-01",
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         docstatus=1,
         grand_total=Decimal("50"),
@@ -71,7 +71,7 @@ def test_purchase_order_cancel_blocked_with_active_receipt(app_ctx):
     )
     receipt = PurchaseReceipt(
         id="PR-CANCEL-01",
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 2),
         docstatus=1,
     )
@@ -115,7 +115,7 @@ def test_purchase_order_cancel_allowed_without_children(app_ctx):
 
     order = PurchaseOrder(
         id="PO-CANCEL-02",
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         docstatus=1,
         grand_total=Decimal("50"),
@@ -137,7 +137,7 @@ def test_sales_order_cancel_blocked_with_active_delivery_note(app_ctx):
 
     order = SalesOrder(
         id="SO-CANCEL-01",
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         docstatus=1,
         grand_total=Decimal("50"),
@@ -153,7 +153,7 @@ def test_sales_order_cancel_blocked_with_active_delivery_note(app_ctx):
     )
     dn = DeliveryNote(
         id="DN-CANCEL-01",
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 2),
         docstatus=1,
     )
@@ -197,7 +197,7 @@ def test_sales_order_cancel_allowed_without_children(app_ctx):
 
     order = SalesOrder(
         id="SO-CANCEL-02",
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 1),
         docstatus=1,
         grand_total=Decimal("50"),

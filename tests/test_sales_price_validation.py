@@ -49,7 +49,7 @@ def login(client, username, password):
     return client.post("/login", data={"usuario": username, "acceso": password}, follow_redirects=True)
 
 
-def _create_so_with_item(company="cacao"):
+def _create_so_with_item(company="CACAO"):
     """Crea una SalesOrder con un ítem a $100."""
     so = SalesOrder(
         id="SO-PRICE-01",
@@ -72,7 +72,7 @@ def _create_so_with_item(company="cacao"):
     return so, so_item
 
 
-def _create_invoice_from_so(so, so_item, rate, company="cacao"):
+def _create_invoice_from_so(so, so_item, rate, company="CACAO"):
     """Crea una SalesInvoice vinculada a la SO con el rate indicado."""
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
 
@@ -133,7 +133,7 @@ def test_price_matching_rejects_when_out_of_tolerance(app_ctx):
     from cacao_accounting.ventas import _validate_invoice_prices_against_source
 
     config = SalesMatchingConfig(
-        company="cacao",
+        company="CACAO",
         matching_type="3-way",
         price_tolerance_type="percentage",
         price_tolerance_value=Decimal("5"),
@@ -154,7 +154,7 @@ def test_price_matching_warns_when_allowed(app_ctx):
     from cacao_accounting.ventas import _validate_invoice_prices_against_source
 
     config = SalesMatchingConfig(
-        company="cacao",
+        company="CACAO",
         matching_type="3-way",
         price_tolerance_type="percentage",
         price_tolerance_value=Decimal("5"),
@@ -174,7 +174,7 @@ def test_price_matching_passes_within_tolerance(app_ctx):
     from cacao_accounting.ventas import _validate_invoice_prices_against_source
 
     config = SalesMatchingConfig(
-        company="cacao",
+        company="CACAO",
         matching_type="3-way",
         price_tolerance_type="percentage",
         price_tolerance_value=Decimal("10"),
@@ -238,7 +238,7 @@ def test_price_matching_manual_invoice_uses_customer_price_list(app_ctx):
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     price_list = PriceList(
         name="Lista manual de venta",
-        company="cacao",
+        company="CACAO",
         currency="NIO",
         is_default=False,
         is_selling=True,
@@ -247,10 +247,10 @@ def test_price_matching_manual_invoice_uses_customer_price_list(app_ctx):
     database.session.add(price_list)
     database.session.flush()
     company_party = database.session.execute(
-        database.select(CompanyParty).filter_by(company="cacao", party_id=customer.id)
+        database.select(CompanyParty).filter_by(company="CACAO", party_id=customer.id)
     ).scalar_one_or_none()
     if company_party is None:
-        company_party = CompanyParty(company="cacao", party_id=customer.id, is_active=True)
+        company_party = CompanyParty(company="CACAO", party_id=customer.id, is_active=True)
         database.session.add(company_party)
     company_party.default_price_list_id = price_list.id
     database.session.add(
@@ -268,7 +268,7 @@ def test_price_matching_manual_invoice_uses_customer_price_list(app_ctx):
         id="SI-PRICE-CATALOG",
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date(2026, 5, 2),
         document_type="sales_invoice",
         docstatus=0,
@@ -287,7 +287,7 @@ def test_price_matching_manual_invoice_uses_customer_price_list(app_ctx):
     database.session.commit()
     database.session.add(
         SalesMatchingConfig(
-            company="cacao",
+            company="CACAO",
             price_tolerance_type="percentage",
             price_tolerance_value=Decimal("5"),
             allow_price_difference=False,

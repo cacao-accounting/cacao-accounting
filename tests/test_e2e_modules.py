@@ -67,13 +67,13 @@ def app_ctx():
         master_data()
 
         # Ensure 3 books: NIO (Primary), USD, EUR
-        books = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        books = database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
         book_codes = [b.code for b in books]
 
         if "USD_BOOK" not in book_codes:
-            database.session.add(Book(code="USD_BOOK", name="Dólares", entity="cacao", currency="USD", status="activo"))
+            database.session.add(Book(code="USD_BOOK", name="Dólares", entity="CACAO", currency="USD", status="activo"))
         if "EUR_BOOK" not in book_codes:
-            database.session.add(Book(code="EUR_BOOK", name="Euros", entity="cacao", currency="EUR", status="activo"))
+            database.session.add(Book(code="EUR_BOOK", name="Euros", entity="CACAO", currency="EUR", status="activo"))
 
         # Ensure exchange rates for today
         today = date.today()
@@ -98,17 +98,17 @@ def app_ctx():
         supplier = database.session.execute(database.select(Party).filter_by(is_supplier=True)).scalars().first()
         if supplier:
             cp = database.session.execute(
-                database.select(CompanyParty).filter_by(party_id=supplier.id, company="cacao")
+                database.select(CompanyParty).filter_by(party_id=supplier.id, company="CACAO")
             ).scalar_one_or_none()
             if cp:
                 cp.allow_purchase_invoice_without_order = True
                 cp.allow_purchase_invoice_without_receipt = True
 
         matching_config = database.session.execute(
-            database.select(PurchaseMatchingConfig).filter_by(company="cacao")
+            database.select(PurchaseMatchingConfig).filter_by(company="CACAO")
         ).scalar_one_or_none()
         if matching_config is None:
-            database.session.add(PurchaseMatchingConfig(company="cacao", require_purchase_order=False))
+            database.session.add(PurchaseMatchingConfig(company="CACAO", require_purchase_order=False))
         else:
             matching_config.require_purchase_order = False
 
@@ -167,7 +167,7 @@ def test_setup_correct(app_ctx):
     login(client, "cacao", "cacao")
 
     # Check books
-    books = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+    books = database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
     assert len(books) >= 3
 
     # Check entities
@@ -181,7 +181,7 @@ def test_purchase_order_rejects_zero_qty(app_ctx):
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     before = database.session.execute(database.select(PurchaseOrder)).scalars().all()
     po_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "item_code_0": "ART-001",
@@ -203,7 +203,7 @@ def test_duplicate_purchase_order_creates_audit_log(app_ctx):
     login(client, "cacao", "cacao")
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     po_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "item_code_0": "ART-001",
@@ -245,11 +245,11 @@ def test_duplicate_purchase_order_preserves_base_quantity_and_source_relation(ap
             ItemUOMConversion(item_code=item.code, from_uom=alternate_uom.code, to_uom=base_uom.code, conversion_factor=10),
         ]
     )
-    source = PurchaseRequest(company="cacao", posting_date=date.today(), docstatus=1)
+    source = PurchaseRequest(company="CACAO", posting_date=date.today(), docstatus=1)
     original = PurchaseOrder(
         supplier_id=supplier.id,
         supplier_name=supplier.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         transaction_currency="NIO",
         base_currency="NIO",
@@ -289,7 +289,7 @@ def test_duplicate_purchase_order_preserves_base_quantity_and_source_relation(ap
             target_type="purchase_order",
             target_id=original.id,
             target_item_id=original_item.id,
-            company="cacao",
+            company="CACAO",
             qty=Decimal("2"),
             qty_in_base_uom=Decimal("20"),
             uom=alternate_uom.code,
@@ -344,7 +344,7 @@ def test_purchase_happy_path(app_ctx):
 
     # 1. Create Purchase Request
     pr_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "transaction_currency": "NIO",
         "posting_date": date.today().isoformat(),
         "requested_by": "Test User",
@@ -372,7 +372,7 @@ def test_purchase_happy_path(app_ctx):
     # In real app, "Actualizar Elementos" or similar might be used.
     # The route /request-for-quotation/new handles from_request
     rfq_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "posting_date": date.today().isoformat(),
         "from_request": pr.id,
         "item_code_0": "ART-001",
@@ -416,7 +416,7 @@ def test_purchase_happy_path(app_ctx):
     assert stale_round.id.encode() not in form_response.data
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     sq_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "from_rfq": rfq.id,
@@ -450,14 +450,14 @@ def test_purchase_happy_path(app_ctx):
 
     pending_lines_response = client.get(
         "/api/document-flow/pending-lines"
-        f"?source_type=purchase_quotation&target_type=supplier_quotation&source_id={rfq.id}&company=cacao"
+        f"?source_type=purchase_quotation&target_type=supplier_quotation&source_id={rfq.id}&company=CACAO"
     )
     assert pending_lines_response.status_code == 200
     assert pending_lines_response.get_json()["items"][0]["item_code"] == "ART-001"
 
     # 4. Create Purchase Order from SQ
     po_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "from_supplier_quotation": sq.id,
@@ -485,7 +485,7 @@ def test_purchase_happy_path(app_ctx):
     # 5. Create Purchase Receipt from PO
     # This should affect inventory and generate GL entries
     prc_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "from_order": po.id,
@@ -517,7 +517,7 @@ def test_purchase_happy_path(app_ctx):
     # factura como devolucion; asi el matching 3-way concilia contra la
     # recepcion referenciada en cabecera.
     pi_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "document_type": "purchase_invoice",
@@ -557,7 +557,7 @@ def test_sales_happy_path(app_ctx):
     # 1. Create Sales Request
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     sr_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "transaction_currency": "NIO",
         "customer_id": customer.id,
         "posting_date": date.today().isoformat(),
@@ -577,7 +577,7 @@ def test_sales_happy_path(app_ctx):
 
     # 2. Create Sales Quotation from SR
     sq_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "customer_id": customer.id,
         "posting_date": date.today().isoformat(),
         "from_request": sr.id,
@@ -602,7 +602,7 @@ def test_sales_happy_path(app_ctx):
 
     # 3. Create Sales Order from SQ
     so_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "customer_id": customer.id,
         "posting_date": date.today().isoformat(),
         "from_quotation": sq.id,
@@ -625,7 +625,7 @@ def test_sales_happy_path(app_ctx):
     # We need stock to deliver and reserve. Let's create a manual stock entry to receive some stock first.
     se = StockEntry(
         purpose="material_receipt",
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         to_warehouse="PRINCIPAL",
         docstatus=0,
@@ -661,7 +661,7 @@ def test_sales_happy_path(app_ctx):
     # 4. Create Delivery Note from SO
     # This should affect inventory and generate GL entries
     dn_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "customer_id": customer.id,
         "posting_date": date.today().isoformat(),
         "from_order": so.id,
@@ -691,7 +691,7 @@ def test_sales_happy_path(app_ctx):
 
     # 5. Create Sales Invoice from Delivery Note
     si_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "customer_id": customer.id,
         "posting_date": date.today().isoformat(),
         "from_note": dn.id,
@@ -735,7 +735,7 @@ def test_inventory_cycle(app_ctx):
 
     # 1. Material Receipt
     mr_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "transaction_currency": "NIO",
         "purpose": "material_receipt",
         "naming_series": stock_entry_series.id,
@@ -763,7 +763,7 @@ def test_inventory_cycle(app_ctx):
 
     # 2. Material Transfer
     mt_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "transaction_currency": "NIO",
         "purpose": "material_transfer",
         "naming_series": stock_entry_series.id,
@@ -795,7 +795,7 @@ def test_inventory_cycle(app_ctx):
 
     # 3. Material Issue (e.g., for internal use)
     mi_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "transaction_currency": "NIO",
         "purpose": "material_issue",
         "naming_series": stock_entry_series.id,
@@ -830,7 +830,7 @@ def test_returns(app_ctx):
     # First need a submitted invoice
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -852,7 +852,7 @@ def test_returns(app_ctx):
 
     # Create Sales Return
     sr_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "customer_id": customer.id,
         "posting_date": date.today().isoformat(),
         "document_type": "sales_credit_note",
@@ -885,7 +885,7 @@ def test_returns(app_ctx):
     # 2. Purchase Return
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     pi = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -909,7 +909,7 @@ def test_returns(app_ctx):
 
     # Create Purchase Return (using document_type=purchase_return in common invoice form)
     pr_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "document_type": "purchase_credit_note",
@@ -947,7 +947,7 @@ def test_partial_and_over_deliveries(app_ctx):
     # 1. Partial Delivery
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     so = SalesOrder(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         transaction_currency="NIO",
@@ -962,7 +962,7 @@ def test_partial_and_over_deliveries(app_ctx):
 
     # First Delivery Note (Partial: 10 of 20)
     dn1_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "customer_id": customer.id,
         "posting_date": date.today().isoformat(),
         "from_order": so.id,
@@ -982,7 +982,7 @@ def test_partial_and_over_deliveries(app_ctx):
     # Ensure stock
     se = StockEntry(
         purpose="material_receipt",
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         to_warehouse="PRINCIPAL",
         docstatus=1,
@@ -1046,13 +1046,13 @@ def test_s2p09_purchase_order_foreign_currency_base_total(app_ctx):
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
 
     # Asegurar moneda base de la compania para resolver tipo de cambio.
-    entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalars().first()
+    entity = database.session.execute(database.select(Entity).filter_by(code="CACAO")).scalars().first()
     if entity and not entity.currency:
         entity.currency = "NIO"
         database.session.commit()
 
     po_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "transaction_currency": "EUR",
@@ -1082,13 +1082,13 @@ def test_validate_invoice_requires_supplier_link(app_ctx):
     database.session.commit()
     cp = CompanyParty(
         party_id=supplier.id,
-        company="cacao",
+        company="CACAO",
         allow_purchase_invoice_without_receipt=False,
         allow_purchase_invoice_without_order=False,
     )
     database.session.add(cp)
     database.session.commit()
-    inv = PurchaseInvoice(supplier_id=supplier.id, company="cacao", posting_date=date.today(), docstatus=0)
+    inv = PurchaseInvoice(supplier_id=supplier.id, company="CACAO", posting_date=date.today(), docstatus=0)
     database.session.add(inv)
     database.session.commit()
 
@@ -1120,7 +1120,7 @@ def test_physical_purchase_return_uses_receipt_allocation(app_ctx):
     database.session.add(
         CompanyParty(
             party_id=supplier.id,
-            company="cacao",
+            company="CACAO",
             allow_purchase_invoice_without_receipt=False,
             allow_purchase_invoice_without_order=False,
         )
@@ -1128,7 +1128,7 @@ def test_physical_purchase_return_uses_receipt_allocation(app_ctx):
     receipt = PurchaseReceipt(
         id="RCP-S2P751",
         supplier_id=supplier.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         transaction_currency="NIO",
@@ -1148,7 +1148,7 @@ def test_physical_purchase_return_uses_receipt_allocation(app_ctx):
     physical_return = PurchaseReceipt(
         id="PRET-S2P751",
         supplier_id=supplier.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         is_return=True,
@@ -1181,7 +1181,7 @@ def test_invoice_edit_preserves_supplier_invoice_no(app_ctx):
     login(client, "cacao", "cacao")
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     inv_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "supplier_invoice_no": "PROV-123",
@@ -1196,7 +1196,7 @@ def test_invoice_edit_preserves_supplier_invoice_no(app_ctx):
     inv = database.session.execute(database.select(PurchaseInvoice).order_by(PurchaseInvoice.created.desc())).scalars().first()
     assert inv.supplier_invoice_no == "PROV-123"
     edit_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "item_code_0": "ART-001",
@@ -1221,7 +1221,7 @@ def test_receipt_edit_updates_supplier_name(app_ctx):
     receipt = PurchaseReceipt(
         supplier_id=supplier_a.id,
         supplier_name=supplier_a.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         transaction_currency="NIO",
         base_currency="NIO",
@@ -1248,7 +1248,7 @@ def test_receipt_edit_updates_supplier_name(app_ctx):
     )
     database.session.commit()
     edit_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier_b.id,
         "posting_date": date.today().isoformat(),
         "item_code_0": "ART-001",
@@ -1270,7 +1270,7 @@ def test_purchase_quotation_flow_requires_lines_and_inherits_currency(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    source = PurchaseRequest(company="cacao", posting_date=date.today(), transaction_currency="NIO", docstatus=1)
+    source = PurchaseRequest(company="CACAO", posting_date=date.today(), transaction_currency="NIO", docstatus=1)
     database.session.add(source)
     database.session.flush()
     database.session.add(
@@ -1293,7 +1293,7 @@ def test_purchase_quotation_flow_requires_lines_and_inherits_currency(app_ctx):
     before = database.session.execute(database.select(PurchaseQuotation)).scalars().all()
     response = client.post(
         "/buying/request-for-quotation/new",
-        data={"from_request": source.id, "company": "cacao", "posting_date": date.today().isoformat()},
+        data={"from_request": source.id, "company": "CACAO", "posting_date": date.today().isoformat()},
         follow_redirects=True,
     )
     assert response.status_code == 200
@@ -1303,7 +1303,7 @@ def test_purchase_quotation_flow_requires_lines_and_inherits_currency(app_ctx):
     item = database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=source.id)).scalar_one()
     quotation_data = {
         "from_request": source.id,
-        "company": "cacao",
+        "company": "CACAO",
         "currency": "NIO",
         "posting_date": date.today().isoformat(),
         "item_code_0": item.item_code,
@@ -1335,7 +1335,7 @@ def test_purchase_quotation_flow_requires_lines_and_inherits_currency(app_ctx):
     assert len(relations) == 2
     pending = client.get(
         "/api/document-flow/pending-lines"
-        f"?source_type=purchase_request&target_type=purchase_quotation&source_id={source.id}&company=cacao"
+        f"?source_type=purchase_request&target_type=purchase_quotation&source_id={source.id}&company=CACAO"
     )
     assert pending.status_code == 200
     assert float(pending.get_json()["items"][0]["qty"]) == 2.0
@@ -1348,7 +1348,7 @@ def test_purchase_quotation_flow_rejects_company_mismatch(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    source = PurchaseRequest(company="cacao", posting_date=date.today(), docstatus=1)
+    source = PurchaseRequest(company="CACAO", posting_date=date.today(), docstatus=1)
     database.session.add(source)
     database.session.commit()
     before = database.session.execute(database.select(PurchaseQuotation)).scalars().all()
@@ -1378,7 +1378,7 @@ def test_purchase_invoice_from_order_hydrates_immutable_header(app_ctx):
     login(client, "cacao", "cacao")
     supplier = database.session.execute(database.select(Party).filter_by(is_supplier=True)).scalars().first()
     order = PurchaseOrder(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         supplier_name=supplier.name,
         posting_date=date.today(),
@@ -1403,7 +1403,7 @@ def test_purchase_invoice_from_order_hydrates_immutable_header(app_ctx):
     response = client.get(f"/buying/purchase-invoice/new?from_order={order.id}")
 
     assert response.status_code == 200
-    assert b'"company": "cacao"' in response.data
+    assert b'"company": "CACAO"' in response.data
     assert b"NIO" in response.data
     assert supplier.name.encode() in response.data
     assert b'name="transaction_currency"' in response.data
@@ -1414,7 +1414,7 @@ def test_purchase_receipt_from_order_exposes_warehouse_selector(app_ctx):
     """A purchase receipt flow must expose the warehouse used for inventory posting."""
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
-    order = PurchaseOrder(company="cacao", posting_date=date.today(), docstatus=1)
+    order = PurchaseOrder(company="CACAO", posting_date=date.today(), docstatus=1)
     database.session.add(order)
     database.session.flush()
     database.session.add(

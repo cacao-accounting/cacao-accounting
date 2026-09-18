@@ -17,7 +17,7 @@
   <div class="p-3">
     <form method="get" class="row g-2 mb-3">
       <div class="col-md-2">
-        <input name="company" value="{{ request.args.get('company', 'cacao') }}" class="form-control" placeholder="{{ _('Compañía') }}">
+        <input name="company" value="{{ company or request.args.get('company', '') }}" class="form-control" placeholder="{{ _('Compañía') }}">
       </div>
       <div class="col-md-2">
         <input name="party_type" value="{{ request.args.get('party_type', '') }}" class="form-control" placeholder="{{ _('Tipo tercero') }}">

@@ -60,7 +60,7 @@ def login(client, username: str = "cacao", password: str = "cacao"):
     return client.post("/login", data={"usuario": username, "acceso": password}, follow_redirects=True)
 
 
-def _get_or_create_expense_account(company: str = "cacao") -> Accounts:
+def _get_or_create_expense_account(company: str = "CACAO") -> Accounts:
     """Obtiene o crea una cuenta contable de tipo gasto para la compañía."""
     account = (
         database.session.execute(
@@ -84,7 +84,7 @@ def _get_or_create_expense_account(company: str = "cacao") -> Accounts:
     return account
 
 
-def _get_or_create_income_account(company: str = "cacao") -> Accounts:
+def _get_or_create_income_account(company: str = "CACAO") -> Accounts:
     """Obtiene o crea una cuenta contable de tipo ingreso para la compañía."""
     account = (
         database.session.execute(
@@ -258,12 +258,12 @@ def test_post_debit_note_creation_and_attributes(app_ctx):
     client = app_ctx.test_client()
     login(client)
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    expense_acc = _get_or_create_expense_account("cacao")
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    expense_acc = _get_or_create_expense_account("CACAO")
 
     payload = {
         "payment_type": "debit_note",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "paid_to_account_id": expense_acc.id,
         "paid_amount": "150.50",
@@ -291,7 +291,7 @@ def test_post_debit_note_creation_and_attributes(app_ctx):
     )
     assert payment is not None
     assert payment.payment_type == "debit_note"
-    assert payment.company == "cacao"
+    assert payment.company == "CACAO"
     assert payment.bank_account_id == bank.id
     assert payment.paid_to_account_id == expense_acc.id
     assert payment.paid_amount == Decimal("150.50")
@@ -306,12 +306,12 @@ def test_post_credit_note_creation_and_attributes(app_ctx):
     client = app_ctx.test_client()
     login(client)
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    income_acc = _get_or_create_income_account("cacao")
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    income_acc = _get_or_create_income_account("CACAO")
 
     payload = {
         "payment_type": "credit_note",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "paid_from_account_id": income_acc.id,
         "paid_amount": "320.75",
@@ -337,7 +337,7 @@ def test_post_credit_note_creation_and_attributes(app_ctx):
     )
     assert payment is not None
     assert payment.payment_type == "credit_note"
-    assert payment.company == "cacao"
+    assert payment.company == "CACAO"
     assert payment.bank_account_id == bank.id
     assert payment.paid_from_account_id == income_acc.id
     assert payment.received_amount == Decimal("320.75")
@@ -350,14 +350,14 @@ def test_post_transfer_creation_and_attributes(app_ctx):
     client = app_ctx.test_client()
     login(client)
 
-    banks = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().all()
+    banks = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().all()
     assert len(banks) >= 2, "Se requieren al menos 2 cuentas bancarias para probar transferencia"
     source_bank = banks[0]
     target_bank = banks[1]
 
     payload = {
         "payment_type": "internal_transfer",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": source_bank.id,
         "target_bank_account_id": target_bank.id,
         "paid_amount": "500.00",
@@ -395,9 +395,9 @@ def test_debit_note_rejects_cross_company_gl_account(app_ctx):
     client = app_ctx.test_client()
     login(client)
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     foreign_expense = Accounts(
-        entity="cafe",
+        entity="CAFE",
         code="61.01.999.999",
         name="Gasto de otra empresa",
         account_type="expense",
@@ -410,7 +410,7 @@ def test_debit_note_rejects_cross_company_gl_account(app_ctx):
 
     payload = {
         "payment_type": "debit_note",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "paid_to_account_id": foreign_expense.id,
         "paid_amount": "100.00",
@@ -435,11 +435,11 @@ def test_transfer_rejects_same_source_and_target_account(app_ctx):
     client = app_ctx.test_client()
     login(client)
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     payload = {
         "payment_type": "internal_transfer",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "target_bank_account_id": bank.id,
         "paid_amount": "200.00",
@@ -459,15 +459,15 @@ def test_transfer_rejects_target_bank_from_different_company(app_ctx):
     client = app_ctx.test_client()
     login(client)
 
-    source_bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    source_bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     other_bank = (
-        database.session.execute(database.select(BankAccount).filter(BankAccount.company != "cacao")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter(BankAccount.company != "CACAO")).scalars().first()
     )
 
     if not other_bank:
         other_bank = BankAccount(
             bank_id=source_bank.bank_id,
-            company="cafe",
+            company="CAFE",
             account_name="Cuenta Cafe",
             account_no="CAFE-001",
             currency="NIO",
@@ -477,7 +477,7 @@ def test_transfer_rejects_target_bank_from_different_company(app_ctx):
 
     payload = {
         "payment_type": "internal_transfer",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": source_bank.id,
         "target_bank_account_id": other_bank.id,
         "paid_amount": "200.00",
@@ -505,10 +505,10 @@ def test_transfer_multicurrency_usd_to_nio(app_ctx, monkeypatch):
     login(client)
 
     source_usd = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     )
     target_nio = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="NIO")).scalars().first()
     )
     assert source_usd is not None
     assert target_nio is not None
@@ -521,7 +521,7 @@ def test_transfer_multicurrency_usd_to_nio(app_ctx, monkeypatch):
 
     payload = {
         "payment_type": "internal_transfer",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": source_usd.id,
         "target_bank_account_id": target_nio.id,
         "paid_amount": "100.00",
@@ -559,16 +559,16 @@ def test_transfer_multicurrency_rejects_non_positive_exchange_rate(app_ctx):
     login(client)
 
     source_usd = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     )
     target_nio = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="NIO")).scalars().first()
     )
 
     for invalid_rate in ["0", "-1.5"]:
         payload = {
             "payment_type": "internal_transfer",
-            "company": "cacao",
+            "company": "CACAO",
             "bank_account_id": source_usd.id,
             "target_bank_account_id": target_nio.id,
             "paid_amount": "100.00",
@@ -592,9 +592,9 @@ def test_debit_note_multicurrency_usd_bank_account(app_ctx, monkeypatch):
     login(client)
 
     bank_usd = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     )
-    expense_acc = _get_or_create_expense_account("cacao")
+    expense_acc = _get_or_create_expense_account("CACAO")
 
     monkeypatch.setattr(
         sys.modules["cacao_accounting.bancos.services"],
@@ -604,7 +604,7 @@ def test_debit_note_multicurrency_usd_bank_account(app_ctx, monkeypatch):
 
     payload = {
         "payment_type": "debit_note",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank_usd.id,
         "paid_to_account_id": expense_acc.id,
         "paid_amount": "50.00",
@@ -643,9 +643,9 @@ def test_credit_note_multicurrency_usd_bank_account(app_ctx, monkeypatch):
     login(client)
 
     bank_usd = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     )
-    income_acc = _get_or_create_income_account("cacao")
+    income_acc = _get_or_create_income_account("CACAO")
 
     monkeypatch.setattr(
         sys.modules["cacao_accounting.bancos.services"],
@@ -655,7 +655,7 @@ def test_credit_note_multicurrency_usd_bank_account(app_ctx, monkeypatch):
 
     payload = {
         "payment_type": "credit_note",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank_usd.id,
         "paid_from_account_id": income_acc.id,
         "paid_amount": "75.00",
@@ -697,13 +697,13 @@ def test_debit_note_uses_configured_bank_debit_note_naming_series(app_ctx):
     login(client)
 
     series = _create_dedicated_naming_series(
-        company="cacao",
+        company="CACAO",
         entity_type="bank_debit_note",
         prefix_template="ND-*YYYY*-",
         series_name="ND-SERIES-TEST",
     )
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    expense_acc = _get_or_create_expense_account("cacao")
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    expense_acc = _get_or_create_expense_account("CACAO")
 
     # Configurar serie en BankAccountNumberingConfig
     num_config = database.session.execute(
@@ -722,7 +722,7 @@ def test_debit_note_uses_configured_bank_debit_note_naming_series(app_ctx):
 
     payload = {
         "payment_type": "debit_note",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "paid_to_account_id": expense_acc.id,
         "paid_amount": "80.00",
@@ -757,13 +757,13 @@ def test_credit_note_uses_configured_bank_credit_note_naming_series(app_ctx):
     login(client)
 
     series = _create_dedicated_naming_series(
-        company="cacao",
+        company="CACAO",
         entity_type="bank_credit_note",
         prefix_template="NC-*YYYY*-",
         series_name="NC-SERIES-TEST",
     )
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    income_acc = _get_or_create_income_account("cacao")
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    income_acc = _get_or_create_income_account("CACAO")
 
     # Configurar serie en BankAccountNumberingConfig
     num_config = database.session.execute(
@@ -782,7 +782,7 @@ def test_credit_note_uses_configured_bank_credit_note_naming_series(app_ctx):
 
     payload = {
         "payment_type": "credit_note",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "paid_from_account_id": income_acc.id,
         "paid_amount": "90.00",
@@ -817,12 +817,12 @@ def test_transfer_uses_configured_bank_transfer_naming_series(app_ctx):
     login(client)
 
     series = _create_dedicated_naming_series(
-        company="cacao",
+        company="CACAO",
         entity_type="bank_transfer",
         prefix_template="TR-*YYYY*-",
         series_name="TR-SERIES-TEST",
     )
-    banks = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().all()
+    banks = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().all()
     source_bank = banks[0]
     target_bank = banks[1]
 
@@ -843,7 +843,7 @@ def test_transfer_uses_configured_bank_transfer_naming_series(app_ctx):
 
     payload = {
         "payment_type": "internal_transfer",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": source_bank.id,
         "target_bank_account_id": target_bank.id,
         "paid_amount": "250.00",
@@ -877,15 +877,15 @@ def test_bank_operation_with_check_mode_uses_external_counter_and_tracks_usage(a
     client = app_ctx.test_client()
     login(client)
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     assert bank.default_external_counter_id is not None
     counter = database.session.get(ExternalCounter, bank.default_external_counter_id)
     initial_last_used = counter.last_used
-    expense_acc = _get_or_create_expense_account("cacao")
+    expense_acc = _get_or_create_expense_account("CACAO")
 
     payload = {
         "payment_type": "debit_note",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "paid_to_account_id": expense_acc.id,
         "paid_amount": "220.00",
@@ -935,7 +935,7 @@ def test_post_forms_missing_required_fields_rejected(app_ctx):
     client = app_ctx.test_client()
     login(client)
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     # 1. Nota de débito sin compañía
     response_no_comp = client.post(
@@ -950,7 +950,7 @@ def test_post_forms_missing_required_fields_rejected(app_ctx):
         "/cash_management/payment/debit-note/new",
         data={
             "payment_payload": json.dumps(
-                {"payment_type": "debit_note", "company": "cacao", "bank_account_id": bank.id, "paid_amount": "0"}
+                {"payment_type": "debit_note", "company": "CACAO", "bank_account_id": bank.id, "paid_amount": "0"}
             )
         },
         follow_redirects=True,
@@ -964,7 +964,7 @@ def test_post_forms_missing_required_fields_rejected(app_ctx):
             "payment_payload": json.dumps(
                 {
                     "payment_type": "internal_transfer",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "bank_account_id": bank.id,
                     "paid_amount": "100",
                     "posting_date": date.today().isoformat(),
@@ -981,10 +981,10 @@ def test_transfer_same_currency_preserves_unitary_exchange_rate(app_ctx):
     client = app_ctx.test_client()
     login(client)
 
-    banks = database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().all()
+    banks = database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="NIO")).scalars().all()
     if len(banks) < 2:
         bank_gl = Accounts(
-            entity="cacao",
+            entity="CACAO",
             code="11.02.001.999",
             name="Banco Banpro NIO 2",
             account_type="bank",
@@ -996,7 +996,7 @@ def test_transfer_same_currency_preserves_unitary_exchange_rate(app_ctx):
         database.session.flush()
         target_bank = BankAccount(
             bank_id=banks[0].bank_id,
-            company="cacao",
+            company="CACAO",
             account_name="Cuenta Ahorro NIO 2",
             account_no="ACC-NIO-002",
             currency="NIO",
@@ -1011,7 +1011,7 @@ def test_transfer_same_currency_preserves_unitary_exchange_rate(app_ctx):
 
     payload = {
         "payment_type": "internal_transfer",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": source_bank.id,
         "target_bank_account_id": target_bank.id,
         "paid_amount": "300.00",
@@ -1047,11 +1047,11 @@ def test_bank_forms_explicit_external_numbers_persisted(app_ctx):
     client = app_ctx.test_client()
     login(client)
 
-    banks = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().all()
+    banks = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().all()
     bank = banks[0]
     target_bank = banks[1]
-    expense_acc = _get_or_create_expense_account("cacao")
-    income_acc = _get_or_create_income_account("cacao")
+    expense_acc = _get_or_create_expense_account("CACAO")
+    income_acc = _get_or_create_income_account("CACAO")
 
     # 1. Nota de débito con referencia externa
     client.post(
@@ -1060,7 +1060,7 @@ def test_bank_forms_explicit_external_numbers_persisted(app_ctx):
             "payment_payload": json.dumps(
                 {
                     "payment_type": "debit_note",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "bank_account_id": bank.id,
                     "paid_to_account_id": expense_acc.id,
                     "paid_amount": "40.00",
@@ -1089,7 +1089,7 @@ def test_bank_forms_explicit_external_numbers_persisted(app_ctx):
             "payment_payload": json.dumps(
                 {
                     "payment_type": "credit_note",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "bank_account_id": bank.id,
                     "paid_from_account_id": income_acc.id,
                     "paid_amount": "60.00",
@@ -1124,7 +1124,7 @@ def test_bank_forms_explicit_external_numbers_persisted(app_ctx):
             "payment_payload": json.dumps(
                 {
                     "payment_type": "internal_transfer",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "bank_account_id": bank.id,
                     "target_bank_account_id": target_bank.id,
                     "paid_amount": "70.00",

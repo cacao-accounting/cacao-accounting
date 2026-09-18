@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.database import Entity, Roles, RolesUser, database
+from cacao_accounting.decorators import resolve_required_company
 from cacao_accounting.printing.exceptions import PrintingError, TemplateValidationError
 from cacao_accounting.printing.models import PrintTemplate, PrintTemplateVersion
 from cacao_accounting.printing.registry import get_printable_document, list_printable_documents
@@ -196,7 +197,7 @@ def preview_template(template_id: int):
             document_type=template.document_type,
             document_id=None,
             user=current_user,
-            company_code=template.company_code or "cacao",
+            company_code=resolve_required_company(template.company_code, "accounting"),
             template_id=template.id,
             sample=True,
         )

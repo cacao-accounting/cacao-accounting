@@ -10,11 +10,13 @@ from werkzeug.exceptions import Forbidden
 
 from cacao_accounting import create_app
 from cacao_accounting.database import (
+    Entity,
     Modules,
     Roles,
     RolesAccess,
     RolesUser,
     User,
+    UserCompanyAccess,
     database,
 )
 
@@ -205,3 +207,87 @@ def test_verifica_permiso_preserves_function_metadata(app):
 
     assert documented_route.__name__ == "documented_route"
     assert documented_route.__doc__ == "Docstring de prueba."
+
+
+def test_resolve_required_company_returns_requested_company(app):
+    """La compañía recibida en la petición se devuelve tal cual."""
+    from cacao_accounting.decorators import resolve_required_company
+
+    with app.test_request_context():
+        assert resolve_required_company("ACME", "cash") == "ACME"
+
+
+def test_resolve_required_company_aborts_without_company_and_user(app):
+    """Sin compañía y sin usuario autenticado la petición falla con 400."""
+    from werkzeug.exceptions import BadRequest
+
+    from cacao_accounting.decorators import resolve_required_company
+
+    with app.test_request_context():
+        with pytest.raises(BadRequest):
+            resolve_required_company(None, "cash")
+
+
+def test_resolve_required_company_resolves_single_company_for_admin(app):
+    """Un administrador con una sola compañía la resuelve automáticamente."""
+    from flask_login import login_user
+
+    from cacao_accounting.decorators import resolve_required_company
+
+    with app.app_context():
+        database.session.add(Entity(code="ACME", name="Acme", company_name="Acme", tax_id="J-ACME", currency="NIO"))
+        admin = User(id="USER-ADMIN-RRC", user="admin_rrc", password=b"x", classification="admin", active=True)
+        database.session.add(admin)
+        database.session.commit()
+
+        with app.test_request_context():
+            login_user(admin)
+            assert resolve_required_company(None, "cash") == "ACME"
+
+
+def test_resolve_required_company_aborts_with_multiple_companies(app):
+    """Con varias compañías autorizadas y sin parámetro la petición falla con 400."""
+    from flask_login import login_user
+    from werkzeug.exceptions import BadRequest
+
+    from cacao_accounting.decorators import resolve_required_company
+
+    with app.app_context():
+        database.session.add_all(
+            [
+                Entity(code="ACME", name="Acme", company_name="Acme", tax_id="J-ACME", currency="NIO"),
+                Entity(code="BETA", name="Beta", company_name="Beta", tax_id="J-BETA", currency="NIO"),
+            ]
+        )
+        admin = User(id="USER-ADMIN-RRC2", user="admin_rrc2", password=b"x", classification="admin", active=True)
+        database.session.add(admin)
+        database.session.commit()
+
+        with app.test_request_context():
+            login_user(admin)
+            with pytest.raises(BadRequest):
+                resolve_required_company(None, "cash")
+
+
+def test_resolve_required_company_resolves_single_assigned_company(app):
+    """Un usuario no administrador con una sola compañía asignada la resuelve."""
+    from flask_login import login_user
+
+    from cacao_accounting.decorators import resolve_required_company
+
+    with app.app_context():
+        database.session.add_all(
+            [
+                Entity(code="ACME", name="Acme", company_name="Acme", tax_id="J-ACME", currency="NIO"),
+                Entity(code="BETA", name="Beta", company_name="Beta", tax_id="J-BETA", currency="NIO"),
+            ]
+        )
+        user = User(id="USER-RRC", user="user_rrc", password=b"x", classification="user", active=True)
+        database.session.add(user)
+        database.session.flush()
+        database.session.add(UserCompanyAccess(user_id=user.id, company_code="BETA"))
+        database.session.commit()
+
+        with app.test_request_context():
+            login_user(user)
+            assert resolve_required_company(None, "cash") == "BETA"

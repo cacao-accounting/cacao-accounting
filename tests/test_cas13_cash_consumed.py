@@ -38,9 +38,9 @@ def _make_supplier_invoice(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     invoice = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -60,7 +60,7 @@ def test_cas13_discount_exceeds_allocated_rejected(app_ctx):
 
     payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 900,
@@ -90,7 +90,7 @@ def test_cas13_discount_equals_allocated_rejected(app_ctx):
 
     payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 900,
@@ -120,7 +120,7 @@ def test_cas13_valid_discount_below_allocated_accepted(app_ctx):
 
     payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 900,

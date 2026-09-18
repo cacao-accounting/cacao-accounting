@@ -43,35 +43,35 @@ def app():
 def test_libros_contables(app):
     with app.app_context():
         # La empresa cacao debe tener 3 libros
-        libros = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        libros = database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
         codigos_libros = [libro.code for libro in libros]
         assert "LOCAL" in codigos_libros
         assert "FIN" in codigos_libros
         assert "MGMT" in codigos_libros
 
         # Verificar monedas de los libros
-        libro_local = database.session.execute(database.select(Book).filter_by(entity="cacao", code="LOCAL")).scalar_one()
+        libro_local = database.session.execute(database.select(Book).filter_by(entity="CACAO", code="LOCAL")).scalar_one()
         assert libro_local.currency == "NIO"
-        libro_fin = database.session.execute(database.select(Book).filter_by(entity="cacao", code="FIN")).scalar_one()
+        libro_fin = database.session.execute(database.select(Book).filter_by(entity="CACAO", code="FIN")).scalar_one()
         assert libro_fin.currency == "USD"
-        libro_mgmt = database.session.execute(database.select(Book).filter_by(entity="cacao", code="MGMT")).scalar_one()
+        libro_mgmt = database.session.execute(database.select(Book).filter_by(entity="CACAO", code="MGMT")).scalar_one()
         assert libro_mgmt.currency == "EUR"
 
 
 def test_unidades_centros_proyectos(app):
     with app.app_context():
         # Unidades
-        u = database.session.execute(database.select(Unit).filter_by(entity="cacao", code="logistica")).scalar_one_or_none()
+        u = database.session.execute(database.select(Unit).filter_by(entity="CACAO", code="logistica")).scalar_one_or_none()
         assert u is not None
 
         # Centros de Costos
         cc_adm = database.session.execute(
-            database.select(CostCenter).filter_by(entity="cacao", code="ADM")
+            database.select(CostCenter).filter_by(entity="CACAO", code="ADM")
         ).scalar_one_or_none()
         assert cc_adm is not None
 
         # Proyectos
-        p = database.session.execute(database.select(Project).filter_by(entity="cacao", code="EXPANSION")).scalar_one_or_none()
+        p = database.session.execute(database.select(Project).filter_by(entity="CACAO", code="EXPANSION")).scalar_one_or_none()
         assert p is not None
 
 
@@ -97,7 +97,7 @@ def test_seed_bank_accounts_share_payment_series_with_separate_checkbooks(app):
         bank_accounts = (
             database.session.execute(
                 database.select(BankAccount)
-                .filter(BankAccount.company == "cacao", BankAccount.currency.in_(("NIO", "USD")))
+                .filter(BankAccount.company == "CACAO", BankAccount.currency.in_(("NIO", "USD")))
                 .order_by(BankAccount.currency)
             )
             .scalars()
@@ -147,14 +147,14 @@ def test_seed_bank_accounts_share_payment_series_with_separate_checkbooks(app):
 def test_ledger_multimoneda(app):
     with app.app_context():
         # Obtener IDs de libros
-        local_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="LOCAL")).scalar_one()
-        fin_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="FIN")).scalar_one()
-        mgmt_id = database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="MGMT")).scalar_one()
+        local_id = database.session.execute(database.select(Book.id).filter_by(entity="CACAO", code="LOCAL")).scalar_one()
+        fin_id = database.session.execute(database.select(Book.id).filter_by(entity="CACAO", code="FIN")).scalar_one()
+        mgmt_id = database.session.execute(database.select(Book.id).filter_by(entity="CACAO", code="MGMT")).scalar_one()
 
         # Verificar que existen entradas en el ledger para los diferentes libros
         # Libro LOCAL (NIO)
         entries_fisc = (
-            database.session.execute(database.select(GLEntry).filter_by(company="cacao", ledger_id=local_id)).scalars().all()
+            database.session.execute(database.select(GLEntry).filter_by(company="CACAO", ledger_id=local_id)).scalars().all()
         )
         assert len(entries_fisc) > 0
         for entry in entries_fisc:
@@ -162,7 +162,7 @@ def test_ledger_multimoneda(app):
 
         # Libro FIN (USD)
         entries_fin = (
-            database.session.execute(database.select(GLEntry).filter_by(company="cacao", ledger_id=fin_id)).scalars().all()
+            database.session.execute(database.select(GLEntry).filter_by(company="CACAO", ledger_id=fin_id)).scalars().all()
         )
         assert len(entries_fin) > 0
         for entry in entries_fin:
@@ -171,7 +171,7 @@ def test_ledger_multimoneda(app):
 
         # Libro MGMT (EUR)
         entries_mgmt = (
-            database.session.execute(database.select(GLEntry).filter_by(company="cacao", ledger_id=mgmt_id)).scalars().all()
+            database.session.execute(database.select(GLEntry).filter_by(company="CACAO", ledger_id=mgmt_id)).scalars().all()
         )
         assert len(entries_mgmt) > 0
         for entry in entries_mgmt:
@@ -191,7 +191,7 @@ def test_seed_multi_book_journal_converts_transaction_currency_to_book_currency(
         )
         books = {
             book.code: book
-            for book in database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+            for book in database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
         }
 
         assert journal.transaction_currency == "NIO"
@@ -235,7 +235,7 @@ def test_seed_multi_book_journal_converts_transaction_currency_to_book_currency(
 def test_reportes_financieros(app):
     with app.app_context():
         # Filtros base para reportes
-        filters = FinancialReportFilters(company="cacao", ledger="LOCAL")
+        filters = FinancialReportFilters(company="CACAO", ledger="LOCAL")
 
         # 1. Balanza de Comprobación
         trial_balance = get_trial_balance_report(filters)
@@ -258,13 +258,13 @@ def test_reportes_financieros(app):
 def test_financial_reports_expose_accounts_with_unknown_classification(app):
     """Las cuentas con clasificación desconocida aparecen como excluidas y generan advertencia."""
     with app.app_context():
-        book = database.session.execute(database.select(Book).filter_by(entity="cacao", code="LOCAL")).scalar_one()
-        baseline = get_income_statement_report(FinancialReportFilters(company="cacao", ledger="LOCAL"))
-        baseline_balance = get_balance_sheet_report(FinancialReportFilters(company="cacao", ledger="LOCAL"))
+        book = database.session.execute(database.select(Book).filter_by(entity="CACAO", code="LOCAL")).scalar_one()
+        baseline = get_income_statement_report(FinancialReportFilters(company="CACAO", ledger="LOCAL"))
+        baseline_balance = get_balance_sheet_report(FinancialReportFilters(company="CACAO", ledger="LOCAL"))
         baseline_count = baseline.totals.get("unclassified_accounts", 0)
         baseline_amount = baseline.totals.get("unclassified_amount", Decimal("0"))
         account = Accounts(
-            entity="cacao",
+            entity="CACAO",
             code="9.99.99",
             name="Cuenta sin clasificación",
             active=True,
@@ -277,7 +277,7 @@ def test_financial_reports_expose_accounts_with_unknown_classification(app):
         database.session.add(
             GLEntry(
                 posting_date=date.today(),
-                company="cacao",
+                company="CACAO",
                 ledger_id=book.id,
                 account_id=account.id,
                 account_code=account.code,
@@ -289,7 +289,7 @@ def test_financial_reports_expose_accounts_with_unknown_classification(app):
         )
         database.session.commit()
 
-        filters = FinancialReportFilters(company="cacao", ledger="LOCAL")
+        filters = FinancialReportFilters(company="CACAO", ledger="LOCAL")
         income = get_income_statement_report(filters)
         balance = get_balance_sheet_report(filters)
 

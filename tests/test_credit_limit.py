@@ -42,10 +42,10 @@ def app_ctx():
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         master_data()
 
-        books = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        books = database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
         book_codes = [b.code for b in books]
         if "USD_BOOK" not in book_codes:
-            database.session.add(Book(code="USD_BOOK", name="Dólares", entity="cacao", currency="USD", status="activo"))
+            database.session.add(Book(code="USD_BOOK", name="Dólares", entity="CACAO", currency="USD", status="activo"))
         database.session.commit()
         yield app
 
@@ -66,10 +66,10 @@ def _ensure_customer(code, name):
         database.session.add(customer)
         database.session.flush()
     cp = database.session.execute(
-        database.select(CompanyParty).filter_by(party_id=customer.id, company="cacao")
+        database.select(CompanyParty).filter_by(party_id=customer.id, company="CACAO")
     ).scalar_one_or_none()
     if not cp:
-        cp = CompanyParty(party_id=customer.id, company="cacao", is_active=True)
+        cp = CompanyParty(party_id=customer.id, company="CACAO", is_active=True)
         database.session.add(cp)
         database.session.commit()
     return customer, cp
@@ -82,17 +82,17 @@ def test_credit_limit_validation(app_ctx):
     cp.credit_limit = None
     database.session.commit()
     # Should not raise exception
-    _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("5000"))
+    _validate_credit_limit_and_overdue("CACAO", customer.id, Decimal("5000"))
 
     # scenario 2: within limit
     cp.credit_limit = Decimal("1000")
     database.session.commit()
     # 500 is within 1000
-    _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("500"))
+    _validate_credit_limit_and_overdue("CACAO", customer.id, Decimal("500"))
 
     # scenario 3: exceeds limit
     with pytest.raises(ValueError) as excinfo:
-        _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("1001"))
+        _validate_credit_limit_and_overdue("CACAO", customer.id, Decimal("1001"))
     assert "límite de crédito" in str(excinfo.value).lower()
 
 
@@ -103,7 +103,7 @@ def test_credit_limit_error_uses_base_currency_for_multicurrency_document(app_ct
     database.session.commit()
 
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         customer_name=customer.name,
         posting_date=date.today(),
@@ -116,7 +116,7 @@ def test_credit_limit_error_uses_base_currency_for_multicurrency_document(app_ct
     )
 
     with pytest.raises(ValueError) as excinfo:
-        _validate_credit_limit_and_overdue("cacao", customer.id, invoice.grand_total, current_document=invoice)
+        _validate_credit_limit_and_overdue("CACAO", customer.id, invoice.grand_total, current_document=invoice)
 
     message = str(excinfo.value)
     assert "Monto del documento: 3650.0000" in message
@@ -131,7 +131,7 @@ def test_credit_limit_uses_invoice_outstanding_not_grand_total(app_ctx, monkeypa
     invoice = SalesInvoice(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         document_type="sales_invoice",
@@ -148,7 +148,7 @@ def test_credit_limit_uses_invoice_outstanding_not_grand_total(app_ctx, monkeypa
         lambda _document: Decimal("50"),
     )
 
-    _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("0"))
+    _validate_credit_limit_and_overdue("CACAO", customer.id, Decimal("0"))
 
 
 def test_block_overdue_validation(app_ctx):
@@ -168,7 +168,7 @@ def test_block_overdue_validation(app_ctx):
     invoice = SalesInvoice(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=past_date,
         docstatus=1,
         grand_total=Decimal("100"),
@@ -181,13 +181,13 @@ def test_block_overdue_validation(app_ctx):
 
     # Should raise ValueError since invoice is overdue and block_overdue is True
     with pytest.raises(ValueError) as excinfo:
-        _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("10"))
+        _validate_credit_limit_and_overdue("CACAO", customer.id, Decimal("10"))
     assert "facturas vencidas" in str(excinfo.value).lower()
 
     # If block_overdue is False, it should not raise ValueError
     cp.block_overdue = False
     database.session.commit()
-    _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("10"))
+    _validate_credit_limit_and_overdue("CACAO", customer.id, Decimal("10"))
 
 
 def test_route_submit_credit_limit_blocks(app_ctx):
@@ -204,7 +204,7 @@ def test_route_submit_credit_limit_blocks(app_ctx):
     so = SalesOrder(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=0,
         grand_total=Decimal("100"),
@@ -230,7 +230,7 @@ def test_credit_exposure_deducts_invoice_created_from_delivery_note(app_ctx):
     order = SalesOrder(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         grand_total=Decimal("100"),
@@ -240,7 +240,7 @@ def test_credit_exposure_deducts_invoice_created_from_delivery_note(app_ctx):
     delivery_note = DeliveryNote(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         sales_order_id=order.id,
         posting_date=date.today(),
         docstatus=1,
@@ -252,7 +252,7 @@ def test_credit_exposure_deducts_invoice_created_from_delivery_note(app_ctx):
         SalesInvoice(
             customer_id=customer.id,
             customer_name=customer.name,
-            company="cacao",
+            company="CACAO",
             delivery_note_id=delivery_note.id,
             posting_date=date.today(),
             docstatus=1,
@@ -262,7 +262,7 @@ def test_credit_exposure_deducts_invoice_created_from_delivery_note(app_ctx):
     )
     database.session.commit()
 
-    assert _approved_customer_order_exposure("cacao", customer.id) == Decimal("0")
+    assert _approved_customer_order_exposure("CACAO", customer.id) == Decimal("0")
 
 
 def test_credit_exposure_excludes_closed_sales_orders(app_ctx):
@@ -271,7 +271,7 @@ def test_credit_exposure_excludes_closed_sales_orders(app_ctx):
     order = SalesOrder(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         grand_total=Decimal("100"),
@@ -280,12 +280,12 @@ def test_credit_exposure_excludes_closed_sales_orders(app_ctx):
     database.session.add(order)
     database.session.commit()
 
-    assert _approved_customer_order_exposure("cacao", customer.id) == Decimal("100")
+    assert _approved_customer_order_exposure("CACAO", customer.id) == Decimal("100")
 
     order.status = "closed"
     database.session.commit()
 
-    assert _approved_customer_order_exposure("cacao", customer.id) == Decimal("0")
+    assert _approved_customer_order_exposure("CACAO", customer.id) == Decimal("0")
 
 
 def test_skip_credit_limit_on_return(app_ctx):
@@ -295,7 +295,7 @@ def test_skip_credit_limit_on_return(app_ctx):
     database.session.commit()
 
     # Even though -100 is passed, or if the document is a return, it should not raise an error
-    _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("-100"))
+    _validate_credit_limit_and_overdue("CACAO", customer.id, Decimal("-100"))
 
 
 def test_debit_note_is_not_counted_twice_in_credit_exposure(app_ctx):
@@ -307,7 +307,7 @@ def test_debit_note_is_not_counted_twice_in_credit_exposure(app_ctx):
     source = SalesInvoice(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         document_type="sales_invoice",
@@ -320,7 +320,7 @@ def test_debit_note_is_not_counted_twice_in_credit_exposure(app_ctx):
     debit_note = SalesInvoice(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         docstatus=1,
         document_type="sales_debit_note",
@@ -339,7 +339,7 @@ def test_debit_note_is_not_counted_twice_in_credit_exposure(app_ctx):
             target_type="sales_debit_note",
             target_id=debit_note.id,
             relation_type="invoice_reversal",
-            company="cacao",
+            company="CACAO",
             qty=Decimal("1"),
             amount=Decimal("100"),
             status="active",
@@ -348,4 +348,4 @@ def test_debit_note_is_not_counted_twice_in_credit_exposure(app_ctx):
     database.session.commit()
 
     assert compute_outstanding_amount(source) == Decimal("900.0000")
-    _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("100"))
+    _validate_credit_limit_and_overdue("CACAO", customer.id, Decimal("100"))

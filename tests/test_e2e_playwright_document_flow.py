@@ -102,7 +102,7 @@ def flask_server():
 
         se = StockEntry(
             purpose="material_receipt",
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             to_warehouse="PRINCIPAL",
             docstatus=0,
@@ -129,14 +129,14 @@ def flask_server():
         from cacao_accounting.database import ItemPrice, PriceList
 
         price_list = (
-            database.session.execute(database.select(PriceList).filter_by(company="cacao", is_selling=True, is_default=True))
+            database.session.execute(database.select(PriceList).filter_by(company="CACAO", is_selling=True, is_default=True))
             .scalars()
             .first()
         )
         if price_list is None:
             price_list = PriceList(
                 name="Lista de ventas E2E",
-                company="cacao",
+                company="CACAO",
                 currency="NIO",
                 is_selling=True,
                 is_default=True,
@@ -206,7 +206,7 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     # ==========================================
 
     # Navigate to Sales Order list and click "Nuevo"
-    page.goto(f"{base_url}/sales/sales-order/new?company=cacao")
+    page.goto(f"{base_url}/sales/sales-order/new?company=CACAO")
     page.wait_for_timeout(500)
 
     # Select Company
@@ -320,7 +320,7 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     # ==========================================
 
     # Navigate to Purchase Order New
-    page.goto(f"{base_url}/buying/purchase-order/new?company=cacao")
+    page.goto(f"{base_url}/buying/purchase-order/new?company=CACAO")
     page.wait_for_timeout(500)
 
     # Select Company

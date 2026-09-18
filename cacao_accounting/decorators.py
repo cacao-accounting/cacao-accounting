@@ -133,3 +133,41 @@ def exige_acceso_compania_cualquiera(modulos: tuple[str, ...], company: str | No
             if exc.code != 403:
                 raise
     abort(403)
+
+
+def resolve_required_company(company: str | None, modulo: str) -> str:
+    """Resuelve la compañía de una petición que la requiere.
+
+    Cuando la petición trae el código de compañía se devuelve tal cual para que
+    la capa de permisos lo valide. Cuando no viene, se resuelve automáticamente
+    si el usuario tiene una única compañía autorizada (caso típico de modo
+    desktop). Si el usuario tiene varias compañías autorizadas el parámetro es
+    obligatorio y la petición falla con HTTP 400 en lugar de asumir un valor.
+
+    Args:
+        company: Código de compañía recibido en la petición, o ``None``.
+        modulo: Módulo usado para obtener las compañías autorizadas del usuario.
+
+    Returns:
+        El código de compañía a utilizar.
+    """
+    if company:
+        return company
+    resolved = _single_authorized_company(modulo)
+    if resolved is not None:
+        return resolved
+    abort(400, description=_("La compañía es obligatoria."))
+
+
+def _single_authorized_company(modulo: str) -> str | None:
+    """Devuelve la única compañía autorizada del usuario o ``None``."""
+    try:
+        is_auth = bool(current_user and getattr(current_user, "is_authenticated", False))
+    except Exception:
+        is_auth = False
+    if not is_auth:
+        return None
+    module_id = obtener_id_modulo_por_nombre(modulo)
+    permisos = Permisos(modulo=module_id, usuario=current_user.id)
+    companies = list(permisos.obtener_companias_autorizadas())
+    return companies[0] if len(companies) == 1 else None

@@ -736,35 +736,35 @@ def test_transaccional_edit_duplicate_actions_routes(request):
 
                 purchase_quotation = PurchaseQuotation(
                     document_no="TEST-RFQ-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
                 )
                 supplier_quotation = SupplierQuotation(
                     document_no="TEST-SQ-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
                 )
                 purchase_order = PurchaseOrder(
                     document_no="TEST-PO-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
                 )
                 purchase_receipt = PurchaseReceipt(
                     document_no="TEST-PR-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
                 )
                 purchase_invoice = PurchaseInvoice(
                     document_no="TEST-PI-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     document_type="purchase_invoice",
                     docstatus=0,
@@ -773,28 +773,28 @@ def test_transaccional_edit_duplicate_actions_routes(request):
                 )
                 sales_quotation = SalesQuotation(
                     document_no="TEST-SQTN-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
                 )
                 sales_order = SalesOrder(
                     document_no="TEST-SO-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
                 )
                 delivery_note = DeliveryNote(
                     document_no="TEST-DN-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     docstatus=0,
                     grand_total=0,
                 )
                 sales_invoice = SalesInvoice(
                     document_no="TEST-SI-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     document_type="sales_invoice",
                     docstatus=0,
@@ -803,7 +803,7 @@ def test_transaccional_edit_duplicate_actions_routes(request):
                 )
                 stock_entry = StockEntry(
                     document_no="TEST-SE-DRAFT",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 5, 16),
                     purpose="material_receipt",
                     docstatus=0,
@@ -840,7 +840,7 @@ def test_transaccional_edit_duplicate_actions_routes(request):
                     StockBin(
                         item_code="ART-001",
                         warehouse="PRINCIPAL",
-                        company="cacao",
+                        company="CACAO",
                         actual_qty=10,
                         valuation_rate=1,
                         stock_value=10,
@@ -903,7 +903,7 @@ def test_stock_entry_edit_route_is_independent(isolated_stock_entry_app):
             database.session.execute(
                 database.select(NamingSeries).filter_by(
                     entity_type="stock_entry",
-                    company="cacao",
+                    company="CACAO",
                     is_active=True,
                 )
             )
@@ -920,7 +920,7 @@ def test_stock_entry_edit_route_is_independent(isolated_stock_entry_app):
             default_uom=uom.code,
         )
         entry = StockEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date(2026, 5, 16),
             purpose="material_receipt",
             to_warehouse="PRINCIPAL",
@@ -942,7 +942,7 @@ def test_stock_entry_edit_route_is_independent(isolated_stock_entry_app):
             response = client.post(
                 edit_url,
                 data={
-                    "company": "cacao",
+                    "company": "CACAO",
                     "naming_series": naming_series.id,
                     "posting_date": "2026-05-16",
                     "purpose": "material_receipt",
@@ -961,7 +961,7 @@ def test_stock_entry_edit_route_is_independent(isolated_stock_entry_app):
             response = client.post(
                 edit_url,
                 data={
-                    "company": "cacao",
+                    "company": "CACAO",
                     "naming_series": naming_series.id,
                     "posting_date": "2026-05-16",
                     "purpose": "material_receipt",
@@ -1124,7 +1124,7 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
                 PurchaseOrder(
                     document_no=f"FILTER-PO-{index:02d}",
                     supplier_name="Proveedor Filtro",
-                    company="cacao",
+                    company="CACAO",
                     posting_date=date(2026, 6, 27),
                     docstatus=0,
                     grand_total=10,
@@ -1134,7 +1134,7 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
             purchase_order_other = PurchaseOrder(
                 document_no="OTHER-PO",
                 supplier_name="Proveedor No Coincide",
-                company="cacao",
+                company="CACAO",
                 posting_date=date(2026, 6, 27),
                 docstatus=1,
                 grand_total=20,
@@ -1142,7 +1142,7 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
             sales_order = SalesOrder(
                 document_no="FILTER-SO-01",
                 customer_name="Cliente Filtro",
-                company="cacao",
+                company="CACAO",
                 posting_date=date(2026, 6, 27),
                 docstatus=1,
                 grand_total=30,
@@ -1151,21 +1151,21 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
                 document_no="FILTER-PAY-01",
                 payment_type="receive",
                 party_name="Cliente Filtro",
-                company="cacao",
+                company="CACAO",
                 posting_date=date(2026, 6, 27),
                 docstatus=1,
                 paid_amount=30,
             )
             journal = ComprobanteContable(
                 document_no="FILTER-JE-01",
-                entity="cacao",
+                entity="CACAO",
                 date=date(2026, 6, 27),
                 reference="Referencia Filtro",
                 status="draft",
             )
             recurring_journal = RecurringJournalTemplate(
                 code="FILTER-REC-01",
-                company="cacao",
+                company="CACAO",
                 book_codes='["LOCAL"]',
                 name="Plantilla Filtro",
                 description="Descripcion Filtro",

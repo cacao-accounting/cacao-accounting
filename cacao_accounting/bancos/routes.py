@@ -75,7 +75,7 @@ from cacao_accounting.document_identifiers import (
     IdentifierConfigurationError,
 )
 
-from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
+from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, resolve_required_company, verifica_permiso
 
 
 from cacao_accounting.version import APPNAME
@@ -562,7 +562,7 @@ def _parse_reconciliation_item_from_form(
 @login_required
 def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
     """Aplica conciliaciones bancarias seleccionadas."""
-    company = request.form.get("company") or "cacao"
+    company = resolve_required_company(request.form.get("company"), "cash")
     transaction_ids = request.form.getlist("bank_transaction_id")
     if not _validate_bank_reconciliation_transactions_access(transaction_ids, company):
         return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
