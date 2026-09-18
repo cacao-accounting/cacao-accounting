@@ -100,6 +100,8 @@ def app():
         database.session.commit()
     yield application
     with application.app_context():
+        database.session.execute(delete(CompanyParty).where(CompanyParty.company.in_(["COMP-A", "COMP-B"])))
+        database.session.execute(delete(Party).where(Party.id.in_(["CACHE-PARTY-A", "CACHE-PARTY-B"])))
         database.session.execute(delete(UserCompanyAccess))
         database.session.execute(delete(User).where(User.user.in_(["cache-user-a", "cache-user-b", "cache-admin"])))
         database.session.execute(delete(Entity).where(Entity.code.in_(["COMP-A", "COMP-B"])))
@@ -151,6 +153,11 @@ def test_smart_select_master_data_is_isolated_between_users(app, memory_cache, m
             [
                 Party(id="CACHE-PARTY-A", code="PARTY-A", name="Party Alpha", is_customer=True, is_active=True),
                 Party(id="CACHE-PARTY-B", code="PARTY-B", name="Party Beta", is_customer=True, is_active=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 CompanyParty(company="COMP-A", party_id="CACHE-PARTY-A", is_active=True),
                 CompanyParty(company="COMP-B", party_id="CACHE-PARTY-B", is_active=True),
             ]

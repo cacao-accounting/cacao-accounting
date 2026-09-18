@@ -2705,6 +2705,11 @@ def test_search_select_party_role_and_group_filters(app_ctx):
             PartyGroup(id="PG-INACTIVE", group_type="supplier", name="Inactivo", is_active=False),
             Party(id="SUPP-F", code="SUPP-F", is_supplier=True, name="Proveedor F", tax_id="SUPP-F", is_active=True),
             Party(id="CUST-F", code="CUST-F", is_customer=True, name="Cliente F", tax_id="CUST-F", is_active=True),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
             CompanyParty(company="cacao", party_id="SUPP-F", is_active=True),
             CompanyParty(company="cacao", party_id="CUST-F", is_active=True),
             PriceList(name="Lista Ventas Cacao", company="cacao", is_selling=True, is_active=True),
