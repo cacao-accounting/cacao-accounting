@@ -708,7 +708,9 @@ def _build_base_query(spec: SearchSelectSpec, normalized_filters: dict[str, Any]
         )
         if target_companies is not None:
             cp_exists = cp_exists.where(CompanyParty.company.in_(sorted(target_companies)))
-        statement = statement.where(cp_exists.exists()).distinct()
+        # El EXISTS garantiza una fila por tercero, por lo que DISTINCT es
+        # redundante y ademas invalida el ORDER BY por relevancia en PostgreSQL.
+        statement = statement.where(cp_exists.exists())
     elif company_scope is not None and spec.model is not Item and "company" in spec.allowed_filters:
         statement = statement.where(_column_for(spec.model, spec.allowed_filters["company"]).in_(sorted(company_scope)))
     return statement
