@@ -1004,9 +1004,8 @@ def cancel_petty_cash_expense(
             .filter(AccountingPeriod.end >= expense.posting_date)
             .first()
         )
-        if period:
-            if not (period.start <= cancellation_date <= period.end):
-                raise ValueError(_("La anulación de un gasto solo se permite en el mismo periodo contable."))
+        if period and not (period.start <= cancellation_date <= period.end):
+            raise ValueError(_("La anulación de un gasto solo se permite en el mismo periodo contable."))
     if expense.journal_id:
         journal = database.session.get(ComprobanteContable, expense.journal_id)
         if journal is not None:
