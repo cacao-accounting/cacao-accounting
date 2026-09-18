@@ -690,11 +690,21 @@ def _build_base_query(spec: SearchSelectSpec, normalized_filters: dict[str, Any]
     if spec.model is Entity and company_scope is not None:
         statement = statement.where(Entity.code.in_(sorted(company_scope)))
     if spec.model is Party and (normalized_filters.get("company") or company_scope is not None):
-        statement = statement.join(CompanyParty, CompanyParty.party_id == Party.id)
-        statement = statement.where(CompanyParty.is_active.is_(True))
-        if company_scope is not None:
-            statement = statement.where(CompanyParty.company.in_(sorted(company_scope)))
-        statement = statement.distinct()
+        target_companies: set[str] | None = None
+        if normalized_filters.get("company"):
+            target_companies = set(normalized_filters["company"])
+            if company_scope is not None:
+                target_companies = target_companies & company_scope
+        else:
+            target_companies = company_scope
+
+        cp_exists = select(1).select_from(CompanyParty).where(
+            CompanyParty.party_id == Party.id,
+            CompanyParty.is_active.is_(True),
+        )
+        if target_companies is not None:
+            cp_exists = cp_exists.where(CompanyParty.company.in_(sorted(target_companies)))
+        statement = statement.where(cp_exists.exists())
     elif company_scope is not None and spec.model is not Item and "company" in spec.allowed_filters:
         statement = statement.where(_column_for(spec.model, spec.allowed_filters["company"]).in_(sorted(company_scope)))
     return statement
@@ -858,7 +868,7 @@ def _apply_single_request_filter(
     if spec.model is Item and filter_name == "company":
         return statement
     if spec.model is Party and filter_name == "company":
-        return statement.where(CompanyParty.company.in_(clean_values))
+        return statement
     if spec.model is Party and filter_name in ("role", "party_type"):
         return _apply_role_filter(statement, clean_values)
     if filter_name not in spec.allowed_filters:

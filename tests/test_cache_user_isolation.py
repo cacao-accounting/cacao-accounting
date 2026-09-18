@@ -100,6 +100,8 @@ def app():
         database.session.commit()
     yield application
     with application.app_context():
+        database.session.execute(delete(CompanyParty).where(CompanyParty.company.in_(["COMP-A", "COMP-B"])))
+        database.session.execute(delete(Party).where(Party.id.in_(["CACHE-PARTY-A", "CACHE-PARTY-B"])))
         database.session.execute(delete(UserCompanyAccess))
         database.session.execute(delete(User).where(User.user.in_(["cache-user-a", "cache-user-b", "cache-admin"])))
         database.session.execute(delete(Entity).where(Entity.code.in_(["COMP-A", "COMP-B"])))
