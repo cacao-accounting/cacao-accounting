@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +17,22 @@ from cacao_accounting.accounting_engine.common.context import (
 from cacao_accounting.accounting_engine.common.rounding import RoundingManager
 
 
+@dataclass(frozen=True)
+class SettlementOptions:
+    """Opciones de calculo del settlement engine."""
+
+    is_partial: bool = False
+    rounding_policy: Optional[Dict[str, Any]] = None
+    transaction_direction: Optional[str] = None
+    document_currency: Optional[str] = None
+    company_currency: Optional[str] = None
+    document_exchange_rate: Optional[Decimal] = None
+    settlement_exchange_rate: Optional[Decimal] = None
+    actual_cash_amount: Optional[Decimal] = None
+    eligible_discount_amount: Optional[Decimal] = None
+    explicit_exchange_difference: Optional[Decimal] = None
+
+
 class SettlementEngine:
     """Deterministic financial settlement engine."""
 
@@ -25,18 +42,19 @@ class SettlementEngine:
         open_balance: Decimal,
         settlement_amount: Decimal,
         withholding_rules: List[Any],
-        is_partial: bool = False,
-        rounding_policy: Optional[Dict[str, Any]] = None,
-        transaction_direction: Optional[str] = None,
-        document_currency: Optional[str] = None,
-        company_currency: Optional[str] = None,
-        document_exchange_rate: Optional[Decimal] = None,
-        settlement_exchange_rate: Optional[Decimal] = None,
-        actual_cash_amount: Optional[Decimal] = None,
-        eligible_discount_amount: Optional[Decimal] = None,
-        explicit_exchange_difference: Optional[Decimal] = None,
+        options: SettlementOptions | None = None,
     ) -> SettlementResult:
         """Calculate payments, collections and withholdings."""
+        opts = options or SettlementOptions()
+        rounding_policy = opts.rounding_policy
+        transaction_direction = opts.transaction_direction
+        document_currency = opts.document_currency
+        company_currency = opts.company_currency
+        document_exchange_rate = opts.document_exchange_rate
+        settlement_exchange_rate = opts.settlement_exchange_rate
+        actual_cash_amount = opts.actual_cash_amount
+        eligible_discount_amount = opts.eligible_discount_amount
+        explicit_exchange_difference = opts.explicit_exchange_difference
         settlement_lines: list[SettlementLine] = []
         audit_trail: list[AuditStep] = []
         warnings: list[str] = []

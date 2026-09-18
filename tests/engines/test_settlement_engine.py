@@ -4,10 +4,10 @@
 """Unit tests for the Settlement Engine."""
 
 from decimal import Decimal
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
-from cacao_accounting.accounting_engine.settlement.engine import SettlementEngine
+from cacao_accounting.accounting_engine.settlement.engine import SettlementEngine, SettlementOptions
 
 
 @dataclass
@@ -71,11 +71,13 @@ def test_settlement_purchase_exchange_loss():
         Decimal("3650"),
         Decimal("100"),
         [],
-        transaction_direction="purchase",
-        document_currency="USD",
-        company_currency="NIO",
-        document_exchange_rate=Decimal("36.5"),
-        settlement_exchange_rate=Decimal("36.8"),
+        options=SettlementOptions(
+            transaction_direction="purchase",
+            document_currency="USD",
+            company_currency="NIO",
+            document_exchange_rate=Decimal("36.5"),
+            settlement_exchange_rate=Decimal("36.8"),
+        ),
     )
 
     assert result.exchange_difference == Decimal("-30.00")
@@ -91,11 +93,13 @@ def test_settlement_collection_exchange_gain():
         Decimal("3650"),
         Decimal("100"),
         [],
-        transaction_direction="sales",
-        document_currency="USD",
-        company_currency="NIO",
-        document_exchange_rate=Decimal("36.5"),
-        settlement_exchange_rate=Decimal("36.8"),
+        options=SettlementOptions(
+            transaction_direction="sales",
+            document_currency="USD",
+            company_currency="NIO",
+            document_exchange_rate=Decimal("36.5"),
+            settlement_exchange_rate=Decimal("36.8"),
+        ),
     )
 
     assert result.exchange_difference == Decimal("30.00")
@@ -109,11 +113,13 @@ def test_settlement_zero_exchange_rate_keeps_carried_balance() -> None:
         Decimal("3650"),
         Decimal("100"),
         [],
-        transaction_direction="sales",
-        document_currency="USD",
-        company_currency="NIO",
-        document_exchange_rate=Decimal("36.5"),
-        settlement_exchange_rate=Decimal("0"),
+        options=SettlementOptions(
+            transaction_direction="sales",
+            document_currency="USD",
+            company_currency="NIO",
+            document_exchange_rate=Decimal("36.5"),
+            settlement_exchange_rate=Decimal("0"),
+        ),
     )
 
     assert result.exchange_difference == Decimal("0")
@@ -129,13 +135,15 @@ def test_settlement_applies_early_payment_discount_against_cash_gap():
         Decimal("3650"),
         Decimal("100"),
         [],
-        transaction_direction="purchase",
-        document_currency="USD",
-        company_currency="NIO",
-        document_exchange_rate=Decimal("36.5"),
-        settlement_exchange_rate=Decimal("36.5"),
-        actual_cash_amount=Decimal("98"),
-        eligible_discount_amount=Decimal("2"),
+        options=SettlementOptions(
+            transaction_direction="purchase",
+            document_currency="USD",
+            company_currency="NIO",
+            document_exchange_rate=Decimal("36.5"),
+            settlement_exchange_rate=Decimal("36.5"),
+            actual_cash_amount=Decimal("98"),
+            eligible_discount_amount=Decimal("2"),
+        ),
     )
 
     assert result.cash_amount == Decimal("98")
@@ -152,11 +160,13 @@ def test_settlement_partial_payment_calculates_unrealized_exchange_difference():
         Decimal("3650"),
         Decimal("40"),
         [],
-        transaction_direction="sales",
-        document_currency="USD",
-        company_currency="NIO",
-        document_exchange_rate=Decimal("36.5"),
-        settlement_exchange_rate=Decimal("36.8"),
+        options=SettlementOptions(
+            transaction_direction="sales",
+            document_currency="USD",
+            company_currency="NIO",
+            document_exchange_rate=Decimal("36.5"),
+            settlement_exchange_rate=Decimal("36.8"),
+        ),
     )
 
     assert result.exchange_difference == Decimal("12.00")
@@ -167,27 +177,26 @@ def test_settlement_partial_payment_calculates_unrealized_exchange_difference():
 def test_sequential_partial_fx_settlements_reach_zero_without_duplicate_gain():
     """Two partial collections recognize only their own realized FX difference."""
     engine = SettlementEngine()
-    common = {
-        "withholding_rules": [],
-        "transaction_direction": "sales",
-        "document_currency": "USD",
-        "company_currency": "NIO",
-        "document_exchange_rate": Decimal("36.5"),
-    }
+    common = SettlementOptions(
+        transaction_direction="sales",
+        document_currency="USD",
+        company_currency="NIO",
+        document_exchange_rate=Decimal("36.5"),
+    )
 
     first = engine.calculate(
-        document_total=Decimal("100"),
-        open_balance=Decimal("3650"),
-        settlement_amount=Decimal("40"),
-        settlement_exchange_rate=Decimal("36.8"),
-        **common,
+        Decimal("100"),
+        Decimal("3650"),
+        Decimal("40"),
+        [],
+        options=replace(common, settlement_exchange_rate=Decimal("36.8")),
     )
     second = engine.calculate(
-        document_total=Decimal("60"),
-        open_balance=Decimal("2190"),
-        settlement_amount=Decimal("60"),
-        settlement_exchange_rate=Decimal("37.0"),
-        **common,
+        Decimal("60"),
+        Decimal("2190"),
+        Decimal("60"),
+        [],
+        options=replace(common, settlement_exchange_rate=Decimal("37.0")),
     )
 
     # Independent calculation: 40*(36.8-36.5)=12 and 60*(37-36.5)=30.
@@ -205,12 +214,14 @@ def test_settlement_rejects_unallocated_cash_gap():
     rules = [MockRule("IR", Decimal("5"), "payment", "withholding_payable")]
 
     result = engine.calculate(
-        document_total=Decimal("100"),
-        open_balance=Decimal("100"),
-        settlement_amount=Decimal("100"),
-        withholding_rules=rules,
-        actual_cash_amount=Decimal("90"),
-        eligible_discount_amount=Decimal("3"),
+        Decimal("100"),
+        Decimal("100"),
+        Decimal("100"),
+        rules,
+        options=SettlementOptions(
+            actual_cash_amount=Decimal("90"),
+            eligible_discount_amount=Decimal("3"),
+        ),
     )
 
     assert result.cash_amount == Decimal("90")
@@ -226,10 +237,10 @@ def test_settlement_rejects_unallocated_cash_gap():
 def test_settlement_rejects_withholdings_greater_than_the_amount_settled():
     """A withholding configuration cannot produce a negative cash payment."""
     result = SettlementEngine().calculate(
-        document_total=Decimal("100"),
-        open_balance=Decimal("100"),
-        settlement_amount=Decimal("100"),
-        withholding_rules=[MockRule("IR", Decimal("120"), "payment", "withholding_payable")],
+        Decimal("100"),
+        Decimal("100"),
+        Decimal("100"),
+        [MockRule("IR", Decimal("120"), "payment", "withholding_payable")],
     )
 
     assert result.cash_amount == Decimal("0")
@@ -240,10 +251,10 @@ def test_settlement_rejects_withholdings_greater_than_the_amount_settled():
 def test_settlement_allows_withholdings_equal_to_the_amount_settled():
     """A fully withheld settlement is valid even when its cash portion is zero."""
     result = SettlementEngine().calculate(
-        document_total=Decimal("100"),
-        open_balance=Decimal("100"),
-        settlement_amount=Decimal("100"),
-        withholding_rules=[MockRule("IR", Decimal("100"), "payment", "withholding_payable")],
+        Decimal("100"),
+        Decimal("100"),
+        Decimal("100"),
+        [MockRule("IR", Decimal("100"), "payment", "withholding_payable")],
     )
 
     assert result.cash_amount == Decimal("0.00")
@@ -254,11 +265,11 @@ def test_settlement_allows_withholdings_equal_to_the_amount_settled():
 def test_settlement_allows_cash_excess_for_a_separate_advance_entry():
     """A payment surplus is balanced by the posting mapper as a party advance."""
     result = SettlementEngine().calculate(
-        document_total=Decimal("60"),
-        open_balance=Decimal("60"),
-        settlement_amount=Decimal("60"),
-        withholding_rules=[],
-        actual_cash_amount=Decimal("100"),
+        Decimal("60"),
+        Decimal("60"),
+        Decimal("60"),
+        [],
+        options=SettlementOptions(actual_cash_amount=Decimal("100")),
     )
 
     assert result.cash_amount == Decimal("100")

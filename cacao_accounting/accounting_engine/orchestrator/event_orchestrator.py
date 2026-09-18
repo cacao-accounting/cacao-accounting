@@ -18,7 +18,7 @@ from cacao_accounting.accounting_engine.common.context import (
 )
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
 from cacao_accounting.accounting_engine.landed_cost.engine import LandedCostEngine
-from cacao_accounting.accounting_engine.settlement.engine import SettlementEngine
+from cacao_accounting.accounting_engine.settlement.engine import SettlementEngine, SettlementOptions
 from cacao_accounting.accounting_engine.snapshots.serializer import SnapshotSerializer
 from cacao_accounting.accounting_engine.orchestrator.mapper import AccountingMapper
 
@@ -86,15 +86,17 @@ class BusinessEventOrchestrator:
                 open_balance=context.references.get("open_balance", Decimal("0")),
                 settlement_amount=settlement_amount,
                 withholding_rules=withholding_rules,
-                rounding_policy=context.rounding_policy,
-                transaction_direction=context.transaction_direction,
-                document_currency=context.currency,
-                company_currency=context.company_currency,
-                document_exchange_rate=context.exchange_rate,
-                settlement_exchange_rate=settlement_exchange_rate,
-                actual_cash_amount=context.references.get("actual_cash_amount"),
-                eligible_discount_amount=context.references.get("eligible_discount_amount"),
-                explicit_exchange_difference=context.references.get("explicit_exchange_difference", Decimal("0")),
+                options=SettlementOptions(
+                    rounding_policy=context.rounding_policy,
+                    transaction_direction=context.transaction_direction,
+                    document_currency=context.currency,
+                    company_currency=context.company_currency,
+                    document_exchange_rate=context.exchange_rate,
+                    settlement_exchange_rate=settlement_exchange_rate,
+                    actual_cash_amount=context.references.get("actual_cash_amount"),
+                    eligible_discount_amount=context.references.get("eligible_discount_amount"),
+                    explicit_exchange_difference=context.references.get("explicit_exchange_difference", Decimal("0")),
+                ),
             )
 
         # 4. Generate Pro-forma Journal Entry
