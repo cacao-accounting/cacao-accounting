@@ -1,6 +1,7 @@
 """Regresión de aislamiento para borradores de factura de compra."""
 
 from decimal import Decimal
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -10,15 +11,23 @@ import pytest
 from flask import Flask
 from flask_babel import Babel, force_locale
 
+from cacao_accounting.compras import purchase_invoice_draft_service as draft_service
 from cacao_accounting.compras.purchase_invoice_draft_service import (
     PurchaseInvoiceDraftCommand,
     PurchaseInvoiceDraftError,
     PurchaseInvoiceDraftLine,
+    _assert_expected_total,
+    _build_draft_invoice,
+    _relate_line_to_source,
+    _resolve_idempotent_replay,
     _validate_idempotency_replay,
     _validate_line,
     _validate_sources,
+    create_purchase_invoice_draft,
 )
-from cacao_accounting.database import CompanyParty, PurchaseInvoice
+from cacao_accounting.database import CompanyParty, Entity, Party, PurchaseInvoice, PurchaseInvoiceItem
+from cacao_accounting.document_flow import DocumentFlowError
+from sqlalchemy import select
 
 TRANSLATIONS_DIR = Path(__file__).resolve().parent.parent / "cacao_accounting" / "translations"
 
@@ -129,3 +138,252 @@ def test_non_purchasable_line_translates_template_before_interpolation() -> None
 
     assert exc_info.value.code == "LINE_UNRESOLVED"
     assert str(exc_info.value) == "Item 'CACAO-01' is not purchasable."
+
+
+def test_assert_expected_total_accepts_none_and_matching():
+    """An absent observed total is ignored; a matching one passes."""
+    _assert_expected_total(cast(PurchaseInvoiceDraftCommand, SimpleNamespace(expected_total=None)), Decimal("200"))
+    _assert_expected_total(cast(PurchaseInvoiceDraftCommand, SimpleNamespace(expected_total=Decimal("100"))), Decimal("100"))
+
+
+def test_assert_expected_total_rejects_mismatch():
+    """A divergence beyond the cent tolerance is a math mismatch."""
+    with pytest.raises(PurchaseInvoiceDraftError) as exc_info:
+        _assert_expected_total(
+            cast(PurchaseInvoiceDraftCommand, SimpleNamespace(expected_total=Decimal("100"))), Decimal("200")
+        )
+    assert exc_info.value.code == "MATH_MISMATCH"
+
+
+def test_resolve_idempotent_replay_without_key_returns_none():
+    """No idempotency key short-circuits the replay lookup."""
+    command = cast(PurchaseInvoiceDraftCommand, SimpleNamespace(idempotency_key=None))
+    assert _resolve_idempotent_replay(command) is None
+
+
+def test_resolve_idempotent_replay_returns_existing_invoice():
+    """A key that matches the same tenant and supplier returns the document."""
+    existing = cast(PurchaseInvoice, SimpleNamespace(company="company-a", supplier_id="supplier-a"))
+    command = cast(
+        PurchaseInvoiceDraftCommand,
+        SimpleNamespace(idempotency_key="KEY", company_id="company-a", supplier_id="supplier-a"),
+    )
+    database_stub = SimpleNamespace(
+        select=select, session=SimpleNamespace(execute=lambda _query: SimpleNamespace(scalar_one_or_none=lambda: existing))
+    )
+    with patch("cacao_accounting.compras.purchase_invoice_draft_service.database", database_stub):
+        assert _resolve_idempotent_replay(command) is existing
+
+
+def test_resolve_idempotent_replay_conflict_raises():
+    """A key owned by another tenant must never return that document."""
+    existing = cast(PurchaseInvoice, SimpleNamespace(company="company-b", supplier_id="supplier-a"))
+    command = cast(
+        PurchaseInvoiceDraftCommand,
+        SimpleNamespace(idempotency_key="KEY", company_id="company-a", supplier_id="supplier-a"),
+    )
+    database_stub = SimpleNamespace(
+        select=select, session=SimpleNamespace(execute=lambda _query: SimpleNamespace(scalar_one_or_none=lambda: existing))
+    )
+    with patch("cacao_accounting.compras.purchase_invoice_draft_service.database", database_stub):
+        with pytest.raises(PurchaseInvoiceDraftError) as exc_info:
+            _resolve_idempotent_replay(command)
+    assert exc_info.value.code == "IDEMPOTENCY_KEY_CONFLICT"
+
+
+def test_relate_line_to_source_requires_receipt_item_for_three_way():
+    """A 3-way line without a receipt item is unresolved."""
+    command = cast(PurchaseInvoiceDraftCommand, SimpleNamespace(matching_mode="THREE_WAY_MATCH", purchase_receipt_id="REC"))
+    line = cast(PurchaseInvoiceDraftLine, SimpleNamespace(purchase_receipt_item_id=None))
+    with pytest.raises(PurchaseInvoiceDraftError) as exc_info:
+        _relate_line_to_source(
+            cast(PurchaseInvoice, SimpleNamespace(id="INV")),
+            cast(PurchaseInvoiceItem, SimpleNamespace(id="LI", uom="UN")),
+            line,
+            command,
+        )
+    assert exc_info.value.code == "LINE_UNRESOLVED"
+
+
+def test_relate_line_to_source_creates_receipt_relation():
+    """A 3-way line creates the receipt-to-invoice relation."""
+    calls: list[dict] = []
+    command = cast(PurchaseInvoiceDraftCommand, SimpleNamespace(matching_mode="THREE_WAY_MATCH", purchase_receipt_id="REC"))
+    line = cast(
+        PurchaseInvoiceDraftLine,
+        SimpleNamespace(purchase_receipt_item_id="RI", quantity=Decimal("1"), rate=Decimal("2"), amount=Decimal("2")),
+    )
+    with patch(
+        "cacao_accounting.compras.purchase_invoice_draft_service.create_document_relation", lambda **kw: calls.append(kw)
+    ):
+        _relate_line_to_source(
+            cast(PurchaseInvoice, SimpleNamespace(id="INV")),
+            cast(PurchaseInvoiceItem, SimpleNamespace(id="LI", uom="UN")),
+            line,
+            command,
+        )
+    assert calls[0]["source_type"] == "purchase_receipt"
+    assert calls[0]["source_id"] == "REC"
+    assert calls[0]["target_id"] == "INV"
+    assert calls[0]["target_item_id"] == "LI"
+
+
+def test_relate_line_to_source_requires_order_item_for_two_way():
+    """A 2-way line without an order item is unresolved."""
+    command = cast(PurchaseInvoiceDraftCommand, SimpleNamespace(matching_mode="TWO_WAY_MATCH", purchase_order_id="PO"))
+    line = cast(PurchaseInvoiceDraftLine, SimpleNamespace(purchase_order_item_id=None))
+    with pytest.raises(PurchaseInvoiceDraftError) as exc_info:
+        _relate_line_to_source(
+            cast(PurchaseInvoice, SimpleNamespace(id="INV")),
+            cast(PurchaseInvoiceItem, SimpleNamespace(id="LI", uom="UN")),
+            line,
+            command,
+        )
+    assert exc_info.value.code == "LINE_UNRESOLVED"
+
+
+def test_build_draft_invoice_sets_totals_and_identifier():
+    """The header carries totals, base amounts and the assigned identifier."""
+    added: list = []
+    identifiers: list[dict] = []
+    command = cast(
+        PurchaseInvoiceDraftCommand,
+        SimpleNamespace(
+            company_id="cacao",
+            supplier_id="SUP",
+            supplier_invoice_no=" F-1 ",
+            idempotency_key=None,
+            posting_date=date(2026, 1, 1),
+            transaction_currency="NIO",
+            purchase_order_id=None,
+            purchase_receipt_id=None,
+            tax_template_id=None,
+            remarks="rem",
+        ),
+    )
+    database_stub = SimpleNamespace(session=SimpleNamespace(add=added.append, flush=lambda: None))
+    with (
+        patch("cacao_accounting.compras.purchase_invoice_draft_service.database", database_stub),
+        patch(
+            "cacao_accounting.compras.purchase_invoice_draft_service.assign_document_identifier",
+            lambda **kw: identifiers.append(kw),
+        ),
+    ):
+        invoice = _build_draft_invoice(
+            command,
+            "user-1",
+            cast(Entity, SimpleNamespace(currency="NIO")),
+            cast(Party, SimpleNamespace(name="Proveedor")),
+            Decimal("1"),
+            Decimal("100"),
+            Decimal("15"),
+            Decimal("115"),
+        )
+
+    assert invoice.supplier_invoice_no == "F-1"
+    assert invoice.supplier_name == "Proveedor"
+    assert invoice.total == Decimal("100")
+    assert invoice.tax_total == Decimal("15")
+    assert invoice.grand_total == Decimal("115")
+    assert invoice.base_grand_total == Decimal("115")
+    assert invoice.outstanding_amount == Decimal("115")
+    assert invoice.docstatus == 0
+    assert added == [invoice]
+    assert identifiers[0]["document"] is invoice
+
+
+def _orchestration_monkeypatch(monkeypatch, invoice):
+    """Patch the creation pipeline dependencies to isolate the orchestrator."""
+    monkeypatch.setattr(draft_service, "_require_actor_can_create", lambda _actor, _company: None)
+    monkeypatch.setattr(
+        draft_service,
+        "_validate_header",
+        lambda _command: (SimpleNamespace(currency="NIO"), SimpleNamespace(name="Proveedor"), SimpleNamespace()),
+    )
+    monkeypatch.setattr(draft_service, "_resolve_idempotent_replay", lambda _command: None)
+    monkeypatch.setattr(draft_service, "_validate_duplicate", lambda _command: None)
+    monkeypatch.setattr(draft_service, "_validate_sources", lambda _command, _settings: None)
+    monkeypatch.setattr(
+        draft_service,
+        "_validate_line",
+        lambda _line: SimpleNamespace(code="IT", name="Item", purchase_uom=None, default_uom="UN"),
+    )
+    monkeypatch.setattr(draft_service, "_exchange_rate", lambda _company, _command: Decimal("1"))
+    monkeypatch.setattr(draft_service, "_resolve_tax_total", lambda _command, _total: Decimal("15"))
+    monkeypatch.setattr(draft_service, "_build_draft_invoice", lambda *_args, **_kwargs: invoice)
+    monkeypatch.setattr(draft_service, "refresh_source_caches_for_target", lambda *_args: None)
+    monkeypatch.setattr(draft_service, "log_create", lambda _invoice: None)
+
+
+def _draft_command(**overrides):
+    values = {
+        "company_id": "cacao",
+        "supplier_id": "SUP",
+        "lines": (SimpleNamespace(amount=Decimal("100")),),
+        "matching_mode": "NON_PO_INVOICE",
+        "expected_total": None,
+        "idempotency_key": None,
+    }
+    values.update(overrides)
+    return cast(PurchaseInvoiceDraftCommand, SimpleNamespace(**values))
+
+
+def test_create_draft_orchestrates_and_commits(monkeypatch):
+    """The happy path persists lines, refreshes caches, logs and commits."""
+    invoice = SimpleNamespace(id="INV-1")
+    persisted: list = []
+    commits: list[bool] = []
+    _orchestration_monkeypatch(monkeypatch, invoice)
+    monkeypatch.setattr(draft_service, "_persist_draft_lines", lambda inv, _command, _validated, _rate: persisted.append(inv))
+    monkeypatch.setattr(
+        draft_service,
+        "database",
+        SimpleNamespace(session=SimpleNamespace(commit=lambda: commits.append(True), rollback=lambda: commits.append(False))),
+    )
+
+    result = create_purchase_invoice_draft(_draft_command(), "user-1")
+
+    assert result is invoice
+    assert persisted == [invoice]
+    assert commits == [True]
+
+
+def test_create_draft_rolls_back_on_domain_error(monkeypatch):
+    """A domain error rolls back the transaction when commit is enabled."""
+    _orchestration_monkeypatch(monkeypatch, SimpleNamespace(id="INV-1"))
+
+    def _raise(_actor, _company):
+        raise PurchaseInvoiceDraftError("AUTHORIZATION_REVOKED", "x")
+
+    monkeypatch.setattr(draft_service, "_require_actor_can_create", _raise)
+    rolled: list[bool] = []
+    monkeypatch.setattr(
+        draft_service,
+        "database",
+        SimpleNamespace(session=SimpleNamespace(commit=lambda: None, rollback=lambda: rolled.append(True))),
+    )
+
+    with pytest.raises(PurchaseInvoiceDraftError):
+        create_purchase_invoice_draft(_draft_command(), "user-1")
+
+    assert rolled == [True]
+
+
+def test_create_draft_translates_document_flow_error(monkeypatch):
+    """A document flow over-allocation becomes a controlled quantity error."""
+    _orchestration_monkeypatch(monkeypatch, SimpleNamespace(id="INV-1"))
+
+    def _raise(*_args, **_kwargs):
+        raise DocumentFlowError("exceeds")
+
+    monkeypatch.setattr(draft_service, "_persist_draft_lines", _raise)
+    monkeypatch.setattr(
+        draft_service,
+        "database",
+        SimpleNamespace(session=SimpleNamespace(commit=lambda: None, rollback=lambda: None)),
+    )
+
+    with pytest.raises(PurchaseInvoiceDraftError) as exc_info:
+        create_purchase_invoice_draft(_draft_command(matching_mode="THREE_WAY_MATCH"), "user-1")
+
+    assert exc_info.value.code == "QUANTITY_EXCEEDS_RECEIPT"
