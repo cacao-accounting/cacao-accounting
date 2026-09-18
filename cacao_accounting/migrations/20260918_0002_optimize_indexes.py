@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Alembic migration for DB performance and integrity optimizations.
 
 Revision ID: 20260918_0002

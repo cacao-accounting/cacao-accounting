@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Shared publication policy for read-only query tools.
 
 Plugins are transport adapters; authorization and exposure metadata belong to

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Servicio centralizado y reusable de bitácora de auditoría (append-only)."""
 
 from __future__ import annotations

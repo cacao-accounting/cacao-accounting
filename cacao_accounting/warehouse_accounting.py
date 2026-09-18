@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 - 2026 William Jose Moreno Reyes
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Helpers para resolver configuracion contable por almacen y compania."""
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
-# Copyright 2026
-# Licensed under the Apache License, Version 2.0
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 """Servicios del asistente de configuración inicial."""
 

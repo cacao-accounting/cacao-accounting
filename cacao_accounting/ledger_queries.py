@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Predicados compartidos para consultar ledgers contables y de inventario.
 
 Una anulación dentro del mismo período conserva el asiento o movimiento original

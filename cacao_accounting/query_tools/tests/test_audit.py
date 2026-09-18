@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 from __future__ import annotations
 
 from cacao_accounting.query_tools.audit import (

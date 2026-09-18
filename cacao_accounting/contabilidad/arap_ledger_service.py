@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Ledger documental de cuentas por cobrar y pagar.
 
 El módulo mantiene el saldo de cada documento en su moneda documental y una

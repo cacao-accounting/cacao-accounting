@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Motor reutilizable para resolver, planear y aplicar asignaciones AR/AP.
 
 Los montos de las solicitudes están en la moneda documental. La tasa expresa

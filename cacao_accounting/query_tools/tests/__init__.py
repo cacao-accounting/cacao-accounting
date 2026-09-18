@@ -1,1 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Pruebas unitarias para el paquete query_tools."""

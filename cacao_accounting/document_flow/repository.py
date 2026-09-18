@@ -99,9 +99,7 @@ def iter_active_relations_for_source(
     for tt, target_ids in ids_by_type.items():
         spec = get_document_type(tt)
         docs = (
-            database.session.execute(
-                database.select(spec.header_model).where(spec.header_model.id.in_(target_ids))
-            )
+            database.session.execute(database.select(spec.header_model).where(spec.header_model.id.in_(target_ids)))
             .scalars()
             .all()
         )

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Utilidad para iniciar el servidor local WSGI usando Waitress."""
 
 # ---------------------------------------------------------------------------------------

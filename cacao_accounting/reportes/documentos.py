@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Proyecciones controladas de documentos para drill-down de solo lectura."""
 
 from __future__ import annotations
