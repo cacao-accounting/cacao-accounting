@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Shared fiscal policy helpers used by previews, persistence, and engines."""
 
 from __future__ import annotations

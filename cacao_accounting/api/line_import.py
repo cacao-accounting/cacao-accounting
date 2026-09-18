@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 - 2026 William José MORENO Reyes
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 """Logic for importing detail lines from external sources."""
 

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Stable semantic dataset services used by external reporting adapters.
 
 These functions deliberately return plain dictionaries rather than ORM

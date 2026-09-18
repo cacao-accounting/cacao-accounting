@@ -698,9 +698,13 @@ def _build_base_query(spec: SearchSelectSpec, normalized_filters: dict[str, Any]
         else:
             target_companies = company_scope
 
-        cp_exists = select(1).select_from(CompanyParty).where(
-            CompanyParty.party_id == Party.id,
-            CompanyParty.is_active.is_(True),
+        cp_exists = (
+            select(1)
+            .select_from(CompanyParty)
+            .where(
+                CompanyParty.party_id == Party.id,
+                CompanyParty.is_active.is_(True),
+            )
         )
         if target_companies is not None:
             cp_exists = cp_exists.where(CompanyParty.company.in_(sorted(target_companies)))

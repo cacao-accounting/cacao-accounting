@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Read-only operational drill-down queries for treasury and audit users."""
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 - 2026 William Jose Moreno Reyes
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 """Serializable print contexts and schemas for registered documents."""
 
 from __future__ import annotations

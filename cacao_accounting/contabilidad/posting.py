@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Fachada de compatibilidad para los servicios de contabilización."""
 
 from __future__ import annotations

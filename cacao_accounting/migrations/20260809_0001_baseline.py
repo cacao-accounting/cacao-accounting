@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Migración dummy que nunca falla.
 
 Cacao Accounting crea su esquema completo con ``create_all`` durante la

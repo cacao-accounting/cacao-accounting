@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Continuous reconciliation between the documentary AR/AP ledger and GL."""
 
 from __future__ import annotations

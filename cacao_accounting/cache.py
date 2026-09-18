@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Soporte para caché de la aplicación adaptándose al modo de ejecución."""
 
 from functools import wraps

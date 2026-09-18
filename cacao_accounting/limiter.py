@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Módulo para el control de peticiones y prevención de ataques de fuerza bruta (Rate Limiting)."""
 
 from typing import Any, Callable

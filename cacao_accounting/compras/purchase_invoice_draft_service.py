@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """HTTP-independent, transactional creation of purchase-invoice drafts.
 
 This is the shared domain boundary for the manual form, importers and Cloud

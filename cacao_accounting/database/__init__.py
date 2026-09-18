@@ -3728,6 +3728,7 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
         if "target_item_id" in kwargs and kwargs["target_item_id"] is None:
             kwargs["target_item_id"] = ""
         super().__init__(**kwargs)
+
     company = database.Column(
         database.String(10),
         database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),

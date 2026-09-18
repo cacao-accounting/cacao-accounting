@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
 """Herramientas de consulta reutilizables para el módulo de contabilidad."""
 
 from cacao_accounting.query_tools.registry import Registry, registry
