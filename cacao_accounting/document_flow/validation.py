@@ -206,7 +206,7 @@ def require_line_relations(*, target_type: str, target_id: str, source_type: str
     relation_item_ids = {str(relation.target_item_id) for relation in relations if relation.target_item_id}
     if len(relations) != len(items) or relation_item_ids != expected_item_ids:
         raise ValueError(
-            _("Cada línea debe conservar una relación activa con el documento origen " "(%(source_type)s:%(source_id)s).")
+            _("Cada línea debe conservar una relación activa con el documento origen (%(source_type)s:%(source_id)s).")
             % {"source_type": source_type, "source_id": source_id}
         )
 
