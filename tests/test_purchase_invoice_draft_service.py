@@ -18,6 +18,7 @@ from cacao_accounting.compras.purchase_invoice_draft_service import (
     PurchaseInvoiceDraftLine,
     _assert_expected_total,
     _build_draft_invoice,
+    _persist_draft_lines,
     _relate_line_to_source,
     _resolve_idempotent_replay,
     _validate_idempotency_replay,
@@ -242,6 +243,91 @@ def test_relate_line_to_source_requires_order_item_for_two_way():
     assert exc_info.value.code == "LINE_UNRESOLVED"
 
 
+def test_relate_line_to_source_creates_order_relation():
+    """A 2-way line creates the order-to-invoice relation with its values."""
+    calls: list[dict] = []
+    command = cast(PurchaseInvoiceDraftCommand, SimpleNamespace(matching_mode="TWO_WAY_MATCH", purchase_order_id="PO"))
+    line = cast(
+        PurchaseInvoiceDraftLine,
+        SimpleNamespace(purchase_order_item_id="OI", quantity=Decimal("3"), rate=Decimal("2.5"), amount=Decimal("7.5")),
+    )
+    with patch(
+        "cacao_accounting.compras.purchase_invoice_draft_service.create_document_relation",
+        lambda **kwargs: calls.append(kwargs),
+    ):
+        _relate_line_to_source(
+            cast(PurchaseInvoice, SimpleNamespace(id="INV")),
+            cast(PurchaseInvoiceItem, SimpleNamespace(id="LI", uom="BOX")),
+            line,
+            command,
+        )
+
+    assert calls == [
+        {
+            "source_type": "purchase_order",
+            "source_id": "PO",
+            "source_item_id": "OI",
+            "target_type": "purchase_invoice",
+            "target_id": "INV",
+            "target_item_id": "LI",
+            "qty": Decimal("3"),
+            "uom": "BOX",
+            "rate": Decimal("2.5"),
+            "amount": Decimal("7.5"),
+        }
+    ]
+
+
+def test_persist_draft_lines_preserves_values_for_each_line():
+    """Every resolved line is persisted with converted amounts and related."""
+    added: list[SimpleNamespace] = []
+    relations: list[tuple[SimpleNamespace, SimpleNamespace, SimpleNamespace, SimpleNamespace]] = []
+    command = cast(
+        PurchaseInvoiceDraftCommand,
+        SimpleNamespace(
+            matching_mode="NON_PO_INVOICE",
+            lines=(
+                SimpleNamespace(
+                    quantity=Decimal("2"), rate=Decimal("4"), amount=Decimal("8"), uom=None, expense_account_id="EXP-1"
+                ),
+                SimpleNamespace(
+                    quantity=Decimal("1"), rate=Decimal("5"), amount=Decimal("5"), uom="BOX", expense_account_id=None
+                ),
+            ),
+        ),
+    )
+    invoice = SimpleNamespace(id="INV")
+    validated = [
+        SimpleNamespace(code="ITEM-1", name="Primer ítem", purchase_uom="EA", default_uom="UNIT"),
+        SimpleNamespace(code="ITEM-2", name="Segundo ítem", purchase_uom=None, default_uom="UNIT"),
+    ]
+
+    def build_line(**values):
+        line = SimpleNamespace(id=f"LI-{len(added) + 1}", **values)
+        return line
+
+    database_stub = SimpleNamespace(session=SimpleNamespace(add=added.append, flush=lambda: None))
+    with (
+        patch("cacao_accounting.compras.purchase_invoice_draft_service.database", database_stub),
+        patch("cacao_accounting.compras.purchase_invoice_draft_service.PurchaseInvoiceItem", build_line),
+        patch(
+            "cacao_accounting.compras.purchase_invoice_draft_service._relate_line_to_source",
+            lambda *args: relations.append(args),
+        ),
+    ):
+        _persist_draft_lines(invoice, command, validated, Decimal("1.5"))
+
+    assert [line.item_code for line in added] == ["ITEM-1", "ITEM-2"]
+    assert [line.uom for line in added] == ["EA", "BOX"]
+    assert [line.base_rate for line in added] == [Decimal("6.0000"), Decimal("7.5000")]
+    assert [line.base_amount for line in added] == [Decimal("12.0000"), Decimal("7.5000")]
+    assert [line.expense_account_id for line in added] == ["EXP-1", None]
+    assert [(relation[1].id, relation[2].amount) for relation in relations] == [
+        ("LI-1", Decimal("8")),
+        ("LI-2", Decimal("5")),
+    ]
+
+
 def test_build_draft_invoice_sets_totals_and_identifier():
     """The header carries totals, base amounts and the assigned identifier."""
     added: list = []
@@ -328,7 +414,8 @@ def _draft_command(**overrides):
     return cast(PurchaseInvoiceDraftCommand, SimpleNamespace(**values))
 
 
-def test_create_draft_orchestrates_and_commits(monkeypatch):
+@pytest.mark.parametrize(("commit", "transactions"), [(True, [True]), (False, [])])
+def test_create_draft_orchestrates_and_commits(monkeypatch, commit, transactions):
     """The happy path persists lines, refreshes caches, logs and commits."""
     invoice = SimpleNamespace(id="INV-1")
     persisted: list = []
@@ -341,11 +428,11 @@ def test_create_draft_orchestrates_and_commits(monkeypatch):
         SimpleNamespace(session=SimpleNamespace(commit=lambda: commits.append(True), rollback=lambda: commits.append(False))),
     )
 
-    result = create_purchase_invoice_draft(_draft_command(), "user-1")
+    result = create_purchase_invoice_draft(_draft_command(), "user-1", commit=commit)
 
     assert result is invoice
     assert persisted == [invoice]
-    assert commits == [True]
+    assert commits == transactions
 
 
 def test_create_draft_rolls_back_on_domain_error(monkeypatch):
@@ -367,6 +454,48 @@ def test_create_draft_rolls_back_on_domain_error(monkeypatch):
         create_purchase_invoice_draft(_draft_command(), "user-1")
 
     assert rolled == [True]
+
+
+def test_create_draft_does_not_rollback_without_commit(monkeypatch):
+    """A caller-managed transaction owns rollback after a domain failure."""
+    _orchestration_monkeypatch(monkeypatch, SimpleNamespace(id="INV-1"))
+
+    def raise_authorization_error(_actor, _company):
+        """Simulate an authorization failure before persistence starts."""
+        raise PurchaseInvoiceDraftError("AUTHORIZATION_REVOKED", "x")
+
+    monkeypatch.setattr(
+        draft_service,
+        "_require_actor_can_create",
+        raise_authorization_error,
+    )
+    rolled: list[bool] = []
+    monkeypatch.setattr(
+        draft_service,
+        "database",
+        SimpleNamespace(session=SimpleNamespace(commit=lambda: None, rollback=lambda: rolled.append(True))),
+    )
+
+    with pytest.raises(PurchaseInvoiceDraftError):
+        create_purchase_invoice_draft(_draft_command(), "user-1", commit=False)
+
+    assert rolled == []
+
+
+def test_create_draft_idempotent_replay_does_not_commit(monkeypatch):
+    """An idempotent retry returns the original draft without another commit."""
+    invoice = SimpleNamespace(id="INV-1")
+    _orchestration_monkeypatch(monkeypatch, invoice)
+    monkeypatch.setattr(draft_service, "_resolve_idempotent_replay", lambda _command: invoice)
+    committed: list[bool] = []
+    monkeypatch.setattr(
+        draft_service,
+        "database",
+        SimpleNamespace(session=SimpleNamespace(commit=lambda: committed.append(True), rollback=lambda: None)),
+    )
+
+    assert create_purchase_invoice_draft(_draft_command(), "user-1") is invoice
+    assert committed == []
 
 
 def test_create_draft_translates_document_flow_error(monkeypatch):
