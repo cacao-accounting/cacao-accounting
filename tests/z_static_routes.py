@@ -58,7 +58,7 @@ static_rutes = [
         ],
     ),
     Route(
-        url="/accounting/entity/cacao",
+        url="/accounting/entity/CACAO",
         text=[
             "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
             "Datos Generales".encode("utf-8"),
@@ -80,9 +80,9 @@ static_rutes = [
         ],
     ),
     Route(
-        url="/accounting/entity/edit/cacao",
+        url="/accounting/entity/edit/CACAO",
         text=[
-            "/accounting/entity/cacao".encode("utf-8"),
+            "/accounting/entity/CACAO".encode("utf-8"),
             "Editar Entidad".encode("utf-8"),
             "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
             "Información Básica".encode("utf-8"),
@@ -115,22 +115,22 @@ static_rutes = [
             "Choco Sonrisas Sociedad Anonima".encode("utf-8"),
             "Mundo Cafe Sociedad Anonima".encode("utf-8"),
             "Mundo Sabor Sociedad Anonima".encode("utf-8"),
-            "cacao".encode("utf-8"),
-            "cafe".encode("utf-8"),
-            "dulce".encode("utf-8"),
-            "/accounting/account/cacao/11.01.001.002".encode("utf-8"),
+            "CACAO".encode("utf-8"),
+            "CAFE".encode("utf-8"),
+            "DULCE".encode("utf-8"),
+            "/accounting/account/CACAO/11.01.001.002".encode("utf-8"),
             "Fondos por Depositar".encode("utf-8"),
         ],
     ),
     Route(
-        url="/accounting/accounts?entidad=cafe",
+        url="/accounting/accounts?entidad=CAFE",
         text=[
             "Catálogo de Cuentas Contables.".encode("utf-8"),
             "Mundo Cafe Sociedad Anonima".encode("utf-8"),
         ],
     ),
     Route(
-        url="/accounting/accounts?entidad=dulce",
+        url="/accounting/accounts?entidad=DULCE",
         text=[
             "Catálogo de Cuentas Contables.".encode("utf-8"),
             "Mundo Sabor Sociedad Anonima".encode("utf-8"),
@@ -159,7 +159,7 @@ static_rutes = [
         ],
     ),
     Route(
-        url="/accounting/costs_center?entidad=cacao",
+        url="/accounting/costs_center?entidad=CACAO",
         text=[
             "Catálogo de Centros de Costos.".encode("utf-8"),
             "Entidad".encode("utf-8"),
@@ -181,7 +181,7 @@ static_rutes = [
         ],
     ),
     Route(
-        url="/accounting/costs_center?entidad=cafe",
+        url="/accounting/costs_center?entidad=CAFE",
         text=[
             "Catálogo de Centros de Costos.".encode("utf-8"),
             "Entidad".encode("utf-8"),
@@ -189,7 +189,7 @@ static_rutes = [
         ],
     ),
     Route(
-        url="/accounting/costs_center?entidad=dulce",
+        url="/accounting/costs_center?entidad=DULCE",
         text=[
             "Catálogo de Centros de Costos.".encode("utf-8"),
             "Entidad".encode("utf-8"),
@@ -243,7 +243,7 @@ static_rutes = [
         ],
     ),
     Route(
-        url="/accounting/account/cacao/1",
+        url="/accounting/account/CACAO/1",
         text=[
             "1 - Activos".encode("utf-8"),
         ],
