@@ -55,28 +55,6 @@ def authorized_company_codes(modulo: str = ACTIVE_COMPANY_MODULE) -> list[str]:
     return codes
 
 
-def available_companies() -> list[tuple[str, str]]:
-    """Compañías autorizadas y activas como pares ``(code, etiqueta)``."""
-    from cacao_accounting.database import Entity, database
-
-    codes = authorized_company_codes()
-    if not codes:
-        return []
-    entities = (
-        database.session.execute(
-            database.select(Entity).where(Entity.code.in_(codes), Entity.enabled.is_(True)).order_by(Entity.code)
-        )
-        .scalars()
-        .all()
-    )
-    return [(entity.code, entity.name or entity.company_name) for entity in entities]
-
-
-def active_company_is_selectable() -> bool:
-    """Indica si la interfaz debe mostrar el selector de compañía."""
-    return not is_desktop_mode() and len(authorized_company_codes()) > 1
-
-
 def get_active_company(requested: str | None = None) -> str | None:
     """Resuelve la compañía activa del usuario.
 
@@ -122,8 +100,3 @@ def set_active_company(response: Response, code: str | None) -> bool:
         secure=not is_desktop_mode(),
     )
     return True
-
-
-def clear_active_company(response: Response) -> None:
-    """Elimina la cookie de compañía activa."""
-    response.delete_cookie(ACTIVE_COMPANY_COOKIE)
