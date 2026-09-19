@@ -36,12 +36,19 @@ def pagina_inicio():
     from flask import redirect
     from flask_login import current_user
 
+    from cacao_accounting.company_context import authorized_company_codes, get_active_company
+
     if current_user.is_portal_customer:
         return redirect("/portal/customer")
     if current_user.is_portal_supplier:
         return redirect("/portal/supplier")
 
-    entidades = database.session.query(Entity).order_by(Entity.name).all()
+    authorized_codes = authorized_company_codes()
+    entidades = (
+        database.session.query(Entity).filter(Entity.code.in_(authorized_codes)).order_by(Entity.name).all()
+        if authorized_codes
+        else []
+    )
     periodos = database.session.query(AccountingPeriod).order_by(AccountingPeriod.start.desc()).all()
     dashboard_entities = [
         {"id": entity.id, "code": entity.code, "name": entity.name or entity.company_name} for entity in entidades
@@ -62,6 +69,7 @@ def pagina_inicio():
         periodos=periodos,
         dashboard_entities=dashboard_entities,
         dashboard_periods=dashboard_periods,
+        active_company=get_active_company(),
     )
 
 

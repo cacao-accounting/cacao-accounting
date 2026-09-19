@@ -229,6 +229,16 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(audit_action_label=audit_action_label)
             app.jinja_env.globals.update(transaction_form_i18n=_transaction_form_i18n_labels)
 
+            from cacao_accounting.company_context import (
+                active_company_is_selectable,
+                available_companies,
+                get_active_company,
+            )
+
+            app.jinja_env.globals.update(compania_activa=get_active_company)
+            app.jinja_env.globals.update(companias_disponibles=available_companies)
+            app.jinja_env.globals.update(selector_compania_activo=active_company_is_selectable)
+
             def get_balance_confirmations_history(party_id: str, party_type: str, company: str | None = None):
                 from cacao_accounting.database import BalanceConfirmation, database
                 from sqlalchemy import select

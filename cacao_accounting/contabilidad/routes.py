@@ -453,10 +453,13 @@ def currency_toggle_active(code):
 @verifica_acceso("accounting")
 def conta():
     """Pantalla principal del modulo contabilidad."""
+    from cacao_accounting.company_context import get_active_company
+
     TITULO = _("Módulo Contabilidad") + " - " + APPNAME
     return render_template(
         "contabilidad.html",
         titulo=TITULO,
+        company=get_active_company(),
     )
 
 

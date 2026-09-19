@@ -75,7 +75,7 @@ def client(app):
 
 def test_dashboard_requires_login(client):
     """Sin sesión el endpoint no expone datos."""
-    response = client.get("/api/dashboard/data?company=COMP-ID")
+    response = client.get("/api/dashboard/data?company=COMP")
     assert response.status_code in {302, 401}
 
 
@@ -96,7 +96,7 @@ def test_dashboard_returns_404_for_missing_company(client):
 def test_dashboard_returns_403_for_disabled_company(client):
     """El helper temporal bloquea compañías deshabilitadas."""
     _login(client, "admin")
-    response = client.get("/api/dashboard/data?company=COMP-DISABLED-ID")
+    response = client.get("/api/dashboard/data?company=LOCK")
     assert response.status_code == 403
 
 
@@ -118,14 +118,14 @@ def test_dashboard_denies_inactive_user_even_with_module_access(app):
 def test_dashboard_validates_period_belongs_to_company(client):
     """El periodo debe pertenecer a la compañía seleccionada."""
     _login(client, "admin")
-    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-OTHER")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-OTHER")
     assert response.status_code == 404
 
 
 def test_dashboard_returns_uniform_sections_and_metrics(client):
     """El happy path devuelve contrato uniforme y métricas ampliadas."""
     _login(client, "admin")
-    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-COMP")
 
     assert response.status_code == 200
     data = response.get_json()
@@ -171,7 +171,7 @@ def test_dashboard_preserves_negative_income_for_net_loss(app, client):
         database.session.commit()
 
     _login(client, "admin")
-    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-COMP")
 
     assert response.status_code == 200
     accounting = response.get_json()["sections"]["accounting"]
@@ -191,7 +191,7 @@ def test_dashboard_excludes_cancelled_and_reversal_gl_entries(app, client):
         database.session.commit()
 
     _login(client, "admin")
-    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-COMP")
 
     assert response.status_code == 200
     sections = response.get_json()["sections"]
@@ -249,7 +249,7 @@ def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
         assert snapshot["metrics"]["accounts_receivable"] == Decimal("800")
 
     _login(client, "admin")
-    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-COMP")
     assert response.status_code == 200
     sections = response.get_json()["sections"]
     assert Decimal(str(sections["sales"]["kpis"]["sales"]["value"])) == Decimal("800")
@@ -287,7 +287,7 @@ def test_concentration_share_is_a_portion_of_the_total():
 def test_dashboard_hides_sales_without_permission(client):
     """Sin permiso de ventas no se devuelven datos sensibles de ventas."""
     _login(client, "accountant")
-    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-COMP")
 
     assert response.status_code == 200
     sales = response.get_json()["sections"]["sales"]
@@ -300,7 +300,7 @@ def test_dashboard_hides_sales_without_permission(client):
 def test_dashboard_hides_banks_without_permission(client):
     """Sin permiso de bancos no se devuelven saldos bancarios."""
     _login(client, "seller")
-    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-COMP")
 
     assert response.status_code == 200
     banks = response.get_json()["sections"]["banks"]
@@ -312,7 +312,7 @@ def test_dashboard_hides_banks_without_permission(client):
 def test_dashboard_handles_empty_company_data(client):
     """Las secciones visibles conservan estructura aunque no haya datos."""
     _login(client, "admin")
-    response = client.get("/api/dashboard/data?company=EMPTY-ID&period=PER-EMPTY")
+    response = client.get("/api/dashboard/data?company=EMPTY&period=PER-EMPTY")
 
     assert response.status_code == 200
     sections = response.get_json()["sections"]
@@ -355,7 +355,7 @@ def test_dashboard_handles_null_month_and_posting_dates(app, client):
         database.session.commit()
 
     _login(client, "admin")
-    response = client.get("/api/dashboard/data?company=COMP-ID")
+    response = client.get("/api/dashboard/data?company=COMP")
     assert response.status_code == 200
     data = response.get_json()
     assert "sections" in data
@@ -364,7 +364,7 @@ def test_dashboard_handles_null_month_and_posting_dates(app, client):
 def test_dashboard_labels_default_to_spanish(client):
     """Sin idioma de usuario las etiquetas del payload salen en el idioma base."""
     _login(client, "admin")
-    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-COMP")
 
     assert response.status_code == 200
     sections = response.get_json()["sections"]
@@ -381,7 +381,7 @@ def test_dashboard_labels_follow_user_language(app, client):
         user.language = "en"
         database.session.commit()
 
-    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-COMP")
 
     assert response.status_code == 200
     sections = response.get_json()["sections"]

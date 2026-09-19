@@ -218,7 +218,9 @@ from cacao_accounting.bancos import cash_forecast as _cf  # noqa: F401, E402
 @login_required
 def bancos_():
     """Pantalla principal del modulo de bancos."""
-    return render_template("bancos.html")
+    from cacao_accounting.company_context import get_active_company
+
+    return render_template("bancos.html", company=get_active_company())
 
 
 @bancos.route("/bank/list")

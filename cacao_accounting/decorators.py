@@ -19,6 +19,7 @@ from werkzeug.exceptions import HTTPException
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.company_context import authorized_company_codes
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.i18n import _
 from cacao_accounting.modulos import validar_modulo_activo
@@ -161,13 +162,5 @@ def resolve_required_company(company: str | None, modulo: str) -> str:
 
 def _single_authorized_company(modulo: str) -> str | None:
     """Devuelve la única compañía autorizada del usuario o ``None``."""
-    try:
-        is_auth = bool(current_user and getattr(current_user, "is_authenticated", False))
-    except Exception:
-        is_auth = False
-    if not is_auth:
-        return None
-    module_id = obtener_id_modulo_por_nombre(modulo)
-    permisos = Permisos(modulo=module_id, usuario=current_user.id)
-    companies = list(permisos.obtener_companias_autorizadas())
+    companies = authorized_company_codes(modulo)
     return companies[0] if len(companies) == 1 else None

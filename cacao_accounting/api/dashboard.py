@@ -58,13 +58,13 @@ EXPENSE_CLASSIFICATIONS = {"cost", "costo", "costos", "expense", "gasto", "gasto
 @login_required
 def get_dashboard_data():
     """Devuelve los datos necesarios para renderizar el dashboard modular."""
-    company_id = request.args.get("company")
+    company_code = request.args.get("company")
     period_id = request.args.get("period")
 
-    if not company_id:
+    if not company_code:
         return jsonify({"error": _("Se requiere el parámetro 'company'")}), 400
 
-    company = database.session.get(Entity, company_id)
+    company = database.session.execute(database.select(Entity).where(Entity.code == company_code)).scalar_one_or_none()
     if company is None:
         return jsonify({"error": _("Compañía no encontrada")}), 404
 

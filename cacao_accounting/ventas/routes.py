@@ -382,7 +382,9 @@ def _handle_delivery_note_new_post() -> ResponseReturnValue:
 @login_required
 def ventas_():
     """Modulo de ventas."""
-    return render_template("ventas.html")
+    from cacao_accounting.company_context import get_active_company
+
+    return render_template("ventas.html", company=get_active_company())
 
 
 @ventas.route("/sales-order/list")
