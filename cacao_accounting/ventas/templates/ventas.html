@@ -24,6 +24,7 @@
     <h1><i class="bi bi-handbag me-2"></i>{{ _("Ventas") }}</h1>
     <p>{{ _("Gestiona clientes, pedidos, facturación y cuentas por cobrar.") }}</p>
   </div>
+  {{ macros.company_selector() }}
 </div>
 
 <div class="ca-module-grid ca-module-workspace-grid">
@@ -123,23 +124,23 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('reportes.ar_aging') }}">{{ _('Aging de Cuentas por Cobrar') }}</a>
+        <a href="{{ url_for('reportes.ar_aging', company=company) }}">{{ _('Aging de Cuentas por Cobrar') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.accounts_receivable') }}">{{ _('Cuentas por Cobrar') }}</a>
+        <a href="{{ url_for('reportes.accounts_receivable', company=company) }}">{{ _('Cuentas por Cobrar') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.sales_by_customer') }}">{{ _('Ventas por Cliente') }}</a>
+        <a href="{{ url_for('reportes.sales_by_customer', company=company) }}">{{ _('Ventas por Cliente') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.sales_by_item') }}">{{ _('Ventas por Artículo') }}</a>
+        <a href="{{ url_for('reportes.sales_by_item', company=company) }}">{{ _('Ventas por Artículo') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.gross_margin') }}">{{ _('Margen Bruto') }}</a>
+        <a href="{{ url_for('reportes.gross_margin', company=company) }}">{{ _('Margen Bruto') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       {% else %}

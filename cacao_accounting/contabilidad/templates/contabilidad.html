@@ -24,6 +24,7 @@
     <h1><i class="bi bi-book me-2"></i>{{ _("Contabilidad") }}</h1>
     <p>{{ _("Registra operaciones contables, cierres y reportes financieros.") }}</p>
   </div>
+  {{ macros.company_selector() }}
 </div>
 
 <div class="ca-module-grid ca-module-workspace-grid">
@@ -169,27 +170,27 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('reportes.account_movement') }}">{{ _("Detalle de Movimiento Contable") }}</a>
+        <a href="{{ url_for('reportes.account_movement', company=company) }}">{{ _("Detalle de Movimiento Contable") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.account_summary') }}">{{ _("Resumen de Movimiento por Cuenta") }}</a>
+        <a href="{{ url_for('reportes.account_summary', company=company) }}">{{ _("Resumen de Movimiento por Cuenta") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.trial_balance') }}">{{ _("Balanza de Comprobación") }}</a>
+        <a href="{{ url_for('reportes.trial_balance', company=company) }}">{{ _("Balanza de Comprobación") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.balance_sheet') }}">{{ _("Balance General") }}</a>
+        <a href="{{ url_for('reportes.balance_sheet', company=company) }}">{{ _("Balance General") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.income_statement') }}">{{ _("Estado de Resultado") }}</a>
+        <a href="{{ url_for('reportes.income_statement', company=company) }}">{{ _("Estado de Resultado") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.cash_flow') }}">{{ _("Estado de Flujo de Efectivo") }}</a>
+        <a href="{{ url_for('reportes.cash_flow', company=company) }}">{{ _("Estado de Flujo de Efectivo") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>

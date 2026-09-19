@@ -111,7 +111,9 @@ _LABEL_DOCUMENTO_ORIGEN = "documento origen"
 @login_required
 def inventario_():
     """Definición de vista principal de inventarios."""
-    return render_template("inventario.html")
+    from cacao_accounting.company_context import get_active_company
+
+    return render_template("inventario.html", company=get_active_company())
 
 
 @inventario.route("/item/list")

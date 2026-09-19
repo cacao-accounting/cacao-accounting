@@ -448,16 +448,29 @@ def _preferred_group_by_from_view(report_code: str, view_key: str) -> str:
 
 
 def _resolve_company(company_code: str | None, modulo: str = "accounting") -> str:
+    """Resuelve la compañía de un reporte validando su existencia.
+
+    No cae a una compañía predeterminada: si el usuario no indica una compañía
+    y no tiene una única compañía autorizada, la petición falla.
+    """
     requested_company = resolve_required_company(company_code, modulo)
     company_exists = database.session.execute(
         database.select(Entity.code).where(Entity.code == requested_company)
     ).scalar_one_or_none()
-    if company_exists is not None:
-        return requested_company
-    default_company = database.session.execute(
-        database.select(Entity.code).order_by(Entity.default.desc(), Entity.code.asc())
-    ).scalar_one_or_none()
-    return default_company or requested_company
+    if company_exists is None:
+        abort(400, description=_("La compañía seleccionada no existe."))
+    return requested_company
+
+
+def _exige_acceso_reporte_compania(company_code: str) -> None:
+    """Valida que el usuario tenga acceso a la compañía del reporte financiero."""
+    user_id = getattr(current_user, "id", None)
+    if not getattr(current_user, "is_authenticated", False) or not user_id:
+        # Las rutas de reportes exigen sesión; sin usuario no hay ACL que validar.
+        return
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
+    if not permisos.tiene_acceso_compania(company_code):
+        abort(403)
 
 
 def _default_ledger_for_company(company_code: str) -> str | None:
@@ -903,6 +916,7 @@ def _financial_period_filters(company_code: str) -> tuple[str | None, str | None
 
 def _financial_filters() -> FinancialReportFilters:
     company_code = _resolve_company(request.args.get("company"))
+    _exige_acceso_reporte_compania(company_code)
     show_cancellations = _bool_arg("show_cancellations")
     requested_status = request.args.get("status") or "submitted"
     status = None if show_cancellations else requested_status

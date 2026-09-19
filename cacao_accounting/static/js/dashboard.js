@@ -66,7 +66,14 @@
       },
       onCompanyChange() {
         this.filters.period = "";
-        this.fetchData();
+        const code = this.filters.company;
+        const endpoint = document.querySelector(".dashboard-shell")?.dataset.companyUrl;
+        if (!code || !endpoint) {
+          this.fetchData();
+          return;
+        }
+        const next = encodeURIComponent(window.location.pathname);
+        window.location.assign(`${endpoint}?company=${encodeURIComponent(code)}&next=${next}`);
       },
       availablePeriods() {
         const company = this.selectedCompany();
@@ -76,7 +83,7 @@
         return this.periods.filter((period) => period.entity === company.code);
       },
       selectedCompany() {
-        return this.companies().find((company) => company.id === this.filters.company);
+        return this.companies().find((company) => company.code === this.filters.company);
       },
       companies() {
         return config.companies;

@@ -24,6 +24,7 @@
     <h1><i class="bi bi-cart4 me-2"></i>{{ _("Compras") }}</h1>
     <p>{{ _("Gestiona proveedores, adquisiciones y cuentas por pagar.") }}</p>
   </div>
+  {{ macros.company_selector() }}
 </div>
 
 <div class="ca-module-grid ca-module-workspace-grid">
@@ -131,19 +132,19 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('reportes.ap_aging') }}">{{ _('Aging de Cuentas por Pagar') }}</a>
+        <a href="{{ url_for('reportes.ap_aging', company=company) }}">{{ _('Aging de Cuentas por Pagar') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.accounts_payable') }}">{{ _('Cuentas por Pagar') }}</a>
+        <a href="{{ url_for('reportes.accounts_payable', company=company) }}">{{ _('Cuentas por Pagar') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.purchases_by_supplier') }}">{{ _('Compras por Proveedor') }}</a>
+        <a href="{{ url_for('reportes.purchases_by_supplier', company=company) }}">{{ _('Compras por Proveedor') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.purchases_by_item') }}">{{ _('Compras por Artículo') }}</a>
+        <a href="{{ url_for('reportes.purchases_by_item', company=company) }}">{{ _('Compras por Artículo') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       {% else %}

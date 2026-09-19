@@ -324,7 +324,9 @@ DOCUMENT_TYPE_LABELS: dict[str, LazyText] = {
 @login_required
 def compras_():
     """Pantalla principal del modulo de compras."""
-    return render_template("compras.html")
+    from cacao_accounting.company_context import get_active_company
+
+    return render_template("compras.html", company=get_active_company())
 
 
 @compras.route("/purchase-order/list")

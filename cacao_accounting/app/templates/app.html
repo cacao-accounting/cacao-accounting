@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 
 {% block contenido %}
-<div class="dashboard-shell" x-data="dashboard()" x-init="init()">
+<div class="dashboard-shell" x-data="dashboard()" x-init="init()"
+  data-company-url="{{ url_for('login.cambiar_compania') }}">
   <section class="dashboard-toolbar">
     <div>
       <h1 class="dashboard-title">{{ _('Dashboard ejecutivo') }}</h1>
@@ -13,7 +14,7 @@
         <select class="form-select" x-model="filters.company" @change="onCompanyChange()">
           <option value="">{{ _('Seleccione una compañía') }}</option>
           {% for entidad in entidades %}
-          <option value="{{ entidad.id }}">{{ entidad.name or entidad.company_name }}</option>
+          <option value="{{ entidad.code }}">{{ entidad.name or entidad.company_name }}</option>
           {% endfor %}
         </select>
       </label>
@@ -117,7 +118,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
 <script>
   globalThis.dashboardConfig = {
-    initialCompany: {{ (entidades[0].id if entidades else "") | tojson }},
+    initialCompany: {{ (active_company or (entidades[0].code if entidades else "")) | tojson }},
     periods: {{ dashboard_periods | tojson }},
     companies: {{ dashboard_entities | tojson }},
     messages: {

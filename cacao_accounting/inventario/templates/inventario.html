@@ -24,6 +24,7 @@
     <h1><i class="bi bi-shop me-2"></i>{{ _("Inventario") }}</h1>
     <p>{{ _("Controla artículos, existencias, movimientos y valoración.") }}</p>
   </div>
+  {{ macros.company_selector() }}
 </div>
 
 <div class="ca-module-grid ca-module-workspace-grid">
@@ -127,27 +128,27 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('reportes.inventory_existence') }}">{{ _('Existencia de Inventario') }}</a>
+        <a href="{{ url_for('reportes.inventory_existence', company=company) }}">{{ _('Existencia de Inventario') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.stock_balance') }}">{{ _('Balance de Stock') }}</a>
+        <a href="{{ url_for('reportes.stock_balance', company=company) }}">{{ _('Balance de Stock') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.inventory_valuation') }}">{{ _('Valorización de Inventario') }}</a>
+        <a href="{{ url_for('reportes.inventory_valuation', company=company) }}">{{ _('Valorización de Inventario') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.kardex') }}">{{ _('Kardex') }}</a>
+        <a href="{{ url_for('reportes.kardex', company=company) }}">{{ _('Kardex') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.batches') }}">{{ _('Lotes') }}</a>
+        <a href="{{ url_for('reportes.batches', company=company) }}">{{ _('Lotes') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.serials') }}">{{ _('Seriales') }}</a>
+        <a href="{{ url_for('reportes.serials', company=company) }}">{{ _('Seriales') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       {% else %}

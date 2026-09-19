@@ -297,6 +297,25 @@ def cerrar_sesion():  # pragma: no cover
     return resp
 
 
+def _safe_redirect_target(target: str | None) -> str:
+    """Devuelve una URL relativa segura o el inicio del dashboard."""
+    if target and target.startswith("/") and not target.startswith("//"):
+        return target
+    return url_for("cacao_app.pagina_inicio")
+
+
+@login.route("/auth/company", methods=["GET", "POST"])
+@login_required
+def cambiar_compania():  # pragma: no cover
+    """Cambia la compañía activa de la interfaz."""
+    from cacao_accounting.company_context import set_active_company
+
+    response = redirect(_safe_redirect_target(request.values.get("next")))
+    if not set_active_company(response, request.values.get("company")):
+        flash(_("No tiene acceso a la compañía seleccionada."), "warning")
+    return response
+
+
 @login.route("/permisos_usuario")
 @login_required
 def test_roles():  # pragma: no cover
