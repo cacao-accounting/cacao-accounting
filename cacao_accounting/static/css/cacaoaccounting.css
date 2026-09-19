@@ -489,40 +489,6 @@ nav[aria-label="breadcrumb"] {
   margin-bottom: var(--ca-page-header-margin-bottom);
 }
 
-.ca-company-selector {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  margin-left: auto;
-}
-
-.ca-company-selector__label {
-  display: inline-flex;
-  align-items: center;
-  gap: .35rem;
-  font-size: .875rem;
-  font-weight: 600;
-  color: var(--ca-text-secondary);
-  white-space: nowrap;
-}
-
-.ca-company-selector__input {
-  min-width: 12rem;
-  max-width: 18rem;
-}
-
-@media (max-width: 767.98px) {
-  .ca-company-selector {
-    width: 100%;
-    margin-left: 0;
-  }
-  .ca-company-selector__input {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: none;
-  }
-}
-
 .ca-module-card {
   background: var(--ca-surface) !important;
   border: 1px solid var(--ca-border) !important;

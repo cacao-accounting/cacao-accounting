@@ -179,29 +179,6 @@ def test_change_company_route_rejects_unauthorized(app):
     assert "cacao_active_company=CAFE" not in response.headers.get("Set-Cookie", "")
 
 
-def test_selector_is_available_only_in_cloud_with_multiple_companies(app):
-    """El selector se muestra solo en cloud y con mas de una compania."""
-    from cacao_accounting.company_context import active_company_is_selectable
-
-    with app.test_request_context():
-        from flask_login import login_user
-
-        login_user(database.session.get(User, "USER-CACAO"))
-        assert active_company_is_selectable() is False
-
-    with app.test_request_context():
-        from flask_login import login_user
-
-        login_user(database.session.get(User, "USER-BOTH"))
-        assert active_company_is_selectable() is True
-
-        app.config["MODO_ESCRITORIO"] = True
-        try:
-            assert active_company_is_selectable() is False
-        finally:
-            app.config.pop("MODO_ESCRITORIO", None)
-
-
 @pytest.mark.parametrize(
     "endpoint",
     ["/accounting/", "/sales/", "/buying/", "/inventory/", "/cash_management/"],

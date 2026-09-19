@@ -54,25 +54,6 @@
 
 {%- endmacro %}
 
-{# Selector de compañía activa (solo cloud con más de una compañía autorizada) #}
-{% macro company_selector() %}
-{% if selector_compania_activo() %}
-{% set _company = compania_activa() %}
-<form method="get" action="{{ url_for('login.cambiar_compania') }}" class="ca-company-selector">
-  <input type="hidden" name="next" value="{{ request.full_path }}">
-  <label class="ca-company-selector__label" for="ca-company-select">
-    <i class="bi bi-building" aria-hidden="true"></i>
-    <span>{{ _("Compañía") }}</span>
-  </label>
-  <select id="ca-company-select" name="company" class="form-select ca-company-selector__input" onchange="this.form.submit()">
-    {% for code, label in companias_disponibles() %}
-    <option value="{{ code }}" {% if code == _company %}selected{% endif %}>{{ label }}</option>
-    {% endfor %}
-  </select>
-</form>
-{% endif %}
-{% endmacro %}
-
 {# Ayuda a renderizar la barra superior en las páginas de la aplicación #}
 {% macro cabecera() %}
 <header class="ca-navbar">
