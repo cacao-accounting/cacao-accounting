@@ -46,7 +46,7 @@
                     <td>{{ template.version }}</td>
                     <td>
                         <div class="btn-group">
-                             <a href="{{ url_for('printing_admin.preview_template', template_id=template.id) }}" target="_blank" class="btn btn-xs btn-outline-info" title="{{ _('Vista previa') }}">
+                             <a href="{{ url_for('printing_admin.preview_template', template_id=template.id, company=request.args.get('company')) }}" target="_blank" class="btn btn-xs btn-outline-info" title="{{ _('Vista previa') }}">
                                 <i class="bi bi-eye"></i>
                             </a>
                             {% if not template.is_system %}
