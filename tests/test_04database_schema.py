@@ -1759,3 +1759,22 @@ def test_all_domain_models_importable_v2():
 
     assert hasattr(PaymentTerms, "__tablename__")
     assert PaymentTerms.__tablename__ == "payment_terms"
+
+
+def test_schema_baseline_migration_is_idempotent(app):
+    """El esquema creado por SQLAlchemy se registra con la migración baseline."""
+    from sqlalchemy import text
+
+    from cacao_accounting import alembic
+    from cacao_accounting.database import database
+
+    with app.app_context():
+        database.create_all()
+        database.session.execute(text("DROP TABLE IF EXISTS alembic_version"))
+        database.session.commit()
+        alembic.upgrade(target="head")
+        alembic.upgrade(target="head")
+
+        version = database.session.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+
+    assert version == "20260809_0001"
