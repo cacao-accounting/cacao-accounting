@@ -288,9 +288,7 @@ def enviar_confirmacion(confirmation_id: str):
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
-        body = (
-            _(
-                """Estimado cliente/proveedor,
+        body = _("""Estimado cliente/proveedor,
 
 La empresa %(company)s le solicita la confirmación externa del saldo de su cuenta al %(cutoff_date)s.
 
@@ -302,10 +300,7 @@ Para ver el detalle de los documentos y responder a esta solicitud, ingrese al s
 
 Atentamente,
 %(company)s
-"""
-            )
-            % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
-        )
+""") % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
         try:
             send_email(
                 to_email=inv.email,
@@ -372,9 +367,7 @@ def reenviar_confirmacion(confirmation_id: str):
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
-        body = (
-            _(
-                """Estimado cliente/proveedor,
+        body = _("""Estimado cliente/proveedor,
 
 Le reenviamos la solicitud de confirmación de saldo de %(company)s al %(cutoff_date)s.
 
@@ -386,10 +379,7 @@ Para ver el detalle de los documentos y responder a esta solicitud, ingrese al s
 
 Atentamente,
 %(company)s
-"""
-            )
-            % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
-        )
+""") % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
         try:
             send_email(
                 to_email=inv.email,

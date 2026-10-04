@@ -848,9 +848,7 @@ def gross_margin():
 @modulo_activo("inventory")
 def stock_balance():
     """Genera reporte de balance de stock por articulo y bodega."""
-    return _render_operational_report(
-        _("Stock Balance"), get_stock_balance(_operational_filters("inventory")), "inventory"
-    )
+    return _render_operational_report(_("Stock Balance"), get_stock_balance(_operational_filters("inventory")), "inventory")
 
 
 @reportes.route("/reports/inventory-valuation")
@@ -876,6 +874,4 @@ def batches():
 @modulo_activo("inventory")
 def serials():
     """Genera reporte de numeros de serie de inventario."""
-    return _render_operational_report(
-        _("Seriales"), get_serial_report(_operational_filters("inventory")), "inventory"
-    )
+    return _render_operational_report(_("Seriales"), get_serial_report(_operational_filters("inventory")), "inventory")
