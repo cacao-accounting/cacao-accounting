@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cacao-accounting-v4';
+const CACHE_NAME = 'cacao-accounting-v5';
 const STATIC_ASSETS = [
   '/static/css/cacaoaccounting.css',
   '/static/manifest.json',

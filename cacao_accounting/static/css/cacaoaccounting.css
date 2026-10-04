@@ -512,13 +512,6 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
   overflow: visible;
 }
 
-@media (max-width: 768px) {
-  .ca-journal-grid {
-    overflow-x: auto;
-    overflow-y: visible;
-  }
-}
-
 .ca-detail-actions-menu {
   display: none;
 }
