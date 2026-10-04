@@ -1037,6 +1037,13 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 raise ValueError(_("El item %(item_code)s no está habilitado para venta.") % {"item_code": item_code})
             _validate_sales_catalog_rate(order, i, item_code, qty, uom, rate)
             qty_in_base_uom = convert_item_qty(item_code, qty, uom or item_obj.default_uom, item_obj.default_uom)
+            warehouse = (
+                request.form.get("warehouse")
+                or request.form.get("from_warehouse")
+                or request.form.get("to_warehouse")
+                or request.form.get(f"warehouse_{i}")
+                or None
+            )
             linea = SalesOrderItem(
                 sales_order_id=order_id,
                 item_code=item_code,
@@ -1048,7 +1055,7 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 amount=amount,
                 discount_percentage=discount_percentage,
                 discount_amount=discount_amount,
-                warehouse=request.form.get(f"warehouse_{i}") or None,
+                warehouse=warehouse,
             )
             database.session.add(linea)
             database.session.flush()
@@ -1177,9 +1184,9 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
             uom = request.form.get(f"uom_{i}") or None
             _validate_sales_catalog_rate(delivery_note, i, item_code, qty, uom, rate)
             warehouse = (
-                request.form.get(f"warehouse_{i}")
-                or request.form.get("from_warehouse")
+                request.form.get("from_warehouse")
                 or request.form.get("warehouse")
+                or request.form.get(f"warehouse_{i}")
                 or None
             )
             if not warehouse:
@@ -1233,6 +1240,13 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
             _validate_sales_catalog_rate(invoice, i, item_code, qty, uom, rate)
+            warehouse = (
+                request.form.get("warehouse")
+                or request.form.get("from_warehouse")
+                or request.form.get("to_warehouse")
+                or request.form.get(f"warehouse_{i}")
+                or None
+            )
             linea = SalesInvoiceItem(
                 sales_invoice_id=invoice_id,
                 item_code=item_code,
@@ -1243,7 +1257,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 amount=amount,
                 discount_percentage=discount_percentage,
                 discount_amount=discount_amount,
-                warehouse=request.form.get(f"warehouse_{i}") or None,
+                warehouse=warehouse,
                 batch_id=request.form.get(f"batch_id_{i}") or None,
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )

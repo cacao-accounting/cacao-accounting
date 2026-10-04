@@ -283,6 +283,7 @@
       }
 
       for (const confCol of configColumns) {
+        if (confCol.field === 'warehouse') continue;
         if (!defaultCols.some(d => d.field === confCol.field)) {
           columnsList.push({ ...confCol });
         }
@@ -295,7 +296,7 @@
       }
 
       for (const column of columnsList) {
-        if (column.field === 'batch_id' || column.field === 'serial_no') {
+        if (column.field === 'warehouse' || column.field === 'batch_id' || column.field === 'serial_no') {
           column.visible = false;
         }
       }
@@ -434,7 +435,7 @@
 
         syncLineInputs() {
           const root = this.$root || document;
-          const fields = ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount', 'warehouse',
+          const fields = ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount',
             'batch_id', 'serial_no', 'account',
             'cost_center', 'unit', 'project', 'remarks', 'source_type', 'source_id', 'source_item_id'];
           const monetaryFields = new Set(['qty', 'rate', 'amount']);
@@ -442,8 +443,7 @@
             for (const field of fields) {
               const input = root.querySelector(`[name="${field}_${index}"]`);
               if (!input) continue;
-              const globalWarehouse = this.header.warehouse || this.header.from_warehouse || this.header.to_warehouse;
-              const value = field === 'warehouse' && !line[field] ? globalWarehouse : line[field];
+              const value = line[field];
               const stringValue = monetaryFields.has(field) ? toCurrencyString(value) : String(value);
               input.value = value === undefined || value === null ? '' : stringValue;
               input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -493,7 +493,6 @@
             rate: 0,
             discount_percentage: 0,
             amount: 0,
-            warehouse: '',
             batch_id: '',
             serial_no: '',
             has_batch: false,

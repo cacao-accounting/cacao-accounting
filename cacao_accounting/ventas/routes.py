@@ -2085,14 +2085,13 @@ def ventas_factura_venta_nuevo():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "initialSourceType": initial_source_type,
         "availableSourceTypes": [
             {"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": str(_LABEL_NOTA_ENTREGA)},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
-        "initialHeader": {"company": company_id or "", "posting_date": str(date.today())},
+        "initialHeader": {"company": company_id or "", "posting_date": str(date.today()), "warehouse": ""},
     }
     if source_origen:
         transaction_config["initialHeader"] = {
@@ -2101,6 +2100,7 @@ def ventas_factura_venta_nuevo():
             "party": getattr(source_origen, "customer_id", None) or "",
             "party_label": getattr(source_origen, "customer_name", None) or "",
             "posting_date": str(date.today()),
+            "warehouse": getattr(source_origen, "warehouse", None) or "",
         }
     if request.method == "POST":
         return _create_sales_invoice_from_form()
@@ -2172,7 +2172,6 @@ def _build_sales_invoice_edit_config(
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "availableSourceTypes": [
             {"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": str(_LABEL_NOTA_ENTREGA)},

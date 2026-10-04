@@ -96,7 +96,7 @@
 </div>
 {% endmacro %}
 
-{% macro transaction_form_header(title, status_label='Borrador', cancel_url=None, submit_label=None, doctype=None, include_currency=True, include_remarks=True) %}
+{% macro transaction_form_header(title, status_label='Borrador', cancel_url=None, submit_label=None, doctype=None, include_currency=True, include_remarks=True, include_warehouse=False) %}
 <style>
   .ca-journal-toolbar {
     align-items: center;
@@ -221,6 +221,23 @@
           x_model="header.currency"
       ) }}
       <div class="invalid-feedback d-block" x-show="!header.currency" x-cloak>{{ _('La moneda transaccional es obligatoria.') }}</div>
+    </div>
+    {% endif %}
+    {% if include_warehouse %}
+    <div class="col-md-6">
+      <label class="form-label" for="warehouse">{{ _('Almacén') }} <span class="text-danger">*</span></label>
+      {{ smart_select(
+          doctype="warehouse",
+          name="warehouse",
+          initial_value_expr="header.warehouse",
+          initial_label_expr="header.warehouse",
+          label=_("Almacén"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"],
+          required=True,
+          x_model="header.warehouse"
+      ) }}
     </div>
     {% endif %}
     <div class="col-md-6">
@@ -406,14 +423,6 @@
                     </template>
                   </div>
                 </template>
-                <template x-if="column.field === 'warehouse'">
-                  <select class="form-select form-select-sm" :name="'warehouse_' + index" x-model="line.warehouse" required>
-                    <option value="">{{ _('Seleccione almacén') }}</option>
-                    <template x-for="warehouse in availableWarehouses" :key="warehouse.code">
-                      <option :value="warehouse.code" x-text="warehouse.code + (warehouse.name ? ' — ' + warehouse.name : '')"></option>
-                    </template>
-                  </select>
-                </template>
               </td>
             </template>
             <input type="hidden" :name="'batch_id_' + index" :value="line.batch_id || ''">
@@ -438,7 +447,6 @@
                   </ul>
                 </div>
               </div>
-              <input type="hidden" :name="'warehouse_' + index" :value="line.warehouse || ''">
               <input type="hidden" :name="'account_' + index" :value="line.account || ''">
               <input type="hidden" :name="'cost_center_' + index" :value="line.cost_center || ''">
               <input type="hidden" :name="'unit_' + index" :value="line.unit || ''">
@@ -716,17 +724,6 @@
                 initial_label_expr="modalLine.project"
             ) }}
           </div>
-          {% if warehouses_disponibles %}
-          <div>
-            <label class="form-label">{{ _('Bodega') }}</label>
-            <select class="form-select" x-model="modalLine.warehouse">
-              <option value="">{{ _('Seleccione') }}</option>
-              {% for warehouse in warehouses_disponibles %}
-              <option value="{{ warehouse.code }}">{{ warehouse.code }}{% if warehouse.name %} — {{ warehouse.name }}{% endif %}</option>
-              {% endfor %}
-            </select>
-          </div>
-          {% endif %}
           <div class="col-12">
             <div class="row g-3 mt-0">
               <div class="col-md-6">

@@ -418,6 +418,29 @@ libros, moneda base, tasa y compatibilidad con empresas antiguas.
 - `tests/test_11_contabilidad_coverage.py -k 'transaction_currency or exchange_rate or mixed_currencies'`: 9/9.
 - Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
 
+## 2026-10-04 (UX de header de almacén y formulario compartido)
+
+### Estado final
+
+Se consolidó la corrección en el macro compartido de transacciones: el almacén queda definido en el header del
+formulario, no en la línea del grid, y la trazabilidad (lote/serie) permanece dentro del modal de edición por línea con
+un asterisco rojo cuando el ítem exige ese dato. El dropdown de acciones se corrige para salir por encima del contenedor y
+mantener la fila compacta en desktop y móvil.
+
+### Archivos principales
+
+- `cacao_accounting/templates/transaction_form_macros.html`: ajuste del layout compartido y del modal de detalle.
+- `cacao_accounting/static/js/transaction-form.js`: sincronización del header, validación y compatibilidad legacy.
+- `cacao_accounting/static/css/cacaoaccounting.css`: manejo del stacking y del dropdown de acciones.
+- `cacao_accounting/ventas/services.py` y `cacao_accounting/compras/services.py`: prioridad del almacén del header para
+  los documentos de ventas y compras.
+
+### Verificación
+
+- `pytest tests/test_batch_serial_submit_and_round_trip.py -q`: 34/34.
+- `cd cacao_accounting/static && npm test -- --grep "transaction-form" -- --reporter dot`: 21/21.
+- `git diff --check`: limpio.
+
 El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
 del umbral.
 

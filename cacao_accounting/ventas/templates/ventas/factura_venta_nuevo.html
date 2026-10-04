@@ -37,7 +37,8 @@
       or document_type == 'sales_credit_note' and _('Nota de Crédito de Venta')
       or document_type == 'sales_debit_note' and _('Nota de Débito de Venta')
       or _('Factura de Venta'),
-      cancel_url=url_for('ventas.ventas_factura_venta_lista')
+      cancel_url=url_for('ventas.ventas_factura_venta_lista'),
+      include_warehouse=True
     ) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">

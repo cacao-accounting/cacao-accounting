@@ -1114,7 +1114,10 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
             warehouse_code = (
-                request.form.get(f"warehouse_{i}") or request.form.get("to_warehouse") or request.form.get("warehouse") or None
+                request.form.get("to_warehouse")
+                or request.form.get("warehouse")
+                or request.form.get(f"warehouse_{i}")
+                or None
             )
             _validate_receipt_warehouse(warehouse_code, item_code, company)
             linea = PurchaseReceiptItem(

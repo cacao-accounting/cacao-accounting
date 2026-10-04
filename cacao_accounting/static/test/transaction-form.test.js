@@ -183,6 +183,21 @@ describe('transaction-form', function () {
     assert.strictEqual(component.visibleColumns[5].field, 'amount');
   });
 
+  it('keeps warehouse at the header level instead of the line grid', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_order',
+      columns: [{ field: 'warehouse', label: 'Almacén', visible: true, width: 2 }],
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'warehouse'), false);
+    assert.strictEqual(component.header.warehouse, '');
+  });
+
   it('keeps lot and serial inputs in the detail modal instead of the inline grid', function () {
     const create = loadTransactionForm();
     const component = create({
