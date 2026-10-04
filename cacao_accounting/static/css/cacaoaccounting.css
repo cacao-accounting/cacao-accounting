@@ -432,6 +432,88 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
 }
 .ca-card-title i { color: var(--ca-text-secondary); }
 
+.btn-xs {
+  --bs-btn-padding-y: .2rem;
+  --bs-btn-padding-x: .45rem;
+  --bs-btn-font-size: .72rem;
+  --bs-btn-border-radius: .45rem;
+  min-width: 1.8rem;
+}
+
+.btn-xs .bi,
+.btn-sm .bi,
+.ca-journal-toolbar .btn .bi,
+.ca-journal-actions .btn .bi,
+.ca-journal-row-menu .btn .bi {
+  font-size: .9rem;
+}
+
+.btn-xs,
+.btn-sm,
+.ca-journal-toolbar .btn,
+.ca-journal-actions .btn,
+.ca-journal-row-menu .btn {
+  padding-inline: .55rem;
+}
+
+.ca-journal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.ca-journal-toolbar .btn {
+  min-height: 2rem;
+  padding-top: .38rem;
+  padding-bottom: .38rem;
+  font-size: .82rem;
+  white-space: nowrap;
+}
+
+.ca-journal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: .35rem;
+}
+
+.ca-journal-actions .btn,
+.ca-journal-row-menu .btn {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: .32rem .45rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ca-journal-row-menu {
+  position: relative;
+}
+
+.ca-journal-row-menu .dropdown-toggle::after {
+  display: none;
+}
+
+.ca-journal-row-menu .dropdown-menu {
+  min-width: 12rem;
+  z-index: 1080;
+}
+
+.ca-journal-grid .dropdown-menu {
+  z-index: 1080;
+}
+
+@media (max-width: 768px) {
+  .ca-journal-grid {
+    overflow-x: auto;
+  }
+}
+
 .ca-detail-actions-menu {
   display: none;
 }
@@ -519,6 +601,36 @@ nav[aria-label="breadcrumb"] {
   transform: translateY(-3px);
 }
 
+@media (max-width: 991.98px) {
+  .ca-journal-toolbar {
+    align-items: stretch;
+  }
+
+  .ca-journal-toolbar > div,
+  .ca-journal-toolbar > .d-flex {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .ca-journal-toolbar .btn,
+  .ca-journal-actions .btn,
+  .ca-journal-row-menu .btn {
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+    padding-top: .45rem;
+    padding-bottom: .45rem;
+  }
+
+  .ca-journal-toolbar .btn {
+    flex: 1 1 calc(50% - .5rem);
+    min-width: 0;
+  }
+
+  .ca-journal-actions {
+    justify-content: flex-end;
+  }
+}
+
 @media (max-width: 640px) {
   .ca-sidebar {
     position: fixed !important;
@@ -552,6 +664,22 @@ nav[aria-label="breadcrumb"] {
   .ca-card-header > div:first-child {
     flex: 1 1 calc(100% - 3rem);
     min-width: 0;
+  }
+
+  .ca-journal-toolbar .btn,
+  .ca-journal-actions .btn,
+  .ca-journal-row-menu .btn {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    font-size: 1rem;
+  }
+
+  .ca-journal-toolbar .btn {
+    flex: 1 1 calc(50% - .5rem);
+  }
+
+  .ca-journal-actions {
+    gap: .25rem;
   }
 
   .ca-detail-actions-menu > .dropdown-toggle {

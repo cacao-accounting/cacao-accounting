@@ -272,7 +272,7 @@
           <template x-for="column in visibleColumns" :key="column.field">
             <th :style="'width:' + (column.width * 90) + 'px'" x-text="column.label"></th>
           </template>
-          <th style="width: 220px;">{{ _('Acciones') }}</th>
+          <th style="width: 120px;">{{ _('Acciones') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -470,19 +470,22 @@
             <td>
               <div class="ca-journal-actions">
                 <button class="btn btn-sm btn-outline-secondary" type="button" @click="openDetails(index)"
-                  title="{{ _('Ver detalle') }}"><i class="bi bi-pencil"></i></button>
-                <button class="btn btn-sm btn-outline-secondary" type="button" @click="insertRow(index, -1)"
-                  title="{{ _('Insertar arriba') }}"><i class="bi bi-arrow-up-square"></i></button>
-                <button class="btn btn-sm btn-outline-secondary" type="button" @click="insertRow(index, 1)"
-                  title="{{ _('Insertar abajo') }}"><i class="bi bi-arrow-down-square"></i></button>
-                <button class="btn btn-sm btn-outline-secondary" type="button" @click="moveRow(index, -1)"
-                  title="{{ _('Subir') }}"><i class="bi bi-arrow-up"></i></button>
-                <button class="btn btn-sm btn-outline-secondary" type="button" @click="moveRow(index, 1)"
-                  title="{{ _('Bajar') }}"><i class="bi bi-arrow-down"></i></button>
-                <button class="btn btn-sm btn-outline-secondary" type="button" @click="duplicateRow(index)"
-                  title="{{ _('Duplicar') }}"><i class="bi bi-copy"></i></button>
+                  title="{{ _('Editar') }}"><i class="bi bi-pencil"></i></button>
                 <button class="btn btn-sm btn-outline-danger" type="button" @click="removeRow(index)"
                   title="{{ _('Eliminar') }}"><i class="bi bi-trash"></i></button>
+                <div class="dropdown ca-journal-row-menu">
+                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                    title="{{ _('Más acciones') }}">
+                    <i class="bi bi-list"></i>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><button class="dropdown-item" type="button" @click="insertRow(index, -1)"><i class="bi bi-arrow-up-square me-2"></i>{{ _('Insertar arriba') }}</button></li>
+                    <li><button class="dropdown-item" type="button" @click="insertRow(index, 1)"><i class="bi bi-arrow-down-square me-2"></i>{{ _('Insertar abajo') }}</button></li>
+                    <li><button class="dropdown-item" type="button" @click="moveRow(index, -1)"><i class="bi bi-arrow-up me-2"></i>{{ _('Subir') }}</button></li>
+                    <li><button class="dropdown-item" type="button" @click="moveRow(index, 1)"><i class="bi bi-arrow-down me-2"></i>{{ _('Bajar') }}</button></li>
+                    <li><button class="dropdown-item" type="button" @click="duplicateRow(index)"><i class="bi bi-copy me-2"></i>{{ _('Duplicar') }}</button></li>
+                  </ul>
+                </div>
               </div>
               <input type="hidden" :name="'warehouse_' + index" :value="line.warehouse || ''">
               <input type="hidden" :name="'account_' + index" :value="line.account || ''">

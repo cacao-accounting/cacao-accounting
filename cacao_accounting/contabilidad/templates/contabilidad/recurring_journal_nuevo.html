@@ -5,10 +5,21 @@
   .ca-journal-form { display: flex; flex-direction: column; gap: 1rem; }
   .ca-journal-toolbar { align-items: center; display: flex; gap: .5rem; justify-content: space-between; }
   .ca-journal-header-grid { display: grid; gap: 1rem; grid-template-columns: repeat(12, minmax(0, 1fr)); }
-  .ca-journal-grid { overflow-x: auto; }
-  .ca-journal-table { min-width: 1120px; table-layout: fixed; }
-  .ca-journal-table th, .ca-journal-table td { vertical-align: middle; }
-  .ca-journal-table input { min-width: 0; }
+  .ca-journal-grid { overflow: visible; }
+  .ca-journal-table { min-width: 1040px; table-layout: fixed; font-size: .75rem; }
+  .ca-journal-table th, .ca-journal-table td { vertical-align: middle; padding: .3rem .45rem; font-size: .75rem; }
+  .ca-journal-table input,
+  .ca-journal-table select,
+  .ca-journal-table .form-control,
+  .ca-journal-table .form-select,
+  .ca-journal-table .ca-smart-select-input,
+  .ca-journal-table .ca-smart-select-option,
+  .ca-journal-table .ca-smart-select-state { min-width: 0; font-size: .75rem; }
+  .ca-journal-table input,
+  .ca-journal-table select,
+  .ca-journal-table .form-control,
+  .ca-journal-table .form-select,
+  .ca-journal-table .ca-smart-select-input { min-height: 1.85rem; padding: .2rem .45rem; }
   .ca-journal-actions { display: flex; gap: .25rem; justify-content: center; white-space: nowrap; }
   .ca-journal-balance { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; justify-content: flex-end; }
   .ca-journal-modal-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -351,9 +362,16 @@
               <td><input type="text" class="form-control form-control-sm" x-model="line.description"></td>
               <td>
                 <div class="ca-journal-actions">
-                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="openDetails(index)"><i class="bi bi-pencil"></i></button>
-                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="duplicateRow(index)"><i class="bi bi-copy"></i></button>
-                  <button class="btn btn-sm btn-outline-danger" type="button" @click="removeRow(index)"><i class="bi bi-trash"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary" type="button" @click="openDetails(index)" title="{{ _('Editar') }}"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn-sm btn-outline-danger" type="button" @click="removeRow(index)" title="{{ _('Eliminar') }}"><i class="bi bi-trash"></i></button>
+                  <div class="dropdown ca-journal-row-menu">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="{{ _('Más acciones') }}">
+                      <i class="bi bi-list"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      <li><button class="dropdown-item" type="button" @click="duplicateRow(index)"><i class="bi bi-copy me-2"></i>{{ _('Duplicar') }}</button></li>
+                    </ul>
+                  </div>
                 </div>
               </td>
             </tr>
