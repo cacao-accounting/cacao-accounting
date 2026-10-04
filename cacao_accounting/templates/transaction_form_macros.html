@@ -237,7 +237,8 @@
 </div>
 {% endmacro %}
 
-{% macro transaction_grid(items_disponibles, uoms_disponibles, source_api_url=None, source_label='', warehouses_disponibles=None, title='Líneas de detalle') %}
+{% macro transaction_grid(items_disponibles, uoms_disponibles, source_api_url=None, source_label='', warehouses_disponibles=None, title=None) %}
+{% set title = title if title is not none else _('Líneas de detalle') %}
 <section class="border rounded-2 p-3 mt-3"
          {% if source_api_url %}x-init='loadSourceFromUrl({{ source_api_url | tojson }}).then(() => applySource())'{% endif %}>
   <div class="alert alert-danger" role="alert" x-show="sourceLoadError || submitError" x-text="sourceLoadError || submitError" x-cloak></div>

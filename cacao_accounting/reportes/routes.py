@@ -805,7 +805,7 @@ def ar_aging():
 def purchases_by_supplier():
     """Genera reporte de compras agrupadas por proveedor."""
     return _render_operational_report(
-        "Compras por Proveedor", get_purchases_by_supplier(_operational_filters("purchases")), "purchases"
+        _("Compras por Proveedor"), get_purchases_by_supplier(_operational_filters("purchases")), "purchases"
     )
 
 
@@ -815,7 +815,7 @@ def purchases_by_supplier():
 def purchases_by_item():
     """Genera reporte de compras agrupadas por articulo."""
     return _render_operational_report(
-        "Compras por Item", get_purchases_by_item(_operational_filters("purchases")), "purchases"
+        _("Compras por Item"), get_purchases_by_item(_operational_filters("purchases")), "purchases"
     )
 
 
@@ -824,7 +824,7 @@ def purchases_by_item():
 @modulo_activo("sales")
 def sales_by_customer():
     """Genera reporte de ventas agrupadas por cliente."""
-    return _render_operational_report("Ventas por Cliente", get_sales_by_customer(_operational_filters("sales")), "sales")
+    return _render_operational_report(_("Ventas por Cliente"), get_sales_by_customer(_operational_filters("sales")), "sales")
 
 
 @reportes.route("/reports/sales-by-item")
@@ -832,7 +832,7 @@ def sales_by_customer():
 @modulo_activo("sales")
 def sales_by_item():
     """Genera reporte de ventas agrupadas por articulo."""
-    return _render_operational_report("Ventas por Item", get_sales_by_item(_operational_filters("sales")), "sales")
+    return _render_operational_report(_("Ventas por Item"), get_sales_by_item(_operational_filters("sales")), "sales")
 
 
 @reportes.route("/reports/gross-margin")
@@ -840,7 +840,7 @@ def sales_by_item():
 @modulo_activo("sales")
 def gross_margin():
     """Genera reporte de margen bruto por ventas."""
-    return _render_operational_report("Margen Bruto", get_gross_margin(_operational_filters("sales")), "sales")
+    return _render_operational_report(_("Margen Bruto"), get_gross_margin(_operational_filters("sales")), "sales")
 
 
 @reportes.route("/reports/stock-balance")
@@ -848,7 +848,9 @@ def gross_margin():
 @modulo_activo("inventory")
 def stock_balance():
     """Genera reporte de balance de stock por articulo y bodega."""
-    return _render_operational_report("Stock Balance", get_stock_balance(_operational_filters("inventory")), "inventory")
+    return _render_operational_report(
+        _("Stock Balance"), get_stock_balance(_operational_filters("inventory")), "inventory"
+    )
 
 
 @reportes.route("/reports/inventory-valuation")
@@ -857,7 +859,7 @@ def stock_balance():
 def inventory_valuation():
     """Genera reporte de valoracion del inventario."""
     return _render_operational_report(
-        "Valoracion de Inventario", get_inventory_valuation(_operational_filters("inventory")), "inventory"
+        _("Valoracion de Inventario"), get_inventory_valuation(_operational_filters("inventory")), "inventory"
     )
 
 
@@ -866,7 +868,7 @@ def inventory_valuation():
 @modulo_activo("inventory")
 def batches():
     """Genera reporte de lotes de inventario."""
-    return _render_operational_report("Lotes", get_batch_report(_operational_filters("inventory")), "inventory")
+    return _render_operational_report(_("Lotes"), get_batch_report(_operational_filters("inventory")), "inventory")
 
 
 @reportes.route("/reports/serials")
@@ -874,4 +876,6 @@ def batches():
 @modulo_activo("inventory")
 def serials():
     """Genera reporte de numeros de serie de inventario."""
-    return _render_operational_report("Seriales", get_serial_report(_operational_filters("inventory")), "inventory")
+    return _render_operational_report(
+        _("Seriales"), get_serial_report(_operational_filters("inventory")), "inventory"
+    )
