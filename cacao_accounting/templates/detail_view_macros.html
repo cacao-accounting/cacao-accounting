@@ -128,6 +128,8 @@
             data-source-type="{{ item.source_type|default('', true) }}"
             data-source-id="{{ item.source_id|default('', true) }}"
             data-source-item-id="{{ item.source_item_id|default('', true) }}"
+            data-batch-no="{{ item.batch_no|default('', true) or item.batch_id|default('', true) }}"
+            data-serial-no="{{ item.serial_no|default('', true) }}"
             data-remarks="{{ item.remarks|default('', true) }}">
           <td>{{ loop.index }}</td>
           <td>{{ item.item_code|default('', true) or '-' }}</td>
@@ -210,6 +212,10 @@
           <dd class="col-sm-8" id="modal-line-unit">-</dd>
           <dt class="col-sm-4">{{ _('Proyecto') }}</dt>
           <dd class="col-sm-8" id="modal-line-project">-</dd>
+          <dt class="col-sm-4">{{ _('Lote') }}</dt>
+          <dd class="col-sm-8" id="modal-line-batch">-</dd>
+          <dt class="col-sm-4">{{ _('Serie') }}</dt>
+          <dd class="col-sm-8" id="modal-line-serial-no">-</dd>
           <dt class="col-sm-4">{{ _('Trazabilidad') }}</dt>
           <dd class="col-sm-8"><span id="modal-line-source-type">-</span> / <span id="modal-line-source-id">-</span> / <span id="modal-line-source-item-id">-</span></dd>
           <dt class="col-sm-4">{{ _('Observaciones') }}</dt>
@@ -267,6 +273,8 @@
       document.getElementById('modal-line-cost-center').textContent = readValue(data.costCenter);
       document.getElementById('modal-line-unit').textContent = readValue(data.unit);
       document.getElementById('modal-line-project').textContent = readValue(data.project);
+      document.getElementById('modal-line-batch').textContent = readValue(data.batchNo || data.batchId);
+      document.getElementById('modal-line-serial-no').textContent = readValue(data.serialNo);
       document.getElementById('modal-line-source-type').textContent = readValue(data.sourceType);
       document.getElementById('modal-line-source-id').textContent = readValue(data.sourceId);
       document.getElementById('modal-line-source-item-id').textContent = readValue(data.sourceItemId);

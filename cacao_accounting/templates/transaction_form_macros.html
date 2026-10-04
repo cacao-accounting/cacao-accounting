@@ -414,60 +414,10 @@
                     </template>
                   </select>
                 </template>
-                <template x-if="column.field === 'batch_id'" x-show="line.has_batch">
-                  <div class="ca-smart-select" x-data='smartSelect({
-                    doctype: "batch",
-                    name: "batch_id_" + index,
-                    minChars: 1,
-                    preload: false,
-                    preloadOnFocus: true,
-                    filters: {
-                      item_code: function() { return line.item_code || ""; }
-                    },
-                    requiredFilters: ["item_code"],
-                    initialValue: line.batch_id,
-                    initialLabel: line.batch_no || line.batch_id || "",
-                    onSelect: function(opt) {
-                      line.batch_id = opt.value || opt.id || "";
-                      line.batch_no = opt.batch_no || "";
-                    },
-                    messages: {
-                      placeholder: "{{ _('Buscar lote') }}",
-                      loading: "{{ _('Buscando...') }}",
-                      noResults: "{{ _('Sin resultados') }}",
-                      minChars: "{{ _('Escriba para buscar') }}",
-                      clear: "{{ _('Limpiar') }}",
-                      invalid: "{{ _('Seleccione una opción válida') }}",
-                      error: "{{ _('No se pudo buscar') }}"
-                    }
-                  })'>
-                    <input type="hidden" :name="'batch_id_' + index" x-model="selectedValue">
-                    <div class="ca-smart-select-input-wrap">
-                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput"
-                        @focus="onFocus" @blur="closeSoon" :placeholder="column.label">
-                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
-                        title="{{ _('Limpiar') }}">×</button>
-                    </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                      <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-                      <template x-for="option in options" :key="option.value">
-                        <button class="ca-smart-select-option" type="button"
-                          @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
-                          <span x-text="option.display_name"></span>
-                        </button>
-                      </template>
-                      <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
-                        x-text="messages.noResults"></div>
-                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
-                    </div>
-                  </div>
-                </template>
-                <template x-if="column.field === 'serial_no'" x-show="line.has_serial_no">
-                  <input class="form-control form-control-sm" type="text" :name="'serial_no_' + index" x-model="line.serial_no"
-                    :placeholder="column.label">
-                </template>
               </td>
             </template>
+            <input type="hidden" :name="'batch_id_' + index" :value="line.batch_id || ''">
+            <input type="hidden" :name="'serial_no_' + index" :value="line.serial_no || ''">
             <td>
               <div class="ca-journal-actions">
                 <button class="btn btn-sm btn-outline-secondary" type="button" @click="openDetails(index)"
@@ -777,17 +727,78 @@
             </select>
           </div>
           {% endif %}
-          <div>
-            <label class="form-label">{{ _('Trazabilidad') }}</label>
-            <input class="form-control" type="text"
-              :value="[modalLine.source_type, modalLine.source_document_no || modalLine.source_id, modalLine.source_item_id].filter(Boolean).join(' / ')"
-              readonly>
-          </div>
+          <div class="col-12">
+            <div class="row g-3 mt-0">
+              <div class="col-md-6">
+                <label class="form-label">
+                  {{ _('Lote') }}
+                  <span class="text-danger" x-show="modalLine.has_batch" x-cloak>*</span>
+                </label>
+                <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "batch",
+                    name: "modal_batch_id",
+                    minChars: 1,
+                    preload: false,
+                    preloadOnFocus: true,
+                    filters: {
+                      item_code: function() { return modalLine.item_code || ""; }
+                    },
+                    requiredFilters: ["item_code"],
+                    initialValue: modalLine.batch_id,
+                    initialLabel: modalLine.batch_no || modalLine.batch_id || "",
+                    onSelect: function(opt) {
+                      modalLine.batch_id = opt.value || opt.id || "";
+                      modalLine.batch_no = opt.batch_no || "";
+                    },
+                    messages: {
+                      placeholder: "{{ _('Buscar lote') }}",
+                      loading: "{{ _('Buscando...') }}",
+                      noResults: "{{ _('Sin resultados') }}",
+                      minChars: "{{ _('Escriba para buscar') }}",
+                      clear: "{{ _('Limpiar') }}",
+                      invalid: "{{ _('Seleccione una opción válida') }}",
+                      error: "{{ _('No se pudo buscar') }}"
+                    }
+                  })'>
+                  <input type="hidden" name="modal_batch_id" x-model="selectedValue" x-effect="modalLine.batch_id = selectedValue" :required="modalLine.has_batch">
+                  <div class="ca-smart-select-input-wrap">
+                    <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+                      @focus="onFocus" @blur="closeSoon" :placeholder="'{{ _('Buscar lote') }}'" :required="modalLine.has_batch">
+                    <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+                      title="{{ _('Limpiar') }}">×</button>
+                  </div>
+                  <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+                    <template x-for="option in options" :key="option.value">
+                      <button class="ca-smart-select-option" type="button"
+                        @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+                        <span x-text="option.display_name"></span>
+                      </button>
+                    </template>
+                    <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars" x-text="messages.noResults"></div>
+                    <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">
+                  {{ _('Serie') }}
+                  <span class="text-danger" x-show="modalLine.has_serial_no" x-cloak>*</span>
+                </label>
+                <input class="form-control" type="text" x-model="modalLine.serial_no" :placeholder="'{{ _('Número de serie') }}'" :required="modalLine.has_serial_no">
+              </div>
             </div>
             <div class="mt-3">
-              <label class="form-label">{{ _('Observaciones') }}</label>
-              <textarea class="form-control" rows="3" x-model="modalLine.remarks"></textarea>
+              <label class="form-label">{{ _('Trazabilidad') }}</label>
+              <input class="form-control" type="text"
+                :value="[modalLine.source_type, modalLine.source_document_no || modalLine.source_id, modalLine.source_item_id].filter(Boolean).join(' / ')"
+                readonly>
             </div>
+          </div>
+          <div class="col-12 mt-3">
+            <label class="form-label">{{ _('Observaciones') }}</label>
+            <textarea class="form-control" rows="3" x-model="modalLine.remarks"></textarea>
+          </div>
           </div>
         </template>
       </div>

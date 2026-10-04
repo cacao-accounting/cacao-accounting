@@ -263,8 +263,6 @@
         { field: 'rate', label: i18n.rateLabel || 'Precio', visible: true, width: 1, required: false },
         { field: 'discount_percentage', label: 'Descuento %', visible: config.enableLineDiscounts === true, width: 1, required: false },
         { field: 'amount', label: i18n.amountLabel || 'Monto', visible: true, width: 1, required: false },
-        { field: 'batch_id', label: 'Lote', visible: false, width: 1, required: false },
-        { field: 'serial_no', label: 'Serie', visible: false, width: 1, required: false },
       ];
 
       const configColumns = Array.isArray(config.columns) ? config.columns : [];
@@ -296,9 +294,9 @@
         }
       }
 
-      if (config.enableBatchSerial === true) {
-        for (const column of columnsList) {
-          if (column.field === 'batch_id' || column.field === 'serial_no') column.visible = true;
+      for (const column of columnsList) {
+        if (column.field === 'batch_id' || column.field === 'serial_no') {
+          column.visible = false;
         }
       }
 
@@ -567,10 +565,10 @@
             line.item_name = item.name || line.item_name;
           }
           this._applyItemUom(line, item);
-          line.has_batch = item.has_batch || false;
-          line.has_serial_no = item.has_serial_no || false;
-          line.has_expiry_date = item.has_expiry_date || false;
-          if (!keepCustomName) {
+          line.has_batch = Boolean(line.has_batch || line.batch_id || item.has_batch || item.has_expiry_date);
+          line.has_serial_no = Boolean(line.has_serial_no || line.serial_no || item.has_serial_no);
+          line.has_expiry_date = Boolean(item.has_expiry_date || line.has_expiry_date || false);
+          if (!keepCustomName && !line.batch_id && !line.serial_no) {
             line.batch_id = '';
             line.serial_no = '';
             line.batch_no = '';

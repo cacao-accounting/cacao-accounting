@@ -183,7 +183,7 @@ describe('transaction-form', function () {
     assert.strictEqual(component.visibleColumns[5].field, 'amount');
   });
 
-  it('requires lot selection for controlled items before submitting', function () {
+  it('keeps lot and serial inputs in the detail modal instead of the inline grid', function () {
     const create = loadTransactionForm();
     const component = create({
       formKey: 'inventory.stock_entry',
@@ -198,11 +198,34 @@ describe('transaction-form', function () {
     line.item_code = 'LOT-ITEM';
     component.onItemChange(line);
 
-    assert(component.visibleColumns.some((column) => column.field === 'batch_id'));
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'batch_id'), false);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'serial_no'), false);
     const event = { prevented: false, preventDefault() { this.prevented = true; } };
     component.prepareSubmit(event);
     assert.strictEqual(event.prevented, true);
     assert.strictEqual(component.submitError, 'El item LOT-ITEM requiere lote.');
+  });
+
+  it('keeps required batch and serial status visible in the modal for tracked items', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'inventory.stock_entry',
+      items: [{ code: 'LOT-ITEM', name: 'Artículo con lote', uom: 'UND', has_batch: true, has_serial_no: true }],
+      uoms: [{ code: 'UND', name: 'Unidad' }],
+      defaultRows: 1,
+    });
+    component.init();
+
+    const line = component.lines[0];
+    line.item_code = 'LOT-ITEM';
+    line.batch_id = 'BATCH-001';
+    line.serial_no = 'SER-001';
+    const normalized = component.normalizeLine(line);
+
+    assert.strictEqual(normalized.has_batch, true);
+    assert.strictEqual(normalized.has_serial_no, true);
+    assert.strictEqual(Boolean(normalized.batch_id), true);
+    assert.strictEqual(Boolean(normalized.serial_no), true);
   });
 
   it('filters unit options based on the selected item and keeps the selected unit valid', function () {

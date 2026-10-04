@@ -493,24 +493,29 @@ h6 { font-size: .9rem; color: var(--ca-text-secondary); }
 
 .ca-journal-row-menu {
   position: relative;
+  z-index: 1;
 }
 
 .ca-journal-row-menu .dropdown-toggle::after {
   display: none;
 }
 
-.ca-journal-row-menu .dropdown-menu {
+.ca-journal-row-menu .dropdown-menu,
+.ca-journal-grid .dropdown-menu {
   min-width: 12rem;
-  z-index: 1080;
+  z-index: 2000;
+  position: absolute;
 }
 
-.ca-journal-grid .dropdown-menu {
-  z-index: 1080;
+.ca-journal-grid {
+  position: relative;
+  overflow: visible;
 }
 
 @media (max-width: 768px) {
   .ca-journal-grid {
     overflow-x: auto;
+    overflow-y: visible;
   }
 }
 
