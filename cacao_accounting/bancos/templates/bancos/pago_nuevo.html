@@ -45,7 +45,8 @@
   }
 
   .ca-payment-table th {
-    background-color: var(--ca-g100);
+    background-color: var(--ca-surface-hover);
+    color: var(--ca-text-secondary);
     font-weight: 600;
     text-align: left;
     padding: 8px;
@@ -53,6 +54,7 @@
   }
 
   .ca-payment-table td {
+    color: var(--ca-text);
     padding: 8px;
     border: 1px solid var(--ca-border);
     vertical-align: middle;
@@ -68,7 +70,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 2rem;
-    background-color: var(--ca-g050);
+    background-color: var(--ca-surface);
     padding: 1rem;
     border: 1px solid var(--ca-border);
     border-radius: 4px;
@@ -83,15 +85,19 @@
   }
 
   .ca-summary-label {
-    color: #666;
+    color: var(--ca-text-secondary);
   }
 
   .ca-summary-value {
     font-weight: 600;
   }
 
+  .ca-summary-tax-total {
+    border-top: 1px solid var(--ca-border) !important;
+  }
+
   .ca-collapsible-section {
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--ca-border);
     padding-top: 1rem;
   }
 
@@ -859,7 +865,7 @@
                   <span class="ca-summary-label">{{ _('Diferencia de Monto') }} (<span x-text="header.currency || 'NIO'"></span>)</span>
                   <span class="ca-summary-value" x-text="formatCurrency(0)"></span>
               </div>
-              <div class="ca-summary-item mt-2 pt-2 border-top">
+              <div class="ca-summary-item ca-summary-tax-total mt-2 pt-2">
                   <span class="ca-summary-label">{{ _('Total Impuestos y Cargos') }} (<span x-text="header.currency || 'NIO'"></span>)</span>
                   <span class="ca-summary-value" x-text="formatCurrency(taxCharges.summary.document_tax_total)"></span>
               </div>

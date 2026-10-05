@@ -112,3 +112,22 @@ def test_post_button_keeps_contrast_in_both_themes() -> None:
     light_tokens, _, dark_tokens = final_tokens.partition('[data-theme="dark"]')
     assert "--ca-p600: #5F7D46;" in light_tokens
     assert "--ca-p600: #C8753D;" in dark_tokens
+
+
+def test_payment_form_uses_theme_aware_surface_tokens() -> None:
+    """Payment tables and summaries must not retain light-only colors in dark mode."""
+    template = (PROJECT_ROOT / "cacao_accounting" / "bancos" / "templates" / "bancos" / "pago_nuevo.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "background-color: var(--ca-surface-hover);" in template
+    assert "background-color: var(--ca-surface);" in template
+    assert "color: var(--ca-text-secondary);" in template
+    assert "border-top: 1px solid var(--ca-border);" in template
+    assert "border-top: 1px solid var(--ca-border) !important;" in template
+    assert "ca-summary-tax-total mt-2 pt-2" in template
+    assert "var(--ca-g100)" not in template
+    assert "var(--ca-g050)" not in template
+    assert "color: #666;" not in template
+    assert "border-top: 1px solid #eee;" not in template
+    assert "border-top" not in template.split("ca-summary-tax-total mt-2 pt-2", maxsplit=1)[1].split(">", maxsplit=1)[0]
