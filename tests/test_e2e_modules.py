@@ -1433,5 +1433,6 @@ def test_purchase_receipt_from_order_exposes_warehouse_selector(app_ctx):
     response = client.get(f"/buying/purchase-receipt/new?from_order={order.id}")
 
     assert response.status_code == 200
-    assert "Seleccione almacén".encode() in response.data
+    assert "Bodega destino".encode() in response.data
+    assert b'doctype: "warehouse"' in response.data
     assert b'name="to_warehouse"' in response.data

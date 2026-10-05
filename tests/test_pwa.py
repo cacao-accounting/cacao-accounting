@@ -34,7 +34,7 @@ def test_pwa_manifest_and_sw():
     assert res_sw.status_code == 200
     assert "application/javascript" in res_sw.content_type
     assert res_sw.headers.get("Service-Worker-Allowed") == "/"
-    assert b"cacao-accounting-v4" in res_sw.data
+    assert b"cacao-accounting-v5" in res_sw.data
 
     # Test Content Security Policy headers include manifest-src and worker-src
     res_ping = client.get("/ping")
