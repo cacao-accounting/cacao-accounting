@@ -163,7 +163,7 @@ def test_sales_customer_creation_respects_unchecked_active_box(app_ctx):
 
 
 def test_sales_invoice_form_exposes_company_warehouses(app_ctx):
-    """La factura de venta muestra la bodega por línea para crear la DN correcta."""
+    """La factura de venta expone la bodega documental en el header para crear la DN correcta."""
     client = app_ctx.test_client()
     client.post("/login", data={"usuario": "cacao", "acceso": "cacao"}, follow_redirects=True)
 
@@ -173,8 +173,42 @@ def test_sales_invoice_form_exposes_company_warehouses(app_ctx):
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert '"field": "warehouse"' in html
+    assert 'id="warehouse" name="warehouse"' in html
+    assert 'doctype: "warehouse"' in html
+    assert '"field": "warehouse"' not in html
     assert warehouse.code in html
+
+
+def test_sales_invoice_edit_preloads_persisted_line_warehouse(app_ctx):
+    """La edición de factura precarga en el header la bodega persistida en las líneas."""
+    client = app_ctx.test_client()
+    client.post("/login", data={"usuario": "cacao", "acceso": "cacao"}, follow_redirects=True)
+
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="CACAO")).scalars().first()
+    item = database.session.execute(database.select(Item)).scalars().first()
+    assert warehouse is not None
+    assert item is not None
+
+    invoice = SalesInvoice(company="CACAO", posting_date=date.today(), docstatus=0)
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        SalesInvoiceItem(
+            sales_invoice_id=invoice.id,
+            item_code=item.code,
+            qty=Decimal("1"),
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+            warehouse=warehouse.code,
+        )
+    )
+    database.session.commit()
+
+    response = client.get(f"/sales/sales-invoice/{invoice.id}/edit?company=CACAO")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert f'"warehouse": "{warehouse.code}"' in html
 
 
 def test_sales_document_totals_convert_transaction_currency(app_ctx):

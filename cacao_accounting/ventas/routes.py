@@ -1098,8 +1098,8 @@ def ventas_orden_venta(order_id):
     )
 
 
-def _sales_order_header_warehouse(lineas: Sequence[Any]) -> str:
-    """Devuelve la bodega documentada en las líneas para precargar el header."""
+def _sales_header_warehouse(lineas: Sequence[Any]) -> str:
+    """Devuelve la primera bodega documentada en las líneas para precargar el header."""
     for item in lineas:
         if item.warehouse:
             return item.warehouse
@@ -1151,7 +1151,7 @@ def ventas_orden_venta_editar(order_id: str):
         return _handle_sales_order_update(registro, request.form, _ENDPOINT_ORDEN_VENTA, order_id)
 
     lineas = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars().all()
-    header_warehouse = _sales_order_header_warehouse(lineas)
+    header_warehouse = _sales_header_warehouse(lineas)
     transaction_config = {
         "formKey": _FORMKEY_SALES_ORDER,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
@@ -2172,7 +2172,10 @@ def _build_sales_invoice_edit_config(
     uoms_disponibles: list[dict[str, Any]],
     bodegas_disponibles: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    lineas = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars()
+    lineas = (
+        database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
+    )
+    header_warehouse = _sales_header_warehouse(lineas)
     return {
         "formKey": _FORMKEY_SALES_INVOICE,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
@@ -2193,6 +2196,7 @@ def _build_sales_invoice_edit_config(
             "remarks": registro.remarks or "",
             "party": registro.customer_id or "",
             "party_label": registro.customer_name or "",
+            "warehouse": header_warehouse,
         },
         "initialLines": [
             {
