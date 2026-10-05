@@ -203,22 +203,6 @@
           x_model="header.naming_series"
       ) }}
     </div>
-    {% if include_currency %}
-    <div class="col-md-6">
-      <label class="form-label" for="currency">{{ _('Moneda') }} <span class="text-danger">*</span></label>
-      {{ smart_select(
-          doctype="currency",
-          name="currency",
-          initial_value_expr="header.currency",
-          initial_label_expr="header.currency",
-          label=_("Moneda"),
-          required=True,
-          locked_expr="typeof isFlowFieldLocked === 'function' && isFlowFieldLocked('currency')",
-          x_model="header.currency"
-      ) }}
-      <div class="invalid-feedback d-block" x-show="!header.currency" x-cloak>{{ _('La moneda transaccional es obligatoria.') }}</div>
-    </div>
-    {% endif %}
     {% if include_warehouse %}
     <div class="col-md-6">
       <label class="form-label" for="warehouse">{{ _('Almacén') }} <span class="text-danger">*</span></label>
@@ -234,6 +218,22 @@
           required=True,
           x_model="header.warehouse"
       ) }}
+    </div>
+    {% endif %}
+    {% if include_currency %}
+    <div class="col-md-6">
+      <label class="form-label" for="currency">{{ _('Moneda') }} <span class="text-danger">*</span></label>
+      {{ smart_select(
+          doctype="currency",
+          name="currency",
+          initial_value_expr="header.currency",
+          initial_label_expr="header.currency",
+          label=_("Moneda"),
+          required=True,
+          locked_expr="typeof isFlowFieldLocked === 'function' && isFlowFieldLocked('currency')",
+          x_model="header.currency"
+      ) }}
+      <div class="invalid-feedback d-block" x-show="!header.currency" x-cloak>{{ _('La moneda transaccional es obligatoria.') }}</div>
     </div>
     {% endif %}
     <div class="col-md-6">
@@ -421,8 +421,6 @@
                 </template>
               </td>
             </template>
-            <input type="hidden" :name="'batch_id_' + index" :value="line.batch_id || ''">
-            <input type="hidden" :name="'serial_no_' + index" :value="line.serial_no || ''">
             <td>
               <div class="ca-journal-actions">
                 <button class="btn btn-sm btn-outline-secondary" type="button" @click="openDetails(index)"
@@ -443,6 +441,8 @@
                   </ul>
                 </div>
               </div>
+              <input type="hidden" :name="'batch_id_' + index" :value="line.batch_id || ''">
+              <input type="hidden" :name="'serial_no_' + index" :value="line.serial_no || ''">
               <input type="hidden" :name="'account_' + index" :value="line.account || ''">
               <input type="hidden" :name="'cost_center_' + index" :value="line.cost_center || ''">
               <input type="hidden" :name="'unit_' + index" :value="line.unit || ''">
@@ -791,6 +791,7 @@
           <div class="col-12 mt-3">
             <label class="form-label">{{ _('Observaciones') }}</label>
             <textarea class="form-control" rows="3" x-model="modalLine.remarks"></textarea>
+          </div>
           </div>
           </div>
         </template>

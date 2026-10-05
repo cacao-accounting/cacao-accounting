@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Any, Sequence
 
 from decimal import Decimal
 
@@ -1098,6 +1098,14 @@ def ventas_orden_venta(order_id):
     )
 
 
+def _sales_order_header_warehouse(lineas: Sequence[Any]) -> str:
+    """Devuelve la bodega documentada en las líneas para precargar el header."""
+    for item in lineas:
+        if item.warehouse:
+            return item.warehouse
+    return ""
+
+
 @ventas.route("/sales-order/<order_id>/edit", methods=["GET", "POST"])
 @modulo_activo("sales")
 @login_required
@@ -1142,7 +1150,8 @@ def ventas_orden_venta_editar(order_id: str):
     if request.method == "POST":
         return _handle_sales_order_update(registro, request.form, _ENDPOINT_ORDEN_VENTA, order_id)
 
-    lineas = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars()
+    lineas = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars().all()
+    header_warehouse = _sales_order_header_warehouse(lineas)
     transaction_config = {
         "formKey": _FORMKEY_SALES_ORDER,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
@@ -1161,6 +1170,7 @@ def ventas_orden_venta_editar(order_id: str):
             "remarks": registro.remarks or "",
             "party": registro.customer_id or "",
             "party_label": registro.customer_name or "",
+            "warehouse": header_warehouse,
         },
         "initialLines": [
             {

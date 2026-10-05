@@ -28,7 +28,11 @@
   {% if from_quotation_id %}
   <input type="hidden" name="from_quotation" value="{{ from_quotation_id }}">
   {% endif %}
-  {{ tf_macros.transaction_form_header(_('Editar Orden de Venta') if edit else _('Orden de Venta'), cancel_url=url_for('ventas.ventas_orden_venta_lista')) }}
+  {{ tf_macros.transaction_form_header(
+      _('Editar Orden de Venta') if edit else _('Orden de Venta'),
+      cancel_url=url_for('ventas.ventas_orden_venta_lista'),
+      include_warehouse=True
+    ) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
