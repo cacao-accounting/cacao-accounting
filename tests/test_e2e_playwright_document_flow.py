@@ -244,13 +244,11 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     page.locator('input[name="qty_0"]').fill("5")
     page.wait_for_timeout(500)
 
-    # Set Warehouse in the order form via line details modal
-    page.locator("button:has(.bi-pencil)").first.click()
-    page.wait_for_timeout(1000)
-    page.locator('select[x-model="modalLine.warehouse"]').select_option("PRINCIPAL")
-    page.wait_for_timeout(500)
-    page.get_by_role("button", name="Guardar detalle").click()
-    page.wait_for_timeout(500)
+    # Sales documents select the warehouse in the header.
+    warehouse_select = page.locator(".ca-smart-select", has=page.locator('input[name="warehouse"]'))
+    warehouse_select.locator("input.ca-smart-select-input").fill("PRINCIPAL")
+    warehouse_select.locator(".ca-smart-select-option", has_text="PRINCIPAL").click()
+    expect(page.locator('input[name="warehouse"]')).to_have_value("PRINCIPAL")
 
     # Submit the form to create a new draft Sales Order
     page.get_by_role("button", name="Guardar").click()
@@ -279,7 +277,10 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
 
     # Wait for the background prefill to load line items into the grid
     expect(page.locator('input[name="item_code_0"]')).to_have_value("ART-001")
-    page.locator('select[name="warehouse_0"]').select_option("PRINCIPAL")
+    warehouse_select = page.locator(".ca-smart-select", has=page.locator('input[name="warehouse"]'))
+    warehouse_select.locator("input.ca-smart-select-input").fill("PRINCIPAL")
+    warehouse_select.locator(".ca-smart-select-option", has_text="PRINCIPAL").click()
+    expect(page.locator('input[name="warehouse"]')).to_have_value("PRINCIPAL")
 
     # Click "Guardar" to save it as draft
     page.get_by_role("button", name="Guardar").click()
@@ -393,13 +394,8 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     # Wait for the background prefill to load line items into the grid
     expect(page.locator('input[name="item_code_0"]')).to_have_value("ART-001")
 
-    # Set Warehouse in the receipt form via line details modal
-    page.locator("button:has(.bi-pencil)").first.click()
-    page.wait_for_timeout(1000)
-    page.locator('select[x-model="modalLine.warehouse"]').select_option("PRINCIPAL")
-    page.wait_for_timeout(500)
-    page.get_by_role("button", name="Guardar detalle").click()
-    page.wait_for_timeout(500)
+    # Receipt lines use the destination warehouse selected in the header.
+    expect(page.locator('input[name="to_warehouse"]')).to_have_value("PRINCIPAL")
 
     # Save Purchase Receipt
     page.get_by_role("button", name="Guardar").click()
