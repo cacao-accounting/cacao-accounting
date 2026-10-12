@@ -552,6 +552,6 @@
 </script>
 
 {{ macros.document_flow_tree("journal_entry", registro) }}
-{{ macros.document_attachments_panel("journal_entry", registro.id) }}
+{{ macros.document_attachments_panel("journal_entry", registro.id, can_modify=(registro.status == "draft")) }}
 
 {% endblock %}
