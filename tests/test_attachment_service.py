@@ -514,3 +514,79 @@ def test_item_image_read_requires_inventory_permission(app_cloud, tmp_path):
 
         res = client.get("/api/inventory/items/ITEM-IMG-PERM/image")
         assert res.status_code == 403
+
+
+def test_journal_entry_attachment_lifecycle_and_immutability(app_cloud, tmp_path):
+    """Test file upload and deletion on draft Journal Entries and immutability after submission."""
+    app_cloud.config["UPLOAD_FOLDER"] = str(tmp_path)
+    client = app_cloud.test_client()
+
+    with app_cloud.app_context():
+        from cacao_accounting.database import ComprobanteContable
+
+        user = User(
+            user="admin_journal",
+            e_mail="admin_journal@example.com",
+            password=b"secret_hash",
+            classification="admin",
+            active=True,
+        )
+        database.session.add(user)
+
+        journal = ComprobanteContable(
+            entity="cacao",
+            status="draft",
+            memo="Borrador de comprobante",
+        )
+        database.session.add(journal)
+        database.session.commit()
+        journal_id = journal.id
+
+        with client.session_transaction() as sess:
+            sess["_user_id"] = user.id
+
+        with patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+            # 1. Upload attachment in draft mode
+            data = {
+                "file": (io.BytesIO(b"Factura de soporte PDF"), "soporte.pdf"),
+                "remarks": "Soporte de gasto",
+            }
+            res_upload = client.post(
+                f"/api/attachments/journal_entry/{journal_id}/upload",
+                data=data,
+                content_type="multipart/form-data",
+            )
+            assert res_upload.status_code == 201
+            file_id = res_upload.get_json()["file_id"]
+
+            # 2. List attachments
+            res_list = client.get(f"/api/attachments/journal_entry/{journal_id}")
+            assert res_list.status_code == 200
+            assert len(res_list.get_json()) == 1
+
+            # 3. Change status to submitted (posted/approved)
+            journal.status = "submitted"
+            database.session.commit()
+
+            # 4. Attempt to upload another file after approval -> rejected with 403 Forbidden
+            data_new = {
+                "file": (io.BytesIO(b"Nuevo soporte PDF"), "nuevo.pdf"),
+            }
+            res_upload_blocked = client.post(
+                f"/api/attachments/journal_entry/{journal_id}/upload",
+                data=data_new,
+                content_type="multipart/form-data",
+            )
+            assert res_upload_blocked.status_code == 403
+
+            # 5. Attempt to delete existing file after approval -> rejected with 403 Forbidden
+            res_delete_blocked = client.post(
+                f"/api/attachments/{file_id}/delete",
+                json={"reference_type": "journal_entry", "reference_id": journal_id},
+            )
+            assert res_delete_blocked.status_code == 403
+
+            # 6. Reading/downloading attached file is still permitted
+            res_dl = client.get(f"/attachments/download/{file_id}")
+            assert res_dl.status_code == 200
+            assert res_dl.data == b"Factura de soporte PDF"

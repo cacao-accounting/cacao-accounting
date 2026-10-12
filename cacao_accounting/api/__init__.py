@@ -270,35 +270,41 @@ _ATTACHMENT_MASTER_MODULES = {
 }
 
 
+def _require_attachment_master_access(normalized_type: str, reference_id: str, action: str) -> bool:
+    """Authorize access to master entities (e.g. supplier, customer)."""
+    master_module = _ATTACHMENT_MASTER_MODULES.get(normalized_type)
+    if not master_module:
+        return False
+    if not database.session.get(Party, reference_id):
+        abort(404)
+    if getattr(current_user, "classification", None) == "admin":
+        return True
+    companies = (
+        database.session.execute(
+            database.select(CompanyParty.company).where(
+                CompanyParty.party_id == reference_id, CompanyParty.is_active.is_(True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not companies:
+        abort(403)
+    for company in companies:
+        try:
+            exige_acceso_compania(master_module, company, action)
+            return True
+        except HTTPException as exc:
+            if exc.code != 403:
+                raise
+    abort(403)
+
+
 def _require_attachment_reference_access(reference_type: str, reference_id: str, action: str = "consultar") -> None:
     """Authorize access to an attachment reference before touching its file."""
-    if getattr(current_user, "classification", None) == "admin":
-        return
     normalized_type = normalize_doctype(reference_type)
-
-    master_module = _ATTACHMENT_MASTER_MODULES.get(normalized_type)
-    if master_module:
-        if not database.session.get(Party, reference_id):
-            abort(404)
-        companies = (
-            database.session.execute(
-                database.select(CompanyParty.company).where(
-                    CompanyParty.party_id == reference_id, CompanyParty.is_active.is_(True)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if not companies:
-            abort(403)
-        for company in companies:
-            try:
-                exige_acceso_compania(master_module, company, action)
-                return
-            except HTTPException as exc:
-                if exc.code != 403:
-                    raise
-        abort(403)
+    if _require_attachment_master_access(normalized_type, reference_id, action):
+        return
 
     try:
         document = get_document(normalized_type, reference_id)
@@ -306,6 +312,15 @@ def _require_attachment_reference_access(reference_type: str, reference_id: str,
         abort(400)
     if not document:
         abort(404)
+
+    if action == "editar":
+        status_val = str(getattr(document, "status", None) or getattr(document, "docstatus", None) or "draft").lower()
+        if status_val in {"submitted", "approved", "cancelled", "rejected", "1", "2"}:
+            abort(403)
+
+    if getattr(current_user, "classification", None) == "admin":
+        return
+
     module = _module_for_document_type(normalized_type)
     if not module:
         abort(400)
