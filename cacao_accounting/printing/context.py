@@ -10,7 +10,253 @@ from typing import Any
 
 from sqlalchemy import select
 
-from cacao_accounting.database import Entity, database
+from cacao_accounting.database import BankAccount, Entity, database
+from cacao_accounting.i18n import _get_locale
+
+SPANISH_MONTHS = [
+    "",
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+]
+
+ENGLISH_MONTHS = [
+    "",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
+
+
+def numero_a_letras(amount: Any, currency: str | None = None, lang: str | None = None) -> str:
+    """Convert a numeric amount into formal text representation in Spanish or English."""
+    try:
+        num = Decimal(str(amount or 0)).quantize(Decimal("0.01"))
+    except (TypeError, ValueError, ArithmeticError):
+        num = Decimal("0.00")
+
+    target_lang = str(lang or _get_locale() or "es").lower()
+    if target_lang.startswith("en"):
+        return _amount_to_words_en(num, currency)
+    return _amount_to_words_es(num, currency)
+
+
+def _amount_to_words_es(num: Decimal, currency: str | None = None) -> str:
+    """Convert a numeric amount into formal Spanish text representation."""
+    if num < 0:
+        return f"MENOS {_amount_to_words_es(abs(num), currency)}"
+
+    entero = int(abs(num))
+    centavos = int(round((abs(num) - entero) * 100))
+
+    texto_entero = "CERO" if entero == 0 else _convertir_entero_a_letras(entero)
+    curr_str = f" {currency.strip().upper()}" if currency and currency.strip() else ""
+    return f"{texto_entero}{curr_str} CON {centavos:02d}/100"
+
+
+def _amount_to_words_en(num: Decimal, currency: str | None = None) -> str:
+    """Convert a numeric amount into formal English text representation."""
+    if num < 0:
+        return f"MINUS {_amount_to_words_en(abs(num), currency)}"
+
+    integer_part = int(abs(num))
+    cents_part = int(round((abs(num) - integer_part) * 100))
+
+    text_integer = "ZERO" if integer_part == 0 else _convert_integer_to_words_en(integer_part)
+    curr_str = f" {currency.strip().upper()}" if currency and currency.strip() else ""
+    return f"{text_integer}{curr_str} AND {cents_part:02d}/100"
+
+
+UNIDADES = (
+    "",
+    "UN",
+    "DOS",
+    "TRES",
+    "CUATRO",
+    "CINCO",
+    "SEIS",
+    "SIETE",
+    "OCHO",
+    "NUEVE",
+    "DIEZ",
+    "ONCE",
+    "DOCE",
+    "TRECE",
+    "CATORCE",
+    "QUINCE",
+    "DIECISÉIS",
+    "DIECISIETE",
+    "DIECIOCHO",
+    "DIECINUEVE",
+    "VEINTE",
+    "VEINTIUNO",
+    "VEINTIDÓS",
+    "VEINTITRÉS",
+    "VEINTICUATRO",
+    "VEINTICINCO",
+    "VEINTISÉIS",
+    "VEINTISIETE",
+    "VEINTIOCHO",
+    "VEINTINUEVE",
+)
+DECENAS = ("", "", "", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA")
+CENTENAS = (
+    "",
+    "CIENTO",
+    "DOSCIENTOS",
+    "TRESCIENTOS",
+    "CUATROCIENTOS",
+    "QUINIENTOS",
+    "SEISCIENTOS",
+    "SETECIENTOS",
+    "OCHOCIENTOS",
+    "NOVECIENTOS",
+)
+
+
+def _convertir_grupo_tres_cifras(num: int) -> str:
+    """Convert a 3-digit number (0-999) to Spanish text."""
+    if num == 0:
+        return ""
+    if num == 100:
+        return "CIEN"
+
+    c = num // 100
+    resto = num % 100
+    str_c = CENTENAS[c]
+
+    if resto == 0:
+        return str_c
+
+    if resto < 30:
+        str_r = UNIDADES[resto]
+    else:
+        d = resto // 10
+        u = resto % 10
+        str_r = f"{DECENAS[d]} Y {UNIDADES[u]}" if u > 0 else DECENAS[d]
+
+    return f"{str_c} {str_r}".strip()
+
+
+def _convertir_miles(n: int) -> str:
+    """Convert thousands (1000-999999) to Spanish text."""
+    miles = n // 1000
+    resto = n % 1000
+    str_miles = "UN MIL" if miles == 1 else f"{_convertir_grupo_tres_cifras(miles)} MIL"
+    if str_miles.endswith("VEINTIUNO MIL"):
+        str_miles = str_miles[:-13] + "VEINTIÚN MIL"
+    elif str_miles.endswith("UNO MIL") and not str_miles.endswith("VEINTIUNO MIL"):
+        str_miles = str_miles[:-7] + "UN MIL"
+
+    str_resto = _convertir_grupo_tres_cifras(resto)
+    return f"{str_miles} {str_resto}".strip()
+
+
+def _convertir_millones(n: int) -> str:
+    """Convert millions (>=1000000) to Spanish text."""
+    millones = n // 1000000
+    resto = n % 1000000
+    str_millones = "UN MILLÓN" if millones == 1 else f"{_convertir_entero_a_letras(millones)} MILLONES"
+    if str_millones.endswith("VEINTIUNO MILLONES"):
+        str_millones = str_millones[:-18] + "VEINTIÚN MILLONES"
+    elif str_millones.endswith("UNO MILLONES"):
+        str_millones = str_millones[:-12] + "UN MILLONES"
+
+    str_resto = _convertir_entero_a_letras(resto)
+    return f"{str_millones} {str_resto}".strip()
+
+
+def _convertir_entero_a_letras(n: int) -> str:
+    """Convert a non-negative integer to Spanish text."""
+    if n < 1000:
+        return _convertir_grupo_tres_cifras(n)
+    if n < 1000000:
+        return _convertir_miles(n)
+    return _convertir_millones(n)
+
+
+EN_UNITS = (
+    "",
+    "ONE",
+    "TWO",
+    "THREE",
+    "FOUR",
+    "FIVE",
+    "SIX",
+    "SEVEN",
+    "EIGHT",
+    "NINE",
+    "TEN",
+    "ELEVEN",
+    "TWELVE",
+    "THIRTEEN",
+    "FOURTEEN",
+    "FIFTEEN",
+    "SIXTEEN",
+    "SEVENTEEN",
+    "EIGHTEEN",
+    "NINETEEN",
+)
+EN_TENS = ("", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY")
+
+
+def _convert_3digits_en(num: int) -> str:
+    """Convert a 3-digit number (0-999) into English text."""
+    if num == 0:
+        return ""
+    h = num // 100
+    rem = num % 100
+    res = f"{EN_UNITS[h]} HUNDRED" if h > 0 else ""
+
+    if rem == 0:
+        return res
+
+    if rem < 20:
+        str_rem = EN_UNITS[rem]
+    else:
+        t = rem // 10
+        u = rem % 10
+        str_rem = f"{EN_TENS[t]} {EN_UNITS[u]}" if u > 0 else EN_TENS[t]
+
+    return f"{res} {str_rem}".strip()
+
+
+def _convert_integer_to_words_en(n: int) -> str:
+    """Convert integer part to English text."""
+    if n == 0:
+        return ""
+    if n < 1000:
+        return _convert_3digits_en(n)
+    if n < 1000000:
+        thousands = n // 1000
+        rem = n % 1000
+        str_th = f"{_convert_3digits_en(thousands)} THOUSAND"
+        str_rem = _convert_3digits_en(rem)
+        return f"{str_th} {str_rem}".strip()
+
+    millions = n // 1000000
+    rem = n % 1000000
+    str_mil = f"{_convert_integer_to_words_en(millions)} MILLION"
+    str_rem = _convert_integer_to_words_en(rem)
+    return f"{str_mil} {str_rem}".strip()
 
 
 def build_common_context(company_code: str | None, user_name: str) -> dict[str, Any]:
@@ -359,6 +605,106 @@ def build_landed_cost_print_context(
         user,
         company_code,
     )
+
+
+def build_check_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a check payment."""
+    from cacao_accounting.database import PaymentEntry, PaymentReference
+
+    document = database.session.get(PaymentEntry, document_id)
+    context = build_common_context(company_code, _user_name(user))
+    if document is None:
+        return context
+
+    target_lang = str((options or {}).get("lang") or _get_locale() or "es").lower()
+    months_list = ENGLISH_MONTHS if target_lang.startswith("en") else SPANISH_MONTHS
+
+    dt = _first_attr(document, "posting_date", "document_date", "date")
+    if isinstance(dt, (date, datetime)):
+        day_str = f"{dt.day:02d}"
+        month_str = f"{dt.month:02d}"
+        month_name = months_list[dt.month] if 1 <= dt.month <= 12 else ""
+        year_str = f"{dt.year}"
+        date_formatted = dt.strftime("%Y-%m-%d")
+    else:
+        day_str, month_str, month_name, year_str = "", "", "", ""
+        date_formatted = str(dt or "")
+
+    paid_amount = _number(_first_attr(document, "paid_amount", "received_amount"))
+    curr = _text(document, "currency", context["company"]["default_currency"])
+    amount_words = numero_a_letras(paid_amount, curr, lang=target_lang)
+
+    bank = None
+    if document.bank_account_id:
+        bank = database.session.get(BankAccount, document.bank_account_id)
+
+    check_no = _text(document, "external_number", _text(document, "reference_no", _document_number(document)))
+    payee_name = _text(document, "party_name", "")
+
+    refs = database.session.execute(select(PaymentReference).filter_by(payment_id=document_id)).scalars().all()
+    context["check"] = {
+        "number": check_no,
+        "payment_number": _document_number(document),
+        "date": date_formatted,
+        "day": day_str,
+        "month": month_str,
+        "month_name": month_name,
+        "year": year_str,
+        "payee_name": payee_name,
+        "amount": paid_amount,
+        "amount_in_words": amount_words,
+        "currency": curr,
+        "bank_account_name": _text(bank, "account_name", ""),
+        "bank_account_number": _text(bank, "account_number", ""),
+        "bank_name": _text(bank, "bank_name", ""),
+        "memo": _text(document, "remarks", ""),
+        "status": _document_status(document),
+        "references": [
+            {
+                "reference_type": _text(ref, "reference_type", ""),
+                "reference_number": _text(ref, "reference_document_no", ""),
+                "allocated_amount": _number(_text(ref, "allocated_amount", 0)),
+            }
+            for ref in refs
+        ],
+    }
+    return context
+
+
+def build_check_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample check context for format preview and editing."""
+    context = _sample_common_context()
+    amount = Decimal("1250.50")
+    curr = "NIO"
+    target_lang = str(_get_locale() or "es").lower()
+    months_list = ENGLISH_MONTHS if target_lang.startswith("en") else SPANISH_MONTHS
+    context["check"] = {
+        "number": "10539",
+        "payment_number": "PAY-2026-00001",
+        "date": "2026-05-26",
+        "day": "26",
+        "month": "05",
+        "month_name": months_list[5],
+        "year": "2026",
+        "payee_name": "Comercial de Suministros S.A.",
+        "amount": amount,
+        "amount_in_words": numero_a_letras(amount, curr, lang=target_lang),
+        "currency": curr,
+        "bank_account_name": "Cuenta Corriente Banpro Cacao",
+        "bank_account_number": "100100998877",
+        "bank_name": "Banpro",
+        "memo": "Pago de factura de proveedores No. 4501",
+        "status": "posted",
+        "references": [
+            {"reference_type": "purchase_invoice", "reference_number": "FAC-2026-00100", "allocated_amount": 1250.50}
+        ],
+    }
+    return context
 
 
 def build_payment_entry_print_context(
@@ -995,6 +1341,28 @@ DELIVERY_NOTE_PRINT_SCHEMA = {**COMMON_SCHEMA, "receipt": {_ITEMS_KEY: LINE_SCHE
 STOCK_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "adjustment": {_ITEMS_KEY: LINE_SCHEMA}}
 QUOTATION_PRINT_SCHEMA = {**COMMON_SCHEMA, "quote": {_ITEMS_KEY: LINE_SCHEMA}}
 PAYMENT_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "payment": {"references[]": {"allocated_amount": "Allocated amount"}}}
+CHECK_PRINT_SCHEMA = {
+    **COMMON_SCHEMA,
+    "check": {
+        "number": "Check number",
+        "payment_number": "Payment document number",
+        "date": "Check issue date (YYYY-MM-DD)",
+        "day": "Check issue day (DD)",
+        "month": "Check issue month (MM)",
+        "month_name": "Check issue month name in active locale",
+        "year": "Check issue year (YYYY)",
+        "payee_name": "Payee or beneficiary name",
+        "amount": "Check amount in numeric figures",
+        "amount_in_words": "Check amount spelled out in active locale words",
+        "currency": _LABEL_CURRENCY_CODE,
+        "bank_account_name": "Source bank account display name",
+        "bank_account_number": "Source bank account number",
+        "bank_name": "Bank institution name",
+        "memo": "Check memo or remarks",
+        "status": "Document status",
+        "references[]": {"allocated_amount": "Allocated amount", "reference_number": "Reference document number"},
+    },
+}
 WITHHOLDING_CERTIFICATE_PRINT_SCHEMA = {
     **COMMON_SCHEMA,
     "withholding_certificate": {"lines[]": {"base_amount": "Base amount", "rate": "Rate", "amount": "Withheld amount"}},

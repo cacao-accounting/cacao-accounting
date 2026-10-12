@@ -394,6 +394,7 @@ class PrintService:
             "quotation": SalesQuotation,
             "sales_quotation": SalesQuotation,
             "payment_entry": PaymentEntry,
+            "check": PaymentEntry,
             "bank_transfer": PaymentEntry,
             "cash_receipt": PaymentEntry,
             "exchange_revaluation": ExchangeRevaluation,

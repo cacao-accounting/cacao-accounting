@@ -8,7 +8,10 @@ from collections.abc import Callable
 from typing import Any, TypedDict
 
 from cacao_accounting.printing.context import (
+    CHECK_PRINT_SCHEMA,
     DELIVERY_NOTE_PRINT_SCHEMA,
+    build_check_print_context,
+    build_check_sample_context,
     EXCHANGE_REVALUATION_PRINT_SCHEMA,
     JOURNAL_ENTRY_PRINT_SCHEMA,
     LANDED_COST_PRINT_SCHEMA,
@@ -309,6 +312,17 @@ def init_printing_registry() -> None:
         build_payment_entry_print_context,
         build_payment_entry_sample_context,
         PAYMENT_ENTRY_PRINT_SCHEMA,
+        snippets,
+    )
+    _register(
+        "check",
+        _l("Impresión de cheque"),
+        "cash",
+        "check",
+        _PERM_CASH_VIEW,
+        build_check_print_context,
+        build_check_sample_context,
+        CHECK_PRINT_SCHEMA,
         snippets,
     )
     _register(

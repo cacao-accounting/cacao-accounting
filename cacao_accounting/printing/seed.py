@@ -299,6 +299,32 @@ ROOT_TEMPLATE_MAP = {
   Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
 </div>
 """,
+    "check": """
+{% set current_status = check.status | default_text('') | lower %}
+{% if current_status in ['draft', 'borrador'] %}
+<div class="watermark watermark-draft">BORRADOR</div>
+{% elif current_status in ['cancelled', 'anulado', 'void', 'rejected'] %}
+<div class="watermark watermark-cancelled">ANULADO</div>
+{% endif %}
+
+<div class="check-sheet" style="position: relative; width: 200mm; height: 85mm; font-family: monospace; font-size: 13px;">
+  <div class="check-field check-amount" style="position: absolute; top: 12mm; left: 145mm; font-weight: bold;">
+    ***{{ check.amount | money(check.currency) }}***
+  </div>
+  <div class="check-field check-payee" style="position: absolute; top: 24mm; left: 25mm; font-weight: bold;">
+    {{ check.payee_name }}
+  </div>
+  <div class="check-field check-words" style="position: absolute; top: 34mm; left: 25mm; width: 160mm;">
+    ***{{ check.amount_in_words }}***
+  </div>
+  <div class="check-field check-date" style="position: absolute; top: 50mm; left: 25mm;">
+    {{ company.address | default_text('Managua') }}, {{ check.day }} de {{ check.month_name }} de {{ check.year }}
+  </div>
+  <div class="check-field check-memo" style="position: absolute; top: 64mm; left: 25mm; font-size: 11px;">
+    Cheque No. {{ check.number }} - {{ check.memo | default_text('') }}
+  </div>
+</div>
+""",
     "revaluation": """
 {% set current_status = revaluation.status | default_text('') | lower %}
 {% if current_status in ['draft', 'borrador'] %}
