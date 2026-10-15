@@ -55,6 +55,8 @@ SENSITIVE_MODELS = (
     "PartyAccount",
     "Book",
     "Accounts",
+    "PurchaseMatchingConfig",
+    "SalesMatchingConfig",
 )
 # These fields are operational state, never a rewrite of financial evidence.
 MUTABLE_STATE = frozenset(

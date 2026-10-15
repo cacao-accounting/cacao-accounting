@@ -419,3 +419,47 @@ def test_posted_advance_can_append_allocation_reference(app):
     reference.allocated_amount = 100
     with pytest.raises(ValueError, match="financieros"):
         database.session.flush()
+
+
+def test_matching_config_changes_are_audited(app):
+    """Los cambios al motor de matching dejan evidencia con valores previos."""
+    from cacao_accounting.database import PurchaseMatchingConfig
+
+    config = PurchaseMatchingConfig(
+        company="co",
+        matching_type="3-way",
+        price_tolerance_value=0,
+        auto_reconcile=True,
+        allow_price_difference=False,
+    )
+    database.session.add(config)
+    database.session.commit()
+    created = _event(config.id)
+    assert created is not None
+    assert created.action == "created"
+    config.matching_type = "2-way"
+    config.allow_price_difference = True
+    database.session.flush()
+    event = _event(config.id)
+    assert event.action == "updated"
+    changes = json.loads(event.changes_json)
+    assert changes["matching_type"]["before"] == "3-way"
+    assert changes["matching_type"]["after"] == "2-way"
+    assert changes["allow_price_difference"]["after"] is True
+
+
+def test_matching_config_bulk_mutation_is_rejected(app):
+    """La configuración de matching solo se modifica por la vía auditada."""
+    from sqlalchemy import text
+
+    from cacao_accounting.database import PurchaseMatchingConfig, SalesMatchingConfig
+
+    database.session.add(PurchaseMatchingConfig(company="co"))
+    database.session.add(SalesMatchingConfig(company="co"))
+    database.session.commit()
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.execute(update(PurchaseMatchingConfig).values(auto_reconcile=False))
+    database.session.rollback()
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(text("DELETE FROM sales_matching_config"))
+    database.session.rollback()
