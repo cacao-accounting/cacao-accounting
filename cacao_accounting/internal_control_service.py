@@ -176,22 +176,27 @@ def _write_event(mapper: Any, connection: Any, target: Any, action: str) -> None
         for key in before_values
         if after is not None and before_values[key] != after.get(key)
     }
-    connection.execute(
-        AuditTrail.__table__.insert().values(
-            id=obtiene_texto_unico(),
-            document_type=target.__table__.name,
-            document_id=str(target.id),
-            document_no=getattr(target, "document_no", None),
-            company=company,
-            action=action,
-            actor_user_id=actor_id,
-            actor_name=actor_name,
-            source_module="internal_control",
-            before_json=json.dumps(before, default=_json_default, ensure_ascii=False) if before else None,
-            after_json=json.dumps(after, default=_json_default, ensure_ascii=False) if after else None,
-            changes_json=json.dumps(changes, default=_json_default, ensure_ascii=False) if changes else None,
-        )
+    values: dict[str, Any] = {
+        "id": obtiene_texto_unico(),
+        "timestamp": None,
+    }
+    values.update(
+        document_type=target.__table__.name,
+        document_id=str(target.id),
+        document_no=getattr(target, "document_no", None),
+        company=company,
+        action=action,
+        actor_user_id=actor_id,
+        actor_name=actor_name,
+        source_module="internal_control",
+        before_json=json.dumps(before, default=_json_default, ensure_ascii=False) if before else None,
+        after_json=json.dumps(after, default=_json_default, ensure_ascii=False) if after else None,
+        changes_json=json.dumps(changes, default=_json_default, ensure_ascii=False) if changes else None,
     )
+    from cacao_accounting.audit_chain import stamp_audit_values
+
+    stamp_audit_values(connection, values)
+    connection.execute(AuditTrail.__table__.insert().values(**values))
 
 
 def _audit_insert(mapper: Any, connection: Any, target: Any) -> None:
@@ -453,14 +458,32 @@ def _guard_sensitive_bulk(state: Any) -> None:
     _guard_financial_bulk(state)
 
 
+def _stamp_audit_chain(mapper: Any, connection: Any, target: Any) -> None:
+    """Attach the audit hash chain to ORM rows in both desktop and cloud."""
+    del mapper
+    from cacao_accounting.audit_chain import stamp_audit_entry
+
+    stamp_audit_entry(connection, target)
+
+
+def _chain_audit_flush(session: Session, flush_context: Any, instances: Any) -> None:
+    """Chain pending audit rows at flush start, in both desktop and cloud."""
+    del flush_context, instances
+    from cacao_accounting.audit_chain import chain_pending_rows
+
+    chain_pending_rows(session)
+
+
 def register_internal_controls() -> None:
     """Install idempotent shared listeners once, independent of app instances."""
     if event.contains(Session, "before_flush", _guard_flush):
         return
     event.listen(Session, "before_flush", _guard_flush)
+    event.listen(Session, "before_flush", _chain_audit_flush)
     event.listen(Session, "do_orm_execute", _guard_sensitive_bulk)
     event.listen(Engine, "before_execute", _guard_bulk)
     event.listen(Engine, "before_cursor_execute", _guard_raw_sql)
+    event.listen(AuditTrail, "before_insert", _stamp_audit_chain)
     for mapper in cast(Any, database.Model).registry.mappers:
         model = mapper.class_
         event.listen(model, "before_insert", _stamp_preparer)

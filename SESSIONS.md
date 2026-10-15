@@ -2686,3 +2686,59 @@ Aunque el defecto era preexistente, se aplican medidas para hacerlo robusto:
   recreación del esquema o clasificación manual de roles.
 - Un preparador sin `approval_rank` bloquea la aprobación (fail-closed).
 - El tipo `admin` es global: no exige `UserCompanyAccess`.
+
+## 2026-10-15 (cadena de hashes SHA-256 sobre audit_trail)
+
+### Petición del usuario
+
+Sobre el análisis de controles ICFR/SOX y la frontera monolito/operador del
+SaaS, se acordó que el único gap que queda dentro del código es tamper-evidence:
+agregar hash chain a la evidencia de auditoría, pequeño y acotado, respetando
+el tree local con trabajo paralelo de terceros.
+
+### Alcance implementado
+
+- `audit_chain.py` (nuevo): `compute_payload_hash` (sha256 del contenido
+  canónico de la fila, timestamp normalizado a UTC naïve), `chain_pending_rows`
+  (encadenado en `before_flush`, necesario porque SQLAlchemy 2.0 agrupa los
+  INSERT del mismo mapper en un solo executemany), `stamp_audit_values`
+  (camino Core del control interno), `stamp_audit_entry` (respaldo en
+  `before_insert`) y `verify_audit_trail_chain()` (recalcula hash y valida el
+  enlace por orden de id ULID monótonico).
+- `AuditTrail`: columnas `payload_hash` y `prev_hash` (nulas, sin migración;
+  `create_all` las crea y las filas del despliegue previo inici chain como cola
+  heredada excluida de la verificación).
+- Activo en desktop y cloud: el listener de Session se registra en
+  `register_internal_controls()` sin condicionarse a `_enabled()`.
+- `tests/test_audit_chain.py`: 6 pruebas (encadenado ORM, continuidad vía ruta
+  Core en cloud, detección de UPDATE crudo por driver y por `text()`, borrado
+  de fila intermedia y filas legacy sin hash).
+
+### Decisiones de diseño
+
+- El hash del payload incluye timestamp; la generación estampa
+  `datetime.now(UTC)` cuando la fila no trae timestamp y la normalización
+ aware/naïve≡UTC hace idéntico el string entre generación y verificación.
+- Idempotente ante rollback: el reintento recalcula la cadena con la cola
+  vigente de la base de datos.
+- Verificación devuelve hallazgos machine-readable (`payload_tampered`,
+  `chain_break`); sin cadenas visibles nuevas al usuario, sin entradas .po.
+
+### Limitaciones conocidas
+
+- Escritores concurrentes en PostgreSQL pueden leer el mismo `prev_hash`
+  antes de aterrizar el COMMIT del otro (fork aparente en verificación);
+  en SQLite no ocurre (escritor único).
+- Un DBA con UPDATE directo puede rearmar la cadena; la defensa real son los
+  GRANT/REVOKE de despliegue documentados en `docs/cloud/internal-controls.md`.
+- Solo cubre `audit_trail`; `approval_action` y `audit_log` quedan con la
+  inmutabilidad runtime existente.
+
+### Verificación
+
+- `tests/test_audit_chain.py` (6 aprobadas), `tests/test_internal_control_service.py`
+  (19 aprobadas), `tests/test_audit_trail_journal.py` y `tests/test_draft_audit.py`
+  (12 aprobadas). Black, Ruff, Flake8, Mypy y complexipy (≤ 11) pasan.
+- Cambios locales pendientes de commit; trabajo de terceros en
+  `internal_control_service.py` (`_enabled()` con `INTERNAL_CONTROLS_ENFORCE`)
+  stageado selectivamente fuera del commit de esta tarea.

@@ -5501,6 +5501,8 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
     source_module = database.Column(database.String(80), nullable=True, index=True)
     ip_address = database.Column(database.String(64), nullable=True)
     user_agent = database.Column(database.String(512), nullable=True)
+    prev_hash = database.Column(database.String(64), nullable=True)
+    payload_hash = database.Column(database.String(64), nullable=True)
 
 
 class EmailQueue(database.Model, BaseTabla):  # type: ignore[name-defined]

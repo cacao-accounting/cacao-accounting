@@ -4,6 +4,20 @@ Cacao supports customer ICFR controls; it does not certify SOX compliance.
 
 The Cloud application records sensitive configuration changes and financial document
 transitions in `audit_trail`, using the same database transaction as the change.
+
+## Audit hash chain
+
+New `audit_trail` rows carry `payload_hash` (SHA-256 of the row's canonical
+content) and `prev_hash` (the previous row's `payload_hash`, ordered by the
+monotonic ULID id). `cacao_accounting.audit_chain.verify_audit_trail_chain()`
+recalculates every hash and validates the links, so editing or removing
+historical rows is detected. Rows stored before this feature enablement have
+no hash and are excluded from verification. Concurrent PostgreSQL writers may
+read the same `prev_hash` before the other transaction commits and produce an
+apparent fork; SQLite is unaffected. Database-level immutability (see the
+PostgreSQL grants below) remains the primary tamper protection; the hash chain
+is the detection layer.
+
 Automated services should wrap work in
 `with audit_actor(user_id=None, name="job:exchange-import"):` from
 `internal_control_service`. Without an authenticated or explicit actor, automatic
