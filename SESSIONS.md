@@ -2600,3 +2600,15 @@ respaldadas por evidencia sin alterar la semántica contable.
   pasan. Pylint no está instalado en el entorno; revisión visual pendiente.
 - Commit local solicitado por el desarrollador; se excluyen cambios ajenos
   y no se realiza push.
+
+## 2026-10-15 (tipografía del resumen financiero)
+
+- A petición del desarrollador, los importes del resumen informativo al pie
+  de los reportes financieros usan 0.8125rem (13px con raíz de 16px).
+  Las etiquetas conservan 0.75rem; las cifras de la tabla no cambian.
+- Prueba de regresión de tamaño y alineación; 9 pruebas de estilos aprobadas.
+- Cambios locales pendientes de commit.
+- QA y tercera revisión independiente aprobadas. Black, Ruff, Flake8,
+  pydocstyle y diff --check pasan. Mypy sobre el archivo de pruebas detecta
+  un error preexistente en línea 73 (`TemplateModule.module_status_badge`),
+  ajeno a este cambio. Revisión visual en navegador pendiente.

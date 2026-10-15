@@ -156,3 +156,13 @@ def test_report_surfaces_follow_the_application_theme() -> None:
             assert ".ca-report-table tbody tr.ca-report-subtotal{" in group
             assert "background:var(--ca-surface-hover)" in group
             assert "color:var(--ca-text)" in group
+
+
+def test_financial_report_summary_uses_compact_amounts() -> None:
+    """The informational footer uses smaller amounts than the report body."""
+    template = (PROJECT_ROOT / "cacao_accounting" / "reportes" / "templates" / "reportes" / "financial_report.html").read_text(
+        encoding="utf-8"
+    )
+    amount = template.split(".ca-total-value{", 1)[1].split("}", 1)[0]
+    assert "font-size:.8125rem" in amount
+    assert "text-align:right" in amount
