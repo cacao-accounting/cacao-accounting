@@ -400,6 +400,7 @@
     <section x-show="collaborationSection === 'comment'" x-cloak class="mb-3">
       <form method="post" action="{{ url_for('api.api_document_comment', document_type=document_type, document_id=document.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
         <label class="form-label small fw-semibold" for="document-comment-{{ document.id }}">{{ _('Comentario') }}</label>
         <div class="d-flex gap-2">
           <textarea class="form-control form-control-sm" id="document-comment-{{ document.id }}" name="comment" rows="2" maxlength="2000" required></textarea>
@@ -411,6 +412,7 @@
     <section x-show="collaborationSection === 'task'" x-cloak class="mb-3">
       <form method="post" action="{{ url_for('api.api_document_task', document_type=document_type, document_id=document.id) }}" class="row g-2 align-items-end">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
         <div class="col-md-3">
           <label class="form-label small fw-semibold" for="task-title-{{ document.id }}">{{ _('Nueva tarea') }}</label>
           <input class="form-control form-control-sm" id="task-title-{{ document.id }}" name="title" maxlength="255" required>
@@ -467,8 +469,9 @@
 {% endmacro %}
 
 {# ─── Document / Master Record Attachments Panel ───────────────── #}
-{% macro document_attachments_panel(reference_type, reference_id) %}
+{% macro document_attachments_panel(reference_type, reference_id, can_modify=None) %}
 {% set attachments = get_document_attachments(reference_type, reference_id) %}
+{% if can_modify is none %}{% set can_modify = attachments_editable(reference_type, reference_id) %}{% endif %}
 <div class="ca-card mt-3" x-data="{ open: false }">
   <div class="ca-card-header" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open">
     <div class="d-flex align-items-center gap-2">
@@ -484,9 +487,10 @@
   </div>
 
   <div class="p-3" x-show="open" x-cloak>
-    {% if is_cloud_mode() %}
+    {% if is_cloud_mode() and can_modify %}
     <form method="post" action="{{ url_for('api.api_upload_attachment', reference_type=reference_type, reference_id=reference_id) }}" enctype="multipart/form-data" class="row g-2 align-items-end mb-3">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
       <div class="col-md-5">
         <label class="form-label small fw-semibold" for="attachment-file-{{ reference_id }}">{{ _('Seleccionar archivo') }}</label>
         <input type="file" class="form-control form-control-sm" id="attachment-file-{{ reference_id }}" name="file" required>
@@ -530,9 +534,10 @@
               <a href="{{ url_for('api.api_download_attachment', file_id=att.file_id) }}" class="btn btn-sm btn-outline-primary py-0 px-2" title="{{ _('Descargar') }}">
                 <i class="bi bi-download"></i>
               </a>
-              {% if is_cloud_mode() %}
+              {% if is_cloud_mode() and can_modify %}
               <form method="post" action="{{ url_for('api.api_delete_attachment', file_id=att.file_id) }}" class="d-inline" onsubmit="return confirm('{{ _("¿Eliminar este archivo adjunto?") }}');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
                 <input type="hidden" name="reference_type" value="{{ reference_type }}">
                 <input type="hidden" name="reference_id" value="{{ reference_id }}">
                 <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="{{ _('Eliminar') }}">

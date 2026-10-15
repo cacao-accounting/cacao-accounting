@@ -514,3 +514,169 @@ def test_item_image_read_requires_inventory_permission(app_cloud, tmp_path):
 
         res = client.get("/api/inventory/items/ITEM-IMG-PERM/image")
         assert res.status_code == 403
+
+
+def test_journal_entry_attachment_lifecycle_and_immutability(app_cloud, tmp_path):
+    """Test file upload and deletion on draft Journal Entries and immutability after submission."""
+    app_cloud.config["UPLOAD_FOLDER"] = str(tmp_path)
+    client = app_cloud.test_client()
+
+    with app_cloud.app_context():
+        from cacao_accounting.database import ComprobanteContable
+
+        user = User(
+            user="admin_journal",
+            e_mail="admin_journal@example.com",
+            password=b"secret_hash",
+            classification="admin",
+            active=True,
+        )
+        database.session.add(user)
+
+        journal = ComprobanteContable(
+            entity="cacao",
+            status="draft",
+            memo="Borrador de comprobante",
+        )
+        database.session.add(journal)
+        database.session.commit()
+        journal_id = journal.id
+
+        with client.session_transaction() as sess:
+            sess["_user_id"] = user.id
+
+        with patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+            # 1. Upload attachment in draft mode
+            data = {
+                "file": (io.BytesIO(b"Factura de soporte PDF"), "soporte.pdf"),
+                "remarks": "Soporte de gasto",
+            }
+            res_upload = client.post(
+                f"/api/attachments/journal_entry/{journal_id}/upload",
+                data=data,
+                content_type="multipart/form-data",
+            )
+            assert res_upload.status_code == 201
+            file_id = res_upload.get_json()["file_id"]
+
+            # 2. List attachments
+            res_list = client.get(f"/api/attachments/journal_entry/{journal_id}")
+            assert res_list.status_code == 200
+            assert len(res_list.get_json()) == 1
+
+            # 3. Change status to submitted (posted/approved)
+            journal.status = "submitted"
+            database.session.commit()
+
+            # 4. Attempt to upload another file after approval -> rejected with 403 Forbidden
+            data_new = {
+                "file": (io.BytesIO(b"Nuevo soporte PDF"), "nuevo.pdf"),
+            }
+            res_upload_blocked = client.post(
+                f"/api/attachments/journal_entry/{journal_id}/upload",
+                data=data_new,
+                content_type="multipart/form-data",
+            )
+            assert res_upload_blocked.status_code == 403
+
+            # 5. Attempt to delete existing file after approval -> rejected with 403 Forbidden
+            res_delete_blocked = client.post(
+                f"/api/attachments/{file_id}/delete",
+                json={"reference_type": "journal_entry", "reference_id": journal_id},
+            )
+            assert res_delete_blocked.status_code == 403
+
+            # 6. Reading/downloading attached file is still permitted
+            res_dl = client.get(f"/attachments/download/{file_id}")
+            assert res_dl.status_code == 200
+            assert res_dl.data == b"Factura de soporte PDF"
+
+            # 7. Pending approval is also locked for attachment mutation
+            journal.status = "Pending Approval"
+            database.session.commit()
+            res_pending = client.post(
+                f"/api/attachments/journal_entry/{journal_id}/upload",
+                data={"file": (io.BytesIO(b"Evidencia tardia"), "tardia.pdf")},
+                content_type="multipart/form-data",
+            )
+            assert res_pending.status_code == 403
+
+
+def test_attachment_edit_policy_states():
+    """La política de edición bloquea estados posteriores al borrador."""
+    from cacao_accounting.attachment_service import document_allows_attachment_edit
+    from cacao_accounting.database import ComprobanteContable, PaymentEntry
+
+    assert document_allows_attachment_edit(None) is False
+    assert document_allows_attachment_edit(ComprobanteContable(status="draft")) is True
+    assert document_allows_attachment_edit(ComprobanteContable(status=None)) is True
+    assert document_allows_attachment_edit(ComprobanteContable(status="Pending Approval")) is False
+    assert document_allows_attachment_edit(ComprobanteContable(status="submitted")) is False
+    assert document_allows_attachment_edit(ComprobanteContable(status="cancelled")) is False
+    assert document_allows_attachment_edit(ComprobanteContable(status="rejected")) is False
+
+    # docstatus manda incluso si el status parece borrador
+    assert document_allows_attachment_edit(PaymentEntry(docstatus=1, status="draft")) is False
+    assert document_allows_attachment_edit(PaymentEntry(docstatus=2, status="draft")) is False
+    assert document_allows_attachment_edit(PaymentEntry(docstatus=0, status="draft")) is True
+
+
+def test_attachment_upload_returns_to_origin_record(app_cloud, tmp_path):
+    """Un POST de formulario regresa al registro de origen, no al dashboard."""
+    from flask import url_for as flask_url_for
+
+    from cacao_accounting.database import ComprobanteContable
+
+    app_cloud.config["UPLOAD_FOLDER"] = str(tmp_path)
+    client = app_cloud.test_client()
+
+    with app_cloud.app_context():
+        user = User(
+            user="admin_return",
+            e_mail="admin_return@example.com",
+            password=b"secret",
+            classification="admin",
+            active=True,
+        )
+        database.session.add(user)
+        journal = ComprobanteContable(entity="cacao", status="draft", memo="retorno")
+        database.session.add(journal)
+        database.session.commit()
+        with app_cloud.test_request_context():
+            record_url = flask_url_for("contabilidad.ver_comprobante", identifier=journal.id)
+        journal_id = journal.id
+        user_id = user.id
+
+    with client.session_transaction() as sess:
+        sess["_user_id"] = user_id
+
+    with patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+        res = client.post(
+            f"/api/attachments/journal_entry/{journal_id}/upload",
+            data={"file": (io.BytesIO(b"doc"), "doc.pdf"), "return_url": record_url},
+            headers={"Referer": f"https://proxy.example.com{record_url}"},
+            content_type="multipart/form-data",
+        )
+        assert res.status_code == 302
+        assert res.headers["Location"].endswith(record_url)
+
+        bad = client.post(
+            f"/api/attachments/journal_entry/{journal_id}/upload",
+            data={"file": (io.BytesIO(b"x"), "x.pdf"), "return_url": "https://evil.example.com/phish"},
+            content_type="multipart/form-data",
+        )
+        assert bad.status_code == 302
+        assert "evil.example.com" not in bad.headers["Location"]
+
+
+def test_validated_internal_target_rejects_unsafe(app_cloud):
+    """La validación de retorno solo acepta rutas internas registradas."""
+    from cacao_accounting.api import _validated_internal_target
+
+    with app_cloud.app_context():
+        assert _validated_internal_target("/index") == "/index"
+        assert _validated_internal_target("https://evil.example.com/x") is None
+        assert _validated_internal_target("//evil.example.com/x") is None
+        assert _validated_internal_target("/no-such-route-xyz") is None
+        assert _validated_internal_target("javascript:alert(1)") is None
+        assert _validated_internal_target(None) is None

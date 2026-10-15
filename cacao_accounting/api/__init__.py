@@ -10,7 +10,7 @@ from functools import wraps
 from datetime import date
 from decimal import Decimal
 from typing import Any, cast
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -18,9 +18,11 @@ from urllib.parse import urlparse
 from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from cacao_accounting.attachment_service import (
+    ATTACHMENT_MASTER_MODULES,
     AttachmentError,
     delete_attachment,
     delete_item_image,
+    document_allows_attachment_edit,
     get_attachment_file,
     get_item_image_file,
     list_attachments,
@@ -30,6 +32,7 @@ from cacao_accounting.attachment_service import (
 from jwt import decode
 from jwt.exceptions import PyJWTError
 from werkzeug.exceptions import Forbidden, HTTPException
+from werkzeug.routing import RequestRedirect
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -264,41 +267,41 @@ def _require_document_send_access(document_type: str, document_id: str) -> Any:
     return document
 
 
-_ATTACHMENT_MASTER_MODULES = {
-    "customer": "sales",
-    "supplier": "purchases",
-}
+def _require_attachment_master_access(normalized_type: str, reference_id: str, action: str) -> bool:
+    """Authorize access to master entities (e.g. supplier, customer)."""
+    master_module = ATTACHMENT_MASTER_MODULES.get(normalized_type)
+    if not master_module:
+        return False
+    if not database.session.get(Party, reference_id):
+        abort(404)
+    if getattr(current_user, "classification", None) == "admin":
+        return True
+    companies = (
+        database.session.execute(
+            database.select(CompanyParty.company).where(
+                CompanyParty.party_id == reference_id, CompanyParty.is_active.is_(True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not companies:
+        abort(403)
+    for company in companies:
+        try:
+            exige_acceso_compania(master_module, company, action)
+            return True
+        except HTTPException as exc:
+            if exc.code != 403:
+                raise
+    abort(403)
 
 
 def _require_attachment_reference_access(reference_type: str, reference_id: str, action: str = "consultar") -> None:
     """Authorize access to an attachment reference before touching its file."""
-    if getattr(current_user, "classification", None) == "admin":
-        return
     normalized_type = normalize_doctype(reference_type)
-
-    master_module = _ATTACHMENT_MASTER_MODULES.get(normalized_type)
-    if master_module:
-        if not database.session.get(Party, reference_id):
-            abort(404)
-        companies = (
-            database.session.execute(
-                database.select(CompanyParty.company).where(
-                    CompanyParty.party_id == reference_id, CompanyParty.is_active.is_(True)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if not companies:
-            abort(403)
-        for company in companies:
-            try:
-                exige_acceso_compania(master_module, company, action)
-                return
-            except HTTPException as exc:
-                if exc.code != 403:
-                    raise
-        abort(403)
+    if _require_attachment_master_access(normalized_type, reference_id, action):
+        return
 
     try:
         document = get_document(normalized_type, reference_id)
@@ -306,10 +309,91 @@ def _require_attachment_reference_access(reference_type: str, reference_id: str,
         abort(400)
     if not document:
         abort(404)
+
+    if action == "editar" and not document_allows_attachment_edit(document):
+        abort(403)
+
+    if getattr(current_user, "classification", None) == "admin":
+        return
+
     module = _module_for_document_type(normalized_type)
     if not module:
         abort(400)
     exige_acceso_compania(module, getattr(document, "company", None), action)
+
+
+_UNSAFE_REDIRECT_CHARS = ("\n", "\r", "\t", "\\")
+
+
+def _is_safe_internal_path(path: str) -> bool:
+    """Valida que una ruta sea interna y no habilite redirecciones abiertas.
+
+    Rechaza rutas relativas a la autoridad (``//host``), secuencias con
+    backslashes o caracteres de control, y cualquier valor que no sea una
+    ruta absoluta simple del propio sitio.
+    """
+    if not path.startswith("/") or path.startswith("//"):
+        return False
+    return not any(character in path for character in _UNSAFE_REDIRECT_CHARS)
+
+
+def _is_registered_internal_url(path: str) -> bool:
+    """Verifica que la ruta resuelva a una regla (endpoint) registrada.
+
+    Impide que un ``return_url`` apunte a rutas arbitrarias: solo se aceptan
+    destinos que existan en el enrutador de la aplicación.
+    """
+    adapter = current_app.url_map.bind("localhost")
+    for method in ("GET", "POST"):
+        try:
+            adapter.match(path, method=method)
+            return True
+        except RequestRedirect:
+            return True
+        except HTTPException:
+            continue
+    return False
+
+
+def _validated_internal_target(candidate: str | None) -> str | None:
+    """Convierte un candidato en ruta interna validada, o ``None`` si no es válido."""
+    value = str(candidate or "").strip()
+    if not value or any(character in value for character in _UNSAFE_REDIRECT_CHARS):
+        return None
+    parsed = urlparse(value)
+    path = unquote(parsed.path)
+    if not _is_safe_internal_path(path) or not _is_registered_internal_url(path):
+        return None
+    return f"{path}?{parsed.query}" if parsed.query else path
+
+
+def _browser_return_target() -> str | None:
+    """Devuelve una URL interna válida para volver tras un POST de formulario.
+
+    Prioriza un ``return_url`` explícito enviado por el formulario y, en su
+    defecto, la ruta del encabezado Referer. Solo se aceptan rutas internas
+    registradas en la aplicación, descartando host, esquema y variantes
+    protocol-relative para evitar redirecciones abiertas y funcionar detrás de
+    proxies donde el host del Referer difiere del de la petición.
+    """
+    for candidate in (request.form.get("return_url"), request.referrer):
+        target = _validated_internal_target(candidate)
+        if target:
+            return target
+    return None
+
+
+def _wants_form_redirect() -> bool:
+    """Indica si el POST proviene de un formulario de navegador (no de una API JSON)."""
+    return bool(request.form) and bool(request.referrer or request.form.get("return_url"))
+
+
+def _redirect_after_form_post(default_endpoint: str = HOME_ENDPOINT):
+    """Redirige un POST de formulario de vuelta a su origen, con fallback seguro."""
+    target = _browser_return_target()
+    if target:
+        return redirect(target)
+    return redirect(url_for(default_endpoint))
 
 
 def _require_attachment_file_access(file_id: str, action: str = "consultar") -> None:
@@ -660,11 +744,8 @@ def api_document_comment(document_type: str, document_id: str):
         )
     except CollaborationError as exc:
         abort_for_collaboration_error(exc)
-    if request.form and request.referrer:
-        parsed = urlparse(request.referrer)
-        if parsed.netloc == "" or parsed.netloc == request.host:
-            return redirect(request.referrer)
-        return redirect(url_for(HOME_ENDPOINT))
+    if _wants_form_redirect():
+        return _redirect_after_form_post()
     return jsonify({"id": entry.id, "action": entry.action}), 201
 
 
@@ -677,11 +758,8 @@ def api_document_task(document_type: str, document_id: str):
         task = create_document_task(document_type, document_id, payload, str(current_user.id))
     except CollaborationError as exc:
         abort_for_collaboration_error(exc)
-    if request.form and request.referrer:
-        parsed = urlparse(request.referrer)
-        if parsed.netloc == "" or parsed.netloc == request.host:
-            return redirect(request.referrer)
-        return redirect(url_for(HOME_ENDPOINT))
+    if _wants_form_redirect():
+        return _redirect_after_form_post()
     return jsonify({"id": task.id, "status": task.status}), 201
 
 
@@ -764,20 +842,14 @@ def api_upload_attachment(reference_type: str, reference_id: str):
             remarks=remarks,
         )
     except AttachmentError as exc:
-        if request.form and request.referrer:
+        if _wants_form_redirect():
             flash(str(exc), "danger")
-            parsed = urlparse(request.referrer)
-            if parsed.netloc == "" or parsed.netloc == request.host:
-                return redirect(request.referrer)
-            return redirect(url_for(HOME_ENDPOINT))
+            return _redirect_after_form_post()
         return jsonify({"error": str(exc)}), exc.status_code
 
-    if request.form and request.referrer:
+    if _wants_form_redirect():
         flash(_("Archivo adjuntado exitosamente."), "success")
-        parsed = urlparse(request.referrer)
-        if parsed.netloc == "" or parsed.netloc == request.host:
-            return redirect(request.referrer)
-        return redirect(url_for(HOME_ENDPOINT))
+        return _redirect_after_form_post()
 
     return jsonify(result), 201
 
@@ -819,20 +891,14 @@ def api_delete_attachment(file_id: str):
     try:
         delete_attachment(file_id, ref_type, ref_id, user_id=str(current_user.id))
     except AttachmentError as exc:
-        if request.form and request.referrer:
+        if _wants_form_redirect():
             flash(str(exc), "danger")
-            parsed = urlparse(request.referrer)
-            if parsed.netloc == "" or parsed.netloc == request.host:
-                return redirect(request.referrer)
-            return redirect(url_for(HOME_ENDPOINT))
+            return _redirect_after_form_post()
         return jsonify({"error": str(exc)}), exc.status_code
 
-    if request.form and request.referrer:
+    if _wants_form_redirect():
         flash(_("Adjunto eliminado."), "info")
-        parsed = urlparse(request.referrer)
-        if parsed.netloc == "" or parsed.netloc == request.host:
-            return redirect(request.referrer)
-        return redirect(url_for(HOME_ENDPOINT))
+        return _redirect_after_form_post()
 
     return jsonify({"success": True})
 
@@ -846,20 +912,14 @@ def api_upload_item_image(item_id: str):
     try:
         result = upload_item_image(item_id, file, user_id=str(current_user.id))
     except AttachmentError as exc:
-        if request.form and request.referrer:
+        if _wants_form_redirect():
             flash(str(exc), "danger")
-            parsed = urlparse(request.referrer)
-            if parsed.netloc == "" or parsed.netloc == request.host:
-                return redirect(request.referrer)
-            return redirect(url_for(HOME_ENDPOINT))
+            return _redirect_after_form_post()
         return jsonify({"error": str(exc)}), exc.status_code
 
-    if request.form and request.referrer:
+    if _wants_form_redirect():
         flash(_("Imagen del producto actualizada."), "success")
-        parsed = urlparse(request.referrer)
-        if parsed.netloc == "" or parsed.netloc == request.host:
-            return redirect(request.referrer)
-        return redirect(url_for(HOME_ENDPOINT))
+        return _redirect_after_form_post()
 
     return jsonify(result), 200
 
@@ -891,20 +951,14 @@ def api_delete_item_image(item_id: str):
     try:
         delete_item_image(item_id, user_id=str(current_user.id))
     except AttachmentError as exc:
-        if request.form and request.referrer:
+        if _wants_form_redirect():
             flash(str(exc), "danger")
-            parsed = urlparse(request.referrer)
-            if parsed.netloc == "" or parsed.netloc == request.host:
-                return redirect(request.referrer)
-            return redirect(url_for(HOME_ENDPOINT))
+            return _redirect_after_form_post()
         return jsonify({"error": str(exc)}), exc.status_code
 
-    if request.form and request.referrer:
+    if _wants_form_redirect():
         flash(_("Imagen eliminada."), "info")
-        parsed = urlparse(request.referrer)
-        if parsed.netloc == "" or parsed.netloc == request.host:
-            return redirect(request.referrer)
-        return redirect(url_for(HOME_ENDPOINT))
+        return _redirect_after_form_post()
 
     return jsonify({"success": True})
 

@@ -22,6 +22,68 @@ from cacao_accounting.i18n import _
 MAX_FILE_SIZE = 16 * 1024 * 1024  # 16 MB
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
+# Entidades maestras (terceros): no tienen ciclo de vida documental, por lo que
+# su evidencia adjunta siempre es editable.
+ATTACHMENT_MASTER_MODULES = {"customer": "sales", "supplier": "purchases"}
+
+# Estados en los que la evidencia adjunta queda bloqueada. La evidencia es
+# append-only: una vez que el documento sale del borrador (o se contabiliza,
+# aprueba, anula o rechaza) no se permite agregar ni eliminar adjuntos.
+_ATTACHMENT_LOCKED_STATUSES = frozenset(
+    {
+        "submitted",
+        "approved",
+        "posted",
+        "applied",
+        "closed",
+        "completed",
+        "cancelled",
+        "canceled",
+        "void",
+        "rejected",
+        "reversed",
+        "pending approval",
+        "pending cancellation",
+    }
+)
+
+
+def document_allows_attachment_edit(document: Any) -> bool:
+    """Indica si un documento admite alta o baja de evidencia adjunta.
+
+    Se bloquea la edicion cuando el documento tiene ``docstatus`` de enviado o
+    anulado (1/2) o cuando su ``status`` corresponde a un estado posterior al
+    borrador. Evaluar ``docstatus`` de forma independiente evita que un
+    documento contabilizado con ``status`` de borrador pase el filtro.
+    """
+    if document is None:
+        return False
+    if getattr(document, "docstatus", None) in (1, 2):
+        return False
+    status = str(getattr(document, "status", None) or "").strip().lower()
+    return status not in _ATTACHMENT_LOCKED_STATUSES
+
+
+def attachment_reference_allows_edit(reference_type: str, reference_id: str) -> bool:
+    """Resuelve si una referencia (documento o maestro) admite editar adjuntos.
+
+    Un tipo desconocido o inexistente devuelve ``True`` para no ocultar la UI
+    por error; la autorizacion y el estado se validan igualmente en el backend.
+    """
+    from cacao_accounting.document_flow.registry import normalize_doctype
+    from cacao_accounting.document_flow.repository import get_document
+
+    normalized = normalize_doctype(reference_type)
+    if normalized in ATTACHMENT_MASTER_MODULES:
+        return True
+    try:
+        document = get_document(normalized, reference_id)
+    except (KeyError, ValueError):
+        return True
+    if document is None:
+        return True
+    return document_allows_attachment_edit(document)
+
 
 class AttachmentError(ValueError):
     """Controlled validation error for attachment operations."""

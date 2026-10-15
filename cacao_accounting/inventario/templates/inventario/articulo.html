@@ -54,6 +54,7 @@
     {% if is_cloud_mode() %}
     <form method="post" action="{{ url_for('api.api_delete_item_image', item_id=registro.code) }}" class="d-inline mb-2" onsubmit="return confirm('{{ _("¿Eliminar la imagen del producto?") }}');">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
       <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>{{ _('Eliminar imagen') }}</button>
     </form>
     {% endif %}
@@ -64,6 +65,7 @@
     {% if is_cloud_mode() %}
     <form method="post" action="{{ url_for('api.api_upload_item_image', item_id=registro.code) }}" enctype="multipart/form-data" class="row g-2 align-items-center justify-content-center mt-2">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
       <div class="col-auto">
         <input type="file" class="form-control form-control-sm" name="file" accept="image/*" required>
       </div>
