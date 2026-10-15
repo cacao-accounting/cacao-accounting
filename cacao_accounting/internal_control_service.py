@@ -34,6 +34,31 @@ LEDGER_TABLES = frozenset(
         "exchange_revaluation_item",
     }
 )
+# Inter-voucher flow evidence: the link, consumed quantities and matching
+# results that downstream reports reconcile against the financial ledger.
+FLOW_EVIDENCE_TABLES = frozenset(
+    {
+        "document_relation",
+        "purchase_reconciliation",
+        "purchase_reconciliation_item",
+        "purchase_invoice_receipt_allocation",
+        "purchase_receipt_return_allocation",
+        "purchase_credit_note_allocation",
+    }
+)
+# Workflow transitions allowed on flow evidence rows; anything else is the
+# historical figure of the document flow and stays immutable.
+FLOW_EVIDENCE_TRANSITIONS = {
+    "document_relation": frozenset(
+        {"status", "reversed_at", "reversed_by", "reversal_reason", "cancelled_at", "cancelled_by", "metadata_json"}
+    ),
+    "purchase_reconciliation": frozenset({"status", "idempotency_key", "matched_amount", "matched_date"}),
+    "purchase_reconciliation_item": frozenset({"status"}),
+    "purchase_invoice_receipt_allocation": frozenset({"status"}),
+    "purchase_receipt_return_allocation": frozenset({"status"}),
+    "purchase_credit_note_allocation": frozenset({"status"}),
+}
+FLOW_PROVIDER_STAMPS = frozenset({"modified", "modified_by"})
 SENSITIVE_MODELS = (
     "User",
     "Roles",
@@ -137,13 +162,24 @@ def _snapshot(target: Any, *, previous: bool = False) -> dict[str, Any]:
         if type(target).__name__ == "User" and column.key not in {"id", "user", "classification", "active", "company"}:
             continue
         history = state.attrs[column.key].history
-        result[column.key] = history.deleted[0] if previous and history.deleted else getattr(target, column.key)
+        current = getattr(target, column.key)
+        if previous and history.deleted:
+            result[column.key] = history.deleted[0]
+        elif previous and state.persistent and history.has_changes():
+            result[column.key] = _persisted_value(state, column.key, current)
+        else:
+            result[column.key] = current
     return result
 
 
 def _audited_document(target: Any) -> bool:
     """Include operational documents and the legacy manual journal header."""
     return isinstance(target, DocBase) or target.__table__.name == "comprobante_contable"
+
+
+def _flow_evidence(target: Any) -> bool:
+    """Identify documentary flow rows so their transitions are audited."""
+    return target.__table__.name in FLOW_EVIDENCE_TRANSITIONS
 
 
 def _stamp_preparer(mapper: Any, connection: Any, target: Any) -> None:
@@ -167,7 +203,7 @@ def _stamp_preparer(mapper: Any, connection: Any, target: Any) -> None:
 def _write_event(mapper: Any, connection: Any, target: Any, action: str) -> None:
     """Write through the flush connection so evidence shares the business commit."""
     del mapper
-    if not _enabled() or not (_sensitive(target) or _audited_document(target)):
+    if not _enabled() or not (_sensitive(target) or _audited_document(target) or _flow_evidence(target)):
         return
     before = _snapshot(target, previous=True) if action != "created" else None
     after = _snapshot(target) if action != "deleted" else None
@@ -218,7 +254,12 @@ def _audit_insert(mapper: Any, connection: Any, target: Any) -> None:
 
 
 def _audit_update(mapper: Any, connection: Any, target: Any) -> None:
-    """Record an updated sensitive object."""
+    """Record an updated sensitive object.
+
+    Se emite en ``before_update`` para que el snapshot previo provenga del
+    valor almacenado en la transacción (el UPDATE todavía no se ejecutó);
+    ``after_update`` ya ve la fila nueva y el "antes" sería indistinguible.
+    """
     _write_event(mapper, connection, target, "updated")
 
 
@@ -282,6 +323,7 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
         changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
         if table in EVIDENCE_TABLES and (target in session.deleted or changed):
             raise ValueError(_("La evidencia de auditoría es inmutable."))
+        _guard_flow_evidence(target, table, changed, target in session.deleted)
         if table == "approval_request" and (
             target in session.deleted
             or changed.intersection(
@@ -302,6 +344,15 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
         if _posted(target) and (target in session.deleted or changed.difference(MUTABLE_STATE)):
             raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
         _guard_line(session, target, changed)
+
+
+def _guard_flow_evidence(target: Any, table: str, changed: set[str], deleted: bool) -> None:
+    """Reject Evidence-field rewrites and deletes of document flow links."""
+    transitions = FLOW_EVIDENCE_TRANSITIONS.get(table)
+    if transitions is None:
+        return
+    if deleted or (changed and changed - transitions - FLOW_PROVIDER_STAMPS):
+        raise ValueError(_("Los vínculos documentales son inmutables; registre una relación nueva."))
 
 
 def _guard_new_lines(session: Session) -> None:
@@ -373,7 +424,7 @@ def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any
     )
     if not targets:
         return
-    protected = EVIDENCE_TABLES.union(LEDGER_TABLES, {"approval_request", "cacao_config"})
+    protected = EVIDENCE_TABLES.union(LEDGER_TABLES, FLOW_EVIDENCE_TABLES, {"approval_request", "cacao_config"})
     protected = protected.union(
         mapper.local_table.name
         for mapper in cast(Any, database.Model).registry.mappers
@@ -391,10 +442,25 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
     table_name = getattr(clause.table, "name", None)
     if table_name in LEDGER_TABLES:
         _guard_ledger_statement(clause, multiparams, params)
+    if table_name in FLOW_EVIDENCE_TABLES:
+        _guard_flow_evidence_statement(clause, multiparams, params)
     if table_name in EVIDENCE_TABLES:
         raise ValueError(_("La evidencia de auditoría es inmutable."))
     if table_name == "approval_request":
         _guard_approval_request_statement(clause, multiparams, params)
+
+
+def _guard_flow_evidence_statement(clause: Any, multiparams: Any, params: Any) -> None:
+    """Reject Core rewrites of documentary flow evidence fields."""
+    if isinstance(clause, Delete):
+        raise ValueError(_("La evidencia del flujo documental no se elimina; use una reversión documental."))
+    table_name = getattr(clause.table, "name", None)
+    if not isinstance(table_name, str):
+        return
+    transitions = FLOW_EVIDENCE_TRANSITIONS.get(table_name, frozenset()) | FLOW_PROVIDER_STAMPS
+    changed = _statement_changed_values(clause, multiparams, params, clause.table)
+    if changed and changed.keys() - transitions:
+        raise ValueError(_("Los vínculos documentales son inmutables; registre una relación nueva."))
 
 
 def _statement_changed_values(clause: Any, multiparams: Any, params: Any, table: Any) -> dict[str, Any]:
@@ -539,6 +605,6 @@ def register_internal_controls() -> None:
         model = mapper.class_
         event.listen(model, "before_insert", _stamp_preparer)
         event.listen(model, "before_update", _stamp_preparer)
+        event.listen(model, "before_update", _audit_update)
         event.listen(model, "after_insert", _audit_insert)
-        event.listen(model, "after_update", _audit_update)
         event.listen(model, "after_delete", _audit_delete)

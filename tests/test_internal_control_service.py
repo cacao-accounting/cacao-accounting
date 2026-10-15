@@ -15,8 +15,10 @@ from cacao_accounting.database import (
     AuditTrail,
     CacaoConfig,
     ComprobanteContable,
+    DocumentRelation,
     Entity,
     GLEntry,
+    PurchaseReconciliation,
     Roles,
     SalesInvoice,
     SalesInvoiceItem,
@@ -527,3 +529,92 @@ def test_ledger_bulk_cancellation_remains_allowed(app):
     database.session.commit()
     database.session.expire_all()
     assert database.session.get(GLEntry, entry.id).is_cancelled is True
+
+
+def _document_relation():
+    relation = DocumentRelation(
+        company="co",
+        source_type="sales_order",
+        source_id="so-923",
+        target_type="sales_invoice",
+        target_id="inv-923",
+        relation_type="derived_from",
+        qty=2,
+    )
+    database.session.add(relation)
+    database.session.commit()
+    return relation
+
+
+def test_document_relation_core_rewrite_is_blocked(app):
+    """Un UPDATE Core no reescribe la cantidad consumida de una relación."""
+    relation = _document_relation()
+    with pytest.raises(ValueError, match="vínculos documentales"):
+        database.session.connection().execute(
+            update(DocumentRelation).where(DocumentRelation.id == relation.id).values(qty=200)
+        )
+    database.session.rollback()
+    assert database.session.get(DocumentRelation, relation.id).qty == 2
+
+
+def test_document_relation_delete_via_core_is_blocked(app):
+    """La relación documental no admite borrado por SQL Core."""
+    relation = _document_relation()
+    with pytest.raises(ValueError, match="no se elimina"):
+        database.session.connection().execute(delete(DocumentRelation).where(DocumentRelation.id == relation.id))
+    database.session.rollback()
+
+
+def test_document_relation_transition_is_audited(app):
+    """Reversión o reactivación legítima queda auditada, sin tocar cantidades."""
+    from datetime import datetime, timezone
+
+    relation = _document_relation()
+    relation.status = "reverted"
+    relation.reversed_at = datetime.now(timezone.utc)
+    relation.reversal_reason = "Reversión del documento"
+    database.session.flush()
+    event = _event(relation.id)
+    assert event.action == "updated"
+    assert json.loads(event.changes_json)["status"]["after"] == "reverted"
+    database.session.rollback()
+    # Otra transición válida del flujo: volver a activa.
+    relation.status = "active"
+    database.session.flush()
+    assert database.session.get(DocumentRelation, relation.id).status == "active"
+    database.session.rollback()
+
+
+def test_document_relation_qty_via_orm_is_blocked(app):
+    """La mutación ORM de evidencia del flujo también queda bloqueada."""
+    relation = _document_relation()
+    relation.qty = 999
+    with pytest.raises(ValueError, match="vínculos documentales"):
+        database.session.flush()
+    database.session.rollback()
+
+
+def test_purchase_reconciliation_evidence_is_guarded(app):
+    """Conciliaciones: sin borrado y con transiciones únicamente por estado."""
+    reconciliation = PurchaseReconciliation(
+        company="co",
+        matching_type="3-way",
+        purchase_invoice_id="pinv-1",
+        matched_amount=10,
+        matched_date=date.today(),
+        status="reconciled",
+    )
+    database.session.add(reconciliation)
+    database.session.commit()
+    with pytest.raises(ValueError, match="no se elimina"):
+        database.session.connection().execute(
+            delete(PurchaseReconciliation).where(PurchaseReconciliation.id == reconciliation.id)
+        )
+    database.session.rollback()
+    # Transición legítima del flujo de cancelación.
+    reconciliation.status = "cancelled"
+    database.session.flush()
+    event = _event(reconciliation.id)
+    assert event.action == "updated"
+    assert json.loads(event.changes_json)["status"]["after"] == "cancelled"
+    database.session.rollback()
