@@ -44,7 +44,7 @@ def app_ctx():
             [
                 Modules(module="accounting", default=True, enabled=True),
                 User(user="admin", name="Admin", password=b"x", classification="admin", active=True),
-                Entity(code="cacao", name="Cacao", company_name="Cacao SA", tax_id="J0001", currency="NIO"),
+                Entity(code="cacao", name="Cacao", company_name="Cacao SA", tax_id="J0001", currency="NIO", enabled=True),
                 Currency(code="USD", name="Dollar", decimals=2, active=True),
                 Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True),
                 Currency(code="EUR", name="Euro", decimals=2, active=True),
@@ -181,15 +181,20 @@ def _book(code: str):
 
 
 def _create_sales_invoice(open_amount: Decimal = Decimal("100.00")):
+    from cacao_accounting.approval_engine import approved_execution
     from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.internal_control_service import audit_actor
     from cacao_accounting.database import (
         Accounts,
         PaymentEntry,
         PaymentReference,
         SalesInvoice,
         SalesInvoiceItem,
+        User,
         database,
     )
+
+    admin_user = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
 
     income = database.session.execute(database.select(Accounts.id).filter_by(entity="cacao", code="4000")).scalar_one()
     invoice = SalesInvoice(
@@ -220,7 +225,9 @@ def _create_sales_invoice(open_amount: Decimal = Decimal("100.00")):
         )
     )
     database.session.flush()
-    post_document_to_gl(invoice)
+    with audit_actor(admin_user.id, admin_user.name or admin_user.user):
+        with approved_execution(invoice, admin_user.id):
+            post_document_to_gl(invoice)
     if open_amount < Decimal("100.00"):
         # El pago parcial se contabiliza en GL antes del cierre, igual que el
         # flujo real (PaymentEntry -> referencia -> post_document_to_gl); el
@@ -254,7 +261,9 @@ def _create_sales_invoice(open_amount: Decimal = Decimal("100.00")):
                 company="cacao",
             )
         )
-        post_document_to_gl(payment)
+        with audit_actor(admin_user.id, admin_user.name or admin_user.user):
+            with approved_execution(payment, admin_user.id):
+                post_document_to_gl(payment)
     database.session.commit()
     return invoice
 
@@ -411,11 +420,11 @@ def test_service_rejects_non_positive_historical_closing_rate(app_ctx):
     )
     from cacao_accounting.database import ExchangeRate, database
 
-    database.session.execute(
-        database.update(ExchangeRate)
-        .where(ExchangeRate.origin == "USD", ExchangeRate.destination == "NIO")
-        .values(rate=Decimal("0"))
-    )
+    rates = database.session.execute(
+        database.select(ExchangeRate).where(ExchangeRate.origin == "USD", ExchangeRate.destination == "NIO")
+    ).scalars().all()
+    for rate_obj in rates:
+        rate_obj.rate = Decimal("0")
     database.session.commit()
 
     with pytest.raises(ExchangeRevaluationError, match="positivo y finito"):
@@ -671,11 +680,12 @@ def test_bank_functional_only_balance_divides_inverse_exchange_pair(app_ctx):
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
     from cacao_accounting.database import Accounts, Bank, BankAccount, ExchangeRevaluationItem, ExchangeRate, GLEntry, database
 
-    database.session.execute(
-        database.update(ExchangeRate)
-        .where(ExchangeRate.origin == "USD", ExchangeRate.destination == "NIO", ExchangeRate.date == date(2026, 5, 1))
-        .values(rate=Decimal("36.6243"))
-    )
+    rate_obj = database.session.execute(
+        database.select(ExchangeRate).where(
+            ExchangeRate.origin == "USD", ExchangeRate.destination == "NIO", ExchangeRate.date == date(2026, 5, 1)
+        )
+    ).scalars().first()
+    rate_obj.rate = Decimal("36.6243")
     bank_account_id = database.session.execute(
         database.select(Accounts.id).filter_by(entity="cacao", code="1005")
     ).scalar_one()

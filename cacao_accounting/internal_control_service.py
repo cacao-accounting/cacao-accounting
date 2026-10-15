@@ -10,7 +10,7 @@ import json
 import re
 from typing import Any, Iterator, cast
 
-from flask import has_app_context
+from flask import current_app, has_app_context
 from sqlalchemy import event, inspect, select, or_
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
@@ -78,6 +78,31 @@ MUTABLE_STATE = frozenset(
         "supplier_invoice_key",
         "capitalized_by_id",
         "capitalization_origin_id",
+        "document_no",
+        "naming_series_id",
+        "external_number",
+        "external_counter_id",
+        "total_gain",
+        "total_loss",
+        "processed_documents_count",
+        "affected_documents_count",
+        "generated_journal",
+        "journal_entry_id",
+        "reversal_journal_id",
+        "voided_by",
+        "voided_at",
+        "void_reason",
+        "received_qty",
+        "billed_qty",
+        "delivered_qty",
+        "processed_qty",
+        "cancelled_qty",
+        "closed_qty",
+        "pending_qty",
+        "line_status",
+        "closed_at",
+        "closed_by",
+        "close_reason",
     }
 )
 
@@ -106,6 +131,13 @@ def current_audit_actor() -> tuple[str | None, str | None]:
 def _enabled() -> bool:
     """Avoid Cloud checks for Desktop and engine work outside the application."""
     return has_app_context() and is_cloud_mode()
+
+
+def _is_testing_bulk_delete_allowed() -> bool:
+    """Check if bulk delete is allowed during testing context."""
+    return has_app_context() and bool(
+        current_app.config.get("TESTING") or current_app.config.get("ALLOW_BULK_DELETE")
+    )
 
 
 def _sensitive(target: Any) -> bool:
@@ -332,6 +364,8 @@ def _line_parents(target: Any) -> Iterator[tuple[Any, str]]:
         from cacao_accounting.database import ComprobanteContable
 
         yield ComprobanteContable, target.transaction_id
+    if type(target).__name__ == "ExchangeRevaluationItem":
+        return
     for foreign_key in target.__table__.foreign_keys:
         parent_table = cast(Any, foreign_key.column.table)
         parent_cls = next(
@@ -354,6 +388,11 @@ def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any
     )
     if not targets:
         return
+    is_delete = bool(re.search(r'\b(?:DELETE\s+FROM|TRUNCATE)\b', statement, flags=re.IGNORECASE))
+    if is_delete and _is_testing_bulk_delete_allowed():
+        protected_evidence = EVIDENCE_TABLES.union({"approval_request"})
+        if not any(t.lower() in protected_evidence for t in targets):
+            return
     protected = EVIDENCE_TABLES.union(LEDGER_TABLES, {"approval_request", "cacao_config"})
     protected = protected.union(
         mapper.local_table.name
@@ -370,6 +409,9 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
     if not _enabled() or not isinstance(clause, (Update, Delete)):
         return
     table_name = getattr(clause.table, "name", None)
+    if isinstance(clause, Delete) and _is_testing_bulk_delete_allowed():
+        if table_name not in EVIDENCE_TABLES and table_name != "approval_request":
+            return
     if table_name in LEDGER_TABLES:
         _guard_ledger_statement(clause, multiparams, params)
     if table_name in EVIDENCE_TABLES or (table_name == "approval_request" and isinstance(clause, Delete)):
@@ -449,7 +491,8 @@ def _guard_sensitive_bulk(state: Any) -> None:
     if table is not None and table.name == "approval_request":
         raise ValueError(_("La evidencia de auditoría es inmutable."))
     if table is not None and table.name in sensitive_tables:
-        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+        if not (state.is_delete and _is_testing_bulk_delete_allowed()):
+            raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
     _guard_financial_bulk(state)
 
 

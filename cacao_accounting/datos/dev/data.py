@@ -48,7 +48,7 @@ DEMO_SUPPLIER_ID = "PARTY-DEMO-SUPPLIER"
 DEMO_SUPPLIER_NAME = "Proveedor Demo SA"
 
 BASE_USUARIOS = [
-    {"user": "admin", "e_mail": "a@dm.com", "password": _pg("admin"), "active": True, "classification": "system"},
+    {"user": "admin", "e_mail": "a@dm.com", "password": _pg("admin"), "active": True, "classification": "admin"},
     {"user": "audit", "e_mail": "au@dm.com", "password": _pg("audit"), "active": True, "classification": "system"},
     {"user": "analist", "e_mail": "an@dm.com", "password": _pg("analist"), "active": True, "classification": "system"},
     {"user": "conta", "e_mail": "con@dm.com", "password": _pg("conta"), "active": True, "classification": "system"},
