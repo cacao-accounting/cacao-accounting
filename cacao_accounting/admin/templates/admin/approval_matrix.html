@@ -57,6 +57,16 @@
           <div class="form-text">{{ _("Cuando esté activo, los documentos que superen los límites de los usuarios pasarán a estado 'Pendiente de Aprobación'.") }}</div>
         </div>
 
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="require_different_approver" id="require_different_approver" {% if require_different_approver %}checked{% endif %}>
+            <label class="form-check-label fw-semibold" for="require_different_approver">
+              {{ _("Exigir cuatro ojos") }}
+            </label>
+          </div>
+          <div class="form-text">{{ _("Si está activo, el creador, último editor financiero y solicitante no pueden aprobar la operación, incluso si son administradores.") }}</div>
+        </div>
+
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-floppy me-1"></i>{{ _("Guardar Estado") }}
         </button>

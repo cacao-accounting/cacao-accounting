@@ -168,6 +168,12 @@
     <ul class="ca-module-links">
 
       {% if acceso.autorizado %}
+      {% if is_cloud_mode() and acceso.reportes %}
+      <li>
+        <a href="{{ url_for('reportes.internal_control', company=company) }}">{{ _("Control Interno") }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      {% endif %}
       <li>
         <a href="{{ url_for('reportes.account_movement', company=company) }}">{{ _("Detalle de Movimiento Contable") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}

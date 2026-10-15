@@ -1549,7 +1549,10 @@ def _submit_bank_difference_journal(
             transaction_id=transaction.id,
             user_id=user_id,
         )
-        submit_journal(journal.id, commit=False, user_id=user_id)
+        from cacao_accounting.control_review_service import reviewed_bank_difference
+
+        with reviewed_bank_difference(journal, transaction.id, amount, user_id):
+            submit_journal(journal.id, commit=False, user_id=user_id)
     except (BankStatementError, JournalValidationError) as exc:
         raise BankReconciliationError(str(exc)) from exc
     return journal
@@ -2640,39 +2643,39 @@ def _resolve_payment_exchange_rate(payload: PaymentPayload, payment_currency: st
     return Decimal("1")
 
 
+def _internal_transfer_rate(source_currency: str, target_currency: str, payload: PaymentPayload, posting_date: Any) -> Decimal:
+    """Resolve the destination-leg rate for an internal transfer.
+
+    La pata destino se convierte con la tasa del sistema en la direccion
+    origen->destino, replicando el criterio del posteo
+    (_create_payment_transfer_entries). Confiar en la tasa no validada de la UI
+    (default 1) fabricaba una ganancia/perdida cambiaria ficticia entre cuentas
+    propias de la compania. A igual moneda de origen y destino la pata destino
+    se recibe uno a uno sin aplicar la tasa de la UI.
+    """
+    if source_currency and target_currency and source_currency != target_currency:
+        transfer_rate = _lookup_exchange_rate(source_currency, target_currency, posting_date)
+    elif source_currency and source_currency == target_currency:
+        transfer_rate = Decimal("1")
+    else:
+        transfer_rate = Decimal(str(payload.get("exchange_rate") or "1"))
+    if transfer_rate <= 0:
+        raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
+    return transfer_rate
+
+
 def _apply_internal_transfer_amounts(
     payment: PaymentEntry, payload: PaymentPayload, payment_type: str, amount: Decimal, target_bank: BankAccount | None
 ) -> None:
     """Apply multi-currency adjustments for internal transfers."""
-    if payment_type != "internal_transfer":
+    if payment_type != "internal_transfer" or not (target_bank and target_bank.currency):
         return
-    if target_bank and target_bank.currency:
-        source_currency = str(payment.currency or "")
-        target_currency = str(target_bank.currency)
-        posting_date = payment.posting_date or _parse_payment_date(payload)
-        if source_currency and target_currency and source_currency != target_currency:
-            # La pata destino se convierte con la tasa del sistema en la
-            # direccion origen->destino, replicando el criterio del posteo
-            # (_create_payment_transfer_entries). Confiar en la tasa no validada
-            # de la UI (default 1) fabricaba una ganancia/perdida cambiaria
-            # ficticia entre cuentas propias de la compania.
-            transfer_rate = _lookup_exchange_rate(source_currency, target_currency, posting_date)
-            if transfer_rate <= 0:
-                raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
-            payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
-            payment.base_received_amount = None
-        else:
-            if source_currency and source_currency == target_currency:
-                # Misma moneda de origen y destino: la pata destino se recibe
-                # uno a uno sin aplicar la tasa de la UI (default 1), evitando
-                # revalorizar una transferencia entre cuentas propias.
-                transfer_rate = Decimal("1")
-            else:
-                transfer_rate = Decimal(str(payload.get("exchange_rate") or "1"))
-                if transfer_rate <= 0:
-                    raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
-            payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
-            payment.base_received_amount = None
+    source_currency = str(payment.currency or "")
+    target_currency = str(target_bank.currency)
+    posting_date = payment.posting_date or _parse_payment_date(payload)
+    transfer_rate = _internal_transfer_rate(source_currency, target_currency, payload, posting_date)
+    payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
+    payment.base_received_amount = None
 
 
 def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, Decimal, str]:

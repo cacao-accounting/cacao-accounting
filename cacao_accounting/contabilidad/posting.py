@@ -5,9 +5,24 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from cacao_accounting.contabilidad import posting_service as _posting_service
+
+if TYPE_CHECKING:
+    # Re-export the public symbols so static analyzers resolve their real types.
+    # Runtime lookups still go through ``__getattr__`` for backwards compatibility.
+    from cacao_accounting.contabilidad.posting_service import (  # noqa: F401
+        GLEntryParams,
+        PostingError,
+        _add_entries,
+        _create_gl_entry,
+        _document_contexts,
+        _lookup_exchange_rate,
+        cancel_document,
+        post_comprobante_contable,
+        submit_document,
+    )
 
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
 _ERROR_INVENTARIO_REQUIERE_ALMACEN = "La linea de inventario requiere almacen."

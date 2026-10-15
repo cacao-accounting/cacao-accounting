@@ -2169,16 +2169,21 @@ def accounting_period_reopen(period_id: str):
     exige_acceso_compania("accounting", period.entity, "editar")
 
     try:
-        reopen_accounting_period(
+        result = reopen_accounting_period(
             period_id=period.id,
             user_id=str(current_user.id),
             reason=request.form.get("reason", ""),
         )
-    except PeriodCloseError as exc:
+    except (PeriodCloseError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
     else:
-        flash(_("El período fue reabierto y la operación quedó registrada en auditoría."), "success")
+        from cacao_accounting.database import ApprovalRequest
+
+        if isinstance(result, ApprovalRequest):
+            flash(_("Operación pendiente de revisión independiente."), "info")
+        else:
+            flash(_("El período fue reabierto y la operación quedó registrada en auditoría."), "success")
     return redirect(url_for("contabilidad.accounting_period_edit", period_id=period.id))
 
 
@@ -3035,12 +3040,17 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
         return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
 
     try:
-        finalize_monthly_close(close_run_id=close_run.id, user_id=str(current_user.id))
-    except PeriodCloseError as exc:
+        result = finalize_monthly_close(close_run_id=close_run.id, user_id=str(current_user.id))
+    except (PeriodCloseError, ValueError) as exc:
         flash_error(exc)
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
-    flash(_("El cierre mensual ha finalizado y el periodo ha sido cerrado."), "success")
+    from cacao_accounting.database import ApprovalRequest
+
+    if isinstance(result, ApprovalRequest):
+        flash(_("Operación pendiente de revisión independiente."), "info")
+    else:
+        flash(_("El cierre mensual ha finalizado y el periodo ha sido cerrado."), "success")
     return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
 

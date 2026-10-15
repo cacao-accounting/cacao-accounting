@@ -1375,7 +1375,10 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     dn.base_grand_total = dn.base_total
 
     _validate_delivery_quantities_against_so(dn.id)
-    submit_document(dn)  # type: ignore[misc]
+    from cacao_accounting.approval_engine import approved_child_execution
+
+    with approved_child_execution(invoice, dn, "delivery_note"):
+        submit_document(dn)  # type: ignore[misc]
     _release_reservation_for_delivery_note(dn)
     log_submit(dn)
 
@@ -2339,13 +2342,16 @@ def _cancel_linked_delivery_note(
     dn = database.session.get(DeliveryNote, invoice.delivery_note_id)
     if not dn or dn.docstatus != 1:
         return
-    cancel_document(
-        dn,
-        reason=reason,
-        actor_user_id=actor_user_id,
-        cancellation_date=cancellation_date,
-        requested_at=requested_at,
-    )  # type: ignore[misc]
+    from cacao_accounting.approval_engine import approved_child_execution
+
+    with approved_child_execution(invoice, dn, "delivery_note"):
+        cancel_document(
+            dn,
+            reason=reason,
+            actor_user_id=actor_user_id,
+            cancellation_date=cancellation_date,
+            requested_at=requested_at,
+        )  # type: ignore[misc]
     _restore_reservation_for_delivery_note(dn)
     log_cancel(dn)
     flash(

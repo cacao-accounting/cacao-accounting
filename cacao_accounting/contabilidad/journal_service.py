@@ -45,6 +45,7 @@ from cacao_accounting.database import (
     Party,
     RecurringJournalApplication,
     RecurringJournalTemplate,
+    User,
     database,
 )
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier, parse_posting_date
@@ -230,7 +231,12 @@ def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = N
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError(_("Solo se puede contabilizar un comprobante en borrador."))
 
-    actor_id = user_id or journal.user_id
+    from cacao_accounting.internal_control_service import audit_actor, current_audit_actor
+
+    actor_id = user_id or current_audit_actor()[0]
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(journal, actor_id=actor_id)
     if not actor_id:
         raise JournalValidationError(_("El comprobante requiere un usuario autorizado para contabilizarse."))
     _validate_journal_book_access(
@@ -240,34 +246,37 @@ def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = N
         "autorizar",
     )
 
-    fiscal_year = _validate_fiscal_year_closing(journal)
+    actor = database.session.get(User, actor_id)
+    actor_name = str((actor.name or actor.user) if actor else actor_id)
+    with audit_actor(str(actor_id), actor_name):
+        fiscal_year = _validate_fiscal_year_closing(journal)
 
-    if not journal.document_no:
-        _assign_identifier_if_needed(journal, journal.naming_series_id)
+        if not journal.document_no:
+            _assign_identifier_if_needed(journal, journal.naming_series_id)
 
-    entries = _post_and_sync_journal(journal, commit)
-    journal.status = JOURNAL_STATUS_SUBMITTED
+        entries = _post_and_sync_journal(journal, commit)
+        journal.status = JOURNAL_STATUS_SUBMITTED
 
-    # Hook para cierre de año fiscal
-    if fiscal_year is not None:
-        fiscal_year.financial_closed = True
-        fiscal_year.closing_voucher_id = journal.id
-        database.session.add(fiscal_year)
+        # Hook para cierre de año fiscal
+        if fiscal_year is not None:
+            fiscal_year.financial_closed = True
+            fiscal_year.closing_voucher_id = journal.id
+            database.session.add(fiscal_year)
 
-    _process_recurrent_application(journal, commit)
+        _process_recurrent_application(journal, commit)
 
-    database.session.add(journal)
-    log_submit(journal)
+        database.session.add(journal)
+        log_submit(journal)
 
-    # QR Validation support
-    from cacao_accounting.printing.validation import ValidationService
+        # QR Validation support
+        from cacao_accounting.printing.validation import ValidationService
 
-    ValidationService().update_validation_from_document(journal)
-    if commit:
-        database.session.commit()
-    else:
-        database.session.flush()
-    return entries
+        ValidationService().update_validation_from_document(journal)
+        if commit:
+            database.session.commit()
+        else:
+            database.session.flush()
+        return entries
 
 
 def reject_journal_draft(journal_id: str, user_id: str | None = None) -> ComprobanteContable:
@@ -286,12 +295,53 @@ def reject_journal_draft(journal_id: str, user_id: str | None = None) -> Comprob
     return journal
 
 
+def _reopen_fiscal_year_for_cancelled_journal(journal: ComprobanteContable) -> None:
+    """Reopen the fiscal year closed by this journal, if any."""
+    if not (journal.is_fiscal_year_closing and journal.fiscal_year_id):
+        return
+    fiscal_year = database.session.get(FiscalYear, journal.fiscal_year_id)
+    if fiscal_year:
+        fiscal_year.financial_closed = False
+        fiscal_year.closing_voucher_id = None
+        database.session.add(fiscal_year)
+
+
+def _reverse_recurring_application(journal: ComprobanteContable) -> None:
+    """Mark the recurring application reversed and roll back the template cursor."""
+    if not journal.recurrent_application_id:
+        return
+    application = database.session.get(RecurringJournalApplication, journal.recurrent_application_id, with_for_update=True)
+    if not application or application.journal_id != journal.id:
+        return
+    application.status = "reversed"
+    database.session.add(application)
+    template = database.session.get(RecurringJournalTemplate, application.template_id)
+    if not template or template.last_applied_date != application.application_date:
+        return
+    latest_date = database.session.execute(
+        select(RecurringJournalApplication.application_date)
+        .where(
+            RecurringJournalApplication.template_id == template.id,
+            RecurringJournalApplication.status == "applied",
+        )
+        .order_by(RecurringJournalApplication.application_date.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    template.last_applied_date = latest_date
+    if template.status == "completed":
+        template.is_completed = False
+        template.status = "approved"
+        template.docstatus = 1
+    database.session.add(template)
+
+
 def cancel_submitted_journal(
     journal_id: str,
     user_id: str | None = None,
     reason: str | None = None,
     cancellation_date: date | str | None = None,
     requested_at: Any = None,
+    commit: bool = True,
 ) -> list[Any]:
     """Anula un comprobante contabilizado mediante reversa GL append-only."""
     journal = get_journal(journal_id)
@@ -319,36 +369,8 @@ def cancel_submitted_journal(
     if user_id:
         journal.modified_by = user_id
 
-    # Hook para cierre de año fiscal
-    if journal.is_fiscal_year_closing and journal.fiscal_year_id:
-        fiscal_year = database.session.get(FiscalYear, journal.fiscal_year_id)
-        if fiscal_year:
-            fiscal_year.financial_closed = False
-            fiscal_year.closing_voucher_id = None
-            database.session.add(fiscal_year)
-
-    if journal.recurrent_application_id:
-        application = database.session.get(RecurringJournalApplication, journal.recurrent_application_id, with_for_update=True)
-        if application and application.journal_id == journal.id:
-            application.status = "reversed"
-            database.session.add(application)
-            template = database.session.get(RecurringJournalTemplate, application.template_id)
-            if template and template.last_applied_date == application.application_date:
-                latest_date = database.session.execute(
-                    select(RecurringJournalApplication.application_date)
-                    .where(
-                        RecurringJournalApplication.template_id == template.id,
-                        RecurringJournalApplication.status == "applied",
-                    )
-                    .order_by(RecurringJournalApplication.application_date.desc())
-                    .limit(1)
-                ).scalar_one_or_none()
-                template.last_applied_date = latest_date
-                if template.status == "completed":
-                    template.is_completed = False
-                    template.status = "approved"
-                    template.docstatus = 1
-                database.session.add(template)
+    _reopen_fiscal_year_for_cancelled_journal(journal)
+    _reverse_recurring_application(journal)
 
     database.session.add(journal)
     log_cancel(journal)
@@ -357,7 +379,10 @@ def cancel_submitted_journal(
 
     ValidationService().update_validation_from_document(journal)
 
-    database.session.commit()
+    if commit:
+        database.session.commit()
+    else:
+        database.session.flush()
     return entries
 
 

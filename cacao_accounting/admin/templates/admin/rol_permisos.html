@@ -40,6 +40,7 @@
         <thead>
           <tr>
             <th>{{ _("Módulo") }}</th>
+            {% if not is_desktop_mode() %}<th>{{ _("Nivel de aprobación") }}</th>{% endif %}
             {% for _, label in acciones %}
               <th>{{ label }}</th>
             {% endfor %}
@@ -49,6 +50,13 @@
           {% for modulo in modulos %}
           <tr>
             <td><strong>{{ modulo.module }}</strong></td>
+            {% if not is_desktop_mode() %}
+            <td><select class="form-select form-select-sm" name="rank_{{ modulo.id }}">
+              {% for value, label in [("", _("Sin clasificar")), (1, _("Usuario")), (2, _("Auxiliar")), (3, _("Gerente"))] %}
+              <option value="{{ value }}" {% if rangos_existentes.get(modulo.id) == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select></td>
+            {% endif %}
             {% set permisos = permisos_existentes.get(modulo.id) %}
             {% for accion, _ in acciones %}
             <td>

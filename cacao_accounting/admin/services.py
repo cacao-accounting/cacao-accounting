@@ -70,7 +70,7 @@ DEBE_SELECCIONAR_COMPANIA_MSG = "Debe seleccionar una compania."
 
 def _require_system_admin() -> None:
     """Restringe configuracion global al administrador del sistema."""
-    if not current_user or not current_user.is_authenticated:
+    if not current_user or not current_user.is_authenticated or getattr(current_user, "active", None) is False:
         abort(403)
     if getattr(current_user, "classification", None) == "admin":
         return
@@ -78,7 +78,9 @@ def _require_system_admin() -> None:
     if (
         admin_role
         and database.session.execute(
-            database.select(RolesUser).filter_by(user_id=current_user.id, role_id=admin_role.id)
+            database.select(RolesUser)
+            .filter_by(user_id=current_user.id, role_id=admin_role.id)
+            .where(RolesUser.active.is_not(False))
         ).scalar_one_or_none()
     ):
         return
@@ -319,7 +321,14 @@ def _handle_approval_matrix_post(set_setup_value, selected_company: str):
     if request.method != "POST":
         return None
     if action == "save_global":
+        if request.form.get("require_different_approver") == "on" and request.form.get("enabled") != "on":
+            flash(_("Debe habilitar las aprobaciones para exigir cuatro ojos."), "danger")
+            return redirect(url_for(ADMIN_APPROVAL_MATRIX_ENDPOINT, company=company))
         set_setup_value(f"approval_engine_enabled_{company}", "1" if request.form.get("enabled") == "on" else "0")
+        set_setup_value(
+            f"approval_require_different_approver_{company}",
+            "1" if request.form.get("require_different_approver") == "on" else "0",
+        )
         database.session.commit()
         flash(_("Configuración global de aprobación guardada correctamente."), "success")
     elif action == "add_rule":
@@ -329,7 +338,7 @@ def _handle_approval_matrix_post(set_setup_value, selected_company: str):
     elif action == "delete_rule":
         rule = database.session.get(ApprovalMatrix, request.form.get("rule_id"))
         if rule:
-            database.session.delete(rule)
+            rule.enabled = False
             database.session.commit()
             flash(_("Regla de aprobación eliminada."), "success")
     else:
@@ -379,6 +388,17 @@ def _process_pending_approval_post(approval_request, get_model_class) -> None:
     req = database.session.get(approval_request, request.form.get("request_id"))
     if not req:
         return
+    from cacao_accounting.control_review_service import REVIEW_TYPES, approve_review, reject_review
+
+    if req.document_type in REVIEW_TYPES:
+        try:
+            handler = approve_review if request.form.get("action") == "approve" else reject_review
+            handler(req, current_user, request.form.get("comments") or None)
+            database.session.commit()
+        except (SQLAlchemyError, ValueError) as exc:
+            database.session.rollback()
+            flash_error(exc)
+        return
     document = database.session.get(get_model_class(req.document_type), req.document_id)
     if document:
         _process_approval_action(request.form.get("action"), document, request.form.get("comments") or None)
@@ -386,6 +406,10 @@ def _process_pending_approval_post(approval_request, get_model_class) -> None:
 
 def _pending_approval_info(req, get_model_class, approval_engine, user_model, document_types):
     """Construye la información visible de una solicitud aprobable."""
+    from cacao_accounting.control_review_service import REVIEW_TYPES, review_pending_info
+
+    if req.document_type in REVIEW_TYPES:
+        return review_pending_info(req, current_user)
     try:
         document = database.session.get(get_model_class(req.document_type), req.document_id)
         if not document or not approval_engine.can_approve(document, current_user):

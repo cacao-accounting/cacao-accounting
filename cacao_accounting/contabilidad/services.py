@@ -777,7 +777,7 @@ def _record_monthly_integrity_checks(close_run: Any, period: Any) -> None:
         )
 
 
-def finalize_monthly_close(close_run_id: str, user_id: str) -> Any:
+def finalize_monthly_close(close_run_id: str, user_id: str, *, commit: bool = True) -> Any:
     """Valida y finaliza un cierre mensual de forma atómica."""
     from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
 
@@ -799,19 +799,35 @@ def finalize_monthly_close(close_run_id: str, user_id: str) -> Any:
         missing, unsuccessful = _monthly_close_check_errors(checks)
         if missing or unsuccessful:
             detail = ", ".join(sorted(missing | unsuccessful))
-            database.session.commit()
+            if commit:
+                database.session.commit()
             raise PeriodCloseError(
                 _("No se puede cerrar el periodo: faltan verificaciones obligatorias aprobadas ({detail}).").format(
                     detail=detail
                 )
             )
 
+        from cacao_accounting.control_review_service import period_review_payload, require_review
+
+        pending = require_review(
+            "monthly_close",
+            close_run.id,
+            close_run.company,
+            user_id,
+            period_review_payload(period),
+            (close_run.created_by, close_run.modified_by),
+        )
+        if pending is not None:
+            if commit:
+                database.session.commit()
+            return pending
         close_run.run_status = "closed"
         close_run.closed_by = str(user_id)
         close_run.closed_at = datetime.now(timezone.utc)
         period.is_closed = True
         log_task_event(close_run, "closed", f"Cierre mensual completado para el periodo {period.name}.")
-        database.session.commit()
+        if commit:
+            database.session.commit()
     except PeriodCloseError:
         raise
     except Exception:
@@ -820,7 +836,7 @@ def finalize_monthly_close(close_run_id: str, user_id: str) -> Any:
     return close_run
 
 
-def reopen_accounting_period(period_id: str, user_id: str, reason: str) -> Any:
+def reopen_accounting_period(period_id: str, user_id: str, reason: str, *, commit: bool = True) -> Any:
     """Reabre un periodo cerrado después de validar su historial posterior."""
     from cacao_accounting.database import AccountingPeriod, GLEntry, PeriodCloseRun
 
@@ -896,6 +912,15 @@ def reopen_accounting_period(period_id: str, user_id: str, reason: str) -> Any:
         )
 
     try:
+        from cacao_accounting.control_review_service import period_review_payload, require_review
+
+        pending = require_review(
+            "period_reopen", period.id, period.entity, user_id, period_review_payload(period, normalized_reason)
+        )
+        if pending is not None:
+            if commit:
+                database.session.commit()
+            return pending
         period.is_closed = False
         period.enabled = True
         period.status = _accounting_period_status_label(True, False)
@@ -905,7 +930,8 @@ def reopen_accounting_period(period_id: str, user_id: str, reason: str) -> Any:
             "reopened",
             f"Motivo: {normalized_reason}. Cierre mensual de referencia: {close_run.id}.",
         )
-        database.session.commit()
+        if commit:
+            database.session.commit()
     except Exception:
         database.session.rollback()
         raise

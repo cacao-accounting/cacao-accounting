@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextvars import ContextVar
+from contextlib import contextmanager
+from collections.abc import Iterator
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -24,10 +27,14 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.runtime_mode import is_desktop_mode
+from cacao_accounting import approval_policy
 from cacao_accounting.document_flow.registry import normalize_doctype
 
 
 from cacao_accounting.i18n import _
+
+_APPROVAL_EXECUTION: ContextVar[tuple[str, str, str, str] | None] = ContextVar("approval_execution", default=None)
+
 
 PENDING_APPROVAL_STATUS = "Pending Approval"
 PENDING_CANCELLATION_STATUS = "Pending Cancellation"
@@ -175,6 +182,18 @@ def _rule_amount_matches(rule: ApprovalMatrix, amount: Decimal) -> bool:
     return True
 
 
+def _rule_selection_key(rule: ApprovalMatrix) -> tuple[Any, ...]:
+    """Order overlapping rules deterministically for a reproducible decision.
+
+    When several rules cover the same amount, the one used to record the
+    approval must not depend on the database return order. The most senior
+    level wins; ties are broken by the most specific range (highest lower
+    bound, then narrowest upper bound) and finally by the stable rule id.
+    """
+    upper = rule.max_amount if rule.max_amount is not None else Decimal("1e30")
+    return (rule.approval_level, rule.min_amount, -upper, str(rule.id or ""))
+
+
 def _add_approver_from_rule(rule: ApprovalMatrix, roles: list[str], users: list[str]) -> None:
     """Add a user or role name from a matching approval rule."""
     if rule.user_id:
@@ -208,6 +227,47 @@ class ApprovalEngine:
             return True
         return False
 
+    @staticmethod
+    def requires_different_approver(company_id: str | None) -> bool:
+        """Devuelve si la compañía exige un aprobador distinto del creador."""
+        if not company_id or is_desktop_mode():
+            return False
+        cfg = database.session.execute(
+            select(CacaoConfig).filter_by(key=f"approval_require_different_approver_{company_id}")
+        ).scalar_one_or_none()
+        if not cfg:
+            return False
+        return cfg.value.lower() in {"1", "true", "yes", "on", "enabled"}
+
+    @classmethod
+    def _pending_request(cls, document: Any, *, lock: bool = False) -> ApprovalRequest | None:
+        """Load the active request, locking it before a state transition."""
+        doctype = cls._resolve_doctype(document)
+        query = select(ApprovalRequest).where(
+            ApprovalRequest.document_id == document.id,
+            ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
+            ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}),
+        )
+        if lock:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        return database.session.execute(query).scalar_one_or_none()
+
+    @classmethod
+    def _independent_policy(cls, document: Any, req: ApprovalRequest | None = None) -> dict[str, Any] | None:
+        """Prefer the persisted policy so configuration cannot weaken pending reviews."""
+        if req is not None and req.policy_snapshot is not None:
+            return req.policy_snapshot if req.policy_snapshot.get("requires_independent") else None
+        company = (
+            getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+        )
+        if not cls.requires_different_approver(company):
+            return None
+        requester = req.requested_by if req else getattr(current_user, "id", None)
+        try:
+            return approval_policy.build_policy(document, str(requester or ""), cls._resolve_doctype(document))
+        except ValueError:
+            return {"requires_independent": True, "module": "", "preparers": []}
+
     @classmethod
     def handle_submission(cls, document: Any, user: Any, label: str = "Documento") -> bool:
         """Maneja el flujo completo de aprobación al enviar un documento.
@@ -218,11 +278,13 @@ class ApprovalEngine:
         """
         from flask import flash as flask_flash
 
-        company_id = getattr(document, "company", None) or getattr(document, "company_id", None)
+        company_id = (
+            getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+        )
         if not company_id or not cls.is_enabled(company_id):
             return False
 
-        req = cls.request_approval(document)
+        req = cls.request_approval(document, actor=user)
         if not req:
             flask_flash(
                 _("No existe una regla de aprobación que cubra este monto. El documento permanece en borrador."),
@@ -233,6 +295,7 @@ class ApprovalEngine:
 
         if cls.can_approve(document, user):
             cls.approve(document, user, _("Aprobado por el remitente"))
+            database.session.commit()
             flask_flash(_("%(label)s aprobada.") % {"label": label}, "success")
         else:
             database.session.commit()
@@ -304,12 +367,14 @@ class ApprovalEngine:
         # 1. Reglas específicas por usuario
         rules = list(
             database.session.execute(
-                select(ApprovalMatrix).filter_by(
+                select(ApprovalMatrix)
+                .filter_by(
                     company_id=company_id,
                     document_type=document_type,
                     user_id=user_id,
                     enabled=True,
                 )
+                .order_by(ApprovalMatrix.approval_level.desc(), ApprovalMatrix.min_amount.desc(), ApprovalMatrix.id)
             )
             .scalars()
             .all()
@@ -326,13 +391,15 @@ class ApprovalEngine:
 
         rules = list(
             database.session.execute(
-                select(ApprovalMatrix).filter(
+                select(ApprovalMatrix)
+                .filter(
                     ApprovalMatrix.company_id == company_id,
                     ApprovalMatrix.document_type == document_type,
                     ApprovalMatrix.role_id.in_(role_ids),
                     ApprovalMatrix.user_id.is_(None),
                     ApprovalMatrix.enabled,
                 )
+                .order_by(ApprovalMatrix.approval_level.desc(), ApprovalMatrix.min_amount.desc(), ApprovalMatrix.id)
             )
             .scalars()
             .all()
@@ -342,24 +409,30 @@ class ApprovalEngine:
     @classmethod
     def can_approve(cls, document: Any, user: Any) -> bool:
         """Verifica si el usuario tiene autorización para aprobar el documento."""
-        company_id = getattr(document, "company", None) or getattr(document, "company_id", None)
+        company_id = (
+            getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+        )
         if not company_id:
             return True
-        if not cls.is_enabled(company_id):
+        req = cls._pending_request(document)
+        if not cls.is_enabled(company_id) and req is None:
             return True
 
-        if getattr(user, "classification", None) == "admin":
+        spec_module = approval_policy.document_module(cls._resolve_doctype(document))
+        if not approval_policy.authorized(user, company_id, spec_module):
+            return False
+        policy = cls._independent_policy(document, req)
+        if policy and not approval_policy.permits_independent_approval(policy, user, company_id):
+            return False
+        if approval_policy.is_admin(user):
             return True
 
         amount = cls.get_document_amount(document)
         document_type = cls._resolve_doctype(document)
 
         rules = cls._get_user_rules(user.id, company_id, document_type)
-        for rule in rules:
-            max_amt = rule.max_amount
-            if rule.min_amount <= amount and (max_amt is None or max_amt >= amount):
-                return True
-        return False
+        required_level = req.required_level if req is not None else 0
+        return cls._find_applicable_rule(rules, amount, user, required_level) is not None
 
     @classmethod
     def _get_required_level(cls, company_id: str, document_type: str, amount: Decimal) -> int:
@@ -624,18 +697,42 @@ class ApprovalEngine:
 
             _validate_receipt_quantities_against_po(document.id)
 
+    @staticmethod
+    def _request_actor_id(actor: Any = None) -> str:
+        """Require a real active requester instead of inventing a system user id."""
+        from cacao_accounting.internal_control_service import current_audit_actor
+
+        actor_id = getattr(actor, "id", None) if actor is not None else current_audit_actor()[0]
+        user = database.session.get(User, actor_id) if actor_id else None
+        if user is None or user.active is not True:
+            raise ValueError(_("La solicitud requiere un usuario activo identificado."))
+        return str(user.id)
+
+    @staticmethod
+    def _lock_document(document: Any) -> None:
+        """Serialize request creation on the existing document in PostgreSQL."""
+        model = type(document)
+        database.session.execute(select(model).where(model.id == document.id).with_for_update())
+
     @classmethod
-    def request_approval(cls, document: Any) -> ApprovalRequest | None:
+    def request_approval(cls, document: Any, *, actor: Any = None) -> ApprovalRequest | None:
         """Crea una solicitud de aprobación para el documento si no existe."""
-        company_id = getattr(document, "company", None) or getattr(document, "company_id", None)
+        company_id = (
+            getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+        )
         if not company_id or not cls.is_enabled(company_id):
             return None
 
         doctype = cls._resolve_doctype(document)
         amount = cls.get_document_amount(document)
 
+        cls._lock_document(document)
         req = database.session.execute(
-            select(ApprovalRequest).filter_by(document_type=doctype, document_id=document.id)
+            select(ApprovalRequest)
+            .filter_by(document_type=doctype, document_id=document.id)
+            .where(ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS, "Approved"}))
+            .order_by(ApprovalRequest.created_at.desc())
+            .limit(1)
         ).scalar_one_or_none()
         if req:
             return req
@@ -643,13 +740,15 @@ class ApprovalEngine:
         req_level = cls._get_required_level(company_id, doctype, amount)
         if req_level == 0:
             return None
-        user_id = getattr(current_user, "id", None) or getattr(document, "user_id", None) or "system"
+        user_id = cls._request_actor_id(actor)
+        policy = cls._new_policy(document, user_id, doctype.removeprefix("cancel_"))
 
         req = ApprovalRequest(
             document_type=doctype,
             document_id=document.id,
             company_id=company_id,
             requested_by=user_id,
+            policy_snapshot=policy,
             current_level=1,
             required_level=req_level,
             status=PENDING_APPROVAL_STATUS,
@@ -658,16 +757,21 @@ class ApprovalEngine:
         database.session.flush()
         from cacao_accounting.audit_trail_service import log_approval_requested
 
+        from cacao_accounting.internal_control_service import audit_actor
+
         snapshot, snapshot_hash = cls._approval_snapshot(document)
-        log_approval_requested(document, snapshot, snapshot_hash)
+        with audit_actor(user_id, str(getattr(actor, "name", None) or user_id)):
+            log_approval_requested(document, snapshot, snapshot_hash)
         return req
 
     @classmethod
     def request_cancellation(
-        cls, document: Any, *, reason: str | None = None, cancellation_date: Any = None
+        cls, document: Any, *, reason: str | None = None, cancellation_date: Any = None, actor: Any = None
     ) -> ApprovalRequest | None:
         """Crea una solicitud de cancelación para el documento si no existe."""
-        company_id = getattr(document, "company", None) or getattr(document, "company_id", None)
+        company_id = (
+            getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+        )
         if not company_id or not cls.is_enabled(company_id):
             return None
 
@@ -678,8 +782,13 @@ class ApprovalEngine:
                 raise ValueError(_("Debe indicar el motivo de la anulación."))
         amount = cls.get_document_amount(document)
 
+        cls._lock_document(document)
         req = database.session.execute(
-            select(ApprovalRequest).filter_by(document_type=doctype, document_id=document.id)
+            select(ApprovalRequest)
+            .filter_by(document_type=doctype, document_id=document.id)
+            .where(ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS, "Approved"}))
+            .order_by(ApprovalRequest.created_at.desc())
+            .limit(1)
         ).scalar_one_or_none()
         if req:
             return req
@@ -687,13 +796,15 @@ class ApprovalEngine:
         req_level = cls._get_required_level(company_id, base_doctype, amount)
         if req_level == 0:
             return None
-        user_id = getattr(current_user, "id", None) or getattr(document, "user_id", None) or "system"
+        user_id = cls._request_actor_id(actor)
+        policy = cls._new_policy(document, user_id, doctype.removeprefix("cancel_"))
 
         req = ApprovalRequest(
             document_type=doctype,
             document_id=document.id,
             company_id=company_id,
             requested_by=user_id,
+            policy_snapshot=policy,
             current_level=1,
             required_level=req_level,
             status=PENDING_CANCELLATION_STATUS,
@@ -704,9 +815,25 @@ class ApprovalEngine:
         database.session.flush()
         from cacao_accounting.audit_trail_service import log_approval_requested
 
+        from cacao_accounting.internal_control_service import audit_actor
+
         snapshot, snapshot_hash = cls._approval_snapshot(document)
-        log_approval_requested(document, snapshot, snapshot_hash, cancellation=True)
+        with audit_actor(user_id, str(getattr(actor, "name", None) or user_id)):
+            log_approval_requested(document, snapshot, snapshot_hash, cancellation=True)
         return req
+
+    @classmethod
+    def _new_policy(cls, document: Any, user_id: str, doctype: str) -> dict[str, Any]:
+        """Validate and freeze independent approval configuration."""
+        company = (
+            getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+        )
+        if not cls.requires_different_approver(company):
+            return {"requires_independent": False}
+        try:
+            return approval_policy.build_policy(document, user_id, doctype)
+        except ValueError as exc:
+            raise ValueError(_("Debe identificar y clasificar a los preparadores antes de solicitar aprobación.")) from exc
 
     @staticmethod
     def _find_applicable_rule(
@@ -715,58 +842,73 @@ class ApprovalEngine:
         user: Any,
         req_level: int,
     ) -> ApprovalMatrix | None:
-        """Find the first rule covering the given amount, or fallback for admin users."""
-        for r in rules:
-            if r.min_amount <= amount and (r.max_amount is None or r.max_amount >= amount):
-                return r
-
-        if getattr(user, "classification", None) == "admin":
+        """Find the deterministic rule covering the amount, or fallback for admin users."""
+        if approval_policy.is_admin(user):
             return ApprovalMatrix(
                 approval_level=req_level,
                 max_amount=amount,
                 enabled=True,
             )
-        return None
+        covering = [rule for rule in rules if _rule_amount_matches(rule, amount)]
+        return max(covering, key=_rule_selection_key) if covering else None
 
     @classmethod
     def _finalize_approval(cls, req: ApprovalRequest, document: Any, user: Any) -> bool:
         """Mark request as approved and execute submit or cancel. Returns True if fully approved."""
-        if req.document_type.startswith("cancel_"):
-            actual_doc_type = req.document_type[7:]
-            actual_doc = database.session.get(get_model_class(actual_doc_type), req.document_id)
-            cls._validate_final_cancellation(actual_doc_type, actual_doc)
-            cls._execute_cancel(
-                actual_doc_type,
-                actual_doc,
-                user,
-                reason=req.cancellation_reason,
-                cancellation_date=req.cancellation_date,
-                requested_at=req.created_at,
-            )
-        else:
-            cls._execute_submit(req.document_type, document, user)
-        database.session.flush()
-        return True
+        from cacao_accounting.internal_control_service import audit_actor
+
+        token = _APPROVAL_EXECUTION.set(_execution_key(document, str(user.id)))
+        try:
+            with audit_actor(str(user.id), str(getattr(user, "name", None) or user.id)):
+                if req.document_type.startswith("cancel_"):
+                    actual_doc_type = req.document_type[7:]
+                    actual_doc = database.session.get(get_model_class(actual_doc_type), req.document_id)
+                    cls._validate_final_cancellation(actual_doc_type, actual_doc)
+                    cls._execute_cancel(
+                        actual_doc_type,
+                        actual_doc,
+                        user,
+                        reason=req.cancellation_reason,
+                        cancellation_date=req.cancellation_date,
+                        requested_at=req.created_at,
+                    )
+                else:
+                    cls._execute_submit(req.document_type, document, user)
+                from cacao_accounting.audit_trail_service import log_approve
+
+                log_approve(document)
+                database.session.flush()
+                return True
+
+        finally:
+            _APPROVAL_EXECUTION.reset(token)
 
     @classmethod
     def approve(cls, document: Any, user: Any, comments: str | None = None) -> bool:
         """Aprueba el documento para el nivel actual."""
-        company_id = getattr(document, "company", None) or getattr(document, "company_id", None)
-        if not company_id or not cls.is_enabled(company_id):
+        company_id = (
+            getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+        )
+        if not company_id or is_desktop_mode():
+            return True
+        if not cls.is_enabled(company_id) and cls._pending_request(document) is None:
             return True
 
         doctype = cls._resolve_doctype(document)
         amount = cls.get_document_amount(document)
 
-        req = database.session.execute(
-            select(ApprovalRequest).filter(
-                ApprovalRequest.document_id == document.id,
-                ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}),
-            )
-        ).scalar_one_or_none()
+        req = cls._pending_request(document, lock=True)
         if not req:
-            req = cls.request_approval(document)
+            finished = database.session.execute(
+                select(ApprovalRequest.id).where(
+                    ApprovalRequest.document_id == document.id,
+                    ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
+                    ApprovalRequest.status == "Approved",
+                )
+            ).first()
+            if finished:
+                return True
+            req = cls.request_approval(document, actor=user)
             if not req:
                 return True
 
@@ -774,6 +916,9 @@ class ApprovalEngine:
             return True
         if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             raise ValueError(_("La solicitud de aprobación no está en estado pendiente."))
+
+        if not cls.can_approve(document, user):
+            raise ValueError(_("El usuario no cumple los permisos, límites o independencia requeridos para aprobar."))
 
         cls._assert_approval_snapshot(req, document)
 
@@ -813,7 +958,7 @@ class ApprovalEngine:
         if doctype == "journal_entry":
             from cacao_accounting.contabilidad.journal_service import submit_journal
 
-            submit_journal(document.id, user_id=str(user.id))
+            submit_journal(document.id, commit=False, user_id=str(user.id))
             return
 
         if doctype in {
@@ -889,6 +1034,7 @@ class ApprovalEngine:
                 reason=reason,
                 cancellation_date=cancellation_date,
                 requested_at=requested_at,
+                commit=False,
             )
             return
         if doctype in _RELATION_ONLY_CANCEL_DOCTYPES:
@@ -917,7 +1063,9 @@ class ApprovalEngine:
     @classmethod
     def reject(cls, document: Any, user: Any, comments: str | None = None) -> None:
         """Rechaza la solicitud de aprobación del documento."""
-        company_id = getattr(document, "company", None) or getattr(document, "company_id", None)
+        company_id = (
+            getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+        )
         if not company_id or not cls.is_enabled(company_id):
             return
 
@@ -935,6 +1083,8 @@ class ApprovalEngine:
         if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             raise ValueError(_("La solicitud de aprobación no está pendiente."))
 
+        if not cls.can_approve(document, user):
+            raise ValueError(_("El usuario no cumple los permisos, límites o independencia requeridos para aprobar."))
         rules = cls._get_user_rules(user.id, company_id, doctype)
         rule = rules[0] if rules else None
 
@@ -969,12 +1119,14 @@ class ApprovalEngine:
         for r in rules:
             if _rule_amount_matches(r, amount):
                 _add_approver_from_rule(r, roles, users)
-        return list(set(roles)), list(set(users))
+        return sorted(set(roles)), sorted(set(users))
 
     @classmethod
     def next_approver(cls, document: Any) -> dict[str, list[str]]:
         """Devuelve nombres de roles y usuarios que pueden realizar la siguiente aprobación."""
-        company_id = getattr(document, "company", None) or getattr(document, "company_id", None)
+        company_id = (
+            getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+        )
         if not company_id or not cls.is_enabled(company_id):
             return {}
 
@@ -1016,3 +1168,67 @@ def get_model_class(doctype: str) -> Any:
         actual_doctype = actual_doctype[7:]
     actual_doctype = "journal_entry" if actual_doctype == "comprobante_contable" else actual_doctype
     return get_document_type(actual_doctype).header_model
+
+
+def _execution_key(document: Any, actor_id: str) -> tuple[str, str, str, str]:
+    """Bind execution to identity, company and document type as well as its id."""
+    company = getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+    return str(document.id), actor_id, str(company), ApprovalEngine._resolve_doctype(document)
+
+
+@contextmanager
+def approved_child_execution(parent: Any, child: Any, expected_doctype: str) -> Iterator[None]:
+    """Authorize a validated generated child only within its approved parent action."""
+    actor = execution_actor(parent.id)
+    if actor is None:
+        yield
+        return
+    parent_key = _execution_key(parent, actor)
+    child_key = _execution_key(child, actor)
+    if _APPROVAL_EXECUTION.get() != parent_key or child_key[2] != parent_key[2] or child_key[3] != expected_doctype:
+        raise ValueError(_("El documento generado no corresponde a la operación aprobada."))
+    with approved_execution(child, actor):
+        yield
+
+
+@contextmanager
+def approved_execution(document: Any, actor_id: str) -> Iterator[None]:
+    """Scope execution to a document after its independent review was verified.
+
+    Only trusted approval transitions or their validated generated-document hooks
+    may establish this scope; it is not a replacement for authority validation.
+    """
+    token = _APPROVAL_EXECUTION.set(_execution_key(document, str(actor_id)))
+    try:
+        yield
+    finally:
+        _APPROVAL_EXECUTION.reset(token)
+
+
+def execution_actor(document_id: str) -> str | None:
+    """Return the actor only for a document currently executing its approved action."""
+    execution = _APPROVAL_EXECUTION.get()
+    return execution[1] if execution and execution[0] == str(document_id) else None
+
+
+def assert_execution_authorized(document: Any, actor_id: str | None = None, *, action: str = "approve") -> None:
+    """Enforce Cloud authority and prevent direct independent-review bypasses."""
+    if is_desktop_mode():
+        return
+    from cacao_accounting.internal_control_service import current_audit_actor
+
+    company = getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+    actor = actor_id or current_audit_actor()[0]
+    if _APPROVAL_EXECUTION.get() == _execution_key(document, str(actor)):
+        return
+    user = database.session.get(User, actor) if actor else None
+    try:
+        module = approval_policy.document_module(ApprovalEngine._resolve_doctype(document))
+    except KeyError as exc:
+        raise ValueError(_("La operación requiere un módulo y un usuario autorizados.")) from exc
+    if not user or not approval_policy.authorized(user, str(company or ""), module, action):
+        raise ValueError(_("La operación requiere un módulo y un usuario autorizados."))
+    pending = ApprovalEngine._pending_request(document)
+    snapshot = ApprovalEngine._independent_policy(document, pending)
+    if pending is not None or (ApprovalEngine.is_enabled(company) and snapshot):
+        raise ValueError(_("La operación debe ejecutarse mediante su aprobación autorizada."))

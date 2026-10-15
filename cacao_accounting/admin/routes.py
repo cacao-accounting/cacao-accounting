@@ -9,8 +9,6 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 
 from flask_login import current_user, login_required
 
-from sqlalchemy import delete
-
 from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.auth import helpers, proteger_passwd
@@ -1063,6 +1061,8 @@ def config_conciliacion_ventas():
 def config_control_presupuestario():
     """Administra la configuración de control presupuestario por compañía."""
     _require_system_admin()
+    if is_desktop_mode():
+        abort(403)
     from cacao_accounting.setup.repository import get_setup_value, set_setup_value
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
@@ -1285,7 +1285,10 @@ def usuario_roles(user_id: str):
 
     if form.validate_on_submit():
         seleccionado = [rol_id for rol_id in form.roles.data if rol_id]
-        database.session.execute(delete(RolesUser).where(RolesUser.user_id == usuario.id))
+        for assignment in database.session.execute(
+            database.select(RolesUser).where(RolesUser.user_id == usuario.id)
+        ).scalars():
+            database.session.delete(assignment)
         for rol_id in seleccionado:
             database.session.add(RolesUser(user_id=usuario.id, role_id=rol_id, active=True))
         database.session.commit()
@@ -1332,7 +1335,10 @@ def usuario_companias(user_id: str):
         )
     if form.validate_on_submit():
         selected = set(form.companies.data or [])
-        database.session.execute(delete(UserCompanyAccess).where(UserCompanyAccess.user_id == usuario.id))
+        for assignment in database.session.execute(
+            database.select(UserCompanyAccess).where(UserCompanyAccess.user_id == usuario.id)
+        ).scalars():
+            database.session.delete(assignment)
         database.session.add_all(
             [UserCompanyAccess(user_id=usuario.id, company_code=company_code) for company_code in selected]
         )
@@ -1442,6 +1448,55 @@ def editar_rol(role_id: str):
     )
 
 
+_PERMISOS_ACCIONES = [
+    ("access", "Acceso"),
+    ("update", "Actualizar"),
+    ("set_null", "Anular"),
+    ("approve", "Autorizar"),
+    ("bi", "BI"),
+    ("close", "Cerrar"),
+    ("setup", "Configurar"),
+    ("view", "Consultar"),
+    ("create", "Crear"),
+    ("edit", "Editar"),
+    ("delete", "Eliminar"),
+    ("import_", "Importar"),
+    ("report", "Reportes"),
+    ("request", "Solicitar"),
+    ("validate", "Validar"),
+]
+
+
+def _rol_permiso_kwargs(role_id, modulo, acciones, ranks, rangos_existentes):
+    """Build the RolesAccess kwargs for a module, or None when there is nothing to store."""
+    permiso_kwargs = {"rol_id": role_id, "module_id": modulo.id}
+    for accion, _label in acciones:
+        permiso_kwargs[accion] = request.form.get(f"perm_{modulo.id}_{accion}") == "on"
+    rank = ranks[modulo.id] if not is_desktop_mode() else rangos_existentes.get(modulo.id)
+    permiso_kwargs["approval_rank"] = int(rank) if rank else None
+    if permiso_kwargs["approval_rank"] or any(permiso_kwargs[action] for action, _label in acciones):
+        return permiso_kwargs
+    return None
+
+
+def _save_rol_permisos(role_id, modulos, acciones, rangos_existentes) -> bool:
+    """Persist submitted permissions; return True when the request was a handled POST."""
+    if request.method != "POST":
+        return False
+    ranks = {modulo.id: request.form.get(f"rank_{modulo.id}", "") for modulo in modulos}
+    if any(value not in {"", "1", "2", "3"} for value in ranks.values()):
+        abort(400)
+    for row in _obtener_permisos_por_rol(role_id):
+        database.session.delete(row)
+    for modulo in modulos:
+        permiso_kwargs = _rol_permiso_kwargs(role_id, modulo, acciones, ranks, rangos_existentes)
+        if permiso_kwargs is not None:
+            database.session.add(RolesAccess(**permiso_kwargs))
+    database.session.commit()
+    flash(_("Permisos del rol actualizados correctamente."), "success")
+    return True
+
+
 @admin.route("/settings/roles/<string:role_id>/permissions", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -1454,38 +1509,14 @@ def rol_permisos(role_id: str):
         return redirect(url_for(LISTA_ROLES))
 
     modulos = _obtener_modulos_disponibles()
-    acciones = [
-        ("access", "Acceso"),
-        ("update", "Actualizar"),
-        ("set_null", "Anular"),
-        ("approve", "Autorizar"),
-        ("bi", "BI"),
-        ("close", "Cerrar"),
-        ("setup", "Configurar"),
-        ("view", "Consultar"),
-        ("create", "Crear"),
-        ("edit", "Editar"),
-        ("delete", "Eliminar"),
-        ("import_", "Importar"),
-        ("report", "Reportes"),
-        ("request", "Solicitar"),
-        ("validate", "Validar"),
-    ]
+    acciones = _PERMISOS_ACCIONES
     permisos_existentes = {
         perm.module_id: {accion: getattr(perm, accion, False) for accion, _label in acciones}
         for perm in _obtener_permisos_por_rol(role_id)
     }
 
-    if request.method == "POST":
-        database.session.execute(database.delete(RolesAccess).where(RolesAccess.rol_id == role_id))
-        for modulo in modulos:
-            permiso_kwargs = {"rol_id": role_id, "module_id": modulo.id}
-            for accion, _label in acciones:
-                permiso_kwargs[accion] = request.form.get(f"perm_{modulo.id}_{accion}") == "on"
-            if any(permiso_kwargs[action] for action, _label in acciones):
-                database.session.add(RolesAccess(**permiso_kwargs))
-        database.session.commit()
-        flash(_("Permisos del rol actualizados correctamente."), "success")
+    rangos_existentes = {perm.module_id: perm.approval_rank for perm in _obtener_permisos_por_rol(role_id)}
+    if _save_rol_permisos(role_id, modulos, acciones, rangos_existentes):
         return redirect(url_for(LISTA_ROLES))
 
     return render_template(
@@ -1493,6 +1524,7 @@ def rol_permisos(role_id: str):
         rol=rol,
         modulos=modulos,
         permisos_existentes=permisos_existentes,
+        rangos_existentes=rangos_existentes,
         acciones=acciones,
     )
 
@@ -1503,6 +1535,8 @@ def rol_permisos(role_id: str):
 def config_approval_matrix():
     """Administra la matriz de aprobación de documentos por compañía."""
     _require_system_admin()
+    if is_desktop_mode():
+        abort(403)
     from cacao_accounting.setup.repository import get_setup_value, set_setup_value
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
@@ -1513,6 +1547,7 @@ def config_approval_matrix():
         return redirect_response
 
     global_enabled = get_setup_value(f"approval_engine_enabled_{selected_company}", "0") == "1"
+    require_different_approver = get_setup_value(f"approval_require_different_approver_{selected_company}", "0") == "1"
     stmt = (
         database.select(ApprovalMatrix)
         .filter_by(company_id=selected_company)
@@ -1532,6 +1567,7 @@ def config_approval_matrix():
         companies=companies,
         selected_company=selected_company,
         global_enabled=global_enabled,
+        require_different_approver=require_different_approver,
         rules=rules,
         roles=roles,
         users=users,
@@ -1569,6 +1605,34 @@ def pending_approvals():
     )
 
 
+def _handle_session_security_post():
+    """Process a session-security action POST, returning a redirect or None."""
+    action = request.form.get("action")
+    if action == "toggle":
+        if not smtp_is_configured():
+            flash(_("Debe configurar el servidor SMTP antes de activar la protección de orígenes."), "danger")
+            return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
+        new_state = request.form.get("enabled") == "on"
+        set_session_security_enabled(new_state)
+        database.session.commit()
+        estado = _("activada") if new_state else _("desactivada")
+        flash(_("Protección de orígenes {}.").format(estado), "success")
+        return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
+    if action == "revoke":
+        device_id = request.form.get("device_id")
+        if device_id and revocar_dispositivo(device_id):
+            database.session.commit()
+            flash(_("Dispositivo revocado correctamente."), "success")
+        return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
+    if action == "unlock":
+        user_id = request.form.get("user_id")
+        if user_id and desbloquear_cuenta_usuario(user_id):
+            database.session.commit()
+            flash(_("Cuenta desbloqueada correctamente."), "success")
+        return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
+    return None
+
+
 @admin.route("/settings/session-security", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -1579,32 +1643,9 @@ def session_security_settings():
         abort(403)
 
     if request.method == "POST":
-        action = request.form.get("action")
-        if action == "toggle":
-            if not smtp_is_configured():
-                flash(
-                    _("Debe configurar el servidor SMTP antes de activar la protección de orígenes."),
-                    "danger",
-                )
-                return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
-            new_state = request.form.get("enabled") == "on"
-            set_session_security_enabled(new_state)
-            database.session.commit()
-            estado = _("activada") if new_state else _("desactivada")
-            flash(_("Protección de orígenes {}.").format(estado), "success")
-            return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
-        if action == "revoke":
-            device_id = request.form.get("device_id")
-            if device_id and revocar_dispositivo(device_id):
-                database.session.commit()
-                flash(_("Dispositivo revocado correctamente."), "success")
-            return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
-        if action == "unlock":
-            user_id = request.form.get("user_id")
-            if user_id and desbloquear_cuenta_usuario(user_id):
-                database.session.commit()
-                flash(_("Cuenta desbloqueada correctamente."), "success")
-            return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
+        response = _handle_session_security_post()
+        if response is not None:
+            return response
 
     enabled = is_session_security_enabled()
     smtp_ok = smtp_is_configured()

@@ -161,7 +161,7 @@ def tiene_rol(user_id: str, role_name: str) -> bool:
     res = database.session.execute(
         database.select(RolesUser.id)
         .join(Roles, Roles.id == RolesUser.role_id)
-        .filter(RolesUser.user_id == user_id, Roles.name == role_name)
+        .filter(RolesUser.user_id == user_id, Roles.name == role_name, RolesUser.active.is_not(False))
     ).scalar_one_or_none()
     return res is not None
 

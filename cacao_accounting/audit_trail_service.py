@@ -132,7 +132,7 @@ def _doc_info(document: Any) -> tuple[str, str, str | None, str | None]:
         or _snake_case(document.__class__.__name__)
     )
     document_no = doc.get("document_no") or doc.get("serie") or doc.get("name")
-    company = doc.get("company") or doc.get("entity")
+    company = doc.get("company") or doc.get("entity") or doc.get("company_id") or doc.get("company_code")
     return document_type, document_id, str(document_no) if document_no else None, str(company) if company else None
 
 
@@ -155,7 +155,9 @@ def _log(
     if action not in ALLOWED_ACTIONS:
         raise AuditTrailServiceError(_("Acción de auditoría no permitida: %(action)s") % {"action": action})
     document_type, document_id, document_no, company = _doc_info(document)
-    actor_user_id, actor_name = _current_actor()
+    from cacao_accounting.internal_control_service import current_audit_actor
+
+    actor_user_id, actor_name = current_audit_actor()
     before_map = _normalize_document(before, exclude_fields=exclude_fields) if before is not None else None
     after_map = _normalize_document(after, exclude_fields=exclude_fields) if after is not None else None
     changes = _compute_changes(before_map, after_map) if before_map is not None and after_map is not None else None

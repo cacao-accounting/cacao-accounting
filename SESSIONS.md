@@ -2612,3 +2612,77 @@ respaldadas por evidencia sin alterar la semántica contable.
   pydocstyle y diff --check pasan. Mypy sobre el archivo de pruebas detecta
   un error preexistente en línea 73 (`TemplateModule.module_status_badge`),
   ajeno a este cambio. Revisión visual en navegador pendiente.
+
+## 2026-10-15 (controles internos ICFR/SOX en Cloud)
+
+### Petición del usuario
+
+Endurecer Cloud con un set acotado de controles verificables y auditables
+(inmutabilidad de evidencia, maker/checker, revisión independiente) sin
+inundar de features y sin agregar migraciones nuevas.
+
+### Alcance implementado
+
+- `internal_control_service.py`: guards transaccionales que impiden mutar
+  evidencia (`audit_trail`, `approval_action`, `audit_log`), ledger y datos
+  financieros posteados; solo se admite estado derivado (`outstanding_amount`,
+  `status`, `is_cancelled`, etc.).
+- `approval_policy.py`: autoridad por módulo/compañía y política de
+  independencia (cuatro ojos) con snapshot de preparadores.
+- `control_review_service.py`: propuestas pendientes para conciliación
+  bancaria, cierre mensual y reapertura de período, revalidadas al aprobar.
+- `document_authorship.py` y reporte de Control Interno en `reportes/`.
+- Endurecimiento RBAC: solo roles/asignaciones activas cuentan.
+- Sin migraciones: el esquema se crea con `create_all`; se elimina la
+  migración incremental `20260918_0002_optimize_indexes.py`.
+
+### Política four-eyes: jerarquía estricta
+
+Dictamen registrado en `analisis.md` y `review.md`: el aprobador independiente
+debe tener autoridad suficiente, no solo identidad distinta.
+
+- Niveles: admin = 4 (derivado de `classification`/rol `admin`), manager = 3,
+  auxiliar = 2, user = 1. La columna `roles_access.approval_rank` solo
+  almacena 1/2/3.
+- `approve` es la única autoridad de aprobación; `approval_rank` es la
+  jerarquía de independencia. Ninguna regla permite aprobar con `approve=False`.
+- Regla estricta: `approver.rank >= max(preparer.rank)`, con aprobador distinto
+  de todo preparador, activo y autorizado (módulo y compañía).
+  - 4 aprueba a 4: sí, con un segundo admin distinto.
+  - 3 aprueba a 3: sí, con otra persona.
+  - 3 aprueba a 4: **no** (se eliminó la excepción `rank == 3`).
+  - 4 aprueba a 3: sí.
+  - Autoaprobación: no. Preparador o aprobador sin clasificar: no.
+- Se rechaza el flag global `allow_manager_approve_admin` y cualquier excepción
+  hardcodeada: un bypass silencioso no es auditable. Las excepciones reales, si
+  el negocio las pide, deben modelarse como reglas explícitas por módulo y
+  compañía, con motivo, autorizador y vigencia (fuera del alcance actual).
+- Consecuencia operativa intencional (documentada en
+  `docs/cloud/internal-controls.md`): con cuatro ojos en enforcing, un documento
+  preparado por un admin solo lo puede aprobar otro admin distinto. Debe existir
+  al menos un segundo administrador activo y clasificado; si no, el documento
+  queda pendiente. Los admin no deben ser operadores por defecto del posteo
+  diario.
+
+### Hallazgo 2 (`feedback.md`): resolución de reglas determinista
+
+Aunque el defecto era preexistente, se aplican medidas para hacerlo robusto:
+
+- `ApprovalEngine._get_user_rules` ordena por `approval_level DESC,
+  min_amount DESC, id`.
+- `ApprovalEngine._find_applicable_rule` selecciona con
+  `_rule_selection_key`: mayor `approval_level`, luego rango más específico
+  (mayor cota inferior y menor cota superior) y finalmente `id`.
+- `_collect_approvers_from_rules` devuelve listas ordenadas.
+- Pruebas de regresión con reglas solapadas en
+  `tests/test_approval_engine.py` (nivel y especificidad), independientes del
+  orden de la base de datos.
+
+### Limitaciones conocidas
+
+- Sin migración: bases ya desplegadas no reciben las columnas nuevas
+  (`roles_access.approval_rank`, `approval_request.policy_snapshot`,
+  `approval_request.review_payload`) ni el backfill de rank; requieren
+  recreación del esquema o clasificación manual de roles.
+- Un preparador sin `approval_rank` bloquea la aprobación (fail-closed).
+- El tipo `admin` es global: no exige `UserCompanyAccess`.

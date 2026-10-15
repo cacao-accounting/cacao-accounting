@@ -1182,6 +1182,9 @@ def _append_purchase_tax_entries(
 
 def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para una factura o nota de venta aprobada."""
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
@@ -1273,6 +1276,9 @@ def _add_sales_income_entries(
 
 def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para una factura o nota de compra aprobada."""
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
@@ -1356,6 +1362,9 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
 
 def post_import_landed_cost(document: ImportLandedCost, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para un costo de importacion aprobado."""
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
@@ -1456,6 +1465,9 @@ def _emit_purchase_invoice_event(document: PurchaseInvoice, company: str) -> Non
 
 def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para cobros, pagos y transferencias internas."""
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
@@ -2314,6 +2326,9 @@ def _bank_transaction_offset_account_id(document: BankTransaction, credit: bool)
 
 def post_bank_transaction(document: BankTransaction, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para una nota bancaria manual."""
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     amount = _decimal_value(document.deposit if document.deposit is not None else document.withdrawal)
@@ -4073,6 +4088,9 @@ def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id,
 
 def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera Stock Ledger y GL para una recepción de compra aprobada."""
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError(_("Solo se puede contabilizar una recepción de compra aprobada."))
     if _has_active_gl_entries(document):
@@ -4210,6 +4228,9 @@ def _create_delivery_note_gl_entries(
 
 def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera Stock Ledger y GL para una nota de entrega aprobada."""
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError(_("Solo se puede contabilizar una nota de entrega aprobada."))
     if _has_active_gl_entries(document):
@@ -4316,6 +4337,9 @@ def _comprobante_entry_params(
 
 def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | Sequence[str] | None = None) -> list[GLEntry]:
     """Genera GL para un comprobante contable manual."""
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if _has_active_gl_entries(document):
         raise PostingError(_DOCUMENTO_YA_CONTABILIZADO_MSG)
 
@@ -4352,6 +4376,9 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
 
 def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera Stock Ledger y GL para movimientos de inventario valuado."""
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError(_("Solo se puede contabilizar una entrada de stock aprobada."))
     if _has_active_gl_entries(document):
@@ -4629,6 +4656,9 @@ def post_document_to_gl(document: Any, ledger_code: str | None = None) -> list[G
     es idempotente; ``submit_document`` sigue llamando a los servicios del
     subledger sin duplicar movimientos.
     """
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document)
     if not isinstance(document, StockEntry) and _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if isinstance(document, SalesInvoice):
@@ -4716,6 +4746,9 @@ def cancel_document(
     original. ``reason`` y ``actor_user_id`` permiten registrar la transición
     de negocio sin alterar el documento ni el ledger histórico.
     """
+    from cacao_accounting.approval_engine import assert_execution_authorized
+
+    assert_execution_authorized(document, actor_id=actor_user_id, action="set_null")
     document = _lock_document_for_transition(document)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError(_("Solo se puede cancelar un documento aprobado."))

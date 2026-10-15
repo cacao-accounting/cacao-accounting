@@ -14,6 +14,9 @@ from cacao_accounting.database import (
     database,
     Roles,
     RolesUser,
+    RolesAccess,
+    Modules,
+    UserCompanyAccess,
     User,
     ApprovalMatrix,
     ApprovalRequest,
@@ -94,8 +97,10 @@ def _enable_engine(company_id: str = "comp_test") -> None:
 
 def _create_user(username: str = "juan", classification: str = "user") -> User:
     """Crea un usuario de prueba."""
-    user = User(user=username, name=username.title(), classification=classification, password=b"testpass")
+    user = User(user=username, name=username.title(), classification=classification, password=b"testpass", active=True)
     database.session.add(user)
+    database.session.flush()
+    database.session.add(UserCompanyAccess(user_id=user.id, company_code="comp_test"))
     database.session.flush()
     return user
 
@@ -171,6 +176,26 @@ def _create_rule(
     enabled: bool = True,
 ) -> ApprovalMatrix:
     """Crea una regla de aprobación."""
+    from cacao_accounting.approval_policy import document_module
+
+    module_name = document_module(document_type)
+    module = database.session.execute(select(Modules).filter_by(module=module_name)).scalar_one_or_none()
+    if module is None:
+        module = Modules(module=module_name, default=True, enabled=True)
+        database.session.add(module)
+        database.session.flush()
+    permission_role = role_id
+    if user_id:
+        permission_name = f"approve-{user_id}-{module_name}"
+        permission = database.session.execute(select(Roles).filter_by(name=permission_name)).scalar_one_or_none()
+        permission_role = (permission or _create_role(permission_name)).id
+        assigned = database.session.execute(select(RolesUser).filter_by(user_id=user_id, role_id=permission_role)).first()
+        if not assigned:
+            database.session.add(RolesUser(user_id=user_id, role_id=permission_role, active=True))
+    if permission_role:
+        existing = database.session.execute(select(RolesAccess).filter_by(rol_id=permission_role, module_id=module.id)).first()
+        if not existing:
+            database.session.add(RolesAccess(rol_id=permission_role, module_id=module.id, access=True, approve=True))
     rule = ApprovalMatrix(
         company_id=company_id,
         document_type=document_type,
@@ -230,6 +255,110 @@ def test_approval_matrix_rules_priority(app):
         assert not ApprovalEngine.can_approve(po_large, user_juan)
 
 
+def test_overlapping_rules_resolve_deterministically(app):
+    """Reglas solapadas eligen siempre la de mayor nivel, sin depender del orden de la BD."""
+    with app.app_context():
+        _enable_engine()
+        user = _create_user("solver")
+        low = _create_rule(
+            "comp_test",
+            "purchase_order",
+            user_id=user.id,
+            min_amount=Decimal("0"),
+            max_amount=Decimal("1000"),
+            approval_level=1,
+        )
+        high = _create_rule(
+            "comp_test",
+            "purchase_order",
+            user_id=user.id,
+            min_amount=Decimal("0"),
+            max_amount=Decimal("1000"),
+            approval_level=2,
+        )
+        amount = Decimal("500")
+
+        rules = ApprovalEngine._get_user_rules(user.id, "comp_test", "purchase_order")
+        assert [rule.approval_level for rule in rules] == [2, 1]
+
+        chosen = ApprovalEngine._find_applicable_rule(rules, amount, user, 1)
+        assert chosen.id == high.id
+        reversed_choice = ApprovalEngine._find_applicable_rule(list(reversed(rules)), amount, user, 1)
+        assert reversed_choice.id == high.id
+        assert low.id != high.id
+
+
+def test_overlapping_rules_tie_break_by_specificity(app):
+    """Con el mismo nivel gana el rango más específico de forma reproducible."""
+    with app.app_context():
+        _enable_engine()
+        user = _create_user("solver2")
+        wide = _create_rule(
+            "comp_test",
+            "purchase_order",
+            user_id=user.id,
+            min_amount=Decimal("0"),
+            max_amount=Decimal("1000"),
+            approval_level=2,
+        )
+        narrow = _create_rule(
+            "comp_test",
+            "purchase_order",
+            user_id=user.id,
+            min_amount=Decimal("400"),
+            max_amount=Decimal("600"),
+            approval_level=2,
+        )
+        amount = Decimal("500")
+        assert ApprovalEngine._find_applicable_rule([wide, narrow], amount, user, 1).id == narrow.id
+        assert ApprovalEngine._find_applicable_rule([narrow, wide], amount, user, 1).id == narrow.id
+        assert ApprovalEngine._find_applicable_rule([wide], Decimal("900"), user, 1).id == wide.id
+
+
+def test_approval_engine_optional_four_eyes(app):
+    """Prueba que el 4-eyes es opcional y evita autoaprobación del creador."""
+    with app.app_context():
+        _enable_engine()
+        requester = _create_user("requester")
+        second_manager = _create_user("manager2")
+        manager_role = _create_role("Manager", "Gerencia")
+        module = Modules(module="purchases", default=True, enabled=True)
+        database.session.add(module)
+        database.session.flush()
+        database.session.add(
+            RolesAccess(rol_id=manager_role.id, module_id=module.id, access=True, approve=True, approval_rank=3)
+        )
+        for user in (requester, second_manager):
+            user.active = True
+        _assign_role(requester, manager_role)
+        _assign_role(second_manager, manager_role)
+        _create_rule("comp_test", "purchase_order", role_id=manager_role.id, max_amount=Decimal("999999"))
+        database.session.add(CacaoConfig(key="approval_require_different_approver_comp_test", value="True"))
+        database.session.flush()
+
+        po = PurchaseOrder(
+            id="po-four-eyes",
+            created_by=requester.id,
+            company="comp_test",
+            grand_total=Decimal("1200"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            supplier_id="PARTY-TEST",
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(po)
+        database.session.flush()
+        _add_po_item("po-four-eyes", rate=Decimal("1200"))
+        req = ApprovalEngine.request_approval(po, actor=requester)
+        assert req is not None
+        req.requested_by = requester.id
+        database.session.commit()
+
+        assert not ApprovalEngine.can_approve(po, requester)
+        assert ApprovalEngine.can_approve(po, second_manager)
+
+
 def test_approval_flow_draft_to_approved(app):
     """Prueba el flujo completo de aprobaciones (Draft -> Approved)."""
     with app.app_context():
@@ -254,7 +383,7 @@ def test_approval_flow_draft_to_approved(app):
         _add_po_item("po10025", rate=Decimal("12000"))
         database.session.commit()
 
-        req = ApprovalEngine.request_approval(po)
+        req = ApprovalEngine.request_approval(po, actor=user_juan)
         assert req is not None
         assert req.status == "Pending Approval"
         assert req.required_level == 1
@@ -335,7 +464,7 @@ def test_approval_flow_rejection(app):
         database.session.add(relation)
         database.session.commit()
 
-        ApprovalEngine.request_approval(po)
+        ApprovalEngine.request_approval(po, actor=user_juan)
         ApprovalEngine.reject(po, user_juan, "Rechazado")
 
         req = database.session.execute(
@@ -358,7 +487,7 @@ def test_pending_approvals_view(app, client):
         database.session.add(po)
         database.session.commit()
 
-        ApprovalEngine.request_approval(po)
+        ApprovalEngine.request_approval(po, actor=user_juan)
         database.session.commit()
 
         with client.session_transaction() as sess:
@@ -411,7 +540,7 @@ def test_multilevel_approval_three_levels(app):
         _add_po_item("po_multi", rate=Decimal("42000"))
         database.session.commit()
 
-        req = ApprovalEngine.request_approval(po)
+        req = ApprovalEngine.request_approval(po, actor=user_juan)
         assert req.required_level == 2
 
         # Buyer (nivel 1) no puede aprobar 42,000 (requiere nivel 2)
@@ -460,7 +589,7 @@ def test_multilevel_approval_tiers(app):
         _add_po_item("po_low", rate=Decimal("30000"))
         database.session.commit()
 
-        req_low = ApprovalEngine.request_approval(po_low)
+        req_low = ApprovalEngine.request_approval(po_low, actor=user_maria)
         assert req_low.required_level == 1
 
         assert ApprovalEngine.can_approve(po_low, user_maria)
@@ -483,7 +612,7 @@ def test_multilevel_approval_tiers(app):
         _add_po_item("po_high", rate=Decimal("100000"))
         database.session.commit()
 
-        req_high = ApprovalEngine.request_approval(po_high)
+        req_high = ApprovalEngine.request_approval(po_high, actor=user_maria)
         assert req_high.required_level == 2
 
         assert not ApprovalEngine.can_approve(po_high, user_maria)
@@ -510,7 +639,7 @@ def test_cancellation_request(app):
         database.session.add(po)
         database.session.commit()
 
-        req = ApprovalEngine.request_cancellation(po)
+        req = ApprovalEngine.request_cancellation(po, actor=user_juan)
         assert req is not None
         assert req.status == "Pending Cancellation"
         assert req.document_type == "cancel_purchase_order"
@@ -528,7 +657,7 @@ def test_cancellation_approval(app):
         database.session.add(pr)
         database.session.commit()
 
-        ApprovalEngine.request_cancellation(pr)
+        ApprovalEngine.request_cancellation(pr, actor=user_juan)
         result = ApprovalEngine.approve(pr, user_juan, "Cancelación autorizada")
         assert result is True
 
@@ -550,7 +679,7 @@ def test_cancellation_rejection(app):
         database.session.add(po)
         database.session.commit()
 
-        ApprovalEngine.request_cancellation(po)
+        ApprovalEngine.request_cancellation(po, actor=user_juan)
         ApprovalEngine.reject(po, user_juan, "No autorizado")
 
         req = database.session.execute(
@@ -651,7 +780,7 @@ def test_request_approval_no_rule_returns_none(app):
         database.session.add(po)
         database.session.commit()
 
-        result = ApprovalEngine.request_approval(po)
+        result = ApprovalEngine.request_approval(po, actor=user_juan)
         assert result is None
 
 
@@ -666,8 +795,8 @@ def test_request_approval_existing_request(app):
         database.session.add(po)
         database.session.commit()
 
-        req1 = ApprovalEngine.request_approval(po)
-        req2 = ApprovalEngine.request_approval(po)
+        req1 = ApprovalEngine.request_approval(po, actor=user_juan)
+        req2 = ApprovalEngine.request_approval(po, actor=user_juan)
         assert req1 is not None
         assert req2 is not None
         assert req1.id == req2.id
@@ -697,7 +826,7 @@ def test_approve_already_approved_request(app):
         _add_po_item("po_already", rate=Decimal("5000"))
         database.session.commit()
 
-        ApprovalEngine.request_approval(po)
+        ApprovalEngine.request_approval(po, actor=user_juan)
         ApprovalEngine.approve(po, user_juan)
 
         # Intentar aprobar de nuevo
@@ -748,7 +877,7 @@ def test_next_approver_with_pending(app):
         database.session.add(po)
         database.session.commit()
 
-        ApprovalEngine.request_approval(po)
+        ApprovalEngine.request_approval(po, actor=user_juan)
         database.session.commit()
 
         approvers = ApprovalEngine.next_approver(po)
@@ -786,7 +915,7 @@ def test_approval_action_on_approve(app):
         _add_po_item("po_audit", rate=Decimal("12000"))
         database.session.commit()
 
-        ApprovalEngine.request_approval(po)
+        ApprovalEngine.request_approval(po, actor=user_juan)
         ApprovalEngine.approve(po, user_juan, "Aprobado con comentario")
         database.session.commit()
 
@@ -810,7 +939,7 @@ def test_approval_action_on_reject(app):
         database.session.add(po)
         database.session.commit()
 
-        ApprovalEngine.request_approval(po)
+        ApprovalEngine.request_approval(po, actor=user_juan)
         ApprovalEngine.reject(po, user_juan, "Rechazado por política")
         database.session.commit()
 
@@ -1033,7 +1162,7 @@ def test_deferred_approval_rejects_changed_payment_snapshot(app):
         database.session.add(payment)
         database.session.commit()
 
-        request = ApprovalEngine.request_approval(payment)
+        request = ApprovalEngine.request_approval(payment, actor=user)
         assert request is not None
         payment.paid_amount = Decimal("250.00")
         with pytest.raises(ValueError, match="cambió después"):

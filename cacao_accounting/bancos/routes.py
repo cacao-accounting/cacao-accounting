@@ -417,7 +417,7 @@ def bancos_transaccion_reconciliar():
 
     reconciliation_date = _bank_reconciliation_date(str(company))
     try:
-        reconcile_bank_items(
+        reconciliation = reconcile_bank_items(
             BankReconciliationRequest(
                 company=str(company),
                 reconciliation_date=reconciliation_date,
@@ -439,7 +439,12 @@ def bancos_transaccion_reconciliar():
         return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT))
 
     database.session.commit()
-    flash(_("Transacciones bancarias conciliadas correctamente."), "success")
+    from cacao_accounting.database import ApprovalRequest
+
+    if isinstance(reconciliation, ApprovalRequest):
+        flash(_("Operación pendiente de revisión independiente."), "info")
+    else:
+        flash(_("Transacciones bancarias conciliadas correctamente."), "success")
     return redirect(url_for("bancos.bancos_transaccion_lista"))
 
 
@@ -584,8 +589,16 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
     reconciliation_date = _bank_reconciliation_date(company)
     try:
         reconciliation = reconcile_bank_items(
-            BankReconciliationRequest(company=company, reconciliation_date=reconciliation_date, matches=matches)
+            BankReconciliationRequest(company=company, reconciliation_date=reconciliation_date, matches=matches),
+            actor_id=str(current_user.id),
+            differences=difference_requests,
         )
+        from cacao_accounting.database import ApprovalRequest
+
+        if isinstance(reconciliation, ApprovalRequest):
+            database.session.commit()
+            flash(_("Operación pendiente de revisión independiente."), "info")
+            return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
         for transaction_id, difference in difference_requests:
             transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)
             if transaction is None:

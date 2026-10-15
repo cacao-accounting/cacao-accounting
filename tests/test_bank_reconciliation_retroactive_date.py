@@ -165,7 +165,8 @@ def test_retroactive_reconciliation_date_is_persisted(app_ctx, chart):
             company=COMPANY,
             reconciliation_date=retroactive_date,
             matches=[BankReconciliationMatch(transaction.id, "gl_entry", target_id, Decimal("100.00"))],
-        )
+        ),
+        actor_id="admin",
     )
     database.session.commit()
 

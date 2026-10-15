@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "smart_select_field.html" import smart_select_field %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item active">{{ _('Control Interno') }}</li>
+  </ol>
+</nav>
+<div class="ca-page-header">
+  <h1>{{ _('Control Interno') }}</h1>
+  <p>{{ _('Evidencia de operaciones, aprobaciones y cambios sensibles. Las fechas corresponden al momento del evento en UTC.') }}</p>
+</div>
+<form method="get" class="ca-card p-3 mb-3">
+  <div class="row g-3">
+    <div class="col-md-3">{{ smart_select_field(_('Compañía'), 'company', 'company', filters.company, 'control-company') }}</div>
+    <div class="col-md-3">
+      <label class="form-label" for="control-period">{{ _('Período contable') }}</label>
+      <input id="control-period" class="form-control" name="period" value="{{ filters.period or '' }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="control-from">{{ _('Fecha desde') }}</label>
+      <input id="control-from" class="form-control" type="date" name="date_from" value="{{ filters.date_from or '' }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="control-to">{{ _('Fecha hasta') }}</label>
+      <input id="control-to" class="form-control" type="date" name="date_to" value="{{ filters.date_to or '' }}">
+    </div>
+    {% for name, label in [('action', _('Acción')), ('actor_id', _('ID del usuario')), ('document_type', _('Tipo de documento')), ('document_id', _('ID del documento'))] %}
+    <div class="col-md-3">
+      <label class="form-label" for="control-{{ name }}">{{ label }}</label>
+      <input id="control-{{ name }}" class="form-control" name="{{ name }}" value="{{ filters[name] or '' }}">
+    </div>
+    {% endfor %}
+  </div>
+  {% if can_include_global %}
+  <label class="form-check mt-3">
+    <input class="form-check-input" type="checkbox" name="include_global" value="1" {% if filters.include_global %}checked{% endif %}>
+    <span class="form-check-label">{{ _('Incluir cambios de configuración global') }}</span>
+  </label>
+  {% endif %}
+  <div class="d-flex gap-2 mt-3">
+    <button class="btn btn-primary" type="submit">{{ _('Aplicar filtros') }}</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for(request.endpoint, **dict(request.args.to_dict(), export='csv')) }}">{{ _('Exportar CSV') }}</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for(request.endpoint, **dict(request.args.to_dict(), export='xlsx')) }}">{{ _('Exportar Excel') }}</a>
+  </div>
+</form>
+<div class="ca-card p-3">
+  <p>{{ _('Registros') }}: {{ report.total_rows }}</p>
+  <div class="table-responsive">
+    <table class="table table-sm">
+      <thead><tr>{% for column in report.columns %}<th>{{ report_headers.get(column, column) }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for row in report.rows %}
+        <tr>{% for column in report.columns %}<td>{{ row.values.get(column) if row.values.get(column) is not none else _('Sin evidencia') }}</td>{% endfor %}</tr>
+      {% else %}
+        <tr><td colspan="{{ report.columns|length }}">{{ _('No hay registros para los filtros seleccionados.') }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <nav class="d-flex justify-content-between">
+    {% if report.page > 1 %}<a href="{{ url_for(request.endpoint, **dict(request.args.to_dict(), page=report.page-1)) }}">{{ _('Anterior') }}</a>{% else %}<span></span>{% endif %}
+    {% if report.page * report.page_size < report.total_rows %}<a href="{{ url_for(request.endpoint, **dict(request.args.to_dict(), page=report.page+1)) }}">{{ _('Siguiente') }}</a>{% endif %}
+  </nav>
+</div>
+{% endblock %}

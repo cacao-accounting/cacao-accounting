@@ -95,6 +95,9 @@ def iniciar_extenciones(app: Flask | None = None) -> None:
     csrf.init_app(app)
     alembic.init_app(app)
     database.init_app(app)
+    from cacao_accounting.internal_control_service import register_internal_controls
+
+    register_internal_controls()
     administrador_sesion.init_app(app)
     babel.init_app(app, locale_selector=_get_locale, timezone_selector=_get_timezone)
     init_cache(app)
@@ -227,6 +230,9 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(current_user_open_task_count=current_user_open_task_count)
             app.jinja_env.globals.update(pending_approval_count=pending_approval_count)
             app.jinja_env.globals.update(audit_action_label=audit_action_label)
+            from cacao_accounting.document_authorship import document_authorship
+
+            app.jinja_env.globals.update(document_authorship=document_authorship)
             app.jinja_env.globals.update(transaction_form_i18n=_transaction_form_i18n_labels)
 
             def get_balance_confirmations_history(party_id: str, party_type: str, company: str | None = None):

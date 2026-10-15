@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Any, Sequence
 
 from sqlalchemy import func, select
+from flask_login import current_user
 
 from cacao_accounting.database import (
     BankAccount,
@@ -780,12 +781,50 @@ def _populate_payment_entry_id(bank_transaction: BankTransaction | None, bank_tr
             break
 
 
-def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
+def reconcile_bank_items(
+    request: BankReconciliationRequest, *, actor_id: str | None = None, differences: list | None = None
+) -> Any:
     """Crea una conciliacion bancaria parcial o total."""
     if not request.matches:
         raise BankReconciliationError(_("La conciliación bancaria requiere al menos una linea."))
 
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError, validate_accounting_period
+
+    try:
+        validate_accounting_period(request.company, request.reconciliation_date)
+    except IdentifierConfigurationError as exc:
+        raise BankReconciliationError(str(exc)) from exc
+
     _lock_request_transactions(request)
+    from cacao_accounting.control_review_service import require_review
+
+    actor_id = actor_id or getattr(current_user, "id", None)
+
+    payload = {
+        "date": request.reconciliation_date.isoformat(),
+        "matches": [
+            {
+                "bank_transaction_id": match.bank_transaction_id,
+                "target_type": match.target_type,
+                "target_id": match.target_id,
+                "allocated_amount": str(match.allocated_amount),
+            }
+            for match in request.matches
+        ],
+        "differences": [[identifier, str(amount)] for identifier, amount in differences or []],
+    }
+    try:
+        pending = require_review(
+            "bank_reconciliation",
+            min(match.bank_transaction_id for match in request.matches),
+            request.company,
+            actor_id,
+            payload,
+        )
+    except ValueError as exc:
+        raise BankReconciliationError(str(exc)) from exc
+    if pending is not None:
+        return pending
     if existing := _matching_reconciliation_replay(request):
         return existing
 
@@ -793,6 +832,7 @@ def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
         company=request.company,
         recon_date=request.reconciliation_date,
         recon_type="bank",
+        created_by=actor_id,
     )
     database.session.add(reconciliation)
     database.session.flush()

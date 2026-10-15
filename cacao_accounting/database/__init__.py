@@ -431,6 +431,7 @@ class RolesAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
     report = database.Column(database.Boolean, nullable=False, default=False)
     request = database.Column(database.Boolean, nullable=False, default=False)
     validate = database.Column(database.Boolean, nullable=False, default=False)
+    approval_rank = database.Column(database.Integer(), nullable=True)
 
 
 class RolesUser(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -6052,6 +6053,8 @@ class ApprovalRequest(database.Model, BaseTabla):  # type: ignore[name-defined]
     created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     cancellation_date = database.Column(database.Date(), nullable=True)
     cancellation_reason = database.Column(database.Text(), nullable=True)
+    policy_snapshot = database.Column(database.JSON(), nullable=True)
+    review_payload = database.Column(database.JSON(), nullable=True)
 
 
 class ApprovalAction(database.Model, BaseTabla):  # type: ignore[name-defined]

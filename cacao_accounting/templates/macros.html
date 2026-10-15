@@ -573,6 +573,7 @@
 {# globalmente desde headertags().                                   #}
 {# ─────────────────────────────────────────────────────────────── #}
 {% macro document_flow_tree(document_type, document, docstatus=None, create_actions_json='[]') %}
+{{ document_author_panel(document_type, document) }}
 {%- set status_value = document.status|default('') -%}
 {%- set inferred_docstatus = 1 if status_value == 'submitted' else (2 if status_value == 'cancelled' else 0) -%}
 {%- set effective_docstatus = docstatus if docstatus is not none else (document.docstatus|default(inferred_docstatus)) -%}
@@ -1088,6 +1089,24 @@
 {% endmacro %}
 
 {# ─── Audit Timeline (reusable across all document types) ─────── #}
+{% macro document_author_panel(document_type, document) %}
+{% if is_cloud_mode() %}
+{% set evidence = document_authorship(document_type, document) %}
+<div class="ca-card mt-3 p-3" data-document-authorship>
+  <dl class="row mb-0">
+    <dt class="col-sm-3">{{ _('Creado por') }}</dt>
+    <dd class="col-sm-9">{{ evidence.created_by or _('Sin evidencia') }}{% if evidence.created_at %} · <time>{{ evidence.created_at }}</time>{% endif %}</dd>
+    <dt class="col-sm-3">{{ _('Aprobado por') }}</dt>
+    <dd class="col-sm-9">{{ evidence.approved_by or _('Sin evidencia') }}{% if evidence.approved_at %} · <time>{{ evidence.approved_at }}</time>{% endif %}</dd>
+    {% if evidence.modified_by %}
+    <dt class="col-sm-3">{{ _('Modificado por') }}</dt>
+    <dd class="col-sm-9">{{ evidence.modified_by }}{% if evidence.modified_at %} · <time>{{ evidence.modified_at }}</time>{% endif %}</dd>
+    {% endif %}
+  </dl>
+</div>
+{% endif %}
+{% endmacro %}
+
 {% macro audit_timeline(timeline, page_size=20) %}
 {% set field_labels = {
     'items':               _('Líneas del documento'),

@@ -56,6 +56,25 @@
           </td>
           <td>
             <a href="{{ item.detail_url }}" class="link-primary fw-semibold">{{ item.doc_no }}</a>
+            {% if item.review_payload %}
+            <details class="small mt-1">
+              <summary>{{ _("Propuesta de revisión") }}</summary>
+              {% if item.review_payload.date %}
+              <p>{{ _("Fecha") }}: {{ item.review_payload.date }}</p>
+              {% else %}
+              <p>{{ _("Período") }}: {{ item.review_payload.start }} — {{ item.review_payload.end }}</p>
+              {% endif %}
+              {% if item.review_payload.reason %}<p>{{ _("Motivo") }}: {{ item.review_payload.reason }}</p>{% endif %}
+              {% for allocation in item.review_payload.matches|default([]) %}
+              <p>{{ _("Transacción bancaria") }}: {{ allocation.bank_transaction_id }}<br>
+                {{ _("Documento destino") }}: {{ allocation.target_id }}<br>
+                {{ _("Monto") }}: {{ allocation.allocated_amount }}</p>
+              {% endfor %}
+              {% for identifier, amount in item.review_payload.differences|default([]) %}
+              <p>{{ _("Diferencia bancaria") }}: {{ identifier }} — {{ amount }}</p>
+              {% endfor %}
+            </details>
+            {% endif %}
           </td>
           <td>
             <strong>{{ item.request.company_id }}</strong>

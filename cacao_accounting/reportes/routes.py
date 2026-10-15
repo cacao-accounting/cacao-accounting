@@ -98,6 +98,59 @@ else:
 
 reportes = Blueprint("reportes", __name__, template_folder="templates")
 
+
+@reportes.route("/reports/internal-control")
+@login_required
+@modulo_activo("accounting")
+def internal_control():
+    """Show company-scoped Cloud evidence and export the same filtered result."""
+    from dataclasses import asdict
+    from flask_login import current_user
+    from cacao_accounting.reportes.internal_control import InternalControlFilters, REPORT_HEADERS, get_internal_control_report
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+    from cacao_accounting.reportes.helpers import _export_operational_report
+    from cacao_accounting.runtime_mode import is_cloud_mode
+
+    if not is_cloud_mode():
+        abort(404)
+    try:
+        filters = InternalControlFilters(
+            company=_resolve_company(request.args.get("company")),
+            date_from=date.fromisoformat(request.args["date_from"]) if request.args.get("date_from") else None,
+            date_to=date.fromisoformat(request.args["date_to"]) if request.args.get("date_to") else None,
+            period=request.args.get("period") or None,
+            action=request.args.get("action") or None,
+            actor_id=request.args.get("actor_id") or None,
+            document_type=request.args.get("document_type") or None,
+            document_id=request.args.get("document_id") or None,
+            include_global=request.args.get("include_global") == "1",
+            page=request.args.get("page", 1, type=int) or 1,
+            page_size=request.args.get("page_size", 100, type=int) or 100,
+            export_all=request.args.get("export") in {"csv", "xlsx"},
+        )
+        report = get_internal_control_report(filters, user_id=str(current_user.id))
+    except PermissionError as exc:
+        abort(403, description=str(exc))
+    except ValueError as exc:
+        abort(400, description=str(exc))
+    if request.args.get("export") not in {None, "csv", "xlsx"}:
+        abort(400)
+    title = _("Control Interno")
+    exported = _export_operational_report(report, "internal-control", title, asdict(filters))
+    if exported is not None:
+        return exported
+    return render_template(
+        "reportes/internal_control.html",
+        titulo=title,
+        report=report,
+        filters=filters,
+        report_title=title,
+        report_headers=REPORT_HEADERS,
+        can_include_global=Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id).administrador,
+    )
+
+
 PURCHASES_HOME_ENDPOINT = "compras.compras_"
 
 _COLUMN_LABELS = {

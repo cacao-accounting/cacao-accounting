@@ -43,6 +43,12 @@
           <input class="form-check-input" type="checkbox" name="include_closing" value="1" {% if report_filters.include_closing %}checked{% endif %}>
           <span class="form-check-label">{{ _("Incluir Registro de Cierre") }}</span>
         </label>
+        {% if is_cloud_mode() and report_code == 'account-movement' %}
+        <label class="form-check">
+          <input class="form-check-input" type="checkbox" name="show_users" value="1" {% if request.args.get('show_users') in ('1', 'true', 'yes', 'on') %}checked{% endif %}>
+          <span class="form-check-label">{{ _('Mostrar usuarios') }}</span>
+        </label>
+        {% endif %}
         <button
           class="btn btn-link text-start p-0 mt-1"
           type="button"

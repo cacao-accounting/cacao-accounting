@@ -135,7 +135,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
 
             resolved = cast(
                 Decimal | None,
-                _lookup_exchange_rate(transaction_currency, base_currency, posting_date) if posting_date else None,
+                _lookup_exchange_rate(transaction_currency, cast(str, base_currency), posting_date) if posting_date else None,
             )
             rate_dec = Decimal(str(resolved)) if resolved is not None else Decimal("0")
         if rate_dec <= 0:

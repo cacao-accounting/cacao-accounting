@@ -137,9 +137,13 @@ _COLUMN_LABELS = {
     "project": "Project",
     "party_type": "Party Type",
     "party_id": "Party",
-    "created_by": "User",
+    "created_by": "Creado por",
     "created": "Creation Date",
-    "created_at": "Creation Date",
+    "created_at": "Fecha de creación",
+    "approved_by": "Aprobado por",
+    "approved_at": "Fecha de aprobación",
+    "modified_by": "Modificado por",
+    "modified_at": "Fecha de modificación",
     "movement_count": "Movements",
     "first_movement": "First Movement",
     "last_movement": "Last Movement",
@@ -253,6 +257,7 @@ _FINANCIAL_FILTER_FIELDS = (
     "status",
     "show_cancellations",
     "include_running_balance",
+    "show_users",
     "page_size",
     "sort_by",
     "sort_dir",
@@ -277,6 +282,16 @@ def _format_number(value: object) -> str:
 
 
 def _column_label(column: str, ledger_currency: str | None) -> str:
+    author_labels = {
+        "created_by": _("Creado por"),
+        "created_at": _("Fecha de creación"),
+        "approved_by": _("Aprobado por"),
+        "approved_at": _("Fecha de aprobación"),
+        "modified_by": _("Modificado por"),
+        "modified_at": _("Fecha de modificación"),
+    }
+    if column in author_labels:
+        return author_labels[column]
     label = _(_COLUMN_LABELS.get(column, column.replace("_", " ").title()))
     if column in _MONEY_COLUMNS and ledger_currency:
         return f"{label} ({ledger_currency})"
@@ -964,8 +979,15 @@ def _empty_financial_report() -> PaginatedReport:
 def _report_to_matrix(report) -> tuple[list[str], list[list[object]]]:
     rows = getattr(report, "rows", [])
     columns = getattr(report, "columns", None) or (list(rows[0].values.keys()) if rows else [])
-    data_rows = [[row.values.get(column) for column in columns] for row in rows]
+    data_rows = [[_spreadsheet_value(row.values.get(column)) for column in columns] for row in rows]
     return columns, data_rows
+
+
+def _spreadsheet_value(value: object) -> object:
+    """Export user-controlled text literally rather than as a spreadsheet formula."""
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + value
+    return value
 
 
 def _pdf_total_rows(report) -> list[list[object]]:
@@ -1182,10 +1204,13 @@ def _compute_display_columns(report, report_code: str, saved_view: str) -> list[
         columns = [column for column in columns if column in selected_columns]
     if report_code == "trial-balance":
         columns = [column for column in columns if column != "level"]
+    required_authors = {"created_by", "created_at", "approved_by", "approved_at"} if _bool_arg("show_users") else set()
     display_columns = [
         column
         for column in columns
-        if any((row.values.get(column) not in (None, "", "—") for row in report.rows)) or column in _ALWAYS_VISIBLE_COLUMNS
+        if any((row.values.get(column) not in (None, "", "—") for row in report.rows))
+        or column in _ALWAYS_VISIBLE_COLUMNS
+        or column in required_authors
     ]
     return display_columns if display_columns else columns
 
@@ -1312,6 +1337,9 @@ def _render_financial_report(
     saved_view: str,
     saved_views: list[str],
 ):
+    from cacao_accounting.document_authorship import report_authorship
+
+    report = report_authorship(report, report_filters.company, _bool_arg("show_users"))
     export_response = _export_financial_report(report, report_code, report_title, report_filters)
     if export_response is not None:
         return export_response
@@ -1394,6 +1422,9 @@ def _render_operational_framework(
     filter_state: dict[str, object],
     context_summary: dict[str, str],
 ):
+    from cacao_accounting.document_authorship import report_authorship
+
+    report = report_authorship(report, str(filter_state.get("company") or ""), _bool_arg("show_users"))
     export_response = _export_operational_report(report, report_code, report_title, filter_state)
     if export_response is not None:
         return export_response

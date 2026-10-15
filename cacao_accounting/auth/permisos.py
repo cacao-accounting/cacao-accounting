@@ -107,6 +107,8 @@ class Permisos:
         self.libro = libro
         self.__init_valido = bool(self.valida_modulo(modulo) and usuario)
         self.usuario_model = database.session.get(User, usuario) if usuario else None
+        if self.usuario_model is None or self.usuario_model.active is False:
+            self.__init_valido = False
         self.roles: list[str] = []
         self.permisos_usuario: list[RolesAccess] = []
         self.administrador = False
@@ -156,7 +158,7 @@ class Permisos:
 
     def obtener_roles_de_usuario(self) -> list[str]:
         """Devuelve una lista con los roles del usuario."""
-        return [rol.role_id for rol in RolesUser.query.filter_by(user_id=self.usuario)]
+        return [rol.role_id for rol in RolesUser.query.filter_by(user_id=self.usuario).filter(RolesUser.active.is_not(False))]
 
     def obtener_id_rol_administrador(self) -> str | None:
         """Devuelve el UUID asignado al rol administrador."""
@@ -171,7 +173,12 @@ class Permisos:
         admin_role_id = self.obtener_id_rol_administrador()
         if not admin_role_id or not self.usuario:
             return False
-        return RolesUser.query.filter_by(role_id=admin_role_id, user_id=self.usuario).first() is not None
+        return (
+            RolesUser.query.filter_by(role_id=admin_role_id, user_id=self.usuario)
+            .filter(RolesUser.active.is_not(False))
+            .first()
+            is not None
+        )
 
     def obtiene_lista_de_permisos(self) -> list[RolesAccess]:
         """Devuelve todos los permisos del usuario para el modulo actual."""
@@ -241,6 +248,7 @@ def cargar_permisos_predeterminados() -> None:
     log.debug("Inicia craga permisos predeterminados.")
     PURCHASING_MANAGER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("purchasing_manager"),
+        approval_rank=3,
         module_id=obtener_id_modulo_por_nombre("purchases"),
         access=True,
         update=True,
@@ -260,6 +268,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     PURCHASING_AUXILIAR = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("purchasing_auxiliar"),
+        approval_rank=2,
         module_id=obtener_id_modulo_por_nombre("purchases"),
         access=True,
         update=True,
@@ -279,6 +288,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     PURCHASING_USER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("purchasing_user"),
+        approval_rank=1,
         module_id=obtener_id_modulo_por_nombre("purchases"),
         access=True,
         update=False,
@@ -298,6 +308,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     ACCOUNTING_MANAGER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("accounting_manager"),
+        approval_rank=3,
         module_id=obtener_id_modulo_por_nombre("accounting"),
         access=True,
         update=True,
@@ -317,6 +328,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     ACCOUNTING_AUXILIAR = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("accounting_auxiliar"),
+        approval_rank=2,
         module_id=obtener_id_modulo_por_nombre("accounting"),
         access=True,
         update=True,
@@ -336,6 +348,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     ACCOUNTING_USER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("accounting_user"),
+        approval_rank=1,
         module_id=obtener_id_modulo_por_nombre("accounting"),
         access=True,
         update=False,
@@ -355,6 +368,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     INVENTORY_MANAGER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("inventory_manager"),
+        approval_rank=3,
         module_id=obtener_id_modulo_por_nombre("inventory"),
         access=True,
         update=True,
@@ -374,6 +388,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     INVENTORY_AUXILIAR = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("inventory_auxiliar"),
+        approval_rank=2,
         module_id=obtener_id_modulo_por_nombre("inventory"),
         access=True,
         update=True,
@@ -393,6 +408,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     INVENTORY_USER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("inventory_user"),
+        approval_rank=1,
         module_id=obtener_id_modulo_por_nombre("inventory"),
         access=True,
         update=False,
@@ -412,6 +428,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     HEAD_OF_TREASURY = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("head_of_treasury"),
+        approval_rank=3,
         module_id=obtener_id_modulo_por_nombre("cash"),
         access=True,
         update=True,
@@ -431,6 +448,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     JUNIOR_OF_TREASURY = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("auxiliar_of_treasury"),
+        approval_rank=2,
         module_id=obtener_id_modulo_por_nombre("cash"),
         access=True,
         update=True,
@@ -450,6 +468,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     USER_OF_TREASURY = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("user_of_treasury"),
+        approval_rank=1,
         module_id=obtener_id_modulo_por_nombre("cash"),
         access=True,
         update=False,
@@ -469,6 +488,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     SALES_MANAGER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("sales_manager"),
+        approval_rank=3,
         module_id=obtener_id_modulo_por_nombre("sales"),
         access=True,
         update=True,
@@ -488,6 +508,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     SALES_AUXILIAR = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("sales_auxiliar"),
+        approval_rank=2,
         module_id=obtener_id_modulo_por_nombre("sales"),
         access=True,
         update=True,
@@ -507,6 +528,7 @@ def cargar_permisos_predeterminados() -> None:
     )
     SALES_USER = RolesAccess(
         rol_id=obtener_id_rol_por_monbre("sales_user"),
+        approval_rank=1,
         module_id=obtener_id_modulo_por_nombre("sales"),
         access=True,
         update=False,
