@@ -78,10 +78,6 @@ MUTABLE_STATE = frozenset(
         "supplier_invoice_key",
         "capitalized_by_id",
         "capitalization_origin_id",
-        "document_no",
-        "naming_series_id",
-        "external_number",
-        "external_counter_id",
         "total_gain",
         "total_loss",
         "processed_documents_count",
@@ -103,6 +99,14 @@ MUTABLE_STATE = frozenset(
         "closed_at",
         "closed_by",
         "close_reason",
+    }
+)
+INITIAL_IDENTIFIERS = frozenset(
+    {
+        "document_no",
+        "naming_series_id",
+        "external_number",
+        "external_counter_id",
     }
 )
 
@@ -285,6 +289,22 @@ def _guard_lifecycle(target: Any) -> None:
         raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
 
 
+def _is_unallowed_flush_change(target: Any, key: str, state: Any) -> bool:
+    """Check if a changed attribute on a posted document violates immutability."""
+    if key in MUTABLE_STATE:
+        return False
+    if key in INITIAL_IDENTIFIERS and _persisted_value(state, key, getattr(target, key)) in (None, ""):
+        return False
+    return True
+
+
+def _guard_posted_flush(session: Session, target: Any, changed: set[str]) -> None:
+    """Validate immutability boundary for dirty or deleted posted documents."""
+    state = inspect(target)
+    if target in session.deleted or any(_is_unallowed_flush_change(target, key, state) for key in changed):
+        raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
+
+
 def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
     """Protect existing evidence and posted document financial values."""
     del flush_context, instances
@@ -312,8 +332,8 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
         ):
             raise ValueError(_("La evidencia de auditoría es inmutable."))
         _guard_lifecycle(target)
-        if _posted(target) and (target in session.deleted or changed.difference(MUTABLE_STATE)):
-            raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
+        if _posted(target):
+            _guard_posted_flush(session, target, changed)
         _guard_line(session, target, changed)
 
 
@@ -390,7 +410,7 @@ def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any
         return
     is_delete = bool(re.search(r'\b(?:DELETE\s+FROM|TRUNCATE)\b', statement, flags=re.IGNORECASE))
     if is_delete and _is_testing_bulk_delete_allowed():
-        protected_evidence = EVIDENCE_TABLES.union({"approval_request"})
+        protected_evidence = EVIDENCE_TABLES.union(LEDGER_TABLES, {"approval_request"})
         if not any(t.lower() in protected_evidence for t in targets):
             return
     protected = EVIDENCE_TABLES.union(LEDGER_TABLES, {"approval_request", "cacao_config"})
@@ -410,7 +430,7 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
         return
     table_name = getattr(clause.table, "name", None)
     if isinstance(clause, Delete) and _is_testing_bulk_delete_allowed():
-        if table_name not in EVIDENCE_TABLES and table_name != "approval_request":
+        if table_name not in EVIDENCE_TABLES and table_name not in LEDGER_TABLES and table_name != "approval_request":
             return
     if table_name in LEDGER_TABLES:
         _guard_ledger_statement(clause, multiparams, params)
