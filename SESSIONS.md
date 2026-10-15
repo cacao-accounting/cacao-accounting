@@ -1,5 +1,22 @@
 # Bitácora de desarrollo
 
+## 2026-10-15 (SOX Cloud — regresión y runner por archivo)
+
+### Correcciones y verificación
+
+- Commit `982f772e` adapta los fixtures y las pruebas afectadas por la autorización explícita de actor en Cloud.
+- La regresión focalizada de controles/auditoría pasó (33 pruebas); cierre fiscal pasó (5 pruebas).
+- El barrido anterior procesó 194 archivos: 188 pasaron. Tres pruebas Playwright dieron `PermissionError` al iniciar
+  Chromium dentro del sandbox; al repetirlas con permisos para el navegador, pasaron las 7 pruebas.
+- `z_forms_data.py`, `z_func.py` y `z_static_routes.py` son utilitarios, no contienen tests. El patrón predeterminado
+  `*` hacía que pytest los ejecutara y devolviera código 5 (`no tests ran`). El runner ahora descubre `test_*.py`
+  recursivamente; `TEST_PATTERN` sigue permitiendo seleccionar patrones explícitos.
+- El runner anterior omitía 16 módulos anidados en `tests/engines` y `tests/imports`. Ejecutados uno por uno: 16 pasaron,
+  2 casos omitidos por sus condiciones de plataforma. Con los archivos superiores y Playwright repetido fuera del
+  sandbox, los 207 módulos reales de test quedaron cubiertos.
+- Black, Flake8, Ruff, pydocstyle y Mypy pasaron. `complexipy` confirmó complejidad máxima 11 en `audit_chain.py`.
+  Pylint no está instalado en `.venv`.
+
 ## 2026-09-04 (QA final de alpha — verificación de flujos de negocio, issues #784-#792)
 
 ### Hallazgos verificados y reproducidos

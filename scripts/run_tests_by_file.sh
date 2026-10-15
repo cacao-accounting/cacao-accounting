@@ -3,7 +3,7 @@
 #
 # Sigue los lineamientos de AGENTS.md:
 #  - No ejecutar toda la suite en una sola corrida.
-#  - Ejecutar los tests test file por test file.
+#  - Ejecutar los tests test file por test file, incluidos subdirectorios.
 #  - Excluir tests/__init__.py y tests/conftest.py.
 #  - Usar siempre .venv para ejecutar las pruebas de calidad.
 #  - No esperar a tener todos los resultados antes de corregir.
@@ -55,10 +55,10 @@ envs=(
     "SECRET_KEY=ASD123kljaAddS"
 )
 
-pattern="${TEST_PATTERN:-*}"
+pattern="${TEST_PATTERN:-test_*}"
 
 mapfile -t test_files < <(
-    find "$TESTS_DIR" -maxdepth 1 -name "$pattern.py" -type f \
+    find "$TESTS_DIR" -name "$pattern.py" -type f \
         ! -name '__init__.py' \
         ! -name 'conftest.py' | sort
 )
