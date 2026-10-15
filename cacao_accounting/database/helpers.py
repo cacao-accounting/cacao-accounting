@@ -127,6 +127,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             log.info("Esquema de base de datos creado correctamente.")
             _ensure_stock_valuation_layer_batch_column()
             _ensure_purchase_line_version_columns()
+            _ensure_audit_trail_hash_version_column()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -691,3 +692,32 @@ def _ensure_purchase_line_version_columns() -> None:
     except Exception as exc:
         database.session.rollback()
         log.warning("Could not ensure purchase line version columns during initialization: {}", exc)
+
+
+def _ensure_audit_trail_hash_version_column() -> None:
+    """Suple idempotentemente ``audit_trail.hash_version`` en esquemas existentes.
+
+    La cadena de hashes de auditoría v2 ata la identidad de la fila al
+    payload; ``create_all`` crea la columna en esquemas nuevos y esta rutina
+    la agrega sin migración formal en bases existentes, dejando ``NULL`` en
+    las filas heredadas que se verifican con el formato v1.
+    """
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        from cacao_accounting.database import AuditTrail
+
+        inspector = sa_inspect(database.engine)
+        if not inspector.has_table(AuditTrail.__tablename__):
+            return
+        columns = {column["name"] for column in inspector.get_columns(AuditTrail.__tablename__)}
+        if "hash_version" in columns:
+            return
+        database.session.execute(database.text("ALTER TABLE audit_trail ADD COLUMN hash_version INTEGER"))
+        database.session.commit()
+        log.info("Columna hash_version agregada a audit_trail.")
+    except (OperationalError, ProgrammingError, InterfaceError):
+        database.session.rollback()
+    except Exception as exc:
+        database.session.rollback()
+        log.warning("Could not ensure audit_trail.hash_version during initialization: {}", exc)

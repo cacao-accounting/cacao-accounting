@@ -134,3 +134,50 @@ def test_legacy_rows_without_hash_are_tolerated(app_ctx):
     chained = [row for row in _rows() if row.payload_hash is not None]
     assert len(chained) == 1
     assert verify_audit_trail_chain() == []
+
+
+def test_new_rows_are_versioned_with_row_identity(app_ctx):
+    """El hash v2 incluye la identidad de la fila y la versión queda estampada."""
+    from cacao_accounting.audit_chain import CHAIN_HASH_VERSION
+
+    log_create({"id": "doc1", "document_type": "test", "company_id": "co"})
+    database.session.commit()
+    rows = _rows()
+    assert all(row.hash_version == CHAIN_HASH_VERSION for row in rows)
+    # La identidad de fila es parte del payload: la misma evidencia con otro id
+    # produce un hash distinto, atando la fila a su posición.
+    a = rows[0]
+    clone = AuditTrail(
+        id="01ARZ3NDEKTSV4RRFFQ69G5FAV-C",
+        document_type=a.document_type,
+        document_id=a.document_id,
+        action=a.action,
+        timestamp=a.timestamp,
+        hash_version=CHAIN_HASH_VERSION,
+    )
+    assert compute_payload_hash(a) != compute_payload_hash(clone)
+
+
+def test_legacy_v1_rows_are_verified_with_legacy_format(app_ctx):
+    """Filas v1 (hash_version NULL) se verifican sin re-escribir datos."""
+    legacy = AuditTrail(document_type="legacy", document_id="old", action="created")
+    database.session.add(legacy)
+    database.session.flush()
+    legacy.prev_hash = None
+    legacy.hash_version = None
+    legacy.payload_hash = compute_payload_hash(legacy, version=1)
+    database.session.commit()
+    assert verify_audit_trail_chain() == []
+
+
+def test_swapped_row_identity_is_detected_in_v2(app_ctx):
+    """Mover una fila v2 a otra posición (otro id) rompe su hash payload."""
+    log_create({"id": "doc1", "document_type": "test", "company_id": "co"})
+    database.session.commit()
+    row = _rows()[0]
+    database.session.connection().execute(
+        text("UPDATE audit_trail SET id = '01ARZ3NDEKTSV4RRFFQ69G5FAV-X' WHERE id = :id"), {"id": row.id}
+    )
+    database.session.expire_all()
+    findings = verify_audit_trail_chain()
+    assert findings and findings[0]["finding"] == "payload_tampered"

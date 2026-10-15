@@ -32,7 +32,9 @@ from typing import Any
 from cacao_accounting.database import AuditTrail, database, obtiene_texto_unico
 
 _HASH_LENGTH = 64
-_CHAIN_FIELDS = (
+# v1 (filas heredadas): el payload no ata la identidad de la propia fila, por
+# lo que una fila movida a otra posición queda indistinguible. v2 la incluye.
+V1_FIELDS = (
     "document_type",
     "document_id",
     "document_no",
@@ -49,6 +51,11 @@ _CHAIN_FIELDS = (
     "user_agent",
     "timestamp",
 )
+CHAIN_HASH_VERSION = 2
+_V2_FIELDS = ("id",) + V1_FIELDS
+
+# Alias histórico compatibles con lecturas del módulo originales.
+_CHAIN_FIELDS = V1_FIELDS
 
 
 def _canonical_timestamp(value: Any) -> Any:
@@ -64,12 +71,40 @@ def _canonical_timestamp(value: Any) -> Any:
     return value
 
 
-def compute_payload_hash(source: Any) -> str:
-    """Devuelve el hash SHA-256 del contenido canónico de una fila de auditoría."""
+def _hash_fields(version: int | None) -> tuple[str, ...]:
+    """Select the canonical field set for the chain hash version."""
+    return _V2_FIELDS if version == CHAIN_HASH_VERSION else V1_FIELDS
+
+
+def _row_hash_version(source: Any, explicit: int | None) -> int | None:
+    """Resolve the hash version for a row: explicit > stored > legacy (v1).
+
+    Las filas nuevas fijan ``hash_version=2`` al momento de estampar; las
+    filas heredadas sin columna quedan verificadas con el formato v1, de
+    modo que la estrategia es compatible con datos existentes.
+    """
+    if explicit is not None:
+        return explicit
     if isinstance(source, Mapping):
-        raw = {name: source.get(name) for name in _CHAIN_FIELDS}
+        value = source.get("hash_version")
     else:
-        raw = {name: getattr(source, name, None) for name in _CHAIN_FIELDS}
+        value = getattr(source, "hash_version", None)
+    return value
+
+
+def compute_payload_hash(source: Any, *, version: int | None = None) -> str:
+    """Devuelve el hash SHA-256 del contenido canónico de una fila de auditoría.
+
+    ``version=2`` (filas nuevas) incluye la identidad de fila en el payload; la
+    versión se resuelve de la fila misma para verificar datos existentes sin
+    re-escribirlos.
+    """
+    resolved = _row_hash_version(source, version)
+    fields = _hash_fields(resolved)
+    if isinstance(source, Mapping):
+        raw = {name: source.get(name) for name in fields}
+    else:
+        raw = {name: getattr(source, name, None) for name in fields}
     payload = _canonical_timestamp(raw["timestamp"]) if raw["timestamp"] is not None else None
     canonical = dict(raw, timestamp=payload)
     rendered = json.dumps(canonical, sort_keys=True, default=str, ensure_ascii=False)
@@ -91,6 +126,7 @@ def stamp_audit_values(connection: Any, values: dict[str, Any]) -> dict[str, Any
     values.setdefault("id", obtiene_texto_unico())
     if values.get("timestamp") is None:
         values["timestamp"] = datetime.now(timezone.utc)
+    values["hash_version"] = CHAIN_HASH_VERSION
     values["prev_hash"] = _last_chain_hash(connection)
     values["payload_hash"] = compute_payload_hash(values)
     return values
@@ -110,6 +146,7 @@ def stamp_audit_entry(connection: Any, entry: Any) -> None:
         entry.id = obtiene_texto_unico()
     if entry.timestamp is None:
         entry.timestamp = datetime.now(timezone.utc)
+    entry.hash_version = CHAIN_HASH_VERSION
     entry.prev_hash = _last_chain_hash(connection)
     entry.payload_hash = compute_payload_hash(entry)
 
@@ -134,6 +171,7 @@ def chain_pending_rows(session: Any) -> None:
     tail = _last_chain_hash(session.connection())
     for row in sorted(pending, key=lambda target: str(target.id)):
         row.prev_hash = tail
+        row.hash_version = CHAIN_HASH_VERSION
         row.payload_hash = compute_payload_hash(row)
         tail = row.payload_hash
 
@@ -143,7 +181,10 @@ def verify_audit_trail_chain() -> list[dict[str, str]]:
 
     Requiere app context. Devuelve ``[]`` si la cadena es íntegra. Excluye las
     filas previas al despliegue del mecanismo (``payload_hash`` nulo) porque
-    forman la cola heredada sobre la que inicia la cadena.
+    forman la cola heredada sobre la que inicia la cadena. Las filas v1 se
+    recalculan con su formato heredado (sin identidad de fila); las v2 atan la
+    identidad de la fila a su contenido, así que mover una fila a otra posición
+    o duplicar su payload queda detectado.
     """
     rows = database.session.scalars(database.select(AuditTrail).order_by(AuditTrail.id.asc())).all()
     issues: list[dict[str, str]] = []
@@ -151,7 +192,8 @@ def verify_audit_trail_chain() -> list[dict[str, str]]:
     for row in rows:
         if row.payload_hash is None:
             continue
-        if compute_payload_hash(row) != row.payload_hash:
+        expected_version = row.hash_version if row.hash_version is not None else None
+        if compute_payload_hash(row, version=expected_version) != row.payload_hash:
             issues.append({"row": str(row.id), "finding": "payload_tampered"})
         if expected_prev is None:
             if row.prev_hash is not None:

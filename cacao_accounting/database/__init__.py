@@ -5534,6 +5534,7 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
     user_agent = database.Column(database.String(512), nullable=True)
     prev_hash = database.Column(database.String(64), nullable=True)
     payload_hash = database.Column(database.String(64), nullable=True)
+    hash_version = database.Column(database.Integer(), nullable=True)
 
 
 class EmailQueue(database.Model, BaseTabla):  # type: ignore[name-defined]
