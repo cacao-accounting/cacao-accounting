@@ -323,3 +323,21 @@ def test_config_view_saves_overrides_and_unblocks_report(efe_app) -> None:
     csv_export = client.get(f"{report_url}&export=csv")
     assert csv_export.status_code == 200
     assert "text/csv" in csv_export.headers["Content-Type"]
+
+
+def test_config_link_badge_is_operational_for_admin(efe_app) -> None:
+    """El enlace de clasificación EFE no debe mostrarse como solo visualización para un admin."""
+    from cacao_accounting.database import User, database
+
+    user = database.session.execute(database.select(User).filter_by(user="efe-user")).scalar_one()
+    client = efe_app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user.id
+        session["_fresh"] = True
+
+    response = client.get("/accounting/")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    row = html.split("/accounting/cash-flow-config", maxsplit=1)[1].split("</li>", maxsplit=1)[0]
+    assert 'data-status="ok"' in row
+    assert "ca-status-view-only" not in row

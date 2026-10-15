@@ -194,7 +194,7 @@
       </li>
       <li>
         <a href="{{ url_for('contabilidad.cash_flow_config') }}">{{ _("Clasificación EFE") }}</a>
-        {{ macros.module_status_badge(module_badge(access=acceso, required='accounting')) }}
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
