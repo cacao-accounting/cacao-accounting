@@ -5484,7 +5484,7 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
     document_no = database.Column(database.String(100), nullable=True, index=True)
     company = database.Column(
         database.String(10),
-        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )

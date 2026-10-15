@@ -17,6 +17,7 @@ from cacao_accounting.cache import invalidate_cache
 from cacao_accounting.config import TESTING_MODE, configuracion
 from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 from cacao_accounting.database import (
+    AuditTrail,
     Entity,
     CompanyParty,
     Modules,
@@ -100,7 +101,6 @@ def app():
         database.session.commit()
     yield application
     with application.app_context():
-        database.session.execute(delete(AuditTrail))
         database.session.execute(delete(CompanyParty).where(CompanyParty.company.in_(["COMP-A", "COMP-B"])))
         database.session.execute(delete(Party).where(Party.id.in_(["CACHE-PARTY-A", "CACHE-PARTY-B"])))
         database.session.execute(delete(UserCompanyAccess))
