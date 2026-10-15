@@ -55,8 +55,10 @@ El sistema es:
   unidades de medida, factores de conversión, etc.
 - **Política append-only:** no se borran filas de evidencia (GL/Stock/AR-AP/subledger) ni se reescriben sus
   cifras; la corrección va por contra-asientos. Cambiar estado lógico o saldos derivados (`outstanding_amount`,
-  `unallocated_amount`, `status`, `is_cancelled`) NO viola el principio y puede seguir mutándose en los flujos
-  de pago y conciliación.
+  `unallocated_amount`, `status`) NO viola el principio y puede seguir mutándose en los flujos
+  de pago y conciliación. La cancelación (`is_cancelled`) es monotónica: solo va de `False` a `True`; una
+  línea del ledger cancelada queda bajo lápida de forma permanente y nunca se reactiva, toda corrección
+  requiere una nueva línea append-only.
 
 # Soporte de bases de datos:
 
