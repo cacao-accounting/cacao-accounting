@@ -181,3 +181,50 @@ def test_swapped_row_identity_is_detected_in_v2(app_ctx):
     database.session.expire_all()
     findings = verify_audit_trail_chain()
     assert findings and findings[0]["finding"] == "payload_tampered"
+
+
+def test_audit_verify_cli_command(app_ctx, tmp_path, monkeypatch):
+    """cacaoctl audit-verify: exit 0 íntegra, exit 1 con hallazgos."""
+    import click
+
+    from cacao_accounting.config import configuracion
+
+    sqlite_file = tmp_path / "audit_verify.db"
+    uri = f"sqlite:///{sqlite_file}"
+    originals = {key: configuracion.get(key) for key in ("SQLALCHEMY_DATABASE_URI", "TESTING", "INTERNAL_CONTROLS_ENFORCE")}
+    runner = click.testing.CliRunner()
+    try:
+        configuracion["SQLALCHEMY_DATABASE_URI"] = uri
+        configuracion["TESTING"] = True
+        configuracion["INTERNAL_CONTROLS_ENFORCE"] = False
+
+        from cacao_accounting.cli import linea_comandos
+        from cacao_accounting.cli import _obtener_aplicacion
+
+        app = _obtener_aplicacion()
+        with app.app_context():
+            database.create_all()
+            database.session.commit()
+            database.engine.dispose()
+
+        assert runner.invoke(linea_comandos, ["audit-verify"]).exit_code == 0
+
+        app = _obtener_aplicacion()
+        with app.app_context():
+            database.create_all()
+            log_create({"id": "doc", "document_type": "test", "company_id": "co"})
+            database.session.commit()
+            database.session.connection().execute(text("UPDATE audit_trail SET actor_name = 'fake'"))
+            database.session.commit()
+            database.engine.dispose()
+
+        tampered = runner.invoke(linea_comandos, ["audit-verify"])
+        assert tampered.exit_code == 1
+        tolerant = runner.invoke(linea_comandos, ["audit-verify", "--no-fail-on-findings"])
+        assert tolerant.exit_code == 0
+    finally:
+        for key, value in originals.items():
+            if value is None:
+                configuracion.pop(key, None)
+            else:
+                configuracion[key] = value

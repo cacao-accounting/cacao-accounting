@@ -18,6 +18,41 @@ apparent fork; SQLite is unaffected. Database-level immutability (see the
 PostgreSQL grants below) remains the primary tamper protection; the hash chain
 is the detection layer.
 
+Since Cacao 20261015 the hash (chain version 2) includes the row's own ULID in
+the canonical payload, so duplicating a row's payload at another position is
+detected. Rows stamped before the feature carry `hash_version NULL` and are
+verified with the legacy format; no historical data is rewritten.
+
+Concurrent PostgreSQL writer forks are not yet serialized; see issue #926 for
+the hardening roadmap.
+
+### Operational verification
+
+`cacaoctl audit-verify` runs `verify_audit_trail_chain()` against the active
+database and reports findings (`payload_tampered`, `chain_break`) with the row
+id and exits 1 when findings exist. It is intended to be wired as a periodic
+job (cron/systemd timer/scheduler) plus monitoring, so missing execution is
+alerted as well:
+
+```cron
+# every 30 minutes; the command exits 1 when findings exist.
+*/30 * * * * cacaoctl audit-verify || alert-audit-chain
+```
+
+Response playbook when the command reports findings:
+
+1. Freeze access that could rewrite `audit_trail` (restrict the runtime role,
+   block application instances against the database).
+2. Take a full backup before any repair attempt; never edit rows in place.
+3. Verify whether `document_type`/`document_id` referenced rows are missing
+   (`chain_break` usually means a row was deleted in the middle of the chain).
+4. Compare `before_json`/`after_json` of the surrounding rows to establish the
+   real sequence; use the healthy tail (rows with `payload_hash NULL`) as
+   anchor.
+5. Escalate to an incident review per the data-integrity policy. Detection is
+   the contract of the command; the application never rehashes historical
+   rows.
+
 Automated services should wrap work in
 `with audit_actor(user_id=None, name="job:exchange-import"):` from
 `internal_control_service`. Without an authenticated or explicit actor, automatic

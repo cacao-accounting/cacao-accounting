@@ -563,3 +563,48 @@ completion.group = "System"  # type: ignore[attr-defined]
 def linea_comandos_main(as_module: bool = False) -> None:  # pragma: no cover
     """Ejecuta la linea de comandos con identidad propia de Cacao Accounting."""
     linea_comandos.main(prog_name=NOMBRE_PROGRAMA, args=sys.argv[1:])
+
+
+@linea_comandos.command(
+    name="audit-verify",
+    help=_("Verifica la cadena de hashes del audit_trail (idempotente)."),
+)
+@click.option(
+    "--fail-on-findings/--no-fail-on-findings",
+    "fail_on_findings",
+    default=True,
+    show_default=True,
+    help=_("Termina con error si la verificación produce hallazgos."),
+)
+def audit_verify(fail_on_findings: bool) -> None:
+    """Verifica operativamente la integridad del rastro de auditoría.
+
+    Recalcula los hashes del ``audit_trail`` y valida el enlazado de la
+    cadena; es el comando pensado para una tarea periódica o el monitoreo de
+    despliegues: reporta cada hallazgo a stderr, resalta el total y devuelve
+    código de error (1) cuando hay hallazgos si ``--fail-on-findings`` está
+    activo, de modo que un job programado o el healthcheck generen la alerta
+    observable que exige el control de integridad.
+    """
+    from cacao_accounting.audit_chain import verify_audit_trail_chain
+
+    app = _obtener_aplicacion()
+    with app.app_context():
+        hallazgos = verify_audit_trail_chain()
+    if not hallazgos:
+        _mensaje_exito(_("La cadena de auditoría es íntegra."))
+        return
+    for hallazgo in hallazgos:
+        click.echo(
+            _("%(row)s : %(finding)s") % {"row": hallazgo["row"].ljust(30), "finding": hallazgo["finding"]},
+            err=fail_on_findings,
+        )
+    click.echo(
+        _("La verificación produjo %(total)s hallazgos; revise el rastro de auditoría.") % {"total": len(hallazgos)},
+        err=fail_on_findings,
+    )
+    if fail_on_findings:
+        raise click.exceptions.Exit(1)
+
+
+audit_verify.group = "System"  # type: ignore[attr-defined]
