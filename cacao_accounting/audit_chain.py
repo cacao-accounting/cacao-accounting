@@ -116,6 +116,35 @@ def _last_chain_hash(connection: Any) -> str | None:
     return connection.execute(database.select(AuditTrail.payload_hash).order_by(AuditTrail.id.desc()).limit(1)).scalar()
 
 
+def _serialize_chain_head(connection: Any) -> None:
+    """Serializa escritores concurrentes del encabezado de la cadena.
+
+    En PostgreSQL dos transacciones pueden leer el mismo ``prev_hash`` y
+    aterrizar con enlaces cruzados (fork cuyo reporte es un falso positivo en
+    la verificación; nada malicioso pero ruidoso). Tomando el bloqueo de fila
+    sobre la cabeza vigente, el segundo escritor espera hasta el COMMIT del
+    primero y lee el ``prev_hash`` correcto. La rutina es no-op en otros
+    motores: SQLite es escritor único y MySQL/MariaDB no aplican el bloqueo
+    con el mismo orden de lectura que PostgreSQL.
+    """
+    dialect = getattr(getattr(connection, "dialect", None), "name", "")
+    if dialect != "postgresql":
+        return
+    connection.execute(
+        database.select(AuditTrail.id)
+        .where(AuditTrail.payload_hash.is_not(None))
+        .order_by(AuditTrail.id.desc())
+        .limit(1)
+        .with_for_update()
+    ).all()
+
+
+def _chain_head_after_lock(connection: Any) -> str | None:
+    """Devuelve el ``payload_hash`` de la cabeza esperando el bloqueo previo."""
+    _serialize_chain_head(connection)
+    return _last_chain_hash(connection)
+
+
 def stamp_audit_values(connection: Any, values: dict[str, Any]) -> dict[str, Any]:
     """Adjunta la cadena de hashes a un INSERT Core contra ``audit_trail``.
 
@@ -127,7 +156,7 @@ def stamp_audit_values(connection: Any, values: dict[str, Any]) -> dict[str, Any
     if values.get("timestamp") is None:
         values["timestamp"] = datetime.now(timezone.utc)
     values["hash_version"] = CHAIN_HASH_VERSION
-    values["prev_hash"] = _last_chain_hash(connection)
+    values["prev_hash"] = _chain_head_after_lock(connection)
     values["payload_hash"] = compute_payload_hash(values)
     return values
 
@@ -147,7 +176,7 @@ def stamp_audit_entry(connection: Any, entry: Any) -> None:
     if entry.timestamp is None:
         entry.timestamp = datetime.now(timezone.utc)
     entry.hash_version = CHAIN_HASH_VERSION
-    entry.prev_hash = _last_chain_hash(connection)
+    entry.prev_hash = _chain_head_after_lock(connection)
     entry.payload_hash = compute_payload_hash(entry)
 
 
@@ -168,7 +197,7 @@ def chain_pending_rows(session: Any) -> None:
             row.id = obtiene_texto_unico()
         if row.timestamp is None:
             row.timestamp = datetime.now(timezone.utc)
-    tail = _last_chain_hash(session.connection())
+    tail = _chain_head_after_lock(session.connection())
     for row in sorted(pending, key=lambda target: str(target.id)):
         row.prev_hash = tail
         row.hash_version = CHAIN_HASH_VERSION

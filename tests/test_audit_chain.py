@@ -228,3 +228,53 @@ def test_audit_verify_cli_command(app_ctx, tmp_path, monkeypatch):
                 configuracion.pop(key, None)
             else:
                 configuracion[key] = value
+
+
+def test_concurrent_writers_are_serialized_on_postgresql(app_ctx):
+    """Escritores concurrentes en PG no producen fork aparente de la cadena."""
+    import os
+    import threading
+    from datetime import datetime, timezone
+
+    from cacao_accounting.audit_chain import stamp_audit_values
+    from cacao_accounting.database import obtiene_texto_unico
+
+    url = os.environ.get("CACAO_DATABASE_URL") or os.environ.get("CACAO_DB") or os.environ.get("DATABASE_URL") or ""
+    engine_name = app_ctx.config["SQLALCHEMY_DATABASE_URI"]
+    if not str(engine_name).startswith("postgresql") and not url.split("://")[0].startswith("postgres"):
+        pytest.skip("La serialización de la cadena es específica de PostgreSQL.")
+
+    def worker(index: int) -> None:
+        with app_ctx.app_context():
+            connection = database.engine.connect()
+            try:
+                with connection.begin():
+                    values = {
+                        "id": obtiene_texto_unico(),
+                        "document_type": "concurrency_probe",
+                        "document_id": str(index),
+                        "action": "created",
+                        "timestamp": datetime.now(timezone.utc),
+                    }
+                    stamp_audit_values(connection, values)
+                    connection.execute(AuditTrail.__table__.insert().values(**values))
+            finally:
+                connection.close()
+
+    threads = [threading.Thread(target=worker, args=(index,)) for index in (1, 2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+    assert all(not thread.is_alive() for thread in threads)
+    database.session.expire_all()
+    rows = [
+        row
+        for row in database.session.scalars(
+            database.select(AuditTrail).filter_by(document_type="concurrency_probe").order_by(AuditTrail.id.asc())
+        )
+    ]
+    assert len(rows) == 2
+    assert rows[0].payload_hash is not None and rows[1].payload_hash is not None
+    assert rows[0].payload_hash != rows[1].payload_hash
+    assert rows[1].prev_hash == rows[0].payload_hash
