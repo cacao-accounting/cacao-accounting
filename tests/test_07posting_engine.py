@@ -5781,3 +5781,301 @@ def test_late_two_way_invoice_amounts_excludes_future_invoices(app_ctx):
     assert amounts["ITEM-A"] == Decimal("50.00")
     assert "ITEM-B" not in amounts
     assert _purchase_invoice_has_receipt(invoice_future, "cacao") is True
+
+
+def test_purchase_invoice_match_failed_blocks_posting(app_ctx):
+    """Fail-closed: la conciliación MATCH_FAILED impide contabilizar la factura."""
+    from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
+    from cacao_accounting.contabilidad.posting_service import post_purchase_invoice
+    from cacao_accounting.contabilidad.posting_service import PostingError
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        GLEntry,
+        Item,
+        PartyAccount,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        PurchaseMatchingConfig,
+        PurchaseReconciliation,
+        StockLedgerEntry,
+        UOM,
+        Warehouse,
+        database,
+    )
+
+    seed_matching_config_for_company("cacao")
+    seedconfig = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company="cacao")).scalar_one()
+    seedconfig.bridge_account_required = False
+    payable = Accounts(
+        entity="cacao",
+        code="AP-GR9",
+        name="CXP",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="payable",
+    )
+    expense = Accounts(
+        entity="cacao",
+        code="EXP-GR9",
+        name="Gasto",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    database.session.add_all([payable, expense])
+    database.session.flush()
+    database.session.add_all(
+        [
+            PartyAccount(party_id="SUPP-GR9", company="cacao", payable_account_id=payable.id),
+            CompanyDefaultAccount(company="cacao", default_expense=expense.id),
+            UOM(code="EA", name="Each"),
+            Item(code="ITEM-GR9", name="Item GR9", item_type="goods", is_stock_item=True, default_uom="EA"),
+            Warehouse(code="WH-GR9", name="Bodega GR9", company="cacao"),
+        ]
+    )
+    database.session.flush()
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        supplier_id="SUPP-GR9",
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ITEM-GR9",
+            qty=Decimal("2"),
+            qty_in_base_uom=Decimal("2"),
+            uom="EA",
+            rate=Decimal("5.00"),
+            amount=Decimal("10.00"),
+            warehouse="WH-GR9",
+        )
+    )
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                debit=Decimal("10"),
+                credit=Decimal("0"),
+                voucher_type="purchase_receipt",
+                voucher_id=receipt.id,
+            ),
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-GR9",
+                warehouse="WH-GR9",
+                company="cacao",
+                qty_change=Decimal("2"),
+                qty_after_transaction=Decimal("2"),
+                valuation_rate=Decimal("5.00"),
+                stock_value_difference=Decimal("10"),
+                stock_value=Decimal("10"),
+                voucher_type="purchase_receipt",
+                voucher_id=receipt.id,
+            ),
+        ]
+    )
+    database.session.flush()
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        supplier_id="SUPP-GR9",
+        purchase_receipt_id=receipt.id,
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+        total=Decimal("15.00"),
+        grand_total=Decimal("15.00"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-GR9",
+            qty=Decimal("3"),
+            uom="EA",
+            rate=Decimal("5.00"),
+            amount=Decimal("15.00"),
+            warehouse="WH-GR9",
+        )
+    )
+    database.session.commit()
+
+    with pytest.raises(PostingError, match="discrepancias"):
+        post_purchase_invoice(invoice)
+    database.session.rollback()
+    database.session.expire_all()
+    posted = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="purchase_invoice", voucher_id=invoice.id))
+        .scalars()
+        .all()
+    )
+    assert posted == [], "La factura disputada no debe dejar asientos en el GL"
+    recon = (
+        database.session.execute(database.select(PurchaseReconciliation).filter_by(purchase_invoice_id=invoice.id))
+        .scalars()
+        .all()
+    )
+    assert recon == []
+
+
+def test_purchase_invoice_match_ok_posts_normally(app_ctx):
+    """Con matching tolerable, la factura contabiliza de forma normal."""
+    from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
+    from cacao_accounting.contabilidad.posting_service import post_purchase_invoice
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        GLEntry,
+        Item,
+        PartyAccount,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        PurchaseMatchingConfig,
+        StockLedgerEntry,
+        UOM,
+        Warehouse,
+        database,
+    )
+
+    seed_matching_config_for_company("cacao")
+    seedconfig = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company="cacao")).scalar_one()
+    seedconfig.bridge_account_required = False
+    payable = Accounts(
+        entity="cacao",
+        code="AP-GR9",
+        name="CXP",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="payable",
+    )
+    expense = Accounts(
+        entity="cacao",
+        code="EXP-GR9",
+        name="Gasto",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    bridge = Accounts(
+        entity="cacao",
+        code="BR-GR9",
+        name="Puente GR/IR",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="bridge",
+    )
+    database.session.add_all([payable, expense, bridge])
+    database.session.flush()
+    database.session.add_all(
+        [
+            PartyAccount(party_id="SUPP-GR9", company="cacao", payable_account_id=payable.id),
+            CompanyDefaultAccount(company="cacao", default_expense=expense.id, bridge_account_id=bridge.id),
+            UOM(code="EA", name="Each"),
+            Item(code="ITEM-GR9", name="Item GR9", item_type="goods", is_stock_item=True, default_uom="EA"),
+            Warehouse(code="WH-GR9", name="Bodega GR9", company="cacao"),
+        ]
+    )
+    database.session.flush()
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        supplier_id="SUPP-GR9",
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ITEM-GR9",
+            qty=Decimal("2"),
+            qty_in_base_uom=Decimal("2"),
+            uom="EA",
+            rate=Decimal("5.00"),
+            amount=Decimal("10.00"),
+            warehouse="WH-GR9",
+        )
+    )
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                debit=Decimal("10"),
+                credit=Decimal("0"),
+                voucher_type="purchase_receipt",
+                voucher_id=receipt.id,
+            ),
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-GR9",
+                warehouse="WH-GR9",
+                company="cacao",
+                qty_change=Decimal("2"),
+                qty_after_transaction=Decimal("2"),
+                valuation_rate=Decimal("5.00"),
+                stock_value_difference=Decimal("10"),
+                stock_value=Decimal("10"),
+                voucher_type="purchase_receipt",
+                voucher_id=receipt.id,
+            ),
+        ]
+    )
+    database.session.flush()
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        supplier_id="SUPP-GR9",
+        purchase_receipt_id=receipt.id,
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+        total=Decimal("10.00"),
+        grand_total=Decimal("10.00"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-GR9",
+            qty=Decimal("2"),
+            uom="EA",
+            rate=Decimal("5.00"),
+            amount=Decimal("10.00"),
+            warehouse="WH-GR9",
+        )
+    )
+    database.session.commit()
+
+    post_purchase_invoice(invoice)
+    posted = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="purchase_invoice", voucher_id=invoice.id))
+        .scalars()
+        .all()
+    )
+    assert posted

@@ -3884,12 +3884,13 @@ def _validate_purchase_receipt_for_reconciliation(document: PurchaseInvoice, pur
 
 def _record_purchase_reconciliation(document: PurchaseInvoice, matched_amount: Decimal) -> None:
     from cacao_accounting.compras.purchase_reconciliation_service import (
+        MatchingResult,
         PurchaseReconciliationError,
         get_matching_config,
         reconcile_purchase_invoice,
     )
 
-    _ = matched_amount
+    del matched_amount  # Parámetro historico ya no usado por la conciliación.
     if document.is_return or getattr(document, "document_type", None) in {"purchase_credit_note", "purchase_debit_note"}:
         return
     config = get_matching_config(str(document.company))
@@ -3900,13 +3901,19 @@ def _record_purchase_reconciliation(document: PurchaseInvoice, matched_amount: D
         return
 
     try:
-        reconcile_purchase_invoice(document.id)
+        result = reconcile_purchase_invoice(document.id)
         if isinstance(document, PurchaseInvoice) and getattr(document, "purchase_receipt_id", None):
             from cacao_accounting.compras.purchase_reconciliation_service import allocate_purchase_invoice_receipt_lines
 
             allocate_purchase_invoice_receipt_lines(document.purchase_receipt_id, document.id)
     except PurchaseReconciliationError as exc:
         raise PostingError(str(exc)) from exc
+    if result.matching_result == MatchingResult.MATCH_FAILED.value:
+        # Fail-closed: la factura en desacuerdo (cantidad/importe fuera de la
+        # tolerancia) no contabiliza; si entrara al GL, AP/AR e inventario
+        # dejarían de reconciliar contra el ledger financiero y el pago podría
+        # avanzar sin resolver la discrepancia. Corregir y conciliar de nuevo.
+        raise PostingError(_("La conciliación falló; corrija las discrepancias antes de contabilizar."))
 
 
 def _restored_source_layer_id(movement: StockLedgerEntry) -> str | None:

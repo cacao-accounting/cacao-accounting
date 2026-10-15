@@ -18883,6 +18883,10 @@ msgstr "Ledger lines are immutable; use an append-only reversal."
 msgid "Las líneas del ledger no se pueden eliminar; use una reversa."
 msgstr "Ledger lines cannot be deleted; use a reversal."
 
+#: cacao_accounting/contabilidad/posting_service.py:3916
+msgid "La conciliación falló; corrija las discrepancias antes de contabilizar."
+msgstr "Reconciliation failed; resolve the discrepancies before posting."
+
 #: cacao_accounting/database/__init__.py:3877
 msgid "Los montos bancarios no pueden ser negativos."
 msgstr "Bank amounts cannot be negative."
