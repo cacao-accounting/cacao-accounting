@@ -72,7 +72,13 @@ class PrintService:
         template: PrintTemplate | None = None
         try:
             context = self._build_context(document_type, document_id, user, company_code, sample)
-            template = self.resolve_template(document_type, company_code, template_id, allow_draft=sample)
+            template = self.resolve_template(
+                document_type,
+                company_code,
+                template_id,
+                allow_draft=sample,
+                bank_account_id=self._template_bank_account_id(document_type, context),
+            )
             rendered_body = self.env.from_string(template.template_body).render(**context)
             html = self.build_print_html(
                 rendered_body,
@@ -114,7 +120,12 @@ class PrintService:
         template: PrintTemplate | None = None
         try:
             context = self._build_context(document_type, document_id, user, company_code, sample=False)
-            template = self.resolve_template(document_type, company_code, template_id)
+            template = self.resolve_template(
+                document_type,
+                company_code,
+                template_id,
+                bank_account_id=self._template_bank_account_id(document_type, context),
+            )
             rendered_body = self.env.from_string(template.template_body).render(**context)
             html_string = self.build_print_html(rendered_body, template.stylesheet_body)
             pdf = HTML(string=html_string, base_url=self._base_url()).write_pdf()
@@ -194,8 +205,15 @@ class PrintService:
         company_code: str,
         template_id: str | int | None = None,
         allow_draft: bool = False,
+        bank_account_id: str | None = None,
     ) -> PrintTemplate:
-        """Resolve a published template by explicit id, company default or global default."""
+        """Resolve a published template by explicit id, bank-account default, company default or global default.
+
+        Cuando ``bank_account_id`` esta definido (por ejemplo el cheque de una
+        cuenta bancaria especifica) se prioriza el formato predeterminado para
+        esa cuenta, permitiendo que cada institucion bancaria use su propio
+        formato de cheque.
+        """
         if get_printable_document(document_type) is None:
             raise PrintTemplateNotFoundError(
                 _("Document type %(document_type)s is not registered.") % {"document_type": document_type}
@@ -203,12 +221,9 @@ class PrintService:
         if template_id:
             return self._resolve_template_by_id(document_type, company_code, template_id, allow_draft)
 
-        company_default = self._default_template(document_type, company_code)
-        if company_default is not None:
-            return company_default
-        global_default = self._default_template(document_type, None)
-        if global_default is not None:
-            return global_default
+        resolved = self._resolve_published_default(document_type, company_code, bank_account_id)
+        if resolved is not None:
+            return resolved
 
         # A desktop database may have been created after the application
         # factory attempted to seed printing, while its tables did not yet
@@ -216,15 +231,35 @@ class PrintService:
         from cacao_accounting.printing.seed import seed_print_templates
 
         seed_print_templates()
-        company_default = self._default_template(document_type, company_code)
-        if company_default is not None:
-            return company_default
-        global_default = self._default_template(document_type, None)
-        if global_default is not None:
-            return global_default
+        resolved = self._resolve_published_default(document_type, company_code, bank_account_id)
+        if resolved is not None:
+            return resolved
         raise PrintTemplateNotFoundError(
             _("No published template found for %(document_type)s.") % {"document_type": document_type}
         )
+
+    def _resolve_published_default(
+        self,
+        document_type: str,
+        company_code: str,
+        bank_account_id: str | None = None,
+    ) -> PrintTemplate | None:
+        """Resolve the published default template for a bank account, company or global scope."""
+        if bank_account_id:
+            bank_default = self._default_template(document_type, company_code, bank_account_id)
+            if bank_default is not None:
+                return bank_default
+        company_default = self._default_template(document_type, company_code)
+        if company_default is not None:
+            return company_default
+        return self._default_template(document_type, None)
+
+    def _template_bank_account_id(self, document_type: str, context: dict[str, Any]) -> str | None:
+        """Return the bank account that scopes template resolution for a document, if any."""
+        if document_type != "check":
+            return None
+        check = context.get("check") or {}
+        return str(check.get("bank_account_id") or "") or None
 
     def build_print_html(
         self,
@@ -394,6 +429,7 @@ class PrintService:
             "quotation": SalesQuotation,
             "sales_quotation": SalesQuotation,
             "payment_entry": PaymentEntry,
+            "check": PaymentEntry,
             "bank_transfer": PaymentEntry,
             "cash_receipt": PaymentEntry,
             "exchange_revaluation": ExchangeRevaluation,
@@ -405,6 +441,8 @@ class PrintService:
         document = database.session.get(model, document_id)
         if document is None:
             raise PrintPermissionError(_("Document not found."))
+        if document_type == "check" and str(getattr(document, "mode_of_payment", "") or "").lower() != "check":
+            raise PrintPermissionError(_("Solo se puede imprimir cheque en pagos con forma de pago cheque."))
         document_company = getattr(document, "company", None) or getattr(document, "entity", None)
         if str(document_company or "") != str(company_code):
             raise PrintPermissionError(_("Document is not available for this company."))
@@ -442,21 +480,23 @@ class PrintService:
             raise PrintTemplateNotFoundError(_("Template is not published."))
         return template
 
-    def _default_template(self, document_type: str, company_code: str | None) -> PrintTemplate | None:
-        return (
-            database.session.execute(
-                select(PrintTemplate)
-                .filter_by(
-                    company_code=company_code,
-                    document_type=document_type,
-                    status="published",
-                    is_default=True,
-                )
-                .order_by(PrintTemplate.id)
-            )
-            .scalars()
-            .first()
+    def _default_template(
+        self,
+        document_type: str,
+        company_code: str | None,
+        bank_account_id: str | None = None,
+    ) -> PrintTemplate | None:
+        query = select(PrintTemplate).filter_by(
+            company_code=company_code,
+            document_type=document_type,
+            status="published",
+            is_default=True,
         )
+        if bank_account_id:
+            query = query.filter(PrintTemplate.bank_account_id == bank_account_id)
+        else:
+            query = query.filter(PrintTemplate.bank_account_id.is_(None))
+        return database.session.execute(query.order_by(PrintTemplate.id)).scalars().first()
 
     def _inject_validation_context(
         self,

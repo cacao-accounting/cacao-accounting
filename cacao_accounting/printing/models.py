@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 """Modelos para el servicio de impresión y validación de documentos."""
 
-from cacao_accounting.database import database, ENTITY_CODE, USER_ID, FK_RESTRICT, FK_CASCADE
+from cacao_accounting.database import database, BANK_ACCOUNT_ID, ENTITY_CODE, USER_ID, FK_RESTRICT, FK_SET_NULL, FK_CASCADE
 
 
 class PrintTemplate(database.Model):  # type: ignore[name-defined]
@@ -14,6 +14,16 @@ class PrintTemplate(database.Model):  # type: ignore[name-defined]
 
     company_code = database.Column(
         database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+
+    # Cada institucion bancaria puede tener su propio formato de cheque impreso.
+    # Cuando se define, el formato solo aplica a esa cuenta bancaria; NULL es un
+    # formato generico a nivel de compania o global de sistema.
+    bank_account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
     )
 
     document_type = database.Column(database.String(80), nullable=False)

@@ -51,6 +51,16 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">{{ _("Cuenta bancaria") }}</label>
+                            <select name="bank_account_id" class="form-select form-select-sm">
+                                <option value="">{{ _('Todas las cuentas') }}</option>
+                                {% for account in bank_accounts %}
+                                <option value="{{ account.id }}" {% if template and template.bank_account_id == account.id %}selected{% endif %}>{{ account.label }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">{{ _("Solo aplica a formatos de cheque; cada banco puede tener su propio formato.") }}</div>
+                        </div>
                         <div class="row">
                             <div class="col-6">
                                 <div class="mb-3">

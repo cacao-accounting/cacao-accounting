@@ -10,7 +10,51 @@ from typing import Any
 
 from sqlalchemy import select
 
-from cacao_accounting.database import Entity, database
+from cacao_accounting.database import Bank, BankAccount, Entity, ExternalCounter, database
+from cacao_accounting.i18n import _get_locale
+from cacao_accounting.num2words import numero_a_letras
+
+SPANISH_MONTHS = [
+    "",
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+]
+
+ENGLISH_MONTHS = [
+    "",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
+
+
+def _resolve_lang(options: dict[str, Any] | None = None) -> str:
+    """Resuelve el idioma de render unificando el documento real y la muestra.
+
+    Permite un override explícito vía ``options["lang"]`` y, en su defecto,
+    usa el idioma activo de la aplicación para evitar divergencias silenciosas
+    entre la previsualización y el documento impreso.
+    """
+    return str((options or {}).get("lang") or _get_locale() or "es").lower()
 
 
 def build_common_context(company_code: str | None, user_name: str) -> dict[str, Any]:
@@ -359,6 +403,118 @@ def build_landed_cost_print_context(
         user,
         company_code,
     )
+
+
+def build_check_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a check payment."""
+    from cacao_accounting.database import PaymentEntry, PaymentReference
+
+    document = database.session.get(PaymentEntry, document_id)
+    context = build_common_context(company_code, _user_name(user))
+    if document is None:
+        return context
+
+    target_lang = _resolve_lang(options)
+    months_list = ENGLISH_MONTHS if target_lang.startswith("en") else SPANISH_MONTHS
+
+    dt = _first_attr(document, "posting_date", "document_date", "date")
+    if isinstance(dt, (date, datetime)):
+        day_str = f"{dt.day:02d}"
+        month_str = f"{dt.month:02d}"
+        month_name = months_list[dt.month] if 1 <= dt.month <= 12 else ""
+        year_str = f"{dt.year}"
+        date_formatted = dt.strftime("%Y-%m-%d")
+    else:
+        day_str, month_str, month_name, year_str = "", "", "", ""
+        date_formatted = str(dt or "")
+
+    paid_amount = _number(_first_attr(document, "paid_amount", "received_amount"))
+    curr = _text(document, "currency", context["company"]["default_currency"])
+    amount_words = numero_a_letras(paid_amount, curr, lang=target_lang)
+
+    bank_account = database.session.get(BankAccount, document.bank_account_id) if document.bank_account_id else None
+    bank = database.session.get(Bank, bank_account.bank_id) if bank_account and bank_account.bank_id else None
+
+    # El numero del cheque impreso es el asignado al pago; si aun no se ha
+    # fijado se muestra al menos el siguiente cheque sugerido por la chequera
+    # predeterminada de la cuenta bancaria.
+    check_no = _text(document, "external_number", "")
+    counter = (
+        database.session.get(ExternalCounter, bank_account.default_external_counter_id)
+        if bank_account and bank_account.default_external_counter_id
+        else None
+    )
+    next_check_no = counter.next_suggested_formatted if counter else ""
+    if not check_no:
+        check_no = next_check_no or _text(document, "reference_no", _document_number(document))
+    payee_name = _text(document, "party_name", "")
+
+    refs = database.session.execute(select(PaymentReference).filter_by(payment_id=document_id)).scalars().all()
+    context["check"] = {
+        "number": check_no,
+        "next_check_number": next_check_no,
+        "payment_number": _document_number(document),
+        "date": date_formatted,
+        "day": day_str,
+        "month": month_str,
+        "month_name": month_name,
+        "year": year_str,
+        "payee_name": payee_name,
+        "amount": paid_amount,
+        "amount_in_words": amount_words,
+        "currency": curr,
+        "bank_account_id": _text(bank_account, "id", "") or str(document.bank_account_id or ""),
+        "bank_account_name": _text(bank_account, "account_name", ""),
+        "bank_account_number": _text(bank_account, "account_no", ""),
+        "bank_name": _text(bank, "name", ""),
+        "memo": _text(document, "remarks", ""),
+        "status": _document_status(document),
+        "references": [
+            {
+                "reference_type": _text(ref, "reference_type", ""),
+                "reference_number": _text(ref, "reference_document_no", ""),
+                "allocated_amount": _number(_text(ref, "allocated_amount", 0)),
+            }
+            for ref in refs
+        ],
+    }
+    return context
+
+
+def build_check_sample_context(user: Any = None, company: Any = None, options: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Build a sample check context for format preview and editing."""
+    context = _sample_common_context()
+    amount = Decimal("1250.50")
+    curr = "NIO"
+    target_lang = _resolve_lang(options)
+    months_list = ENGLISH_MONTHS if target_lang.startswith("en") else SPANISH_MONTHS
+    context["check"] = {
+        "number": "10539",
+        "payment_number": "PAY-2026-00001",
+        "date": "2026-05-26",
+        "day": "26",
+        "month": "05",
+        "month_name": months_list[5],
+        "year": "2026",
+        "payee_name": "Comercial de Suministros S.A.",
+        "amount": amount,
+        "amount_in_words": numero_a_letras(amount, curr, lang=target_lang),
+        "currency": curr,
+        "bank_account_name": "Cuenta Corriente Banpro Cacao",
+        "bank_account_number": "100100998877",
+        "bank_name": "Banpro",
+        "memo": "Pago de factura de proveedores No. 4501",
+        "status": "posted",
+        "references": [
+            {"reference_type": "purchase_invoice", "reference_number": "FAC-2026-00100", "allocated_amount": 1250.50}
+        ],
+    }
+    return context
 
 
 def build_payment_entry_print_context(
@@ -995,6 +1151,29 @@ DELIVERY_NOTE_PRINT_SCHEMA = {**COMMON_SCHEMA, "receipt": {_ITEMS_KEY: LINE_SCHE
 STOCK_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "adjustment": {_ITEMS_KEY: LINE_SCHEMA}}
 QUOTATION_PRINT_SCHEMA = {**COMMON_SCHEMA, "quote": {_ITEMS_KEY: LINE_SCHEMA}}
 PAYMENT_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "payment": {"references[]": {"allocated_amount": "Allocated amount"}}}
+CHECK_PRINT_SCHEMA = {
+    **COMMON_SCHEMA,
+    "check": {
+        "number": "Check number",
+        "next_check_number": "Next suggested check number from the assigned checkbook",
+        "payment_number": "Payment document number",
+        "date": "Check issue date (YYYY-MM-DD)",
+        "day": "Check issue day (DD)",
+        "month": "Check issue month (MM)",
+        "month_name": "Check issue month name in active locale",
+        "year": "Check issue year (YYYY)",
+        "payee_name": "Payee or beneficiary name",
+        "amount": "Check amount in numeric figures",
+        "amount_in_words": "Check amount spelled out in active locale words",
+        "currency": _LABEL_CURRENCY_CODE,
+        "bank_account_name": "Source bank account display name",
+        "bank_account_number": "Source bank account number",
+        "bank_name": "Bank institution name",
+        "memo": "Check memo or remarks",
+        "status": "Document status",
+        "references[]": {"allocated_amount": "Allocated amount", "reference_number": "Reference document number"},
+    },
+}
 WITHHOLDING_CERTIFICATE_PRINT_SCHEMA = {
     **COMMON_SCHEMA,
     "withholding_certificate": {"lines[]": {"base_amount": "Base amount", "rate": "Rate", "amount": "Withheld amount"}},

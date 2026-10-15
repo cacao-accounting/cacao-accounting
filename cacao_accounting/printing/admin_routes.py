@@ -9,7 +9,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from cacao_accounting.database import Entity, Roles, RolesUser, database
+from cacao_accounting.database import Bank, BankAccount, Entity, Roles, RolesUser, database
 from cacao_accounting.decorators import resolve_required_company, _single_authorized_company
 from cacao_accounting.printing.exceptions import PrintingError, TemplateValidationError
 from cacao_accounting.printing.models import PrintTemplate, PrintTemplateVersion
@@ -39,7 +39,8 @@ def list_templates():
         .scalars()
         .all()
     )
-    return render_template("admin/print_template_list.html", templates=templates)
+    bank_labels = {account["id"]: account["label"] for account in _bank_account_options()}
+    return render_template("admin/print_template_list.html", templates=templates, bank_labels=bank_labels)
 
 
 @printing_admin.route("/admin/print-templates/settings", methods=["GET", "POST"])
@@ -68,21 +69,27 @@ def create_template():
     """Create a draft print template."""
     _require_print_admin()
     if request.method == "POST":
-        template = PrintTemplate(
-            company_code=request.form.get("company_code") or None,
-            document_type=request.form.get("document_type") or "",
-            code=request.form.get("code") or "",
-            name=request.form.get("name") or "",
-            description=request.form.get("description"),
-            template_body=request.form.get("template_body") or "",
-            stylesheet_body=request.form.get("stylesheet_body"),
-            paper_size=request.form.get("paper_size") or "letter",
-            orientation=request.form.get("orientation") or "portrait",
-            status="draft",
-            created_by=_current_user_id(),
-        )
-        database.session.add(template)
-        database.session.commit()
+        try:
+            template = PrintTemplate(
+                company_code=request.form.get("company_code") or None,
+                document_type=request.form.get("document_type") or "",
+                bank_account_id=_form_bank_account_id(),
+                code=request.form.get("code") or "",
+                name=request.form.get("name") or "",
+                description=request.form.get("description"),
+                template_body=request.form.get("template_body") or "",
+                stylesheet_body=request.form.get("stylesheet_body"),
+                paper_size=request.form.get("paper_size") or "letter",
+                orientation=request.form.get("orientation") or "portrait",
+                status="draft",
+                created_by=_current_user_id(),
+            )
+            database.session.add(template)
+            database.session.commit()
+        except TemplateValidationError as exc:
+            database.session.rollback()
+            flash(_("Error al crear plantilla: %(error)s") % {"error": exc}, "danger")
+            return _render_form(None)
         flash(_("Plantilla creada exitosamente."), "success")
         return redirect(url_for("printing_admin.edit_template", template_id=template.id))
     return _render_form(None)
@@ -111,6 +118,7 @@ def duplicate_template(template_id: int):
     copy = PrintTemplate(
         company_code=source.company_code,
         document_type=source.document_type,
+        bank_account_id=source.bank_account_id,
         code=_copy_code(source.code),
         name=f"Copia de {source.name}",
         description=source.description,
@@ -237,6 +245,7 @@ def _update_template_from_form(template: PrintTemplate) -> None:
         service.create_version(template, change_note=request.form.get("change_note"))
         template.name = request.form.get("name") or template.name
         template.description = request.form.get("description")
+        template.bank_account_id = _form_bank_account_id(company_code=template.company_code)
         template.template_body = body
         template.stylesheet_body = css
         template.paper_size = request.form.get("paper_size") or "letter"
@@ -253,15 +262,52 @@ def _update_template_from_form(template: PrintTemplate) -> None:
 def _render_form(template: PrintTemplate | None):
     doc_types = list_printable_documents()
     companies = database.session.execute(select(Entity).filter_by(enabled=True)).scalars().all()
+    bank_accounts = _bank_account_options()
     definition = get_printable_document(template.document_type) if template else None
     return render_template(
         "admin/print_template_form.html",
         doc_types=doc_types,
         companies=companies,
+        bank_accounts=bank_accounts,
         template=template,
         schema=definition["schema"] if definition else {},
         snippets=definition["snippets"] if definition else [],
     )
+
+
+def _bank_account_options() -> list[dict[str, str]]:
+    """List bank accounts (with their bank) available to scope check formats."""
+    rows = database.session.execute(
+        select(BankAccount, Bank.name)
+        .join(Bank, Bank.id == BankAccount.bank_id)
+        .order_by(BankAccount.company, Bank.name, BankAccount.account_name)
+    ).all()
+    return [
+        {
+            "id": account.id,
+            "company": account.company,
+            "label": f"{bank_name} - {account.account_name} ({account.account_no or ''})",
+        }
+        for account, bank_name in rows
+    ]
+
+
+def _form_bank_account_id(company_code: str | None = None) -> str | None:
+    """Return the bank account selected in the form validating its company scope.
+
+    ``company_code`` permite validar contra la compania efectiva de la
+    plantilla cuando el formulario no reenvia el campo (por ejemplo al editar).
+    """
+    bank_account_id = request.form.get("bank_account_id") or None
+    if not bank_account_id:
+        return None
+    account = database.session.get(BankAccount, bank_account_id)
+    if account is None:
+        raise TemplateValidationError(_("La cuenta bancaria seleccionada no existe."))
+    effective_company = company_code or request.form.get("company_code") or None
+    if effective_company and account.company != effective_company:
+        raise TemplateValidationError(_("La cuenta bancaria no pertenece a la compañía indicada."))
+    return bank_account_id
 
 
 def _get_template(template_id: int) -> PrintTemplate:
@@ -272,11 +318,18 @@ def _get_template(template_id: int) -> PrintTemplate:
 
 
 def _clear_default(template: PrintTemplate) -> None:
+    """Clear the default flag for the template scope (company, document and bank account)."""
+    bank_filter = (
+        PrintTemplate.bank_account_id.is_(None)
+        if template.bank_account_id is None
+        else (PrintTemplate.bank_account_id == template.bank_account_id)
+    )
     database.session.execute(
         database.update(PrintTemplate)
         .where(
             PrintTemplate.company_code == template.company_code,
             PrintTemplate.document_type == template.document_type,
+            bank_filter,
         )
         .values(is_default=False)
     )

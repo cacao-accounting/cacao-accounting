@@ -24399,6 +24399,22 @@ msgstr "List of sales requests."
 msgid "Nuevo Pedido"
 msgstr "New Order"
 
+#: cacao_accounting/printing/registry.py
+msgid "Impresión de cheque"
+msgstr "Check printing"
+
+#: cacao_accounting/printing/templates/admin/print_template_form.html
+msgid "Todas las cuentas"
+msgstr "All accounts"
+
+#: cacao_accounting/printing/templates/admin/print_template_form.html
+msgid "Solo aplica a formatos de cheque; cada banco puede tener su propio formato."
+msgstr "Only applies to check formats; each bank can have its own format."
+
+#: cacao_accounting/printing/service.py
+msgid "Solo se puede imprimir cheque en pagos con forma de pago cheque."
+msgstr "A check can only be printed for payments whose mode of payment is check."
+
 #~ msgid "Debe indicar el motivo de la anulacion."
 #~ msgstr "You must provide the reason for the cancellation."
 
