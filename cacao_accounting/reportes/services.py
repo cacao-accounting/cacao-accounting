@@ -3094,7 +3094,7 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
             account_summary,
             summary,
         )
-        if not processed:
+        if not processed and classification not in KNOWN_ACCOUNT_CLASSIFICATIONS:
             _track_unclassified_account(unclassified, account_code, account_name, classification, debit, credit)
     gross_profit = summary["income"] - summary["cost"]
     operating_profit = gross_profit - summary["expense"]

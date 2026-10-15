@@ -2577,3 +2577,26 @@ respaldadas por evidencia sin alterar la semántica contable.
   válidas anterior y posterior persistan con un resumen coherente.
 - Dos agentes independientes realizaron discovery de esquema y consultas; un
   tercer agente aprobó el diff completo en la revisión QA final.
+
+## 2026-10-15 (debug de reportes financieros y tema oscuro)
+
+- Se inspeccionó `cacaoaccounting.db` en modo solo lectura. Las 355 cuentas
+  usan clasificaciones admitidas; las dos cuentas con movimientos son
+  `11.01.01` (Asset) y `31.01.01` (Equity), con 2,000 en débito y crédito.
+  Los totales del balance coinciden con esos registros.
+- Se corrigió un falso positivo del estado de resultados: las cuentas de
+  balance válidas se marcaban como desconocidas porque no pertenecían a sus
+  secciones de ingresos, costos o gastos. Se conserva la advertencia para
+  valores vacíos o desconocidos, sin modificar reglas ni registros contables.
+- Los reportes financieros y operativos ahora usan superficies y textos del
+  tema en contexto, cabeceras sticky y etiquetas de totales; los grupos y
+  subtotales financieros también respetan el tema y la prioridad CSS.
+- Pruebas de regresión y estilos: 19 aprobadas. QA adicional comprobó la
+  preservación del aviso real de clasificación desconocida: 1 aprobada.
+- Implementación validada por QA y tercera revisión independiente con
+  contexto limpio. La revisión visual en navegador queda pendiente.
+- Verificación completa del seed: 9 pruebas aprobadas; total focalizado:
+  28 pruebas aprobadas. Black, Ruff, Flake8, Mypy, pydocstyle y complexipy
+  pasan. Pylint no está instalado en el entorno; revisión visual pendiente.
+- Commit local solicitado por el desarrollador; se excluyen cambios ajenos
+  y no se realiza push.

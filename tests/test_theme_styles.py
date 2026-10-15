@@ -131,3 +131,28 @@ def test_payment_form_uses_theme_aware_surface_tokens() -> None:
     assert "color: #666;" not in template
     assert "border-top: 1px solid #eee;" not in template
     assert "border-top" not in template.split("ca-summary-tax-total mt-2 pt-2", maxsplit=1)[1].split(">", maxsplit=1)[0]
+
+
+def test_report_surfaces_follow_the_application_theme() -> None:
+    """Report context, sticky headings and totals use matching theme colors."""
+    for name in ("financial_report.html", "operational_report.html"):
+        template = (PROJECT_ROOT / "cacao_accounting" / "reportes" / "templates" / "reportes" / name).read_text(
+            encoding="utf-8"
+        )
+        context = template.split(".ca-report-context{", 1)[1].split("}", 1)[0]
+        heading = template.split(".ca-report-table thead th{", 1)[1].split("}", 1)[0]
+        label = template.split(".ca-total-label{", 1)[1].split("}", 1)[0]
+        assert "background:var(--ca-surface-hover)" in context
+        assert "color:var(--ca-text)" in context
+        assert "background:var(--ca-surface)" in heading
+        assert "color:var(--ca-text-secondary)" in heading
+        assert "color:var(--ca-text-secondary)" in label
+        assert "--ca-bg-soft" not in template
+        assert 'class="table-light"' not in template
+        assert 'class="table-secondary"' not in template
+
+        if name == "financial_report.html":
+            group = template.split(".ca-report-table tbody tr.ca-report-group,", 1)[1].split("}", 1)[0]
+            assert ".ca-report-table tbody tr.ca-report-subtotal{" in group
+            assert "background:var(--ca-surface-hover)" in group
+            assert "color:var(--ca-text)" in group

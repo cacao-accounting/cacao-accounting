@@ -157,3 +157,38 @@ def test_balance_sheet_period_result_is_after_equity_accounts(app_ctx):
     )
 
     assert [row.get("account_name") for row in rows] == ["Capital", "period_profit_summary"]
+
+
+@pytest.mark.parametrize("classification", ["Asset", "Liability", "Equity", " Activos ", "Pasivos", "Patrimonio"])
+def test_income_statement_ignores_valid_balance_accounts(app_ctx, classification):
+    """Las cuentas de balance válidas no generan avisos de clasificación en resultados."""
+    from cacao_accounting.database import Accounts
+    from cacao_accounting.reportes.services import get_balance_sheet_report, get_income_statement_report
+
+    book = Book(entity="cacao", code="BS-BOOK", name="Balance", currency="NIO", is_primary=True, default=True)
+    account = Accounts(entity="cacao", code="31.01", name="Cuenta de balance", classification=classification)
+    database.session.add_all([book, account])
+    database.session.flush()
+    database.session.add(
+        GLEntry(
+            company="cacao",
+            ledger_id=book.id,
+            account_id=account.id,
+            account_code=account.code,
+            posting_date=date(2026, 10, 15),
+            debit=Decimal("2000"),
+            credit=Decimal("0"),
+            voucher_type="journal_entry",
+            voucher_id="VALID-BALANCE",
+        )
+    )
+    database.session.commit()
+    filters = FinancialReportFilters(company="cacao", ledger=book.code)
+    income = get_income_statement_report(filters)
+    balance = get_balance_sheet_report(filters)
+
+    assert "unclassified_accounts" not in income.totals
+    assert all(row.values["section"] != "unclassified" for row in income.rows)
+    assert income.totals["net_profit"] == Decimal("0")
+    assert "unclassified_accounts" not in balance.totals
+    assert any(row.values["account_code"] == account.code for row in balance.rows)
