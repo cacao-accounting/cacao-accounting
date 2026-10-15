@@ -49,6 +49,7 @@ from cacao_accounting.database import (
     PettyCashVoucher,
     PurchaseInvoice,
     PurchaseOrder,
+    PurchaseReconciliation,
     Reconciliation,
     ReconciliationItem,
     SalesOrder,
@@ -1808,6 +1809,27 @@ def _load_payment_reference_document(reference_type: str, reference_id: str, flo
     return document
 
 
+def _block_disputed_purchase_reconciliation(document: Any) -> None:
+    """Impide pagar una factura de compra con conciliación en disputa.
+
+    El matching 2-way/3-way solo informa pero no detiene si la conciliación
+    se creó manualmente después del posting del documento; este guard cubre
+    ese caso frío y mantiene el control fail-closed de S2P: sin conciliación
+    en acuerdo no hay pago.
+    """
+    if not isinstance(document, PurchaseInvoice):
+        return
+    if getattr(document, "document_type", None) not in (None, "purchase_invoice"):
+        return
+    disputed = database.session.execute(
+        database.select(PurchaseReconciliation.id).filter_by(purchase_invoice_id=document.id, status="disputed").limit(1)
+    ).scalar_one_or_none()
+    if disputed:
+        from werkzeug.exceptions import Conflict
+
+        raise Conflict(_("La factura tiene conciliación en disputa; resuelva el matching antes del pago."))
+
+
 def _validate_payment_reference_document(
     *,
     payment: PaymentEntry,
@@ -1821,6 +1843,7 @@ def _validate_payment_reference_document(
     """
     if getattr(document, "docstatus", 0) != 1:
         raise ValueError(_("El documento referenciado debe estar aprobado."))
+    _block_disputed_purchase_reconciliation(document)
     if payment.company and document.company and payment.company != document.company:
         from werkzeug.exceptions import Conflict
 

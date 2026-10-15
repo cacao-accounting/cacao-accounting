@@ -18884,7 +18884,8 @@ msgid "Las líneas del ledger no se pueden eliminar; use una reversa."
 msgstr "Ledger lines cannot be deleted; use a reversal."
 
 #: cacao_accounting/contabilidad/posting_service.py:3916
-msgid "La conciliación falló; corrija las discrepancias antes de contabilizar."
+msgid ""
+"La conciliación falló; corrija las discrepancias antes de contabilizar."
 msgstr "Reconciliation failed; resolve the discrepancies before posting."
 
 #: cacao_accounting/database/__init__.py:3877
@@ -24412,12 +24413,27 @@ msgid "Todas las cuentas"
 msgstr "All accounts"
 
 #: cacao_accounting/printing/templates/admin/print_template_form.html
-msgid "Solo aplica a formatos de cheque; cada banco puede tener su propio formato."
+msgid ""
+"Solo aplica a formatos de cheque; cada banco puede tener su propio formato."
 msgstr "Only applies to check formats; each bank can have its own format."
 
 #: cacao_accounting/printing/service.py
 msgid "Solo se puede imprimir cheque en pagos con forma de pago cheque."
-msgstr "A check can only be printed for payments whose mode of payment is check."
+msgstr ""
+"A check can only be printed for payments whose mode of payment is check."
+
+#: cacao_accounting/reportes/templates/reportes/internal_control.html
+msgid ""
+"Eventos de control interno que coinciden con los filtros seleccionados."
+msgstr "Internal control events matching the selected filters."
+
+#: cacao_accounting/bancos/services.py:1831
+msgid ""
+"La factura tiene conciliación en disputa; resuelva el matching antes del "
+"pago."
+msgstr ""
+"The invoice has a disputed reconciliation; resolve the matching before "
+"payment."
 
 #~ msgid "Debe indicar el motivo de la anulacion."
 #~ msgstr "You must provide the reason for the cancellation."
@@ -24642,7 +24658,3 @@ msgstr "A check can only be printed for payments whose mode of payment is check.
 
 #~ msgid "La linea origen no pertenece al documento indicado."
 #~ msgstr "The source line does not belong to the specified document."
-
-#: cacao_accounting/reportes/templates/reportes/internal_control.html
-msgid "Eventos de control interno que coinciden con los filtros seleccionados."
-msgstr "Internal control events matching the selected filters."

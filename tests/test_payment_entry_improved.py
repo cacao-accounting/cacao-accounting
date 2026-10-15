@@ -7,6 +7,8 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from werkzeug.exceptions import Conflict
+
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     Accounts,
@@ -2569,3 +2571,49 @@ def test_collection_cycle_partial_overpayment_and_advance(app_ctx):
     assert compute_outstanding_amount(invoice, as_of_date=date.today()) == Decimal("100")
     assert invoice.outstanding_amount == Decimal("100")
     assert compute_payment_unallocated_amount(advance) == Decimal("0")
+
+
+def test_payment_rejects_disputed_purchase_reconciliation(app_ctx):
+    """Sin conciliación en acuerdo no hay pago de factura de compra."""
+    from cacao_accounting.bancos.services import _validate_payment_reference_document
+    from cacao_accounting.database import PurchaseReconciliation
+
+    customer = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+    invoice = PurchaseInvoice(
+        company="CACAO",
+        supplier_id=customer.id,
+        posting_date=date.today(),
+        document_type="purchase_invoice",
+        transaction_currency="USD",
+        exchange_rate=Decimal("1"),
+        docstatus=1,
+        grand_total=Decimal("100"),
+        outstanding_amount=Decimal("100"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseReconciliation(
+            company="CACAO",
+            purchase_invoice_id=invoice.id,
+            matching_type="3-way",
+            matched_amount=Decimal("100"),
+            matched_date=date.today(),
+            status="disputed",
+        )
+    )
+    database.session.commit()
+    payment = PaymentEntry(
+        company="CACAO",
+        payment_type="pay",
+        currency="USD",
+        party_type="supplier",
+        party_id=customer.id,
+    )
+
+    with pytest.raises(Conflict, match="conciliación en disputa"):
+        _validate_payment_reference_document(
+            payment=payment,
+            document=invoice,
+            flow_source_type="purchase_invoice",
+        )
