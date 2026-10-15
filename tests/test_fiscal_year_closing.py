@@ -49,6 +49,7 @@ def app():
     app = create_app(
         {
             "TESTING": True,
+            "MODO_ESCRITORIO": True,
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
             "SECRET_KEY": "test",
             "WTF_CSRF_ENABLED": False,
@@ -152,7 +153,7 @@ def test_fiscal_year_closing_cycle(app, setup_data):
             ],
         }
         j1 = create_journal_draft(payload1, setup_data["admin_user_id"])
-        submit_journal(j1.id)
+        submit_journal(j1.id, user_id=setup_data["admin_user_id"])
 
         fy = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
         fy.is_closed = True
@@ -309,7 +310,7 @@ def test_multiannual_balance_sheet_balanced(app, setup_data):
             ],
         }
         j1 = create_journal_draft(payload1, setup_data["admin_user_id"])
-        submit_journal(j1.id)
+        submit_journal(j1.id, user_id=setup_data["admin_user_id"])
 
         # 2. Expense of 600
         payload2 = {
@@ -323,7 +324,7 @@ def test_multiannual_balance_sheet_balanced(app, setup_data):
             ],
         }
         j2 = create_journal_draft(payload2, setup_data["admin_user_id"])
-        submit_journal(j2.id)
+        submit_journal(j2.id, user_id=setup_data["admin_user_id"])
 
         # 3. Capital of 100
         payload3 = {
@@ -337,7 +338,7 @@ def test_multiannual_balance_sheet_balanced(app, setup_data):
             ],
         }
         j3 = create_journal_draft(payload3, setup_data["admin_user_id"])
-        submit_journal(j3.id)
+        submit_journal(j3.id, user_id=setup_data["admin_user_id"])
 
         # Close 2024 fiscal year
         fy2024 = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
@@ -406,7 +407,7 @@ def test_balance_sheet_counts_closed_fiscal_year_result_once(app, setup_data):
             ],
         }
         j1 = create_journal_draft(payload1, setup_data["admin_user_id"])
-        submit_journal(j1.id)
+        submit_journal(j1.id, user_id=setup_data["admin_user_id"])
 
         payload2 = {
             "company": "CMP",
@@ -419,7 +420,7 @@ def test_balance_sheet_counts_closed_fiscal_year_result_once(app, setup_data):
             ],
         }
         j2 = create_journal_draft(payload2, setup_data["admin_user_id"])
-        submit_journal(j2.id)
+        submit_journal(j2.id, user_id=setup_data["admin_user_id"])
 
         payload3 = {
             "company": "CMP",
@@ -432,7 +433,7 @@ def test_balance_sheet_counts_closed_fiscal_year_result_once(app, setup_data):
             ],
         }
         j3 = create_journal_draft(payload3, setup_data["admin_user_id"])
-        submit_journal(j3.id)
+        submit_journal(j3.id, user_id=setup_data["admin_user_id"])
 
         # Close the fiscal year 2024 and post the closing entry.
         fy2024 = database.session.get(FiscalYear, setup_data["fiscal_year_id"])

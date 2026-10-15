@@ -102,10 +102,18 @@ def app():
     with application.app_context():
         database.session.execute(delete(CompanyParty).where(CompanyParty.company.in_(["COMP-A", "COMP-B"])))
         database.session.execute(delete(Party).where(Party.id.in_(["CACHE-PARTY-A", "CACHE-PARTY-B"])))
-        database.session.execute(delete(UserCompanyAccess))
-        database.session.execute(delete(User).where(User.user.in_(["cache-user-a", "cache-user-b", "cache-admin"])))
-        database.session.execute(delete(Entity).where(Entity.code.in_(["COMP-A", "COMP-B"])))
-        database.session.execute(delete(Modules).where(Modules.module == "accounting"))
+        # Sensitive tables must be removed through ORM objects so the audited
+        # snapshot path runs; bulk deletes are rejected by the ICFR guard.
+        for access in database.session.scalars(database.select(UserCompanyAccess)):
+            database.session.delete(access)
+        for user in database.session.scalars(
+            database.select(User).where(User.user.in_(["cache-user-a", "cache-user-b", "cache-admin"]))
+        ):
+            database.session.delete(user)
+        for entity in database.session.scalars(database.select(Entity).where(Entity.code.in_(["COMP-A", "COMP-B"]))):
+            database.session.delete(entity)
+        for module in database.session.scalars(database.select(Modules).where(Modules.module == "accounting")):
+            database.session.delete(module)
         database.session.commit()
         database.session.remove()
         database.engine.dispose()
@@ -196,7 +204,10 @@ def test_company_scope_is_rechecked_after_access_changes(app, memory_cache):
 
     with app.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cache-user-b")).scalar_one()
-        database.session.execute(database.delete(UserCompanyAccess).where(UserCompanyAccess.user_id == user.id))
+        for access in database.session.scalars(
+            database.select(UserCompanyAccess).where(UserCompanyAccess.user_id == user.id)
+        ):
+            database.session.delete(access)
         database.session.add(UserCompanyAccess(user_id=user.id, company_code="COMP-A"))
         database.session.commit()
 

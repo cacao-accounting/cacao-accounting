@@ -13,7 +13,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
-from cacao_accounting.audit_trail_service import format_document_timeline, get_document_timeline, log_create
+from cacao_accounting.audit_trail_service import format_document_timeline, get_document_timeline
 from cacao_accounting.compras.purchase_request_comparison_service import (
     purchase_request_comparison_is_closed,
     purchase_request_direct_order_item_ids,
@@ -266,7 +266,6 @@ def test_audit_trail_stores_snake_case_document_type(app_ctx):
         request = PurchaseRequest(id="PREQ-AUDIT-01", company="cacao", docstatus=1)
         database.session.add(request)
         database.session.flush()
-        log_create(request)
         database.session.commit()
 
         assert len(get_document_timeline("purchase_request", request.id)) == 1

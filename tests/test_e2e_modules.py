@@ -9,6 +9,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     database,
+    User,
     Entity,
     Book,
     ExchangeRate,
@@ -62,9 +63,10 @@ def app_ctx():
     )
     with app.app_context():
         from cacao_accounting.datos.dev import master_data
-
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         master_data()
+        cacao_admin = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        cacao_admin.classification = "admin"
 
         # Ensure 3 books: NIO (Primary), USD, EUR
         books = database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
@@ -648,8 +650,11 @@ def test_sales_happy_path(app_ctx):
     database.session.commit()
 
     from cacao_accounting.contabilidad.posting import submit_document
+    from cacao_accounting.internal_control_service import audit_actor
 
-    submit_document(se)
+    admin_id = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one().id
+    with audit_actor(admin_id, "E2E test administrator"):
+        submit_document(se)
     database.session.commit()
 
     # Submit sales order (requires stock to reserve)
@@ -847,7 +852,11 @@ def test_returns(app_ctx):
     # Post it manually to have GL entries to reverse
     from cacao_accounting.contabilidad.posting import post_document_to_gl
 
-    post_document_to_gl(si)
+    from cacao_accounting.internal_control_service import audit_actor
+
+    admin_id = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one().id
+    with audit_actor(admin_id, "E2E test administrator"):
+        post_document_to_gl(si)
     database.session.commit()
 
     # Create Sales Return
@@ -904,7 +913,9 @@ def test_returns(app_ctx):
     pii = PurchaseInvoiceItem(purchase_invoice_id=pi.id, item_code="ART-001", qty=10, rate=50, amount=500)
     database.session.add(pii)
     database.session.commit()
-    post_document_to_gl(pi)
+    admin_id = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one().id
+    with audit_actor(admin_id, "E2E test administrator"):
+        post_document_to_gl(pi)
     database.session.commit()
 
     # Create Purchase Return (using document_type=purchase_return in common invoice form)
@@ -1006,7 +1017,11 @@ def test_partial_and_over_deliveries(app_ctx):
     database.session.commit()
     from cacao_accounting.contabilidad.posting import post_document_to_gl
 
-    post_document_to_gl(se)
+    from cacao_accounting.internal_control_service import audit_actor
+
+    admin_id = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one().id
+    with audit_actor(admin_id, "E2E test administrator"):
+        post_document_to_gl(se)
     database.session.commit()
 
     client.post(f"/sales/delivery-note/{dn1.id}/submit", follow_redirects=True)

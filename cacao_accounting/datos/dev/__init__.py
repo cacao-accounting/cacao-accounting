@@ -78,6 +78,8 @@ def demo_usuarios():
             user=u.get("user"),
             e_mail=u.get("e_mail"),
             password=u.get("password"),
+            active=u.get("active"),
+            classification=u.get("classification"),
             created_by="system",
         )
         database.session.add(usuario)

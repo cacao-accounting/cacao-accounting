@@ -63,6 +63,7 @@ from cacao_accounting.database import (
     StockLedgerEntry,
     StockBin,
     User,
+    Modules,
     Roles,
     RolesUser,
     DocumentRelation,
@@ -101,7 +102,10 @@ def app_ctx():
     with app.app_context():
         database.create_all()
         _setup_base_data()
-        yield app
+        from cacao_accounting.internal_control_service import audit_actor
+
+        with audit_actor("user-manager", "S2P lifecycle test administrator"):
+            yield app
         database.session.remove()
         database.drop_all()
 
@@ -169,6 +173,10 @@ def _setup_base_data():
     )
     role = Roles(name="Purchase Manager", note="Gerente de Compras")
     role_user = RolesUser(user_id=manager.id, role_id=role.id, active=True)
+    modules = [
+        Modules(module=name, default=True, enabled=True)
+        for name in ("accounting", "purchases", "inventory", "sales", "cash")
+    ]
 
     database.session.add_all(
         [
@@ -200,6 +208,7 @@ def _setup_base_data():
             c_party2,
             manager,
             role,
+            *modules,
             role_user,
             PartyAccount(party_id="SUP-S2P-01", company="cacao", payable_account_id=pay_acc.id),
             PartyAccount(party_id="SUP-S2P-02", company="cacao", payable_account_id=pay_acc.id),

@@ -70,6 +70,7 @@ def app_ctx():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
+            "MODO_ESCRITORIO": True,
         }
     )
     with app.app_context():

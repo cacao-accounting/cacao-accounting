@@ -35,12 +35,22 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, database
+        from cacao_accounting.database import Entity, Modules, User, database
 
         database.create_all()
-        database.session.add(Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO"))
+        database.session.add_all(
+            [
+                Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO"),
+                User(id="admin", user="admin", name="Administrator", password=b"x", classification="admin", active=True),
+                Modules(module="cash", default=True, enabled=True),
+            ]
+        )
         database.session.commit()
-        yield app
+        with app.test_request_context("/"):
+            from flask_login import login_user
+
+            login_user(database.session.get(User, "admin"))
+            yield app
 
 
 def _seed_bank_account(account_name: str = "Cuenta tolerancias"):

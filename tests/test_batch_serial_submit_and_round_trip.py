@@ -71,6 +71,7 @@ from cacao_accounting.database import (
     StockValuationLayer,
     Project,
     Unit,
+    User,
     UOM,
     Warehouse,
     WarehouseCompanyAccount,
@@ -112,6 +113,24 @@ def _seed_test_data():
     de salida (DeliveryNote, SalesInvoice update_inventory=True, StockEntry
     material_issue) aprueben la validacion de disponibilidad de lote/serie.
     """
+    from cacao_accounting.database import Modules
+
+    database.session.add(
+        User(
+            id="test-admin",
+            user="test-sox-admin",
+            name="Test Administrator",
+            password=b"x",
+            classification="admin",
+            active=True,
+        )
+    )
+    sales_module = database.session.execute(database.select(Modules).filter_by(module="sales")).scalar_one_or_none()
+    if sales_module is None:
+        database.session.add(Modules(module="sales", default=False, enabled=True))
+    else:
+        sales_module.enabled = True
+
     entity = Entity(
         code="cacao",
         name="Cacao Corp",
@@ -1330,8 +1349,10 @@ class TestDeliveryNoteSubmit:
         assert duplicate.reversal_of == original.id
 
         from cacao_accounting.contabilidad.posting import submit_document
+        from cacao_accounting.internal_control_service import audit_actor
 
-        submit_document(duplicate)
+        with audit_actor("test-admin", "Prueba de devolución"):
+            submit_document(duplicate)
         database.session.commit()
         database.session.refresh(duplicate)
         assert duplicate.docstatus == 1

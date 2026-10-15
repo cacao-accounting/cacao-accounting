@@ -1170,9 +1170,20 @@ def get_model_class(doctype: str) -> Any:
     return get_document_type(actual_doctype).header_model
 
 
+def _document_company(document: Any) -> str | None:
+    """Resolve the company directly or through a bank transaction's account."""
+    company = getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+    if not company and ApprovalEngine._resolve_doctype(document) == "bank_transaction":
+        from cacao_accounting.database import BankAccount
+
+        bank_account = database.session.get(BankAccount, getattr(document, "bank_account_id", None))
+        company = bank_account.company if bank_account is not None else None
+    return company
+
+
 def _execution_key(document: Any, actor_id: str) -> tuple[str, str, str, str]:
     """Bind execution to identity, company and document type as well as its id."""
-    company = getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+    company = _document_company(document)
     return str(document.id), actor_id, str(company), ApprovalEngine._resolve_doctype(document)
 
 
@@ -1217,7 +1228,7 @@ def assert_execution_authorized(document: Any, actor_id: str | None = None, *, a
         return
     from cacao_accounting.internal_control_service import current_audit_actor
 
-    company = getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
+    company = _document_company(document)
     actor = actor_id or current_audit_actor()[0]
     if _APPROVAL_EXECUTION.get() == _execution_key(document, str(actor)):
         return

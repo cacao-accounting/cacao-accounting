@@ -51,6 +51,7 @@ def app_ctx():
                     enabled=True,
                 ),
                 Modules(module="accounting", default=True, enabled=True),
+                Modules(module="sales", default=False, enabled=True),
                 User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Book(entity="abc", code="L01", name="Libro principal", status="activo", is_primary=True, currency="NIO"),
@@ -70,7 +71,11 @@ def app_ctx():
             ]
         )
         database.session.commit()
-        yield app
+        with app.test_request_context("/"):
+            from flask_login import login_user
+
+            login_user(database.session.get(User, "admin"))
+            yield app
 
 
 def _login(client, user_id: str) -> None:

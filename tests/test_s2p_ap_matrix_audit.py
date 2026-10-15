@@ -36,8 +36,22 @@ def app_ctx():
         }
     )
     with app.app_context():
+        from cacao_accounting.database import Modules
+
         database.create_all()
-        yield app
+        database.session.add_all(
+            [
+                Modules(module="accounting", default=True, enabled=True),
+                Modules(module="purchases", default=True, enabled=True),
+                Modules(module="inventory", default=True, enabled=True),
+                Modules(module="cash", default=True, enabled=True),
+            ]
+        )
+        database.session.commit()
+        from cacao_accounting.internal_control_service import audit_actor
+
+        with audit_actor("s2p-actor", "S2P matrix test administrator"):
+            yield app
         database.session.remove()
         database.drop_all()
 

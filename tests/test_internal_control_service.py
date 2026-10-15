@@ -35,6 +35,7 @@ def app():
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
             "MODO_ESCRITORIO": False,
+            "INTERNAL_CONTROLS_ENFORCE": True,
         }
     )
     with application.app_context():

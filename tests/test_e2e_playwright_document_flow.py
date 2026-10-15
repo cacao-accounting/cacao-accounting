@@ -84,6 +84,7 @@ def flask_server():
         # Let's also ensure cacao has permissions
         user_cacao = database.session.execute(database.select(User).filter_by(user="cacao")).scalars().first()
         if user_cacao:
+            user_cacao.classification = "admin"
             for book in books:
                 exists = database.session.execute(
                     database.select(UserCompanyAccess).filter_by(user_id=user_cacao.id, company_code=book.entity)
@@ -123,7 +124,11 @@ def flask_server():
         )
         database.session.add(sei)
         database.session.commit()
-        submit_document(se)
+        from cacao_accounting.internal_control_service import audit_actor
+
+        cacao_id = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one().id
+        with audit_actor(cacao_id, "Playwright test administrator"):
+            submit_document(se)
         database.session.commit()
 
         from cacao_accounting.database import ItemPrice, PriceList

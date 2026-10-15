@@ -250,7 +250,10 @@ def _posted_receipt():
         )
     )
     database.session.commit()
-    post_document_to_gl(receipt)
+    from cacao_accounting.internal_control_service import audit_actor
+
+    with audit_actor("admin", "Kardex test administrator"):
+        post_document_to_gl(receipt)
     database.session.commit()
     return receipt
 

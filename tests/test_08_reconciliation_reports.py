@@ -30,19 +30,24 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, PurchaseMatchingConfig, database
+        from cacao_accounting.database import Entity, PurchaseMatchingConfig, User, database
 
         database.create_all()
         database.session.add_all(
             [
                 Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO"),
+                User(id="admin", user="acl-admin", password=b"x", classification="admin", active=True),
                 # Estos escenarios cubren conciliaciones sin OC; el comportamiento
                 # estricto se verifica en pruebas que cambian explícitamente la configuración.
                 PurchaseMatchingConfig(company="cacao", require_purchase_order=False),
             ]
         )
         database.session.commit()
-        yield app
+        with app.test_request_context("/"):
+            from flask_login import login_user
+
+            login_user(database.session.get(User, "admin"))
+            yield app
 
 
 def _seed_active_primary_book(code: str = "LOCAL", currency: str = "NIO"):
@@ -66,8 +71,9 @@ def _seed_accounting_admin() -> None:
     """Crea un actor persistido para servicios de posting fail-closed."""
     from cacao_accounting.database import Modules, User, database
 
-    if database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one_or_none() is None:
-        database.session.add(Modules(module="accounting", default=True, enabled=True))
+    for module in ("accounting", "sales", "purchases", "inventory", "cash"):
+        if database.session.execute(database.select(Modules).filter_by(module=module)).scalar_one_or_none() is None:
+            database.session.add(Modules(module=module, default=module == "accounting", enabled=True))
     if database.session.get(User, "admin") is None:
         database.session.add(User(id="admin", user="acl-admin", password=b"x", classification="admin", active=True))
     database.session.commit()
@@ -526,6 +532,7 @@ def test_purchase_reconciliation_rejects_underdeclared_full_quantity():
 
 
 def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
+    _seed_accounting_admin()
     from cacao_accounting.bancos.reconciliation_service import (
         BankReconciliationError,
         BankReconciliationMatch,
@@ -840,6 +847,7 @@ def test_bank_reconciliation_matches_eur_gl_debit_and_credit_in_usd(app_ctx):
 
 
 def test_posted_payment_bank_dimension_reconciles_with_bank_summary(app_ctx):
+    _seed_accounting_admin()
     """Payment GL lines must retain the bank account used by the posting."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
@@ -971,6 +979,7 @@ def test_reconciliation_matrix_isolates_selected_ledger(app_ctx):
 
 
 def test_reconciliation_matrix_converts_subledger_to_ledger_currency(app_ctx):
+    _seed_accounting_admin()
     """La matriz convierte submayores de moneda funcional a moneda del libro con tasa histórica."""
     from cacao_accounting.database import (
         Accounts,
@@ -2841,6 +2850,7 @@ def test_trial_balance_uses_tree_presentation_without_level_column(app_ctx):
 
 
 def test_tax_template_posts_sales_tax_and_price_suggestion(app_ctx):
+    _seed_accounting_admin()
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
         Accounts,
@@ -3576,6 +3586,7 @@ def test_default_accounts_view_uses_smart_select_without_rendering_full_account_
 
 
 def test_manual_journal_allows_bank_and_untyped_accounts(app_ctx):
+    _seed_accounting_admin()
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import Accounts, ComprobanteContable, ComprobanteContableDetalle, GLEntry, database
 
@@ -3656,6 +3667,7 @@ def test_manual_journal_allows_bank_and_untyped_accounts(app_ctx):
 
 
 def test_sales_tax_uses_default_account_when_tax_has_no_account(app_ctx):
+    _seed_accounting_admin()
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
         Accounts,
@@ -3719,6 +3731,7 @@ def test_sales_tax_uses_default_account_when_tax_has_no_account(app_ctx):
 
 
 def test_inventory_uom_batch_serial_and_rebuild_stock_bins(app_ctx):
+    _seed_accounting_admin()
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
         Accounts,
@@ -4541,6 +4554,7 @@ def test_two_way_matching_aggregates_duplicate_order_and_invoice_lines(app_ctx):
 
 
 def test_purchase_invoice_posting_auto_reconciles_two_way_po_only_invoice(app_ctx):
+    _seed_accounting_admin()
     """Posting: una factura PO-only se auto-concilia cuando la compania esta en 2-way."""
     from cacao_accounting.compras.purchase_reconciliation_service import (
         MatchingType,
@@ -4769,6 +4783,7 @@ def test_bridge_account_is_configurable_not_required_by_default(app_ctx):
 
 
 def test_purchase_receipt_posting_allows_missing_bridge_when_not_required(app_ctx):
+    _seed_accounting_admin()
     """Recepcion mantiene stock ledger sin GL puente cuando la cuenta puente no es requerida."""
     from cacao_accounting.compras.purchase_reconciliation_service import (
         PurchaseMatchingConfig,

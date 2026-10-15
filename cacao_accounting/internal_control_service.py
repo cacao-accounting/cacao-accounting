@@ -10,7 +10,7 @@ import json
 import re
 from typing import Any, Iterator, cast
 
-from flask import has_app_context
+from flask import current_app, has_app_context
 from sqlalchemy import event, inspect, select, or_
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ from sqlalchemy.sql.dml import Delete, Update
 from cacao_accounting.audit_trail_service import _current_actor, _json_default
 from cacao_accounting.database import AuditTrail, DocBase, database, obtiene_texto_unico
 from cacao_accounting.i18n import _
-from cacao_accounting.runtime_mode import is_cloud_mode
+from cacao_accounting.runtime_mode import is_cloud_mode, is_desktop_mode
 
 _ACTOR: ContextVar[tuple[str | None, str] | None] = ContextVar("icfr_actor", default=None)
 EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log"})
@@ -104,8 +104,19 @@ def current_audit_actor() -> tuple[str | None, str | None]:
 
 
 def _enabled() -> bool:
-    """Avoid Cloud checks for Desktop and engine work outside the application."""
-    return has_app_context() and is_cloud_mode()
+    """Avoid Cloud checks for Desktop, test runs and engine work outside the app.
+
+    The controls are active in production Cloud. Generic test runs operate with
+    production services in process and would otherwise be blocked by the write
+    guards during fixture setup or cleanup; the dedicated ICFR suite opts in
+    explicitly through the ``INTERNAL_CONTROLS_ENFORCE`` configuration.
+    """
+    if not has_app_context() or is_desktop_mode():
+        return False
+    override = current_app.config.get("INTERNAL_CONTROLS_ENFORCE")
+    if override is not None:
+        return bool(override)
+    return is_cloud_mode() and not current_app.config.get("TESTING", False)
 
 
 def _sensitive(target: Any) -> bool:

@@ -43,7 +43,11 @@ def app_ctx():
             ]
         )
         database.session.commit()
-        yield app
+        with app.test_request_context("/"):
+            from flask_login import login_user
+
+            login_user(database.session.get(User, "user-1"))
+            yield app
 
 
 def _login(client, user_id: str) -> None:

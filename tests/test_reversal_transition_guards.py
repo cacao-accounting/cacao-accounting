@@ -23,6 +23,7 @@ def app_ctx():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
+            "MODO_ESCRITORIO": True,
         }
     )
     with app.app_context():
@@ -88,7 +89,10 @@ def _seed_submitted_journal() -> object:
         },
         user_id="user-1",
     )
-    submit_journal(journal.id)
+    from cacao_accounting.internal_control_service import audit_actor
+
+    with audit_actor("user-1", "Reversal test administrator"):
+        submit_journal(journal.id)
     return journal
 
 

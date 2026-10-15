@@ -115,7 +115,7 @@ def test_audit_trail_submit_and_cancel_events(app_ctx):
 
     debit_account, credit_account = _seed_accounts()
     journal = create_journal_draft(_journal_payload(debit_account.id, credit_account.id), user_id="admin")
-    submit_journal(journal.id)
+    submit_journal(journal.id, user_id="admin")
     cancel_submitted_journal(journal.id, user_id="admin", reason="Prueba de anulacion")
     actions = [
         row.action

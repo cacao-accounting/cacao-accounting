@@ -17,7 +17,7 @@ from cacao_accounting.config import configuracion
 def app_ctx():
     """Aplicacion aislada con base SQLite en memoria."""
 
-    app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "TESTING": True})
     with app.app_context():
         from cacao_accounting.database import database
 

@@ -43,6 +43,7 @@ from cacao_accounting.database import (
     StockValuationLayer,
     GLEntry,
     ItemUOMConversion,
+    Modules,
 )
 from cacao_accounting.contabilidad.posting import (
     PostingError,
@@ -97,8 +98,13 @@ def _setup_inventory_test_data(app):
                 tax_id="J0001",
                 valuation_method="moving_average",
                 currency="NIO",
+                enabled=True,
             )
             database.session.add(company)
+
+        for module_name in ("accounting", "purchases", "sales", "inventory"):
+            if not database.session.execute(database.select(Modules).filter_by(module=module_name)).first():
+                database.session.add(Modules(module=module_name, default=True, enabled=True))
 
         # Primary Book
         book = database.session.get(Book, "primary")
@@ -264,7 +270,10 @@ def _create_and_submit_stock_entry(
 
     database.session.add(StockEntryItem(**item_kwargs))
     database.session.commit()
-    submit_document(se)
+    from cacao_accounting.internal_control_service import audit_actor
+
+    with audit_actor("test-user", "Inventory test administrator"):
+        submit_document(se)
     return se
 
 
@@ -471,7 +480,10 @@ def test_01_recepcion_ordenes_compra(app):
         database.session.add_all([item_stock, item_service])
         database.session.commit()
 
-        submit_document(pr)
+        from cacao_accounting.internal_control_service import audit_actor
+
+        with audit_actor("test-user", "Inventory test administrator"):
+            submit_document(pr)
 
         sle_list = (
             database.session.execute(
@@ -537,7 +549,10 @@ def test_02_remision_facturas_notas_venta(app):
         )
         database.session.commit()
 
-        submit_document(dn)
+        from cacao_accounting.internal_control_service import audit_actor
+
+        with audit_actor("test-user", "Inventory test administrator"):
+            submit_document(dn)
 
         sle_list = (
             database.session.execute(

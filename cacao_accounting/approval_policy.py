@@ -71,8 +71,11 @@ def authorized(user: Any, company: str, module_name: str, action: str = "approve
 
 def document_module(doctype: str) -> str:
     """Resolve authority from the existing document registry."""
-    if doctype == "import_landed_cost":
-        return "purchases"
+    match doctype:
+        case "import_landed_cost":
+            return "purchases"
+        case "bank_transaction":
+            return "cash"
     spec = get_document_type(doctype)
     return str(spec.permission_module or spec.module)
 

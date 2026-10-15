@@ -54,6 +54,7 @@ def env(request):
             Modules,
             PartyAccount,
             UOM,
+            User,
             Warehouse,
             WarehouseCompanyAccount,
         )
@@ -73,6 +74,7 @@ def env(request):
                 Modules(module="purchases", default=True, enabled=True),
                 Modules(module="inventory", default=True, enabled=True),
                 Modules(module="sales", default=True, enabled=True),
+                User(id="inventory-admin", user="inventory-admin", password=b"x", classification="admin", active=True),
                 Book(entity=COMPANY, code="GENERAL", name="General", status="activo", is_primary=True, currency="NIO"),
                 AccountingPeriod(
                     entity=COMPANY,
@@ -140,7 +142,10 @@ def env(request):
             ]
         )
         database.session.commit()
-        yield request.param
+        from cacao_accounting.internal_control_service import audit_actor
+
+        with audit_actor("inventory-admin", "Inventory valuation test administrator"):
+            yield request.param
         database.session.remove()
         database.drop_all()
 

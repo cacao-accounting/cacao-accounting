@@ -59,6 +59,8 @@ from cacao_accounting.database import (
     GLEntry,
     Item,
     ItemAccount,
+    Modules,
+    User,
     StockBin,
     StockEntry,
     StockEntryItem,
@@ -162,6 +164,13 @@ def env(request):
     )
     with app.app_context():
         database.create_all()
+        database.session.add_all(
+            [
+                User(id="admin", user="admin", name="Administrator", password=b"x", classification="admin", active=True),
+                Modules(module="inventory", default=True, enabled=True),
+            ]
+        )
+        database.session.commit()
         chart = _seed(method)
         yield {"method": method, **chart}
         database.session.remove()
@@ -266,7 +275,7 @@ def _receive(env: dict, warehouse: str, item: str, qty: Decimal, rate: Decimal, 
         )
     )
     database.session.commit()
-    submit_document(doc)
+    _submit_as_inventory_test_actor(doc)
     database.session.commit()
     return doc
 
@@ -300,7 +309,7 @@ def _issue(env: dict, warehouse: str, item: str, qty: Decimal, day: date) -> Sto
         )
     )
     database.session.commit()
-    submit_document(doc)
+    _submit_as_inventory_test_actor(doc)
     database.session.commit()
     return doc
 
@@ -334,7 +343,7 @@ def _transfer(env: dict, source: str, target: str, item: str, qty: Decimal, day:
         )
     )
     database.session.commit()
-    submit_document(doc)
+    _submit_as_inventory_test_actor(doc)
     database.session.commit()
     return doc
 
@@ -373,7 +382,7 @@ def _reconcile(
         )
     )
     database.session.commit()
-    submit_document(doc)
+    _submit_as_inventory_test_actor(doc)
     database.session.commit()
     return doc
 
@@ -397,9 +406,17 @@ def _deliver(env: dict, warehouse: str, item: str, qty: Decimal, price: Decimal,
         )
     )
     database.session.commit()
-    submit_document(doc)
+    _submit_as_inventory_test_actor(doc)
     database.session.commit()
     return doc
+
+
+def _submit_as_inventory_test_actor(document: Any) -> None:
+    """Provide explicit Cloud identity for inventory posting test helpers."""
+    from cacao_accounting.internal_control_service import audit_actor
+
+    with audit_actor("admin", "Prueba AUDIT-004"):
+        submit_document(document)
 
 
 def _bin(env: dict, item: str, warehouse: str) -> StockBin | None:

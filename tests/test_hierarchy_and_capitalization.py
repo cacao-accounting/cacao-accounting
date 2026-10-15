@@ -36,6 +36,7 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
         self.app = create_app(
             {
                 "TESTING": True,
+                "MODO_ESCRITORIO": True,
                 "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
                 "WTF_CSRF_ENABLED": False,
                 "SECRET_KEY": "test_key",

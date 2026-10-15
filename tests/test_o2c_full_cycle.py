@@ -52,6 +52,7 @@ def app_ctx():
     app = create_app(
         {
             "TESTING": True,
+            "MODO_ESCRITORIO": True,
             "SECRET_KEY": "test_secret_key_o2c",
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,

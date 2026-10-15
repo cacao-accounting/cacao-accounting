@@ -25,12 +25,13 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import AccountingPeriod, Book, Entity, User, database
+        from cacao_accounting.database import AccountingPeriod, Book, Entity, Modules, User, database
 
         database.create_all()
         database.session.add_all(
             [
                 Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO"),
+                Modules(module="sales", default=True, enabled=True),
                 Book(code="PRIMARY", name="Libro principal", entity="cacao", currency="NIO", status="activo", is_primary=True),
                 User(user="cancellation-actor", name="Actor", classification="admin", active=True, password=b"x"),
                 AccountingPeriod(
@@ -204,13 +205,15 @@ def test_movement_detail_metadata_handles_unrelated_and_reversal_entries(app_ctx
         ({"actor_user_id": "actor", "reason": "ok", "cancellation_date": date(2026, 2, 1)}, "mismo periodo"),
     ],
 )
-def test_cancellation_policy_rejects_invalid_requests(app_ctx, kwargs, message):
+def test_cancellation_policy_rejects_invalid_requests(app_ctx, kwargs, message, monkeypatch):
     """Fecha, período, actor y motivo se validan antes de tocar el ledger."""
     from cacao_accounting.contabilidad.posting import PostingError, cancel_document
     from cacao_accounting.database import database
 
     invoice, actor = _seed_invoice()
     kwargs = {**kwargs, "actor_user_id": actor.id if kwargs.get("actor_user_id") == "actor" else kwargs.get("actor_user_id")}
+    if kwargs["actor_user_id"] is None:
+        monkeypatch.setattr("cacao_accounting.approval_engine.assert_execution_authorized", lambda *args, **values: None)
     with pytest.raises(PostingError, match=message):
         cancel_document(invoice, **kwargs)
 
@@ -259,7 +262,7 @@ def test_active_document_relation_blocks_cancellation_but_reverted_relation_does
     cancel_document(invoice, actor_user_id=actor.id, reason="Corrección")
 
 
-def test_cancellation_policy_covers_invalid_metadata_and_period_resolution(app_ctx):
+def test_cancellation_policy_covers_invalid_metadata_and_period_resolution(app_ctx, monkeypatch):
     """La política rechaza estados, actores, fechas y períodos no resolubles."""
     from cacao_accounting.contabilidad.cancellation_service import CancellationRequest, resolve_cancellation
     from cacao_accounting.contabilidad.posting import PostingError, cancel_document
@@ -269,8 +272,10 @@ def test_cancellation_policy_covers_invalid_metadata_and_period_resolution(app_c
     with pytest.raises(PostingError, match="motivo"):
         cancel_document(invoice, actor_user_id=actor.id, reason=" ")
 
+    monkeypatch.setattr("cacao_accounting.approval_engine.assert_execution_authorized", lambda *args, **values: None)
     with pytest.raises(PostingError, match="no existe"):
         cancel_document(invoice, actor_user_id="missing", reason="Corrección")
+    monkeypatch.undo()
 
     with pytest.raises(PostingError, match="inválida"):
         cancel_document(invoice, actor_user_id=actor.id, reason="Corrección", cancellation_date="invalid")

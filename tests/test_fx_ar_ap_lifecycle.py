@@ -72,19 +72,28 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Currency, Entity, database
+        from cacao_accounting.database import Currency, Entity, Modules, User, database
 
         database.create_all()
         database.session.add_all(
             [
                 Entity(code=COMPANY, name="FX", company_name="FX SA", tax_id="FX-1", currency="NIO"),
+                User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                Modules(module="accounting", default=True, enabled=True),
+                Modules(module="sales", default=True, enabled=True),
+                Modules(module="purchases", default=True, enabled=True),
+                Modules(module="cash", default=True, enabled=True),
+                Modules(module="inventory", default=True, enabled=True),
                 Currency(code="NIO", name="Cordobas", decimals=2, active=True, default=True),
                 Currency(code="USD", name="Dolares", decimals=2, active=True),
                 Currency(code="EUR", name="Euros", decimals=2, active=True),
             ]
         )
         database.session.commit()
-        yield app
+        from cacao_accounting.internal_control_service import audit_actor
+
+        with audit_actor("admin", "FX lifecycle test administrator"):
+            yield app
         database.session.remove()
         database.drop_all()
 

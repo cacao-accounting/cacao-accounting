@@ -25,6 +25,7 @@ def app_ctx():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
+            "MODO_ESCRITORIO": True,
         }
     )
     with app.app_context():
@@ -1408,7 +1409,10 @@ def test_crear_aprobar_y_reponer_caja_chica(app_ctx_book):
     set_petty_cash_replenishment_status(repo, "aprobado", actor_id="user-1")
     assert repo.status == "aprobado"
 
-    replenish_petty_cash(repo, bank_account_id=banco_acc.id, actor_id="user-1")
+    from cacao_accounting.internal_control_service import audit_actor
+
+    with audit_actor("user-1", "Petty cash test administrator"):
+        replenish_petty_cash(repo, bank_account_id=banco_acc.id, actor_id="user-1")
     assert repo.status == "reembolsado"
     assert repo.bank_debit_note_id is not None
 
@@ -1605,7 +1609,10 @@ def test_reposicion_caja_chica_multimoneda_convierte_al_tipo_de_cambio(app_ctx_b
     set_petty_cash_replenishment_status(repo, "solicitado")
     set_petty_cash_replenishment_status(repo, "aprobado", actor_id="user-1")
 
-    replenish_petty_cash(repo, bank_account_id=banco_acc.id, actor_id="user-1")
+    from cacao_accounting.internal_control_service import audit_actor
+
+    with audit_actor("user-1", "Petty cash test administrator"):
+        replenish_petty_cash(repo, bank_account_id=banco_acc.id, actor_id="user-1")
 
     nota_debito = database.session.get(PaymentEntry, repo.bank_debit_note_id)
     assert nota_debito is not None

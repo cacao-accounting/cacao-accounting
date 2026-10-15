@@ -28,6 +28,7 @@ def app_ctx():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
+            "MODO_ESCRITORIO": False,
         }
     )
     with app.app_context():
@@ -54,12 +55,19 @@ def app_ctx():
         )
         database.session.add_all(
             [
-                Modules(module="accounting", default=True, enabled=True),
+                *[
+                    Modules(module=module, default=module == "accounting", enabled=True)
+                    for module in ("accounting", "sales", "purchases", "inventory", "cash")
+                ],
                 User(id="user-1", user="admin", password=b"x", classification="admin", active=True),
             ]
         )
         database.session.commit()
-        yield app
+        with app.test_request_context("/"):
+            from flask_login import login_user
+
+            login_user(database.session.get(User, "user-1"))
+            yield app
 
 
 def _transaction_documents() -> list[tuple[object, str, str]]:

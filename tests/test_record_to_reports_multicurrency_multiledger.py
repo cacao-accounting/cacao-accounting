@@ -23,12 +23,24 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, database
+        from cacao_accounting.database import Entity, Modules, User, database
 
         database.create_all()
-        database.session.add(Entity(code="r2r", name="R2R", company_name="R2R", tax_id="R2R-1", currency="NIO"))
+        database.session.add_all(
+            [
+                Entity(code="r2r", name="R2R", company_name="R2R", tax_id="R2R-1", currency="NIO", enabled=True),
+                User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                *[
+                    Modules(module=name, default=True, enabled=True)
+                    for name in ("accounting", "sales", "purchases", "cash", "inventory")
+                ],
+            ]
+        )
         database.session.commit()
-        yield app
+        from cacao_accounting.internal_control_service import audit_actor
+
+        with audit_actor("admin", "R2R test administrator"):
+            yield app
 
 
 def _cancellation_metadata(posting_date: date) -> dict[str, str]:

@@ -197,7 +197,7 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
     if existing_assignment is not None:
         return
 
-    rol = RolesUser(user_id=USUARIO.id, role_id=ROL.id)
+    rol = RolesUser(user_id=USUARIO.id, role_id=ROL.id, active=True)
 
     database.session.add(rol)
     database.session.commit()

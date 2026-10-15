@@ -396,7 +396,7 @@ def test_journal_service_submit_not_draft(app_ctx):
         },
         user_id="user-1",
     )
-    submit_journal(journal.id)
+    submit_journal(journal.id, user_id="user-1")
     with pytest.raises(JournalValidationError, match="borrador"):
         submit_journal(journal.id)
 
@@ -510,7 +510,7 @@ def test_journal_service_cancel_submitted(app_ctx):
         },
         user_id="user-1",
     )
-    submit_journal(journal.id)
+    submit_journal(journal.id, user_id="user-1")
     entries = cancel_submitted_journal(journal.id, user_id="admin", reason="Prueba de anulacion")
     assert len(entries) >= 0
     database.session.refresh(journal)
@@ -3690,7 +3690,7 @@ def test_route_journal_cancel_success_flash(app_ctx):
         },
         user_id="user-1",
     )
-    submit_journal(journal.id)
+    submit_journal(journal.id, user_id="user-1")
 
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()

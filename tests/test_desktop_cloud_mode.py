@@ -276,23 +276,23 @@ def test_cloud_collaboration_open_redirect_protection(app_ctx) -> None:
     client = app_ctx.test_client()
     _login(client)
 
-    # 1. Safe relative referrer should be accepted
+    # 1. Safe relative referrer must name a registered internal route.
     response = client.post(
         "/api/documents/journal_entry/journal-id/comments",
         data={"comment": "Safe comment"},
-        headers={"Referer": "/safe-relative-path"},
+        headers={"Referer": "/index"},
     )
     assert response.status_code == 302
-    assert response.location in ("/safe-relative-path", "http://localhost/safe-relative-path")
+    assert response.location == "/index"
 
-    # 2. Safe same-host referrer should be accepted
+    # 2. Same-host URLs are reduced to a registered internal route.
     response = client.post(
         "/api/documents/journal_entry/journal-id/comments",
         data={"comment": "Safe comment"},
-        headers={"Referer": "http://localhost/another-safe-path"},
+        headers={"Referer": "http://localhost/index"},
     )
     assert response.status_code == 302
-    assert response.location == "http://localhost/another-safe-path"
+    assert response.location == "/index"
 
     # 3. Unsafe external referrer should be redirected to home page
     response = client.post(
@@ -303,7 +303,7 @@ def test_cloud_collaboration_open_redirect_protection(app_ctx) -> None:
     assert response.status_code == 302
     assert response.location in ("/index", "http://localhost/index")
 
-    # 4. Safe relative referrer for tasks
+    # 4. Safe relative referrer for tasks.
     response = client.post(
         "/api/documents/journal_entry/journal-id/tasks",
         data={
@@ -313,10 +313,10 @@ def test_cloud_collaboration_open_redirect_protection(app_ctx) -> None:
             "priority": "high",
             "due_date": "2026-05-31",
         },
-        headers={"Referer": "/safe-task-path"},
+        headers={"Referer": "/index"},
     )
     assert response.status_code == 302
-    assert response.location in ("/safe-task-path", "http://localhost/safe-task-path")
+    assert response.location == "/index"
 
     # 5. Unsafe external referrer for tasks should be redirected to home page
     response = client.post(

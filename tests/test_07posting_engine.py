@@ -65,7 +65,7 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Book, Entity, PurchaseMatchingConfig, database
+        from cacao_accounting.database import Book, Entity, Modules, PurchaseMatchingConfig, User, database
 
         database.create_all()
         database.session.add_all(
@@ -77,13 +77,29 @@ def app_ctx():
                     tax_id="J0001",
                     currency="NIO",
                 ),
+                User(
+                    id="admin",
+                    user="admin",
+                    name="Administrator",
+                    password=b"x",
+                    classification="admin",
+                    active=True,
+                ),
+                *[
+                    Modules(module=module, default=module == "accounting", enabled=True)
+                    for module in ("accounting", "sales", "purchases", "inventory", "cash")
+                ],
                 Book(code="PRIMARY", name="Libro principal", entity="cacao", currency="NIO", is_primary=True),
                 # Los escenarios históricos de posting ejercitan facturas sin OC.
                 PurchaseMatchingConfig(company="cacao", require_purchase_order=False),
             ]
         )
         database.session.commit()
-        yield app
+        with app.test_request_context("/"):
+            from flask_login import login_user
+
+            login_user(database.session.get(User, "admin"))
+            yield app
 
 
 def test_gl_entry_constraint_rejects_unbalanced_records(app_ctx):
@@ -3058,6 +3074,14 @@ def test_post_bank_transaction_creates_balanced_gl_entries(app_ctx):
     transaction.base_currency = "NIO"
     database.session.add(transaction)
     database.session.commit()
+
+    from cacao_accounting.approval_policy import authorized, document_module
+    from cacao_accounting.internal_control_service import current_audit_actor
+    from flask_login import current_user
+
+    assert document_module("bank_transaction") == "cash"
+    assert current_audit_actor()[0] == "admin"
+    assert authorized(current_user, "cacao", "cash")
 
     post_document_to_gl(transaction)
     database.session.commit()

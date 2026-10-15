@@ -54,7 +54,10 @@ def app_ctx():
     with app.app_context():
         database.create_all()
         _setup_base_data()
-        yield
+        from cacao_accounting.internal_control_service import audit_actor
+
+        with audit_actor("user-manager", "Purchase return test administrator"):
+            yield
         database.session.remove()
         database.drop_all()
 

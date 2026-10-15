@@ -41,17 +41,23 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Currency, Entity
+        from cacao_accounting.database import Currency, Entity, Modules, User
 
         database.create_all()
         database.session.add_all(
             [
                 Entity(code=COMPANY, name="Banco8", company_name="Banco8", tax_id="BNK-8", currency="NIO"),
                 Currency(code="NIO", name="Cordobas", decimals=2, active=True, default=True),
+                User(id="admin", user="admin", name="Administrator", password=b"x", classification="admin", active=True),
+                Modules(module="cash", default=True, enabled=True),
             ]
         )
         database.session.commit()
-        yield app
+        with app.test_request_context("/"):
+            from flask_login import login_user
+
+            login_user(database.session.get(User, "admin"))
+            yield app
         database.session.remove()
         database.drop_all()
 

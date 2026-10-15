@@ -724,6 +724,8 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
         PaymentEntry,
         PurchaseInvoice,
         PurchaseInvoiceItem,
+        Modules,
+        User,
         database,
     )
     from cacao_accounting.document_flow.service import apply_advance_to_invoice
@@ -756,7 +758,9 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
         supplier_advance_account_id=advance.id,
         apply_advances_automatically=True,
     )
-    database.session.add(defaults)
+    actor = User(id="ADV-ADMIN", user="advance-admin", name="Advance Admin", password=b"x", classification="admin", active=True)
+    module = Modules(module="accounting", default=True, enabled=True)
+    database.session.add_all([defaults, actor, module])
     database.session.flush()
 
     invoice = PurchaseInvoice(
@@ -790,7 +794,10 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
     database.session.add_all([invoice, inv_item, advance_pay])
     database.session.flush()
 
-    apply_advance_to_invoice("ADV-P-001", "PINV-ADV-001", Decimal("500"), date(2026, 5, 8))
+    from cacao_accounting.internal_control_service import audit_actor
+
+    with audit_actor(actor.id, "Prueba de anticipo"):
+        apply_advance_to_invoice("ADV-P-001", "PINV-ADV-001", Decimal("500"), date(2026, 5, 8))
 
     entries = database.session.execute(select(GLEntry).filter_by(company="TEST", voucher_type="journal_entry")).scalars().all()
     assert len(entries) == 2

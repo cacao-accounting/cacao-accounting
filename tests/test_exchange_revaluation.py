@@ -43,8 +43,11 @@ def app_ctx():
         database.session.add_all(
             [
                 Modules(module="accounting", default=True, enabled=True),
+                Modules(module="sales", default=True, enabled=True),
+                Modules(module="purchases", default=True, enabled=True),
+                Modules(module="cash", default=True, enabled=True),
                 User(user="admin", name="Admin", password=b"x", classification="admin", active=True),
-                Entity(code="cacao", name="Cacao", company_name="Cacao SA", tax_id="J0001", currency="NIO"),
+                Entity(code="cacao", name="Cacao", company_name="Cacao SA", tax_id="J0001", currency="NIO", enabled=True),
                 Currency(code="USD", name="Dollar", decimals=2, active=True),
                 Currency(code="NIO", name="Cordoba", decimals=2, active=True, default=True),
                 Currency(code="EUR", name="Euro", decimals=2, active=True),
@@ -83,7 +86,11 @@ def app_ctx():
             ]
         )
         database.session.commit()
-        yield app
+        from cacao_accounting.internal_control_service import audit_actor
+
+        admin_id = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one().id
+        with audit_actor(admin_id, "Exchange revaluation test administrator"):
+            yield app
 
 
 def _login(client, user_id: str) -> None:
