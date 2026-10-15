@@ -49,6 +49,7 @@
   <p>{{ _('Registros') }}: {{ report.total_rows }}</p>
   <div class="table-responsive">
     <table class="table table-sm">
+      <caption class="visually-hidden">{{ _('Eventos de control interno que coinciden con los filtros seleccionados.') }}</caption>
       <thead><tr>{% for column in report.columns %}<th>{{ report_headers.get(column, column) }}</th>{% endfor %}</tr></thead>
       <tbody>
       {% for row in report.rows %}

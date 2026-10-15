@@ -24638,3 +24638,7 @@ msgstr "A check can only be printed for payments whose mode of payment is check.
 
 #~ msgid "La linea origen no pertenece al documento indicado."
 #~ msgstr "The source line does not belong to the specified document."
+
+#: cacao_accounting/reportes/templates/reportes/internal_control.html
+msgid "Eventos de control interno que coinciden con los filtros seleccionados."
+msgstr "Internal control events matching the selected filters."
