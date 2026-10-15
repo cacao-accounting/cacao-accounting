@@ -1567,14 +1567,45 @@ class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
     created_by = database.Column(database.String(26), nullable=True)
 
 
+def _persisted_ledger_is_cancelled(connection, state, target) -> bool:
+    """Read the stored cancellation flag without trusting stale object memory."""
+    table = state.mapper.local_table
+    column = table.c["is_cancelled"]
+    identity = state.identity
+    value = getattr(target, state.mapper.primary_key[0].key, None)
+    if identity:
+        value = identity[0]
+    if value is None:
+        return False
+    row = connection.execute(select(column).where(table.c[table.primary_key[0].key] == value)).first()
+    return bool(row is not None and row[0])
+
+
 def _reject_ledger_mutation(mapper, connection, target) -> None:
-    """Keep append-only ledger rows immutable except for cancellation state."""
+    """Keep append-only ledger rows immutable with monotonic cancellation.
+
+    La cancelacion de una linea contable va en una sola dirección
+    (``False -> True``): una vez cancelada, la evidencia queda bajo lápida
+    y no puede ser reactivada; cualquier corrección debe usar una nueva
+    línea append-only (ver AGENTS.md, política append-only).
+    """
     state = inspect(target)
     changed = [
         attribute.key for attribute in state.attrs if attribute.key != "is_cancelled" and attribute.history.has_changes()
     ]
     if changed:
         raise ValueError(_("Las líneas del ledger son inmutables; use una reversa append-only."))
+    if "is_cancelled" not in state.attrs:
+        return
+    cancellation = state.attrs["is_cancelled"]
+    if not cancellation.history.has_changes() or target.is_cancelled is not False:
+        return
+    if cancellation.history.deleted:
+        was_cancelled = bool(cancellation.history.deleted[0])
+    else:
+        was_cancelled = _persisted_ledger_is_cancelled(connection, state, target)
+    if was_cancelled:
+        raise ValueError(_("Una línea del ledger cancelada no se reactiva; registre una nueva línea."))
 
 
 def _reject_ledger_delete(mapper, connection, target) -> None:

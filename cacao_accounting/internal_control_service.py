@@ -397,18 +397,30 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
         _guard_approval_request_statement(clause, multiparams, params)
 
 
+def _statement_changed_values(clause: Any, multiparams: Any, params: Any, table: Any) -> dict[str, Any]:
+    """Map the mutated column keys of an Update to their bound values."""
+    values = getattr(clause, "_values", None)
+    if values is not None:
+        return {getattr(key, "key", key): getattr(value, "value", value) for key, value in values.items()}
+    parameters = list(multiparams or ()) + ([params] if params else [])
+    changed: dict[str, Any] = {}
+    for group in parameters:
+        if group:
+            changed.update({key: value for key, value in group.items() if key in table.c})
+    return changed
+
+
 def _guard_ledger_statement(clause: Any, multiparams: Any, params: Any) -> None:
     """Mirror the existing ledger mapper rule for Core and ORM SQL statements."""
     if isinstance(clause, Delete):
         raise ValueError(_("Las líneas del ledger no se pueden eliminar; use una reversa."))
-    values = getattr(clause, "_values", None)
-    if values is not None:
-        changed = {getattr(key, "key", key) for key in values}
-    else:
-        parameters = list(multiparams or ()) + ([params] if params else [])
-        changed = {key for group in parameters for key in group if key in clause.table.c}
-    if not changed or changed.difference({"is_cancelled"}):
+    changed = _statement_changed_values(clause, multiparams, params, clause.table)
+    if not changed:
         raise ValueError(_("Las líneas del ledger son inmutables; use una reversa append-only."))
+    if {key for key in changed if key != "is_cancelled"}:
+        raise ValueError(_("Las líneas del ledger son inmutables; use una reversa append-only."))
+    if not changed["is_cancelled"]:
+        raise ValueError(_("Una línea del ledger cancelada no se reactiva; registre una nueva línea."))
 
 
 PROTECTED_REQUEST_FIELDS = frozenset(
@@ -429,13 +441,8 @@ def _guard_approval_request_statement(clause: Any, multiparams: Any, params: Any
     """Reject Core rewrites of approval provenance while allowing lifecycle moves."""
     if isinstance(clause, Delete):
         raise ValueError(_("La evidencia de auditoría es inmutable."))
-    values = getattr(clause, "_values", None)
-    if values is not None:
-        changed = {getattr(key, "key", key) for key in values}
-    else:
-        parameters = list(multiparams or ()) + ([params] if params else [])
-        changed = {key for group in parameters for key in group if key in clause.table.c}
-    if changed.intersection(PROTECTED_REQUEST_FIELDS):
+    changed = _statement_changed_values(clause, multiparams, params, clause.table)
+    if changed and changed.keys() & PROTECTED_REQUEST_FIELDS:
         raise ValueError(_("La evidencia de auditoría es inmutable."))
 
 

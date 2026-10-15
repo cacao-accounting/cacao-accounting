@@ -16,6 +16,7 @@ from cacao_accounting.database import (
     CacaoConfig,
     ComprobanteContable,
     Entity,
+    GLEntry,
     Roles,
     SalesInvoice,
     SalesInvoiceItem,
@@ -463,3 +464,66 @@ def test_matching_config_bulk_mutation_is_rejected(app):
     with pytest.raises(ValueError, match="servicio auditado"):
         database.session.connection().execute(text("DELETE FROM sales_matching_config"))
     database.session.rollback()
+
+
+def _ledger_row():
+    """Create an isolated GL ledger line for cancellation-boundary tests."""
+    entry = GLEntry(
+        company="co",
+        posting_date=date.today(),
+        debit=100,
+        credit=0,
+        voucher_type="test_document",
+        voucher_id="v-925",
+    )
+    database.session.add(entry)
+    database.session.commit()
+    return entry
+
+
+def test_ledger_cancellation_is_monotonic(app):
+    """La cancelación del ledger va en una sola dirección False -> True."""
+    entry = _ledger_row()
+    entry.is_cancelled = True
+    database.session.flush()
+    database.session.commit()
+    assert database.session.get(GLEntry, entry.id).is_cancelled is True
+    # La reactivación directa queda bloqueada a nivel de ORM.
+    entry.is_cancelled = False
+    with pytest.raises(ValueError, match="no se reactiva"):
+        database.session.flush()
+    database.session.rollback()
+    assert database.session.get(GLEntry, entry.id).is_cancelled is True
+
+
+def test_ledger_reactivation_via_sql_core_is_blocked(app):
+    """La vía Core no puede reactivar una línea del ledger cancelada."""
+    entry = _ledger_row()
+    entry.is_cancelled = True
+    database.session.flush()
+    database.session.commit()
+    with pytest.raises(ValueError, match="no se reactiva"):
+        database.session.connection().execute(update(GLEntry).where(GLEntry.id == entry.id).values(is_cancelled=False))
+    database.session.rollback()
+    assert database.session.get(GLEntry, entry.id).is_cancelled is True
+
+
+def test_ledger_reactivation_via_orm_bulk_is_blocked(app):
+    """Los UPDATE bulk del ORM tampoco pueden reactivar la evidencia."""
+    entry = _ledger_row()
+    entry.is_cancelled = True
+    database.session.flush()
+    database.session.commit()
+    with pytest.raises(ValueError, match="no se reactiva"):
+        database.session.execute(update(GLEntry).values(is_cancelled=False))
+    database.session.rollback()
+    assert database.session.get(GLEntry, entry.id).is_cancelled is True
+
+
+def test_ledger_bulk_cancellation_remains_allowed(app):
+    """Cancelar por Core sigue permitido (dirección monotónica)."""
+    entry = _ledger_row()
+    database.session.connection().execute(update(GLEntry).where(GLEntry.id == entry.id).values(is_cancelled=True))
+    database.session.commit()
+    database.session.expire_all()
+    assert database.session.get(GLEntry, entry.id).is_cancelled is True
