@@ -290,6 +290,7 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
                     "company_id",
                     "document_id",
                     "document_type",
+                    "required_level",
                     "created_at",
                 }
             )
@@ -388,8 +389,10 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
     table_name = getattr(clause.table, "name", None)
     if table_name in LEDGER_TABLES:
         _guard_ledger_statement(clause, multiparams, params)
-    if table_name in EVIDENCE_TABLES or (table_name == "approval_request" and isinstance(clause, Delete)):
+    if table_name in EVIDENCE_TABLES:
         raise ValueError(_("La evidencia de auditoría es inmutable."))
+    if table_name == "approval_request":
+        _guard_approval_request_statement(clause, multiparams, params)
 
 
 def _guard_ledger_statement(clause: Any, multiparams: Any, params: Any) -> None:
@@ -404,6 +407,34 @@ def _guard_ledger_statement(clause: Any, multiparams: Any, params: Any) -> None:
         changed = {key for group in parameters for key in group if key in clause.table.c}
     if not changed or changed.difference({"is_cancelled"}):
         raise ValueError(_("Las líneas del ledger son inmutables; use una reversa append-only."))
+
+
+PROTECTED_REQUEST_FIELDS = frozenset(
+    {
+        "policy_snapshot",
+        "review_payload",
+        "requested_by",
+        "company_id",
+        "document_id",
+        "document_type",
+        "required_level",
+        "created_at",
+    }
+)
+
+
+def _guard_approval_request_statement(clause: Any, multiparams: Any, params: Any) -> None:
+    """Reject Core rewrites of approval provenance while allowing lifecycle moves."""
+    if isinstance(clause, Delete):
+        raise ValueError(_("La evidencia de auditoría es inmutable."))
+    values = getattr(clause, "_values", None)
+    if values is not None:
+        changed = {getattr(key, "key", key) for key in values}
+    else:
+        parameters = list(multiparams or ()) + ([params] if params else [])
+        changed = {key for group in parameters for key in group if key in clause.table.c}
+    if changed.intersection(PROTECTED_REQUEST_FIELDS):
+        raise ValueError(_("La evidencia de auditoría es inmutable."))
 
 
 def _posting_predicate(table: Any) -> Any:

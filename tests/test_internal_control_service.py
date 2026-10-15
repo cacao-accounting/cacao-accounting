@@ -148,6 +148,39 @@ def test_approval_action_and_policy_cannot_be_rewritten(app):
         database.session.flush()
 
 
+def test_request_required_level_cannot_be_weakened(app):
+    """El nivel de four-eyes congelado no puede revaluarse a la baja."""
+    request = ApprovalRequest(
+        document_type="test",
+        document_id="doc-922",
+        company_id="co",
+        requested_by="actor",
+        required_level=3,
+        policy_snapshot={"requires_independent": True},
+    )
+    database.session.add(request)
+    database.session.commit()
+    request.required_level = 1
+    with pytest.raises(ValueError, match="inmutable"):
+        database.session.flush()
+    database.session.rollback()
+    request.policy_snapshot = {"requires_independent": False}
+    with pytest.raises(ValueError, match="inmutable"):
+        database.session.flush()
+    database.session.rollback()
+    with pytest.raises(ValueError, match="inmutable"):
+        database.session.connection().execute(
+            update(ApprovalRequest)
+            .where(ApprovalRequest.id == request.id)
+            .values(required_level=1, policy_snapshot={"requires_independent": False})
+        )
+    database.session.rollback()
+    # Las transiciones de flujo del motor de aprobación siguen permitidas.
+    request.status = "Approved"
+    request.current_level = 3
+    database.session.flush()
+
+
 def test_posted_header_and_line_protected_but_balances_and_cancellation_mutable(app):
     """Financial evidence stays fixed; derived balances and lifecycle may change."""
     invoice = SalesInvoice(company="co", docstatus=1, total=100, posting_date=date.today())
