@@ -57,6 +57,18 @@ def app_instance():
     return _app
 
 
+@pytest.fixture()
+def cloud_app_instance(app_instance):
+    """Expose Cloud-only admin settings independently of the host mode."""
+    configured_mode = app_instance.config.get("MODO_ESCRITORIO")
+    app_instance.config["MODO_ESCRITORIO"] = False
+    yield app_instance
+    if configured_mode is None:
+        app_instance.config.pop("MODO_ESCRITORIO", None)
+    else:
+        app_instance.config["MODO_ESCRITORIO"] = configured_mode
+
+
 def test_admin_home_redirects_unauthenticated(app_instance):
     with app_instance.test_client() as client:
         response = client.get("/admin")
@@ -539,8 +551,8 @@ def test_config_conciliacion_compras_y_ventas(app_instance):
         assert "conciliación de ventas guardada" in response.get_data(as_text=True)
 
 
-def test_budget_control_config(app_instance):
-    with app_instance.test_client() as client:
+def test_budget_control_config(cloud_app_instance):
+    with cloud_app_instance.test_client() as client:
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
 
         # GET

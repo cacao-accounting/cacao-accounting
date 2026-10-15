@@ -29,6 +29,7 @@ def app_ctx() -> Iterator[Flask]:
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
             "SECRET_KEY": "test-routes-map-secret",
+            "MODO_ESCRITORIO": False,
         }
     )
     with app.app_context():

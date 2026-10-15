@@ -22,6 +22,12 @@ from tests.test_approval_engine import (
 app = approval_app
 
 
+@pytest.fixture(autouse=True)
+def cloud_mode(app):
+    """Keep Cloud approval semantics explicit when the suite runs on Desktop."""
+    app.config["MODO_ESCRITORIO"] = False
+
+
 def _actor(name, module, rank, *, approve=True, scope=True):
     """Create an active classified user with independently assigned authority."""
     user = _create_user(name)

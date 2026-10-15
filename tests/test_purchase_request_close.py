@@ -50,6 +50,14 @@ def app_ctx():
 
 
 @pytest.fixture()
+def cloud_audit_app(app_ctx):
+    """Enable Cloud audit evidence explicitly for its audit-trail regression."""
+    app_ctx.config["MODO_ESCRITORIO"] = False
+    app_ctx.config["INTERNAL_CONTROLS_ENFORCE"] = True
+    return app_ctx
+
+
+@pytest.fixture()
 def http_app():
     """Create an isolated application with an administrator for HTTP tests."""
     app = create_app(
@@ -260,9 +268,9 @@ def test_unclosable_purchase_request_rejects_close_over_http(http_app):
             assert database.session.get(PurchaseRequest, request.id).status == "open"
 
 
-def test_audit_trail_stores_snake_case_document_type(app_ctx):
+def test_audit_trail_stores_snake_case_document_type(cloud_audit_app):
     """DocBase documents are audited under their snake_case document type."""
-    with app_ctx.app_context():
+    with cloud_audit_app.app_context():
         request = PurchaseRequest(id="PREQ-AUDIT-01", company="cacao", docstatus=1)
         database.session.add(request)
         database.session.flush()

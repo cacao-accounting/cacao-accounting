@@ -1,5 +1,24 @@
 # Bitácora de desarrollo
 
+## 2026-10-15 (SOX Cloud — fixtures explícitas al ejecutar en Desktop)
+
+### Hallazgos y corrección
+
+Al correr la suite con `CACAO_ACCOUNTING_DESKTOP=True`, cinco regresiones de pruebas Cloud dependían del modo ambiental:
+el control presupuestario devolvía 403, el guard de aprobación se omitía en Desktop, el audit trail Cloud no se generaba y
+el reporte interno Cloud respondía 404. Se fijó `MODO_ESCRITORIO=False` únicamente en las fixtures que prueban esas
+capacidades; la prueba de audit trail activa además `INTERNAL_CONTROLS_ENFORCE=True`. No se modificó código productivo ni
+se relajaron aserciones.
+
+### Verificación
+
+- Los cinco casos reportados pasan con `CACAO_ACCOUNTING_DESKTOP=True`.
+- Archivos afectados completos en Desktop: 36 passed, 6 skipped.
+- Los mismos archivos en modo Cloud: 42 passed.
+- Black, Ruff, Flake8 y pydocstyle pasan en los archivos modificados; los imports tardíos intencionales de
+  `test_admin_blueprint.py` se exceptúan de E402 en esa verificación.
+- QA independiente revisó el alcance de las fixtures y aprobó que la cobertura Cloud se conserva sin tocar producción.
+
 ## 2026-10-15 (SOX Cloud — regresión y runner por archivo)
 
 ### Correcciones y verificación
