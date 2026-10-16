@@ -1080,26 +1080,6 @@ def test_ctas_cargar_catalogos(app_ctx):
 # ===========================================================================
 
 
-def test_gl_list_route(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/gl/list")
-    assert response.status_code == 200
-
-
-def test_gl_new_route(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/gl/new")
-    assert response.status_code == 200
-
-
 # ===========================================================================
 # contabilidad/__init__.py — Flask routes coverage
 # ===========================================================================
@@ -1116,26 +1096,6 @@ def test_route_conta(app_ctx):
     assert response.status_code == 200
     assert "Comprobante Recurrente" in html
     assert "Asistente de Cierre Mensual" in html
-
-
-def test_route_monedas(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/currency/list")
-    assert response.status_code == 200
-
-
-def test_route_nueva_moneda_get(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/currency/new")
-    assert response.status_code == 200
 
 
 def test_route_nueva_moneda_post(app_ctx):
@@ -1278,16 +1238,6 @@ def test_route_editar_moneda_missing(app_ctx):
     assert response.status_code in (200, 302)
 
 
-def test_route_entidades(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/entity/list")
-    assert response.status_code == 200
-
-
 def test_route_entidad_detail(app_ctx):
     from cacao_accounting.database import User
 
@@ -1295,18 +1245,6 @@ def test_route_entidad_detail(app_ctx):
     client = app_ctx.test_client()
     _login(client, user.id)
     response = client.get("/accounting/entity/cacao")
-    assert response.status_code == 200
-
-
-def test_route_nueva_entidad_get(app_ctx):
-    from cacao_accounting.database import Currency, User, database
-
-    database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
-    database.session.commit()
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/entity/new")
     assert response.status_code == 200
 
 
@@ -1428,16 +1366,6 @@ def test_route_editar_entidad_post(app_ctx):
     assert response.status_code in (200, 302)
 
 
-def test_route_unidades(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/unit/list")
-    assert response.status_code == 200
-
-
 def test_route_unidad_detail(app_ctx):
     from cacao_accounting.database import Unit, User, database
 
@@ -1475,16 +1403,6 @@ def test_route_nueva_unidad_post(app_ctx):
     assert response.status_code in (200, 302)
 
 
-def test_route_nueva_unidad_get(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/unit/new")
-    assert response.status_code == 200
-
-
 def test_route_editar_unidad_get(app_ctx):
     from cacao_accounting.database import Unit, User, database
 
@@ -1510,16 +1428,6 @@ def test_route_editar_unidad_post(app_ctx):
         data={"id": "EDU2", "nombre": "Edit Unit Updated", "entidad": "cacao", "habilitado": "y"},
     )
     assert response.status_code in (200, 302)
-
-
-def test_route_libros(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/book/list")
-    assert response.status_code == 200
 
 
 def test_route_libro_detail(app_ctx):
@@ -1573,18 +1481,6 @@ def test_route_editar_libro_missing(app_ctx):
     assert response.status_code in (200, 302)
 
 
-def test_route_nuevo_libro_get(app_ctx):
-    from cacao_accounting.database import Currency, User, database
-
-    database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
-    database.session.commit()
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/book/new")
-    assert response.status_code == 200
-
-
 def test_route_journal_books_no_company(app_ctx):
     from cacao_accounting.database import User
 
@@ -1615,18 +1511,6 @@ def test_route_cuenta_detail(app_ctx):
     client = app_ctx.test_client()
     _login(client, user.id)
     response = client.get("/accounting/account/cacao/1.01")
-    assert response.status_code == 200
-
-
-def test_route_nueva_cuenta_get(app_ctx):
-    from cacao_accounting.database import Currency, User, database
-
-    database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
-    database.session.commit()
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/account/new")
     assert response.status_code == 200
 
 
@@ -1686,16 +1570,6 @@ def test_route_ccostos(app_ctx):
     client = app_ctx.test_client()
     _login(client, user.id)
     response = client.get("/accounting/costs_center?entidad=cacao")
-    assert response.status_code == 200
-
-
-def test_route_nuevo_centro_costo_get(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/costs_center/new")
     assert response.status_code == 200
 
 
@@ -1847,26 +1721,6 @@ def test_route_editar_centro_costo_post(app_ctx):
         },
     )
     assert response.status_code in (200, 302)
-
-
-def test_route_proyectos(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/project/list")
-    assert response.status_code == 200
-
-
-def test_route_nuevo_proyecto_get(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/project/new")
-    assert response.status_code == 200
 
 
 def test_route_nuevo_proyecto_post(app_ctx):
@@ -2029,26 +1883,6 @@ def test_route_proyecto_detail_missing(app_ctx):
     assert response.status_code in (200, 302)
 
 
-def test_route_fiscal_year_list(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/fiscal_year/list")
-    assert response.status_code == 200
-
-
-def test_route_fiscal_year_new_get(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/fiscal_year/new")
-    assert response.status_code == 200
-
-
 def test_route_fiscal_year_new_post(app_ctx):
     from cacao_accounting.database import User
 
@@ -2119,16 +1953,6 @@ def test_route_fiscal_year_detail_missing(app_ctx):
     _login(client, user.id)
     response = client.get("/accounting/fiscal_year/NONEXISTENT")
     assert response.status_code in (200, 302)
-
-
-def test_route_accounting_period_new_get(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/accounting_period/new")
-    assert response.status_code == 200
 
 
 def test_route_accounting_period_new_post(app_ctx):
@@ -2213,28 +2037,6 @@ def test_route_accounting_period_detail_missing(app_ctx):
     _login(client, user.id)
     response = client.get("/accounting/accounting_period/NONEXISTENT")
     assert response.status_code in (200, 302)
-
-
-def test_route_tasa_cambio(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/exchange")
-    assert response.status_code == 200
-
-
-def test_route_nueva_tasa_cambio_get(app_ctx):
-    from cacao_accounting.database import Currency, User, database
-
-    database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
-    database.session.commit()
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/exchange/new")
-    assert response.status_code == 200
 
 
 def test_route_nueva_tasa_cambio_post(app_ctx):
@@ -2330,26 +2132,6 @@ def test_route_editar_tasa_cambio_post(app_ctx):
         data={"origin": "USD", "destination": "NIO", "rate": "37.00", "date": "2026-06-01"},
     )
     assert response.status_code in (200, 302)
-
-
-def test_route_periodo_contable(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/accounting_period")
-    assert response.status_code == 200
-
-
-def test_route_listar_comprobantes(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/journal/list")
-    assert response.status_code == 200
 
 
 def test_route_listar_comprobantes_filtro_periodo(app_ctx):
@@ -2988,26 +2770,6 @@ def test_route_editar_comprobante_post_error(app_ctx):
     assert response.status_code in (200, 302)
 
 
-def test_route_naming_series_list(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/naming-series/list")
-    assert response.status_code == 200
-
-
-def test_route_naming_series_new_get(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/naming-series/new")
-    assert response.status_code == 200
-
-
 def test_route_naming_series_new_post(app_ctx):
     from cacao_accounting.database import User
 
@@ -3209,26 +2971,6 @@ def test_route_naming_series_toggle_active_missing(app_ctx):
     _login(client, user.id)
     response = client.post("/accounting/naming-series/NONEXISTENT/toggle-active", follow_redirects=False)
     assert response.status_code in (200, 302)
-
-
-def test_route_external_counter_list(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/external-counter/list")
-    assert response.status_code == 200
-
-
-def test_route_external_counter_new_get(app_ctx):
-    from cacao_accounting.database import User
-
-    user = User.query.filter_by(user="admin").first()
-    client = app_ctx.test_client()
-    _login(client, user.id)
-    response = client.get("/accounting/external-counter/new")
-    assert response.status_code == 200
 
 
 def test_route_external_counter_new_post(app_ctx):

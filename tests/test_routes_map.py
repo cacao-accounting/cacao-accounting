@@ -17,6 +17,33 @@ EXCLUDED_RULES = {
     "/logout",
     "/salir",
 }
+STRICT_STATUS_200_ROUTES = {
+    "/accounting/accounting_period",
+    "/accounting/accounting_period/new",
+    "/accounting/account/new",
+    "/accounting/book/list",
+    "/accounting/book/new",
+    "/accounting/costs_center/new",
+    "/accounting/currency/list",
+    "/accounting/currency/new",
+    "/accounting/entity/list",
+    "/accounting/entity/new",
+    "/accounting/exchange",
+    "/accounting/exchange/new",
+    "/accounting/external-counter/list",
+    "/accounting/external-counter/new",
+    "/accounting/fiscal_year/list",
+    "/accounting/fiscal_year/new",
+    "/accounting/gl/list",
+    "/accounting/gl/new",
+    "/accounting/journal/list",
+    "/accounting/naming-series/list",
+    "/accounting/naming-series/new",
+    "/accounting/project/list",
+    "/accounting/project/new",
+    "/accounting/unit/list",
+    "/accounting/unit/new",
+}
 
 
 @pytest.fixture()
@@ -97,10 +124,24 @@ def _iter_get_routes(app: Flask) -> list[str]:
 def test_all_static_get_routes_render_without_server_errors(app_ctx: Flask, client) -> None:
     _login_admin(client)
 
-    for route in _iter_get_routes(app_ctx):
+    app_ctx.config["MODO_ESCRITORIO"] = True
+    try:
+        for route in sorted(STRICT_STATUS_200_ROUTES):
+            response = client.get(route, follow_redirects=False)
+            assert response.status_code == 200, f"Ruta desktop {route} devolvió {response.status_code}, se esperaba 200"
+    finally:
+        app_ctx.config["MODO_ESCRITORIO"] = False
+
+    routes = _iter_get_routes(app_ctx)
+    missing_routes = STRICT_STATUS_200_ROUTES - set(routes)
+    assert not missing_routes, f"Rutas esperadas no visitadas: {sorted(missing_routes)}"
+
+    for route in routes:
         response = client.get(route, follow_redirects=False)
         if route.startswith("/api/") and response.status_code == 404:
             continue
+        if route in STRICT_STATUS_200_ROUTES:
+            assert response.status_code == 200, f"Ruta {route} devolvió {response.status_code}, se esperaba 200"
         assert response.status_code in ALLOWED_STATUS_CODES, f"Ruta {route} devolvió estado inesperado {response.status_code}"
         assert response.status_code != 404, f"Ruta {route} devolvió 404"
         assert response.status_code < 500, f"Ruta {route} devolvió error de servidor {response.status_code}"
