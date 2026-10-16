@@ -82,9 +82,20 @@ def _preparation_policy(actor: Any, preparer_ids: tuple, module: str) -> dict:
 
 
 def require_review(
-    kind: str, identifier: str, company: str, actor_id: str | None, payload: dict, preparer_ids: tuple = ()
+    kind: str,
+    identifier: str,
+    company: str,
+    actor_id: str | None,
+    payload: dict,
+    preparer_ids: tuple = (),
+    *,
+    review_required: bool = True,
 ) -> Any:
-    """Return a pending proposal, or allow execution through a validated review context."""
+    """Authorize the actor and return a proposal when the operation requires review.
+
+    ``review_required=False`` allows a policy-classified immediate change,
+    while retaining actor authorization and approved-execution validation.
+    """
     from cacao_accounting.approval_engine import ApprovalEngine
     from cacao_accounting.runtime_mode import is_desktop_mode
 
@@ -98,6 +109,8 @@ def require_review(
             raise ValueError(_("La revisión no corresponde a esta operación."))
         if _digest(payload) != _digest(execution.review_payload):
             raise ValueError(_("La operación cambió después de solicitar la revisión."))
+        return None
+    if not review_required:
         return None
     req = database.session.execute(
         database.select(ApprovalRequest)

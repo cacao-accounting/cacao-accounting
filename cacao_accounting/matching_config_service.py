@@ -148,10 +148,8 @@ def update_matching_config(
         "after": {field: _plain(value) for field, value in typed_after.items()},
         "weakened_fields": debilitados,
     }
-    pending = None
-    if debilitados:
-        identifier = f"{model}:{company}"
-        pending = require_review("config_change", identifier, company, actor_id, payload)
+    identifier = f"{model}:{company}"
+    pending = require_review("config_change", identifier, company, actor_id, payload, review_required=bool(debilitados))
     if pending is None:
         for field, value in typed_after.items():
             setattr(config, field, value)

@@ -394,6 +394,26 @@ def test_strengthening_config_change_applies_without_review(chart, config_review
     )
 
 
+@pytest.mark.parametrize("actor_id", ["nonexistent", "inactive"])
+@pytest.mark.parametrize("enabled", [False, True])
+def test_strengthening_config_change_requires_authorized_actor(chart, config_reviewers, actor_id, enabled):
+    """Immediate configuration edits still require a valid administrator."""
+    from cacao_accounting.database import PurchaseMatchingConfig
+    from cacao_accounting.matching_config_service import update_matching_config
+
+    config = PurchaseMatchingConfig(company=COMPANY, auto_reconcile=False)
+    database.session.add(config)
+    database.session.add(User(id="inactive", user="inactive", password=b"x", classification="admin", active=False))
+    database.session.execute(
+        database.select(CacaoConfig).filter_by(key="approval_engine_enabled_" + COMPANY)
+    ).scalar_one().value = ("1" if enabled else "0")
+    database.session.commit()
+    with pytest.raises(ValueError, match="No tiene autorización"):
+        update_matching_config("purchase", COMPANY, _matching_values(), actor_id=actor_id)
+    database.session.expire(config)
+    assert config.auto_reconcile is False
+
+
 @pytest.mark.parametrize("current_type", ["2-way", "3-way"])
 def test_config_review_rejects_changed_configuration(chart, config_reviewers, current_type):
     """A stale proposal cannot execute even when its target no longer weakens controls."""

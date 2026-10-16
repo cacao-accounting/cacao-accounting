@@ -1032,7 +1032,7 @@ def test_purchase_reconciliation_require_purchase_order_enforced(app_instance):
         response = client.post(
             "/settings/purchase-reconciliation",
             data={
-                "company": "cacao",
+                "company": "CACAO",
                 "matching_type": "3-way",
                 "price_tolerance_type": "percentage",
                 "price_tolerance_value": "0",
@@ -1053,7 +1053,7 @@ def test_purchase_reconciliation_require_purchase_order_enforced(app_instance):
             supplier_id = supplier.id
             cp = CompanyParty(
                 party_id=supplier_id,
-                company="cacao",
+                company="CACAO",
                 allow_purchase_invoice_without_order=True,
                 allow_purchase_invoice_without_receipt=True,
             )
@@ -1062,12 +1062,12 @@ def test_purchase_reconciliation_require_purchase_order_enforced(app_instance):
 
             # Validar que _validate_supplier_invoice_flags rechaza factura sin OC
             with pytest.raises(ValueError, match="requiere una orden de compra"):
-                _validate_supplier_invoice_flags(supplier_id, "cacao", purchase_order_id=None, purchase_receipt_id=None)
+                _validate_supplier_invoice_flags(supplier_id, "CACAO", purchase_order_id=None, purchase_receipt_id=None)
 
             # Probar que _reconcile_three_way rechaza factura sin OC
             invoice = PurchaseInvoice(
                 supplier_id=supplier_id,
-                company="cacao",
+                company="CACAO",
                 docstatus=1,
                 purchase_order_id=None,
                 purchase_receipt_id="dummy_receipt_id",
@@ -1075,7 +1075,7 @@ def test_purchase_reconciliation_require_purchase_order_enforced(app_instance):
             receipt = PurchaseReceipt(
                 id="dummy_receipt_id",
                 supplier_id=supplier_id,
-                company="cacao",
+                company="CACAO",
                 docstatus=1,
                 purchase_order_id=None,
             )
@@ -1089,7 +1089,7 @@ def test_purchase_reconciliation_require_purchase_order_enforced(app_instance):
         response = client.post(
             "/settings/purchase-reconciliation",
             data={
-                "company": "cacao",
+                "company": "CACAO",
                 "matching_type": "3-way",
                 "price_tolerance_type": "percentage",
                 "price_tolerance_value": "0",
@@ -1103,4 +1103,4 @@ def test_purchase_reconciliation_require_purchase_order_enforced(app_instance):
 
         with app_instance.app_context():
             # Ahora la validación de flags sin OC debe tener éxito
-            _validate_supplier_invoice_flags(supplier_id, "cacao", purchase_order_id=None, purchase_receipt_id=None)
+            _validate_supplier_invoice_flags(supplier_id, "CACAO", purchase_order_id=None, purchase_receipt_id=None)
