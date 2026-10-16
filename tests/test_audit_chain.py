@@ -2,8 +2,10 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 """Integridad del ``audit_trail`` mediante cadena de hashes SHA-256."""
 
+import os
+
 import pytest
-from sqlalchemy import text
+from sqlalchemy import delete, text
 
 from cacao_accounting import create_app
 from cacao_accounting.audit_chain import compute_payload_hash, verify_audit_trail_chain
@@ -15,10 +17,11 @@ from cacao_accounting.database import AuditTrail, database
 @pytest.fixture()
 def app_ctx():
     """App de escritorio sin enforcement, con la cadena activa en ambos modos."""
+    database_uri = os.environ.get("CACAO_AUDIT_CHAIN_TEST_DATABASE_URL", "sqlite:///:memory:")
     application = create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_DATABASE_URI": database_uri,
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
             "MODO_ESCRITORIO": True,
@@ -27,9 +30,14 @@ def app_ctx():
     )
     with application.app_context():
         database.create_all()
+        if str(database_uri).startswith(("postgresql://", "postgresql+")):
+            database.session.execute(delete(AuditTrail))
         database.session.commit()
         yield application
         database.session.rollback()
+        if str(database_uri).startswith(("postgresql://", "postgresql+")):
+            database.session.execute(delete(AuditTrail))
+            database.session.commit()
         database.session.remove()
         database.engine.dispose()
 
@@ -136,6 +144,47 @@ def test_legacy_rows_without_hash_are_tolerated(app_ctx):
     assert verify_audit_trail_chain() == []
 
 
+def test_legacy_row_after_chain_head_does_not_reset_head(app_ctx):
+    """A legacy row inserted later cannot make new entries lose continuity."""
+    log_create({"id": "first", "document_type": "test", "company_id": "co"})
+    database.session.commit()
+    first_hash = _rows()[0].payload_hash
+    database.session.execute(database.insert(AuditTrail).values(document_type="legacy", document_id="late", action="created"))
+    database.session.commit()
+    log_create({"id": "second", "document_type": "test", "company_id": "co"})
+    database.session.commit()
+    hashed = [row for row in _rows() if row.payload_hash is not None]
+    assert hashed[-1].prev_hash == first_hash
+    assert verify_audit_trail_chain() == []
+
+
+def test_verification_follows_hash_links_not_row_ids(app_ctx):
+    """Chain verification tolerates commit order differing from generated ids."""
+    from datetime import datetime, timezone
+
+    root = {
+        "id": "z-root",
+        "document_type": "test",
+        "document_id": "root",
+        "action": "created",
+        "timestamp": datetime.now(timezone.utc),
+        "hash_version": 2,
+        "prev_hash": None,
+    }
+    root["payload_hash"] = compute_payload_hash(root)
+    child = {
+        **root,
+        "id": "a-child",
+        "document_id": "child",
+        "prev_hash": root["payload_hash"],
+        "timestamp": datetime.now(timezone.utc),
+    }
+    child["payload_hash"] = compute_payload_hash(child)
+    database.session.connection().execute(AuditTrail.__table__.insert(), [root, child])
+    database.session.commit()
+    assert verify_audit_trail_chain() == []
+
+
 def test_new_rows_are_versioned_with_row_identity(app_ctx):
     """El hash v2 incluye la identidad de la fila y la versión queda estampada."""
     from cacao_accounting.audit_chain import CHAIN_HASH_VERSION
@@ -232,23 +281,25 @@ def test_audit_verify_cli_command(app_ctx, tmp_path, monkeypatch):
 
 def test_concurrent_writers_are_serialized_on_postgresql(app_ctx):
     """Escritores concurrentes en PG no producen fork aparente de la cadena."""
-    import os
     import threading
     from datetime import datetime, timezone
 
     from cacao_accounting.audit_chain import stamp_audit_values
     from cacao_accounting.database import obtiene_texto_unico
 
-    url = os.environ.get("CACAO_DATABASE_URL") or os.environ.get("CACAO_DB") or os.environ.get("DATABASE_URL") or ""
     engine_name = app_ctx.config["SQLALCHEMY_DATABASE_URI"]
-    if not str(engine_name).startswith("postgresql") and not url.split("://")[0].startswith("postgres"):
-        pytest.skip("La serialización de la cadena es específica de PostgreSQL.")
+    if not str(engine_name).startswith("postgresql"):
+        pytest.skip("Define CACAO_AUDIT_CHAIN_TEST_DATABASE_URL con una base PostgreSQL aislada.")
+    database.session.execute(delete(AuditTrail))
+    database.session.commit()
+    assert database.session.scalar(database.select(AuditTrail.id).where(AuditTrail.payload_hash.is_not(None)).limit(1)) is None
 
     def worker(index: int) -> None:
         with app_ctx.app_context():
             connection = database.engine.connect()
             try:
                 with connection.begin():
+                    start_writers.wait(timeout=10)
                     values = {
                         "id": obtiene_texto_unico(),
                         "document_type": "concurrency_probe",
@@ -261,6 +312,7 @@ def test_concurrent_writers_are_serialized_on_postgresql(app_ctx):
             finally:
                 connection.close()
 
+    start_writers = threading.Barrier(2)
     threads = [threading.Thread(target=worker, args=(index,)) for index in (1, 2)]
     for thread in threads:
         thread.start()
@@ -277,4 +329,8 @@ def test_concurrent_writers_are_serialized_on_postgresql(app_ctx):
     assert len(rows) == 2
     assert rows[0].payload_hash is not None and rows[1].payload_hash is not None
     assert rows[0].payload_hash != rows[1].payload_hash
-    assert rows[1].prev_hash == rows[0].payload_hash
+    assert sorted(row.prev_hash is None for row in rows) == [False, True]
+    root = next(row for row in rows if row.prev_hash is None)
+    leaf = next(row for row in rows if row.prev_hash is not None)
+    assert leaf.prev_hash == root.payload_hash
+    assert verify_audit_trail_chain() == []

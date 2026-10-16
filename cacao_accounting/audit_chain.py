@@ -5,16 +5,15 @@
 
 Cada fila nueva de ``audit_trail`` calcula ``payload_hash = sha256(payload)``
 sobre su contenido y registra ``prev_hash`` igual al ``payload_hash`` de la
-fila precedente (orden por ``id``, ULID monótonico). La verificación recalcula
-el hash de cada fila y valida el enlace con la fila previa, por lo que editar
-una fila histórica, insertar evidencia falsa o eliminar del medio la cadena
-queda detectado en ``verify_audit_trail_chain()``.
+fila precedente. La verificación recalcula el hash de cada fila y valida el
+enlace con la fila previa, por lo que editar una fila histórica, insertar
+evidencia falsa o eliminar del medio la cadena queda detectado en
+``verify_audit_trail_chain()``.
 
 Limitaciones aceptadas por diseño mínimo:
 
-- Escritores concurrentes en PostgreSQL pueden leer el mismo ``prev_hash``
-  antes de aterrizar su COMMIT (respuesta de falta (fork) aparente). En SQLite,
-  escritor único, no ocurre.
+- Escritores concurrentes en PostgreSQL se serializan con un advisory lock
+  transaccional, incluso cuando la cadena todavía está vacía.
 - Los DBA con escritura directa sobre la columna pueden rearmar la cadena;
   lo que protege es que los GRANT/REVOKE de despliegue revocan UPDATE/DELETE
   y que la columna no se recalcula desde la aplicación.
@@ -52,6 +51,7 @@ V1_FIELDS = (
     "timestamp",
 )
 CHAIN_HASH_VERSION = 2
+_CHAIN_TAIL_INFO_KEY = "cacao_audit_chain_pending_tail"
 _V2_FIELDS = ("id",) + V1_FIELDS
 
 # Alias histórico compatibles con lecturas del módulo originales.
@@ -112,30 +112,37 @@ def compute_payload_hash(source: Any, *, version: int | None = None) -> str:
 
 
 def _last_chain_hash(connection: Any) -> str | None:
-    """Devuelve el ``payload_hash`` de la fila auditada más reciente."""
-    return connection.execute(database.select(AuditTrail.payload_hash).order_by(AuditTrail.id.desc()).limit(1)).scalar()
+    """Return the terminal hash by link topology, independent of row ids."""
+    successor = AuditTrail.__table__.alias("audit_chain_successor")
+    has_successor = database.select(successor.c.id).where(successor.c.prev_hash == AuditTrail.payload_hash).exists()
+    heads = (
+        connection.execute(
+            database.select(AuditTrail.payload_hash).where(AuditTrail.payload_hash.is_not(None), ~has_successor).limit(2)
+        )
+        .scalars()
+        .all()
+    )
+    if len(heads) > 1:
+        raise RuntimeError("La cadena de auditoría tiene más de una cabeza terminal.")
+    return heads[0] if heads else None
 
 
 def _serialize_chain_head(connection: Any) -> None:
     """Serializa escritores concurrentes del encabezado de la cadena.
 
-    En PostgreSQL dos transacciones pueden leer el mismo ``prev_hash`` y
-    aterrizar con enlaces cruzados (fork cuyo reporte es un falso positivo en
-    la verificación; nada malicioso pero ruidoso). Tomando el bloqueo de fila
-    sobre la cabeza vigente, el segundo escritor espera hasta el COMMIT del
-    primero y lee el ``prev_hash`` correcto. La rutina es no-op en otros
-    motores: SQLite es escritor único y MySQL/MariaDB no aplican el bloqueo
-    con el mismo orden de lectura que PostgreSQL.
+    Un advisory lock transaccional serializa incluso el primer escritor,
+    cuando la cadena está vacía. El bloqueo de fila sobre la cabeza permanece
+    como defensa adicional. Este mecanismo es específico de PostgreSQL;
+    SQLite serializa escritores localmente.
     """
     dialect = getattr(getattr(connection, "dialect", None), "name", "")
     if dialect != "postgresql":
         return
+    connection.exec_driver_sql("SELECT pg_advisory_xact_lock(481239, 926)")
+    successor = AuditTrail.__table__.alias("audit_chain_successor")
+    has_successor = database.select(successor.c.id).where(successor.c.prev_hash == AuditTrail.payload_hash).exists()
     connection.execute(
-        database.select(AuditTrail.id)
-        .where(AuditTrail.payload_hash.is_not(None))
-        .order_by(AuditTrail.id.desc())
-        .limit(1)
-        .with_for_update()
+        database.select(AuditTrail.id).where(AuditTrail.payload_hash.is_not(None), ~has_successor).limit(1).with_for_update()
     ).all()
 
 
@@ -143,6 +150,17 @@ def _chain_head_after_lock(connection: Any) -> str | None:
     """Devuelve el ``payload_hash`` de la cabeza esperando el bloqueo previo."""
     _serialize_chain_head(connection)
     return _last_chain_hash(connection)
+
+
+def _pending_chain_tail(connection: Any) -> str | None:
+    """Return the tail already reserved by writes in the current flush."""
+    transaction = connection.get_transaction()
+    cached = connection.info.get(_CHAIN_TAIL_INFO_KEY)
+    if transaction is not None and cached is not None and cached[0] is transaction:
+        return cached[1]
+    tail = _chain_head_after_lock(connection)
+    connection.info[_CHAIN_TAIL_INFO_KEY] = (connection.get_transaction(), tail)
+    return tail
 
 
 def stamp_audit_values(connection: Any, values: dict[str, Any]) -> dict[str, Any]:
@@ -156,8 +174,9 @@ def stamp_audit_values(connection: Any, values: dict[str, Any]) -> dict[str, Any
     if values.get("timestamp") is None:
         values["timestamp"] = datetime.now(timezone.utc)
     values["hash_version"] = CHAIN_HASH_VERSION
-    values["prev_hash"] = _chain_head_after_lock(connection)
+    values["prev_hash"] = _pending_chain_tail(connection)
     values["payload_hash"] = compute_payload_hash(values)
+    connection.info[_CHAIN_TAIL_INFO_KEY] = (connection.get_transaction(), values["payload_hash"])
     return values
 
 
@@ -176,8 +195,9 @@ def stamp_audit_entry(connection: Any, entry: Any) -> None:
     if entry.timestamp is None:
         entry.timestamp = datetime.now(timezone.utc)
     entry.hash_version = CHAIN_HASH_VERSION
-    entry.prev_hash = _chain_head_after_lock(connection)
+    entry.prev_hash = _pending_chain_tail(connection)
     entry.payload_hash = compute_payload_hash(entry)
+    connection.info[_CHAIN_TAIL_INFO_KEY] = (connection.get_transaction(), entry.payload_hash)
 
 
 def chain_pending_rows(session: Any) -> None:
@@ -189,20 +209,69 @@ def chain_pending_rows(session: Any) -> None:
     El cálculo es idempotente: si el flush se deshace (rollback) y las filas
     se reintentan, la cadena se recalcula con la cola vigente.
     """
+    connection = session.connection()
+    connection.info.pop(_CHAIN_TAIL_INFO_KEY, None)
     pending = [target for target in session.new if isinstance(target, AuditTrail)]
     if not pending:
         return
+    tail = _chain_head_after_lock(connection)
+    connection.info[_CHAIN_TAIL_INFO_KEY] = (connection.get_transaction(), tail)
     for row in pending:
         if row.id is None:
             row.id = obtiene_texto_unico()
         if row.timestamp is None:
             row.timestamp = datetime.now(timezone.utc)
-    tail = _chain_head_after_lock(session.connection())
+    tail = connection.info[_CHAIN_TAIL_INFO_KEY][1]
     for row in sorted(pending, key=lambda target: str(target.id)):
         row.prev_hash = tail
         row.hash_version = CHAIN_HASH_VERSION
         row.payload_hash = compute_payload_hash(row)
         tail = row.payload_hash
+    connection.info[_CHAIN_TAIL_INFO_KEY] = (connection.get_transaction(), tail)
+
+
+def _payload_hash_issues(rows: list[Any]) -> list[dict[str, str]]:
+    """Return rows whose canonical payload no longer matches its stored hash."""
+    return [
+        {"row": str(row.id), "finding": "payload_tampered"}
+        for row in rows
+        if compute_payload_hash(row, version=row.hash_version) != row.payload_hash
+    ]
+
+
+def _walk_chain(root: Any, children: dict[str | None, list[Any]]) -> tuple[set[str], list[Any]]:
+    """Walk one chain branch, returning visited ids and unexpected branches."""
+    visited: set[str] = set()
+    branches: list[Any] = []
+    current = root
+    while current is not None and str(current.id) not in visited:
+        visited.add(str(current.id))
+        successors = children.get(current.payload_hash, [])
+        if len(successors) != 1:
+            branches.extend(row for row in successors if str(row.id) not in visited)
+            break
+        current = successors[0]
+    return visited, branches
+
+
+def _chain_link_issues(rows: list[Any]) -> list[dict[str, str]]:
+    """Return branch, extra-root, and orphan findings for a linked chain."""
+    children: dict[str | None, list[Any]] = {}
+    for row in rows:
+        children.setdefault(row.prev_hash, []).append(row)
+    roots = sorted(children.get(None, []), key=lambda row: str(row.id))
+    issues = [{"row": str(row.id), "finding": "chain_break"} for row in roots[1:]]
+    visited: set[str] = set()
+    if roots:
+        visited, branches = _walk_chain(roots[0], children)
+        issues.extend({"row": str(row.id), "finding": "chain_break"} for row in branches)
+    reported = {issue["row"] for issue in issues}
+    issues.extend(
+        {"row": str(row.id), "finding": "chain_break"}
+        for row in rows
+        if str(row.id) not in visited and str(row.id) not in reported
+    )
+    return issues
 
 
 def verify_audit_trail_chain() -> list[dict[str, str]]:
@@ -216,18 +285,7 @@ def verify_audit_trail_chain() -> list[dict[str, str]]:
     o duplicar su payload queda detectado.
     """
     rows = database.session.scalars(database.select(AuditTrail).order_by(AuditTrail.id.asc())).all()
-    issues: list[dict[str, str]] = []
-    expected_prev: str | None = None
-    for row in rows:
-        if row.payload_hash is None:
-            continue
-        expected_version = row.hash_version if row.hash_version is not None else None
-        if compute_payload_hash(row, version=expected_version) != row.payload_hash:
-            issues.append({"row": str(row.id), "finding": "payload_tampered"})
-        if expected_prev is None:
-            if row.prev_hash is not None:
-                issues.append({"row": str(row.id), "finding": "chain_break"})
-        elif row.prev_hash != expected_prev:
-            issues.append({"row": str(row.id), "finding": "chain_break"})
-        expected_prev = row.payload_hash
+    hashed_rows = [row for row in rows if row.payload_hash is not None]
+    issues = _payload_hash_issues(hashed_rows) + _chain_link_issues(hashed_rows)
+    issues.sort(key=lambda issue: (issue["row"], issue["finding"]))
     return issues
