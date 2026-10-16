@@ -7,14 +7,15 @@ const STATIC_ASSETS = [
   '/static/media/brand-mark.svg'
 ];
 
+async function precacheStaticAssets() {
+  const cache = await caches.open(CACHE_NAME);
+  await cache.addAll(STATIC_ASSETS).catch(() => {
+    // Suppress failure for non-critical assets during install
+  });
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch(() => {
-        // Suppress failure for non-critical assets during install
-      });
-    })
-  );
+  event.waitUntil(precacheStaticAssets());
   self.skipWaiting();
 });
 
@@ -41,24 +42,37 @@ self.addEventListener('fetch', (event) => {
 
   // Network-first for html/dynamic requests, cache-first for static assets
   if (url.origin === self.location.origin && url.pathname.startsWith('/static/')) {
-    event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) {
-          fetch(event.request).then((networkResponse) => {
-            if (networkResponse?.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-            }
-          }).catch(() => {});
-          return cachedResponse;
-        }
-        return fetch(event.request);
-      })
-    );
+    event.respondWith(cacheFirstWithRefresh(event.request));
   } else {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match(event.request);
-      })
-    );
+    event.respondWith(networkFirstWithCacheFallback(event.request));
   }
 });
+
+async function cacheFirstWithRefresh(request) {
+  const cachedResponse = await caches.match(request);
+  if (cachedResponse) {
+    void refreshCachedAsset(request);
+    return cachedResponse;
+  }
+  return fetch(request);
+}
+
+async function refreshCachedAsset(request) {
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse?.status === 200) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(request, networkResponse);
+    }
+  } catch (_) {
+    // Best-effort background refresh; the cached response is already served.
+  }
+}
+
+async function networkFirstWithCacheFallback(request) {
+  try {
+    return await fetch(request);
+  } catch (_) {
+    return caches.match(request);
+  }
+}

@@ -112,12 +112,12 @@
             this.selectedValue = normalizeValue(config.initialValue);
           }
           if (this.preload && this.requiredFiltersPresent() && !this.selectedValue) {
-            this.preloadOptions();
+            void this.preloadOptions();
           }
           if (this.autoSelectDefault && this.defaultAfterMs > 0) {
             this._defaultTimer = setTimeout(() => {
               if (!this.selectedValue && this.requiredFiltersPresent() && !this.loading) {
-                this.preloadOptions();
+                void this.preloadOptions();
               }
             }, this.defaultAfterMs);
           }
@@ -176,7 +176,7 @@
           this.lastFilterSignature = nextSignature;
           this.clearSelection();
           if ((this.preload || this.loadOnFilterChange) && this.requiredFiltersPresent()) {
-            this.preloadOptions();
+            void this.preloadOptions();
           }
         },
 
@@ -190,7 +190,7 @@
             this.selectedLabel = '';
           }
           this.invalid = false;
-          this.fetchOptions();
+          void this.fetchOptions();
         },
 
         onFocus() {
@@ -214,7 +214,7 @@
           if (this.options.length > 0) {
             this.openMenu();
           } else if (this.requiredFiltersPresent()) {
-            this.preloadOptions({ openMenu: true });
+            void this.preloadOptions({ openMenu: true });
           }
         },
 

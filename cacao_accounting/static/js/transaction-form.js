@@ -243,70 +243,85 @@
     return line.split("\t");
   }
 
+  function buildMessages(config) {
+    return {
+      itemCode: i18n.itemCodeLabel || 'Código del item',
+      itemName: i18n.itemNameLabel || 'Descripción del item',
+      uom: i18n.uomLabel || 'Unidad de medida',
+      qty: i18n.qtyLabel || 'Cantidad',
+      rate: i18n.rateLabel || 'Precio / Costo Unitario',
+      amount: i18n.amountLabel || 'Precio / Costo Total',
+      ...config.messages
+    };
+  }
+
+  function buildDefaultColumns(config) {
+    return [
+      { field: 'item_code', label: i18n.itemCodeLabel || 'Código', visible: true, width: 2, required: true },
+      { field: 'item_name', label: i18n.itemNameLabel || 'Descripción', visible: true, width: 3, required: false },
+      { field: 'uom', label: i18n.uomLabel || 'UOM', visible: true, width: 1, required: false },
+      { field: 'qty', label: i18n.qtyLabel || 'Cantidad', visible: true, width: 1, required: false },
+      { field: 'rate', label: i18n.rateLabel || 'Precio', visible: true, width: 1, required: false },
+      { field: 'discount_percentage', label: 'Descuento %', visible: config.enableLineDiscounts === true, width: 1, required: false },
+      { field: 'amount', label: i18n.amountLabel || 'Monto', visible: true, width: 1, required: false },
+    ];
+  }
+
+  function mergeConfiguredColumn(defCol, matchingConfig) {
+    const merged = { ...defCol, ...matchingConfig };
+    if (defCol.required) {
+      merged.required = true;
+      merged.visible = true;
+    }
+    return merged;
+  }
+
+  function applyColumnVisibility(columnsList, config) {
+    for (const column of columnsList) {
+      if (config.showPricing === false && (column.field === 'rate' || column.field === 'amount')) {
+        column.visible = false;
+      }
+      if (column.field === 'warehouse' || column.field === 'batch_id' || column.field === 'serial_no') {
+        column.visible = false;
+      }
+    }
+  }
+
+  function resolveColumnsList(config) {
+    const defaultCols = buildDefaultColumns(config);
+    const configColumns = Array.isArray(config.columns) ? config.columns : [];
+
+    const columnsList = defaultCols.map((defCol) => {
+      const matchingConfig = configColumns.find(c => c.field === defCol.field);
+      return matchingConfig ? mergeConfiguredColumn(defCol, matchingConfig) : { ...defCol };
+    });
+
+    for (const confCol of configColumns) {
+      if (confCol.field === 'warehouse') continue;
+      if (!defaultCols.some(d => d.field === confCol.field)) {
+        columnsList.push({ ...confCol });
+      }
+    }
+
+    applyColumnVisibility(columnsList, config);
+    return columnsList;
+  }
+
+  function resolveFlowLockedFields(config) {
+    const flowLockedFields = Array.isArray(config.flowLockedFields)
+      ? [...config.flowLockedFields]
+      : [];
+    if (!flowLockedFields.length && config.initialSourceType) {
+      flowLockedFields.push('company', 'currency');
+    }
+    return flowLockedFields;
+  }
+
   document.addEventListener('alpine:init', () => {
     Alpine.data('transactionForm', (config) => {
-      const messages = {
-        itemCode: i18n.itemCodeLabel || 'Código del item',
-        itemName: i18n.itemNameLabel || 'Descripción del item',
-        uom: i18n.uomLabel || 'Unidad de medida',
-        qty: i18n.qtyLabel || 'Cantidad',
-        rate: i18n.rateLabel || 'Precio / Costo Unitario',
-        amount: i18n.amountLabel || 'Precio / Costo Total',
-        ...config.messages
-      };
-
-      const defaultCols = [
-        { field: 'item_code', label: i18n.itemCodeLabel || 'Código', visible: true, width: 2, required: true },
-        { field: 'item_name', label: i18n.itemNameLabel || 'Descripción', visible: true, width: 3, required: false },
-        { field: 'uom', label: i18n.uomLabel || 'UOM', visible: true, width: 1, required: false },
-        { field: 'qty', label: i18n.qtyLabel || 'Cantidad', visible: true, width: 1, required: false },
-        { field: 'rate', label: i18n.rateLabel || 'Precio', visible: true, width: 1, required: false },
-        { field: 'discount_percentage', label: 'Descuento %', visible: config.enableLineDiscounts === true, width: 1, required: false },
-        { field: 'amount', label: i18n.amountLabel || 'Monto', visible: true, width: 1, required: false },
-      ];
-
-      const configColumns = Array.isArray(config.columns) ? config.columns : [];
-
-      const columnsList = [];
-      for (const defCol of defaultCols) {
-        const matchingConfig = configColumns.find(c => c.field === defCol.field);
-        if (matchingConfig) {
-          const merged = { ...defCol, ...matchingConfig };
-          if (defCol.required) {
-            merged.required = true;
-            merged.visible = true;
-          }
-          columnsList.push(merged);
-        } else {
-          columnsList.push({ ...defCol });
-        }
-      }
-
-      for (const confCol of configColumns) {
-        if (confCol.field === 'warehouse') continue;
-        if (!defaultCols.some(d => d.field === confCol.field)) {
-          columnsList.push({ ...confCol });
-        }
-      }
-
-      if (config.showPricing === false) {
-        for (const column of columnsList) {
-          if (column.field === 'rate' || column.field === 'amount') column.visible = false;
-        }
-      }
-
-      for (const column of columnsList) {
-        if (column.field === 'warehouse' || column.field === 'batch_id' || column.field === 'serial_no') {
-          column.visible = false;
-        }
-      }
-
-      const flowLockedFields = Array.isArray(config.flowLockedFields)
-        ? [...config.flowLockedFields]
-        : [];
-      if (!flowLockedFields.length && config.initialSourceType) {
-        flowLockedFields.push('company', 'currency');
-      }
+      const messages = buildMessages(config);
+      const columnsList = resolveColumnsList(config);
+      const flowLockedFields = resolveFlowLockedFields(config);
 
       return {
         formKey: config.formKey || '',
@@ -586,7 +601,7 @@
         onItemChange(line) {
           this.syncLineFromItem(line, false);
           this.calcAmount(line);
-          this.refreshCatalogPrice(line);
+          void this.refreshCatalogPrice(line);
         },
 
         async refreshCatalogPrice(line) {
@@ -613,7 +628,7 @@
         },
 
         refreshCatalogPrices() {
-          for (const line of this.lines) this.refreshCatalogPrice(line);
+          for (const line of this.lines) void this.refreshCatalogPrice(line);
         },
 
         addRow() {
@@ -782,7 +797,7 @@
         },
 
         executeTaxPreview() {
-          this.fetchTaxPreview();
+          void this.fetchTaxPreview();
         },
 
         async fetchTaxPreview() {
@@ -1003,7 +1018,7 @@
             await this.loadSourceFromUrl(apiUrl);
           } else {
             this.autofillStep = 1;
-            this.fetchSourceDocuments();
+            void this.fetchSourceDocuments();
           }
         },
 

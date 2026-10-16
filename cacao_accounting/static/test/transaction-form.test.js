@@ -183,6 +183,73 @@ describe('transaction-form', function () {
     assert.strictEqual(component.visibleColumns[5].field, 'amount');
   });
 
+  it('hides price columns when pricing is disabled', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'inventory.stock_entry',
+      showPricing: false,
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    const fields = component.preferences.columns.map((column) => column.field);
+    assert.strictEqual(fields.includes('rate'), true);
+    assert.strictEqual(fields.includes('amount'), true);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'rate'), false);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'amount'), false);
+  });
+
+  it('adds the discount column when line discounts are enabled', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_order',
+      enableLineDiscounts: true,
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    const discount = component.preferences.columns.find((column) => column.field === 'discount_percentage');
+    assert.ok(discount);
+    assert.strictEqual(discount.visible, true);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'discount_percentage'), true);
+  });
+
+  it('appends custom config columns but never the warehouse column', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_order',
+      columns: [
+        { field: 'warehouse', label: 'Almacén', visible: true, width: 2 },
+        { field: 'custom_note', label: 'Nota', visible: true, width: 2 },
+      ],
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    const fields = component.preferences.columns.map((column) => column.field);
+    assert.strictEqual(fields.includes('custom_note'), true);
+    assert.strictEqual(fields.includes('warehouse'), false);
+  });
+
+  it('keeps required default columns visible even when config hides them', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_order',
+      columns: [{ field: 'item_code', visible: false, width: 4 }],
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    const itemCode = component.preferences.columns.find((column) => column.field === 'item_code');
+    assert.strictEqual(itemCode.required, true);
+    assert.strictEqual(itemCode.visible, true);
+    assert.strictEqual(itemCode.width, 4);
+  });
+
   it('keeps warehouse at the header level instead of the line grid', function () {
     const create = loadTransactionForm();
     const component = create({
