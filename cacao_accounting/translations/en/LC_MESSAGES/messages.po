@@ -24435,6 +24435,30 @@ msgstr ""
 "The invoice has a disputed reconciliation; resolve the matching before "
 "payment."
 
+#: cacao_accounting/admin/routes.py
+msgid ""
+"El cambio debilita controles de matching y quedó pendiente de revisión "
+"independiente."
+msgstr ""
+"The change weakens matching controls and is waiting for an independent "
+"review."
+
+#: cacao_accounting/control_review_service.py
+msgid "Cambio de configuración de matching"
+msgstr "Matching configuration change"
+
+#: cacao_accounting/matching_config_service.py
+msgid "La configuración solicitada no existe."
+msgstr "The requested configuration does not exist."
+
+#: cacao_accounting/matching_config_service.py
+msgid "La configuración de matching no existe para la compañía solicitada."
+msgstr "The matching configuration does not exist for the requested company."
+
+#: cacao_accounting/matching_config_service.py
+msgid "El valor de tolerancia debe ser numérico."
+msgstr "The tolerance value must be numeric."
+
 #~ msgid "Debe indicar el motivo de la anulacion."
 #~ msgstr "You must provide the reason for the cancellation."
 

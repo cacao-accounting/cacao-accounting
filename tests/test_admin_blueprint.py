@@ -504,7 +504,7 @@ def test_config_conciliacion_compras_y_ventas(app_instance):
         response = client.post(
             "/settings/purchase-reconciliation",
             data={
-                "company": "cacao",
+                "company": "CACAO",
                 "matching_type": "3-way",
                 "price_tolerance_type": "percentage",
                 "price_tolerance_value": "5.0",
@@ -523,7 +523,7 @@ def test_config_conciliacion_compras_y_ventas(app_instance):
         with app_instance.app_context():
             from cacao_accounting.database import CompanyDefaultAccount
 
-            defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+            defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="CACAO")).scalar_one()
             assert defaults.apply_advances_automatically is True
 
         # GET sales matching
@@ -538,7 +538,7 @@ def test_config_conciliacion_compras_y_ventas(app_instance):
         response = client.post(
             "/settings/sales-matching",
             data={
-                "company": "cacao",
+                "company": "CACAO",
                 "matching_type": "3-way",
                 "price_tolerance_type": "percentage",
                 "price_tolerance_value": "5.0",

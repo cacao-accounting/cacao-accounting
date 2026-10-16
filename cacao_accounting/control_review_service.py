@@ -19,7 +19,13 @@ from flask_login import current_user
 from cacao_accounting.database import ApprovalAction, ApprovalRequest, AuditTrail, User, database
 from cacao_accounting.i18n import _
 
-REVIEW_TYPES = frozenset({"bank_reconciliation", "monthly_close", "period_reopen"})
+REVIEW_TYPES = frozenset({"bank_reconciliation", "monthly_close", "period_reopen", "config_change"})
+_OPERATION_SCOPE = {
+    "bank_reconciliation": ("cash", "edit"),
+    "config_change": ("admin", "edit"),
+    "monthly_close": ("accounting", "close"),
+    "period_reopen": ("accounting", "close"),
+}
 _execution: ContextVar[Any] = ContextVar("control_review_execution", default=None)
 
 
@@ -29,7 +35,7 @@ def _operation_actor(kind: str, company: str, actor_id: str | None) -> Any:
 
     actor_id = actor_id or getattr(current_user, "id", None)
     actor = database.session.get(User, actor_id) if actor_id else None
-    module, action = ("cash", "edit") if kind == "bank_reconciliation" else ("accounting", "close")
+    module, action = _OPERATION_SCOPE.get(kind, ("accounting", "close"))
     if actor is None or not authorized(actor, company, module, action):
         raise ValueError(_("No tiene autorización para preparar esta operación."))
     return actor
@@ -100,7 +106,7 @@ def require_review(
     ).scalar_one_or_none()
     if req is None and (not ApprovalEngine.requires_different_approver(company) or not ApprovalEngine.is_enabled(company)):
         return None
-    module = "cash" if kind == "bank_reconciliation" else "accounting"
+    module = _OPERATION_SCOPE.get(kind, ("accounting", "close"))[0]
     policy = _preparation_policy(actor, preparer_ids, module)
     if req is not None:
         if _digest(req.review_payload) == _digest(payload):
@@ -142,7 +148,7 @@ def review_is_allowed(req: Any, user: Any) -> bool:
             user,
             req.company_id,
             req.policy_snapshot["module"],
-            "edit" if req.document_type == "bank_reconciliation" else "close",
+            _OPERATION_SCOPE.get(req.document_type, ("", "close"))[1],
         )
     )
 
@@ -168,6 +174,10 @@ def reviewed_bank_difference(journal: Any, transaction_id: str, amount: Decimal,
 def _execute(req: Any, user: Any) -> Any:
     """Apply the reviewed proposal through the same business services and validators."""
     payload = req.review_payload
+    if req.document_type == "config_change":
+        from cacao_accounting.matching_config_service import update_matching_config
+
+        return update_matching_config(payload["model"], req.company_id, payload["after"], actor_id=str(user.id))
     if req.document_type == "monthly_close":
         from cacao_accounting.contabilidad.services import finalize_monthly_close
 
@@ -250,24 +260,35 @@ def review_pending_info(req: Any, user: Any) -> dict | None:
         "bank_reconciliation": _("Conciliación bancaria"),
         "monthly_close": _("Cierre mensual"),
         "period_reopen": _("Reapertura de período"),
+        "config_change": _("Cambio de configuración de matching"),
     }
     from flask import url_for
 
-    requester = database.session.get(User, req.requested_by)
     endpoints = {
         "monthly_close": ("contabilidad.ver_cierre_mensual", {"identifier": req.document_id}),
         "period_reopen": ("contabilidad.accounting_period_edit", {"period_id": req.document_id}),
         "bank_reconciliation": ("bancos.bancos_conciliacion_bancaria", {"company": req.company_id}),
+        "config_change": (
+            ("admin.config_conciliacion_ventas", {})
+            if (req.review_payload or {}).get("model") == "sales"
+            else ("admin.config_conciliacion_compras", {})
+        ),
     }
-    endpoint, arguments = endpoints[req.document_type]
+    document_id = (
+        f"{(req.review_payload or {}).get('model', 'config')}:{req.company_id}"
+        if req.document_type == "config_change"
+        else req.document_id
+    )
+    endpoint = endpoints[req.document_type]
+    requester = database.session.get(User, req.requested_by)
     return {
         "request": req,
         "document": req,
         "label": labels[req.document_type],
-        "detail_url": url_for(endpoint, _external=False, **arguments),
+        "detail_url": url_for(endpoint[0], _external=False, **endpoint[1]),
         "requester_name": requester.name or requester.user if requester else req.requested_by,
         "amount": Decimal("0"),
-        "doc_no": req.document_id,
+        "doc_no": document_id,
         "review_payload": req.review_payload,
     }
 

@@ -279,3 +279,143 @@ def test_derived_journal_execution_is_limited_to_the_reviewed_difference(chart, 
                 pytest.fail("Unreviewed amount was allowed")
     finally:
         review._execution.reset(token)
+
+
+def _matching_values(**overrides):
+    """Complete purchase-matching form with non-weakening defaults."""
+    values = {
+        "matching_type": "3-way",
+        "price_tolerance_type": "percentage",
+        "price_tolerance_value": Decimal("0"),
+        "qty_tolerance_type": "percentage",
+        "qty_tolerance_value": Decimal("0"),
+        "require_purchase_order": True,
+        "bridge_account_required": True,
+        "auto_reconcile": True,
+        "allow_price_difference": False,
+    }
+    values.update(overrides)
+    return values
+
+
+def _weakening_config_review(chart, config_reviewers, overrides):
+    """Create a weakening purchase-matching change and keep the config untouched."""
+    from cacao_accounting.database import ApprovalRequest, PurchaseMatchingConfig, PurchaseReconciliation
+    from cacao_accounting.matching_config_service import update_matching_config
+
+    preparer, reviewer = config_reviewers
+    database.session.add(PurchaseMatchingConfig(company=COMPANY))
+    database.session.add(
+        PurchaseReconciliation(
+            company=COMPANY,
+            matching_type="3-way",
+            purchase_invoice_id="pinv-snapshot",
+            price_tolerance_type="percentage",
+            price_tolerance_value=Decimal("0"),
+            qty_tolerance_type="percentage",
+            qty_tolerance_value=Decimal("0"),
+            matched_amount=Decimal("10"),
+            matched_date=date.today(),
+            status="reconciled",
+        )
+    )
+    database.session.commit()
+
+    pending = update_matching_config("purchase", COMPANY, _matching_values(**overrides), actor_id=preparer.id)
+    database.session.commit()
+    assert isinstance(pending, ApprovalRequest)
+    assert pending.status == "Pending Approval"
+    config = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company=COMPANY)).scalar_one()
+    assert config.matching_type == "3-way"
+    assert config.auto_reconcile is True
+    assert not review.review_is_allowed(pending, preparer)
+    with pytest.raises(ValueError):
+        review.approve_review(pending, preparer)
+    return pending, config, reviewer
+
+
+@pytest.fixture()
+def config_reviewers(reviewers):
+    """Enable the admin module so config_change authorization resolves."""
+    from cacao_accounting.database import Modules
+
+    database.session.add(Modules(module="admin", default=True, enabled=True))
+    database.session.commit()
+    return reviewers
+
+
+def test_weakening_config_change_waits_for_independent_review(chart, config_reviewers):
+    """A 3-way to 2-way switch requires another administrator before it lands."""
+    from cacao_accounting.database import AuditTrail
+
+    pending, config, reviewer = _weakening_config_review(chart, config_reviewers, {"matching_type": "2-way"})
+    result = review.approve_review(pending, reviewer, "Reviewed")
+    database.session.commit()
+    assert config.matching_type == "2-way"
+    assert isinstance(result, type(config))
+    evidence = database.session.query(AuditTrail).filter_by(source_module="control_review").all()
+    assert {event.actor_user_id for event in evidence} == {"admin", "reviewer"}
+
+
+def test_reconciliation_keeps_the_snapshot_when_config_changes(chart, config_reviewers):
+    """Historical matching snapshots are never rewritten by later config edits."""
+    from cacao_accounting.database import PurchaseReconciliation
+
+    pending, config, reviewer = _weakening_config_review(chart, config_reviewers, {"price_tolerance_value": Decimal("5")})
+    review.approve_review(pending, reviewer)
+    database.session.commit()
+    historical = database.session.execute(database.select(PurchaseReconciliation).filter_by(company=COMPANY)).scalar_one()
+    assert config.price_tolerance_value == Decimal("5")
+    assert historical.matching_type == "3-way"
+    assert historical.price_tolerance_type == "percentage"
+    assert historical.price_tolerance_value == Decimal("0")
+    assert historical.qty_tolerance_value == Decimal("0")
+    assert historical.matched_amount == Decimal("10")
+
+
+def test_strengthening_config_change_applies_without_review(chart, config_reviewers):
+    """Non-weakening edits still land immediately under an active four-eyes setup."""
+    from cacao_accounting.database import ApprovalRequest, PurchaseMatchingConfig
+    from cacao_accounting.matching_config_service import update_matching_config
+
+    preparer, reviewer = config_reviewers
+    database.session.add(PurchaseMatchingConfig(company=COMPANY, auto_reconcile=False))
+    database.session.commit()
+
+    result = update_matching_config("purchase", COMPANY, _matching_values(), actor_id=preparer.id)
+
+    assert result is not None and not isinstance(result, ApprovalRequest)
+    assert result.auto_reconcile is True
+    assert (
+        database.session.execute(
+            database.select(database.func.count()).select_from(ApprovalRequest).filter_by(document_type="config_change")
+        ).scalar_one()
+        == 0
+    )
+
+
+def test_weakening_classification_matches_the_agreed_policy():
+    """4-way switches, disabled guards, enabled allowances and tolerance moves."""
+    from cacao_accounting.matching_config_service import weakened_fields
+
+    purchase = _matching_values()
+    assert weakened_fields("purchase", purchase, purchase) == []
+    assert weakened_fields("purchase", purchase, _matching_values(matching_type="2-way")) == ["matching_type"]
+    assert weakened_fields("purchase", purchase, _matching_values(allow_price_difference=True)) == ["allow_price_difference"]
+    assert weakened_fields("purchase", purchase, _matching_values(require_purchase_order=False)) == ["require_purchase_order"]
+    assert weakened_fields("purchase", purchase, _matching_values(auto_reconcile=False)) == ["auto_reconcile"]
+    assert "price_tolerance" in weakened_fields("purchase", purchase, _matching_values(price_tolerance_value=Decimal("5")))
+    assert "qty_tolerance" in weakened_fields("purchase", purchase, _matching_values(qty_tolerance_value=Decimal("5")))
+    strengthening = _matching_values(require_purchase_order=False).copy()
+    assert weakened_fields("purchase", strengthening, _matching_values()) == []
+    sales = {
+        "matching_type": "3-way",
+        "price_tolerance_type": "percentage",
+        "price_tolerance_value": Decimal("0"),
+        "require_sales_order": True,
+        "allow_price_difference": False,
+    }
+    assert weakened_fields("sales", sales, sales) == []
+    assert weakened_fields("sales", sales, {**sales, "matching_type": "2-way"}) == ["matching_type"]
+    assert weakened_fields("sales", sales, {**sales, "require_sales_order": False}) == ["require_sales_order"]
+    assert weakened_fields("sales", sales, {**sales, "allow_price_difference": True}) == ["allow_price_difference"]

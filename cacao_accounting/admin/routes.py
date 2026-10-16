@@ -29,6 +29,7 @@ from cacao_accounting.decorators import modulo_activo
 from cacao_accounting.database import (
     Accounts,
     ApprovalMatrix,
+    ApprovalRequest,
     Book,
     CompanyDefaultAccount,
     DimensionType,
@@ -951,22 +952,36 @@ def config_conciliacion_compras():
             config = seed_matching_config_for_company(company)
             database.session.flush()
 
-        config.matching_type = request.form.get("matching_type") or "3-way"
-        config.price_tolerance_type = request.form.get("price_tolerance_type") or "percentage"
-        config.price_tolerance_value = _decimal_form("price_tolerance_value")
-        config.qty_tolerance_type = request.form.get("qty_tolerance_type") or "percentage"
-        config.qty_tolerance_value = _decimal_form("qty_tolerance_value")
-        config.require_purchase_order = bool(request.form.get("require_purchase_order"))
-        config.bridge_account_required = bool(request.form.get("bridge_account_required"))
-        config.auto_reconcile = bool(request.form.get("auto_reconcile"))
-        config.allow_price_difference = bool(request.form.get("allow_price_difference"))
+        from cacao_accounting.matching_config_service import update_matching_config
+
+        pending = update_matching_config(
+            "purchase",
+            company,
+            {
+                "matching_type": request.form.get("matching_type") or "3-way",
+                "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
+                "price_tolerance_value": _decimal_form("price_tolerance_value"),
+                "qty_tolerance_type": request.form.get("qty_tolerance_type") or "percentage",
+                "qty_tolerance_value": _decimal_form("qty_tolerance_value"),
+                "require_purchase_order": bool(request.form.get("require_purchase_order")),
+                "bridge_account_required": bool(request.form.get("bridge_account_required")),
+                "auto_reconcile": bool(request.form.get("auto_reconcile")),
+                "allow_price_difference": bool(request.form.get("allow_price_difference")),
+            },
+        )
         default_accounts = get_company_default_accounts(company)
         if default_accounts is None:
             default_accounts = CompanyDefaultAccount(company=company)
             database.session.add(default_accounts)
         default_accounts.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
         database.session.commit()
-        flash(_("Configuración de conciliación de compras guardada correctamente."), "success")
+        if isinstance(pending, ApprovalRequest):
+            flash(
+                _("El cambio debilita controles de matching y quedó pendiente de revisión independiente."),
+                "warning",
+            )
+        else:
+            flash(_("Configuración de conciliación de compras guardada correctamente."), "success")
         return redirect(url_for("admin.config_conciliacion_compras"))
 
     configs = (
@@ -1034,13 +1049,27 @@ def config_conciliacion_ventas():
             database.session.add(config)
             database.session.flush()
 
-        config.matching_type = request.form.get("matching_type") or "3-way"
-        config.price_tolerance_type = request.form.get("price_tolerance_type") or "percentage"
-        config.price_tolerance_value = _decimal_form("price_tolerance_value")
-        config.require_sales_order = bool(request.form.get("require_sales_order"))
-        config.allow_price_difference = bool(request.form.get("allow_price_difference"))
+        from cacao_accounting.matching_config_service import update_matching_config
+
+        pending = update_matching_config(
+            "sales",
+            company,
+            {
+                "matching_type": request.form.get("matching_type") or "3-way",
+                "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
+                "price_tolerance_value": _decimal_form("price_tolerance_value"),
+                "require_sales_order": bool(request.form.get("require_sales_order")),
+                "allow_price_difference": bool(request.form.get("allow_price_difference")),
+            },
+        )
         database.session.commit()
-        flash(_("Configuración de conciliación de ventas guardada correctamente."), "success")
+        if isinstance(pending, ApprovalRequest):
+            flash(
+                _("El cambio debilita controles de matching y quedó pendiente de revisión independiente."),
+                "warning",
+            )
+        else:
+            flash(_("Configuración de conciliación de ventas guardada correctamente."), "success")
         return redirect(url_for("admin.config_conciliacion_ventas"))
 
     configs = (
