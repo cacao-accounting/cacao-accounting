@@ -24459,6 +24459,9 @@ msgstr "The matching configuration does not exist for the requested company."
 msgid "El valor de tolerancia debe ser numérico."
 msgstr "The tolerance value must be numeric."
 
+msgid "La operación cambió después de solicitar la revisión."
+msgstr "The operation changed after the review was requested."
+
 #~ msgid "Debe indicar el motivo de la anulacion."
 #~ msgstr "You must provide the reason for the cancellation."
 

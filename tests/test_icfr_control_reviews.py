@@ -394,6 +394,20 @@ def test_strengthening_config_change_applies_without_review(chart, config_review
     )
 
 
+@pytest.mark.parametrize("current_type", ["2-way", "3-way"])
+def test_config_review_rejects_changed_configuration(chart, config_reviewers, current_type):
+    """A stale proposal cannot execute even when its target no longer weakens controls."""
+    pending, config, reviewer = _weakening_config_review(chart, config_reviewers, {"matching_type": "2-way"})
+    config.matching_type = current_type
+    config.price_tolerance_value = Decimal("5")
+    database.session.commit()
+    with pytest.raises(ValueError, match="La operación cambió"):
+        review.approve_review(pending, reviewer)
+    assert config.matching_type == current_type
+    assert pending.status == "Pending Approval"
+    assert database.session.query(ApprovalAction).count() == 0
+
+
 def test_weakening_classification_matches_the_agreed_policy():
     """4-way switches, disabled guards, enabled allowances and tolerance moves."""
     from cacao_accounting.matching_config_service import weakened_fields

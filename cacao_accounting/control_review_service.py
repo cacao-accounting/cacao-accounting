@@ -177,7 +177,9 @@ def _execute(req: Any, user: Any) -> Any:
     if req.document_type == "config_change":
         from cacao_accounting.matching_config_service import update_matching_config
 
-        return update_matching_config(payload["model"], req.company_id, payload["after"], actor_id=str(user.id))
+        return update_matching_config(
+            payload["model"], req.company_id, payload["after"], actor_id=str(user.id), expected_before=payload["before"]
+        )
     if req.document_type == "monthly_close":
         from cacao_accounting.contabilidad.services import finalize_monthly_close
 

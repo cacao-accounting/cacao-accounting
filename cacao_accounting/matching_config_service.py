@@ -108,7 +108,14 @@ def _normalize(field: str, value: Any) -> Any:
     return value
 
 
-def update_matching_config(model: str, company: str, values: dict[str, Any], actor_id: str | None = None) -> Any:
+def update_matching_config(
+    model: str,
+    company: str,
+    values: dict[str, Any],
+    actor_id: str | None = None,
+    *,
+    expected_before: dict[str, Any] | None = None,
+) -> Any:
     """Aplica la edición de configuración o la deja pendiente de revisión independiente.
 
     Devuelve la fila de ``ApprovalRequest`` cuando el cambio debilita
@@ -122,12 +129,18 @@ def update_matching_config(model: str, company: str, values: dict[str, Any], act
     clase = CONFIG_MODELS.get(model)
     if clase is None:
         raise ValueError(_("La configuración solicitada no existe."))
-    config = database.session.execute(database.select(clase).filter_by(company=company)).scalar_one_or_none()
+    config = database.session.execute(
+        database.select(clase).filter_by(company=company).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if config is None:
         raise ValueError(_("La configuración de matching no existe para la compañía solicitada."))
     fields = CONFIG_FIELDS[model]
     typed_after = {field: _normalize(field, values.get(field)) for field in fields}
     typed_before = {field: _normalize(field, getattr(config, field)) for field in fields}
+    if expected_before is not None and typed_before != {
+        field: _normalize(field, expected_before.get(field)) for field in fields
+    }:
+        raise ValueError(_("La operación cambió después de solicitar la revisión."))
     debilitados = weakened_fields(model, typed_before, typed_after)
     payload = {
         "model": model,
