@@ -174,8 +174,7 @@ def _enabled() -> bool:
 def _sensitive(target: Any) -> bool:
     """Select administrative/accounting configuration without collecting secrets."""
     if type(target).__name__ == "CacaoConfig":
-        key = str(target.key or "")
-        return key.startswith(("approval_", "four_eyes_", "fiscal_", "accounting_"))
+        return str(target.key or "").startswith(_SENSITIVE_CONFIG_PREFIXES)
     return type(target).__name__ in SENSITIVE_MODELS
 
 
@@ -487,6 +486,8 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
         raise ValueError(_("La evidencia de auditoría es inmutable."))
     if table_name == "approval_request":
         _guard_approval_request_statement(clause, multiparams, params)
+    if table_name == "cacao_config":
+        _guard_cacao_config_statement(clause, multiparams, params)
     if _is_sensitive_table(table_name) and isinstance(clause, Delete):
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
     if _is_sensitive_table(table_name) and _statement_changed_values(clause, multiparams, params, clause.table):
@@ -500,12 +501,23 @@ def _guard_flow_evidence_statement(clause: Any, multiparams: Any, params: Any) -
     changed = _statement_changed_values(clause, multiparams, params, clause.table)
     if changed:
         raise ValueError(_("Las transiciones documentales deben realizarse mediante el servicio auditado."))
-    table_name = getattr(clause.table, "name", None)
-    if not isinstance(table_name, str):
-        return
-    transitions = FLOW_EVIDENCE_TRANSITIONS.get(table_name, frozenset()) | FLOW_PROVIDER_STAMPS
-    if changed and changed.keys() - transitions:
-        raise ValueError(_("Los vínculos documentales son inmutables; registre una relación nueva."))
+
+
+_SENSITIVE_CONFIG_PREFIXES = ("approval_", "four_eyes_", "fiscal_", "accounting_")
+
+
+def _guard_cacao_config_statement(clause: Any, multiparams: Any, params: Any) -> None:
+    """Reject direct Core rewrites of key/value configuration.
+
+    La identidad de la fila sensible vive en el WHERE, no en las columnas
+    mutadas, así que el guard rechaza todo UPDATE Core directo: la
+    configuración solo se edita por la ruta ORM auditada (el flush del
+    unit-of-work queda exento por _is_orm_unit_of_work).
+    """
+    if isinstance(clause, Delete):
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    if _statement_changed_values(clause, multiparams, params, clause.table):
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
 
 
 def _statement_changed_values(clause: Any, multiparams: Any, params: Any, table: Any) -> dict[str, Any]:

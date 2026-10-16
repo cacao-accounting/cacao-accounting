@@ -5,7 +5,7 @@ from datetime import date
 import json
 
 import pytest
-from sqlalchemy import delete, update
+from sqlalchemy import delete, text, update
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -355,6 +355,31 @@ def test_request_parameterized_connection_update_is_blocked(app):
     with pytest.raises(ValueError, match="servicio autorizado"):
         database.session.connection().execute(statement, {"status": "Approved"})
     database.session.rollback()
+
+
+def test_request_textual_sql_update_is_blocked(app):
+    """Text SQL cannot bypass immutable ApprovalRequest evidence guards."""
+    request = ApprovalRequest(
+        document_type="test",
+        document_id="doc-922-text",
+        company_id="co",
+        requested_by="actor",
+        required_level=3,
+        policy_snapshot={"requires_independent": True},
+    )
+    database.session.add(request)
+    database.session.commit()
+
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(
+            text("UPDATE approval_request SET required_level = :required_level WHERE id = :request_id"),
+            {"required_level": 1, "request_id": request.id},
+        )
+
+    database.session.rollback()
+    database.session.refresh(request)
+    assert request.required_level == 3
+    assert request.policy_snapshot == {"requires_independent": True}
 
 
 def test_explicit_actor_reaches_manual_audit_service_and_user_snapshot_is_safe(app):
@@ -735,3 +760,24 @@ def test_matching_config_connection_update_is_rejected(app):
         )
     with pytest.raises(ValueError, match="servicio auditado"):
         database.session.connection().execute(delete(PurchaseMatchingConfig).where(PurchaseMatchingConfig.id == config.id))
+
+
+def test_sensitive_config_keys_via_core_are_blocked(app):
+    """Connection updates can never rewrite application configuration."""
+    config = CacaoConfig(key="approval_engine_enabled_co", value="1")
+    database.session.add(config)
+    database.session.commit()
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(update(CacaoConfig).where(CacaoConfig.key == config.key).values(value="0"))
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(update(CacaoConfig).where(CacaoConfig.key == config.key), {"value": "0"})
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(delete(CacaoConfig).where(CacaoConfig.key == config.key))
+    database.session.rollback()
+    plain = CacaoConfig(key="ui_locale", value="es")
+    database.session.add(plain)
+    database.session.commit()
+    plain.value = "en"
+    database.session.commit()
+    refreshed = database.session.execute(database.select(CacaoConfig).filter_by(key="ui_locale")).scalar_one()
+    assert refreshed.value == "en"

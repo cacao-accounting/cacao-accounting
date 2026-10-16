@@ -75,6 +75,29 @@ REVOKE UPDATE, DELETE, TRUNCATE ON audit_trail, approval_action, audit_log
   FROM cacao_runtime, PUBLIC;
 ```
 
+The same restriction applies to the inter-voucher flow evidence tables
+(`document_relation`, `purchase_reconciliation`, `purchase_reconciliation_item`,
+`purchase_invoice_receipt_allocation`, `purchase_receipt_return_allocation`,
+`purchase_credit_note_allocation`). The application may append new relations and
+write the audited workflow transitions (`status` and the reversal/cancellation
+stamps) through its authorized services, but no direct rewrites of link,
+quantity or matching-calculus fields are acceptable under any circumstance:
+
+```sql
+GRANT SELECT, INSERT ON document_relation, purchase_reconciliation,
+  purchase_reconciliation_item, purchase_invoice_receipt_allocation,
+  purchase_receipt_return_allocation, purchase_credit_note_allocation
+  TO cacao_runtime;
+GRANT SELECT, UPDATE ON document_relation, purchase_reconciliation,
+  purchase_reconciliation_item, purchase_invoice_receipt_allocation,
+  purchase_receipt_return_allocation, purchase_credit_note_allocation
+  TO cacao_runtime;
+REVOKE DELETE, TRUNCATE ON document_relation, purchase_reconciliation,
+  purchase_reconciliation_item, purchase_invoice_receipt_allocation,
+  purchase_receipt_return_allocation, purchase_credit_note_allocation
+  FROM cacao_runtime, PUBLIC;
+```
+
 Remove equivalent privileges inherited through other role memberships. Grant
 normal business table permissions separately. Never grant `ALL ON ALL TABLES`
 to the runtime role after this restriction. Test under the runtime credential
