@@ -824,3 +824,22 @@ def test_sensitive_config_orm_edit_is_audited(app):
     assert event.actor_user_id == "actor"
     assert event.company == "co"
     assert json.loads(event.changes_json)["value"] == {"before": "1", "after": "0"}
+
+
+@pytest.mark.parametrize("expired", [False, True])
+def test_sensitive_config_rename_remains_audited(app, expired):
+    """Renaming a sensitive key keeps its previous identity in the audit trail."""
+    config = CacaoConfig(key="approval_engine_enabled_co", value="1")
+    database.session.add(config)
+    database.session.commit()
+    identifier = config.id
+    if expired:
+        database.session.expire(config)
+    with audit_actor("actor", "Administrator"):
+        config.key = "ui_locale"
+        database.session.commit()
+    event = _event(identifier)
+    assert event.action == "updated"
+    assert event.actor_user_id == "actor"
+    assert event.company == "co"
+    assert json.loads(event.changes_json)["key"] == {"before": "approval_engine_enabled_co", "after": "ui_locale"}

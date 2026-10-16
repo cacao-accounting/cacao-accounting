@@ -174,7 +174,9 @@ def _enabled() -> bool:
 def _sensitive(target: Any) -> bool:
     """Select administrative/accounting configuration without collecting secrets."""
     if type(target).__name__ == "CacaoConfig":
-        return str(target.key or "").startswith(_SENSITIVE_CONFIG_PREFIXES)
+        state = inspect(target)
+        previous_key = _persisted_value(state, "key", target.key) if state.persistent else target.key
+        return any(str(key or "").startswith(_SENSITIVE_CONFIG_PREFIXES) for key in (target.key, previous_key))
     return type(target).__name__ in SENSITIVE_MODELS
 
 
@@ -224,6 +226,15 @@ def _stamp_preparer(mapper: Any, connection: Any, target: Any) -> None:
         target.modified_by = actor_id
 
 
+def _config_company(key: str, before: dict[str, Any] | None) -> str | None:
+    """Keep the company scope when an approval configuration key is renamed."""
+    for candidate in (key, (before or {}).get("key", "")):
+        for prefix in ("approval_engine_enabled_", "approval_require_different_approver_"):
+            if candidate.startswith(prefix):
+                return candidate.removeprefix(prefix)
+    return None
+
+
 def _write_event(mapper: Any, connection: Any, target: Any, action: str) -> None:
     """Write through the flush connection so evidence shares the business commit."""
     del mapper
@@ -239,10 +250,7 @@ def _write_event(mapper: Any, connection: Any, target: Any, action: str) -> None
         company = target.code
     company = company or getattr(target, "company_id", None)
     if type(target).__name__ == "CacaoConfig":
-        for prefix in ("approval_engine_enabled_", "approval_require_different_approver_"):
-            if target.key.startswith(prefix):
-                company = target.key.removeprefix(prefix)
-                break
+        company = _config_company(target.key, before)
     before_values = before or {}
     changes = {
         key: {"before": before_values.get(key), "after": after.get(key)}
