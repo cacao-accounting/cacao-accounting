@@ -62,6 +62,31 @@ The application rejects mutation of audit evidence and posted financial values.
 These protections are additional to service authorization; the database runtime
 role must also be restricted. SQLite Desktop requires no separate service.
 
+## Approval and configuration evidence
+
+`cacao_accounting.internal_control_service` installs the shared guards. Every
+change to a sensitive model (users, roles, company access, entities, exchange
+rates, accounting periods and fiscal years, taxes and tax rules, accounting
+mapping rules and default accounts, books and accounts, and purchase/sales
+matching configuration) is written to `audit_trail` in the same transaction as
+the change, with before/after values and the resolved actor.
+
+Sensitive `cacao_config` keys are recognized by prefix (`approval_`,
+`four_eyes_`, `fiscal_`, `accounting_`). The row identity is the key, so the
+guard resolves the persisted key before a rename: renaming a sensitive key still
+produces the audit event and keeps the company scope of the previous key.
+Direct Core `UPDATE`/`DELETE` on `cacao_config` is rejected because the sensitive
+identity lives in the `WHERE` clause, not in the mutated columns; only the
+audited ORM path may edit it.
+
+Approval requests carry provenance that is immutable: `policy_snapshot`,
+`review_payload`, `requested_by`, `company_id`, `required_level`, the document
+identity and the creation/cancellation stamps cannot be changed or deleted
+through the ORM or Core. Only lifecycle moves (`status`, `current_level`) are
+allowed, and only for the specific rows handed to
+`approval_request_transition(...)`. Bulk ORM updates (`do_orm_execute`) are
+rejected as well, so a configuration or approval snapshot cannot be skipped.
+
 ## PostgreSQL deployment
 
 Use separate migration owner and runtime roles. The runtime role must NOT own

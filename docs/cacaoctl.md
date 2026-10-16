@@ -57,6 +57,7 @@ cacaoctl db <subcomando> [opciones]
 | Subcomando  | Descripción                                          |
 |-------------|------------------------------------------------------|
 | `init`      | Crea una nueva base de datos.                        |
+| `migrate`   | Aplica migraciones pendientes de Alembic.            |
 | `reset`     | Recrea completamente la base de datos.               |
 | `clean`     | Elimina la base de datos (solo desarrollo).          |
 | `seed`      | Inserta datos de ejemplo en la base de datos.        |
@@ -83,6 +84,29 @@ Opciones:
 
 - `--force`: Elimina una base existente antes de crear la nueva.
 - `--seed`: Inserta datos de ejemplo después de crear la base.
+
+#### `db migrate`
+
+Aplica las migraciones pendientes de Alembic de forma idempotente. Si no hay
+migraciones por aplicar, informa y termina con éxito (código 0), por lo que es
+seguro ejecutarlo al inicio de un contenedor. Requiere una base inicializada;
+si la tabla `user` no existe, solicita ejecutar `cacaoctl db init` primero.
+
+```bash
+# Aplicar todas las migraciones pendientes
+cacaoctl db migrate
+
+# Aplicar hasta una revisión específica
+cacaoctl db migrate --revision 20261015_0001
+
+# Apuntar a una revisión distinta de head
+cacaoctl db migrate --head head
+```
+
+Opciones:
+
+- `--head`: Revisión destino (por defecto `head`).
+- `--revision`: Revisión específica a aplicar.
 
 #### `db reset`
 
@@ -224,6 +248,42 @@ Port         : 5000
 Threads      : 4
 Cache        : DummyCache
 ```
+
+#### `audit-verify`
+
+Verifica de forma idempotente la integridad de la cadena de hashes del
+`audit_trail`. Recalcula el hash de cada fila, valida el enlazado entre filas y
+reporta los hallazgos (`payload_tampered`, `chain_break`) con el identificador
+de la fila. Cuando hay hallazgos, la salida va a `stderr` y el proceso termina
+con código 1, de modo que una tarea programada o un healthcheck puedan generar
+la alerta observable.
+
+```bash
+cacaoctl audit-verify
+```
+
+Si la cadena es íntegra, informa el resultado y termina con código 0:
+
+```
+La cadena de auditoría es íntegra.
+```
+
+Con hallazgos:
+
+```
+0000000000000000000000000A : payload_tampered
+La verificación produjo 1 hallazgos; revise el rastro de auditoría.
+```
+
+Opciones:
+
+- `--fail-on-findings/--no-fail-on-findings`: Termina con error si hay
+  hallazgos (por defecto `True`). Use `--no-fail-on-findings` para inspeccionar
+  el rastro sin que el comando falle.
+
+Se recomienda programarlo como tarea periódica y monitorear su ejecución; ver
+el playbook de respuesta en
+[Cloud internal-control evidence](cloud/internal-controls.md).
 
 ## Autocompletado para el shell
 
