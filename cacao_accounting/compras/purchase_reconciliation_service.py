@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Any, cast
+from typing import Any, Sequence, cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
@@ -673,35 +673,38 @@ def cancel_purchase_settlement_allocations(*, receipt_id: str | None = None, inv
         query = query.where(PurchaseInvoiceReceiptAllocation.receipt_item_id.in_(receipt_item_ids))
     if invoice_item_ids:
         query = query.where(PurchaseInvoiceReceiptAllocation.invoice_item_id.in_(invoice_item_ids))
+    allocations = database.session.execute(query).scalars().all()
+    return_allocations: Sequence[PurchaseReceiptReturnAllocation] = []
+    if receipt_item_ids:
+        return_query = select(PurchaseReceiptReturnAllocation).where(
+            PurchaseReceiptReturnAllocation.return_receipt_item_id.in_(receipt_item_ids),
+            PurchaseReceiptReturnAllocation.status == "active",
+        )
+        return_allocations = database.session.execute(return_query).scalars().all()
+    credit_note_query = select(PurchaseCreditNoteAllocation).where(PurchaseCreditNoteAllocation.status == "active")
+    credit_note_filters = []
+    if invoice_item_ids:
+        credit_note_filters.extend(
+            [
+                PurchaseCreditNoteAllocation.credit_note_item_id.in_(invoice_item_ids),
+                PurchaseCreditNoteAllocation.invoice_item_id.in_(invoice_item_ids),
+            ]
+        )
+    if receipt_item_ids:
+        credit_note_filters.append(PurchaseCreditNoteAllocation.return_receipt_item_id.in_(receipt_item_ids))
+    credit_note_allocations: Sequence[PurchaseCreditNoteAllocation] = []
+    if credit_note_filters:
+        credit_note_query = credit_note_query.where(or_(*credit_note_filters))
+        credit_note_allocations = database.session.execute(credit_note_query).scalars().all()
     from cacao_accounting.internal_control_service import flow_evidence_transition
 
-    with flow_evidence_transition():
-        for row in database.session.execute(query).scalars().all():
+    with flow_evidence_transition(*allocations, *return_allocations, *credit_note_allocations):
+        for row in allocations:
             row.status = "cancelled"
-
-        if receipt_item_ids:
-            return_query = select(PurchaseReceiptReturnAllocation).where(
-                PurchaseReceiptReturnAllocation.return_receipt_item_id.in_(receipt_item_ids),
-                PurchaseReceiptReturnAllocation.status == "active",
-            )
-            for row in database.session.execute(return_query).scalars().all():
-                row.status = "cancelled"
-
-        credit_note_query = select(PurchaseCreditNoteAllocation).where(PurchaseCreditNoteAllocation.status == "active")
-        credit_note_filters = []
-        if invoice_item_ids:
-            credit_note_filters.extend(
-                [
-                    PurchaseCreditNoteAllocation.credit_note_item_id.in_(invoice_item_ids),
-                    PurchaseCreditNoteAllocation.invoice_item_id.in_(invoice_item_ids),
-                ]
-            )
-        if receipt_item_ids:
-            credit_note_filters.append(PurchaseCreditNoteAllocation.return_receipt_item_id.in_(receipt_item_ids))
-        if credit_note_filters:
-            credit_note_query = credit_note_query.where(or_(*credit_note_filters))
-            for row in database.session.execute(credit_note_query).scalars().all():
-                row.status = "cancelled"
+        for row in return_allocations:
+            row.status = "cancelled"
+        for row in credit_note_allocations:
+            row.status = "cancelled"
         database.session.flush()
 
 
@@ -1677,18 +1680,26 @@ def cancel_purchase_reconciliation(purchase_invoice_id: str) -> None:
         .scalars()
         .all()
     )
+    items: Sequence[PurchaseReconciliationItem] = []
+    if reconciliations:
+        items = (
+            database.session.execute(
+                select(PurchaseReconciliationItem).where(
+                    PurchaseReconciliationItem.purchase_reconciliation_id.in_([row.id for row in reconciliations])
+                )
+            )
+            .scalars()
+            .all()
+        )
+    items_by_reconciliation: dict[str, list[PurchaseReconciliationItem]] = defaultdict(list)
+    for item in items:
+        items_by_reconciliation[item.purchase_reconciliation_id].append(item)
     from cacao_accounting.internal_control_service import flow_evidence_transition
 
-    with flow_evidence_transition():
+    with flow_evidence_transition(*reconciliations, *items):
         for reconciliation in reconciliations:
             reconciliation.status = "cancelled"
-            for item in (
-                database.session.execute(
-                    select(PurchaseReconciliationItem).filter_by(purchase_reconciliation_id=reconciliation.id)
-                )
-                .scalars()
-                .all()
-            ):
+            for item in items_by_reconciliation[reconciliation.id]:
                 item.status = "cancelled"
 
             emit_economic_event(
@@ -1813,18 +1824,26 @@ def emit_goods_received_cancelled(purchase_receipt_id: str, company: str) -> Non
         .scalars()
         .all()
     )
+    items: Sequence[PurchaseReconciliationItem] = []
+    if affected:
+        items = (
+            database.session.execute(
+                select(PurchaseReconciliationItem).where(
+                    PurchaseReconciliationItem.purchase_reconciliation_id.in_([row.id for row in affected])
+                )
+            )
+            .scalars()
+            .all()
+        )
+    items_by_reconciliation: dict[str, list[PurchaseReconciliationItem]] = defaultdict(list)
+    for item in items:
+        items_by_reconciliation[item.purchase_reconciliation_id].append(item)
     from cacao_accounting.internal_control_service import flow_evidence_transition
 
-    with flow_evidence_transition():
+    with flow_evidence_transition(*affected, *items):
         for reconciliation in affected:
             reconciliation.status = "cancelled"
-            for item in (
-                database.session.execute(
-                    select(PurchaseReconciliationItem).filter_by(purchase_reconciliation_id=reconciliation.id)
-                )
-                .scalars()
-                .all()
-            ):
+            for item in items_by_reconciliation[reconciliation.id]:
                 item.status = "cancelled"
             emit_economic_event(
                 event_type=EventType.MATCH_CANCELLED,

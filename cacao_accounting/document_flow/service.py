@@ -559,9 +559,26 @@ def get_target_line_source(target_type: str, target_item_id: str) -> dict[str, s
 
 def revert_relations_for_target(target_type: str, target_id: str, reason: str = "target_cancelled") -> int:
     """Revert linked documents through the authorized flow transition."""
+    target_key = normalize_doctype(target_type)
+    target_rows = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(target_type=target_key, target_id=target_id, status="active")
+        )
+        .scalars()
+        .all()
+    )
+    source_rows: Sequence[DocumentRelation] = []
+    if reason != "draft_edited":
+        source_rows = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(source_type=target_key, source_id=target_id, status="active")
+            )
+            .scalars()
+            .all()
+        )
     from cacao_accounting.internal_control_service import flow_evidence_transition
 
-    with flow_evidence_transition():
+    with flow_evidence_transition(*target_rows, *source_rows):
         result = _revert_relations_for_target(target_type, target_id, reason)
         database.session.flush()
         return result

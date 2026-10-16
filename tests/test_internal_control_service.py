@@ -145,7 +145,7 @@ def test_approval_action_and_policy_cannot_be_rewritten(app):
     database.session.commit()
     from cacao_accounting.internal_control_service import approval_request_transition
 
-    with approval_request_transition():
+    with approval_request_transition(request):
         request.status = "Approved"
         database.session.flush()
     request.policy_snapshot = {"requires_independent": False}
@@ -159,6 +159,24 @@ def test_approval_action_and_policy_cannot_be_rewritten(app):
     database.session.delete(action)
     with pytest.raises(ValueError, match="inmutable"):
         database.session.flush()
+
+
+def test_approval_transition_scope_is_limited_to_target_request(app):
+    """One authorized request cannot piggyback another dirty request in the flush."""
+    requests = [
+        ApprovalRequest(document_type="test", document_id=f"doc-{index}", company_id="co", requested_by="actor")
+        for index in range(2)
+    ]
+    database.session.add_all(requests)
+    database.session.commit()
+    from cacao_accounting.internal_control_service import approval_request_transition
+
+    requests[0].status = "Approved"
+    requests[1].status = "Approved"
+    with approval_request_transition(requests[0]):
+        with pytest.raises(ValueError, match="servicio autorizado"):
+            database.session.flush()
+    database.session.rollback()
 
 
 def test_request_required_level_cannot_be_weakened(app):
@@ -203,7 +221,7 @@ def test_request_required_level_cannot_be_weakened(app):
     database.session.rollback()
     from cacao_accounting.internal_control_service import approval_request_transition
 
-    with approval_request_transition():
+    with approval_request_transition(request):
         request.current_level = 3
         database.session.flush()
 
@@ -566,13 +584,13 @@ def test_ledger_bulk_cancellation_remains_allowed(app):
     assert database.session.get(GLEntry, entry.id).is_cancelled is True
 
 
-def _document_relation():
+def _document_relation(suffix: str = "923"):
     relation = DocumentRelation(
         company="co",
         source_type="sales_order",
-        source_id="so-923",
+        source_id=f"so-{suffix}",
         target_type="sales_invoice",
-        target_id="inv-923",
+        target_id=f"inv-{suffix}",
         relation_type="derived_from",
         qty=2,
     )
@@ -632,6 +650,19 @@ def test_document_relation_qty_via_orm_is_blocked(app):
     relation.qty = 999
     with pytest.raises(ValueError, match="vínculos documentales"):
         database.session.flush()
+    database.session.rollback()
+
+
+def test_flow_transition_scope_is_limited_to_target_relation(app):
+    """One authorized flow relation cannot piggyback another dirty relation."""
+    relations = [_document_relation("one"), _document_relation("two")]
+    from cacao_accounting.internal_control_service import flow_evidence_transition
+
+    relations[0].status = "reverted"
+    relations[1].status = "reverted"
+    with flow_evidence_transition(relations[0]):
+        with pytest.raises(ValueError, match="servicio autorizado"):
+            database.session.flush()
     database.session.rollback()
 
 

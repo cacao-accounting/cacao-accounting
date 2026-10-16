@@ -107,7 +107,7 @@ def require_review(
             return req
         from cacao_accounting.internal_control_service import approval_request_transition
 
-        with approval_request_transition():
+        with approval_request_transition(req):
             req.status = "Invalidated"
             _event(req, "rejected", actor, {"reason": "changed_proposal"})
             database.session.flush()
@@ -216,7 +216,7 @@ def approve_review(req: Any, user: Any, comments: str | None = None) -> Any:
         _execution.reset(token)
     from cacao_accounting.internal_control_service import approval_request_transition
 
-    with approval_request_transition():
+    with approval_request_transition(req):
         req.status = "Approved"
         database.session.add(
             ApprovalAction(approval_request_id=req.id, approved_by=user.id, action="approve", level=1, comments=comments)
@@ -233,7 +233,7 @@ def reject_review(req: Any, user: Any, comments: str | None = None) -> None:
         raise ValueError(_("No tiene autorización para revisar esta operación."))
     from cacao_accounting.internal_control_service import approval_request_transition
 
-    with approval_request_transition():
+    with approval_request_transition(req):
         req.status = "Rejected"
         database.session.add(
             ApprovalAction(approval_request_id=req.id, approved_by=user.id, action="reject", level=1, comments=comments)

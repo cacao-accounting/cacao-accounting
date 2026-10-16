@@ -2236,7 +2236,7 @@ def _persist_sales_reversal_relation(invoice: SalesInvoice) -> None:
             from datetime import UTC, datetime
             from cacao_accounting.internal_control_service import flow_evidence_transition
 
-            with flow_evidence_transition():
+            with flow_evidence_transition(relation):
                 relation.status = "reverted"
                 relation.reversed_at = datetime.now(UTC)
                 relation.reversal_reason = "reversal_document_revised"

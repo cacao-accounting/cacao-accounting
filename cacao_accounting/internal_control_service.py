@@ -22,8 +22,8 @@ from cacao_accounting.i18n import _
 from cacao_accounting.runtime_mode import is_cloud_mode, is_desktop_mode
 
 _ACTOR: ContextVar[tuple[str | None, str] | None] = ContextVar("icfr_actor", default=None)
-_APPROVAL_TRANSITION: ContextVar[bool] = ContextVar("icfr_approval_transition", default=False)
-_FLOW_TRANSITION: ContextVar[bool] = ContextVar("icfr_flow_transition", default=False)
+_APPROVAL_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_approval_transition", default=frozenset())
+_FLOW_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_flow_transition", default=frozenset())
 _ORM_FLUSH_ACTIVE: ContextVar[bool] = ContextVar("icfr_orm_flush_active", default=False)
 EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log"})
 LEDGER_TABLES = frozenset(
@@ -134,9 +134,10 @@ def current_audit_actor() -> tuple[str | None, str | None]:
 
 
 @contextmanager
-def approval_request_transition() -> Iterator[None]:
-    """Authorize approval state changes performed by the approval engine."""
-    token = _APPROVAL_TRANSITION.set(True)
+def approval_request_transition(*requests: Any) -> Iterator[None]:
+    """Authorize approval state changes for the supplied request rows only."""
+    allowed = _APPROVAL_TRANSITION.get().union(id(request) for request in requests)
+    token = _APPROVAL_TRANSITION.set(frozenset(allowed))
     try:
         yield
     finally:
@@ -144,9 +145,10 @@ def approval_request_transition() -> Iterator[None]:
 
 
 @contextmanager
-def flow_evidence_transition() -> Iterator[None]:
-    """Authorize workflow changes performed by a document-flow service."""
-    token = _FLOW_TRANSITION.set(True)
+def flow_evidence_transition(*rows: Any) -> Iterator[None]:
+    """Authorize workflow changes for the supplied evidence rows only."""
+    allowed = _FLOW_TRANSITION.get().union(id(row) for row in rows)
+    token = _FLOW_TRANSITION.set(frozenset(allowed))
     try:
         yield
     finally:
@@ -349,7 +351,7 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
         _guard_sensitive_delete(table, target in session.deleted)
         _guard_flow_evidence(target, table, changed, target in session.deleted)
         _guard_approval_request(target, table, changed, target in session.deleted)
-        _guard_authorized_transition(table, changed)
+        _guard_authorized_transition(target, table, changed)
         _guard_lifecycle(target)
         if _posted(target) and (target in session.deleted or changed.difference(MUTABLE_STATE)):
             raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
@@ -368,13 +370,13 @@ def _guard_sensitive_delete(table: str, deleted: bool) -> None:
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
 
 
-def _guard_authorized_transition(table: str, changed: set[str]) -> None:
+def _guard_authorized_transition(target: Any, table: str, changed: set[str]) -> None:
     """Require service scopes for approval and document-flow transitions."""
     if table == "approval_request" and changed.intersection({"status", "current_level"}):
-        if not _APPROVAL_TRANSITION.get():
+        if id(target) not in _APPROVAL_TRANSITION.get():
             raise ValueError(_("Las transiciones requieren el servicio autorizado."))
     if table in FLOW_EVIDENCE_TRANSITIONS and changed.intersection(FLOW_EVIDENCE_TRANSITIONS[table]):
-        if not _FLOW_TRANSITION.get():
+        if id(target) not in _FLOW_TRANSITION.get():
             raise ValueError(_("Las transiciones documentales requieren el servicio autorizado."))
 
 
