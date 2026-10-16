@@ -14,6 +14,7 @@ from cacao_accounting.database import (
     ApprovalRequest,
     AuditTrail,
     CacaoConfig,
+    SalesMatchingConfig,
     ComprobanteContable,
     DocumentRelation,
     Entity,
@@ -740,6 +741,13 @@ def test_purchase_reconciliation_match_result_is_immutable(app):
     database.session.rollback()
     with pytest.raises(ValueError, match="servicio auditado"):
         database.session.connection().execute(
+            update(PurchaseReconciliation)
+            .where(PurchaseReconciliation.id == reconciliation.id)
+            .ordered_values((PurchaseReconciliation.status, "cancelled"))
+        )
+    database.session.rollback()
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(
             update(PurchaseReconciliation).where(PurchaseReconciliation.id == reconciliation.id).values(status="cancelled")
         )
     database.session.rollback()
@@ -781,3 +789,38 @@ def test_sensitive_config_keys_via_core_are_blocked(app):
     database.session.commit()
     refreshed = database.session.execute(database.select(CacaoConfig).filter_by(key="ui_locale")).scalar_one()
     assert refreshed.value == "en"
+
+
+@pytest.mark.parametrize(
+    ("model", "attributes", "field", "value"),
+    [
+        (CacaoConfig, {"key": "approval_engine_enabled_co", "value": "1"}, "value", "0"),
+        (PurchaseMatchingConfig, {"company": "co", "matching_type": "3-way"}, "matching_type", "2-way"),
+        (SalesMatchingConfig, {"company": "co", "matching_type": "3-way"}, "matching_type", "2-way"),
+    ],
+)
+def test_ordered_config_updates_are_rejected(app, model, attributes, field, value):
+    """Ordered Core assignments obey the same guard as ordinary UPDATE values."""
+    config = model(**attributes)
+    database.session.add(config)
+    database.session.commit()
+    statement = update(model).where(model.id == config.id).ordered_values((getattr(model, field), value))
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(statement)
+    database.session.expire(config)
+    assert getattr(config, field) == attributes[field]
+
+
+def test_sensitive_config_orm_edit_is_audited(app):
+    """Legitimate configuration edits keep actor, company and previous values."""
+    config = CacaoConfig(key="approval_engine_enabled_co", value="1")
+    database.session.add(config)
+    database.session.commit()
+    with audit_actor("actor", "Administrator"):
+        config.value = "0"
+        database.session.commit()
+    event = _event(config.id)
+    assert event.action == "updated"
+    assert event.actor_user_id == "actor"
+    assert event.company == "co"
+    assert json.loads(event.changes_json)["value"] == {"before": "1", "after": "0"}

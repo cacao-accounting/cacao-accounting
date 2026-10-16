@@ -488,9 +488,7 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
         _guard_approval_request_statement(clause, multiparams, params)
     if table_name == "cacao_config":
         _guard_cacao_config_statement(clause, multiparams, params)
-    if _is_sensitive_table(table_name) and isinstance(clause, Delete):
-        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
-    if _is_sensitive_table(table_name) and _statement_changed_values(clause, multiparams, params, clause.table):
+    if _is_sensitive_table(table_name):
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
 
 
@@ -514,15 +512,16 @@ def _guard_cacao_config_statement(clause: Any, multiparams: Any, params: Any) ->
     configuración solo se edita por la ruta ORM auditada (el flush del
     unit-of-work queda exento por _is_orm_unit_of_work).
     """
-    if isinstance(clause, Delete):
-        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
-    if _statement_changed_values(clause, multiparams, params, clause.table):
-        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    del clause, multiparams, params
+    raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
 
 
 def _statement_changed_values(clause: Any, multiparams: Any, params: Any, table: Any) -> dict[str, Any]:
     """Map the mutated column keys of an Update to their bound values."""
     values = getattr(clause, "_values", None)
+    ordered_values = getattr(clause, "_ordered_values", None)
+    if ordered_values is not None:
+        values = dict(ordered_values)
     if values is not None:
         return {getattr(key, "key", key): getattr(value, "value", value) for key, value in values.items()}
     parameters = list(multiparams or ()) + ([params] if params else [])
