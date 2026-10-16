@@ -5783,8 +5783,12 @@ def test_late_two_way_invoice_amounts_excludes_future_invoices(app_ctx):
     assert _purchase_invoice_has_receipt(invoice_future, "cacao") is True
 
 
-def test_purchase_invoice_match_failed_blocks_posting(app_ctx):
-    """Fail-closed: la conciliación MATCH_FAILED impide contabilizar la factura."""
+@pytest.mark.parametrize(
+    ("matching_type", "discrepancy"),
+    [(matching_type, discrepancy) for matching_type in ("2-way", "3-way") for discrepancy in ("quantity", "amount")],
+)
+def test_purchase_invoice_match_failed_blocks_posting(app_ctx, matching_type, discrepancy):
+    """Fail-closed: discrepancias de cantidad e importe bloquean 2-way y 3-way."""
     from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
     from cacao_accounting.contabilidad.posting_service import post_purchase_invoice
     from cacao_accounting.contabilidad.posting_service import PostingError
@@ -5796,6 +5800,8 @@ def test_purchase_invoice_match_failed_blocks_posting(app_ctx):
         PartyAccount,
         PurchaseInvoice,
         PurchaseInvoiceItem,
+        PurchaseOrder,
+        PurchaseOrderItem,
         PurchaseReceipt,
         PurchaseReceiptItem,
         PurchaseMatchingConfig,
@@ -5809,6 +5815,7 @@ def test_purchase_invoice_match_failed_blocks_posting(app_ctx):
     seed_matching_config_for_company("cacao")
     seedconfig = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company="cacao")).scalar_one()
     seedconfig.bridge_account_required = False
+    seedconfig.matching_type = matching_type
     payable = Accounts(
         entity="cacao",
         code="AP-GR9",
@@ -5839,21 +5846,20 @@ def test_purchase_invoice_match_failed_blocks_posting(app_ctx):
         ]
     )
     database.session.flush()
-    receipt = PurchaseReceipt(
+    order = PurchaseOrder(
         company="cacao",
         posting_date=date(2026, 5, 1),
         supplier_id="SUPP-GR9",
         docstatus=1,
         transaction_currency="NIO",
-        base_currency="NIO",
-        exchange_rate=Decimal("1"),
     )
-    database.session.add(receipt)
+    database.session.add(order)
     database.session.flush()
     database.session.add(
-        PurchaseReceiptItem(
-            purchase_receipt_id=receipt.id,
+        PurchaseOrderItem(
+            purchase_order_id=order.id,
             item_code="ITEM-GR9",
+            item_name="Item GR9",
             qty=Decimal("2"),
             qty_in_base_uom=Decimal("2"),
             uom="EA",
@@ -5862,43 +5868,73 @@ def test_purchase_invoice_match_failed_blocks_posting(app_ctx):
             warehouse="WH-GR9",
         )
     )
-    database.session.add_all(
-        [
-            GLEntry(
-                posting_date=date(2026, 5, 1),
-                company="cacao",
-                debit=Decimal("10"),
-                credit=Decimal("0"),
-                voucher_type="purchase_receipt",
-                voucher_id=receipt.id,
-            ),
-            StockLedgerEntry(
-                posting_date=date(2026, 5, 1),
+    receipt = None
+    if matching_type == "3-way":
+        receipt = PurchaseReceipt(
+            company="cacao",
+            posting_date=date(2026, 5, 1),
+            supplier_id="SUPP-GR9",
+            purchase_order_id=order.id,
+            docstatus=1,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(receipt)
+        database.session.flush()
+        database.session.add(
+            PurchaseReceiptItem(
+                purchase_receipt_id=receipt.id,
                 item_code="ITEM-GR9",
+                qty=Decimal("2"),
+                qty_in_base_uom=Decimal("2"),
+                uom="EA",
+                rate=Decimal("5.00"),
+                amount=Decimal("10.00"),
                 warehouse="WH-GR9",
-                company="cacao",
-                qty_change=Decimal("2"),
-                qty_after_transaction=Decimal("2"),
-                valuation_rate=Decimal("5.00"),
-                stock_value_difference=Decimal("10"),
-                stock_value=Decimal("10"),
-                voucher_type="purchase_receipt",
-                voucher_id=receipt.id,
-            ),
-        ]
-    )
+            )
+        )
+        database.session.add_all(
+            [
+                GLEntry(
+                    posting_date=date(2026, 5, 1),
+                    company="cacao",
+                    debit=Decimal("10"),
+                    credit=Decimal("0"),
+                    voucher_type="purchase_receipt",
+                    voucher_id=receipt.id,
+                ),
+                StockLedgerEntry(
+                    posting_date=date(2026, 5, 1),
+                    item_code="ITEM-GR9",
+                    warehouse="WH-GR9",
+                    company="cacao",
+                    qty_change=Decimal("2"),
+                    qty_after_transaction=Decimal("2"),
+                    valuation_rate=Decimal("5.00"),
+                    stock_value_difference=Decimal("10"),
+                    stock_value=Decimal("10"),
+                    voucher_type="purchase_receipt",
+                    voucher_id=receipt.id,
+                ),
+            ]
+        )
     database.session.flush()
+    invoice_qty = Decimal("3") if discrepancy == "quantity" else Decimal("2")
+    invoice_rate = Decimal("5.00") if discrepancy == "quantity" else Decimal("6.00")
+    invoice_amount = invoice_qty * invoice_rate
     invoice = PurchaseInvoice(
         company="cacao",
         posting_date=date(2026, 5, 2),
         supplier_id="SUPP-GR9",
-        purchase_receipt_id=receipt.id,
+        purchase_order_id=order.id,
+        purchase_receipt_id=receipt.id if receipt is not None else None,
         docstatus=1,
         transaction_currency="NIO",
         base_currency="NIO",
         exchange_rate=Decimal("1"),
-        total=Decimal("15.00"),
-        grand_total=Decimal("15.00"),
+        total=invoice_amount,
+        grand_total=invoice_amount,
     )
     database.session.add(invoice)
     database.session.flush()
@@ -5906,10 +5942,10 @@ def test_purchase_invoice_match_failed_blocks_posting(app_ctx):
         PurchaseInvoiceItem(
             purchase_invoice_id=invoice.id,
             item_code="ITEM-GR9",
-            qty=Decimal("3"),
+            qty=invoice_qty,
             uom="EA",
-            rate=Decimal("5.00"),
-            amount=Decimal("15.00"),
+            rate=invoice_rate,
+            amount=invoice_amount,
             warehouse="WH-GR9",
         )
     )
