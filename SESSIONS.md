@@ -2778,3 +2778,124 @@ el tree local con trabajo paralelo de terceros.
 - Cambios locales pendientes de commit; trabajo de terceros en
   `internal_control_service.py` (`_enabled()` con `INTERNAL_CONTROLS_ENFORCE`)
   stageado selectivamente fuera del commit de esta tarea.
+
+## 2026-10-16 (QA: veredictos sobre fix-proposed #922, #923, #924, #926)
+
+### Modalidad
+
+Verificación mecánica sin corrida de pruebas por indicación del desarrollador: análisis estático del
+diff (`442b9017`, `37767167`, `f1abab61`, `b765cde4`, `d5baebd1`, `e909fe62`, `b6fc1a46`, `aabec9cd`,
+`60414361`, `285490b0`), del código vigente en `cacao_accounting/internal_control_service.py`,
+`cacao_accounting/audit_chain.py`, `cacao_accounting/cli.py` y `tests/test_internal_control_service.py`
+(cobertura confirmada por lectura), más los commits `test_internal_control_service.py` (37 passed
+corridados en la ronda previa del implementador) y las bitácoras por issue.
+
+### Veredictos
+
+- **#922 fix-confirmed**: criterios de aceptación completos y mecánicamente trazables.
+  `PROTECTED_REQUEST_FIELDS` congela `required_level`, `policy_snapshot`, identidad, alcance y
+  cancelación; la única vía de mutación es el flush ORM dentro del scope por instancia
+  `approval_request_transition(req)`; Engine rechaza todo UPDATE Core a la tabla (protegido o no) y
+  `do_orm_execute` bloquea bulk ORM. Las tres propuestas de QA anteriores están implementadas con
+  regresiones: piggy-back (`test_approval_transition_scope_is_limited_to_target_request`),
+  transición por `Connection.execute` con valores y parametrizada
+  (`test_request_required_level_cannot_be_weakened`,
+  `test_request_parameterized_connection_update_is_blocked`), y el token no autoriza campos de
+  evidencia (`_guard_approval_request` corre independiente del scope). Observaciones no bloqueantes:
+  scopes por `id(objeto)` exigen que el llamador retenga la referencia; `_is_orm_unit_of_work`
+  depende de la API interna `base_mapper._compiled_cache`.
+- **#923 needs-work**: el núcleo del fix está bien construido (taxonomía
+  `FLOW_EVIDENCE_TABLES/TRANSITIONS`, `matched_amount`/`matched_date` retirados de las transiciones,
+  rechazo ORM/Core/textual de reescrituras y borrados, scopes por instancia verificables en
+  `revert_relations_for_target` y en los servicios de conciliación, no-reactivación monotónica).
+  Pendientes concretos: (1) validar y atestiguar los privilegios mínimos del rol PostgreSQL runtime
+  para las seis tablas de flujo documental;   `docs/cloud/internal-controls.md` documenta GRANT/REVOKE solo para
+  `audit_trail`, `approval_action` y `audit_log`; (2) eliminar el código muerto de
+  `_guard_flow_evidence_statement` (`internal_control_service.py:503-508`), inalcanzable tras el
+  `if changed: raise` de la línea 501.
+- **#924 needs-work**: auditoría, inmutabilidad y snapshots verificados: `_write_event` emite
+  before/after para `PurchaseMatchingConfig`/`SalesMatchingConfig` (SENSITIVE_MODELS),
+  `_guard_bulk` rechaza UPDATE Core compilado, parametrizado y DELETE
+  (`test_matching_config_connection_update_is_rejected` cumple lo exigido en la ronda QA previa) y
+  `_apply_config_snapshot` conserva tolerancias y `matching_type` por conciliación. Queda abierto y
+  declarado por el propio desarrollador: la aprobación independiente auditable para cambios que
+  debilitan controles, con su regresión maker-checker (propuesta 3) y la invariancia del snapshot
+  histórico (propuesta 4).
+- **#926 fix-confirmed** (condicionado): criterios cubiertos — hash v2 con identidad de fila
+  (`_V2_FIELDS` incluye `id`) y estrategia compatible (filas legadas v1 verificadas con su formato,
+  migración idempotente `20261015_0001`), verificación operativa con `cacaoctl audit-verify`
+  (hallazgos a stderr, `Exit(1)`, playbook en `docs/cloud/internal-controls.md`), serialización con
+  advisory lock transaccional fijo que existe incluso con cadena vacía (cierra la observación de los
+  dos primeros escritores) y `SELECT ... FOR UPDATE` como defensa adicional, cabeza resuelta por
+  topología de enlaces (`_last_chain_hash` filtra `payload_hash IS NOT NULL`), lo que elimina el
+  falso-encabezado legacy detectado en la ronda anterior. Condición para el cierre material: evidencia
+  en CI de la corrida (no skipped) de `test_concurrent_writers_are_serialized_on_postgresql`.
+  Observaciones no bloqueantes: `verify_audit_trail_chain` carga la tabla completa en memoria
+  (recomendar paginación cuando el rastro escale); el patrón asume READ COMMITTED en PostgreSQL
+  (default) — un despliegue en REPEATABLE READ puede ver una cabeza obsoleta; el pool de escritores
+  MySQL/MariaDB queda documentado como límite Tier 2/3.
+
+### Hallazgo nuevo a reportar (fuera del scope de los cuatro issues)
+
+`cacao_config` está protegido solo contra SQL textual (`_guard_raw_sql`, que salta statements
+compilados); `Connection.execute(update(CacaoConfig))` no encuentra match en `_guard_bulk`
+(`_is_sensitive_table` no cubre `CacaoConfig`). Las llaves `approval_engine_enabled_<company>`,
+`approval_require_different_approver_<company>`, `fiscal_*` y `accounting_*` son mutables por esa vía
+sin guard. Se propone issue nuevo replicando el patrón de `SENSITIVE_MODELS` (#924) sobre esta tabla.
+
+Siempre valdrá doble-agente: estos veredictos requieren la firma del desarrollador humano antes de
+mover etiquetas materialmente en los issues.
+
+## 2026-10-16 (implementación: cierre de pendientes #923, #924, #927)
+
+### Alcance
+
+Como implementador se aplicaron los pendientes que el QA dejó en needs-work:
+
+- **#923**: se elimina el código muerto de `_guard_flow_evidence_statement`
+  (el bloque de transiciones era inalcanzable tras el `if changed: raise`) y
+  se documenta en `docs/cloud/internal-controls.md` el GRANT/REVOKE del rol
+  runtime de PostgreSQL para las seis tablas de evidencia del flujo
+  documental (INSERT permitido, UPDATE solo transiciones auditadas por
+  servicios, DELETE/TRUNCATE revocados).
+- **#924**: nuevo `cacao_accounting/matching_config_service.py`, única vía de
+  actualización de `PurchaseMatchingConfig`/`SalesMatchingConfig`. La ruta
+  administrativa entrega los valores del formulario al servicio; este
+  clasifica los cambios que debilitan controles (3-way→2-way, desactivar
+  requisito de OC/OV, cuenta puente o auto-reconciliación, permitir
+  diferencias de precio, cambiar tolerancias) y en Cloud con cuatro ojos los
+  enruta por `require_review` con el tipo nuevo `config_change`, reutilizando
+  la aprobación independiente existente (otro administrador autorizado, con
+  clasificación y rangos congelados en `policy_snapshot`). La aprobación
+  ejecuta el mismo servicio (un solo validador) y el resultado queda con
+  before/after en la evidencia de control_review. Se agregó regresión de
+  invariancia del snapshot histórico (`test_reconciliation_keeps_the_snapshot_
+  when_config_changes`): al aprobarse el cambio de tolerancias, la
+  conciliación previa conserva sus valores de snapshot aplicados.
+- **#927**: `_guard_cacao_config_statement` rechaza en Engine todo UPDATE y
+  DELETE Core directo sobre `cacao_config` (la identidad sensible vive en el
+  WHERE, no en las columnas mutadas; el flush ORM queda exento por
+  `_is_orm_unit_of_work`). Los prefijos sensibles se centralizan en
+  `_SENSITIVE_CONFIG_PREFIXES`, compartidos entre `_sensitive` y el guard.
+
+### Decisiones de implementación
+
+- El tipo de revisión nuevo añade `config_change` al conjunto `REVIEW_TYPES` con alcance
+  permanente módulo `admin`/acción `edit`; se extendieron `_operation_actor`,
+  `review_is_allowed` y `review_pending_info` por mapeo (`_OPERATION_SCOPE`)
+  en lugar de condicionales dispersas.
+- La clasificación de debilitamiento compara valores TIPADOS (los Decimals de
+  columnas comparan numéricamente) y serializa valores simples (str) para el
+  payload de revisión, evitando falsos positivos por escala decimal
+  (`0` vs `0.0000`) y fallas de serialización JSON.
+- `allow_price_difference` debilita al ACTIVARSE (False→True); los demás
+  toggles debilitan al desactivarse. Consultar `WEAKENING_TOGGLES` y
+  `WEAKENING_FEATURES` antes de ampliar la política.
+
+### Limitaciones
+
+- La sección doc de PostgreSQL exige prueba con el credencial
+  runtime; en la práctica es paso de despliegue (igual que el resto del
+  checklist de la misma sección).
+- Los cambios de matching config en Desktop se aplican sin revisión
+  (coherente con `require_review`, que no existe en desktop).
