@@ -93,8 +93,8 @@ def require_review(
 ) -> Any:
     """Authorize the actor and return a proposal when the operation requires review.
 
-    ``review_required=False`` allows a policy-classified immediate change,
-    while retaining actor authorization and approved-execution validation.
+    ``review_required=False`` skips proposal creation (for example, when
+    settings are unchanged), retaining actor and approved-execution validation.
     """
     from cacao_accounting.approval_engine import ApprovalEngine
     from cacao_accounting.runtime_mode import is_desktop_mode

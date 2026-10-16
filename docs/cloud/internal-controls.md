@@ -145,3 +145,20 @@ Validate on PostgreSQL with actual runtime credentials as well as SQLite tests.
 Record version/commit, reviewer, schema result, and runtime privilege checks in
 the deployment record. No automated test can establish production role isolation,
 backup retention, or the operating effectiveness of a customer's controls.
+## Matching configuration approvals
+
+The policy approved in issue #924 is simple: every effective change to
+purchase or sales matching configuration requires independent approval
+when the Cloud approval engine and independent review are enabled. This
+includes increases, reductions, changes of tolerance type and changes that
+strengthen controls. There is no weakening/strengthening classification.
+
+Saving identical values does not create a proposal; numerically equal
+decimals (for example, `5` and `5.0000`) are identical values. Pending
+changes do not alter the active configuration. Another authorized reviewer
+must approve them, and a changed baseline prevents applying a stale
+proposal. Audit evidence retains the before/after values, actor and company.
+
+Desktop retains its single-user operation. Cloud authorization remains
+mandatory even if the approval engine is disabled. Historical matching
+snapshots remain unchanged when the active configuration changes.

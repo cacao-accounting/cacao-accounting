@@ -24437,11 +24437,10 @@ msgstr ""
 
 #: cacao_accounting/admin/routes.py
 msgid ""
-"El cambio debilita controles de matching y quedó pendiente de revisión "
+"El cambio de configuración de matching quedó pendiente de aprobación "
 "independiente."
 msgstr ""
-"The change weakens matching controls and is waiting for an independent "
-"review."
+"The matching configuration change is waiting for independent approval."
 
 #: cacao_accounting/control_review_service.py
 msgid "Cambio de configuración de matching"

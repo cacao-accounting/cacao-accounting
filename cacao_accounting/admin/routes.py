@@ -977,7 +977,7 @@ def config_conciliacion_compras():
         database.session.commit()
         if isinstance(pending, ApprovalRequest):
             flash(
-                _("El cambio debilita controles de matching y quedó pendiente de revisión independiente."),
+                _("El cambio de configuración de matching quedó pendiente de aprobación independiente."),
                 "warning",
             )
         else:
@@ -1065,7 +1065,7 @@ def config_conciliacion_ventas():
         database.session.commit()
         if isinstance(pending, ApprovalRequest):
             flash(
-                _("El cambio debilita controles de matching y quedó pendiente de revisión independiente."),
+                _("El cambio de configuración de matching quedó pendiente de aprobación independiente."),
                 "warning",
             )
         else:

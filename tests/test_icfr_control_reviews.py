@@ -373,27 +373,6 @@ def test_reconciliation_keeps_the_snapshot_when_config_changes(chart, config_rev
     assert historical.matched_amount == Decimal("10")
 
 
-def test_strengthening_config_change_applies_without_review(chart, config_reviewers):
-    """Non-weakening edits still land immediately under an active four-eyes setup."""
-    from cacao_accounting.database import ApprovalRequest, PurchaseMatchingConfig
-    from cacao_accounting.matching_config_service import update_matching_config
-
-    preparer, reviewer = config_reviewers
-    database.session.add(PurchaseMatchingConfig(company=COMPANY, auto_reconcile=False))
-    database.session.commit()
-
-    result = update_matching_config("purchase", COMPANY, _matching_values(), actor_id=preparer.id)
-
-    assert result is not None and not isinstance(result, ApprovalRequest)
-    assert result.auto_reconcile is True
-    assert (
-        database.session.execute(
-            database.select(database.func.count()).select_from(ApprovalRequest).filter_by(document_type="config_change")
-        ).scalar_one()
-        == 0
-    )
-
-
 @pytest.mark.parametrize("actor_id", ["nonexistent", "inactive"])
 @pytest.mark.parametrize("enabled", [False, True])
 def test_strengthening_config_change_requires_authorized_actor(chart, config_reviewers, actor_id, enabled):
@@ -428,28 +407,66 @@ def test_config_review_rejects_changed_configuration(chart, config_reviewers, cu
     assert database.session.query(ApprovalAction).count() == 0
 
 
-def test_weakening_classification_matches_the_agreed_policy():
-    """4-way switches, disabled guards, enabled allowances and tolerance moves."""
-    from cacao_accounting.matching_config_service import weakened_fields
+@pytest.mark.parametrize(
+    ("model", "field", "before", "after"),
+    [
+        ("purchase", "matching_type", "2-way", "3-way"),
+        ("purchase", "require_purchase_order", False, True),
+        ("purchase", "bridge_account_required", False, True),
+        ("purchase", "auto_reconcile", False, True),
+        ("purchase", "allow_price_difference", True, False),
+        ("purchase", "price_tolerance_type", "percentage", "absolute"),
+        ("purchase", "price_tolerance_value", Decimal("5"), Decimal("2")),
+        ("purchase", "qty_tolerance_type", "percentage", "absolute"),
+        ("purchase", "qty_tolerance_value", Decimal("5"), Decimal("2")),
+        ("sales", "matching_type", "2-way", "3-way"),
+        ("sales", "require_sales_order", False, True),
+        ("sales", "allow_price_difference", True, False),
+        ("sales", "price_tolerance_type", "percentage", "absolute"),
+        ("sales", "price_tolerance_value", Decimal("5"), Decimal("2")),
+    ],
+)
+def test_every_matching_config_change_requires_approval(chart, config_reviewers, model, field, before, after):
+    """Every setting waits for approval, including stricter controls and lower tolerances."""
+    from cacao_accounting.matching_config_service import CONFIG_FIELDS, CONFIG_MODELS, update_matching_config
 
-    purchase = _matching_values()
-    assert weakened_fields("purchase", purchase, purchase) == []
-    assert weakened_fields("purchase", purchase, _matching_values(matching_type="2-way")) == ["matching_type"]
-    assert weakened_fields("purchase", purchase, _matching_values(allow_price_difference=True)) == ["allow_price_difference"]
-    assert weakened_fields("purchase", purchase, _matching_values(require_purchase_order=False)) == ["require_purchase_order"]
-    assert weakened_fields("purchase", purchase, _matching_values(auto_reconcile=False)) == ["auto_reconcile"]
-    assert "price_tolerance" in weakened_fields("purchase", purchase, _matching_values(price_tolerance_value=Decimal("5")))
-    assert "qty_tolerance" in weakened_fields("purchase", purchase, _matching_values(qty_tolerance_value=Decimal("5")))
-    strengthening = _matching_values(require_purchase_order=False).copy()
-    assert weakened_fields("purchase", strengthening, _matching_values()) == []
-    sales = {
-        "matching_type": "3-way",
-        "price_tolerance_type": "percentage",
-        "price_tolerance_value": Decimal("0"),
-        "require_sales_order": True,
-        "allow_price_difference": False,
-    }
-    assert weakened_fields("sales", sales, sales) == []
-    assert weakened_fields("sales", sales, {**sales, "matching_type": "2-way"}) == ["matching_type"]
-    assert weakened_fields("sales", sales, {**sales, "require_sales_order": False}) == ["require_sales_order"]
-    assert weakened_fields("sales", sales, {**sales, "allow_price_difference": True}) == ["allow_price_difference"]
+    preparer, reviewer = config_reviewers
+    config = CONFIG_MODELS[model](company=COMPANY, **{field: before})
+    database.session.add(config)
+    database.session.commit()
+    values = {key: getattr(config, key) for key in CONFIG_FIELDS[model]}
+    values[field] = after
+    pending = update_matching_config(model, COMPANY, values, actor_id=preparer.id)
+    database.session.commit()
+    assert isinstance(pending, ApprovalRequest)
+    assert pending.review_payload["changed_fields"] == [field]
+    assert getattr(config, field) == before
+    with pytest.raises(ValueError, match="No tiene autorización"):
+        review.approve_review(pending, preparer)
+    review.approve_review(pending, reviewer)
+    database.session.commit()
+    assert pending.status == "Approved"
+    assert getattr(config, field) == after
+    event = database.session.execute(
+        database.select(AuditTrail).filter_by(document_id=config.id, action="updated")
+    ).scalar_one()
+    assert event.actor_user_id == reviewer.id
+    assert event.company == COMPANY
+    assert event.before_json and event.after_json
+
+
+@pytest.mark.parametrize("model", ["purchase", "sales"])
+def test_identical_matching_config_needs_no_approval(chart, config_reviewers, model):
+    """Saving unchanged settings, including equal decimals, creates no proposal."""
+    from cacao_accounting.matching_config_service import CONFIG_FIELDS, CONFIG_MODELS, update_matching_config
+
+    preparer, _ = config_reviewers
+    config = CONFIG_MODELS[model](company=COMPANY, price_tolerance_value=Decimal("5"))
+    database.session.add(config)
+    database.session.commit()
+    values = {field: getattr(config, field) for field in CONFIG_FIELDS[model]}
+    values["price_tolerance_value"] = "5.0000"
+    result = update_matching_config(model, COMPANY, values, actor_id=preparer.id)
+    database.session.commit()
+    assert result is config
+    assert database.session.query(ApprovalRequest).filter_by(document_type="config_change").count() == 0
