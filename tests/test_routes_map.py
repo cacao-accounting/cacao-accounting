@@ -43,6 +43,10 @@ STRICT_STATUS_200_ROUTES = {
     "/accounting/project/new",
     "/accounting/unit/list",
     "/accounting/unit/new",
+    "/cash_management/petty-cash-expense/list",
+    "/cash_management/petty-cash-expense/new",
+    "/cash_management/petty-cash-voucher/list",
+    "/cash_management/petty-cash-voucher/new",
 }
 
 

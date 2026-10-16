@@ -1039,20 +1039,6 @@ def test_gasto_con_vale_liquida_el_vale(app_ctx_book):
 # -------------------------------------------------------------------------------------
 # Rutas de vales y gastos
 # -------------------------------------------------------------------------------------
-def test_ruta_lista_vales(app_ctx_full):
-    client = app_ctx_full.test_client()
-    _login(client)
-    resp = client.get("/cash_management/petty-cash-voucher/list")
-    assert resp.status_code == 200
-
-
-def test_ruta_nuevo_vale(app_ctx_full):
-    client = app_ctx_full.test_client()
-    _login(client)
-    resp = client.get("/cash_management/petty-cash-voucher/new")
-    assert resp.status_code == 200
-
-
 def test_crear_vale_via_web(app_ctx_full):
     from cacao_accounting.bancos.services import create_petty_cash_account, petty_cash_vouchers
     from cacao_accounting.database import Accounts, database
@@ -1092,20 +1078,6 @@ def test_crear_vale_via_web(app_ctx_full):
     )
     assert resp.status_code == 200
     assert any(v.concept == "Vale web" for v in petty_cash_vouchers("cacao"))
-
-
-def test_ruta_lista_gastos(app_ctx_full):
-    client = app_ctx_full.test_client()
-    _login(client)
-    resp = client.get("/cash_management/petty-cash-expense/list")
-    assert resp.status_code == 200
-
-
-def test_ruta_nuevo_gasto(app_ctx_full):
-    client = app_ctx_full.test_client()
-    _login(client)
-    resp = client.get("/cash_management/petty-cash-expense/new")
-    assert resp.status_code == 200
 
 
 # -------------------------------------------------------------------------------------
