@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     Entity,
     GLEntry,
     PurchaseReconciliation,
+    PurchaseMatchingConfig,
     Roles,
     SalesInvoice,
     SalesInvoiceItem,
@@ -86,14 +87,16 @@ def test_sensitive_changes_share_commit_and_actor(app):
 
 
 def test_sensitive_delete_and_secret_configuration_exclusion(app):
-    """Assignment deletion remains evidenced, while secret settings stay private."""
+    """Sensitive assignments cannot be deleted and secret settings stay private."""
     role = Roles(name="custom", note="Custom")
     database.session.add(role)
     database.session.commit()
     role_id = role.id
     database.session.delete(role)
-    database.session.flush()
-    assert _event(role_id).action == "deleted"
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.flush()
+    database.session.rollback()
+    assert database.session.get(Roles, role_id) is not None
     secret = CacaoConfig(key="smtp_password", value="secret")
     option = CacaoConfig(key="approval_engine_enabled_co", value="1")
     database.session.add_all([secret, option])
@@ -140,9 +143,16 @@ def test_approval_action_and_policy_cannot_be_rewritten(app):
     action = ApprovalAction(approval_request_id=request.id, approved_by="actor", action="approve")
     database.session.add(action)
     database.session.commit()
-    request.status = "Approved"
-    database.session.flush()
+    from cacao_accounting.internal_control_service import approval_request_transition
+
+    with approval_request_transition():
+        request.status = "Approved"
+        database.session.flush()
     request.policy_snapshot = {"requires_independent": False}
+    with pytest.raises(ValueError, match="inmutable"):
+        database.session.flush()
+    database.session.rollback()
+    request.cancellation_reason = "forged"
     with pytest.raises(ValueError, match="inmutable"):
         database.session.flush()
     database.session.rollback()
@@ -167,6 +177,11 @@ def test_request_required_level_cannot_be_weakened(app):
     with pytest.raises(ValueError, match="inmutable"):
         database.session.flush()
     database.session.rollback()
+    with pytest.raises(ValueError, match="servicio autorizado"):
+        database.session.connection().execute(
+            update(ApprovalRequest).where(ApprovalRequest.id == request.id).values(status="Approved")
+        )
+    database.session.rollback()
     request.policy_snapshot = {"requires_independent": False}
     with pytest.raises(ValueError, match="inmutable"):
         database.session.flush()
@@ -178,10 +193,19 @@ def test_request_required_level_cannot_be_weakened(app):
             .values(required_level=1, policy_snapshot={"requires_independent": False})
         )
     database.session.rollback()
-    # Las transiciones de flujo del motor de aprobación siguen permitidas.
-    request.status = "Approved"
-    request.current_level = 3
-    database.session.flush()
+    with pytest.raises(ValueError, match="servicio autorizado"):
+        request.status = "Approved"
+        database.session.flush()
+    database.session.rollback()
+    with pytest.raises(ValueError, match="servicio autorizado"):
+        request.current_level = 3
+        database.session.flush()
+    database.session.rollback()
+    from cacao_accounting.internal_control_service import approval_request_transition
+
+    with approval_request_transition():
+        request.current_level = 3
+        database.session.flush()
 
 
 def test_posted_header_and_line_protected_but_balances_and_cancellation_mutable(app):
@@ -302,6 +326,17 @@ def test_request_bulk_and_delete_guards(app):
     database.session.delete(request)
     with pytest.raises(ValueError):
         database.session.flush()
+
+
+def test_request_parameterized_connection_update_is_blocked(app):
+    """Connection parameters cannot bypass approval transition guards."""
+    request = ApprovalRequest(document_type="test", document_id="doc", company_id="co", requested_by="actor")
+    database.session.add(request)
+    database.session.commit()
+    statement = update(ApprovalRequest).where(ApprovalRequest.id == request.id)
+    with pytest.raises(ValueError, match="servicio autorizado"):
+        database.session.connection().execute(statement, {"status": "Approved"})
+    database.session.rollback()
 
 
 def test_explicit_actor_reaches_manual_audit_service_and_user_snapshot_is_safe(app):
@@ -549,7 +584,7 @@ def _document_relation():
 def test_document_relation_core_rewrite_is_blocked(app):
     """Un UPDATE Core no reescribe la cantidad consumida de una relación."""
     relation = _document_relation()
-    with pytest.raises(ValueError, match="vínculos documentales"):
+    with pytest.raises(ValueError, match="transiciones documentales"):
         database.session.connection().execute(
             update(DocumentRelation).where(DocumentRelation.id == relation.id).values(qty=200)
         )
@@ -565,23 +600,29 @@ def test_document_relation_delete_via_core_is_blocked(app):
     database.session.rollback()
 
 
-def test_document_relation_transition_is_audited(app):
-    """Reversión o reactivación legítima queda auditada, sin tocar cantidades."""
-    from datetime import datetime, timezone
-
+def test_document_relation_parameterized_transition_is_blocked(app):
+    """Parameterized Connection updates cannot bypass document-flow services."""
     relation = _document_relation()
-    relation.status = "reverted"
-    relation.reversed_at = datetime.now(timezone.utc)
-    relation.reversal_reason = "Reversión del documento"
-    database.session.flush()
+    statement = update(DocumentRelation).where(DocumentRelation.id == relation.id)
+    with pytest.raises(ValueError, match="transiciones documentales"):
+        database.session.connection().execute(statement, {"status": "reverted"})
+    database.session.rollback()
+
+
+def test_document_relation_transition_is_audited_and_not_reactivated(app):
+    """Reversión queda auditada y una relación revertida no se reactiva."""
+    relation = _document_relation()
+    from cacao_accounting.document_flow.service import revert_relations_for_target
+
+    revert_relations_for_target(relation.target_type, relation.target_id, reason="test_reversal")
     event = _event(relation.id)
     assert event.action == "updated"
     assert json.loads(event.changes_json)["status"]["after"] == "reverted"
-    database.session.rollback()
-    # Otra transición válida del flujo: volver a activa.
+    database.session.commit()
+    # La reversión es monotónica: se agrega una relación nueva si se corrige.
     relation.status = "active"
-    database.session.flush()
-    assert database.session.get(DocumentRelation, relation.id).status == "active"
+    with pytest.raises(ValueError, match="no se reactiva"):
+        database.session.flush()
     database.session.rollback()
 
 
@@ -611,10 +652,55 @@ def test_purchase_reconciliation_evidence_is_guarded(app):
             delete(PurchaseReconciliation).where(PurchaseReconciliation.id == reconciliation.id)
         )
     database.session.rollback()
-    # Transición legítima del flujo de cancelación.
+    # Una asignación ORM directa no emite el evento económico de cancelación.
     reconciliation.status = "cancelled"
-    database.session.flush()
+    with pytest.raises(ValueError, match="servicio autorizado"):
+        database.session.flush()
+    database.session.rollback()
+    from cacao_accounting.compras.purchase_reconciliation_service import cancel_purchase_reconciliation
+
+    cancel_purchase_reconciliation(reconciliation.purchase_invoice_id)
     event = _event(reconciliation.id)
     assert event.action == "updated"
     assert json.loads(event.changes_json)["status"]["after"] == "cancelled"
     database.session.rollback()
+
+
+def test_purchase_reconciliation_match_result_is_immutable(app):
+    """Matching figures are evidence and cannot be rewritten after creation."""
+    reconciliation = PurchaseReconciliation(
+        company="co",
+        matching_type="3-way",
+        purchase_invoice_id="pinv-immutable",
+        matched_amount=10,
+        matched_date=date.today(),
+        status="reconciled",
+    )
+    database.session.add(reconciliation)
+    database.session.commit()
+    reconciliation.matched_amount = 20
+    with pytest.raises(ValueError, match="vínculos documentales"):
+        database.session.flush()
+    database.session.rollback()
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(
+            update(PurchaseReconciliation).where(PurchaseReconciliation.id == reconciliation.id).values(status="cancelled")
+        )
+    database.session.rollback()
+
+
+def test_matching_config_connection_update_is_rejected(app):
+    """Compiled Connection updates cannot bypass matching-config auditing."""
+    config = PurchaseMatchingConfig(company="co", matching_type="3-way")
+    database.session.add(config)
+    database.session.commit()
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(
+            update(PurchaseMatchingConfig).where(PurchaseMatchingConfig.id == config.id).values(matching_type="2-way")
+        )
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(
+            update(PurchaseMatchingConfig).where(PurchaseMatchingConfig.id == config.id), {"matching_type": "2-way"}
+        )
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.connection().execute(delete(PurchaseMatchingConfig).where(PurchaseMatchingConfig.id == config.id))

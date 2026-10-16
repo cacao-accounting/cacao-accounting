@@ -105,8 +105,12 @@ def require_review(
     if req is not None:
         if _digest(req.review_payload) == _digest(payload):
             return req
-        req.status = "Invalidated"
-        _event(req, "rejected", actor, {"reason": "changed_proposal"})
+        from cacao_accounting.internal_control_service import approval_request_transition
+
+        with approval_request_transition():
+            req.status = "Invalidated"
+            _event(req, "rejected", actor, {"reason": "changed_proposal"})
+            database.session.flush()
     req = ApprovalRequest(
         document_type=kind,
         document_id=identifier,
@@ -210,12 +214,15 @@ def approve_review(req: Any, user: Any, comments: str | None = None) -> Any:
             result = _execute(req, user)
     finally:
         _execution.reset(token)
-    req.status = "Approved"
-    database.session.add(
-        ApprovalAction(approval_request_id=req.id, approved_by=user.id, action="approve", level=1, comments=comments)
-    )
-    _event(req, "approved", user, {"result_id": result.id, "prepared_by": req.requested_by})
-    database.session.flush()
+    from cacao_accounting.internal_control_service import approval_request_transition
+
+    with approval_request_transition():
+        req.status = "Approved"
+        database.session.add(
+            ApprovalAction(approval_request_id=req.id, approved_by=user.id, action="approve", level=1, comments=comments)
+        )
+        _event(req, "approved", user, {"result_id": result.id, "prepared_by": req.requested_by})
+        database.session.flush()
     return result
 
 
@@ -224,12 +231,15 @@ def reject_review(req: Any, user: Any, comments: str | None = None) -> None:
     req = database.session.get(ApprovalRequest, req.id, with_for_update=True, populate_existing=True)
     if req is None or not review_is_allowed(req, user):
         raise ValueError(_("No tiene autorización para revisar esta operación."))
-    req.status = "Rejected"
-    database.session.add(
-        ApprovalAction(approval_request_id=req.id, approved_by=user.id, action="reject", level=1, comments=comments)
-    )
-    _event(req, "rejected", user)
-    database.session.flush()
+    from cacao_accounting.internal_control_service import approval_request_transition
+
+    with approval_request_transition():
+        req.status = "Rejected"
+        database.session.add(
+            ApprovalAction(approval_request_id=req.id, approved_by=user.id, action="reject", level=1, comments=comments)
+        )
+        _event(req, "rejected", user)
+        database.session.flush()
 
 
 def review_pending_info(req: Any, user: Any) -> dict | None:

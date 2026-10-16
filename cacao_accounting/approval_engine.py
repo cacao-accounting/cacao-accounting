@@ -941,11 +941,17 @@ class ApprovalEngine:
         database.session.add(action)
 
         if applicable_rule.approval_level >= req.required_level:
-            req.status = "Approved"
-            return cls._finalize_approval(req, document, user)
+            from cacao_accounting.internal_control_service import approval_request_transition
 
-        req.current_level = applicable_rule.approval_level + 1
-        database.session.flush()
+            with approval_request_transition():
+                req.status = "Approved"
+                return cls._finalize_approval(req, document, user)
+
+        from cacao_accounting.internal_control_service import approval_request_transition
+
+        with approval_request_transition():
+            req.current_level = applicable_rule.approval_level + 1
+            database.session.flush()
         return False
 
     @classmethod
@@ -1100,8 +1106,11 @@ class ApprovalEngine:
             level=rule.approval_level if rule else req.current_level,
         )
         database.session.add(action)
-        req.status = "Rejected"
-        database.session.flush()
+        from cacao_accounting.internal_control_service import approval_request_transition
+
+        with approval_request_transition():
+            req.status = "Rejected"
+            database.session.flush()
         if req.document_type == doctype:
             from cacao_accounting.document_flow import refresh_source_caches_for_target, revert_relations_for_target
 

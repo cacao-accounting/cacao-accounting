@@ -22,6 +22,9 @@ from cacao_accounting.i18n import _
 from cacao_accounting.runtime_mode import is_cloud_mode, is_desktop_mode
 
 _ACTOR: ContextVar[tuple[str | None, str] | None] = ContextVar("icfr_actor", default=None)
+_APPROVAL_TRANSITION: ContextVar[bool] = ContextVar("icfr_approval_transition", default=False)
+_FLOW_TRANSITION: ContextVar[bool] = ContextVar("icfr_flow_transition", default=False)
+_ORM_FLUSH_ACTIVE: ContextVar[bool] = ContextVar("icfr_orm_flush_active", default=False)
 EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log"})
 LEDGER_TABLES = frozenset(
     {
@@ -52,7 +55,7 @@ FLOW_EVIDENCE_TRANSITIONS = {
     "document_relation": frozenset(
         {"status", "reversed_at", "reversed_by", "reversal_reason", "cancelled_at", "cancelled_by", "metadata_json"}
     ),
-    "purchase_reconciliation": frozenset({"status", "idempotency_key", "matched_amount", "matched_date"}),
+    "purchase_reconciliation": frozenset({"status"}),
     "purchase_reconciliation_item": frozenset({"status"}),
     "purchase_invoice_receipt_allocation": frozenset({"status"}),
     "purchase_receipt_return_allocation": frozenset({"status"}),
@@ -128,6 +131,26 @@ def current_audit_actor() -> tuple[str | None, str | None]:
         return explicit
     authenticated = _current_actor()
     return authenticated if authenticated[0] else (None, "system")
+
+
+@contextmanager
+def approval_request_transition() -> Iterator[None]:
+    """Authorize approval state changes performed by the approval engine."""
+    token = _APPROVAL_TRANSITION.set(True)
+    try:
+        yield
+    finally:
+        _APPROVAL_TRANSITION.reset(token)
+
+
+@contextmanager
+def flow_evidence_transition() -> Iterator[None]:
+    """Authorize workflow changes performed by a document-flow service."""
+    token = _FLOW_TRANSITION.set(True)
+    try:
+        yield
+    finally:
+        _FLOW_TRANSITION.reset(token)
 
 
 def _enabled() -> bool:
@@ -323,27 +346,36 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
         changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
         if table in EVIDENCE_TABLES and (target in session.deleted or changed):
             raise ValueError(_("La evidencia de auditoría es inmutable."))
+        _guard_sensitive_delete(table, target in session.deleted)
         _guard_flow_evidence(target, table, changed, target in session.deleted)
-        if table == "approval_request" and (
-            target in session.deleted
-            or changed.intersection(
-                {
-                    "policy_snapshot",
-                    "review_payload",
-                    "requested_by",
-                    "company_id",
-                    "document_id",
-                    "document_type",
-                    "required_level",
-                    "created_at",
-                }
-            )
-        ):
-            raise ValueError(_("La evidencia de auditoría es inmutable."))
+        _guard_approval_request(target, table, changed, target in session.deleted)
+        _guard_authorized_transition(table, changed)
         _guard_lifecycle(target)
         if _posted(target) and (target in session.deleted or changed.difference(MUTABLE_STATE)):
             raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
         _guard_line(session, target, changed)
+
+
+def _guard_approval_request(target: Any, table: str, changed: set[str], deleted: bool) -> None:
+    """Protect immutable approval evidence fields from ORM changes."""
+    if table == "approval_request" and (deleted or changed.intersection(PROTECTED_REQUEST_FIELDS)):
+        raise ValueError(_("La evidencia de auditoría es inmutable."))
+
+
+def _guard_sensitive_delete(table: str, deleted: bool) -> None:
+    """Reject ORM deletion of sensitive records while auditing normal updates."""
+    if deleted and _is_sensitive_table(table):
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+
+
+def _guard_authorized_transition(table: str, changed: set[str]) -> None:
+    """Require service scopes for approval and document-flow transitions."""
+    if table == "approval_request" and changed.intersection({"status", "current_level"}):
+        if not _APPROVAL_TRANSITION.get():
+            raise ValueError(_("Las transiciones requieren el servicio autorizado."))
+    if table in FLOW_EVIDENCE_TRANSITIONS and changed.intersection(FLOW_EVIDENCE_TRANSITIONS[table]):
+        if not _FLOW_TRANSITION.get():
+            raise ValueError(_("Las transiciones documentales requieren el servicio autorizado."))
 
 
 def _guard_flow_evidence(target: Any, table: str, changed: set[str], deleted: bool) -> None:
@@ -353,6 +385,10 @@ def _guard_flow_evidence(target: Any, table: str, changed: set[str], deleted: bo
         return
     if deleted or (changed and changed - transitions - FLOW_PROVIDER_STAMPS):
         raise ValueError(_("Los vínculos documentales son inmutables; registre una relación nueva."))
+    if table == "document_relation" and "status" in changed:
+        previous = _persisted_value(inspect(target), "status", target.status)
+        if previous != "active" and target.status == "active":
+            raise ValueError(_("Una relación revertida no se reactiva; registre una relación nueva."))
 
 
 def _guard_new_lines(session: Session) -> None:
@@ -436,10 +472,11 @@ def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any
 
 def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, execution_options: Any) -> None:
     """Reject evidence SQL mutations, including Core and ORM bulk statements."""
-    del execution_options
     if not _enabled() or not isinstance(clause, (Update, Delete)):
         return
     table_name = getattr(clause.table, "name", None)
+    if _is_orm_unit_of_work(execution_options, table_name):
+        return
     if table_name in LEDGER_TABLES:
         _guard_ledger_statement(clause, multiparams, params)
     if table_name in FLOW_EVIDENCE_TABLES:
@@ -448,17 +485,23 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
         raise ValueError(_("La evidencia de auditoría es inmutable."))
     if table_name == "approval_request":
         _guard_approval_request_statement(clause, multiparams, params)
+    if _is_sensitive_table(table_name) and isinstance(clause, Delete):
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    if _is_sensitive_table(table_name) and _statement_changed_values(clause, multiparams, params, clause.table):
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
 
 
 def _guard_flow_evidence_statement(clause: Any, multiparams: Any, params: Any) -> None:
     """Reject Core rewrites of documentary flow evidence fields."""
     if isinstance(clause, Delete):
         raise ValueError(_("La evidencia del flujo documental no se elimina; use una reversión documental."))
+    changed = _statement_changed_values(clause, multiparams, params, clause.table)
+    if changed:
+        raise ValueError(_("Las transiciones documentales deben realizarse mediante el servicio auditado."))
     table_name = getattr(clause.table, "name", None)
     if not isinstance(table_name, str):
         return
     transitions = FLOW_EVIDENCE_TRANSITIONS.get(table_name, frozenset()) | FLOW_PROVIDER_STAMPS
-    changed = _statement_changed_values(clause, multiparams, params, clause.table)
     if changed and changed.keys() - transitions:
         raise ValueError(_("Los vínculos documentales son inmutables; registre una relación nueva."))
 
@@ -499,6 +542,8 @@ PROTECTED_REQUEST_FIELDS = frozenset(
         "document_type",
         "required_level",
         "created_at",
+        "cancellation_date",
+        "cancellation_reason",
     }
 )
 
@@ -510,6 +555,31 @@ def _guard_approval_request_statement(clause: Any, multiparams: Any, params: Any
     changed = _statement_changed_values(clause, multiparams, params, clause.table)
     if changed and changed.keys() & PROTECTED_REQUEST_FIELDS:
         raise ValueError(_("La evidencia de auditoría es inmutable."))
+    if changed:
+        raise ValueError(_("Las transiciones de aprobación deben realizarse mediante el servicio autorizado."))
+
+
+def _is_sensitive_table(table_name: Any) -> bool:
+    """Return whether a table belongs to a sensitive mapped model."""
+    if not isinstance(table_name, str):
+        return False
+    return any(
+        mapper.local_table.name == table_name and mapper.class_.__name__ in SENSITIVE_MODELS
+        for mapper in cast(Any, database.Model).registry.mappers
+    )
+
+
+def _is_orm_unit_of_work(execution_options: Any, table_name: Any) -> bool:
+    """Allow only flush SQL carrying the mapped table's internal statement cache."""
+    if not _ORM_FLUSH_ACTIVE.get() or not isinstance(table_name, str):
+        return False
+    compiled_cache = execution_options.get("compiled_cache")
+    if compiled_cache is None:
+        return False
+    return any(
+        mapper.local_table.name == table_name and mapper.base_mapper._compiled_cache is compiled_cache
+        for mapper in cast(Any, database.Model).registry.mappers
+    )
 
 
 def _posting_predicate(table: Any) -> Any:
@@ -591,12 +661,27 @@ def _chain_audit_flush(session: Session, flush_context: Any, instances: Any) -> 
     chain_pending_rows(session)
 
 
+def _start_orm_flush(session: Session, flush_context: Any, instances: Any) -> None:
+    """Mark ORM unit-of-work SQL so Core guards can distinguish it from direct writes."""
+    del session, flush_context, instances
+    _ORM_FLUSH_ACTIVE.set(True)
+
+
+def _end_orm_flush(session: Session, flush_context: Any) -> None:
+    """Clear the ORM unit-of-work marker after successful or failed flushes."""
+    del session, flush_context
+    _ORM_FLUSH_ACTIVE.set(False)
+
+
 def register_internal_controls() -> None:
     """Install idempotent shared listeners once, independent of app instances."""
     if event.contains(Session, "before_flush", _guard_flush):
         return
     event.listen(Session, "before_flush", _guard_flush)
     event.listen(Session, "before_flush", _chain_audit_flush)
+    event.listen(Session, "before_flush", _start_orm_flush)
+    event.listen(Session, "after_flush_postexec", _end_orm_flush)
+    event.listen(Session, "after_soft_rollback", _end_orm_flush)
     event.listen(Session, "do_orm_execute", _guard_sensitive_bulk)
     event.listen(Engine, "before_execute", _guard_bulk)
     event.listen(Engine, "before_cursor_execute", _guard_raw_sql)

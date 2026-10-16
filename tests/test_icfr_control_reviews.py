@@ -37,6 +37,7 @@ _gl_entry_target = bank_tests._gl_entry_target
 def reviewers(app_ctx):
     """Enable independent Cloud review with two separately identified administrators."""
     app_ctx.config["MODO_ESCRITORIO"] = False
+    app_ctx.config["INTERNAL_CONTROLS_ENFORCE"] = True
     from cacao_accounting.database import Modules
 
     database.session.add(Modules(module="accounting", default=True, enabled=True))
