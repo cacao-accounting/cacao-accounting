@@ -6059,8 +6059,8 @@ def test_purchase_reconciliation_rollback_on_intermediate_failure(app_ctx, monke
     # Forzar un fallo en la fase de matching despues de flush del header
     original_three_way = purchase_reconciliation_service._reconcile_three_way
 
-    def failing_three_way(invoice_obj, config):
-        original_three_way(invoice_obj, config)
+    def failing_three_way(invoice_obj, config, *, idempotency_key=None):
+        original_three_way(invoice_obj, config, idempotency_key=idempotency_key)
         raise PurchaseReconciliationError("Fallo simulado en matching")
 
     monkeypatch.setattr(purchase_reconciliation_service, "_reconcile_three_way", failing_three_way)

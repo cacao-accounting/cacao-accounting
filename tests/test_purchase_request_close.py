@@ -203,8 +203,9 @@ def test_direct_order_coverage_requires_active_relation_to_approved_order(app_ct
         assert purchase_request_is_ready_to_close(request)
 
         order.docstatus = 2
-        relation = database.session.query(DocumentRelation).one()
-        relation.status = "reverted"
+        from cacao_accounting.document_flow import revert_relations_for_target
+
+        revert_relations_for_target("purchase_order", order.id, reason="test_order_reverted")
         database.session.commit()
         assert not purchase_request_direct_order_item_ids(request)
         assert not purchase_request_is_ready_to_close(request)
