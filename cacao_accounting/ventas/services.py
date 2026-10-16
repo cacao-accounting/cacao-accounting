@@ -64,7 +64,7 @@ from cacao_accounting.document_flow import (
 
 from cacao_accounting.document_flow.context import company_currency, effective_currency, validate_immutable_header
 
-from cacao_accounting.document_flow.repository import consumed_qty_for_source
+from cacao_accounting.document_flow.repository import consumed_qty_for_source, next_relation_revision
 
 
 from cacao_accounting.decorators import (  # noqa: F401
@@ -2214,45 +2214,55 @@ def _persist_sales_reversal_relation(invoice: SalesInvoice) -> None:
     target_type = invoice.document_type
     relation = (
         database.session.execute(
-            database.select(DocumentRelation).filter_by(
+            database.select(DocumentRelation)
+            .filter_by(
                 source_type="sales_invoice",
                 source_id=invoice.reversal_of,
                 target_type=target_type,
                 target_id=invoice.id,
                 relation_type="invoice_reversal",
             )
+            .order_by(DocumentRelation.revision.desc())
         )
         .scalars()
         .first()
     )
     amount = Decimal(str(invoice.grand_total or "0"))
     if relation:
-        relation.qty = Decimal("1")
-        relation.amount = amount
-        relation.status = "active"
-        from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+        if relation.status == "active" and relation.qty == Decimal("1") and relation.amount == amount:
+            _refresh_sales_reversal_source(invoice)
+            return
+        if relation.status == "active":
+            from datetime import UTC, datetime
+            from cacao_accounting.internal_control_service import flow_evidence_transition
 
-        source = database.session.get(SalesInvoice, invoice.reversal_of)
-        if source:
-            refresh_outstanding_amount_cache(source)
-        return
-    database.session.add(
-        DocumentRelation(
-            source_type="sales_invoice",
-            source_id=invoice.reversal_of,
-            source_item_id=None,
-            target_type=target_type,
-            target_id=invoice.id,
-            target_item_id=None,
-            company=invoice.company,
-            qty=Decimal("1"),
-            uom=None,
-            rate=amount,
-            amount=amount,
-            relation_type="invoice_reversal",
-            status="active",
-        )
+            with flow_evidence_transition():
+                relation.status = "reverted"
+                relation.reversed_at = datetime.now(UTC)
+                relation.reversal_reason = "reversal_document_revised"
+                database.session.flush()
+    new_relation = DocumentRelation(
+        source_type="sales_invoice",
+        source_id=invoice.reversal_of,
+        source_item_id=None,
+        target_type=target_type,
+        target_id=invoice.id,
+        target_item_id=None,
+        company=invoice.company,
+        qty=Decimal("1"),
+        uom=None,
+        rate=amount,
+        amount=amount,
+        relation_type="invoice_reversal",
+        status="active",
     )
+    new_relation.revision = next_relation_revision(new_relation)
+    database.session.add(new_relation)
+    _refresh_sales_reversal_source(invoice)
+
+
+def _refresh_sales_reversal_source(invoice: SalesInvoice) -> None:
+    """Refresh the derived AP/AR balance after appending a reversal link."""
     from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
 
     source = database.session.get(SalesInvoice, invoice.reversal_of)

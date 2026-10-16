@@ -145,6 +145,60 @@ def test_purchase_credit_note_reduces_outstanding_balance(app_ctx):
     assert source_invoice.outstanding_amount == Decimal("600.00")
 
 
+def test_purchase_reversal_revision_preserves_prior_amount(app_ctx):
+    """Editing a draft reversal appends figures instead of rewriting them."""
+    from cacao_accounting.document_flow import revert_relations_for_target
+
+    supplier = _ensure_supplier("SUPLR-AP-REVISION", "Proveedor revision")
+    source_invoice = PurchaseInvoice(
+        id="PINV-ORIG-REVISION",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="purchase_invoice",
+        grand_total=Decimal("1000.00"),
+        outstanding_amount=Decimal("1000.00"),
+        base_outstanding_amount=Decimal("1000.00"),
+    )
+    credit_note = PurchaseInvoice(
+        id="PINV-CN-REVISION",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        document_type="purchase_credit_note",
+        grand_total=Decimal("400.00"),
+        reversal_of=source_invoice.id,
+    )
+    database.session.add_all([source_invoice, credit_note])
+    database.session.commit()
+    _persist_purchase_reversal_relation(credit_note)
+    database.session.commit()
+
+    revert_relations_for_target("purchase_credit_note", credit_note.id, reason="draft_edited")
+    credit_note.grand_total = Decimal("350.00")
+    _persist_purchase_reversal_relation(credit_note)
+    database.session.commit()
+
+    relations = (
+        database.session.execute(
+            database.select(DocumentRelation)
+            .where(
+                DocumentRelation.source_id == source_invoice.id,
+                DocumentRelation.target_id == credit_note.id,
+                DocumentRelation.relation_type == "invoice_reversal",
+            )
+            .order_by(DocumentRelation.revision)
+        )
+        .scalars()
+        .all()
+    )
+    assert [(row.revision, row.amount, row.status) for row in relations] == [
+        (1, Decimal("400.0000"), "reverted"),
+        (2, Decimal("350.0000"), "active"),
+    ]
+
+
 def test_purchase_return_invoice_route_is_removed(app_ctx):
     """Physical returns are receipts and cannot be created as AP invoices (Refs: #816, #817)."""
     from cacao_accounting.compras.services import _purchase_invoice_document_type

@@ -94,7 +94,7 @@ from cacao_accounting.document_flow import (
 
 from cacao_accounting.document_flow.context import company_currency, effective_currency, validate_immutable_header
 
-from cacao_accounting.document_flow.repository import consumed_qty_for_source
+from cacao_accounting.document_flow.repository import consumed_qty_for_source, next_relation_revision
 
 from cacao_accounting.document_flow.service import _relation_qty_in_base_uom
 
@@ -2356,13 +2356,15 @@ def _persist_purchase_reversal_relation(invoice: PurchaseInvoice) -> None:
     target_type = invoice.document_type
     relation = (
         database.session.execute(
-            database.select(DocumentRelation).filter_by(
+            database.select(DocumentRelation)
+            .filter_by(
                 source_type="purchase_invoice",
                 source_id=invoice.reversal_of,
                 target_type=target_type,
                 target_id=invoice.id,
                 relation_type="invoice_reversal",
             )
+            .order_by(DocumentRelation.revision.desc())
         )
         .scalars()
         .first()
@@ -2372,7 +2374,9 @@ def _persist_purchase_reversal_relation(invoice: PurchaseInvoice) -> None:
         _update_purchase_reversal_relation(relation, invoice, amount)
         return
 
-    database.session.add(_new_purchase_reversal_relation(invoice, target_type, amount))
+    new_relation = _new_purchase_reversal_relation(invoice, target_type, amount)
+    new_relation.revision = next_relation_revision(new_relation)
+    database.session.add(new_relation)
     _refresh_purchase_reversal_source(invoice)
 
 
@@ -2386,10 +2390,22 @@ def _refresh_purchase_reversal_source(invoice: PurchaseInvoice) -> None:
 
 
 def _update_purchase_reversal_relation(relation: DocumentRelation, invoice: PurchaseInvoice, amount: Decimal) -> None:
-    """Actualiza una relación de reversión existente y refresca su factura origen."""
-    relation.qty = Decimal("1")
-    relation.amount = amount
-    relation.status = "active"
+    """Keep prior figures immutable and append a new relation revision."""
+    if relation.status == "active" and relation.qty == Decimal("1") and relation.amount == amount:
+        _refresh_purchase_reversal_source(invoice)
+        return
+    if relation.status == "active":
+        from datetime import UTC, datetime
+        from cacao_accounting.internal_control_service import flow_evidence_transition
+
+        with flow_evidence_transition():
+            relation.status = "reverted"
+            relation.reversed_at = datetime.now(UTC)
+            relation.reversal_reason = "reversal_document_revised"
+            database.session.flush()
+    replacement = _new_purchase_reversal_relation(invoice, relation.target_type, amount)
+    replacement.revision = next_relation_revision(replacement)
+    database.session.add(replacement)
     _refresh_purchase_reversal_source(invoice)
 
 

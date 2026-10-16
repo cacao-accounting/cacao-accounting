@@ -40,6 +40,7 @@ from cacao_accounting.database import (
     PurchaseReconciliation,
     PurchaseReconciliationItem,
     database,
+    obtiene_texto_unico,
 )
 
 from cacao_accounting.i18n import _
@@ -672,32 +673,36 @@ def cancel_purchase_settlement_allocations(*, receipt_id: str | None = None, inv
         query = query.where(PurchaseInvoiceReceiptAllocation.receipt_item_id.in_(receipt_item_ids))
     if invoice_item_ids:
         query = query.where(PurchaseInvoiceReceiptAllocation.invoice_item_id.in_(invoice_item_ids))
-    for row in database.session.execute(query).scalars().all():
-        row.status = "cancelled"
+    from cacao_accounting.internal_control_service import flow_evidence_transition
 
-    if receipt_item_ids:
-        return_query = select(PurchaseReceiptReturnAllocation).where(
-            PurchaseReceiptReturnAllocation.return_receipt_item_id.in_(receipt_item_ids),
-            PurchaseReceiptReturnAllocation.status == "active",
-        )
-        for row in database.session.execute(return_query).scalars().all():
+    with flow_evidence_transition():
+        for row in database.session.execute(query).scalars().all():
             row.status = "cancelled"
 
-    credit_note_query = select(PurchaseCreditNoteAllocation).where(PurchaseCreditNoteAllocation.status == "active")
-    credit_note_filters = []
-    if invoice_item_ids:
-        credit_note_filters.extend(
-            [
-                PurchaseCreditNoteAllocation.credit_note_item_id.in_(invoice_item_ids),
-                PurchaseCreditNoteAllocation.invoice_item_id.in_(invoice_item_ids),
-            ]
-        )
-    if receipt_item_ids:
-        credit_note_filters.append(PurchaseCreditNoteAllocation.return_receipt_item_id.in_(receipt_item_ids))
-    if credit_note_filters:
-        credit_note_query = credit_note_query.where(or_(*credit_note_filters))
-        for row in database.session.execute(credit_note_query).scalars().all():
-            row.status = "cancelled"
+        if receipt_item_ids:
+            return_query = select(PurchaseReceiptReturnAllocation).where(
+                PurchaseReceiptReturnAllocation.return_receipt_item_id.in_(receipt_item_ids),
+                PurchaseReceiptReturnAllocation.status == "active",
+            )
+            for row in database.session.execute(return_query).scalars().all():
+                row.status = "cancelled"
+
+        credit_note_query = select(PurchaseCreditNoteAllocation).where(PurchaseCreditNoteAllocation.status == "active")
+        credit_note_filters = []
+        if invoice_item_ids:
+            credit_note_filters.extend(
+                [
+                    PurchaseCreditNoteAllocation.credit_note_item_id.in_(invoice_item_ids),
+                    PurchaseCreditNoteAllocation.invoice_item_id.in_(invoice_item_ids),
+                ]
+            )
+        if receipt_item_ids:
+            credit_note_filters.append(PurchaseCreditNoteAllocation.return_receipt_item_id.in_(receipt_item_ids))
+        if credit_note_filters:
+            credit_note_query = credit_note_query.where(or_(*credit_note_filters))
+            for row in database.session.execute(credit_note_query).scalars().all():
+                row.status = "cancelled"
+        database.session.flush()
 
 
 def _matched_qty_for_order_item(order_item_id: str) -> Decimal:
@@ -1181,21 +1186,10 @@ def reconcile_purchase_invoice(
     config = get_matching_config(str(invoice.company))
 
     if config.matching_type == MatchingType.TWO_WAY:
-        result = _reconcile_two_way(invoice, config)
+        result = _reconcile_two_way(invoice, config, idempotency_key=idempotency_key)
     else:
-        result = _reconcile_three_way(invoice, config)
-
-    # Persist the idempotency key on the created reconciliation so that retries
-    # with the same key are resolved by replay instead of creating duplicates.
-    if idempotency_key is not None:
-        reconciliation = database.session.get(
-            PurchaseReconciliation,
-            result.reconciliation_id,
-            with_for_update=True,
-        )
-        if reconciliation is not None and not reconciliation.idempotency_key:
-            reconciliation.idempotency_key = idempotency_key
-        database.session.flush()
+        result = _reconcile_three_way(invoice, config, idempotency_key=idempotency_key)
+    database.session.flush()
 
     return result
 
@@ -1279,7 +1273,12 @@ def _persist_three_way_items(
             )
 
 
-def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
+def _reconcile_three_way(
+    invoice: PurchaseInvoice,
+    config: MatchingConfig,
+    *,
+    idempotency_key: str | None = None,
+) -> PurchaseReconciliationResult:
     """Match purchase receipt vs invoice validating received quantities."""
     receipt = _load_purchase_receipt_for_invoice(invoice)
     invoice_po_id = getattr(invoice, "purchase_order_id", None)
@@ -1298,6 +1297,8 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     invoice_groups = _aggregate_lines_by_item_and_uom(invoice_items)
 
     reconciliation = PurchaseReconciliation(
+        id=obtiene_texto_unico(),
+        idempotency_key=idempotency_key,
         company=invoice.company,
         purchase_order_id=invoice_po_id or receipt_po_id,
         purchase_receipt_id=receipt.id,
@@ -1308,10 +1309,8 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
         status="pending_invoice",
     )
     _apply_config_snapshot(reconciliation, config)
-    database.session.add(reconciliation)
-    database.session.flush()
-
     totals = _calculate_three_way_totals(receipt_groups, invoice_groups, config)
+    database.session.add(reconciliation)
     result = _finalize_reconciliation(
         reconciliation,
         invoice,
@@ -1418,7 +1417,12 @@ def _persist_two_way_items(
             )
 
 
-def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
+def _reconcile_two_way(
+    invoice: PurchaseInvoice,
+    config: MatchingConfig,
+    *,
+    idempotency_key: str | None = None,
+) -> PurchaseReconciliationResult:
     """Match purchase order vs invoice without requiring a receipt."""
     purchase_order_id, _order = _load_purchase_order_for_invoice(invoice)
     order_items = _lock_purchase_order_items(purchase_order_id)
@@ -1429,6 +1433,8 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     invoice_groups = _aggregate_lines_by_item_and_uom(invoice_items)
 
     reconciliation = PurchaseReconciliation(
+        id=obtiene_texto_unico(),
+        idempotency_key=idempotency_key,
         company=invoice.company,
         purchase_order_id=purchase_order_id,
         purchase_receipt_id=None,
@@ -1439,10 +1445,8 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
         status="pending_invoice",
     )
     _apply_config_snapshot(reconciliation, config)
-    database.session.add(reconciliation)
-    database.session.flush()
-
     totals = _two_way_totals(invoice_groups, order_groups, config)
+    database.session.add(reconciliation)
     result = _finalize_reconciliation(
         reconciliation,
         invoice,
@@ -1673,24 +1677,28 @@ def cancel_purchase_reconciliation(purchase_invoice_id: str) -> None:
         .scalars()
         .all()
     )
-    for reconciliation in reconciliations:
-        reconciliation.status = "cancelled"
-        for item in (
-            database.session.execute(
-                select(PurchaseReconciliationItem).filter_by(purchase_reconciliation_id=reconciliation.id)
-            )
-            .scalars()
-            .all()
-        ):
-            item.status = "cancelled"
+    from cacao_accounting.internal_control_service import flow_evidence_transition
 
-        emit_economic_event(
-            event_type=EventType.MATCH_CANCELLED,
-            company=str(reconciliation.company),
-            document_type="purchase_reconciliation",
-            document_id=reconciliation.id,
-            payload={"purchase_invoice_id": purchase_invoice_id},
-        )
+    with flow_evidence_transition():
+        for reconciliation in reconciliations:
+            reconciliation.status = "cancelled"
+            for item in (
+                database.session.execute(
+                    select(PurchaseReconciliationItem).filter_by(purchase_reconciliation_id=reconciliation.id)
+                )
+                .scalars()
+                .all()
+            ):
+                item.status = "cancelled"
+
+            emit_economic_event(
+                event_type=EventType.MATCH_CANCELLED,
+                company=str(reconciliation.company),
+                document_type="purchase_reconciliation",
+                document_id=reconciliation.id,
+                payload={"purchase_invoice_id": purchase_invoice_id},
+            )
+        database.session.flush()
 
 
 def get_purchase_reconciliation_pending(company: str, as_of_date: date | None = None) -> list[PurchasePendingRow]:
@@ -1805,23 +1813,27 @@ def emit_goods_received_cancelled(purchase_receipt_id: str, company: str) -> Non
         .scalars()
         .all()
     )
-    for reconciliation in affected:
-        reconciliation.status = "cancelled"
-        for item in (
-            database.session.execute(
-                select(PurchaseReconciliationItem).filter_by(purchase_reconciliation_id=reconciliation.id)
+    from cacao_accounting.internal_control_service import flow_evidence_transition
+
+    with flow_evidence_transition():
+        for reconciliation in affected:
+            reconciliation.status = "cancelled"
+            for item in (
+                database.session.execute(
+                    select(PurchaseReconciliationItem).filter_by(purchase_reconciliation_id=reconciliation.id)
+                )
+                .scalars()
+                .all()
+            ):
+                item.status = "cancelled"
+            emit_economic_event(
+                event_type=EventType.MATCH_CANCELLED,
+                company=company,
+                document_type="purchase_reconciliation",
+                document_id=reconciliation.id,
+                payload={"reason": "purchase_receipt_cancelled", "purchase_receipt_id": purchase_receipt_id},
             )
-            .scalars()
-            .all()
-        ):
-            item.status = "cancelled"
-        emit_economic_event(
-            event_type=EventType.MATCH_CANCELLED,
-            company=company,
-            document_type="purchase_reconciliation",
-            document_id=reconciliation.id,
-            payload={"reason": "purchase_receipt_cancelled", "purchase_receipt_id": purchase_receipt_id},
-        )
+        database.session.flush()
 
     emit_economic_event(
         event_type="GOODS_RECEIVED_CANCELLED",

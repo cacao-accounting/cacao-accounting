@@ -186,9 +186,28 @@ def consumed_qty_for_source(
 
 
 def save_relation(relation: DocumentRelation) -> DocumentRelation:
-    """Agrega una relacion a la sesion actual."""
+    """Append a new version of a relation to the current session."""
+    relation.revision = next_relation_revision(relation)
     database.session.add(relation)
     return relation
+
+
+def next_relation_revision(relation: DocumentRelation) -> int:
+    """Return the next immutable revision number for the same document link."""
+    from sqlalchemy import func
+
+    latest = database.session.execute(
+        database.select(func.max(DocumentRelation.revision)).filter_by(
+            source_type=relation.source_type,
+            source_id=relation.source_id,
+            source_item_id=relation.source_item_id or "",
+            target_type=relation.target_type,
+            target_id=relation.target_id,
+            target_item_id=relation.target_item_id or "",
+            relation_type=relation.relation_type,
+        )
+    ).scalar_one()
+    return int(latest or 0) + 1
 
 
 def get_line_flow_state(

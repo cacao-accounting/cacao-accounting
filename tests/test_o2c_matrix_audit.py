@@ -249,6 +249,43 @@ def _post_invoice(invoice) -> None:
     database.session.commit()
 
 
+def test_sales_reversal_revision_preserves_prior_amount(app_ctx, chart):
+    """Editing a sales reversal appends a new link without rewriting evidence."""
+    from cacao_accounting.document_flow import revert_relations_for_target
+    from cacao_accounting.database import DocumentRelation
+    from cacao_accounting.ventas.services import _persist_sales_reversal_relation
+
+    source = _make_invoice(amount=Decimal("1000"))
+    credit_note = _make_invoice(amount=Decimal("200"), document_type="sales_credit_note")
+    credit_note.reversal_of = source.id
+    database.session.commit()
+    _persist_sales_reversal_relation(credit_note)
+    database.session.commit()
+
+    revert_relations_for_target("sales_credit_note", credit_note.id, reason="draft_edited")
+    credit_note.grand_total = Decimal("175")
+    _persist_sales_reversal_relation(credit_note)
+    database.session.commit()
+
+    relations = (
+        database.session.execute(
+            select(DocumentRelation)
+            .where(
+                DocumentRelation.source_id == source.id,
+                DocumentRelation.target_id == credit_note.id,
+                DocumentRelation.relation_type == "invoice_reversal",
+            )
+            .order_by(DocumentRelation.revision)
+        )
+        .scalars()
+        .all()
+    )
+    assert [(row.revision, row.amount, row.status) for row in relations] == [
+        (1, Decimal("200.0000"), "reverted"),
+        (2, Decimal("175.0000"), "active"),
+    ]
+
+
 def _make_payment(
     *,
     amount: Decimal,

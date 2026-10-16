@@ -558,6 +558,16 @@ def get_target_line_source(target_type: str, target_item_id: str) -> dict[str, s
 
 
 def revert_relations_for_target(target_type: str, target_id: str, reason: str = "target_cancelled") -> int:
+    """Revert linked documents through the authorized flow transition."""
+    from cacao_accounting.internal_control_service import flow_evidence_transition
+
+    with flow_evidence_transition():
+        result = _revert_relations_for_target(target_type, target_id, reason)
+        database.session.flush()
+        return result
+
+
+def _revert_relations_for_target(target_type: str, target_id: str, reason: str) -> int:
     """Revierte relaciones activas de un documento destino y libera saldos.
 
     Tambien revierte relaciones donde el documento cancelado es SOURCE

@@ -3748,8 +3748,24 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
             "target_id",
             "target_item_id",
             "relation_type",
-            name="uq_document_relation_line",
+            "revision",
+            name="uq_document_relation_line_revision",
         ),
+        Index(
+            "uq_document_relation_active_line",
+            "source_type",
+            "source_id",
+            "source_item_id",
+            "target_type",
+            "target_id",
+            "target_item_id",
+            "relation_type",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ).ddl_if(
+            dialect=("sqlite", "postgresql")  # type: ignore[arg-type]
+        ),  # type: ignore[arg-type]
     )
     source_type = database.Column(database.String(50), nullable=False)
     source_id = database.Column(database.String(26), nullable=False)
@@ -3780,6 +3796,7 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     relation_type = database.Column(database.String(50), nullable=False, index=True)
+    revision = database.Column(database.Integer(), nullable=False, default=1)
     # active, reverted, closed. Reverted/closed relations remain as historical trace.
     status = database.Column(database.String(20), default="active", nullable=False, index=True)
     reversed_at = database.Column(database.DateTime(timezone=True), nullable=True)
