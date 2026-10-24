@@ -40,14 +40,16 @@ def _decimal(value: Any) -> str:
 
 
 def _with_provenance(result: dict[str, Any], company_id: str, **filters: Any) -> dict[str, Any]:
-    page = result.get("page") or {}
+    items = result.get("items", [])
     result["provenance"] = {
         "company_id": company_id,
         "filters": {key: value for key, value in filters.items() if value is not None},
         "completeness": {
-            "truncated": bool(page.get("has_more")),
-            "returned_items": len(result.get("items", [])),
-            "total_items": page.get("total_items", len(result.get("items", []))),
+            "page": result["page"],
+            "page_size": result["page_size"],
+            "truncated": bool(result["has_next_page"]),
+            "returned_items": len(items),
+            "total_items": result["total_items"],
         },
     }
     return result
