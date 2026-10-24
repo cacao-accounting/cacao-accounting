@@ -68,3 +68,25 @@ def test_paginated_result_single_page():
     result = PaginatedResult(page=1, page_size=100, total_items=50, items=list(range(50)))
     assert result.total_pages == 1
     assert result.has_next_page is False
+
+
+def test_with_provenance_uses_paginated_contract() -> None:
+    """La provenance se calcula desde los metadatos de PaginatedResult."""
+    from cacao_accounting.query_tools.handlers.operational import _with_provenance
+    from cacao_accounting.query_tools.pagination import PaginatedResult
+
+    empty = _with_provenance(PaginatedResult(page=1, page_size=2, total_items=0, items=[]).to_dict(), "c1")
+    assert empty["provenance"]["completeness"] == {
+        "page": 1,
+        "page_size": 2,
+        "truncated": False,
+        "returned_items": 0,
+        "total_items": 0,
+    }
+    first = _with_provenance(PaginatedResult(page=1, page_size=2, total_items=3, items=[1, 2]).to_dict(), "c1", x=None)
+    assert first["provenance"]["completeness"]["truncated"] is True
+    assert first["provenance"]["completeness"]["total_items"] == 3
+    assert first["provenance"]["filters"] == {}
+    last = _with_provenance(PaginatedResult(page=2, page_size=2, total_items=3, items=[3]).to_dict(), "c1")
+    assert last["provenance"]["completeness"]["truncated"] is False
+    assert last["provenance"]["completeness"]["returned_items"] == 1
