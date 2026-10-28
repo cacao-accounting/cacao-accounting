@@ -843,3 +843,34 @@ def test_sensitive_config_rename_remains_audited(app, expired):
     assert event.actor_user_id == "actor"
     assert event.company == "co"
     assert json.loads(event.changes_json)["key"] == {"before": "approval_engine_enabled_co", "after": "ui_locale"}
+
+
+def test_orm_guard_covers_fk_children_and_polymorphic_tax_snapshots(app):
+    """Children without a recognised suffix and polymorphic snapshots follow the posted parent."""
+    from cacao_accounting.database import DocumentTaxLine, DocumentTaxSummary, ImportLandedCost, ImportLandedCostCharge
+
+    landed = ImportLandedCost(company="co", docstatus=0, purchase_invoice_id="purchase")
+    invoice = SalesInvoice(company="co", docstatus=0, total=10)
+    database.session.add_all([landed, invoice])
+    database.session.flush()
+    charge = ImportLandedCostCharge(import_landed_cost_id=landed.id, concept="flete", amount=5)
+    summary = DocumentTaxSummary(company="co", document_type="sales_invoice", document_id=invoice.id, grand_total=100)
+    database.session.add_all([charge, summary])
+    database.session.commit()
+    tax_line = DocumentTaxLine(document_tax_summary_id=summary.id, line_index=1, concept="iva", tax_type="vat", amount=1)
+    database.session.add(tax_line)
+    database.session.commit()
+
+    charge.amount = 6
+    summary.grand_total = 90
+    database.session.commit()
+    assert summary.grand_total == 90
+
+    landed.docstatus = 1
+    invoice.docstatus = 1
+    database.session.commit()
+    for mutated, attribute in ((charge, "amount"), (summary, "grand_total"), (tax_line, "amount")):
+        setattr(mutated, attribute, 0)
+        with pytest.raises(ValueError, match="financieros"):
+            database.session.flush()
+        database.session.rollback()

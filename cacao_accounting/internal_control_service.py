@@ -13,7 +13,7 @@ from typing import Any, Iterator, cast
 from flask import current_app, has_app_context
 from sqlalchemy import event, inspect, select, or_
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 from sqlalchemy.sql.dml import Delete, Update
 
 from cacao_accounting.audit_trail_service import _current_actor, _json_default
@@ -422,7 +422,7 @@ def _guard_new_lines(session: Session) -> None:
 
 def _guard_line(session: Session, target: Any, changed: set[str]) -> None:
     """Protect existing financial lines through their mapped parent foreign key."""
-    if _audited_document(target) or not type(target).__name__.endswith(("Item", "Reference", "Detalle")):
+    if _audited_document(target):
         return
     if changed.issubset(MUTABLE_STATE) and target not in session.deleted:
         return
@@ -441,8 +441,32 @@ def _stamp_line_editor(parent: Any) -> None:
         parent.modified_by = actor_id
 
 
+POLYMORPHIC_EVIDENCE_TABLES = frozenset({"document_tax_summary", "landed_cost_allocation"})
+
+
+def _polymorphic_parents(target: Any) -> Iterator[tuple[Any, str]]:
+    """Resolve the document referenced by ``document_type``/``document_id`` without a foreign key."""
+    table = target.__table__.name
+    if table == "document_tax_line":
+        from cacao_accounting.database import DocumentTaxSummary
+
+        session = object_session(target)
+        summary = session.get(DocumentTaxSummary, target.document_tax_summary_id) if session else None
+        if summary is None:
+            return
+        target = summary
+    elif table not in POLYMORPHIC_EVIDENCE_TABLES:
+        return
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    document_type = DOCUMENT_TYPES.get(target.document_type)
+    if document_type is not None and target.document_id:
+        yield document_type.header_model, target.document_id
+
+
 def _line_parents(target: Any) -> Iterator[tuple[Any, str]]:
     """Resolve financial headers, including the legacy journal detail link."""
+    yield from _polymorphic_parents(target)
     if target.__table__.name == "comprobante_contable_detalle" and target.transaction_id:
         from cacao_accounting.database import ComprobanteContable
 
