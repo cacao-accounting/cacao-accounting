@@ -5,7 +5,7 @@ from datetime import date
 import json
 
 import pytest
-from sqlalchemy import delete, text, update
+from sqlalchemy import bindparam, delete, insert, text, update
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -498,9 +498,371 @@ def test_posted_advance_can_append_allocation_reference(app):
     database.session.flush()
     assert reference.id
     assert payment.unallocated_amount == 50
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.execute(
+            insert(PaymentReference).values(
+                payment_id=payment.id,
+                reference_type="sales_invoice",
+                reference_id="invoice-two",
+                allocated_amount=25,
+                allocation_date=date.today(),
+            )
+        )
     reference.allocated_amount = 100
     with pytest.raises(ValueError, match="financieros"):
         database.session.flush()
+
+
+def test_posted_payment_bank_reconciliation_links_are_service_mutable(app, monkeypatch):
+    """Allow reconciliation links to change without opening posted bank evidence."""
+    from decimal import Decimal
+
+    from cacao_accounting.bancos.reconciliation_service import (
+        BankReconciliationMatch,
+        _update_reconciled_transactions,
+    )
+    from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, PaymentEntry
+
+    bank = Bank(name="Test Bank")
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(bank_id=bank.id, company="co", account_name="Operating")
+    database.session.add(account)
+    database.session.flush()
+    payment = PaymentEntry(company="co", docstatus=1, payment_type="receive", received_amount=100)
+    database.session.add(payment)
+    database.session.flush()
+    database.session.add(
+        GLEntry(
+            company="co",
+            voucher_type="payment_entry",
+            voucher_id=payment.id,
+            posting_date=date.today(),
+            account_id="account",
+            debit=100,
+            credit=0,
+        )
+    )
+    transaction = BankTransaction(
+        bank_account_id=account.id,
+        posting_date=date.today(),
+        deposit=Decimal("100"),
+    )
+    database.session.add(transaction)
+    database.session.commit()
+
+    match = BankReconciliationMatch(str(transaction.id), "payment_entry", str(payment.id), Decimal("100"))
+    import importlib
+
+    reconciliation_service = importlib.import_module("cacao_accounting.bancos.reconciliation_service")
+    monkeypatch.setattr(reconciliation_service, "_allocated_for_source", lambda _transaction_id: Decimal("100"))
+    _update_reconciled_transactions({str(transaction.id): Decimal("100")}, [match])
+    assert transaction.payment_entry_id == payment.id
+    assert transaction.is_reconciled is True
+    database.session.commit()
+
+    transaction.deposit = Decimal("101")
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.flush()
+    database.session.rollback()
+
+    transaction = database.session.get(BankTransaction, transaction.id)
+    payment = database.session.get(PaymentEntry, payment.id)
+    assert transaction is not None and payment is not None
+    assert transaction.payment_entry_id == payment.id
+    _apply_payment_cancellation_hooks(payment)
+    assert transaction.payment_entry_id is None
+    assert transaction.is_reconciled is False
+
+
+def test_bank_transaction_reconciled_to_gl_is_immutable(app):
+    """Protect statement evidence even when its reconciliation target is a GL row."""
+    from decimal import Decimal
+
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, Reconciliation, ReconciliationItem
+    from cacao_accounting.internal_control_service import bank_reconciliation_transition
+
+    bank = Bank(name="GL Reconciliation Bank")
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(bank_id=bank.id, company="co", account_name="GL account")
+    database.session.add(account)
+    database.session.flush()
+    transaction = BankTransaction(bank_account_id=account.id, posting_date=date.today(), deposit=Decimal("10"))
+    entry = GLEntry(
+        company="co",
+        voucher_type="journal_entry",
+        voucher_id="journal",
+        posting_date=date.today(),
+        debit=10,
+        credit=0,
+    )
+    reconciliation = Reconciliation(company="co", recon_date=date.today(), recon_type="bank")
+    database.session.add_all([transaction, entry, reconciliation])
+    database.session.flush()
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation.id,
+            reference_type="bank_transaction",
+            reference_id=transaction.id,
+            amount=Decimal("10"),
+            allocated_amount=Decimal("10"),
+            reconciliation_date=date.today(),
+            status="reconciled",
+            source_type="bank_transaction",
+            source_id=transaction.id,
+            target_type="gl_entry",
+            target_id=entry.id,
+        )
+    )
+    with bank_reconciliation_transition(transaction):
+        transaction.is_reconciled = True
+        database.session.flush()
+    database.session.commit()
+
+    transaction.deposit = Decimal("11")
+    with pytest.raises(ValueError, match="conciliados"):
+        database.session.flush()
+    database.session.rollback()
+
+    with pytest.raises(ValueError, match="conciliados"):
+        database.session.connection().execute(
+            update(BankTransaction).where(BankTransaction.id == transaction.id).values(deposit=Decimal("11"))
+        )
+
+
+def test_bank_transaction_stays_immutable_after_reconciliation_cancellation(app):
+    """Keep imported statement data protected after its reconciliation is cancelled."""
+    from decimal import Decimal
+
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, Reconciliation, ReconciliationItem
+
+    bank = Bank(name="Historical Reconciliation Bank")
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(bank_id=bank.id, company="co", account_name="Historical account")
+    database.session.add(account)
+    database.session.flush()
+    transaction = BankTransaction(bank_account_id=account.id, posting_date=date.today(), deposit=Decimal("10"))
+    reconciliation = Reconciliation(company="co", recon_date=date.today(), recon_type="bank")
+    database.session.add_all([transaction, reconciliation])
+    database.session.flush()
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation.id,
+            reference_type="bank_transaction",
+            reference_id=transaction.id,
+            amount=Decimal("10"),
+            allocated_amount=Decimal("10"),
+            reconciliation_date=date.today(),
+            status="cancelled",
+            source_type=None,
+            source_id=None,
+            target_type="gl_entry",
+            target_id="cancelled-gl-match",
+        )
+    )
+    database.session.commit()
+
+    transaction.deposit = Decimal("11")
+    with pytest.raises(ValueError, match="conciliados"):
+        database.session.flush()
+    database.session.rollback()
+
+    with pytest.raises(ValueError, match="conciliados"):
+        database.session.connection().execute(
+            update(BankTransaction).where(BankTransaction.id == transaction.id).values(deposit=Decimal("11"))
+        )
+
+
+def test_posted_document_lines_are_blocked_without_ledger_evidence(app):
+    """Protect approved orders whose posting does not create GL or stock rows."""
+    from cacao_accounting.database import Item, SalesOrder, SalesOrderItem, UOM
+
+    uom = UOM(code="EA", name="Each")
+    item = Item(code="ITEM-1", name="Stock item", item_type="goods", default_uom="EA")
+    order = SalesOrder(company="co", docstatus=0, total=10)
+    database.session.add_all([uom, item, order])
+    database.session.flush()
+    database.session.add(SalesOrderItem(sales_order_id=order.id, item_code=item.code, qty=1, rate=10, amount=10))
+    database.session.commit()
+    order.docstatus = 1
+    database.session.commit()
+
+    late_line = SalesOrderItem(sales_order_id=order.id, item_code=item.code, qty=1, rate=10, amount=10)
+    database.session.add(late_line)
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.flush()
+    database.session.rollback()
+
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.execute(
+            insert(SalesOrderItem).values(sales_order_id=order.id, item_code=item.code, qty=1, rate=10, amount=10)
+        )
+
+
+def test_core_insert_cannot_bypass_protected_evidence_controls(app):
+    """Require audited service flows for direct protected-table inserts."""
+    from cacao_accounting.database import DocumentRelation
+    from cacao_accounting.internal_control_service import _financial_child_tables, _raw_sql_protected_tables
+
+    protected_inserts = (
+        (
+            "gl_entry",
+            insert(GLEntry).values(
+                company="co",
+                voucher_type="test",
+                voucher_id="document",
+                posting_date=date.today(),
+                account_id=None,
+                debit=1,
+                credit=0,
+            ),
+        ),
+        ("audit_trail", insert(AuditTrail).values(document_type="test", document_id="document", action="created")),
+        (
+            "document_relation",
+            insert(DocumentRelation).values(
+                source_type="sales_order",
+                source_id="source",
+                target_type="payment_entry",
+                target_id="target",
+                relation_type="allocation",
+                qty=1,
+            ),
+        ),
+        ("sales_invoice", insert(SalesInvoice).values(company="co", docstatus=0, total=1)),
+    )
+    for table_name, statement in protected_inserts:
+        try:
+            database.session.execute(statement)
+        except ValueError:
+            continue
+        pytest.fail(
+            f"Core INSERT into {table_name} bypassed the evidence guard; "
+            f"financial_child={table_name in _financial_child_tables()}, "
+            f"protected={table_name in _raw_sql_protected_tables()}"
+        )
+
+    with pytest.raises(ValueError):
+        database.session.connection().execute(
+            insert(GLEntry.__table__).values(
+                company="co",
+                voucher_type="test",
+                voucher_id="document",
+                posting_date=date.today(),
+                account_id=None,
+                debit=1,
+                credit=0,
+            )
+        )
+
+
+def test_cancelled_advance_cannot_receive_new_payment_references(app):
+    """Only active posted advances may receive later allocation evidence."""
+    from cacao_accounting.database import PaymentEntry, PaymentReference
+
+    payment = PaymentEntry(
+        company="co",
+        docstatus=1,
+        payment_type="receive",
+        received_amount=100,
+        is_advance=True,
+    )
+    database.session.add(payment)
+    database.session.commit()
+    payment.docstatus = 2
+    database.session.commit()
+
+    reference = PaymentReference(
+        payment_id=payment.id,
+        reference_type="sales_invoice",
+        reference_id="invoice",
+        allocated_amount=50,
+        allocation_date=date.today(),
+    )
+    database.session.add(reference)
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.flush()
+    database.session.rollback()
+
+    with pytest.raises(ValueError, match="servicio auditado"):
+        database.session.execute(
+            insert(PaymentReference).values(
+                payment_id=payment.id,
+                reference_type="sales_invoice",
+                reference_id="invoice",
+                allocated_amount=50,
+                allocation_date=date.today(),
+            )
+        )
+
+    database.session.rollback()
+    same_transaction = PaymentEntry(
+        company="co",
+        docstatus=0,
+        payment_type="receive",
+        received_amount=100,
+        is_advance=True,
+    )
+    database.session.add(same_transaction)
+    database.session.flush()
+    same_transaction.docstatus = 1
+    database.session.flush()
+    same_transaction.docstatus = 2
+    database.session.flush()
+    database.session.add(
+        PaymentReference(
+            payment_id=same_transaction.id,
+            reference_type="sales_invoice",
+            reference_id="invoice",
+            allocated_amount=50,
+            allocation_date=date.today(),
+        )
+    )
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.flush()
+    database.session.rollback()
+
+
+def test_regular_payment_reference_must_exist_before_posting(app):
+    """Do not extend an ordinary payment after its posting flush."""
+    from cacao_accounting.database import PaymentEntry, PaymentReference
+
+    payment = PaymentEntry(company="co", docstatus=0, payment_type="receive", received_amount=100, is_advance=False)
+    database.session.add(payment)
+    database.session.flush()
+    database.session.add(
+        PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id="invoice",
+            allocated_amount=50,
+            allocation_date=date.today(),
+        )
+    )
+    database.session.flush()
+    payment.docstatus = 1
+    database.session.commit()
+
+    posted_payment = PaymentEntry(company="co", docstatus=0, payment_type="receive", received_amount=100)
+    database.session.add(posted_payment)
+    database.session.flush()
+    posted_payment.docstatus = 1
+    database.session.flush()
+    database.session.add(
+        PaymentReference(
+            payment_id=posted_payment.id,
+            reference_type="sales_invoice",
+            reference_id="invoice",
+            allocated_amount=50,
+            allocation_date=date.today(),
+        )
+    )
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.flush()
+    database.session.rollback()
 
 
 def test_matching_config_changes_are_audited(app):
@@ -843,3 +1205,279 @@ def test_sensitive_config_rename_remains_audited(app, expired):
     assert event.actor_user_id == "actor"
     assert event.company == "co"
     assert json.loads(event.changes_json)["key"] == {"before": "approval_engine_enabled_co", "after": "ui_locale"}
+
+
+def test_orm_guard_covers_fk_children_and_polymorphic_tax_snapshots(app):
+    """Children without a recognised suffix and polymorphic snapshots follow the posted parent."""
+    from cacao_accounting.database import (
+        DocumentTaxLine,
+        DocumentTaxSummary,
+        ImportLandedCost,
+        ImportLandedCostCharge,
+        Item,
+        LandedCostAllocation,
+        PurchaseOrder,
+        PurchaseOrderComparison,
+        PurchaseRequest,
+        UOM,
+    )
+    from cacao_accounting.internal_control_service import _polymorphic_parents
+
+    orphan_tax_line = DocumentTaxLine(
+        document_tax_summary_id="missing-summary",
+        line_index=1,
+        concept="iva",
+        tax_type="vat",
+        amount=1,
+    )
+    assert list(_polymorphic_parents(orphan_tax_line)) == []
+
+    landed = ImportLandedCost(company="co", docstatus=0, purchase_invoice_id="purchase")
+    draft_landed = ImportLandedCost(company="co", docstatus=0, purchase_invoice_id="purchase-draft")
+    invoice = SalesInvoice(company="co", docstatus=0, total=10)
+    uom = UOM(code="ea", name="Each")
+    item = Item(code="widget", name="Widget", item_type="goods", is_stock_item=True, default_uom=uom.code)
+    database.session.add_all([landed, draft_landed, invoice, uom, item])
+    database.session.flush()
+    charge = ImportLandedCostCharge(import_landed_cost_id=landed.id, concept="flete", amount=5)
+    draft_charge = ImportLandedCostCharge(import_landed_cost_id=draft_landed.id, concept="draft", amount=2)
+    summary = DocumentTaxSummary(company="co", document_type="sales_invoice", document_id=invoice.id, grand_total=100)
+    allocation = LandedCostAllocation(
+        company="co",
+        document_type="import_landed_cost",
+        document_id=landed.id,
+        document_line_id="charge-line",
+        item_code=item.code,
+        posting_date=date.today(),
+        base_amount=5,
+        allocated_amount=5,
+        final_inventory_cost=5,
+        unit_inventory_cost=5,
+    )
+    database.session.add_all([charge, draft_charge, summary, allocation])
+    database.session.commit()
+    tax_line = DocumentTaxLine(document_tax_summary_id=summary.id, line_index=1, concept="iva", tax_type="vat", amount=1)
+    database.session.add(tax_line)
+    database.session.commit()
+
+    charge.amount = 6
+    summary.grand_total = 90
+    tax_line.amount = 2
+    allocation.allocated_amount = 6
+    database.session.commit()
+    assert summary.grand_total == 90
+    database.session.connection().execute(
+        update(ImportLandedCostCharge).where(ImportLandedCostCharge.id == draft_charge.id).values(amount=3)
+    )
+    database.session.refresh(draft_charge)
+    assert draft_charge.amount == 3
+
+    landed.docstatus = 1
+    invoice.docstatus = 1
+    database.session.commit()
+    database.session.add_all(
+        [
+            GLEntry(
+                company="co",
+                posting_date=date.today(),
+                voucher_type="import_landed_cost",
+                voucher_id=landed.id,
+                debit=5,
+                credit=0,
+            ),
+            GLEntry(
+                company="co",
+                posting_date=date.today(),
+                voucher_type="sales_invoice",
+                voucher_id=invoice.id,
+                debit=10,
+                credit=0,
+            ),
+        ]
+    )
+    database.session.commit()
+    for mutated, attribute in (
+        (charge, "amount"),
+        (summary, "grand_total"),
+        (tax_line, "amount"),
+        (allocation, "allocated_amount"),
+    ):
+        setattr(mutated, attribute, 0)
+        with pytest.raises(ValueError, match="financieros"):
+            database.session.flush()
+        database.session.rollback()
+
+    for deleted in (charge, summary, tax_line, allocation):
+        database.session.delete(deleted)
+        with pytest.raises(ValueError, match="financieros"):
+            database.session.flush()
+        database.session.rollback()
+
+    charge.import_landed_cost_id = draft_landed.id
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.flush()
+    database.session.rollback()
+    summary.document_type = "unknown_document_type"
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.flush()
+    database.session.rollback()
+
+    new_lines = (
+        ImportLandedCostCharge(import_landed_cost_id=landed.id, concept="seguro", amount=2),
+        DocumentTaxLine(document_tax_summary_id=summary.id, line_index=2, concept="iva", tax_type="vat", amount=1),
+        LandedCostAllocation(
+            company="co",
+            document_type="import_landed_cost",
+            document_id=landed.id,
+            document_line_id="second-charge-line",
+            item_code=item.code,
+            posting_date=date.today(),
+            base_amount=2,
+            allocated_amount=2,
+            final_inventory_cost=2,
+            unit_inventory_cost=2,
+        ),
+    )
+    for line in new_lines:
+        database.session.add(line)
+        with pytest.raises(ValueError, match="financieros"):
+            database.session.flush()
+        database.session.rollback()
+
+    statements = (
+        update(ImportLandedCostCharge).where(ImportLandedCostCharge.id == charge.id).values(amount=0),
+        delete(ImportLandedCostCharge).where(ImportLandedCostCharge.id == charge.id),
+        update(DocumentTaxSummary).where(DocumentTaxSummary.id == summary.id).values(grand_total=0),
+        delete(DocumentTaxSummary).where(DocumentTaxSummary.id == summary.id),
+        update(DocumentTaxLine).where(DocumentTaxLine.id == tax_line.id).values(amount=0),
+        delete(DocumentTaxLine).where(DocumentTaxLine.id == tax_line.id),
+        update(LandedCostAllocation).where(LandedCostAllocation.id == allocation.id).values(allocated_amount=0),
+        delete(LandedCostAllocation).where(LandedCostAllocation.id == allocation.id),
+    )
+    for statement in statements:
+        with pytest.raises(ValueError, match="sensibles|financieros"):
+            database.session.connection().execute(statement)
+        database.session.rollback()
+
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.connection().execute(
+            insert(ImportLandedCostCharge).values(import_landed_cost_id=landed.id, concept="core", amount=1)
+        )
+    database.session.rollback()
+    bound_insert = insert(ImportLandedCostCharge).values(
+        import_landed_cost_id=bindparam("parent"),
+        concept=bindparam("concept"),
+        amount=bindparam("amount"),
+    )
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.connection().execute(
+            bound_insert,
+            {"parent": landed.id, "concept": "bound", "amount": 1},
+        )
+    database.session.rollback()
+    multi_values_insert = insert(ImportLandedCostCharge).values(
+        [
+            {"import_landed_cost_id": bindparam("parent"), "concept": "multi-one", "amount": 1},
+            {"import_landed_cost_id": bindparam("parent"), "concept": "multi-two", "amount": 2},
+        ]
+    )
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.connection().execute(multi_values_insert, {"parent": landed.id})
+    database.session.rollback()
+
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.connection().execute(update(SalesInvoice).where(SalesInvoice.id == invoice.id).values(docstatus=0))
+    database.session.rollback()
+    bulk_status_update = (
+        update(SalesInvoice).where(SalesInvoice.id == bindparam("target_id")).values(docstatus=bindparam("new_status"))
+    )
+    with pytest.raises(ValueError, match="financieros"):
+        database.session.connection().execute(
+            bulk_status_update,
+            [
+                {"target_id": invoice.id, "new_status": 0},
+                {"target_id": invoice.id, "new_status": 1},
+            ],
+        )
+    database.session.rollback()
+    database.session.connection().execute(
+        update(SalesInvoice).where(SalesInvoice.id == invoice.id).values(outstanding_amount=5)
+    )
+    database.session.rollback()
+
+    raw_mutations = {
+        "import_landed_cost_charge": "UPDATE import_landed_cost_charge SET amount = 0 WHERE 1 = 0",
+        "document_tax_summary": "UPDATE document_tax_summary SET grand_total = 0 WHERE 1 = 0",
+        "document_tax_line": "UPDATE document_tax_line SET amount = 0 WHERE 1 = 0",
+        "landed_cost_allocation": "UPDATE landed_cost_allocation SET allocated_amount = 0 WHERE 1 = 0",
+    }
+    for table, update_sql in raw_mutations.items():
+        for statement in (
+            update_sql,
+            f"UPDATE OR REPLACE {table} SET id = id WHERE 1 = 0",
+            f"UPDATE/**/OR REPLACE/**/{table} SET id = id WHERE 1 = 0",
+            f"UPDATE/*outer/*nested*/tail*/{table} SET id = id WHERE 1 = 0",
+            f"UPDATE -- comment\n {table} SET id = id WHERE 1 = 0",
+            f"UPDATE ONLY {table} SET id = id WHERE 1 = 0",
+            f"UPDATE public.{table} SET id = id WHERE 1 = 0",
+            f"DELETE FROM ONLY {table}",
+            f"TRUNCATE TABLE ONLY {table}",
+            f"MERGE INTO {table} USING (SELECT 1 AS id) source ON false WHEN MATCHED THEN DELETE",
+            f"MERGE INTO ONLY {table} USING (SELECT 1 AS id) source ON false WHEN MATCHED THEN DELETE",
+            f"MERGE {table}",
+            f"DELETE FROM {table}",
+            f"DELETE/**/FROM {table}",
+            f"DELETE LOW_PRIORITY FROM {table}",
+            f"DELETE QUICK FROM {table}",
+            f"DELETE IGNORE FROM {table}",
+            f"DELETE charge FROM {table} AS charge WHERE 1 = 0",
+            f"DELETE charge FROM ordinary_table AS source JOIN {table} AS charge ON 1 = 1 WHERE 1 = 0",
+            f"INSERT INTO {table} (id) VALUES ('blocked')",
+            f"INSERT INTO {table} (id) VALUES ('it''s -- text')",
+            f"INSERT INTO {table} (id) VALUES ('back\\slash')",
+            f"INSERT INTO \"{table}\" (id) VALUES ('blocked')",
+            f"INSERT IGNORE INTO {table} (id) VALUES ('blocked')",
+            f"INSERT IGNORE {table} (id) VALUES ('blocked')",
+            f"INSERT LOW_PRIORITY INTO {table} (id) VALUES ('blocked')",
+            f"INSERT/**/INTO {table} (id) VALUES ('blocked')",
+            f"REPLACE INTO {table} (id) VALUES ('blocked')",
+            f"REPLACE {table} (id) VALUES ('blocked')",
+            f"COPY {table} FROM STDIN",
+            f"COPY BINARY {table} FROM STDIN",
+            f"LOAD DATA INFILE 'source.csv' INTO TABLE {table}",
+            f"LOAD XML LOCAL INFILE 'source.xml' INTO TABLE {table}",
+        ):
+            with pytest.raises(ValueError, match="sensibles"):
+                database.session.connection().exec_driver_sql(statement)
+            database.session.rollback()
+
+    comparison_parent_keys = [
+        key.parent.key
+        for key in PurchaseOrderComparison.__table__.foreign_keys
+        if key.column.table.name in {"purchase_order", "purchase_request"}
+    ]
+    first_parent_key = comparison_parent_keys[0]
+    request = PurchaseRequest(
+        company="co",
+        docstatus=0 if first_parent_key == "purchase_request_id" else 1,
+    )
+    order = PurchaseOrder(
+        company="co",
+        docstatus=0 if first_parent_key == "base_purchase_order_id" else 1,
+    )
+    database.session.add_all([request, order])
+    database.session.flush()
+    comparison = PurchaseOrderComparison(
+        company="co",
+        purchase_request_id=request.id,
+        base_purchase_order_id=order.id,
+    )
+    database.session.add(comparison)
+    database.session.commit()
+    for statement in (
+        update(PurchaseOrderComparison).where(PurchaseOrderComparison.id == comparison.id).values(company="co"),
+        delete(PurchaseOrderComparison).where(PurchaseOrderComparison.id == comparison.id),
+    ):
+        with pytest.raises(ValueError, match="financieros"):
+            database.session.connection().execute(statement)
+        database.session.rollback()

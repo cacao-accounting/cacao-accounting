@@ -7,24 +7,29 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 import json
-import re
 from typing import Any, Iterator, cast
 
 from flask import current_app, has_app_context
-from sqlalchemy import event, inspect, select, or_
+from sqlalchemy import and_, event, inspect, or_, select
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
-from sqlalchemy.sql.dml import Delete, Update
+from sqlalchemy.orm import Session, object_session
+from sqlalchemy.sql.dml import Delete, Insert, Update
 
 from cacao_accounting.audit_trail_service import _current_actor, _json_default
 from cacao_accounting.database import AuditTrail, DocBase, database, obtiene_texto_unico
+from cacao_accounting.internal_control_sql import raw_sql_mutates_protected_table
 from cacao_accounting.i18n import _
 from cacao_accounting.runtime_mode import is_cloud_mode, is_desktop_mode
 
 _ACTOR: ContextVar[tuple[str | None, str] | None] = ContextVar("icfr_actor", default=None)
 _APPROVAL_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_approval_transition", default=frozenset())
 _FLOW_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_flow_transition", default=frozenset())
+_BANK_RECONCILIATION_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
+    "icfr_bank_reconciliation_transition", default=frozenset()
+)
+_AUDIT_TRAIL_INSERT_ACTIVE: ContextVar[bool] = ContextVar("icfr_audit_trail_insert_active", default=False)
 _ORM_FLUSH_ACTIVE: ContextVar[bool] = ContextVar("icfr_orm_flush_active", default=False)
+_POSTED_DOCUMENTS_IN_TRANSACTION = "icfr_posted_documents"
 EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log"})
 LEDGER_TABLES = frozenset(
     {
@@ -155,6 +160,17 @@ def flow_evidence_transition(*rows: Any) -> Iterator[None]:
         _FLOW_TRANSITION.reset(token)
 
 
+@contextmanager
+def bank_reconciliation_transition(*rows: Any) -> Iterator[None]:
+    """Authorize reconciliation-link state changes for the supplied bank rows."""
+    allowed = _BANK_RECONCILIATION_TRANSITION.get().union(id(row) for row in rows)
+    token = _BANK_RECONCILIATION_TRANSITION.set(frozenset(allowed))
+    try:
+        yield
+    finally:
+        _BANK_RECONCILIATION_TRANSITION.reset(token)
+
+
 def _enabled() -> bool:
     """Avoid Cloud checks for Desktop, test runs and engine work outside the app.
 
@@ -277,7 +293,11 @@ def _write_event(mapper: Any, connection: Any, target: Any, action: str) -> None
     from cacao_accounting.audit_chain import stamp_audit_values
 
     stamp_audit_values(connection, values)
-    connection.execute(AuditTrail.__table__.insert().values(**values))
+    token = _AUDIT_TRAIL_INSERT_ACTIVE.set(True)
+    try:
+        connection.execute(AuditTrail.__table__.insert().values(**values))
+    finally:
+        _AUDIT_TRAIL_INSERT_ACTIVE.reset(token)
 
 
 def _audit_insert(mapper: Any, connection: Any, target: Any) -> None:
@@ -365,6 +385,49 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
         _guard_line(session, target, changed)
 
 
+def _is_currently_posted(target: Any) -> bool:
+    """Return whether a document is currently in its posted state."""
+    if isinstance(target, DocBase):
+        return target.docstatus == 1
+    return target.__table__.name == "comprobante_contable" and (bool(target.applied) or target.status == "submitted")
+
+
+def _remember_posted_document(target: Any) -> None:
+    """Allow child rows only while their parent is posted in this transaction."""
+    session = object_session(target)
+    if session is None or not _is_currently_posted(target):
+        return
+    posted = session.info.setdefault(_POSTED_DOCUMENTS_IN_TRANSACTION, set())
+    posted.add((target.__table__.name, str(target.id)))
+
+
+def _remember_inserted_posted_document(mapper: Any, connection: Any, target: Any) -> None:
+    """Remember a document created already posted for its initial atomic write."""
+    del mapper, connection
+    _remember_posted_document(target)
+
+
+def _remember_document_posting_transition(mapper: Any, connection: Any, target: Any) -> None:
+    """Remember a draft-to-posted transition inside the active transaction."""
+    del mapper, connection
+    if _is_currently_posted(target) and not _posted(target):
+        _remember_posted_document(target)
+
+
+def _clear_transaction_posted_documents(session: Session, transaction: Any) -> None:
+    """Clear posting allowances after the outer database transaction ends."""
+    if transaction.parent is None:
+        session.info.pop(_POSTED_DOCUMENTS_IN_TRANSACTION, None)
+
+
+def _posted_in_current_transaction(session: Session, target: Any) -> bool:
+    """Return whether this header was created or posted in the active transaction."""
+    if not _is_currently_posted(target):
+        return False
+    posted = session.info.get(_POSTED_DOCUMENTS_IN_TRANSACTION, set())
+    return (target.__table__.name, str(target.id)) in posted
+
+
 def _guard_approval_request(target: Any, table: str, changed: set[str], deleted: bool) -> None:
     """Protect immutable approval evidence fields from ORM changes."""
     if table == "approval_request" and (deleted or changed.intersection(PROTECTED_REQUEST_FIELDS)):
@@ -401,11 +464,9 @@ def _guard_flow_evidence(target: Any, table: str, changed: set[str], deleted: bo
 
 
 def _guard_new_lines(session: Session) -> None:
-    """Reject additional documentary lines after their header has ledger evidence."""
-    from cacao_accounting.database import GLEntry, StockLedgerEntry
-
+    """Reject additional documentary lines after their header is posted."""
     for target in session.new:
-        if _audited_document(target) or not type(target).__name__.endswith(("Item", "Detalle")):
+        if _audited_document(target):
             continue
         for parent_class, parent_id in _line_parents(target):
             parent = session.get(parent_class, parent_id)
@@ -414,24 +475,76 @@ def _guard_new_lines(session: Session) -> None:
             if not _posted(parent):
                 _stamp_line_editor(parent)
                 continue
-            for ledger in (GLEntry, StockLedgerEntry):
-                query = select(ledger.id).where(ledger.voucher_id == parent_id).limit(1)
-                if session.connection().execute(query).first() is not None:
-                    raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
+            if _is_posted_advance_reference(target, parent):
+                continue
+            if _posted_in_current_transaction(session, parent) and target.__table__.name != "payment_reference":
+                continue
+            raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
+
+
+def _is_posted_advance_reference(target: Any, parent: Any) -> bool:
+    """Allow the supported later allocation of a posted advance payment."""
+    from cacao_accounting.database import PaymentEntry, PaymentReference
+
+    return (
+        isinstance(target, PaymentReference)
+        and isinstance(parent, PaymentEntry)
+        and parent.docstatus == 1
+        and parent.is_advance
+    )
 
 
 def _guard_line(session: Session, target: Any, changed: set[str]) -> None:
     """Protect existing financial lines through their mapped parent foreign key."""
-    if _audited_document(target) or not type(target).__name__.endswith(("Item", "Reference", "Detalle")):
+    if _audited_document(target):
         return
     if changed.issubset(MUTABLE_STATE) and target not in session.deleted:
         return
+    if (
+        target.__table__.name == "bank_transaction"
+        and changed
+        and changed.issubset({"payment_entry_id", "is_reconciled"})
+        and id(target) in _BANK_RECONCILIATION_TRANSITION.get()
+    ):
+        return
+    if target.__table__.name == "bank_transaction":
+        if changed.intersection({"payment_entry_id", "is_reconciled"}):
+            raise ValueError(_("Los vínculos de conciliación bancaria requieren el servicio autorizado."))
+        if target in session.deleted or _has_bank_reconciliation_evidence(session, target):
+            raise ValueError(_("Los datos financieros conciliados son inmutables."))
     for parent_class, parent_id in _line_parents(target):
         parent = session.get(parent_class, parent_id)
         if parent is not None and _posted(parent):
             raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
         if parent is not None:
             _stamp_line_editor(parent)
+
+
+def _has_bank_reconciliation_evidence(session: Session, target: Any) -> bool:
+    """Check whether an imported bank row has ever been reconciled."""
+    if _persisted_value(inspect(target), "is_reconciled", target.is_reconciled):
+        return True
+    from cacao_accounting.database import ReconciliationItem
+
+    return (
+        session.execute(
+            select(ReconciliationItem.id)
+            .where(
+                or_(
+                    and_(
+                        ReconciliationItem.source_type == "bank_transaction",
+                        ReconciliationItem.source_id == target.id,
+                    ),
+                    and_(
+                        ReconciliationItem.reference_type == "bank_transaction",
+                        ReconciliationItem.reference_id == target.id,
+                    ),
+                )
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
 
 
 def _stamp_line_editor(parent: Any) -> None:
@@ -441,8 +554,63 @@ def _stamp_line_editor(parent: Any) -> None:
         parent.modified_by = actor_id
 
 
+POLYMORPHIC_EVIDENCE_TABLES = frozenset({"document_tax_summary", "document_tax_line", "landed_cost_allocation"})
+
+
+def _field_values(target: Any, key: str) -> tuple[Any, ...]:
+    """Return current and persisted values for a mapped relationship field."""
+    current = getattr(target, key, None)
+    state = inspect(target)
+    if not state.persistent:
+        return (current,)
+    persisted = _persisted_value(state, key, current)
+    return (current,) if current == persisted else (current, persisted)
+
+
+def _polymorphic_document_parent(document_type: Any, document_id: Any) -> tuple[Any, str] | None:
+    """Resolve a registered polymorphic document identity to its header model."""
+    if not document_type or not document_id:
+        return None
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    document = DOCUMENT_TYPES.get(str(document_type))
+    if document is None:
+        return None
+    return document.header_model, str(document_id)
+
+
+def _polymorphic_parents(target: Any) -> Iterator[tuple[Any, str]]:
+    """Resolve the document referenced by ``document_type``/``document_id`` without a foreign key."""
+    table = target.__table__.name
+    if table == "document_tax_line":
+        from cacao_accounting.database import DocumentTaxSummary
+
+        session = object_session(target)
+        if session is None:
+            return
+        parents: set[tuple[Any, str]] = set()
+        for summary_id in _field_values(target, "document_tax_summary_id"):
+            summary = session.get(DocumentTaxSummary, summary_id) if summary_id else None
+            if summary is not None:
+                parents.update(_polymorphic_parents(summary))
+        yield from parents
+        return
+    elif table not in POLYMORPHIC_EVIDENCE_TABLES:
+        return
+    document_types = _field_values(target, "document_type")
+    document_ids = _field_values(target, "document_id")
+    pairs = {(document_types[0], document_ids[0])}
+    if len(document_types) > 1 or len(document_ids) > 1:
+        pairs.add((document_types[-1], document_ids[-1]))
+    for document_type, document_id in pairs:
+        parent = _polymorphic_document_parent(document_type, document_id)
+        if parent is not None:
+            yield parent
+
+
 def _line_parents(target: Any) -> Iterator[tuple[Any, str]]:
     """Resolve financial headers, including the legacy journal detail link."""
+    yield from _polymorphic_parents(target)
     if target.__table__.name == "comprobante_contable_detalle" and target.transaction_id:
         from cacao_accounting.database import ComprobanteContable
 
@@ -454,38 +622,101 @@ def _line_parents(target: Any) -> Iterator[tuple[Any, str]]:
         )
         if parent_cls is None or not (issubclass(parent_cls, DocBase) or parent_table.name == "comprobante_contable"):
             continue
-        parent_id = getattr(target, foreign_key.parent.key)
-        if parent_id is not None:
-            yield parent_cls, parent_id
+        for parent_id in _field_values(target, foreign_key.parent.key):
+            if parent_id is not None:
+                yield parent_cls, parent_id
 
 
-def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: Any) -> None:
-    """Reject textual writes that cannot participate in mapped evidence controls."""
-    del connection, cursor, parameters, executemany
-    if not _enabled() or (context.compiled is not None and isinstance(context.compiled.statement, (Update, Delete))):
-        return
-    targets = re.findall(
-        r'\b(?:UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+(?:["`]?\w+["`]?\.)?["`]?([\w]+)', statement, flags=re.IGNORECASE
+def _document_parent_tables() -> dict[str, Any]:
+    """Return mapped document headers and the legacy accounting journal."""
+    return {
+        mapper.local_table.name: mapper.local_table
+        for mapper in cast(Any, database.Model).registry.mappers
+        if issubclass(mapper.class_, DocBase) or mapper.local_table.name == "comprobante_contable"
+    }
+
+
+def _financial_child_tables() -> set[str]:
+    """Return mapped tables with a foreign key to a document header."""
+    parents = _document_parent_tables()
+    return {
+        mapper.local_table.name
+        for mapper in cast(Any, database.Model).registry.mappers
+        if any(key.column.table.name in parents for key in mapper.local_table.foreign_keys)
+    }
+
+
+def _raw_sql_protected_tables() -> set[str]:
+    """Collect tables that textual SQL cannot mutate directly."""
+    protected = set(EVIDENCE_TABLES).union(
+        LEDGER_TABLES,
+        FLOW_EVIDENCE_TABLES,
+        POLYMORPHIC_EVIDENCE_TABLES,
+        _financial_child_tables(),
+        {"approval_request", "cacao_config"},
     )
-    if not targets:
-        return
-    protected = EVIDENCE_TABLES.union(LEDGER_TABLES, FLOW_EVIDENCE_TABLES, {"approval_request", "cacao_config"})
-    protected = protected.union(
+    protected.update(
         mapper.local_table.name
         for mapper in cast(Any, database.Model).registry.mappers
         if mapper.class_.__name__ in SENSITIVE_MODELS or issubclass(mapper.class_, DocBase)
     )
-    if any(table.lower() in protected for table in targets):
+    return protected
+
+
+def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: Any) -> None:
+    """Reject textual writes that cannot participate in mapped evidence controls."""
+    del cursor, parameters, executemany
+    if not _enabled() or (context.compiled is not None and isinstance(context.compiled.statement, (Insert, Update, Delete))):
+        return
+    if raw_sql_mutates_protected_table(statement, _raw_sql_protected_tables(), connection.dialect.name):
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
 
 
 def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, execution_options: Any) -> None:
     """Reject evidence SQL mutations, including Core and ORM bulk statements."""
-    if not _enabled() or not isinstance(clause, (Update, Delete)):
+    if not _enabled():
         return
-    table_name = getattr(clause.table, "name", None)
+    table_name = getattr(getattr(clause, "table", None), "name", None)
     if _is_orm_unit_of_work(execution_options, table_name):
         return
+    if isinstance(clause, Insert):
+        _guard_bulk_insert(connection, clause, multiparams, params, table_name)
+        return
+    if not isinstance(clause, (Update, Delete)):
+        return
+    _guard_bulk_update(connection, clause, multiparams, params, table_name)
+
+
+def _guard_bulk_insert(connection: Any, clause: Insert, multiparams: Any, params: Any, table_name: str | None) -> None:
+    """Protect direct Core inserts to audit, ledger and document tables."""
+    if table_name == "audit_trail" and _AUDIT_TRAIL_INSERT_ACTIVE.get():
+        return
+    protected_tables = EVIDENCE_TABLES.union(
+        LEDGER_TABLES,
+        FLOW_EVIDENCE_TABLES,
+        POLYMORPHIC_EVIDENCE_TABLES,
+        {"payment_reference", "approval_request", "cacao_config"},
+        _document_parent_tables(),
+    )
+    if table_name in protected_tables or _is_sensitive_table(table_name):
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    if table_name in _financial_child_tables():
+        _guard_core_financial_insert(connection, clause, multiparams, params)
+        return
+    if table_name in _raw_sql_protected_tables():
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+
+
+def _guard_bulk_update(
+    connection: Any, clause: Update | Delete, multiparams: Any, params: Any, table_name: str | None
+) -> None:
+    """Protect direct Core updates and deletes from rewriting evidence."""
+    if table_name == "bank_transaction":
+        _guard_bank_transaction_statement(connection, clause, multiparams, params)
+    if table_name in POLYMORPHIC_EVIDENCE_TABLES:
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    if table_name in _financial_child_tables() or table_name in _document_parent_tables():
+        _guard_core_financial_write(connection, clause, multiparams, params)
     if table_name in LEDGER_TABLES:
         _guard_ledger_statement(clause, multiparams, params)
     if table_name in FLOW_EVIDENCE_TABLES:
@@ -498,6 +729,38 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
         _guard_cacao_config_statement(clause, multiparams, params)
     if _is_sensitive_table(table_name):
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+
+
+def _guard_bank_transaction_statement(connection: Any, clause: Any, multiparams: Any, params: Any) -> None:
+    """Protect reconciled bank evidence from direct Core or ORM bulk writes."""
+    from cacao_accounting.database import ReconciliationItem
+
+    table = clause.table
+    if isinstance(clause, Update):
+        changed = _statement_changed_values(clause, multiparams, params, table)
+        if changed.keys() & {"payment_entry_id", "is_reconciled"}:
+            raise ValueError(_("Los vínculos de conciliación bancaria requieren el servicio autorizado."))
+    reconciliation_history = (
+        select(ReconciliationItem.id)
+        .where(
+            or_(
+                and_(
+                    ReconciliationItem.source_type == "bank_transaction",
+                    ReconciliationItem.source_id == table.c.id,
+                ),
+                and_(
+                    ReconciliationItem.reference_type == "bank_transaction",
+                    ReconciliationItem.reference_id == table.c.id,
+                ),
+            )
+        )
+        .exists()
+    )
+    protected = or_(table.c.is_reconciled.is_(True), reconciliation_history)
+    query = select(1).select_from(table).where(*clause._where_criteria, protected).limit(1)
+    for parameter_set in _parameter_sets(multiparams, params):
+        if connection.execute(query, parameter_set).first() is not None:
+            raise ValueError(_("Los datos financieros conciliados son inmutables."))
 
 
 def _guard_flow_evidence_statement(clause: Any, multiparams: Any, params: Any) -> None:
@@ -531,13 +794,148 @@ def _statement_changed_values(clause: Any, multiparams: Any, params: Any, table:
     if ordered_values is not None:
         values = dict(ordered_values)
     if values is not None:
-        return {getattr(key, "key", key): getattr(value, "value", value) for key, value in values.items()}
-    parameters = list(multiparams or ()) + ([params] if params else [])
+        bound_parameters = {key: value for group in _parameter_sets(multiparams, params) for key, value in group.items()}
+        return {getattr(key, "key", key): _bound_value(value, bound_parameters) for key, value in values.items()}
+    parameter_sets = _parameter_sets(multiparams, params)
     changed: dict[str, Any] = {}
-    for group in parameters:
+    for group in parameter_sets:
         if group:
             changed.update({key: value for key, value in group.items() if key in table.c})
     return changed
+
+
+def _bound_value(value: Any, parameters: dict[str, Any]) -> Any:
+    """Resolve a SQLAlchemy bind parameter when its execution value is known."""
+    bind_key = getattr(value, "key", None)
+    if bind_key in parameters:
+        return parameters[bind_key]
+    return getattr(value, "value", value)
+
+
+def _statement_values_for_parameters(clause: Any, parameters: dict[str, Any], table: Any) -> dict[str, Any]:
+    """Resolve the changed fields for one Core execution parameter set."""
+    values = getattr(clause, "_values", None)
+    ordered_values = getattr(clause, "_ordered_values", None)
+    if ordered_values is not None:
+        values = dict(ordered_values)
+    if values is not None:
+        return {getattr(key, "key", key): _bound_value(value, parameters) for key, value in values.items()}
+    return {key: value for key, value in parameters.items() if key in table.c}
+
+
+def _parameter_sets(multiparams: Any, params: Any) -> list[dict[str, Any]]:
+    """Normalize SQLAlchemy Core parameter forms for guard queries."""
+    if isinstance(multiparams, dict):
+        return [multiparams]
+    if multiparams:
+        if not all(isinstance(group, dict) for group in multiparams):
+            raise ValueError(_("Los cambios financieros requieren parámetros nombrados."))
+        return list(multiparams)
+    return [params] if isinstance(params, dict) and params else [{}]
+
+
+def _guard_core_financial_write(connection: Any, clause: Any, multiparams: Any, params: Any) -> None:
+    """Apply posted-parent checks to direct Core updates and deletes."""
+    table = clause.table
+    parents = _document_parent_tables()
+    criterion = _bulk_posted_predicate(table, parents)
+    if criterion is None:
+        return
+    query = select(1).select_from(table).where(*clause._where_criteria, criterion).limit(1)
+    foreign_keys = {key.parent.key for key in table.foreign_keys if key.column.table.name in parents}
+    for row in _parameter_sets(multiparams, params):
+        if isinstance(clause, Update):
+            changed = _statement_values_for_parameters(clause, row, table)
+            if changed.keys() & foreign_keys:
+                raise ValueError(_("Los vínculos financieros deben modificarse mediante el servicio auditado."))
+            restores_draft = changed.get("docstatus") == 0 or changed.get("status") == "draft"
+            if changed and changed.keys() <= MUTABLE_STATE and not restores_draft:
+                continue
+        if connection.execute(query, row).first() is not None:
+            raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
+
+
+def _normalized_values(values: Any, parameters: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Convert Core insert keys and bind parameters to plain column values."""
+    supplied = parameters or {}
+    return {getattr(key, "key", key): _bound_value(value, supplied) for key, value in (values or {}).items()}
+
+
+def _core_insert_rows(clause: Any, multiparams: Any, params: Any) -> list[dict[str, Any]]:
+    """Extract literal INSERT rows needed to check their document parents."""
+    inline_values = getattr(clause, "_values", None)
+    parameter_sets = _parameter_sets(multiparams, params)
+    rows = _multi_value_insert_rows(clause, inline_values, parameter_sets)
+    if rows:
+        return rows
+    return _single_value_insert_rows(clause, inline_values, parameter_sets)
+
+
+def _multi_value_insert_rows(clause: Any, inline_values: Any, parameter_sets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Resolve SQLAlchemy INSERT statements with multiple inline rows."""
+    rows: list[dict[str, Any]] = []
+    for group in getattr(clause, "_multi_values", ()) or ():
+        entries = group if isinstance(group, (list, tuple)) else (group,)
+        for entry in entries:
+            rows.extend(
+                _merge_insert_values(inline_values, entry, parameter_set, clause.table) for parameter_set in parameter_sets
+            )
+    return rows
+
+
+def _single_value_insert_rows(clause: Any, inline_values: Any, parameter_sets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Resolve SQLAlchemy INSERT statements with execution-time row values."""
+    rows = []
+    for parameter_set in parameter_sets:
+        values = _merge_insert_values(inline_values, None, parameter_set, clause.table)
+        if values:
+            rows.append(values)
+    return rows
+
+
+def _merge_insert_values(inline_values: Any, row_values: Any, parameters: dict[str, Any], table: Any) -> dict[str, Any]:
+    """Merge inline and execution-time values for one inserted row."""
+    values = _normalized_values(inline_values, parameters)
+    values.update(_normalized_values(row_values, parameters))
+    values.update({key: value for key, value in parameters.items() if key in table.c})
+    return values
+
+
+def _parent_is_posted(connection: Any, table: Any, parent_id: str) -> bool:
+    """Check persisted document lifecycle state for a Core INSERT parent."""
+    if "docstatus" in table.c:
+        row = connection.execute(select(table.c.docstatus).where(table.c.id == parent_id)).first()
+        return row is not None and row[0] in (1, 2)
+    row = connection.execute(select(table.c.status, table.c.applied).where(table.c.id == parent_id)).first()
+    return row is not None and (bool(row.applied) or row.status in {"submitted", "cancelled"})
+
+
+def _guard_core_financial_insert(connection: Any, clause: Any, multiparams: Any, params: Any) -> None:
+    """Reject Core inserts that append children to posted documents."""
+    parents = _document_parent_tables()
+    rows = _core_insert_rows(clause, multiparams, params)
+    if not rows:
+        raise ValueError(_("Las líneas financieras deben registrarse mediante el servicio auditado."))
+    for row in rows:
+        _guard_core_insert_row(connection, clause.table, row, parents)
+
+
+def _guard_core_insert_row(connection: Any, table: Any, row: dict[str, Any], parents: dict[str, Any]) -> None:
+    """Reject a single Core INSERT row linked to posted financial evidence."""
+    for foreign_key in table.foreign_keys:
+        parent_table = foreign_key.column.table
+        if parent_table.name not in parents:
+            continue
+        parent_id = row.get(foreign_key.parent.key)
+        if parent_id is None:
+            if not foreign_key.parent.nullable:
+                raise ValueError(_("Las líneas financieras deben registrarse mediante el servicio auditado."))
+            continue
+        if not isinstance(parent_id, str):
+            raise ValueError(_("Las líneas financieras deben registrarse mediante el servicio auditado."))
+        if not _parent_is_posted(connection, parent_table, parent_id):
+            continue
+        raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
 
 
 def _guard_ledger_statement(clause: Any, multiparams: Any, params: Any) -> None:
@@ -615,13 +1013,15 @@ def _bulk_posted_predicate(table: Any, parents: dict[str, Any]) -> Any:
     parent = parents.get(table.name)
     if parent is not None:
         return _posting_predicate(parent)
+    predicates = []
     if table.name == "comprobante_contable_detalle":
-        parent = parents["comprobante_contable"]
-        return table.c.transaction_id.in_(select(parent.c.id).where(_posting_predicate(parent)))
+        parent = parents.get("comprobante_contable")
+        if parent is not None:
+            predicates.append(table.c.transaction_id.in_(select(parent.c.id).where(_posting_predicate(parent))))
     for key in table.foreign_keys:
         if key.column.table.name in parents:
-            return key.parent.in_(select(key.column).where(_posting_predicate(key.column.table)))
-    return None
+            predicates.append(key.parent.in_(select(key.column).where(_posting_predicate(key.column.table))))
+    return or_(*predicates) if predicates else None
 
 
 def _guard_financial_bulk(state: Any) -> None:
@@ -703,12 +1103,16 @@ def register_internal_controls() -> None:
     event.listen(Session, "before_flush", _start_orm_flush)
     event.listen(Session, "after_flush_postexec", _end_orm_flush)
     event.listen(Session, "after_soft_rollback", _end_orm_flush)
+    event.listen(Session, "after_transaction_end", _clear_transaction_posted_documents)
     event.listen(Session, "do_orm_execute", _guard_sensitive_bulk)
     event.listen(Engine, "before_execute", _guard_bulk)
     event.listen(Engine, "before_cursor_execute", _guard_raw_sql)
     event.listen(AuditTrail, "before_insert", _stamp_audit_chain)
     for mapper in cast(Any, database.Model).registry.mappers:
         model = mapper.class_
+        if issubclass(model, DocBase) or mapper.local_table.name == "comprobante_contable":
+            event.listen(model, "after_insert", _remember_inserted_posted_document)
+            event.listen(model, "before_update", _remember_document_posting_transition)
         event.listen(model, "before_insert", _stamp_preparer)
         event.listen(model, "before_update", _stamp_preparer)
         event.listen(model, "before_update", _audit_update)

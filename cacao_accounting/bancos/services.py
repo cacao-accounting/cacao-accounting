@@ -2980,9 +2980,13 @@ def _apply_payment_cancellation_hooks(payment: PaymentEntry) -> None:
     linked_transactions = (
         database.session.execute(database.select(BankTransaction).filter_by(payment_entry_id=payment.id)).scalars().all()
     )
-    for transaction in linked_transactions:
-        transaction.is_reconciled = False
-        transaction.payment_entry_id = None
+    from cacao_accounting.internal_control_service import bank_reconciliation_transition
+
+    with bank_reconciliation_transition(*linked_transactions):
+        for transaction in linked_transactions:
+            transaction.is_reconciled = False
+            transaction.payment_entry_id = None
+        database.session.flush()
     database.session.execute(
         database.update(ReconciliationItem)
         .where(

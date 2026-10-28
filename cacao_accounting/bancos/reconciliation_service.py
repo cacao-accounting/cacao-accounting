@@ -763,12 +763,16 @@ def find_bank_reconciliation_candidates(
 
 def _update_reconciled_transactions(source_totals: dict[str, Decimal], matches: list[Any]) -> None:
     """Mark bank transactions as reconciled and populate payment_entry_id."""
+    from cacao_accounting.internal_control_service import bank_reconciliation_transition
+
     for bank_transaction_id in source_totals:
         bank_transaction = database.session.get(BankTransaction, bank_transaction_id, with_for_update=True)
         if bank_transaction is not None:
-            if _allocated_for_source(bank_transaction_id) >= _bank_amount(bank_transaction):
-                bank_transaction.is_reconciled = True
-            _populate_payment_entry_id(bank_transaction, bank_transaction_id, matches)
+            with bank_reconciliation_transition(bank_transaction):
+                if _allocated_for_source(bank_transaction_id) >= _bank_amount(bank_transaction):
+                    bank_transaction.is_reconciled = True
+                _populate_payment_entry_id(bank_transaction, bank_transaction_id, matches)
+                database.session.flush()
 
 
 def _populate_payment_entry_id(bank_transaction: BankTransaction | None, bank_transaction_id: str, matches: list[Any]) -> None:
