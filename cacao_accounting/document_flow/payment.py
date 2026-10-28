@@ -13,18 +13,20 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from cacao_accounting.database import (
     Accounts,
+    AuditTrail,
     Book,
     ComprobanteContable,
     ComprobanteContableDetalle,
     DocumentRelation,
+    DocumentTransition,
     Entity,
     GLEntry,
     PaymentEntry,
@@ -182,6 +184,99 @@ def _payment_order_allocated(flow_source_type: str, source_id: str, company: str
     return sum((decimal_or_zero(amount) for amount in rows), Decimal("0"))
 
 
+def _cutoff_exclusive_start(as_of_date: date) -> datetime:
+    """Return UTC midnight immediately after a date-only reporting cutoff."""
+    return datetime.combine(as_of_date + timedelta(days=1), time.min, tzinfo=timezone.utc)
+
+
+def _document_active_at_cutoff(model: Any, as_of_date: date | None) -> Any:
+    """Include documents cancelled after the historical reporting cutoff."""
+    if as_of_date is None:
+        return model.docstatus == 1
+    document_type_values = [model.__tablename__]
+    for attribute in ("document_type", "voucher_type"):
+        value = getattr(model, attribute, None)
+        if value is not None:
+            document_type_values.append(value)
+    source_ids = [DocumentTransition.source_id == model.id]
+    voucher_id = getattr(model, "voucher_id", None)
+    if voucher_id is not None:
+        source_ids.append(DocumentTransition.source_id == voucher_id)
+    transition_date = (
+        select(func.min(DocumentTransition.posting_date))
+        .where(
+            DocumentTransition.transition_type == "cancellation",
+            DocumentTransition.source_type.in_(document_type_values),
+            or_(*source_ids),
+        )
+        .correlate(model)
+        .scalar_subquery()
+    )
+    audit_document_type = model.document_type if hasattr(model, "document_type") else model.__tablename__
+    audit_cancellation = (
+        select(func.min(AuditTrail.timestamp))
+        .where(
+            AuditTrail.document_type == audit_document_type,
+            AuditTrail.document_id == model.id,
+            AuditTrail.action == "cancelled",
+        )
+        .correlate(model)
+        .scalar_subquery()
+    )
+    cancelled_at = cast(Any, func.coalesce(model.cancelled_at, audit_cancellation))
+    cancellation_after_cutoff = or_(
+        transition_date > as_of_date,
+        (transition_date.is_(None)) & (cancelled_at >= _cutoff_exclusive_start(as_of_date)),
+    )
+    return or_(
+        model.docstatus == 1,
+        (model.docstatus == 2) & cancellation_after_cutoff,
+    )
+
+
+def _relation_active_at_cutoff(as_of_date: date | None) -> Any:
+    """Include a relation reverted or cancelled after the reporting cutoff."""
+    if as_of_date is None:
+        return DocumentRelation.status == "active"
+    cutoff_start = _cutoff_exclusive_start(as_of_date)
+    source_cancellation = _relation_endpoint_cancellation_date(DocumentRelation.source_type, DocumentRelation.source_id)
+    target_cancellation = _relation_endpoint_cancellation_date(DocumentRelation.target_type, DocumentRelation.target_id)
+    has_effective_transition = or_(source_cancellation.is_not(None), target_cancellation.is_not(None))
+    transition_reason = DocumentRelation.reversal_reason.in_(("payment_cancelled", "target_cancelled"))
+    use_effective_transition = and_(transition_reason.is_(True), has_effective_transition)
+    transitions_after_cutoff = and_(
+        or_(source_cancellation.is_(None), source_cancellation > as_of_date),
+        or_(target_cancellation.is_(None), target_cancellation > as_of_date),
+    )
+    cancellation_after_cutoff = or_(
+        and_(use_effective_transition, transitions_after_cutoff),
+        and_(~use_effective_transition, DocumentRelation.cancelled_at >= cutoff_start),
+    )
+    reversal_after_cutoff = or_(
+        and_(use_effective_transition, transitions_after_cutoff),
+        and_(~use_effective_transition, DocumentRelation.reversed_at >= cutoff_start),
+    )
+    return or_(
+        DocumentRelation.status == "active",
+        and_(DocumentRelation.status == "cancelled", cancellation_after_cutoff),
+        and_(DocumentRelation.status == "reverted", reversal_after_cutoff),
+    )
+
+
+def _relation_endpoint_cancellation_date(source_type: Any, source_id: Any) -> Any:
+    """Return a document endpoint's effective cancellation date, if recorded."""
+    return (
+        select(func.min(DocumentTransition.posting_date))
+        .where(
+            DocumentTransition.transition_type == "cancellation",
+            DocumentTransition.source_type == source_type,
+            DocumentTransition.source_id == source_id,
+        )
+        .correlate(DocumentRelation)
+        .scalar_subquery()
+    )
+
+
 def _document_payment_references(document: Any, as_of_date: date | None = None) -> list[PaymentReference]:
     """Devuelve las referencias de pago asociadas a una factura."""
     raw_document_type = getattr(document, "document_type", None) or getattr(document, "__tablename__", "")
@@ -208,8 +303,8 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
             DocumentRelation.source_type == document_type,
             DocumentRelation.source_id == document_id,
             DocumentRelation.target_type == "payment_entry",
-            DocumentRelation.status == "active",
-            PaymentEntry.docstatus == 1,
+            _relation_active_at_cutoff(as_of_date),
+            _document_active_at_cutoff(PaymentEntry, as_of_date),
             PaymentEntry.company == document.company,
             or_(DocumentRelation.company.is_(None), DocumentRelation.company == document.company),
         )
@@ -219,7 +314,8 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
             or_(
                 PaymentReference.allocation_date.is_(None),
                 PaymentReference.allocation_date <= as_of_date,
-            )
+            ),
+            PaymentEntry.posting_date <= as_of_date,
         )
     references = list(database.session.execute(relation_query).scalars().all())
 
@@ -234,7 +330,7 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
         .where(
             PaymentReference.reference_type == physical_reference_type,
             PaymentReference.reference_id == document_id,
-            PaymentEntry.docstatus == 1,
+            _document_active_at_cutoff(PaymentEntry, as_of_date),
             PaymentEntry.company == document.company,
             or_(DocumentRelation.company.is_(None), DocumentRelation.company == document.company),
             DocumentRelation.id.is_(None),
@@ -245,7 +341,8 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
             or_(
                 PaymentReference.allocation_date.is_(None),
                 PaymentReference.allocation_date <= as_of_date,
-            )
+            ),
+            PaymentEntry.posting_date <= as_of_date,
         )
     legacy_references = list(database.session.execute(fallback_query).scalars().all())
     return references + legacy_references
@@ -297,6 +394,7 @@ def compute_outstanding_amount(
                     ARAPLedgerEntry.document_type == document_type,
                     ARAPLedgerEntry.document_id == str(getattr(document, "id", "")),
                     ARAPLedgerEntry.event_type == "allocation",
+                    ARAPLedgerEntry.posting_date <= as_of_date,
                 )
             ).scalars()
         )
@@ -350,9 +448,9 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
             .where(
                 DocumentRelation.source_type == document_type,
                 DocumentRelation.source_id == document_id,
-                DocumentRelation.status == "active",
+                _relation_active_at_cutoff(as_of_date),
+                _document_active_at_cutoff(SalesInvoice, as_of_date),
                 SalesInvoice.document_type.in_(target_types),
-                SalesInvoice.docstatus == 1,
                 SalesInvoice.posting_date <= as_of_date,
             )
         )
@@ -368,9 +466,9 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
             .where(
                 DocumentRelation.source_type == document_type,
                 DocumentRelation.source_id == document_id,
-                DocumentRelation.status == "active",
+                _relation_active_at_cutoff(as_of_date),
+                _document_active_at_cutoff(PurchaseInvoice, as_of_date),
                 PurchaseInvoice.document_type.in_(target_types),
-                PurchaseInvoice.docstatus == 1,
                 PurchaseInvoice.posting_date <= as_of_date,
             )
         )

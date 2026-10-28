@@ -477,3 +477,837 @@ def test_receivables_handlers(app_instance):
             party_id="CUST-TEST",
         )
         assert res_open["total_items"] > 0
+
+
+@pytest.mark.parametrize(
+    "module_name,handler,model,party_field,document_type,payment_type,note_type",
+    [
+        (
+            "receivables",
+            h_receivables.get_receivables_aging,
+            SalesInvoice,
+            "customer_id",
+            "sales_invoice",
+            "receive",
+            "sales_credit_note",
+        ),
+        (
+            "payables",
+            h_payables.get_payables_aging,
+            PurchaseInvoice,
+            "supplier_id",
+            "purchase_invoice",
+            "pay",
+            "purchase_credit_note",
+        ),
+    ],
+)
+def test_aging_uses_cutoff_for_posted_payments_and_notes(
+    app_instance, module_name, handler, model, party_field, document_type, payment_type, note_type
+):
+    """AR/AP aging excludes real payments and notes posted after its cutoff."""
+    from cacao_accounting.database import (
+        ARAPLedgerEntry,
+        Party,
+        PaymentEntry,
+        PaymentReference,
+    )
+
+    with app_instance.app_context():
+        from cacao_accounting.reportes.services import SubledgerFilters, get_ar_ap_subledger
+
+        company = "CACAO"
+        party_id = f"CUT-{module_name}"
+        party_name = "Corte de aging"
+        party = Party(
+            id=party_id,
+            code=party_id,
+            name=party_name,
+            is_customer=module_name == "receivables",
+            is_supplier=module_name == "payables",
+        )
+        database.session.add(party)
+        party_fields = (
+            {"customer_id": party_id, "customer_name": party_name}
+            if module_name == "receivables"
+            else {"supplier_id": party_id, "supplier_name": party_name}
+        )
+        invoice_number = f"AGING-{module_name}"
+        invoice = model(
+            document_no=invoice_number,
+            company="CACAO",
+            posting_date=date(2026, 1, 1),
+            docstatus=1,
+            grand_total=Decimal("100.00"),
+            total=Decimal("100.00"),
+            outstanding_amount=Decimal("100.00"),
+            transaction_currency="NIO",
+            base_currency="NIO",
+            status="unpaid",
+            **party_fields,
+        )
+        database.session.add(invoice)
+        database.session.flush()
+
+        database.session.add(
+            ARAPLedgerEntry(
+                company=company,
+                ledger_type="AR" if module_name == "receivables" else "AP",
+                party_type="customer" if module_name == "receivables" else "supplier",
+                party_id=party.id,
+                document_type=document_type,
+                document_id=invoice.id,
+                document_no=invoice_number,
+                posting_date=date(2026, 1, 1),
+                event_type="opening",
+                currency="NIO",
+                document_amount=Decimal("100.00"),
+            )
+        )
+
+        for payment_date, allocated_amount in (
+            (date(2026, 1, 15), Decimal("30.00")),
+            (date(2026, 2, 15), Decimal("25.00")),
+        ):
+            payment = PaymentEntry(company=company, posting_date=payment_date, payment_type=payment_type, docstatus=1)
+            database.session.add(payment)
+            database.session.flush()
+            reference = PaymentReference(
+                payment_id=payment.id,
+                reference_type=document_type,
+                reference_id=invoice.id,
+                company=company,
+                total_amount=Decimal("100.00"),
+                outstanding_amount=Decimal("100.00"),
+                allocated_amount=allocated_amount,
+                allocation_date=payment_date,
+            )
+            database.session.add(reference)
+            database.session.flush()
+            database.session.add(
+                DocumentRelation(
+                    source_type=document_type,
+                    source_id=invoice.id,
+                    target_type="payment_entry",
+                    target_id=payment.id,
+                    target_item_id=reference.id,
+                    company=company,
+                    qty=Decimal("1"),
+                    amount=allocated_amount,
+                    relation_type="payment_reference",
+                    status="active",
+                )
+            )
+
+        for note_index, (note_date, note_amount) in enumerate(
+            ((date(2026, 1, 20), Decimal("10.00")), (date(2026, 2, 20), Decimal("5.00"))),
+            start=1,
+        ):
+            note = model(
+                document_no=f"{invoice_number}-NOTE-{note_index}",
+                company=company,
+                posting_date=note_date,
+                docstatus=1,
+                document_type=note_type,
+                is_return=True,
+                grand_total=note_amount,
+                total=note_amount,
+                outstanding_amount=note_amount,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                status="unpaid",
+                **party_fields,
+            )
+            database.session.add(note)
+            database.session.flush()
+            database.session.add(
+                DocumentRelation(
+                    source_type=document_type,
+                    source_id=invoice.id,
+                    target_type="sales_invoice" if module_name == "receivables" else "purchase_invoice",
+                    target_id=note.id,
+                    company=company,
+                    qty=Decimal("1"),
+                    amount=note_amount,
+                    relation_type="credit_note",
+                    status="active",
+                )
+            )
+
+        database.session.commit()
+
+        context = QueryContext(
+            user_id="query-tool-service",
+            permissions={f"{module_name}.reports.read"},
+            company_ids=[company],
+            is_service_principal=True,
+        )
+        for cutoff, expected_paid, expected_outstanding, expected_bucket in (
+            ("2026-01-31", Decimal("30.00"), Decimal("60.00"), "0_30"),
+            ("2026-02-28", Decimal("55.00"), Decimal("30.00"), "31_60"),
+        ):
+            subledger = get_ar_ap_subledger(
+                SubledgerFilters(
+                    company=company,
+                    party_type="customer" if module_name == "receivables" else "supplier",
+                    party_id=party_id,
+                    as_of_date=date.fromisoformat(cutoff),
+                )
+            )
+            subledger_row = next(row for row in subledger.rows if row.values["document_no"] == invoice_number)
+            assert Decimal(subledger_row.values["paid_amount"]) == expected_paid
+            assert Decimal(subledger_row.values["outstanding_amount"]) == expected_outstanding
+            result = handler.handler(context=context, company_id=company, as_of_date=cutoff, party_id=party_id)
+            row = next(item for item in result["items"] if item["document_no"] == invoice_number)
+            assert Decimal(row["outstanding"]) == expected_outstanding
+            assert row["bucket"] == expected_bucket
+            assert Decimal(row["base_outstanding"]) == expected_outstanding
+            assert Decimal(result["summary"][expected_bucket]) == expected_outstanding
+            assert result["summary_currency"] == "NIO"
+            next_page = handler.handler(
+                context=context,
+                company_id=company,
+                as_of_date=cutoff,
+                party_id=party_id,
+                page=2,
+                page_size=1,
+            )
+            assert next_page["items"] == []
+            assert next_page["summary"] == result["summary"]
+            assert next_page["total_items"] == result["total_items"]
+
+
+def test_aging_keeps_legacy_allocations_until_their_later_cancellation(app_instance):
+    """Historical aging retains legacy payment and note relations at the cutoff."""
+    from datetime import datetime, timezone
+
+    from cacao_accounting.database import ARAPLedgerEntry, DocumentTransition, Party, PaymentEntry, PaymentReference
+
+    with app_instance.app_context():
+        company = "CACAO"
+        party = Party(id="CUT-HISTORIC", code="CUT-HISTORIC", name="Historical", is_customer=True)
+        invoice = SalesInvoice(
+            company=company,
+            customer_id=party.id,
+            document_type="sales_invoice",
+            document_no="AGING-HISTORICAL",
+            posting_date=date(2026, 1, 1),
+            docstatus=1,
+            grand_total=Decimal("100"),
+            total=Decimal("100"),
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add_all([party, invoice])
+        database.session.flush()
+        cancellation_time = datetime(2026, 2, 15, tzinfo=timezone.utc)
+        period = database.session.execute(database.select(AccountingPeriod).filter_by(entity=company)).scalars().first()
+        actor = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        assert period is not None
+
+        payment = PaymentEntry(
+            company=company,
+            posting_date=date(2026, 1, 15),
+            payment_type="receive",
+            docstatus=2,
+            cancelled_at=cancellation_time,
+        )
+        database.session.add(payment)
+        database.session.flush()
+        reference = PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id=invoice.id,
+            company=company,
+            allocated_amount=Decimal("30"),
+            allocation_date=date(2026, 1, 15),
+        )
+        database.session.add(reference)
+        database.session.flush()
+        payment_effective_before_cutoff = PaymentEntry(
+            company=company,
+            posting_date=date(2026, 1, 10),
+            payment_type="receive",
+            docstatus=2,
+            cancelled_at=cancellation_time,
+        )
+        database.session.add(payment_effective_before_cutoff)
+        database.session.flush()
+        reference_effective_before_cutoff = PaymentReference(
+            payment_id=payment_effective_before_cutoff.id,
+            reference_type="sales_invoice",
+            reference_id=invoice.id,
+            company=company,
+            allocated_amount=Decimal("20"),
+            allocation_date=date(2026, 1, 10),
+        )
+        database.session.add(reference_effective_before_cutoff)
+        database.session.flush()
+
+        note = SalesInvoice(
+            company=company,
+            document_type="sales_credit_note",
+            document_no="AGING-HISTORICAL-CN",
+            customer_id=party.id,
+            posting_date=date(2026, 1, 20),
+            docstatus=2,
+            cancelled_at=cancellation_time,
+            is_return=True,
+            grand_total=Decimal("10"),
+            total=Decimal("10"),
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(note)
+        database.session.flush()
+        note_effective_before_cutoff = SalesInvoice(
+            company=company,
+            document_type="sales_credit_note",
+            document_no="AGING-HISTORICAL-CN-EARLY",
+            customer_id=party.id,
+            posting_date=date(2026, 1, 25),
+            docstatus=2,
+            cancelled_at=cancellation_time,
+            is_return=True,
+            grand_total=Decimal("5"),
+            total=Decimal("5"),
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(note_effective_before_cutoff)
+        database.session.flush()
+        database.session.add_all(
+            [
+                ARAPLedgerEntry(
+                    company=company,
+                    ledger_type="AR",
+                    party_type="customer",
+                    party_id=party.id,
+                    document_type="sales_invoice",
+                    document_id=invoice.id,
+                    document_no=invoice.document_no,
+                    posting_date=date(2026, 1, 1),
+                    event_type="opening",
+                    currency="NIO",
+                    document_amount=Decimal("100"),
+                ),
+                DocumentTransition(
+                    source_type="payment_entry",
+                    source_id=payment.id,
+                    transition_type="cancellation",
+                    company=company,
+                    posting_date=date(2026, 2, 15),
+                    accounting_period_id=period.id,
+                    actor_user_id=actor.id,
+                    reason="future effective cancellation",
+                ),
+                DocumentTransition(
+                    source_type="payment_entry",
+                    source_id=payment_effective_before_cutoff.id,
+                    transition_type="cancellation",
+                    company=company,
+                    posting_date=date(2026, 1, 10),
+                    accounting_period_id=period.id,
+                    actor_user_id=actor.id,
+                    reason="cancellation effective before cutoff",
+                ),
+                DocumentTransition(
+                    source_type="sales_credit_note",
+                    source_id=note.id,
+                    transition_type="cancellation",
+                    company=company,
+                    posting_date=date(2026, 2, 15),
+                    accounting_period_id=period.id,
+                    actor_user_id=actor.id,
+                    reason="future effective cancellation",
+                ),
+                DocumentTransition(
+                    source_type="sales_credit_note",
+                    source_id=note_effective_before_cutoff.id,
+                    transition_type="cancellation",
+                    company=company,
+                    posting_date=date(2026, 1, 25),
+                    accounting_period_id=period.id,
+                    actor_user_id=actor.id,
+                    reason="cancellation effective before cutoff",
+                ),
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    target_type="payment_entry",
+                    target_id=payment.id,
+                    target_item_id=reference.id,
+                    company=company,
+                    qty=Decimal("1"),
+                    amount=Decimal("30"),
+                    relation_type="payment_reference",
+                    status="cancelled",
+                    cancelled_at=cancellation_time,
+                ),
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    target_type="payment_entry",
+                    target_id=payment_effective_before_cutoff.id,
+                    target_item_id=reference_effective_before_cutoff.id,
+                    company=company,
+                    qty=Decimal("1"),
+                    amount=Decimal("20"),
+                    relation_type="payment_reference",
+                    status="reverted",
+                    reversed_at=cancellation_time,
+                ),
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    target_type="sales_credit_note",
+                    target_id=note.id,
+                    company=company,
+                    qty=Decimal("1"),
+                    amount=Decimal("10"),
+                    relation_type="credit_note",
+                    status="cancelled",
+                    cancelled_at=cancellation_time,
+                ),
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    target_type="sales_credit_note",
+                    target_id=note_effective_before_cutoff.id,
+                    company=company,
+                    qty=Decimal("1"),
+                    amount=Decimal("5"),
+                    relation_type="credit_note",
+                    status="reverted",
+                    reversed_at=cancellation_time,
+                ),
+            ]
+        )
+        database.session.commit()
+
+        context = QueryContext(
+            user_id="query-tool-service",
+            permissions={"receivables.reports.read"},
+            company_ids=[company],
+            is_service_principal=True,
+        )
+        before_cancel = h_receivables.get_receivables_aging.handler(
+            context=context, company_id=company, party_id=party.id, as_of_date="2026-01-31"
+        )
+        row_before = next(item for item in before_cancel["items"] if item["document_no"] == invoice.document_no)
+        assert Decimal(row_before["outstanding"]) == Decimal("60")
+        assert Decimal(before_cancel["summary"]["0_30"]) == Decimal("60")
+
+        after_cancel = h_receivables.get_receivables_aging.handler(
+            context=context, company_id=company, party_id=party.id, as_of_date="2026-02-28"
+        )
+        row_after = next(item for item in after_cancel["items"] if item["document_no"] == invoice.document_no)
+        assert Decimal(row_after["outstanding"]) == Decimal("100")
+        assert Decimal(after_cancel["summary"]["31_60"]) == Decimal("100")
+
+
+def test_aging_includes_invoice_cancelled_after_cutoff(app_instance):
+    """Retain an invoice in historical aging until its effective cancellation date."""
+    from datetime import datetime, timezone
+
+    from cacao_accounting.database import ARAPLedgerEntry, AccountingPeriod, DocumentTransition, Party
+
+    with app_instance.app_context():
+        company = "CACAO"
+        party = Party(id="CUT-CANCELLED-INVOICE", code="CUT-CANCELLED-INVOICE", name="Historical", is_customer=True)
+        invoice = SalesInvoice(
+            company=company,
+            customer_id=party.id,
+            document_type="sales_invoice",
+            document_no="AGING-CANCELLED-LATER",
+            posting_date=date(2026, 1, 1),
+            docstatus=2,
+            cancelled_at=datetime(2026, 2, 15, tzinfo=timezone.utc),
+            grand_total=Decimal("100"),
+            total=Decimal("100"),
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add_all([party, invoice])
+        database.session.flush()
+        period = database.session.execute(database.select(AccountingPeriod).filter_by(entity=company)).scalars().first()
+        actor = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        assert period is not None
+        database.session.add_all(
+            [
+                ARAPLedgerEntry(
+                    company=company,
+                    ledger_type="AR",
+                    party_type="customer",
+                    party_id=party.id,
+                    document_type="sales_invoice",
+                    document_id=invoice.id,
+                    document_no=invoice.document_no,
+                    posting_date=date(2026, 1, 1),
+                    event_type="opening",
+                    currency="NIO",
+                    document_amount=Decimal("100"),
+                ),
+                DocumentTransition(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    transition_type="cancellation",
+                    company=company,
+                    posting_date=date(2026, 2, 15),
+                    accounting_period_id=period.id,
+                    actor_user_id=actor.id,
+                    reason="future effective cancellation",
+                ),
+            ]
+        )
+        database.session.commit()
+
+        context = QueryContext(
+            user_id="query-tool-service",
+            permissions={"receivables.reports.read"},
+            company_ids=[company],
+            is_service_principal=True,
+        )
+        before_cancel = h_receivables.get_receivables_aging.handler(
+            context=context, company_id=company, party_id=party.id, as_of_date="2026-01-31"
+        )
+        assert before_cancel["total_items"] == 1
+        row = before_cancel["items"][0]
+        assert row["document_no"] == invoice.document_no
+        assert Decimal(row["outstanding"]) == Decimal("100")
+
+        after_cancel = h_receivables.get_receivables_aging.handler(
+            context=context, company_id=company, party_id=party.id, as_of_date="2026-02-28"
+        )
+        assert after_cancel["total_items"] == 0
+
+
+def test_aging_uses_effective_cancellation_date_for_reverted_relations(app_instance):
+    """Keep allocations through the effective date when relations revert earlier."""
+    from datetime import datetime, timezone
+
+    from cacao_accounting.database import ARAPLedgerEntry, DocumentTransition, Party, PaymentEntry, PaymentReference
+    from cacao_accounting.document_flow.payment import compute_outstanding_amount
+
+    with app_instance.app_context():
+        company = "CACAO"
+        executed_at = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        party = Party(id="CUT-EFFECTIVE-RELATION", code="CUT-EFFECTIVE-RELATION", name="Effective", is_customer=True)
+        invoice = SalesInvoice(
+            company=company,
+            customer_id=party.id,
+            document_type="sales_invoice",
+            document_no="AGING-EFFECTIVE-RELATION",
+            posting_date=date(2026, 1, 1),
+            docstatus=2,
+            cancelled_at=executed_at,
+            grand_total=Decimal("100"),
+            total=Decimal("100"),
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add_all([party, invoice])
+        database.session.flush()
+
+        period = database.session.execute(database.select(AccountingPeriod).filter_by(entity=company)).scalars().first()
+        actor = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        assert period is not None
+        payment = PaymentEntry(
+            company=company,
+            posting_date=date(2026, 1, 15),
+            payment_type="receive",
+            docstatus=2,
+            received_amount=Decimal("30"),
+            cancelled_at=executed_at,
+        )
+        database.session.add(payment)
+        database.session.flush()
+        reference = PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id=invoice.id,
+            company=company,
+            allocated_amount=Decimal("30"),
+            allocation_date=date(2026, 1, 15),
+        )
+        note = SalesInvoice(
+            company=company,
+            document_type="sales_credit_note",
+            document_no="AGING-EFFECTIVE-NOTE",
+            customer_id=party.id,
+            posting_date=date(2026, 1, 20),
+            docstatus=2,
+            cancelled_at=executed_at,
+            is_return=True,
+            grand_total=Decimal("10"),
+            total=Decimal("10"),
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add_all([reference, note])
+        database.session.flush()
+        database.session.add_all(
+            [
+                ARAPLedgerEntry(
+                    company=company,
+                    ledger_type="AR",
+                    party_type="customer",
+                    party_id=party.id,
+                    document_type="sales_invoice",
+                    document_id=invoice.id,
+                    document_no=invoice.document_no,
+                    posting_date=date(2026, 1, 1),
+                    event_type="opening",
+                    currency="NIO",
+                    document_amount=Decimal("100"),
+                ),
+                DocumentTransition(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    transition_type="cancellation",
+                    company=company,
+                    posting_date=date(2026, 2, 20),
+                    accounting_period_id=period.id,
+                    actor_user_id=actor.id,
+                    reason="future effective cancellation",
+                ),
+                DocumentTransition(
+                    source_type="payment_entry",
+                    source_id=payment.id,
+                    transition_type="cancellation",
+                    company=company,
+                    posting_date=date(2026, 2, 20),
+                    accounting_period_id=period.id,
+                    actor_user_id=actor.id,
+                    reason="future effective cancellation",
+                ),
+                DocumentTransition(
+                    source_type="sales_credit_note",
+                    source_id=note.id,
+                    transition_type="cancellation",
+                    company=company,
+                    posting_date=date(2026, 2, 20),
+                    accounting_period_id=period.id,
+                    actor_user_id=actor.id,
+                    reason="future effective cancellation",
+                ),
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    target_type="payment_entry",
+                    target_id=payment.id,
+                    target_item_id=reference.id,
+                    company=company,
+                    qty=Decimal("1"),
+                    amount=Decimal("30"),
+                    relation_type="payment_reference",
+                    status="reverted",
+                    reversed_at=executed_at,
+                    reversal_reason="payment_cancelled",
+                ),
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    target_type="sales_credit_note",
+                    target_id=note.id,
+                    company=company,
+                    qty=Decimal("1"),
+                    amount=Decimal("5"),
+                    relation_type="credit_note",
+                    revision=1,
+                    status="reverted",
+                    reversed_at=datetime(2026, 1, 25, tzinfo=timezone.utc),
+                    reversal_reason="reversal_document_revised",
+                ),
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    target_type="sales_credit_note",
+                    target_id=note.id,
+                    company=company,
+                    qty=Decimal("1"),
+                    amount=Decimal("10"),
+                    relation_type="credit_note",
+                    revision=2,
+                    status="reverted",
+                    reversed_at=executed_at,
+                    reversal_reason="target_cancelled",
+                ),
+            ]
+        )
+        database.session.commit()
+
+        context = QueryContext(
+            user_id="query-tool-service",
+            permissions={"receivables.reports.read"},
+            company_ids=[company],
+            is_service_principal=True,
+        )
+        before_effective_date = h_receivables.get_receivables_aging.handler(
+            context=context, company_id=company, party_id=party.id, as_of_date="2026-02-10"
+        )
+        row_before = next(row for row in before_effective_date["items"] if row["document_no"] == invoice.document_no)
+        assert Decimal(row_before["outstanding"]) == Decimal("60")
+
+        after_effective_date = h_receivables.get_receivables_aging.handler(
+            context=context, company_id=company, party_id=party.id, as_of_date="2026-02-28"
+        )
+        assert after_effective_date["total_items"] == 0
+        assert compute_outstanding_amount(invoice, as_of_date=date(2026, 2, 28)) == Decimal("100")
+
+
+def test_subledger_paid_matches_cutoff_allocations_without_arap_opening(app_instance):
+    """Keep paid and outstanding amounts aligned for legacy-only invoices."""
+    from datetime import datetime, timezone
+
+    from cacao_accounting.database import Party, PaymentEntry, PaymentReference
+    from cacao_accounting.reportes.services import SubledgerFilters, get_ar_ap_subledger
+
+    with app_instance.app_context():
+        company = "CACAO"
+        party = Party(id="CUT-LEGACY-PAID", code="CUT-LEGACY-PAID", name="Legacy", is_customer=True)
+        invoice = SalesInvoice(
+            company=company,
+            customer_id=party.id,
+            document_type="sales_invoice",
+            document_no="AGING-LEGACY-ONLY",
+            posting_date=date(2026, 1, 1),
+            docstatus=1,
+            grand_total=Decimal("100"),
+            total=Decimal("100"),
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add_all([party, invoice])
+        database.session.flush()
+        cancellation_time = datetime(2026, 2, 15, tzinfo=timezone.utc)
+        payment = PaymentEntry(
+            company=company,
+            posting_date=date(2026, 1, 15),
+            payment_type="receive",
+            docstatus=2,
+            cancelled_at=cancellation_time,
+        )
+        database.session.add(payment)
+        database.session.flush()
+        reference = PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id=invoice.id,
+            company=company,
+            allocated_amount=Decimal("30"),
+            allocation_date=date(2026, 1, 15),
+        )
+        database.session.add(reference)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="sales_invoice",
+                source_id=invoice.id,
+                target_type="payment_entry",
+                target_id=payment.id,
+                target_item_id=reference.id,
+                company=company,
+                qty=Decimal("1"),
+                amount=Decimal("30"),
+                relation_type="payment_reference",
+                status="cancelled",
+                cancelled_at=cancellation_time,
+            )
+        )
+        database.session.commit()
+
+        report = get_ar_ap_subledger(
+            SubledgerFilters(company=company, party_type="customer", party_id=party.id, as_of_date=date(2026, 1, 31))
+        )
+        row = next(row.values for row in report.rows if row.values["document_no"] == invoice.document_no)
+        assert Decimal(row["paid_amount"]) == Decimal("30")
+        assert Decimal(row["outstanding_amount"]) == Decimal("70")
+
+
+@pytest.mark.parametrize(
+    "module_name,handler,model,party_field,party_name_field,party_type",
+    [
+        (
+            "receivables",
+            h_receivables.get_receivables_aging,
+            SalesInvoice,
+            "customer_id",
+            "customer_name",
+            "customer",
+        ),
+        (
+            "payables",
+            h_payables.get_payables_aging,
+            PurchaseInvoice,
+            "supplier_id",
+            "supplier_name",
+            "supplier",
+        ),
+    ],
+)
+def test_aging_maps_duplicate_document_numbers_by_record_id(
+    app_instance, module_name, handler, model, party_field, party_name_field, party_type
+):
+    """Duplicate human document numbers remain distinct and base totals preserve FX."""
+    with app_instance.app_context():
+        company = "CACAO"
+        party_id = f"DUP-{module_name}"
+        party_fields = {party_field: party_id, party_name_field: "Parte de prueba"}
+        document_no = f"DUP-AGING-{module_name}"
+        database.session.add_all(
+            [
+                model(
+                    document_no=document_no,
+                    company=company,
+                    posting_date=date(2026, 1, 1),
+                    docstatus=1,
+                    total=Decimal("100"),
+                    grand_total=Decimal("100"),
+                    base_total=Decimal("100"),
+                    base_grand_total=Decimal("100"),
+                    transaction_currency="NIO",
+                    base_currency="NIO",
+                    exchange_rate=Decimal("1"),
+                    status="unpaid",
+                    **party_fields,
+                ),
+                model(
+                    document_no=document_no,
+                    company=company,
+                    posting_date=date(2026, 1, 1),
+                    docstatus=1,
+                    total=Decimal("50"),
+                    grand_total=Decimal("50"),
+                    base_total=Decimal("1800"),
+                    base_grand_total=Decimal("1800"),
+                    transaction_currency="USD",
+                    base_currency="NIO",
+                    exchange_rate=Decimal("36"),
+                    status="unpaid",
+                    **party_fields,
+                ),
+            ]
+        )
+        database.session.commit()
+
+        context = QueryContext(
+            user_id="query-tool-service",
+            permissions={f"{module_name}.reports.read"},
+            company_ids=[company],
+            is_service_principal=True,
+        )
+        result = handler.handler(
+            context=context,
+            company_id=company,
+            as_of_date="2026-01-31",
+            party_id=party_id,
+        )
+
+        rows = result["items"]
+        assert len(rows) == 2
+        assert sorted(
+            (row["total"], row["outstanding"], row["base_outstanding"], row["transaction_currency"]) for row in rows
+        ) == [("100.0000", "100.0000", "100.0000", "NIO"), ("50.0000", "50.0000", "1800.0000", "USD")]
+        assert Decimal(result["summary"]["0_30"]) == Decimal("1900")
+        assert result["summary_currency"] == "NIO"

@@ -28,14 +28,12 @@ from cacao_accounting.database import (
     CompanyDefaultAccount,
     CompanyParty,
     CostCenter,
-    DocumentRelation,
     DocumentTransition,
     Entity,
     ExchangeRate,
     FiscalYear,
     GLEntry,
     Item,
-    PaymentReference,
     PaymentEntry,
     PaymentTerms,
     Party,
@@ -56,6 +54,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.document_flow.payment import _document_active_at_cutoff
 from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, exclude_cancelled_stock_entries, primary_ledger_id
 
 
@@ -201,6 +200,7 @@ class ReportRow:
     """Fila generica de reporte."""
 
     values: dict[str, Any]
+    source_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -298,36 +298,15 @@ def _normalize_account_classification(account: Accounts | None) -> str:
     return _CLASSIFICATION_ALIASES.get(raw_classification, raw_classification)
 
 
-def _payment_allocations(reference_type: str, reference_id: str, company: str, as_of_date: date | None) -> Decimal:
-    query = (
-        select(PaymentReference)
-        .outerjoin(
-            DocumentRelation,
-            and_(
-                DocumentRelation.target_type == "payment_entry",
-                DocumentRelation.target_item_id == PaymentReference.id,
-            ),
-        )
-        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
-        .where(
-            PaymentReference.reference_type == reference_type,
-            PaymentReference.reference_id == reference_id,
-            PaymentEntry.docstatus == 1,
-            PaymentEntry.company == company,
-            or_(DocumentRelation.company.is_(None), DocumentRelation.company == company),
-            or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active"),
-        )
-        .distinct()
-    )
-    if as_of_date is not None:
-        query = query.where(
-            or_(
-                PaymentReference.allocation_date.is_(None),
-                PaymentReference.allocation_date <= as_of_date,
-            )
-        )
+def _payment_allocations(document: Any, as_of_date: date | None) -> Decimal:
+    """Sum legacy allocations that were effective at the requested cutoff."""
+    from cacao_accounting.document_flow.payment import _document_payment_references
+
     return sum(
-        (_decimal_value(reference.allocated_amount) for reference in database.session.execute(query).scalars().all()),
+        (
+            _decimal_value(reference.allocated_amount)
+            for reference in _document_payment_references(document, as_of_date=as_of_date)
+        ),
         Decimal("0"),
     )
 
@@ -354,14 +333,16 @@ def _subledger_document_query(filters: SubledgerFilters, effective_as_of: date) 
     if filters.party_type == "customer":
         document_type = "sales_invoice"
         document_model = SalesInvoice
-        query = select(SalesInvoice).filter_by(company=filters.company, docstatus=1)
+        query = select(SalesInvoice).filter_by(company=filters.company)
+        query = query.where(_document_active_at_cutoff(SalesInvoice, effective_as_of))
         query = query.where(or_(SalesInvoice.reversal_of.is_(None), SalesInvoice.reversal_of == ""))
         if filters.party_id:
             query = query.filter_by(customer_id=filters.party_id)
     elif filters.party_type == "supplier":
         document_type = "purchase_invoice"
         document_model = PurchaseInvoice
-        query = select(PurchaseInvoice).filter_by(company=filters.company, docstatus=1)
+        query = select(PurchaseInvoice).filter_by(company=filters.company)
+        query = query.where(_document_active_at_cutoff(PurchaseInvoice, effective_as_of))
         query = query.where(or_(PurchaseInvoice.reversal_of.is_(None), PurchaseInvoice.reversal_of == ""))
         if filters.party_id:
             query = query.filter_by(supplier_id=filters.party_id)
@@ -413,20 +394,31 @@ def _subledger_document_amounts(
         .limit(1)
     ).scalar_one_or_none()
     if ledger_balance is not None and opening_exists is not None:
-        from cacao_accounting.document_flow.payment import _compute_allocated_notes_amount
+        from cacao_accounting.document_flow.payment import _document_payment_references
 
-        notes = _compute_allocated_notes_amount(document, as_of_date=effective_as_of)
-        if getattr(document, "is_return", False):
-            # Las devoluciones posteadas al subledger abren con importe
-            # negativo; se presentan como saldo vivo negativo para
-            # compensar el saldo del tercero en el corte del subledger.
-            outstanding = abs(_decimal_value(ledger_balance)) - notes
-        else:
-            outstanding = max(_decimal_value(ledger_balance) - notes, Decimal("0"))
-        paid = max(original_amount - _decimal_value(ledger_balance), Decimal("0"))
+        represented_payment_ids = set(
+            database.session.execute(
+                select(ARAPLedgerEntry.reference_id).where(
+                    ARAPLedgerEntry.document_type == document_type,
+                    ARAPLedgerEntry.document_id == str(document.id),
+                    ARAPLedgerEntry.event_type == "allocation",
+                    ARAPLedgerEntry.posting_date <= effective_as_of,
+                )
+            ).scalars()
+        )
+        pending_references = [
+            reference
+            for reference in _document_payment_references(document, as_of_date=effective_as_of)
+            if str(reference.payment_id) not in represented_payment_ids
+        ]
+        pending_amount = sum((_decimal_value(reference.allocated_amount) for reference in pending_references), Decimal("0"))
+        # Keep the report aligned with the document balance helper, which also
+        # accounts for effective legacy allocations not represented in AR/AP.
+        outstanding = compute_outstanding_amount(document, as_of_date=effective_as_of)
+        paid = max(original_amount - _decimal_value(ledger_balance) + pending_amount, Decimal("0"))
         return paid, outstanding
     return (
-        _payment_allocations(document_type, document.id, company, effective_as_of),
+        _payment_allocations(document, effective_as_of),
         compute_outstanding_amount(document, as_of_date=effective_as_of),
     )
 
@@ -463,7 +455,8 @@ def _subledger_row(
                 "outstanding_amount": outstanding,
                 "transaction_currency": document.transaction_currency,
                 "currency": document.base_currency or document.transaction_currency,
-            }
+            },
+            source_id=str(document.id),
         ),
         original,
         paid,
@@ -951,7 +944,7 @@ def get_aging_report(filters: AgingFilters) -> AgingReport:
         values["due_date"] = due_date
         values["days"] = days
         values["bucket"] = bucket
-        rows.append(ReportRow(values=values))
+        rows.append(ReportRow(values=values, source_id=row.source_id))
     return AgingReport(rows=rows, totals=bucket_totals)
 
 

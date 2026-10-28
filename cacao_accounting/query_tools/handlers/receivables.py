@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from sqlalchemy import func
@@ -16,6 +17,7 @@ from cacao_accounting.database import (
 from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
+from cacao_accounting.query_tools.handlers.aging import AgingQuery, get_aging_result
 from cacao_accounting.query_tools.pagination import (
     PaginatedResult,
     paginate,
@@ -59,56 +61,17 @@ def get_receivables_aging(
         required_module="sales",
         company_id=company_id,
     )
-
-    _page, _page_size = paginate(page, page_size)
-
-    query = (
-        database.select(SalesInvoice)
-        .where(SalesInvoice.company == company_id)
-        .where(SalesInvoice.docstatus == 1)
-        .where(SalesInvoice.posting_date <= as_of_date)
-    )
-
-    if party_id:
-        query = query.where(SalesInvoice.customer_id == party_id)
-
-    total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
-
-    rows = (
-        database.session.execute(
-            query.order_by(SalesInvoice.customer_id, SalesInvoice.posting_date)
-            .offset((_page - 1) * _page_size)
-            .limit(_page_size)
+    cutoff_date = date.fromisoformat(as_of_date)
+    return get_aging_result(
+        AgingQuery(
+            company_id=company_id,
+            party_type="customer",
+            party_id=party_id,
+            as_of_date=cutoff_date,
+            page=page,
+            page_size=page_size,
         )
-        .scalars()
-        .all()
     )
-
-    items = []
-    for inv in rows:
-        outstanding = compute_outstanding_amount(inv)
-        items.append(
-            {
-                "document_no": inv.document_no,
-                "customer_id": inv.customer_id,
-                "customer_name": inv.customer_name,
-                "posting_date": inv.posting_date.isoformat() if inv.posting_date else None,
-                "total": str(inv.total),
-                "outstanding": str(outstanding),
-                "transaction_currency": inv.transaction_currency,
-                "base_currency": inv.base_currency,
-                "exchange_rate": str(inv.exchange_rate) if inv.exchange_rate else None,
-                "status": inv.status,
-            }
-        )
-
-    result = PaginatedResult(
-        page=_page,
-        page_size=_page_size,
-        total_items=total,
-        items=items,
-    )
-    return result.to_dict()
 
 
 @query_tool(
