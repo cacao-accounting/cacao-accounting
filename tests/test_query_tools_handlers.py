@@ -37,6 +37,7 @@ import cacao_accounting.query_tools.handlers.audit_trail as h_audit_trail
 import cacao_accounting.query_tools.handlers.banking as h_banking
 import cacao_accounting.query_tools.handlers.companies as h_companies
 import cacao_accounting.query_tools.handlers.documents as h_documents
+import cacao_accounting.query_tools.handlers.operational as h_operational
 import cacao_accounting.query_tools.handlers.payables as h_payables
 import cacao_accounting.query_tools.handlers.receivables as h_receivables
 
@@ -147,6 +148,40 @@ def test_list_companies_handler(app_instance):
         ctx_restricted = QueryContext(user_id=user.id, company_ids=["nonexistent"])
         res_restricted = h_companies.list_companies.handler(context=ctx_restricted, page=1, page_size=10)
         assert res_restricted["total_items"] == 0
+
+
+def test_operational_paginated_handlers_include_provenance(app_instance):
+    """Los seis handlers operativos devuelven completitud según el contrato paginado."""
+    with app_instance.app_context():
+        context = QueryContext(
+            user_id="query-tool-service",
+            company_ids=["CACAO"],
+            permissions={
+                "banking.reports.read",
+                "documents.reports.read",
+                "audit.reports.read",
+                "accounting.reports.read",
+            },
+            is_service_principal=True,
+        )
+        handlers = (
+            (h_operational.search_payments, {}),
+            (h_operational.get_unapplied_payments, {}),
+            (h_operational.get_payment_applications, {"payment_id": "missing-payment"}),
+            (h_operational.search_document_relations, {}),
+            (h_operational.search_audit_events, {}),
+            (h_operational.get_revaluations, {}),
+        )
+
+        for query_tool, parameters in handlers:
+            result = query_tool.handler(context=context, company_id="CACAO", **parameters)
+            completeness = result["provenance"]["completeness"]
+
+            assert completeness["page"] == result["page"]
+            assert completeness["page_size"] == result["page_size"]
+            assert completeness["truncated"] is result["has_next_page"]
+            assert completeness["returned_items"] == len(result["items"])
+            assert completeness["total_items"] == result["total_items"]
 
 
 def test_list_accounting_periods_handler(app_instance):
