@@ -442,3 +442,49 @@ def test_receivables_handlers(app_instance):
             party_id="CUST-TEST",
         )
         assert res_open["total_items"] > 0
+
+
+@pytest.mark.parametrize("module_name", ["receivables", "payables"])
+def test_aging_passes_cutoff_to_outstanding(app_instance, monkeypatch, module_name):
+    """El aging calcula el saldo al corte solicitado y no al estado actual."""
+    module = h_receivables if module_name == "receivables" else h_payables
+    handler = module.get_receivables_aging if module_name == "receivables" else module.get_payables_aging
+    permission = f"{module_name}.reports.read"
+    captured: list[date | None] = []
+
+    def fake_outstanding(document, as_of_date=None, **kwargs):
+        captured.append(as_of_date)
+        return Decimal("100.00")
+
+    monkeypatch.setattr(module, "compute_outstanding_amount", fake_outstanding)
+    with app_instance.app_context():
+        user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        ctx = QueryContext(user_id=user.id, permissions={permission}, company_ids=["CACAO"])
+        model = SalesInvoice if module_name == "receivables" else PurchaseInvoice
+        party_field = (
+            {"customer_id": "CUST-CUT", "customer_name": "C"}
+            if module_name == "receivables"
+            else {
+                "supplier_id": "SUP-CUT",
+                "supplier_name": "S",
+            }
+        )
+        database.session.add(
+            model(
+                document_no=f"CUT-{module_name}",
+                company="CACAO",
+                posting_date=date(2026, 1, 1),
+                docstatus=1,
+                grand_total=Decimal("100.00"),
+                total=Decimal("100.00"),
+                outstanding_amount=Decimal("0.00"),
+                transaction_currency="NIO",
+                base_currency="NIO",
+                status="paid",
+                **party_field,
+            )
+        )
+        database.session.commit()
+        result = handler.handler(context=ctx, company_id="CACAO", as_of_date="2026-01-31")
+        assert any(i["document_no"] == f"CUT-{module_name}" and i["outstanding"] == "100.00" for i in result["items"])
+        assert captured and all(value == date(2026, 1, 31) for value in captured)

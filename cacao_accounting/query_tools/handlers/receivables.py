@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from sqlalchemy import func
@@ -86,7 +87,7 @@ def get_receivables_aging(
 
     items = []
     for inv in rows:
-        outstanding = compute_outstanding_amount(inv)
+        outstanding = compute_outstanding_amount(inv, date.fromisoformat(str(as_of_date)[:10]))
         items.append(
             {
                 "document_no": inv.document_no,
