@@ -446,9 +446,13 @@ def lista_impuestos():
     """Administra impuestos y cargos de compra/venta."""
     _require_system_admin()
     if request.method == "POST":
+        rate = _decimal_form("rate")
+        if not rate.is_finite():
+            flash(_("La tasa debe ser finita."), "danger")
+            return redirect(url_for("admin.lista_impuestos"))
         tax = Tax(
             name=request.form.get("name") or "",
-            rate=_decimal_form("rate"),
+            rate=rate,
             tax_type=request.form.get("tax_type") or "percentage",
             applies_to=request.form.get("applies_to") or "both",
             account_id=request.form.get("account_id") or None,

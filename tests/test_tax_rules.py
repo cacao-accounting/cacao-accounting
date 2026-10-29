@@ -155,6 +155,53 @@ def test_purchase_tax_template_validation_uses_template_type_and_applies_to(app_
         _validate_purchase_tax_template("cacao", selling.id, "NIO")
 
 
+@pytest.mark.parametrize("rate", ["NaN", "sNaN", "Infinity", "-Infinity"])
+def test_admin_tax_catalog_rejects_non_finite_rates(client, app_ctx: Flask, rate: str) -> None:
+    """The legacy tax catalog must reject non-finite rates before persistence."""
+    from cacao_accounting.database import Tax, database
+
+    _login_admin(client)
+    response = client.post(
+        "/settings/taxes",
+        data={
+            "name": f"Invalid rate {rate}",
+            "rate": rate,
+            "tax_type": "percentage",
+            "applies_to": "sales",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "La tasa debe ser finita.".encode() in response.data
+    assert database.session.execute(database.select(Tax).filter_by(name=f"Invalid rate {rate}")).scalar_one_or_none() is None
+
+
+@pytest.mark.parametrize("is_inclusive", [False, True])
+def test_calculate_taxes_rejects_historical_non_finite_legacy_rate(app_ctx: Flask, is_inclusive: bool) -> None:
+    """Legacy tax rows with non-finite rates fail with TaxPricingError."""
+    from cacao_accounting.database import Tax, TaxTemplate, TaxTemplateItem, database
+    from cacao_accounting.tax_pricing_service import TaxPricingError, calculate_taxes
+
+    tax = Tax(name="Tasa heredada infinita", rate=Decimal("Infinity"), tax_type="percentage", applies_to="sales")
+    template = TaxTemplate(name="Plantilla ventas", company="cacao", template_type="selling", is_active=True)
+    database.session.add_all([tax, template])
+    database.session.flush()
+    database.session.add(
+        TaxTemplateItem(
+            tax_template_id=template.id,
+            tax_id=tax.id,
+            sequence=1,
+            behavior="additive",
+            is_inclusive=is_inclusive,
+        )
+    )
+    database.session.commit()
+
+    with pytest.raises(TaxPricingError, match="La tasa debe ser finita"):
+        calculate_taxes(SimpleNamespace(company="cacao", _tax_items=[SimpleNamespace(amount=Decimal("100"))]), template.id)
+
+
 def test_tax_template_extracts_percentage_tax_included_in_price(app_ctx: Flask) -> None:
     """A 15% inclusive template extracts 15 from a displayed total of 115."""
     from cacao_accounting.database import Tax, TaxTemplate, TaxTemplateItem, database

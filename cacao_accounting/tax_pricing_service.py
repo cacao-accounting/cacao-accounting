@@ -99,6 +99,14 @@ def _document_items_total(document: Any) -> Decimal:
     return total
 
 
+def _finite_tax_rate(tax: Tax) -> Decimal:
+    """Return a finite rate or raise a controlled configuration error."""
+    rate = _decimal_value(tax.rate)
+    if not rate.is_finite():
+        raise TaxPricingError(_("La tasa debe ser finita."))
+    return rate
+
+
 def _calculate_template_item_tax(
     template_item,
     base_amount,
@@ -112,7 +120,7 @@ def _calculate_template_item_tax(
         return None
     calculation_base = template_item.calculation_base or "net_document"
     taxable_base = running_total if calculation_base == "previous_total" else base_amount
-    rate = _decimal_value(tax.rate)
+    rate = _finite_tax_rate(tax)
     if tax.tax_type == "fixed":
         amount = rate
     elif template_item.is_inclusive:
@@ -148,15 +156,12 @@ def _inclusive_tax_bases(items: list[TaxTemplateItem]) -> tuple[dict[str, Decima
         tax = database.session.get(Tax, template_item.tax_id)
         if not tax or not tax.is_active:
             continue
+        rate = _finite_tax_rate(tax)
         calculation_base = template_item.calculation_base or "net_document"
         if tax.tax_type == "percentage":
-            inclusive_rates_by_base[calculation_base] = inclusive_rates_by_base.get(
-                calculation_base, Decimal("0")
-            ) + _decimal_value(tax.rate)
+            inclusive_rates_by_base[calculation_base] = inclusive_rates_by_base.get(calculation_base, Decimal("0")) + rate
         elif tax.tax_type == "fixed":
-            inclusive_fixed_by_base[calculation_base] = inclusive_fixed_by_base.get(
-                calculation_base, Decimal("0")
-            ) + _decimal_value(tax.rate)
+            inclusive_fixed_by_base[calculation_base] = inclusive_fixed_by_base.get(calculation_base, Decimal("0")) + rate
     return inclusive_rates_by_base, inclusive_fixed_by_base
 
 

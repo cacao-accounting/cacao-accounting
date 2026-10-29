@@ -2175,6 +2175,9 @@ msgstr "Price of item created successfully."
 msgid "El precio debe ser finito."
 msgstr "Price must be finite."
 
+msgid "La tasa debe ser finita."
+msgstr "Tax rate must be finite."
+
 #: cacao_accounting/admin/routes.py:906
 #: cacao_accounting/admin/templates/admin/item_prices.html:3
 msgid "Precios por Item"
