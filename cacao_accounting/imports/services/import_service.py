@@ -293,7 +293,7 @@ class ImportService:
         self._validate_document_period(doc_obj, batch)
         adapter.persist_document(doc_obj)
         database.session.commit()
-        return 1, 0
+        return len(rows), 0
 
     def _validate_document_period(self, doc_obj: Any, batch: Any) -> None:
         """Valida que el periodo contable esté abierto para el documento."""
@@ -375,7 +375,7 @@ class ImportService:
                 success_count += s
                 error_count += e
             except (ArithmeticError, ValueError, SQLAlchemyError) as exc:
-                error_count = self._handle_document_error(batch_id, batch, ref, exc, error_count)
+                error_count = self._handle_document_error(batch_id, batch, ref, exc, error_count, len(rows))
 
             self._update_batch_progress(batch, batch_id, success_count, error_count)
 
@@ -393,10 +393,12 @@ class ImportService:
             return True
         return False
 
-    def _handle_document_error(self, batch_id: str, batch: Any, ref: str, exc: Exception, error_count: int) -> int:
+    def _handle_document_error(
+        self, batch_id: str, batch: Any, ref: str, exc: Exception, error_count: int, row_count: int
+    ) -> int:
         """Maneja error en procesamiento de documento individual."""
         database.session.rollback()
-        error_count += 1
+        error_count += row_count
         err_record = ImportBatchError(batch_id=batch_id, document_ref=ref, error_type="IMPORT_ERROR", message=str(exc))
         database.session.add(err_record)
         database.session.commit()

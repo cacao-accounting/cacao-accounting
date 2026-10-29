@@ -152,6 +152,50 @@ def test_validation_arithmetic_error_finishes_batch(tmp_path, monkeypatch):
         assert error.error_type == "SYSTEM_ERROR"
 
 
+def test_execution_progress_counts_source_rows_for_grouped_documents(tmp_path):
+    """El progreso y los resultados usan filas aun cuando varios renglones formen un documento."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        database.create_all()
+        csv_file = tmp_path / "grouped_execution.csv"
+        csv_file.write_text("document_ref,value\n", encoding="utf-8")
+        batch = ImportBatch(
+            id=str(ULID()),
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            source_format="csv",
+            source_path=str(csv_file),
+            import_status=4,
+            total_rows=4,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        class MixedResultAdapter:
+            def build_document(self, rows, _context):
+                if rows[0]["document_ref"] == "BAD":
+                    raise ValueError("invalid grouped document")
+                return {"posting_date": None}
+
+            def persist_document(self, _document):
+                return None
+
+        docs = {
+            "GOOD": [{"document_ref": "GOOD"}, {"document_ref": "GOOD"}],
+            "BAD": [{"document_ref": "BAD"}, {"document_ref": "BAD"}],
+        }
+        service = ImportService()
+        success_rows, error_rows = service._process_all_documents(batch, batch.id, MixedResultAdapter(), docs, {})
+        service._finalize_execution(batch, batch.id, success_rows, error_rows)
+
+        updated_batch = database.session.get(ImportBatch, batch.id)
+        error = ImportBatchError.query.filter_by(batch_id=batch.id, document_ref="BAD").one()
+        assert updated_batch.success_rows == 2
+        assert updated_batch.error_rows == 2
+        assert updated_batch.processed_rows == 4
+        assert error.error_type == "IMPORT_ERROR"
+
+
 def test_import_service_forbidden_columns(tmp_path):
     app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
     with app.app_context():
