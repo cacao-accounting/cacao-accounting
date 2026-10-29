@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 
 from cacao_accounting.database import DocumentRelation, database
 from cacao_accounting.reportes.documentos import get_document_details, get_document_lines, get_document_status
@@ -59,11 +59,11 @@ def get_document_flow(
 
     query = database.select(DocumentRelation).where(
         DocumentRelation.company == company_id,
-        (DocumentRelation.source_id == document_id) | (DocumentRelation.target_id == document_id),
+        or_(
+            and_(DocumentRelation.source_type == document_type, DocumentRelation.source_id == document_id),
+            and_(DocumentRelation.target_type == document_type, DocumentRelation.target_id == document_id),
+        ),
     )
-
-    if document_type:
-        query = query.where((DocumentRelation.source_type == document_type) | (DocumentRelation.target_type == document_type))
 
     total = database.session.execute(database.select(func.count()).select_from(query.subquery())).scalar() or 0
 

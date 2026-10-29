@@ -431,6 +431,16 @@ def test_get_document_flow_handler(app_instance):
         assert res["total_items"] > 0
         assert res["items"][0]["source_id"] == "PO-001"
 
+        related = h_documents.get_related_documents.handler(
+            context=ctx,
+            company_id="CACAO",
+            document_type="purchase_order",
+            document_id="PO-001",
+            page=1,
+            page_size=10,
+        )
+        assert related["items"] == res["items"]
+
 
 def test_payables_handlers(app_instance):
     with app_instance.app_context():
@@ -1674,3 +1684,43 @@ def test_report_result_paginates_full_report_rows():
     result = _report_result(report, "CACAO", SimpleNamespace(page=2, page_size=1))
 
     assert result["items"] == [{"document_no": "MOV-002"}]
+
+
+def test_get_document_flow_matches_document_type_to_matching_id(app_instance):
+    """A matching ID and type must belong to the same relation endpoint."""
+    with app_instance.app_context():
+        user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        context = QueryContext(user_id=user.id, permissions={"documents.reports.read"}, company_ids=["CACAO"])
+        database.session.add_all(
+            [
+                DocumentRelation(
+                    source_type="purchase_order",
+                    source_id="PO-RELATED-QT",
+                    target_type="sales_invoice",
+                    target_id="SINV-RELATED-QT",
+                    relation_type="reference",
+                    qty=Decimal("1"),
+                    company="CACAO",
+                ),
+                DocumentRelation(
+                    source_type="purchase_order",
+                    source_id="SINV-RELATED-QT",
+                    target_type="sales_invoice",
+                    target_id="SINV-UNRELATED-QT",
+                    relation_type="reference",
+                    qty=Decimal("1"),
+                    company="CACAO",
+                ),
+            ]
+        )
+        database.session.commit()
+
+        result = h_documents.get_document_flow.handler(
+            context=context,
+            company_id="CACAO",
+            document_type="sales_invoice",
+            document_id="SINV-RELATED-QT",
+        )
+
+        assert result["total_items"] == 1
+        assert result["items"][0]["target_id"] == "SINV-RELATED-QT"
