@@ -296,6 +296,31 @@ def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
     assert Decimal(str(sections["sales"]["tables"]["top_customers"][0]["total"])) == Decimal("800")
 
 
+def test_analytics_kpis_exclude_fiscal_year_closing_entries(app):
+    """El cierre fiscal no debe netear los movimientos operativos del KPI."""
+    from cacao_accounting.reportes.analytics import get_kpi_snapshot
+
+    with app.app_context():
+        database.session.get(Accounts, "ACC-INCOME-ES").classification = "Income"
+        database.session.get(Accounts, "ACC-EXP-ES").classification = "Expense"
+        closing_entries = [
+            _gl("GL-KPI-CLOSE-INCOME", "ACC-INCOME-EN", debit=300, credit=0),
+            _gl("GL-KPI-CLOSE-EXPENSE", "ACC-EXP-EN", debit=0, credit=50),
+            _gl("GL-KPI-CLOSE-COST", "ACC-COST", debit=0, credit=20),
+        ]
+        for entry in closing_entries:
+            entry.is_fiscal_year_closing = True
+        database.session.add_all(closing_entries)
+        database.session.commit()
+
+        result = get_kpi_snapshot("COMP", date(2024, 1, 1), date(2024, 1, 31))
+
+        assert result["metrics"]["income"] == Decimal("300")
+        assert result["metrics"]["expenses"] == Decimal("80")
+        assert result["metrics"]["cost"] == Decimal("20")
+        assert result["metrics"]["net_income"] == Decimal("200")
+
+
 def test_analytics_currency_conversion_uses_latest_prior_rate(app):
     """Analytics debe convertir con la última tasa disponible antes de la fecha."""
     from cacao_accounting.reportes.analytics import _convert_to_ledger_currency

@@ -121,6 +121,7 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
             GLEntry.posting_date <= end,
             GLEntry.is_cancelled.is_(False),
             GLEntry.is_reversal.is_(False),
+            GLEntry.is_fiscal_year_closing.is_(False),
         )
     )
     effective_ledger = ledger_id or primary_ledger_id(company)
