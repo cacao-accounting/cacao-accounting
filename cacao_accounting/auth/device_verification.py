@@ -31,8 +31,15 @@ OTP_LENGTH = 6
 
 
 def _now_utc() -> datetime:
-    """Retorna la hora UTC actual como datetime naive para compatibilidad con SQLite."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Return the current UTC time with timezone information preserved."""
+    return datetime.now(timezone.utc)
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normalize database timestamps to aware UTC for cross-database comparisons."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def generar_otp(user_id: str, purpose: str = "device_verification") -> str:
@@ -82,7 +89,7 @@ def validar_otp(user_id: str, code: str, purpose: str = "device_verification") -
     if registro is None:
         return False
 
-    if registro.expires_at < now:
+    if _as_utc(registro.expires_at) < now:
         registro.consumed = True
         database.session.flush()
         return False
@@ -131,7 +138,7 @@ def verificar_cookie_dispositivo(user_id: str, token: str) -> bool:
     registro = database.session.scalar(select(RecognizedDevice).filter_by(user_id=user_id, token=token))
     if registro is None:
         return False
-    if registro.expires_at < now:
+    if _as_utc(registro.expires_at) < now:
         return False
     return True
 
@@ -184,7 +191,7 @@ def validar_token_recuperacion(token: str, consumir: bool = True) -> User | None
     registro = database.session.scalar(select(PasswordResetToken).filter_by(token=token, consumed=False))
     if registro is None:
         return None
-    if registro.expires_at < now:
+    if _as_utc(registro.expires_at) < now:
         registro.consumed = True
         database.session.flush()
         return None

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 """Pruebas unitarias para verificación de dispositivos y OTP."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from argon2 import PasswordHasher
@@ -105,6 +105,16 @@ class TestValidarOtp:
             code = generar_otp(user)
             assert validar_otp(user, code) is True
 
+    def test_valid_code_accepts_timezone_aware_expiration(self, app, user):
+        """OTP expiry comparisons normalize timestamps returned with a timezone."""
+        with app.app_context():
+            code = generar_otp(user)
+            otp = database.session.scalar(select(OtpVerification).filter_by(user_id=user, consumed=False))
+            otp.expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+            database.session.flush()
+
+            assert validar_otp(user, code) is True
+
     def test_invalid_code_returns_false(self, app, user):
         with app.app_context():
             generar_otp(user)
@@ -175,6 +185,10 @@ class TestDispositivoCookie:
     def test_verificar_cookie_valid(self, app, user):
         with app.app_context():
             token = establecer_cookie_dispositivo(user)
+            device = database.session.scalar(select(RecognizedDevice).filter_by(token=token))
+            device.expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+            database.session.flush()
+
             assert verificar_cookie_dispositivo(user, token) is True
 
     def test_verificar_cookie_invalid_token(self, app, user):

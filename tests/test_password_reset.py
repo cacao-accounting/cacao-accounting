@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 """Pruebas unitarias para recuperación de contraseña."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from argon2 import PasswordHasher
@@ -97,6 +97,16 @@ class TestValidarTokenRecuperacion:
             result = validar_token_recuperacion(token)
             assert result is not None
             assert result.id == user
+
+    def test_valid_token_accepts_timezone_aware_expiration(self, app, user):
+        """Recovery expiry comparisons normalize timestamps returned with a timezone."""
+        with app.app_context():
+            token = generar_token_recuperacion(user)
+            registro = database.session.scalar(database.select(PasswordResetToken).filter_by(token=token))
+            registro.expires_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+            database.session.flush()
+
+            assert validar_token_recuperacion(token) is not None
 
     def test_token_consumed_after_use(self, app, user):
         with app.app_context():
