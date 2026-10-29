@@ -155,6 +155,9 @@ def test_reported_spanglish_strings_are_translated(english_catalog, msgid, expec
             "Puede incluir columnas con nombres alternativos (ej: Artículo, Producto, Código).",
             "You can include columns with alternative names (e.g.: Item, Product, Code).",
         ),
+        (" de %(code)s", " of %(code)s"),
+        (" a %(rate)s", " at %(rate)s"),
+        (" (Total: %(amount)s)", " (Total: %(amount)s)"),
     ],
 )
 def test_new_source_spanish_messages_have_english_catalog_entries(msgid, expected):

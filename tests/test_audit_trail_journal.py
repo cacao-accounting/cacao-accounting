@@ -201,6 +201,24 @@ def test_format_document_timeline_handles_invalid_json(app_ctx):
     assert timeline[0]["changes"] == []
 
 
+def test_timeline_item_summary_uses_translatable_fragments(monkeypatch):
+    """Refs: #1003; item summaries use the active gettext messages."""
+    from cacao_accounting.audit_trail_service import _format_timeline_value
+    from babel.support import Translations
+    from pathlib import Path
+
+    item = {"item_code": "ITEM-A", "qty": "5", "uom": "Unit", "rate": "20", "amount": "100"}
+    spanish_summary = _format_timeline_value([item])
+    assert spanish_summary == "5 Unit de ITEM-A a 20 (Total: 100)"
+
+    translation_dir = Path(__file__).resolve().parents[1] / "cacao_accounting" / "translations"
+    english_catalog = Translations.load(str(translation_dir), "en")
+    monkeypatch.setattr("cacao_accounting.audit_trail_service._", english_catalog.gettext)
+    english_summary = _format_timeline_value([item])
+
+    assert english_summary == "5 Unit of ITEM-A at 20 (Total: 100)"
+
+
 def test_journal_detail_renders_changes_timeline(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft, update_journal_draft
     from cacao_accounting.database import User, database

@@ -373,11 +373,11 @@ def _format_single_item(item: dict) -> str:
     parts = [qty_str]
     if uom:
         parts.append(f" {uom}")
-    parts.append(f" de {code}")
+    parts.append(_(" de %(code)s") % {"code": code})
     if rate:
-        parts.append(f" a {rate}")
+        parts.append(_(" a %(rate)s") % {"rate": rate})
     if amount:
-        parts.append(f" (Total: {amount})")
+        parts.append(_(" (Total: %(amount)s)") % {"amount": amount})
     return "".join(parts)
 
 

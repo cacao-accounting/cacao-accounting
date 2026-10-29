@@ -23714,6 +23714,21 @@ msgstr "Number:"
 msgid "Total:"
 msgstr "Total:"
 
+#, python-format
+#: cacao_accounting/audit_trail_service.py
+msgid " de %(code)s"
+msgstr " of %(code)s"
+
+#, python-format
+#: cacao_accounting/audit_trail_service.py
+msgid " a %(rate)s"
+msgstr " at %(rate)s"
+
+#, python-format
+#: cacao_accounting/audit_trail_service.py
+msgid " (Total: %(amount)s)"
+msgstr " (Total: %(amount)s)"
+
 #: cacao_accounting/templates/public/validation_result.html:85
 msgid "Estado actual:"
 msgstr "Current status:"
