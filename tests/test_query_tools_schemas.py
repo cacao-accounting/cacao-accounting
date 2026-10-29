@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from inspect import Parameter, signature
 from typing import Any
 import pytest
 
@@ -169,3 +170,73 @@ def test_common_schemas_define_shared_filters_responses_and_company_parameter() 
     error_properties = ERROR_RESPONSE["properties"]["error"]["properties"]
     assert set(error_properties) == {"code", "message", "request_id"}
     assert all(value == {"type": "string"} for value in error_properties.values())
+
+
+def test_registered_tool_schemas_only_publish_accepted_handler_parameters() -> None:
+    """Verifica que cada parámetro anunciado pueda recibirse por su handler."""
+    from cacao_accounting.query_tools import load_query_tools
+    from cacao_accounting.query_tools.registry import registry
+
+    load_query_tools()
+    for tool in registry.list_tools().values():
+        if tool.handler is None:
+            continue
+
+        handler_parameters = signature(tool.handler).parameters
+        accepts_arbitrary_keywords = any(parameter.kind is Parameter.VAR_KEYWORD for parameter in handler_parameters.values())
+        if accepts_arbitrary_keywords:
+            continue
+
+        accepted_parameters = set(handler_parameters) - {"context"}
+        published_parameters = set(tool.parameters_schema.get("properties", {}))
+        required_parameters = set(tool.parameters_schema.get("required", []))
+
+        assert published_parameters <= accepted_parameters, (
+            f"{tool.name} publishes unsupported parameters: " f"{sorted(published_parameters - accepted_parameters)}"
+        )
+        assert required_parameters <= accepted_parameters, (
+            f"{tool.name} requires unsupported parameters: " f"{sorted(required_parameters - accepted_parameters)}"
+        )
+
+
+def test_operational_tool_schemas_only_include_supported_filters() -> None:
+    """Protege contratos específicos de ventas, compras, inventario y bancos."""
+    from cacao_accounting.query_tools import load_query_tools
+    from cacao_accounting.query_tools.registry import registry
+
+    load_query_tools()
+    common = {"company_id", "page", "page_size"}
+    date_range = {"date_from", "date_to"}
+    expected_properties = {
+        "sales.get_by_customer": common | date_range | {"party_id"},
+        "sales.get_by_item": common | date_range | {"item_code"},
+        "sales.get_gross_margin": common | date_range,
+        "purchases.get_by_supplier": common | date_range | {"party_id"},
+        "purchases.get_by_item": common | date_range | {"item_code"},
+        "documents.get_related_documents": common | {"document_type", "document_id"},
+        "receivables.get_subledger": common | {"party_id", "as_of_date"},
+        "payables.get_subledger": common | {"party_id", "as_of_date"},
+        "inventory.get_kardex": common | date_range | {"item_code", "warehouse"},
+        "inventory.get_existence": common | date_range | {"item_code", "warehouse"},
+        "inventory.get_batches": common | {"item_code", "warehouse"},
+        "inventory.get_serials": common | {"item_code", "warehouse"},
+        "inventory.get_negative_stock": common | {"item_code", "warehouse"},
+        "inventory.get_reorder_alerts": common | {"item_code", "warehouse"},
+        "inventory.get_transfers": common | date_range | {"item_code", "warehouse"},
+        "inventory.get_slow_moving_items": common | {"date_to", "item_code", "warehouse", "inactivity_days"},
+        "inventory.get_turnover": common | date_range | {"item_code", "warehouse"},
+        "inventory.get_stock_balance": common | {"item_code", "warehouse"},
+        "inventory.get_valuation": common | {"date_to", "item_code", "warehouse"},
+        "banking.get_balance_summary": common | {"as_of_date", "bank_account_id"},
+        "banking.get_unreconciled_transactions": common | date_range | {"bank_account_id"},
+    }
+
+    tools = registry.list_tools()
+    for name, expected in expected_properties.items():
+        schema = tools[name].parameters_schema
+        assert set(schema["properties"]) == expected, name
+        expected_required = {
+            "inventory.get_turnover": {"company_id", "date_from", "date_to"},
+            "documents.get_related_documents": {"company_id", "document_type", "document_id"},
+        }.get(name, {"company_id"})
+        assert set(schema.get("required", [])) == expected_required, name

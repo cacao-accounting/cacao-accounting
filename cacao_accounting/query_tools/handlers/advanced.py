@@ -293,27 +293,48 @@ def get_budget_variance_handler(
     return _report_result(get_budget_variance(filters), company_id, filters)
 
 
-def _operational_schema() -> dict[str, Any]:
-    return {
-        "type": "object",
-        "properties": {
-            "company_id": {"type": "string"},
-            "date_from": {"type": "string", "format": "date"},
-            "date_to": {"type": "string", "format": "date"},
-            "party_id": {"type": "string"},
-            "item_code": {"type": "string"},
-            "warehouse": {"type": "string"},
-            "bank_account_id": {"type": "string"},
+def _operational_schema(*filters: str) -> dict[str, Any]:
+    """Crea un esquema con solo los filtros que implementa un reporte operativo."""
+    supported_filters = {
+        "date_from": {"type": "string", "format": "date"},
+        "date_to": {"type": "string", "format": "date"},
+        "party_id": {"type": "string"},
+        "item_code": {"type": "string"},
+        "warehouse": {"type": "string"},
+    }
+    properties: dict[str, Any] = {"company_id": {"type": "string"}}
+    properties.update({name: supported_filters[name] for name in filters})
+    properties.update(
+        {
             "page": {"type": "integer", "minimum": 1, "default": 1},
             "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
-        },
+        }
+    )
+    return {
+        "type": "object",
+        "properties": properties,
         "required": ["company_id"],
     }
 
 
+_OPERATIONAL_FILTERS_BY_SERVICE: dict[Callable[..., Any], tuple[str, ...]] = {
+    get_sales_by_customer: ("date_from", "date_to", "party_id"),
+    get_sales_by_item: ("date_from", "date_to", "item_code"),
+    get_gross_margin: ("date_from", "date_to"),
+    get_purchases_by_supplier: ("date_from", "date_to", "party_id"),
+    get_purchases_by_item: ("date_from", "date_to", "item_code"),
+    get_stock_balance: ("item_code", "warehouse"),
+    get_inventory_valuation: ("date_to", "item_code", "warehouse"),
+}
+
+
 def _register_operational(name: str, description: Any, permission: str, module: str, service: Callable[..., Any]) -> None:
     @query_tool(
-        name, description, required_module=module, required_permission=permission, parameters_schema=_operational_schema()
+        name,
+        description,
+        required_module=module,
+        required_permission=permission,
+        parameters_schema=_operational_schema(*_OPERATIONAL_FILTERS_BY_SERVICE[service]),
     )
     def handler(
         *,
@@ -344,7 +365,11 @@ def _register_operational(name: str, description: Any, permission: str, module: 
 
 
 _register_operational(
-    "sales.get_by_customer", _l("Agrega ventas por cliente."), _PERM_RECEIVABLES_REPORTS_READ, "sales", get_sales_by_customer
+    "sales.get_by_customer",
+    _l("Agrega ventas por cliente."),
+    _PERM_RECEIVABLES_REPORTS_READ,
+    "sales",
+    get_sales_by_customer,
 )
 
 
@@ -356,6 +381,60 @@ _INVENTORY_SCHEMA: dict[str, Any] = {
         "warehouse": {"type": "string"},
         "date_from": {"type": "string", "format": "date"},
         "date_to": {"type": "string", "format": "date"},
+        "page": {"type": "integer", "minimum": 1, "default": 1},
+        "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
+    },
+    "required": ["company_id"],
+}
+
+
+_INVENTORY_LOOKUP_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "company_id": {"type": "string"},
+        "item_code": {"type": "string"},
+        "warehouse": {"type": "string"},
+        "page": {"type": "integer", "minimum": 1, "default": 1},
+        "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
+    },
+    "required": ["company_id"],
+}
+
+
+_INVENTORY_OPERATIONAL_SCHEMA = _INVENTORY_LOOKUP_SCHEMA
+
+
+_SLOW_MOVING_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        **_INVENTORY_LOOKUP_SCHEMA["properties"],
+        "date_to": {"type": "string", "format": "date"},
+        "inactivity_days": {"type": "integer", "minimum": 1, "maximum": 3650},
+    },
+    "required": ["company_id"],
+}
+
+
+_BANKING_OPERATIONAL_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "company_id": {"type": "string"},
+        "date_from": {"type": "string", "format": "date"},
+        "date_to": {"type": "string", "format": "date"},
+        "bank_account_id": {"type": "string"},
+        "page": {"type": "integer", "minimum": 1, "default": 1},
+        "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
+    },
+    "required": ["company_id"],
+}
+
+
+_BANKING_BALANCE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "company_id": {"type": "string"},
+        "bank_account_id": {"type": "string"},
+        "as_of_date": {"type": "string", "format": "date"},
         "page": {"type": "integer", "minimum": 1, "default": 1},
         "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
     },
@@ -452,7 +531,7 @@ def _inventory_operational(
     _l("Lista lotes de inventario."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
-    parameters_schema=_INVENTORY_SCHEMA,
+    parameters_schema=_INVENTORY_LOOKUP_SCHEMA,
 )
 def get_inventory_batches(
     *,
@@ -465,6 +544,8 @@ def get_inventory_batches(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Lista saldos por lote; conserva fechas antiguas como argumentos ignorados."""
+    _ = date_from, date_to
     return _inventory_operational(context, company_id, get_batch_report, item_code, warehouse, page, page_size)
 
 
@@ -473,7 +554,7 @@ def get_inventory_batches(
     _l("Lista números de serie de inventario."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
-    parameters_schema=_INVENTORY_SCHEMA,
+    parameters_schema=_INVENTORY_LOOKUP_SCHEMA,
 )
 def get_inventory_serials(
     *,
@@ -486,6 +567,8 @@ def get_inventory_serials(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Lista números de serie; conserva fechas antiguas como argumentos ignorados."""
+    _ = date_from, date_to
     return _inventory_operational(context, company_id, get_serial_report, item_code, warehouse, page, page_size)
 
 
@@ -494,7 +577,7 @@ def get_inventory_serials(
     _l("Detecta existencias negativas por artículo y almacén."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
-    parameters_schema=_operational_schema(),
+    parameters_schema=_INVENTORY_OPERATIONAL_SCHEMA,
 )
 def get_inventory_negative_stock(
     *,
@@ -505,6 +588,7 @@ def get_inventory_negative_stock(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Consulta existencias negativas por artículo y bodega."""
     filters = _operational(
         context,
         company_id,
@@ -525,7 +609,7 @@ def get_inventory_negative_stock(
     _l("Detecta artículos por debajo del mínimo o punto de reorden configurado."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
-    parameters_schema=_operational_schema(),
+    parameters_schema=_INVENTORY_OPERATIONAL_SCHEMA,
 )
 def get_inventory_reorder_alerts(
     *,
@@ -536,6 +620,7 @@ def get_inventory_reorder_alerts(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Consulta artículos que requieren reposición."""
     filters = _operational(
         context,
         company_id,
@@ -556,7 +641,7 @@ def get_inventory_reorder_alerts(
     _l("Consulta traslados de material entre almacenes."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
-    parameters_schema=_operational_schema(),
+    parameters_schema=_INVENTORY_SCHEMA,
 )
 def get_inventory_transfer_report(
     *,
@@ -569,6 +654,7 @@ def get_inventory_transfer_report(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Consulta traslados por fecha, artículo y bodega."""
     filters = _operational(
         context,
         company_id,
@@ -589,13 +675,7 @@ def get_inventory_transfer_report(
     _l("Lista inventario con existencias y sin salidas durante un umbral."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
-    parameters_schema={
-        **_operational_schema(),
-        "properties": {
-            **_operational_schema()["properties"],
-            "inactivity_days": {"type": "integer", "minimum": 1, "maximum": 3650},
-        },
-    },
+    parameters_schema=_SLOW_MOVING_SCHEMA,
 )
 def get_inventory_slow_moving_items(
     *,
@@ -608,6 +688,7 @@ def get_inventory_slow_moving_items(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Consulta existencias sin salidas recientes según el umbral indicado."""
     filters = _operational(
         context,
         company_id,
@@ -628,10 +709,7 @@ def get_inventory_slow_moving_items(
     _l("Calcula rotación de inventario por artículo y almacén."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
-    parameters_schema={
-        **_operational_schema(),
-        "required": ["company_id", "date_from", "date_to"],
-    },
+    parameters_schema={**_INVENTORY_SCHEMA, "required": ["company_id", "date_from", "date_to"]},
 )
 def get_inventory_turnover_report(
     *,
@@ -644,6 +722,7 @@ def get_inventory_turnover_report(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Calcula rotación entre las fechas obligatorias y filtros opcionales."""
     filters = _operational(
         context,
         company_id,
@@ -664,24 +743,26 @@ def get_inventory_turnover_report(
     _l("Obtiene saldos bancarios consolidados."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
-    parameters_schema=_operational_schema(),
+    parameters_schema=_BANKING_BALANCE_SCHEMA,
 )
 def get_banking_balance_summary(
     *,
     context: QueryContext,
     company_id: str,
+    as_of_date: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     bank_account_id: str | None = None,
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Consulta saldos bancarios al corte y admite rangos antiguos sin aplicarlos."""
+    _ = date_from, date_to
     validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     filters = BankingFilters(
         company=company_id,
         bank_account_id=bank_account_id,
-        date_from=_date(date_from),
-        date_to=_date(date_to),
+        as_of_date=_date(as_of_date),
         page=page,
         page_size=page_size,
     )
@@ -724,7 +805,7 @@ def get_banking_reconciliation_status(
     _l("Lista movimientos de extracto pendientes de conciliación."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
-    parameters_schema=_operational_schema(),
+    parameters_schema=_BANKING_OPERATIONAL_SCHEMA,
 )
 def get_banking_unreconciled_transactions(
     *,
@@ -736,6 +817,7 @@ def get_banking_unreconciled_transactions(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Lista movimientos bancarios sin conciliar con filtros compatibles."""
     validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     filters = BankingFilters(
         company=company_id,
@@ -752,13 +834,12 @@ _SUBLEDGER_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
-        "party_type": {"type": "string", "enum": ["customer", "supplier"]},
         "party_id": {"type": "string"},
         "as_of_date": {"type": "string", "format": "date"},
         "page": {"type": "integer", "minimum": 1, "default": 1},
         "page_size": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100},
     },
-    "required": ["company_id", "party_type"],
+    "required": ["company_id"],
 }
 
 
@@ -802,6 +883,8 @@ def get_receivables_subledger(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Obtiene el subledger de clientes; conserva party_type por compatibilidad."""
+    _ = party_type
     return _subledger(context, company_id, "customer", party_id, as_of_date, page, page_size)
 
 
@@ -822,14 +905,24 @@ def get_payables_subledger(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
+    """Obtiene el subledger de proveedores; conserva party_type por compatibilidad."""
+    _ = party_type
     return _subledger(context, company_id, "supplier", party_id, as_of_date, page, page_size)
 
 
 _register_operational(
-    "sales.get_by_item", _l("Agrega ventas por artículo."), _PERM_RECEIVABLES_REPORTS_READ, "sales", get_sales_by_item
+    "sales.get_by_item",
+    _l("Agrega ventas por artículo."),
+    _PERM_RECEIVABLES_REPORTS_READ,
+    "sales",
+    get_sales_by_item,
 )
 _register_operational(
-    "sales.get_gross_margin", _l("Calcula margen bruto de ventas."), _PERM_RECEIVABLES_REPORTS_READ, "sales", get_gross_margin
+    "sales.get_gross_margin",
+    _l("Calcula margen bruto de ventas."),
+    _PERM_RECEIVABLES_REPORTS_READ,
+    "sales",
+    get_gross_margin,
 )
 _register_operational(
     "purchases.get_by_supplier",

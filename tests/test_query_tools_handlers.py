@@ -1347,3 +1347,25 @@ def test_aging_maps_duplicate_document_numbers_by_record_id(
         ) == [("100.0000", "100.0000", "100.0000", "NIO"), ("50.0000", "50.0000", "1800.0000", "USD")]
         assert Decimal(result["summary"]["0_30"]) == Decimal("1900")
         assert result["summary_currency"] == "NIO"
+
+
+def test_banking_balance_summary_applies_the_published_cutoff(app_instance):
+    """El handler transfiere as_of_date al servicio que calcula el saldo."""
+    from cacao_accounting.query_tools.handlers import advanced as h_advanced
+
+    with app_instance.app_context():
+        user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        context = QueryContext(user_id=user.id, permissions={"banking.reports.read"}, company_ids=["CACAO"])
+
+        result = h_advanced.get_banking_balance_summary.handler(
+            context=context,
+            company_id="CACAO",
+            as_of_date="2026-05-01",
+            date_from="2026-04-01",
+            date_to="2026-04-30",
+        )
+
+        filters = result["provenance"]["filters"]
+        assert filters["as_of_date"] == "2026-05-01"
+        assert "date_from" not in filters
+        assert "date_to" not in filters
