@@ -2111,6 +2111,26 @@ def test_mass_payment_reconciliation_applies_customer_payment_to_multiple_sales_
     assert len(relations) == 2
 
 
+def test_payment_reconciliation_rejects_negative_discount():
+    """A discount cannot increase the cash consumed by an allocation."""
+    from cacao_accounting.document_flow.payment import _ReconciliationLineValues, _validate_reconciliation_line
+    from cacao_accounting.document_flow.service import DocumentFlowError
+
+    values = _ReconciliationLineValues(
+        payment_id="PAY-NEG-DISCOUNT",
+        document_id="INV-NEG-DISCOUNT",
+        flow_source_type="sales_invoice",
+        model_type="sales_invoice",
+        allocated=Decimal("100"),
+        discount=Decimal("-10"),
+        gain_loss=Decimal("0"),
+        difference=Decimal("0"),
+    )
+
+    with pytest.raises(DocumentFlowError, match="descuento no puede ser negativo"):
+        _validate_reconciliation_line(values, set())
+
+
 def test_mass_payment_reconciliation_applies_supplier_payment_to_purchase_invoices(app_ctx):
     """La conciliacion masiva aplica un pago abierto contra facturas AP."""
     from cacao_accounting.document_flow.service import apply_payment_reconciliation, compute_payment_unallocated_amount

@@ -947,6 +947,8 @@ def _parse_reconciliation_line(raw_line: dict[str, Any]) -> _ReconciliationLineV
 
 def _validate_reconciliation_line(values: _ReconciliationLineValues, processed: set[tuple[str, str, str]]) -> None:
     """Validate amounts and prevent duplicate payment/document applications."""
+    if values.discount < 0:
+        raise _document_flow_error(_("El descuento no puede ser negativo."), 409)
     if values.allocated <= 0:
         raise _document_flow_error(_MSG_MONTO_MAYOR_CERO, 409)
     if values.discount + values.gain_loss >= values.allocated:

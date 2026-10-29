@@ -6129,6 +6129,10 @@ msgstr "The applied amount exceeds the available payment balance."
 msgid "El monto aplicado debe ser mayor que cero."
 msgstr "The applied amount must be greater than zero."
 
+#: cacao_accounting/document_flow/payment.py
+msgid "El descuento no puede ser negativo."
+msgstr "The discount cannot be negative."
+
 #: cacao_accounting/app/templates/app.html:8
 msgid "Dashboard ejecutivo"
 msgstr "Executive dashboard"
