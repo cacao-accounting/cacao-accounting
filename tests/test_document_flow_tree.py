@@ -686,6 +686,64 @@ def test_apply_advance_to_invoice_crea_referencia_y_relacion(app):
     tree = build_document_flow_tree("sales_invoice", "SINV-ADV-001", direction="downstream")
     payment_ids = {n["document_id"] for n in tree["downstream"] if n.get("document_type") == "payment_entry"}
     assert "ADV-001" in payment_ids
+    payment_tree = build_document_flow_tree("payment_entry", "ADV-001", direction="downstream")
+    assert payment_tree["downstream"][0]["relation_status"] == "active"
+
+
+def test_payment_tree_reflects_reverted_reference_relation(app):
+    """A cancelled payment must not show its document reference as active."""
+    from cacao_accounting.database import PaymentEntry, PaymentReference, SalesInvoice, database
+    from cacao_accounting.document_flow.service import apply_advance_to_invoice, revert_relations_for_target
+    from cacao_accounting.document_flow.tree import build_document_flow_tree
+
+    _seed_entity(database)
+    invoice = SalesInvoice(
+        id="SINV-ADV-CANCELLED",
+        company="TEST",
+        posting_date=date(2026, 5, 7),
+        docstatus=1,
+        grand_total=Decimal("500"),
+        outstanding_amount=Decimal("500"),
+    )
+    advance = PaymentEntry(
+        id="ADV-CANCELLED",
+        company="TEST",
+        posting_date=date(2026, 5, 7),
+        docstatus=1,
+        payment_type="receive",
+        party_id=None,
+        received_amount=Decimal("500"),
+        currency="NIO",
+    )
+    database.session.add_all([invoice, advance])
+    database.session.flush()
+
+    apply_advance_to_invoice("ADV-CANCELLED", "SINV-ADV-CANCELLED", Decimal("125"), date(2026, 5, 8))
+    revert_relations_for_target("payment_entry", "ADV-CANCELLED", reason="payment_cancelled")
+    advance.docstatus = 2
+    legacy_invoice = SalesInvoice(
+        id="SINV-ADV-LEGACY",
+        company="TEST",
+        posting_date=date(2026, 5, 7),
+        docstatus=1,
+        grand_total=Decimal("100"),
+        outstanding_amount=Decimal("100"),
+    )
+    database.session.add(legacy_invoice)
+    database.session.add(
+        PaymentReference(
+            payment_id="ADV-CANCELLED",
+            reference_type="sales_invoice",
+            reference_id="SINV-ADV-LEGACY",
+            allocated_amount=Decimal("25"),
+        )
+    )
+    database.session.flush()
+
+    tree = build_document_flow_tree("payment_entry", "ADV-CANCELLED", direction="downstream")
+    invoice_nodes = {node["document_id"]: node for node in tree["downstream"] if node.get("document_type") == "sales_invoice"}
+    assert invoice_nodes["SINV-ADV-CANCELLED"]["relation_status"] == "reverted"
+    assert invoice_nodes["SINV-ADV-LEGACY"]["relation_status"] == "reverted"
 
 
 # ---------------------------------------------------------------------------

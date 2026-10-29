@@ -169,8 +169,8 @@
       meta:          null,
       expandAllNodes: true,
 
-      get isDraft()    { return this.docstatus === 0; },
-      get isCancelled(){ return this.docstatus === 2; },
+      get isDraft()    { return Number(this.current?.docstatus ?? this.docstatus) === 0; },
+      get isCancelled(){ return Number(this.current?.docstatus ?? this.docstatus) === 2; },
       get documentCount() {
         const fromMeta = this.meta && Number.isFinite(this.meta.node_count) ? Number(this.meta.node_count) : 0;
         return Math.max(0, fromMeta + (this.current ? 1 : 0));
@@ -181,6 +181,7 @@
       },
       get currentAppliedAmount() {
         if (!this.current || this.current.document_type !== 'payment_entry') return null;
+        if (this.isCancelled) return 0;
         const total = Number(this.current.total);
         const unallocated = Number(this.current.unallocated_amount);
         if (!Number.isFinite(total) || !Number.isFinite(unallocated)) return null;
@@ -188,6 +189,7 @@
       },
       get currentUnallocatedAmount() {
         if (!this.current || this.current.document_type !== 'payment_entry') return null;
+        if (this.isCancelled) return 0;
         const unallocated = Number(this.current.unallocated_amount);
         if (!Number.isFinite(unallocated)) return null;
         return Math.max(0, unallocated);

@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import Any
 from werkzeug.routing import BuildError
 
-from cacao_accounting.database import DocumentRelation, PaymentReference, database
+from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
 from cacao_accounting.document_flow.status import document_status_payload
@@ -505,12 +505,34 @@ def _payment_entry_references(document_id: str) -> list[PaymentReference]:
     )
 
 
+def _payment_reference_relation_status(reference: PaymentReference) -> str:
+    """Return the latest flow status attached to a payment reference."""
+    relation = (
+        database.session.execute(
+            database.select(DocumentRelation)
+            .filter_by(
+                target_type="payment_entry",
+                target_id=reference.payment_id,
+                target_item_id=reference.id,
+            )
+            .order_by(DocumentRelation.revision.desc(), DocumentRelation.created.desc())
+        )
+        .scalars()
+        .first()
+    )
+    if relation:
+        return relation.status
+    payment = database.session.get(PaymentEntry, reference.payment_id)
+    return "reverted" if payment and payment.docstatus == 2 else "active"
+
+
 def _append_payment_reference_node(
     result: list[dict[str, Any]],
     *,
     seen_pairs: set[tuple[str, str]],
     pair: tuple[str, str],
     relation_type: str,
+    relation_status: str,
     related_doctype: str,
     related_id: str,
     allocated_amount: str,
@@ -531,7 +553,7 @@ def _append_payment_reference_node(
 
     node = get_document_node(related_doctype, related_id)
     node["relation_type"] = relation_type
-    node["relation_status"] = "active"
+    node["relation_status"] = relation_status
     node["applied_amount"] = allocated_amount
     node_counter[0] += 1
     node["children"] = get_downstream_tree(
@@ -583,6 +605,7 @@ def _append_payment_reference_nodes(
                 seen_pairs=seen_pairs,
                 pair=("payment_entry", ref.payment_id),
                 relation_type="payment",
+                relation_status=_payment_reference_relation_status(ref),
                 related_doctype="payment_entry",
                 related_id=ref.payment_id,
                 allocated_amount=str(Decimal(str(ref.allocated_amount or 0))),
@@ -605,6 +628,7 @@ def _append_payment_reference_nodes(
             seen_pairs=seen_pairs,
             pair=(ref_type, ref.reference_id),
             relation_type="payment_reference",
+            relation_status=_payment_reference_relation_status(ref),
             related_doctype=ref_type,
             related_id=ref.reference_id,
             allocated_amount=str(Decimal(str(ref.allocated_amount or 0))),
