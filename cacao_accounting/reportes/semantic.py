@@ -16,7 +16,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from cacao_accounting.database import (
     AuditTrail,
@@ -258,6 +258,7 @@ def get_settlement_analysis(
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return payment applications at their allocation grain (N:N safe)."""
+    effective_date = func.coalesce(PaymentReference.allocation_date, PaymentEntry.posting_date)
     query = (
         select(PaymentReference, PaymentEntry)
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
@@ -269,10 +270,10 @@ def get_settlement_analysis(
             or_(PaymentReference.company.is_(None), PaymentReference.company == company),
         )
     if date_from:
-        query = query.where(PaymentReference.allocation_date >= date_from)
+        query = query.where(effective_date >= date_from)
     if date_to:
-        query = query.where(PaymentReference.allocation_date <= date_to)
-    query = _bounded(query.order_by(PaymentReference.allocation_date, PaymentReference.id), limit, offset)
+        query = query.where(effective_date <= date_to)
+    query = _bounded(query.order_by(effective_date, PaymentReference.id), limit, offset)
     return [
         {
             "document_number": reference.reference_document_no or reference.reference_id,

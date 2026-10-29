@@ -1000,6 +1000,52 @@ def test_settlement_analysis_excludes_cancelled_payments(app_ctx):
     assert [row["amount"] for row in rows] == [Decimal("100")]
 
 
+def test_settlement_analysis_uses_payment_date_for_legacy_references(app_ctx):
+    """Una referencia sin allocation_date usa fecha de pago en filtros y orden."""
+    from cacao_accounting.database import PaymentEntry, PaymentReference, database
+    from cacao_accounting.reportes.semantic import get_settlement_analysis
+
+    payments = [
+        PaymentEntry(
+            company="r2r",
+            posting_date=posting_date,
+            payment_type="receive",
+            received_amount=amount,
+            docstatus=1,
+        )
+        for posting_date, amount in (
+            (date(2026, 8, 11), Decimal("100")),
+            (date(2026, 8, 10), Decimal("200")),
+            (date(2026, 8, 15), Decimal("300")),
+        )
+    ]
+    database.session.add_all(payments)
+    database.session.flush()
+    database.session.add_all(
+        [
+            PaymentReference(
+                payment_id=payment.id,
+                reference_type="sales_invoice",
+                reference_id=f"INV-LEGACY-SETTLEMENT-{index}",
+                company="r2r",
+                allocated_amount=payment.received_amount,
+                allocation_date=None,
+            )
+            for index, payment in enumerate(payments, start=1)
+        ]
+    )
+    database.session.commit()
+
+    rows = get_settlement_analysis(
+        company="r2r",
+        date_from=date(2026, 8, 10),
+        date_to=date(2026, 8, 11),
+    )
+
+    assert [row["date"] for row in rows] == [date(2026, 8, 10), date(2026, 8, 11)]
+    assert [row["amount"] for row in rows] == [Decimal("200"), Decimal("100")]
+
+
 def test_r2r_multi_company_isolation_all_ledgers(app_ctx):
     """Assert strict multi-tenant entity isolation across GL, AR, AP, and Kardex ledgers."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
