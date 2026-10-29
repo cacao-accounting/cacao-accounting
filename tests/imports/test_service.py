@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 
@@ -44,6 +44,44 @@ def test_import_service_validate(tmp_path):
         updated_batch = database.session.get(ImportBatch, batch.id)
         assert updated_batch.import_status == 3
         assert updated_batch.total_rows == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "success_rows", "processed_rows", "started_at"),
+    [
+        (4, 0, 0, datetime(2026, 10, 1)),
+        (5, 1, 1, datetime(2026, 10, 1)),
+        (6, 0, 1, datetime(2026, 10, 1)),
+        (7, 0, 1, datetime(2026, 10, 1)),
+        (8, 0, 0, datetime(2026, 10, 1)),
+        (3, 1, 0, None),
+        (3, 0, 0, datetime(2026, 10, 1)),
+    ],
+)
+def test_processed_import_batch_cannot_be_revalidated_or_reexecuted(status, success_rows, processed_rows, started_at):
+    """Los lotes en proceso o ejecutados no pueden reabrirse para duplicar documentos."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        database.create_all()
+        batch = ImportBatch(
+            id=str(ULID()),
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            source_format="csv",
+            source_path="/does/not/need/to/exist.csv",
+            import_status=status,
+            success_rows=success_rows,
+            processed_rows=processed_rows,
+            started_at=started_at,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        service = ImportService()
+        assert service.validate(batch.id) is False
+        assert service.execute(batch.id) is False
+        database.session.refresh(batch)
+        assert batch.import_status == status
 
 
 @pytest.mark.parametrize(

@@ -60,6 +60,7 @@ imports = Blueprint("imports", __name__, template_folder="templates")
 _ENDPOINT_IMPORTS_DETAIL = "imports.detail"
 _ENDPOINT_IMPORTS_NEW = "imports.new"
 _INVALID_FILE_TYPE_MSG = _l("Error al validar el tipo de archivo")
+_PROCESSED_IMPORT_STATUSES = {4, 5, 6, 8}
 
 
 def check_desktop_mode():
@@ -310,6 +311,9 @@ def upload(batch_id):
     """Subir un archivo a un lote de importación."""
     check_permission("actualizar")
     batch = _batch_or_404(batch_id, "editar")
+    if batch.import_status in _PROCESSED_IMPORT_STATUSES or batch.success_rows or batch.processed_rows or batch.started_at:
+        flash(_("El estado actual del lote no permite esta acción."), "warning")
+        return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
     file = request.files.get("file")
     if not file or not file.filename:
         return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
@@ -343,7 +347,8 @@ def validate(batch_id):
     check_permission("validar")
     _batch_or_404(batch_id, "editar")
     service = ImportService()
-    service.validate(batch_id)
+    if not service.validate(batch_id):
+        flash(_("El estado actual del lote no permite esta acción."), "warning")
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 
@@ -355,8 +360,10 @@ def execute(batch_id):
     check_permission("autorizar")
     _batch_or_404(batch_id, "autorizar")
     service = ImportService()
-    service.execute(batch_id)
-    flash(_("Importación iniciada"), "info")
+    if service.execute(batch_id):
+        flash(_("Importación iniciada"), "info")
+    else:
+        flash(_("El estado actual del lote no permite esta acción."), "warning")
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 

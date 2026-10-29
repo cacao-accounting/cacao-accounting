@@ -79,6 +79,58 @@ def test_ods_template_download_round_trips_through_reader(tmp_path):
     assert result.columns[0]
 
 
+@pytest.mark.parametrize(
+    ("status", "success_rows", "processed_rows", "started_at"),
+    [(5, 1, 1, None), (7, 0, 1, "2026-10-01T12:00:00")],
+)
+def test_processed_import_batch_rejects_file_replacement(status, success_rows, processed_rows, started_at):
+    """El endpoint no permite reemplazar evidencia fuente tras iniciar el procesamiento."""
+    from io import BytesIO
+    from datetime import datetime
+    from cacao_accounting.database.helpers import inicia_base_de_datos
+    from cacao_accounting.imports.models import ImportBatch
+    from ulid import ULID
+
+    app = create_app(
+        {
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "WTF_CSRF_ENABLED": False,
+        }
+    )
+    with app.app_context():
+        inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=True)
+        batch = ImportBatch(
+            id=str(ULID()),
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            source_format="csv",
+            source_path="/original/import.csv",
+            source_filename="import.csv",
+            import_status=status,
+            success_rows=success_rows,
+            processed_rows=processed_rows,
+            started_at=datetime.fromisoformat(started_at) if started_at else None,
+        )
+        database.session.add(batch)
+        database.session.commit()
+        batch_id = batch.id
+
+    with app.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+        response = client.post(
+            f"/imports/{batch_id}/upload",
+            data={"file": (BytesIO(b"codigo,nombre,clasificacion\n9500,Changed,Asset"), "changed.csv")},
+        )
+
+    assert response.status_code == 302
+    with app.app_context():
+        batch = database.session.get(ImportBatch, batch_id)
+        assert batch.import_status == status
+        assert batch.source_path == "/original/import.csv"
+
+
 def test_new_template_has_single_record_type_field():
     """El formulario de nuevo lote solo debe tener un selector de tipo."""
     content = (TEMPLATES_DIR / "new.html").read_text(encoding="utf-8")

@@ -24829,3 +24829,7 @@ msgstr "The operation changed after the review was requested."
 #, python-format
 msgid "La columna %(column)s aparece más de una vez después de normalizar los encabezados."
 msgstr "Column %(column)s appears more than once after normalizing the headers."
+
+#: cacao_accounting/imports/routes.py
+msgid "El estado actual del lote no permite esta acción."
+msgstr "The batch's current state does not allow this action."

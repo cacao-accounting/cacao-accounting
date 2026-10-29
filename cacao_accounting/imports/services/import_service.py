@@ -38,6 +38,7 @@ from cacao_accounting.imports.utils.validation import is_period_open
 from cacao_accounting.i18n import _
 
 IMPORT_SYNC_MAX_ROWS = 100
+REVALIDATABLE_IMPORT_STATUSES = {1, 2, 3, 7}
 
 
 class _IndexedImportRow(dict[str, Any]):
@@ -108,18 +109,24 @@ class ImportService:
         if expected_columns is not None:
             table.columns = canonical_columns(table.columns, expected_columns)
 
-    def validate(self, batch_id: str):
+    def validate(self, batch_id: str) -> bool:
         """Valida estructuralmente y por reglas de negocio un lote de importación."""
-        batch = database.session.get(ImportBatch, batch_id)
-        if not batch:
-            return
+        batch = database.session.get(ImportBatch, batch_id, with_for_update=True)
+        if (
+            not batch
+            or batch.import_status not in REVALIDATABLE_IMPORT_STATUSES
+            or batch.success_rows
+            or batch.processed_rows
+            or batch.started_at
+        ):
+            return False
 
         batch.import_status = 4
         database.session.commit()
 
         try:
             if not self._validate_accounting_book_rule(batch):
-                return
+                return True
 
             reader = self._get_reader(batch.source_format)
             adapter = self._get_adapter(batch.record_type)
@@ -132,7 +139,7 @@ class ImportService:
             structural_errors = self._collect_structural_errors(batch_id, table, adapter)
             if structural_errors:
                 self._commit_structural_errors(batch, batch_id, structural_errors)
-                return
+                return True
 
             docs = self._group_by_reference(table.columns, normalized_rows)
             batch.total_rows = len(normalized_rows)
@@ -143,6 +150,7 @@ class ImportService:
 
         except (ArithmeticError, SQLAlchemyError, ValueError, OSError) as e:
             self._handle_validation_error(batch, batch_id, e)
+        return True
 
     def _validate_accounting_book_rule(self, batch: ImportBatch) -> bool:
         """Valida regla de libro contable solo para journal_entry."""
@@ -269,14 +277,14 @@ class ImportService:
             "errors": errors,
         }
 
-    def execute(self, batch_id: str):
+    def execute(self, batch_id: str) -> bool:
         """Ejecuta la importación del lote de forma síncrona o asíncrona."""
         batch = database.session.get(ImportBatch, batch_id, with_for_update=True)
         if not batch:
-            return
+            return False
 
-        if batch.import_status != 3:
-            return
+        if batch.import_status != 3 or batch.success_rows or batch.processed_rows or batch.started_at:
+            return False
 
         reader = self._get_reader(batch.source_format)
         table = reader.read(batch.source_path)
@@ -293,6 +301,7 @@ class ImportService:
             thread.start()
         else:
             self._execute_task(current_app._get_current_object(), batch_id)  # type: ignore[attr-defined]
+        return True
 
     def cancel(self, batch_id: str):
         """Solicita la cancelación de un lote de importación."""
