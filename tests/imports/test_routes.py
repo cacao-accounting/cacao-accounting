@@ -50,6 +50,35 @@ def test_imports_enabled_in_web_mode():
         assert "/login" in response.location
 
 
+def test_ods_template_download_round_trips_through_reader(tmp_path):
+    """La plantilla ODS de descarga coloca encabezados en una fila legible."""
+    from cacao_accounting.database.helpers import inicia_base_de_datos
+    from cacao_accounting.imports.readers.ods_reader import ODSReader
+
+    app = create_app(
+        {
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "WTF_CSRF_ENABLED": False,
+        }
+    )
+    with app.app_context():
+        inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=True)
+
+    with app.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+        response = client.get("/imports/template/purchase_request?format=ods")
+
+    assert response.status_code == 200
+    ods_path = tmp_path / "template.ods"
+    ods_path.write_bytes(response.data)
+    result = ODSReader().read(str(ods_path))
+
+    assert result.columns
+    assert result.columns[0]
+
+
 def test_new_template_has_single_record_type_field():
     """El formulario de nuevo lote solo debe tener un selector de tipo."""
     content = (TEMPLATES_DIR / "new.html").read_text(encoding="utf-8")

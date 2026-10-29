@@ -114,6 +114,29 @@ class TestCSVReader:
 
 
 class TestODSReader:
+    def test_ods_reader_reads_text_cells_from_table_rows(self, tmp_path):
+        """Lee encabezados y valores de celdas de texto de un ODS real."""
+        from odf import opendocument, table
+        from odf.text import P
+
+        document = opendocument.OpenDocumentSpreadsheet()
+        sheet = table.Table(name="Import")
+        document.spreadsheet.addElement(sheet)
+        for values in (("nombre", "cantidad"), ("Producto A", "3")):
+            row = table.TableRow()
+            sheet.addElement(row)
+            for value in values:
+                cell = table.TableCell(valuetype="string")
+                cell.addElement(P(text=value))
+                row.addElement(cell)
+        file_path = tmp_path / "import.ods"
+        document.save(str(file_path))
+
+        result = ODSReader().read(str(file_path))
+
+        assert result.columns == ["nombre", "cantidad"]
+        assert result.rows == [["Producto A", "3"]]
+
     def test_ods_reader_compute_valid_columns(self):
         reader = ODSReader()
         columns = ["col1", "", "col3", ""]

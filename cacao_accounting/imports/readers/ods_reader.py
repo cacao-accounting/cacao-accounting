@@ -3,7 +3,7 @@
 
 """Lector de archivos ODS."""
 
-from odf import opendocument, table
+from odf import opendocument, table, teletype
 from cacao_accounting.imports.readers.base import BaseReader, NormalizedTable
 
 
@@ -55,8 +55,7 @@ class ODSReader(BaseReader):
         if value_type == "boolean":
             return cell.getAttribute("booleanvalue")
 
-        text_nodes = cell.getElementsByType(opendocument.teletype.Text)
-        return "".join(opendocument.teletype.extractText(node) for node in text_nodes)
+        return teletype.extractText(cell)
 
     def _compute_valid_columns(self, columns: list, rows: list) -> tuple[list, list]:
         """Calcula los índices de columnas válidas (no vacías)."""

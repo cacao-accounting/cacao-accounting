@@ -8,6 +8,7 @@ import csv
 import io
 import openpyxl
 from odf import opendocument, table as odf_table
+from odf.text import P as odf_paragraph
 from cacao_accounting.exceptions import flash_error
 from flask import (
     Blueprint,
@@ -402,8 +403,8 @@ def download_template(record_type):
             spreadsheet.addElement(tr)
             for col in adapter.localized_columns(str(get_locale())):
                 tc = odf_table.TableCell(valuetype="string")
-                tc.addElement(opendocument.teletype.Text(col))
-                spreadsheet.addElement(tc)
+                tc.addElement(odf_paragraph(text=col))
+                tr.addElement(tc)
             template_path = os.path.join(template_dir, output_name)
             doc.save(template_path)
             return send_file(template_path, as_attachment=True, download_name=output_name)
