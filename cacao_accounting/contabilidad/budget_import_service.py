@@ -8,6 +8,9 @@ import io
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List
 
+from sqlalchemy.exc import SQLAlchemyError
+
+from cacao_accounting.contabilidad.budget_service import BudgetError, _parse_budget_amount
 from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
@@ -20,9 +23,6 @@ from cacao_accounting.database import (
     Unit,
     database,
 )
-from cacao_accounting.contabilidad.budget_service import BudgetError
-from sqlalchemy.exc import SQLAlchemyError
-
 
 from cacao_accounting.i18n import _
 
@@ -403,7 +403,7 @@ class BudgetImportService:
                     business_unit_id=sl.business_unit_id,
                     project_id=sl.project_id,
                     period_id=sl.period_id,
-                    amount=sl.amount,
+                    amount=_parse_budget_amount(sl.amount),
                     description=sl.description,
                     created_by=user_id,
                 )
@@ -413,13 +413,20 @@ class BudgetImportService:
             # Limpiar staging
             database.session.query(BudgetImportLine).filter_by(import_id=import_id).delete()
             database.session.commit()
+        except BudgetError:
+            database.session.rollback()
+            failed_batch = database.session.get(BudgetImport, import_id)
+            if failed_batch:
+                failed_batch.status = "failed"
+            database.session.commit()
+            raise
         except SQLAlchemyError as e:
             database.session.rollback()
             failed_batch = database.session.get(BudgetImport, import_id)
             if failed_batch:
                 failed_batch.status = "failed"
             database.session.commit()
-            raise BudgetError(_("Error atómico en inserción: %(error)s") % {"error": e})
+            raise BudgetError(_("Error atómico en inserción: %(error)s") % {"error": e}) from e
 
     def _parse_period_amount(self, row: dict, period_name: str) -> tuple[Decimal | None, str | None]:
         raw_value = row.get(period_name, "").strip()
@@ -429,6 +436,14 @@ class BudgetImportService:
             amount = Decimal(raw_value)
         except InvalidOperation:
             return None, f"Monto '{raw_value}' no numérico en {period_name}."
+        try:
+            amount = _parse_budget_amount(amount)
+        except BudgetError:
+            if not amount.is_finite():
+                return None, _("El monto del período %(period)s debe ser finito.") % {"period": period_name}
+            return None, _("El monto del período %(period)s excede el rango o pierde precisión al almacenarse.") % {
+                "period": period_name
+            }
         if amount == 0:
             return None, None
         return amount, None
@@ -452,8 +467,13 @@ class BudgetImportService:
         if not total_val:
             return None
         try:
-            if abs(Decimal(total_val) - row_total) > Decimal("0.01"):
-                return f"Total {total_val} no coincide con suma {row_total}."
+            total = Decimal(total_val)
         except InvalidOperation:
             return f"Total '{total_val}' no numérico."
+        try:
+            total = _parse_budget_amount(total)
+        except BudgetError as exc:
+            return str(exc)
+        if abs(total - row_total) > Decimal("0.01"):
+            return f"Total {total_val} no coincide con suma {row_total}."
         return None

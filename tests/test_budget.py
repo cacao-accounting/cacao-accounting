@@ -182,6 +182,167 @@ def test_budget_import(app_ctx):
     assert lines[0].amount == Decimal("500")
 
 
+def test_budget_lines_reject_non_finite_amounts(app_ctx):
+    """Direct budget entry points reject Infinity and NaN without changing rows."""
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    account = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cost_center = database.session.query(CostCenter).filter_by(entity="CACAO").first()
+    period = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+    budget = service.create_budget(
+        {
+            "company": "CACAO",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "NONFINITE-DIRECT",
+            "name": "Non-finite direct test",
+            "currency_id": book.currency or "NIO",
+        },
+        str(admin_user.id),
+    )
+    line_data = {
+        "account_id": account.id,
+        "cost_center_id": cost_center.id,
+        "period_id": period.id,
+    }
+
+    with pytest.raises(BudgetError, match="monto debe ser finito"):
+        service.add_budget_line(budget.id, {**line_data, "amount": "Infinity"}, str(admin_user.id))
+    with pytest.raises(BudgetError, match="monto debe ser numérico"):
+        service.add_budget_line(budget.id, {**line_data, "amount": "not-a-number"}, str(admin_user.id))
+    with pytest.raises(BudgetError, match="rango permitido"):
+        service.add_budget_line(budget.id, {**line_data, "amount": "1e999"}, str(admin_user.id))
+    with pytest.raises(BudgetError, match="rango permitido"):
+        service.add_budget_line(
+            budget.id,
+            {**line_data, "amount": "9999999999999999.9999"},
+            str(admin_user.id),
+        )
+    with pytest.raises(BudgetError, match="sin perder precisión"):
+        service.add_budget_line(
+            budget.id,
+            {**line_data, "amount": "1000000000000000.0001"},
+            str(admin_user.id),
+        )
+
+    line = service.add_budget_line(budget.id, {**line_data, "amount": "100"}, str(admin_user.id))
+    with pytest.raises(BudgetError, match="monto debe ser finito"):
+        service.update_budget_line(line.id, {**line_data, "amount": "NaN"}, str(admin_user.id))
+
+    database.session.refresh(line)
+    assert line.amount == Decimal("100")
+
+
+@pytest.mark.parametrize(
+    ("period_amount", "total_amount", "expected_error"),
+    [
+        ("Infinity", "", "período .* debe ser finito"),
+        ("1e999", "", "período .* rango o pierde precisión al almacenarse"),
+        ("9999999999999999.9999", "", "período .* rango o pierde precisión al almacenarse"),
+        ("1000000000000000.0001", "", "período .* pierde precisión al almacenarse"),
+        ("100", "NaN", "monto debe ser finito"),
+    ],
+)
+def test_budget_import_rejects_non_finite_amounts_before_staging(app_ctx, period_amount, total_amount, expected_error):
+    """Non-finite spreadsheet amounts fail validation before staging."""
+    from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
+    from cacao_accounting.database import BudgetImport, BudgetImportLine
+
+    service = BudgetService()
+    import_service = BudgetImportService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    account = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cost_center = database.session.query(CostCenter).filter_by(entity="CACAO").first()
+    period = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+    budget = service.create_budget(
+        {
+            "company": "CACAO",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "NONFINITE-IMPORT",
+            "name": "Non-finite import test",
+            "currency_id": book.currency or "NIO",
+        },
+        str(admin_user.id),
+    )
+    csv_content = (
+        f"Cuenta,Centro de Costo,{period.name},Total\n" f"{account.code},{cost_center.code},{period_amount},{total_amount}\n"
+    )
+
+    with pytest.raises(BudgetError, match=expected_error):
+        import_service.validate_import(budget.id, "infinite.csv", csv_content.encode("utf-8"), str(admin_user.id))
+
+    batch = database.session.query(BudgetImport).filter_by(budget_id=budget.id).one()
+    assert batch.status == "failed"
+    assert database.session.query(BudgetImportLine).filter_by(import_id=batch.id).count() == 0
+
+
+@pytest.mark.parametrize("dialect_name", ["postgresql", "mysql"])
+def test_budget_amount_validation_preserves_native_decimal_range(app_ctx, dialect_name):
+    """Native DECIMAL backends retain valid NUMERIC(20,4) amounts."""
+    from cacao_accounting.contabilidad.budget_service import _parse_budget_amount
+
+    maximum = Decimal("9999999999999999.9999")
+
+    assert _parse_budget_amount(maximum, dialect_name=dialect_name) == maximum
+
+
+@pytest.mark.parametrize("amount", ["1.23445", "-1.23445"])
+def test_budget_sqlite_amount_validation_rejects_decimal_tie_mismatch(app_ctx, amount):
+    """SQLite amounts that format differently from Decimal rounding are rejected."""
+    from cacao_accounting.contabilidad.budget_service import _parse_budget_amount
+
+    with pytest.raises(BudgetError, match="sin perder precisión"):
+        _parse_budget_amount(amount, dialect_name="sqlite")
+
+
+def test_budget_import_rechecks_staged_amounts_before_insert(app_ctx):
+    """The staging-to-ledger transfer rejects corrupted non-finite rows atomically."""
+    from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
+    from cacao_accounting.database import BudgetImport, BudgetImportLine
+
+    service = BudgetService()
+    import_service = BudgetImportService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    accounts = database.session.query(Accounts).filter_by(entity="CACAO", group=False).limit(2).all()
+    cost_center = database.session.query(CostCenter).filter_by(entity="CACAO").first()
+    period = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+    budget = service.create_budget(
+        {
+            "company": "CACAO",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "NONFINITE-STAGING",
+            "name": "Non-finite staging test",
+            "currency_id": book.currency or "NIO",
+        },
+        str(admin_user.id),
+    )
+    csv_content = f"Cuenta,Centro de Costo,{period.name},Total\n"
+    csv_content += f"{accounts[0].code},{cost_center.code},100,100\n"
+    csv_content += f"{accounts[1].code},{cost_center.code},200,200\n"
+    batch = import_service.validate_import(budget.id, "staged.csv", csv_content.encode("utf-8"), str(admin_user.id))
+    staged_lines = (
+        database.session.query(BudgetImportLine).filter_by(import_id=batch.id).order_by(BudgetImportLine.row_index).all()
+    )
+    staged_line = staged_lines[1]
+    staged_line.amount = Decimal("Infinity")
+    database.session.commit()
+
+    with pytest.raises(BudgetError, match="monto debe ser finito"):
+        import_service.insert_lines(batch.id, str(admin_user.id))
+
+    assert database.session.query(BudgetLine).filter_by(budget_id=budget.id).count() == 0
+    assert database.session.get(BudgetImport, batch.id).status == "failed"
+    assert database.session.query(BudgetImportLine).filter_by(import_id=batch.id).count() == 2
+
+
 def test_budget_import_route_uses_shared_template(app_ctx, monkeypatch):
     from cacao_accounting.contabilidad import presupuesto as presupuesto_module
 
@@ -373,9 +534,9 @@ def test_budget_import_rollback(app_ctx):
     batch = import_service.validate_import(budget.id, "test.csv", csv_content.encode("utf-8"), str(admin_user.id))
     assert batch.status == "validated"
 
-    # Manipulate staging: set a required field to None to force a DB error on insert
+    # Manipulate staging: the period is nullable in staging but required in BudgetLine.
     line2 = database.session.query(BudgetImportLine).filter_by(import_id=batch.id).all()[1]
-    line2.amount = None  # BudgetLine.amount is NOT NULL
+    line2.period_id = None
     database.session.commit()
 
     with pytest.raises(BudgetError, match="Error atómico en inserción"):

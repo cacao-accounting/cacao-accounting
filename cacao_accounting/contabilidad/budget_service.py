@@ -4,7 +4,7 @@
 """Servicio para la gestión de presupuestos."""
 
 from datetime import datetime, date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional
 
 from cacao_accounting.database import (
@@ -29,6 +29,34 @@ class BudgetError(Exception):
     """Excepción base para errores de presupuesto."""
 
     _safe_for_display = True
+
+
+_MAX_BUDGET_AMOUNT = Decimal("9999999999999999.9999")
+
+
+def _parse_budget_amount(value: Any, *, dialect_name: str | None = None) -> Decimal:
+    """Convierte el importe y valida el rango NUMERIC(20,4) y el límite SQLite."""
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise BudgetError(_("El monto debe ser numérico.")) from exc
+    if not amount.is_finite():
+        raise BudgetError(_("El monto debe ser finito."))
+    if amount.copy_abs() > _MAX_BUDGET_AMOUNT:
+        raise BudgetError(_("El monto excede el rango permitido para el presupuesto."))
+    if dialect_name is None:
+        dialect_name = database.session.get_bind().dialect.name
+    if dialect_name == "sqlite":
+        try:
+            expected_amount = amount.quantize(Decimal("0.0001"))
+            sqlite_amount = Decimal(f"{float(amount):.4f}")
+        except (InvalidOperation, OverflowError) as exc:
+            raise BudgetError(_("El monto excede el rango permitido para el presupuesto.")) from exc
+        if not sqlite_amount.is_finite() or sqlite_amount.copy_abs() > _MAX_BUDGET_AMOUNT:
+            raise BudgetError(_("El monto excede el rango permitido para el presupuesto."))
+        if sqlite_amount != expected_amount:
+            raise BudgetError(_("El monto no puede almacenarse con cuatro decimales sin perder precisión."))
+    return amount
 
 
 class BudgetService:
@@ -89,6 +117,7 @@ class BudgetService:
         if not budget or budget.status != "draft":
             raise BudgetError(_("El presupuesto no existe o no está en borrador."))
 
+        amount = _parse_budget_amount(data["amount"])
         self._validate_line_data(budget, data)
 
         line = BudgetLine(
@@ -98,7 +127,7 @@ class BudgetService:
             business_unit_id=data.get("business_unit_id"),
             project_id=data.get("project_id"),
             period_id=data["period_id"],
-            amount=Decimal(str(data["amount"])),
+            amount=amount,
             description=data.get("description"),
             created_by=user_id,
         )
@@ -116,6 +145,7 @@ class BudgetService:
         if not budget or budget.status != "draft":
             raise BudgetError(_("Solo se pueden editar líneas de presupuestos en borrador."))
 
+        amount = _parse_budget_amount(data.get("amount", line.amount))
         self._validate_line_data(budget, data, exclude_line_id=line_id)
 
         line.account_id = data.get("account_id", line.account_id)
@@ -123,7 +153,7 @@ class BudgetService:
         line.business_unit_id = data.get("business_unit_id", line.business_unit_id)
         line.project_id = data.get("project_id", line.project_id)
         line.period_id = data.get("period_id", line.period_id)
-        line.amount = Decimal(str(data.get("amount", line.amount)))
+        line.amount = amount
         line.description = data.get("description", line.description)
         line.modified_by = user_id
         line.modified = datetime.now()
