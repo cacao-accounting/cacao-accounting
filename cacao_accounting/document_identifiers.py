@@ -35,9 +35,6 @@ class ExternalNumberDuplicateError(IdentifierConfigurationError):
     """Error al intentar usar un numero externo ya registrado en el mismo contador."""
 
 
-EL_CONTADOR_EXTERNO_NO_EXISTE = "El contador externo no existe."
-EL_CONTADOR_EXTERNO_ESTA_INACTIVO = "El contador externo esta inactivo."
-
 # Tipos de entidad bancaria — cada transacción bancaria tiene su propia serie.
 BANK_PAYMENT_ENTITY_TYPES = ("bank_payment", "bank_receipt", "bank_transfer", "bank_debit_note", "bank_credit_note")
 
@@ -689,9 +686,9 @@ def suggest_next_external_number(external_counter_id: str) -> str:
     """
     counter = database.session.get(ExternalCounter, external_counter_id)
     if not counter:
-        raise IdentifierConfigurationError(EL_CONTADOR_EXTERNO_NO_EXISTE)
+        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
     if not counter.is_active:
-        raise IdentifierConfigurationError(EL_CONTADOR_EXTERNO_ESTA_INACTIVO)
+        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
     return counter.next_suggested_formatted
 
 
@@ -712,9 +709,9 @@ def record_external_number_used(
     """
     counter = database.session.get(ExternalCounter, external_counter_id)
     if not counter:
-        raise IdentifierConfigurationError(EL_CONTADOR_EXTERNO_NO_EXISTE)
+        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
     if not counter.is_active:
-        raise IdentifierConfigurationError(EL_CONTADOR_EXTERNO_ESTA_INACTIVO)
+        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
     if number_used < 0:
         raise IdentifierConfigurationError(_("El número externo usado no puede ser negativo."))
 
@@ -753,9 +750,9 @@ def adjust_external_counter(
 
     counter = database.session.get(ExternalCounter, external_counter_id)
     if not counter:
-        raise IdentifierConfigurationError(EL_CONTADOR_EXTERNO_NO_EXISTE)
+        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
     if not counter.is_active:
-        raise IdentifierConfigurationError(EL_CONTADOR_EXTERNO_ESTA_INACTIVO)
+        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
 
     previous_value = counter.last_used or 0
 

@@ -269,6 +269,48 @@ class TestExternalCounter(unittest.TestCase):
         with self.assertRaises(IdentifierConfigurationError):
             suggest_next_external_number(counter.id)
 
+    def test_external_counter_errors_follow_the_active_locale(self) -> None:
+        """Los errores de contador externo deben traducirse en el idioma activo."""
+        from flask import get_flashed_messages
+        from flask_babel import force_locale
+
+        from cacao_accounting.database import ExternalCounter
+        from cacao_accounting.document_identifiers import (
+            IdentifierConfigurationError,
+            adjust_external_counter,
+            suggest_next_external_number,
+        )
+        from cacao_accounting.exceptions import flash_error
+
+        inactive_counter = ExternalCounter(
+            company="ent",
+            name="Contador Inactivo",
+            counter_type="fiscal",
+            last_used=0,
+            padding=5,
+            is_active=False,
+        )
+        self.db.session.add(inactive_counter)
+        self.db.session.flush()
+
+        with self.app.test_request_context("/"):
+            with force_locale("en"):
+                with self.assertRaises(IdentifierConfigurationError) as missing_error:
+                    suggest_next_external_number("missing-counter")
+                flash_error(missing_error.exception)
+                self.assertEqual(get_flashed_messages(), ["The specified external counter does not exist."])
+
+        with self.app.test_request_context("/"):
+            with force_locale("en"):
+                with self.assertRaises(IdentifierConfigurationError) as inactive_error:
+                    adjust_external_counter(
+                        external_counter_id=inactive_counter.id,
+                        new_last_used=10,
+                        reason="Valid adjustment reason.",
+                    )
+                flash_error(inactive_error.exception)
+                self.assertEqual(get_flashed_messages(), ["The specified external counter is inactive."])
+
     def test_adjust_external_counter_creates_audit_log(self) -> None:
         """adjust_external_counter debe crear un registro en ExternalCounterAuditLog."""
         from cacao_accounting.database import ExternalCounterAuditLog
