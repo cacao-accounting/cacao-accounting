@@ -100,6 +100,66 @@ def test_get_payment_reconciliation_import_schema(logged_in_client):
     assert {"payment_id", "reference_type", "reference_id", "allocated_amount"}.issubset(keys)
 
 
+def test_open_items_rejects_authenticated_user_without_company_access(app, monkeypatch):
+    """The selector does not leak another company's AR/AP balances."""
+    from cacao_accounting.contabilidad import arap_allocation
+
+    with app.app_context():
+        user = User(id="UNASSIGNED", user="unassigned", password=b"test", active=True)
+        role = Roles(id="ROLE-ACCOUNTING", name="accounting_user", note="Accounting user")
+        database.session.add_all(
+            [
+                user,
+                role,
+                RolesUser(user_id=user.id, role_id=role.id, active=True),
+                RolesAccess(rol_id=role.id, module_id="accounting_mod", access=True, view=True),
+            ]
+        )
+        database.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = "UNASSIGNED"
+        session["_fresh"] = True
+
+    def unexpected_open_items(**kwargs):
+        raise AssertionError("Company authorization must run before loading open items")
+
+    monkeypatch.setattr(arap_allocation, "list_cached_open_items", unexpected_open_items)
+    monkeypatch.setattr(arap_allocation, "list_open_items", unexpected_open_items)
+
+    response = client.get("/api/line-import/open-items?company=cacao&party_type=customer&party=customer-1")
+
+    assert response.status_code == 403
+
+
+def test_open_items_rejects_disabled_company_for_admin(logged_in_client, app, monkeypatch):
+    """Admin access does not override the disabled-company restriction."""
+    from cacao_accounting.contabilidad import arap_allocation
+
+    with app.app_context():
+        database.session.add(
+            Entity(
+                id="disabled",
+                code="disabled",
+                company_name="Disabled Company",
+                tax_id="DISABLED-TAX",
+                enabled=False,
+            )
+        )
+        database.session.commit()
+
+    def unexpected_open_items(**kwargs):
+        raise AssertionError("Disabled-company authorization must run before loading open items")
+
+    monkeypatch.setattr(arap_allocation, "list_cached_open_items", unexpected_open_items)
+    monkeypatch.setattr(arap_allocation, "list_open_items", unexpected_open_items)
+
+    response = logged_in_client.get("/api/line-import/open-items?company=disabled&party_type=customer&party=customer-1")
+
+    assert response.status_code == 403
+
+
 def test_validate_payment_reconciliation_rejects_unknown_documents(logged_in_client):
     """La validación previa evita importar pagos o referencias inexistentes."""
     payload = {

@@ -137,6 +137,11 @@ def get_open_items() -> ResponseReturnValue:
     query_text = (request.args.get("q") or "").strip().casefold()
     if not company or party_type not in {"customer", "supplier"} or not party:
         return jsonify({"results": []})
+    company_record = database.session.query(Entity).filter(or_(Entity.id == company, Entity.code == company)).first()
+    permission = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    if company_record is None or not permission.consultar or not permission.tiene_acceso_compania(company_record.code):
+        return jsonify({"error": _("No tiene acceso a la compañía seleccionada.")}), 403
+    company = str(company_record.code)
     items = list_cached_open_items(company=company, party_type=party_type, party_id=party)
     if not items:
         items = list_open_items(company=company, party_type=party_type, party_id=party)
