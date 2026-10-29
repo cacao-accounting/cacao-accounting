@@ -102,6 +102,7 @@
         onSelect: config.onSelect || null,
         _positionHandler: null,
         _defaultTimer: null,
+        _requestId: 0,
 
         init() {
           this.lastFilterSignature = this.filterSignature();
@@ -174,6 +175,7 @@
           const nextSignature = this.filterSignature();
           if (nextSignature === this.lastFilterSignature) return;
           this.lastFilterSignature = nextSignature;
+          this._invalidatePendingRequest();
           this.clearSelection();
           if ((this.preload || this.loadOnFilterChange) && this.requiredFiltersPresent()) {
             void this.preloadOptions();
@@ -241,6 +243,7 @@
         },
 
         async preloadOptions(settings) {
+          const requestId = ++this._requestId;
           const loadSettings = settings || {};
           this.error = '';
           const params = this.buildSearchParams('');
@@ -250,8 +253,10 @@
           }
           try {
             const response = await this.fetchOptionsResponse(params);
+            if (requestId !== this._requestId) return;
             this.handlePreloadResponse(response);
           } catch (err) {
+            if (requestId !== this._requestId) return;
             this.handleFetchError(err, { keepOpen: false });
           }
         },
@@ -289,6 +294,7 @@
         },
 
         async fetchOptions() {
+          const requestId = ++this._requestId;
           const query = this.search.trim();
           this.error = '';
           if (!this.hasValidFilters()) {
@@ -307,12 +313,19 @@
           this.openMenu();
           try {
             const data = await this.fetchOptionsResponse(params);
+            if (requestId !== this._requestId) return;
             this.options = data.results || [];
             this.loading = false;
             this.openMenu();
           } catch (err) {
+            if (requestId !== this._requestId) return;
             this.handleFetchError(err, { keepOpen: true });
           }
+        },
+
+        _invalidatePendingRequest() {
+          this._requestId += 1;
+          this.loading = false;
         },
 
         handleFetchError(err, settings) {
@@ -333,13 +346,13 @@
         },
 
         handleShortQuery() {
+          this.loading = false;
           if (this.hasPreloadedOptions()) {
             this.openMenu();
             return;
           }
           this.options = [];
           this.closeMenu();
-          this.loading = false;
         },
 
         buildSearchParams(query) {
@@ -357,6 +370,7 @@
 
         selectOptionValue(value, label) {
           if (this.locked) return;
+          this._invalidatePendingRequest();
           this.selectedValue = normalizeValue(value) || '';
           this.selectedLabel = label || '';
           this.search = this.selectedLabel;
@@ -379,6 +393,7 @@
 
         selectOption(option) {
           if (this.locked) return;
+          this._invalidatePendingRequest();
           const optionValue = option.value ?? option.id;
           this.selectedValue = normalizeValue(optionValue) || '';
           this.selectedLabel = option.display_name || option.label || '';
@@ -415,6 +430,7 @@
 
         clearSelection() {
           if (this.locked) return;
+          this._invalidatePendingRequest();
           this.selectedValue = '';
           this.selectedLabel = '';
           this.search = '';

@@ -47,6 +47,16 @@ async function flushPromises() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('smart-select', function () {
   afterEach(function () {
     delete globalThis.document;
@@ -395,6 +405,146 @@ describe('smart-select', function () {
 
     assert.strictEqual(component.search, 'cacao');
     assert.ok(decodeURIComponent(requestUrl).includes('q=cacao'));
+  });
+
+  it('keeps the latest search results when requests finish out of order', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    const create = loadSmartSelect({ fetch: () => requests.shift().promise });
+    const component = create({ doctype: 'company', name: 'company', minChars: 1 });
+
+    component.search = 'old';
+    const oldSearch = component.fetchOptions();
+    component.search = 'new';
+    const newSearch = component.fetchOptions();
+
+    newRequest.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'NEW' }] }) });
+    await newSearch;
+    oldRequest.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'OLD' }] }) });
+    await oldSearch;
+
+    assert.deepStrictEqual(component.options.map((option) => option.value), ['NEW']);
+    assert.strictEqual(component.loading, false);
+  });
+
+  it('ignores errors from an obsolete search request', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    const create = loadSmartSelect({ fetch: () => requests.shift().promise });
+    const component = create({ doctype: 'company', name: 'company', minChars: 1 });
+
+    component.search = 'old';
+    const oldSearch = component.fetchOptions();
+    component.search = 'new';
+    const newSearch = component.fetchOptions();
+    newRequest.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'NEW' }] }) });
+    await newSearch;
+    oldRequest.reject(new Error('stale network failure'));
+    await oldSearch;
+
+    assert.deepStrictEqual(component.options.map((option) => option.value), ['NEW']);
+    assert.strictEqual(component.error, '');
+    assert.strictEqual(component.loading, false);
+  });
+
+  it('keeps the latest preload results when requests finish out of order', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    const create = loadSmartSelect({ fetch: () => requests.shift().promise });
+    const component = create({ doctype: 'company', name: 'company' });
+
+    const oldPreload = component.preloadOptions();
+    const newPreload = component.preloadOptions();
+    newRequest.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'NEW' }] }) });
+    await newPreload;
+    oldRequest.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'OLD' }] }) });
+    await oldPreload;
+
+    assert.deepStrictEqual(component.options.map((option) => option.value), ['NEW']);
+    assert.strictEqual(component.loading, false);
+  });
+
+  it('ignores errors from an obsolete preload request', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    const create = loadSmartSelect({ fetch: () => requests.shift().promise });
+    const component = create({ doctype: 'company', name: 'company' });
+
+    const oldPreload = component.preloadOptions();
+    const newPreload = component.preloadOptions();
+    newRequest.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'NEW' }] }) });
+    await newPreload;
+    oldRequest.reject(new Error('stale network failure'));
+    await oldPreload;
+
+    assert.deepStrictEqual(component.options.map((option) => option.value), ['NEW']);
+    assert.strictEqual(component.error, '');
+    assert.strictEqual(component.loading, false);
+  });
+
+  it('stops loading when a new query becomes shorter than minChars', async function () {
+    const pendingRequest = deferred();
+    const create = loadSmartSelect({ fetch: () => pendingRequest.promise });
+    const component = create({ doctype: 'company', name: 'company', minChars: 2 });
+    component.options = [{ value: 'PRELOADED' }];
+    component.search = 'long';
+
+    const pendingSearch = component.fetchOptions();
+    assert.strictEqual(component.loading, true);
+
+    component.search = 'x';
+    await component.fetchOptions();
+    pendingRequest.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'STALE' }] }) });
+    await pendingSearch;
+
+    assert.deepStrictEqual(component.options.map((option) => option.value), ['PRELOADED']);
+    assert.strictEqual(component.loading, false);
+    assert.strictEqual(component.open, true);
+  });
+
+  it('invalidates pending searches when filters change or selection is cleared', async function () {
+    const pendingRequest = deferred();
+    const companyElement = {
+      value: 'old-company',
+      addEventListener() {},
+    };
+    const create = loadSmartSelect({
+      elements: { '#company': companyElement },
+      fetch: () => pendingRequest.promise,
+    });
+    const component = create({
+      doctype: 'item',
+      name: 'item',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      minChars: 1,
+    });
+    component.init();
+
+    component.search = 'item';
+    const oldSearch = component.fetchOptions();
+    companyElement.value = 'new-company';
+    component.handleFilterChange();
+    pendingRequest.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'STALE' }] }) });
+    await oldSearch;
+
+    assert.deepStrictEqual(component.options, []);
+    assert.strictEqual(component.loading, false);
+
+    const nextRequest = deferred();
+    globalThis.fetch = () => nextRequest.promise;
+    component.search = 'item';
+    const nextSearch = component.fetchOptions();
+    component.clearSelection();
+    nextRequest.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'STALE' }] }) });
+    await nextSearch;
+
+    assert.deepStrictEqual(component.options, []);
+    assert.strictEqual(component.loading, false);
   });
 
   it('positions the open menu with fixed viewport coordinates', function () {
