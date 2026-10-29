@@ -1625,3 +1625,52 @@ def test_cost_center_discovery_omits_inactive_centers(app_instance):
         codes = {row["code"] for row in result["items"]}
         assert "QT-ACTIVE" in codes
         assert "QT-INACTIVE" not in codes
+
+
+def test_account_movement_query_tool_keeps_service_page(app_instance, monkeypatch):
+    """The wrapper must not slice a report page a second time."""
+    from cacao_accounting.query_tools.handlers import advanced as h_advanced
+    from cacao_accounting.reportes.services import PaginatedReport, ReportRow
+
+    with app_instance.app_context():
+        context = QueryContext(
+            user_id="query-tool-service",
+            permissions={"accounting.reports.read"},
+            company_ids=["CACAO"],
+            is_service_principal=True,
+        )
+        second_page = PaginatedReport(
+            rows=[ReportRow(values={"document_no": "MOV-002"})],
+            totals={},
+            total_rows=2,
+            page=2,
+            page_size=1,
+        )
+        monkeypatch.setattr(h_advanced, "get_account_movement_detail", lambda _filters: second_page)
+
+        result = h_advanced.get_account_movement_detail_handler.handler(
+            context=context,
+            company_id="CACAO",
+            page=2,
+            page_size=1,
+        )
+
+        assert result["items"] == [{"document_no": "MOV-002"}]
+
+
+def test_report_result_paginates_full_report_rows():
+    """The wrapper still slices reports that return their complete row set."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.query_tools.handlers.advanced import _report_result
+    from cacao_accounting.reportes.services import PaginatedReport, ReportRow
+
+    report = PaginatedReport(
+        rows=[ReportRow(values={"document_no": "MOV-001"}), ReportRow(values={"document_no": "MOV-002"})],
+        totals={},
+        total_rows=2,
+        page_size=2,
+    )
+    result = _report_result(report, "CACAO", SimpleNamespace(page=2, page_size=1))
+
+    assert result["items"] == [{"document_no": "MOV-002"}]

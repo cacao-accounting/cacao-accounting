@@ -73,7 +73,10 @@ def _report_result(report: Any, company_id: str | None = None, filters: Any = No
     page_size = requested_size or report.page_size or len(report.rows)
     total_items = report.total_rows or len(report.rows)
     rows = report.rows
-    if requested_size:
+    service_page_matches_request = (
+        getattr(report, "page", None) == page_number and getattr(report, "page_size", None) == page_size
+    )
+    if requested_size and not service_page_matches_request:
         start = (page_number - 1) * page_size
         rows = report.rows[start : start + page_size]
     has_more = page_number * page_size < total_items
