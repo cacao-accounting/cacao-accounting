@@ -53,6 +53,28 @@ def test_roles_and_company_access_are_parallel(app):
         assert permissions.tiene_acceso_compania("cafe") is False
 
 
+def test_admin_company_list_excludes_disabled_entities(app):
+    """Administrator company lists must follow the enabled-company access rule."""
+    with app.app_context():
+        admin = User(id="USER-ADMIN", user="admin", password=b"test", classification="admin", active=True)
+        disabled = Entity(
+            id="disabled",
+            code="disabled",
+            name="Deshabilitada",
+            company_name="Deshabilitada",
+            tax_id="J009",
+            currency="NIO",
+            enabled=False,
+        )
+        database.session.add_all([admin, disabled])
+        database.session.commit()
+
+        permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=admin.id)
+
+        assert permissions.tiene_acceso_compania("disabled") is False
+        assert permissions.obtener_companias_autorizadas() == ["cacao", "cafe"]
+
+
 def test_company_selector_does_not_disclose_unassigned_active_company(client):
     """Un selector muestra solo compañías activas expresamente asignadas."""
     from flask_login import login_user

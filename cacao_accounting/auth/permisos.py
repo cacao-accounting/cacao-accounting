@@ -223,7 +223,9 @@ class Permisos:
     def obtener_companias_autorizadas(self) -> list[str]:
         """Retorna los códigos de compañía asignados al usuario actual."""
         if self.administrador:
-            return list(database.session.execute(select(Entity.code).order_by(Entity.code)).scalars())
+            return list(
+                database.session.execute(select(Entity.code).where(Entity.enabled.is_(True)).order_by(Entity.code)).scalars()
+            )
         if not self.usuario:
             return []
         return list(
