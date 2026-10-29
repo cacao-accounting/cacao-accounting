@@ -90,3 +90,14 @@ def test_with_provenance_uses_paginated_contract() -> None:
     last = _with_provenance(PaginatedResult(page=2, page_size=2, total_items=3, items=[3]).to_dict(), "c1")
     assert last["provenance"]["completeness"]["truncated"] is False
     assert last["provenance"]["completeness"]["returned_items"] == 1
+
+
+def test_discovery_result_uses_paginated_contract() -> None:
+    """La procedencia de discovery refleja si hay una página siguiente."""
+    from cacao_accounting.query_tools.handlers.discovery import _result
+
+    first = _result(1, 2, [{"id": "a"}, {"id": "b"}], 3, "c1")
+    last = _result(2, 2, [{"id": "c"}], 3, "c1")
+
+    assert first["provenance"]["completeness"]["truncated"] is True
+    assert last["provenance"]["completeness"]["truncated"] is False

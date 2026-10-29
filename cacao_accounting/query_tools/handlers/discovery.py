@@ -40,7 +40,7 @@ def _page(page: int, page_size: int) -> tuple[int, int]:
 
 def _result(page: int, size: int, items: list[dict[str, Any]], total: int, company_id: str) -> dict[str, Any]:
     result = PaginatedResult(page=page, page_size=size, total_items=total, items=items).to_dict()
-    result["provenance"] = {"company_id": company_id, "completeness": {"truncated": result["page"]["has_more"]}}
+    result["provenance"] = {"company_id": company_id, "completeness": {"truncated": result["has_next_page"]}}
     return result
 
 

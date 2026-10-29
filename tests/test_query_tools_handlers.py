@@ -184,6 +184,42 @@ def test_operational_paginated_handlers_include_provenance(app_instance):
             assert completeness["total_items"] == result["total_items"]
 
 
+def test_cash_forecast_list_uses_paginated_contract(app_instance):
+    """La lista de pronósticos informa correctamente si queda otra página."""
+    from cacao_accounting.database import CashForecast, FiscalYear
+    from cacao_accounting.query_tools.handlers import treasury as h_treasury
+
+    with app_instance.app_context():
+        user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        context = QueryContext(user_id=user.id, permissions={"banking.reports.read"}, company_ids=["CACAO"])
+        fiscal_year = database.session.execute(
+            database.select(FiscalYear).where(FiscalYear.entity == "CACAO").limit(1)
+        ).scalar_one()
+        database.session.add_all(
+            [
+                CashForecast(
+                    version="pagination-contract-1",
+                    fiscal_year_id=fiscal_year.id,
+                    company="CACAO",
+                    periodicity="monthly",
+                ),
+                CashForecast(
+                    version="pagination-contract-2",
+                    fiscal_year_id=fiscal_year.id,
+                    company="CACAO",
+                    periodicity="monthly",
+                ),
+            ]
+        )
+        database.session.commit()
+
+        first = h_treasury.list_cash_forecasts.handler(context=context, company_id="CACAO", page_size=1)
+        last = h_treasury.list_cash_forecasts.handler(context=context, company_id="CACAO", page=2, page_size=1)
+
+        assert first["provenance"]["completeness"]["truncated"] is True
+        assert last["provenance"]["completeness"]["truncated"] is False
+
+
 def test_list_accounting_periods_handler(app_instance):
     with app_instance.app_context():
         user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()

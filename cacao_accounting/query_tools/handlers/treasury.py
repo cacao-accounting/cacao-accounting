@@ -80,7 +80,7 @@ def list_cash_forecasts(*, context: QueryContext, company_id: str, page: int = 1
         for row in rows
     ]
     result = PaginatedResult(page=current, page_size=size, total_items=total, items=items).to_dict()
-    result["provenance"] = {"company_id": company_id, "completeness": {"truncated": result["page"]["has_more"]}}
+    result["provenance"] = {"company_id": company_id, "completeness": {"truncated": result["has_next_page"]}}
     return result
 
 
