@@ -164,6 +164,43 @@ def test_dashboard_returns_uniform_sections_and_metrics(client):
     assert sales["tables"]["top_customers"][0]["name"] == "Cliente Demo"
 
 
+def test_recent_bank_movements_use_the_bank_account_currency(app, client):
+    """Recent statement amounts retain the currency of their bank account."""
+    with app.app_context():
+        database.session.add(Currency(id="CUR-NIO", code="NIO", name="Córdoba", decimals=2, active=True))
+        database.session.add(
+            BankAccount(
+                id="BANK-ACC-NIO",
+                bank_id="BANK-1",
+                company="COMP",
+                account_name="Cuenta NIO",
+                account_no="002",
+                currency="NIO",
+                is_active=True,
+            )
+        )
+        database.session.add(
+            BankTransaction(
+                id="BANK-TX-NIO",
+                bank_account_id="BANK-ACC-NIO",
+                posting_date=date(2024, 1, 20),
+                deposit=Decimal("100"),
+                description="Depósito NIO",
+                is_reconciled=False,
+            )
+        )
+        database.session.commit()
+
+    _login(client, "admin")
+    response = client.get("/api/dashboard/data?company=COMP&period=PER-COMP")
+
+    assert response.status_code == 200
+    movements = response.get_json()["sections"]["banks"]["tables"]["recent_movements"]
+    nio_movement = next(row for row in movements if row["description"] == "Depósito NIO")
+    assert Decimal(nio_movement["amount"]) == Decimal("100")
+    assert nio_movement["currency"] == "NIO"
+
+
 def test_dashboard_preserves_negative_income_for_net_loss(app, client):
     """Una pérdida neta debe permanecer negativa en los KPI y el resultado mensual."""
     with app.app_context():

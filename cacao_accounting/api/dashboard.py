@@ -552,16 +552,22 @@ def _recent_bank_movements(
     currency: str,
 ) -> list[dict[str, Any]]:
     """Devuelve movimientos bancarios recientes."""
-    rows = _bank_transactions_query(account_ids, start_date, end_date).order_by(BankTransaction.posting_date.desc()).limit(5)
+    rows = (
+        _bank_transactions_query(account_ids, start_date, end_date)
+        .join(BankAccount, BankAccount.id == BankTransaction.bank_account_id)
+        .with_entities(BankTransaction, BankAccount.currency)
+        .order_by(BankTransaction.posting_date.desc())
+        .limit(5)
+    )
     return [
         {
             "date": row.posting_date.isoformat() if row.posting_date else "",
             "description": row.description or row.reference_number or _("Movimiento bancario"),
             "amount": _numeric(Decimal(str(row.deposit or 0)) - Decimal(str(row.withdrawal or 0))),
-            "currency": currency,
+            "currency": account_currency or currency,
             "status": _("Conciliado") if row.is_reconciled else _("Pendiente"),
         }
-        for row in rows
+        for row, account_currency in rows
     ]
 
 
