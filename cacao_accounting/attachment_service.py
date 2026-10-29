@@ -361,27 +361,35 @@ def delete_attachment(file_id: str, reference_type: str, reference_id: str, user
     if attachment is None:
         raise AttachmentError(_("Adjunto no encontrado."), 404)
 
-    database.session.delete(attachment)
-    database.session.flush()
+    file_path_to_remove = None
+    try:
+        database.session.delete(attachment)
+        database.session.flush()
 
-    other_links = (
-        database.session.execute(
-            database.select(database.func.count(FileAttachment.id)).where(FileAttachment.file_id == file_id)
-        ).scalar()
-        or 0
-    )
+        other_links = (
+            database.session.execute(
+                database.select(database.func.count(FileAttachment.id)).where(FileAttachment.file_id == file_id)
+            ).scalar()
+            or 0
+        )
 
-    if other_links == 0:
-        file_rec = database.session.get(File, file_id)
-        if file_rec:
-            if file_rec.file_path and os.path.exists(file_rec.file_path):
-                try:
-                    os.remove(file_rec.file_path)
-                except OSError:
-                    pass
-            database.session.delete(file_rec)
+        if other_links == 0:
+            file_rec = database.session.get(File, file_id)
+            if file_rec:
+                file_path_to_remove = file_rec.file_path
+                database.session.delete(file_rec)
 
-    database.session.commit()
+        database.session.commit()
+    except Exception:
+        database.session.rollback()
+        raise
+
+    if file_path_to_remove and os.path.exists(file_path_to_remove):
+        try:
+            os.remove(file_path_to_remove)
+        except OSError:
+            pass
+
     return True
 
 

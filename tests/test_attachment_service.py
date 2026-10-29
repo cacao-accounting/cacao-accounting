@@ -1,6 +1,7 @@
 """Tests for Cloud-only file attachment service and item product images."""
 
 import io
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -16,7 +17,7 @@ from cacao_accounting.attachment_service import (
     upload_attachment,
     upload_item_image,
 )
-from cacao_accounting.database import Item, Party, User, database
+from cacao_accounting.database import FileAttachment, Item, Party, User, database
 from werkzeug.datastructures import FileStorage
 
 
@@ -93,17 +94,45 @@ def test_attachment_delete_cloud(app_cloud, tmp_path):
             )
 
             file_id = upload_res["file_id"]
+            _, file_path = get_attachment_file(file_id)
             attachments = list_attachments("supplier", "SUPP-01")
             assert len(attachments) == 1
+
+            database.session.add(FileAttachment(file_id=file_id, reference_type="supplier", reference_id="SUPP-02"))
+            database.session.commit()
 
             delete_attachment(file_id, "supplier", "SUPP-01", user_id="user123")
 
             attachments_after = list_attachments("supplier", "SUPP-01")
             assert len(attachments_after) == 0
+            assert len(list_attachments("supplier", "SUPP-02")) == 1
+            assert Path(file_path).is_file()
+
+            delete_attachment(file_id, "supplier", "SUPP-02", user_id="user123")
+            assert not Path(file_path).exists()
 
             with pytest.raises(AttachmentError) as exc_info:
                 get_attachment_file(file_id)
             assert exc_info.value.status_code == 404
+
+
+def test_attachment_delete_preserves_file_when_database_commit_fails(app_cloud, tmp_path):
+    """Refs: #1001; a rolled-back delete must retain its physical file."""
+    app_cloud.config["UPLOAD_FOLDER"] = str(tmp_path)
+    file_obj = FileStorage(stream=io.BytesIO(b"document"), filename="document.txt")
+
+    with app_cloud.app_context(), patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+        result = upload_attachment("document", "REF-1", file_obj)
+        file_id = result["file_id"]
+        _, file_path = get_attachment_file(file_id)
+
+        with patch.object(database.session, "commit", side_effect=RuntimeError("database unavailable")):
+            with pytest.raises(RuntimeError, match="database unavailable"):
+                delete_attachment(file_id, "document", "REF-1")
+
+        assert Path(file_path).is_file()
+        assert len(list_attachments("document", "REF-1")) == 1
+        assert get_attachment_file(file_id)[1] == file_path
 
 
 def test_desktop_mode_blocks_attachments(app_cloud):
