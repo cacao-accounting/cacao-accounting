@@ -133,7 +133,7 @@ class ImportService:
             batch.import_status = 2 if business_errors_count > 0 else 3
             database.session.commit()
 
-        except (SQLAlchemyError, ValueError, OSError) as e:
+        except (ArithmeticError, SQLAlchemyError, ValueError, OSError) as e:
             self._handle_validation_error(batch, batch_id, e)
 
     def _validate_accounting_book_rule(self, batch: ImportBatch) -> bool:

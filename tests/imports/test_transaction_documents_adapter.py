@@ -14,6 +14,7 @@ from cacao_accounting import create_app
 from cacao_accounting.database import Entity, Warehouse, database
 from cacao_accounting.database.helpers import inicia_base_de_datos
 from cacao_accounting.imports.adapters.purchase_order import PurchaseOrderAdapter
+from cacao_accounting.imports.adapters.transaction_documents import PurchaseOrderAdapter as TransactionPurchaseOrderAdapter
 from cacao_accounting.imports.adapters.transaction_documents import (
     TransactionDocumentAdapter,
     TransactionImportConfig,
@@ -205,3 +206,38 @@ def test_build_document_keeps_transaction_and_base_amounts(monkeypatch) -> None:
     assert document["header"].base_total == Decimal("7300.0000")
     assert document["items"][0].base_amount == Decimal("7300.0000")
     assert document["items"][0].base_rate == Decimal("3650.0000")
+
+
+@pytest.mark.parametrize("field", ["cantidad", "precio_unitario"])
+@pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])
+def test_transaction_import_rejects_non_finite_row_values(monkeypatch, field: str, value: str) -> None:
+    """Las cantidades y tarifas no finitas se rechazan antes de persistir."""
+    from cacao_accounting.imports.adapters import transaction_documents
+
+    monkeypatch.setattr(transaction_documents, "company_currency", lambda _company: "NIO")
+    adapter = TransactionPurchaseOrderAdapter()
+    row = {
+        "document_ref": "PO-NONFINITE",
+        "fecha": date.today().isoformat(),
+        "moneda": "NIO",
+        "producto": "ITEM-1",
+        "cantidad": "1",
+        "precio_unitario": "1",
+    }
+    row[field] = value
+
+    assert any("Valor numérico inválido" in error for error in adapter.validate_row(row))
+    with pytest.raises(ValueError):
+        adapter.build_document([row], {"company_id": "cacao"})
+
+
+@pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])
+def test_transaction_import_rejects_non_finite_exchange_rate(monkeypatch, value: str) -> None:
+    """La tasa explícita no finita genera un error controlado."""
+    from cacao_accounting.imports.adapters import transaction_documents
+
+    monkeypatch.setattr(transaction_documents, "company_currency", lambda _company: "NIO")
+    with pytest.raises(ValueError, match="finito"):
+        TransactionPurchaseOrderAdapter()._currency_and_rate(  # noqa: SLF001
+            {"moneda": "USD", "tipo_cambio": value}, None, "cacao", date.today()
+        )

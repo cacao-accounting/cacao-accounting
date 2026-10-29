@@ -143,3 +143,39 @@ def test_identity_hash_includes_bank_account_and_date(bank_app):
     )
 
     assert _bank_transaction_identity(tx1) != _bank_transaction_identity(tx2)
+
+
+@pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])
+def test_bank_import_adapter_rejects_non_finite_amounts(bank_app, value: str) -> None:
+    """El adaptador de extractos no acepta importes no finitos."""
+    account = database.session.execute(database.select(BankAccount).filter_by(account_name="Test Account")).scalar_one()
+    adapter = BankStatementAdapter()
+    row = {
+        "bank_account_id": account.id,
+        "posting_date": "2026-08-26",
+        "deposit": value,
+        "withdrawal": "",
+    }
+
+    assert any("Monto bancario inválido" in error for error in adapter.validate_row(row))
+    with pytest.raises(ValueError, match="finito"):
+        adapter.build_document([row], {"company_id": "cacao"})
+
+
+@pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])
+def test_statement_parser_rejects_non_finite_amounts(value: str) -> None:
+    """El importador CSV bancario convierte no finitos en error controlado."""
+    from cacao_accounting.bancos.statement_service import BankStatementError, _parse_bank_statement_row
+
+    mapping = {"date": "date", "deposit": "deposit", "withdrawal": "withdrawal"}
+    with pytest.raises(BankStatementError, match="finito"):
+        _parse_bank_statement_row({"date": "2026-08-26", "deposit": value, "withdrawal": ""}, mapping)
+
+
+@pytest.mark.parametrize("value", [Decimal("NaN"), Decimal("sNaN"), Decimal("Infinity"), Decimal("-Infinity")])
+def test_statement_decimal_parser_rejects_non_finite_decimal(value: Decimal) -> None:
+    """El parser también valida Decimal ya convertido, no solo entradas CSV."""
+    from cacao_accounting.bancos.statement_service import BankStatementError, _decimal_value
+
+    with pytest.raises(BankStatementError, match="finito"):
+        _decimal_value(value)

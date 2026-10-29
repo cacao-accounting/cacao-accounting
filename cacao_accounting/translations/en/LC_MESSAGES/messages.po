@@ -8349,6 +8349,9 @@ msgstr "Ambiguous thousands separator"
 msgid "El monto del extracto no es válido: %(value)s"
 msgstr "The statement amount is invalid: %(value)s"
 
+msgid "El monto del extracto debe ser finito: %(value)s"
+msgstr "The statement amount must be finite: %(value)s"
+
 #: cacao_accounting/bancos/statement_service.py:271
 msgid "La fecha del extracto no tiene un formato soportado."
 msgstr "The statement date does not have a supported format."

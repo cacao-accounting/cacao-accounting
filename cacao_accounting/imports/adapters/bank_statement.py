@@ -30,7 +30,7 @@ class BankStatementAdapter(BaseImportAdapter):
     @staticmethod
     def _optional_amount(value: Any) -> Decimal | None:
         """Convierte una columna vacía o cero en un lado bancario ausente."""
-        if value in (None, ""):
+        if value is None or (isinstance(value, str) and value == ""):
             return None
         normalized = str(value).strip().replace(" ", "")
         if "," in normalized and "." in normalized:
@@ -46,6 +46,8 @@ class BankStatementAdapter(BaseImportAdapter):
         elif normalized.count(".") > 1:
             raise InvalidOperation(_("Separador de miles ambiguo"))
         amount = Decimal(normalized)
+        if not amount.is_finite():
+            raise ValueError(_("El monto debe ser finito."))
         return amount if amount != 0 else None
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:

@@ -98,10 +98,23 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         errors = super().validate_row(row_data)
         for field in ("cantidad", "precio_unitario"):
             try:
-                Decimal(str(row_data.get(field) or 0))
-            except (InvalidOperation, ValueError):
+                self._finite_decimal(row_data.get(field), field)
+            except ValueError:
                 errors.append(f"Valor numérico inválido en columna '{field}'.")
         return errors
+
+    @staticmethod
+    def _finite_decimal(value: Any, field: str) -> Decimal:
+        """Convierte un valor Decimal y rechaza entradas inválidas o no finitas."""
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return Decimal("0")
+        try:
+            amount = Decimal(str(value))
+        except (InvalidOperation, ValueError) as exc:
+            raise ValueError(_("%(field)s debe ser un número decimal válido.") % {"field": field}) from exc
+        if not amount.is_finite():
+            raise ValueError(_("%(field)s debe ser finito.") % {"field": field})
+        return amount
 
     def _validate_source_document(self, first_row: dict[str, Any], source: Any, company_id: str, errors: list[str]) -> None:
         """Validate the optional upstream document and its party/company scope."""
@@ -212,8 +225,8 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         total_qty = Decimal("0")
         total = Decimal("0")
         for row in document_data:
-            qty = Decimal(str(row.get("cantidad") or 0))
-            rate = Decimal(str(row.get("precio_unitario") or 0))
+            qty = self._finite_decimal(row.get("cantidad"), "cantidad")
+            rate = self._finite_decimal(row.get("precio_unitario"), "precio_unitario")
             amount = qty * rate
             item = self.config.item_model(
                 item_code=row.get("producto"),
@@ -322,12 +335,13 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 )
             )
         explicit_rate = first_row.get("tipo_cambio") or first_row.get("exchange_rate")
+        explicit_decimal = self._finite_decimal(explicit_rate, "tipo de cambio") if explicit_rate not in (None, "") else None
         if transaction_currency == base_currency:
             return transaction_currency, base_currency, Decimal("1")
-        if explicit_rate not in (None, ""):
-            rate = Decimal(str(explicit_rate))
+        if explicit_decimal is not None:
+            rate = explicit_decimal
         elif source is not None and getattr(source, "exchange_rate", None):
-            rate = Decimal(str(source.exchange_rate))
+            rate = self._finite_decimal(source.exchange_rate, "tipo de cambio")
         else:
             from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
 
@@ -342,6 +356,8 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                         "posting_date": posting_date,
                     }
                 ) from exc
+        if not rate.is_finite():
+            raise ValueError(_("Tipo de Cambio debe ser finito."))
         if rate <= 0:
             raise ValueError(_("El tipo de cambio debe ser positivo."))
         return transaction_currency, base_currency, rate

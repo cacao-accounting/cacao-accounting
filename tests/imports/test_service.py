@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 from datetime import date
+from decimal import InvalidOperation
 
 import pytest
 
@@ -112,6 +113,43 @@ def test_business_error_keeps_global_source_row_without_document_reference(tmp_p
 
         error = ImportBatchError.query.filter_by(batch_id=batch.id).one()
         assert error.row_number == 2
+
+
+def test_validation_arithmetic_error_finishes_batch(tmp_path, monkeypatch):
+    """Una excepción Decimal inesperada termina el lote en vez de dejarlo procesando."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        database.create_all()
+        csv_file = tmp_path / "arithmetic_error.csv"
+        csv_file.write_text("value\ninvalid\n", encoding="utf-8")
+        batch = ImportBatch(
+            id=str(ULID()),
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            source_format="csv",
+            source_path=str(csv_file),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        class ArithmeticErrorAdapter:
+            required_columns = []
+
+            def validate_row(self, _row):
+                raise InvalidOperation("invalid Decimal")
+
+            def validate_document(self, _rows, _context):
+                return []
+
+        service = ImportService()
+        monkeypatch.setattr(service, "_get_adapter", lambda _record_type: ArithmeticErrorAdapter())
+        service.validate(batch.id)
+
+        updated_batch = database.session.get(ImportBatch, batch.id)
+        error = ImportBatchError.query.filter_by(batch_id=batch.id).one()
+        assert updated_batch.import_status == 7
+        assert error.error_type == "SYSTEM_ERROR"
 
 
 def test_import_service_forbidden_columns(tmp_path):

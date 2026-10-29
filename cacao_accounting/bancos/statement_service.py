@@ -237,9 +237,11 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
 
 
 def _decimal_value(value: Any) -> Decimal:
-    if value in (None, ""):
+    if value is None or (isinstance(value, str) and value == ""):
         return Decimal("0")
     if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise BankStatementError(_("El monto del extracto debe ser finito: %(value)s") % {"value": value})
         return value
     normalized = str(value).strip().replace(" ", "")
     if "," in normalized and "." in normalized:
@@ -255,9 +257,12 @@ def _decimal_value(value: Any) -> Decimal:
     elif normalized.count(".") > 1:
         raise InvalidOperation(_("Separador de miles ambiguo"))
     try:
-        return Decimal(normalized)
+        amount = Decimal(normalized)
     except InvalidOperation as exc:
         raise BankStatementError(_("El monto del extracto no es válido: %(value)s") % {"value": value}) from exc
+    if not amount.is_finite():
+        raise BankStatementError(_("El monto del extracto debe ser finito: %(value)s") % {"value": value})
+    return amount
 
 
 def _parse_date(value: str) -> date:
