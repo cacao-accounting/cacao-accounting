@@ -64,9 +64,19 @@ function loadTransactionForm() {
   require(modulePath);
   listeners['alpine:init']();
 
-  return function create(config) {
+  const create = function create(config) {
     return transactionFormFactory(config);
   };
+  create.runNextTimeout = function runNextTimeout() {
+    const next = scheduledTimeouts.entries().next().value;
+    if (!next) return false;
+    const [timeoutId, callback] = next;
+    scheduledTimeouts.delete(timeoutId);
+    callback();
+    return true;
+  };
+  create.pendingTimeoutCount = () => scheduledTimeouts.size;
+  return create;
 }
 
 describe('transaction-form', function () {
@@ -777,6 +787,94 @@ describe('transaction-form', function () {
     await lookup;
 
     assert.strictEqual(line.rate, 75);
+  });
+
+  it('keeps the latest fiscal preview when requests finish out of order', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    globalThis.fetch = () => requests.shift().promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'COMP', currency: 'USD' },
+    });
+
+    const oldPreview = component.fetchTaxPreview();
+    component.header.posting_date = '2026-10-28';
+    const newPreview = component.fetchTaxPreview();
+    newRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ summary: { document_tax_total: '8' }, tax_lines: [{ concept: 'new' }] }),
+    });
+    await newPreview;
+    oldRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ summary: { document_tax_total: '2' }, tax_lines: [{ concept: 'old' }] }),
+    });
+    await oldPreview;
+
+    assert.strictEqual(component.taxCharges.summary.document_tax_total, '8');
+    assert.strictEqual(component.taxCharges.lines[0].concept, 'new');
+  });
+
+  it('refreshes fiscal preview after header changes and ignores the prior context', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    globalThis.fetch = () => requests.shift().promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'COMP', currency: 'USD' },
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => { watchers[expression] = callback; };
+    component.init();
+
+    assert.strictEqual(typeof watchers['header.currency'], 'function');
+    assert.strictEqual(create.runNextTimeout(), true);
+    component.header.currency = 'NIO';
+    watchers['header.currency']();
+    assert.strictEqual(create.runNextTimeout(), true);
+
+    newRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ summary: { document_tax_total: '8' }, tax_lines: [{ concept: 'NIO' }] }),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    oldRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ summary: { document_tax_total: '2' }, tax_lines: [{ concept: 'USD' }] }),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(component.taxCharges.summary.document_tax_total, '8');
+    assert.strictEqual(component.taxCharges.lines[0].concept, 'NIO');
+  });
+
+  it('cancels a queued fiscal preview when opening tax-line editing', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'COMP', currency: 'USD' },
+    });
+    component.taxCharges.lines = [component.newTaxLine()];
+    component.queueTaxPreview();
+    assert.strictEqual(create.pendingTimeoutCount(), 1);
+
+    component.openTaxLineDetails(0);
+
+    assert.strictEqual(create.pendingTimeoutCount(), 0);
   });
 
 });

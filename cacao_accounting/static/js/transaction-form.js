@@ -324,6 +324,7 @@
       const flowLockedFields = resolveFlowLockedFields(config);
       const catalogPriceRequestIds = new WeakMap();
       let catalogPriceRequestSequence = 0;
+      let taxPreviewRequestId = 0;
 
       return {
         formKey: config.formKey || '',
@@ -405,9 +406,14 @@
           this.lines = (config.initialLines || []).map(normalizeLineWithCb(this));
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
           if (typeof this.$watch === 'function') {
-            this.$watch('header.party', () => this.refreshCatalogPrices());
-            this.$watch('header.company', () => this.refreshCatalogPrices());
-            this.$watch('header.posting_date', () => this.refreshCatalogPrices());
+            const pricingFields = new Set(['company', 'party', 'posting_date']);
+            const fiscalFields = ['company', 'currency', 'posting_date', 'party_type', 'party', 'purpose', 'payment_type'];
+            for (const field of fiscalFields) {
+              this.$watch(`header.${field}`, () => {
+                if (pricingFields.has(field)) this.refreshCatalogPrices();
+                this.queueTaxPreview();
+              });
+            }
           }
           this.queueTaxPreview();
         },
@@ -816,36 +822,44 @@
 
         queueTaxPreview() {
           if (!this.supportsFiscalPreview()) return;
+          this._invalidateTaxPreviewRequest();
           const hasWindowTimers = typeof globalThis !== 'undefined' &&
             typeof globalThis.setTimeout === 'function' &&
             typeof globalThis.clearTimeout === 'function';
           if (!hasWindowTimers) return;
-          if (this.taxPreviewDebounceId) {
+          if (this.taxPreviewDebounceId !== null) {
             globalThis.clearTimeout(this.taxPreviewDebounceId);
           }
           this.taxPreviewDebounceId = globalThis.setTimeout(this.executeTaxPreview.bind(this), 250);
         },
 
         executeTaxPreview() {
+          this.taxPreviewDebounceId = null;
           void this.fetchTaxPreview();
         },
 
         async fetchTaxPreview() {
+          this._invalidateTaxPreviewRequest();
+          const requestId = taxPreviewRequestId;
           if (!this.supportsFiscalPreview()) {
             this.taxCharges.loading = false;
             this.taxCharges.error = '';
             return;
           }
-          if (!this.header.company) return;
+          if (!this.header.company) {
+            this.taxCharges.loading = false;
+            return;
+          }
           this.taxCharges.loading = true;
           this.taxCharges.error = '';
-          await this._executeTaxPreviewRequest();
+          await this._executeTaxPreviewRequest(requestId);
         },
 
-        async _executeTaxPreviewRequest() {
+        async _executeTaxPreviewRequest(requestId) {
           try {
             const response = await this.requestTaxPreview();
             const data = await response.json();
+            if (requestId !== taxPreviewRequestId) return;
             if (!response.ok) {
               this.taxCharges.error = data?.message || i18n.errorTaxPreview || 'No se pudo calcular.';
               this.taxCharges.loading = false;
@@ -853,8 +867,18 @@
             }
             this.applyTaxPreviewData(data);
           } catch (err) {
+            if (requestId !== taxPreviewRequestId) return;
             this.handleTaxPreviewError(err);
           }
+        },
+
+        _invalidateTaxPreviewRequest() {
+          taxPreviewRequestId += 1;
+          if (this.taxPreviewDebounceId !== null && typeof globalThis.clearTimeout === 'function') {
+            globalThis.clearTimeout(this.taxPreviewDebounceId);
+          }
+          this.taxPreviewDebounceId = null;
+          this.taxCharges.loading = false;
         },
 
         handleTaxPreviewError(err) {
@@ -882,6 +906,7 @@
         },
 
 	        openTaxLineDetails(index) {
+          this._invalidateTaxPreviewRequest();
 	          this.taxCharges.activeIndex = index;
 	          this.taxCharges.modalLine = this.normalizeTaxLine(this.taxCharges.lines[index] || {});
 	          const modalEl = document.getElementById('taxChargeDetailModal');
@@ -889,6 +914,7 @@
 	        },
 
 	        saveTaxLineModal() {
+          this._invalidateTaxPreviewRequest();
 	          if (this.taxCharges.activeIndex !== null && this.taxCharges.modalLine) {
 	            this.syncTaxTreatment(this.taxCharges.modalLine);
 	            if (this.taxCharges.modalLine.manual) {
@@ -940,6 +966,7 @@
 	        },
 
 	        addTaxLine() {
+          this._invalidateTaxPreviewRequest();
 	          const line = this.newTaxLine();
 	          this.taxCharges.lines.push(line);
 	          this.taxCharges.activeIndex = this.taxCharges.lines.length - 1;
@@ -950,6 +977,7 @@
 	        },
 
 	        removeTaxLine(index) {
+          this._invalidateTaxPreviewRequest();
 	          this.taxCharges.lines.splice(index, 1);
 	          this.recalculateTaxSummary();
 	        },
