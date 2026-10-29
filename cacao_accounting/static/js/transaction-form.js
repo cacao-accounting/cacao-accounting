@@ -325,6 +325,7 @@
       const catalogPriceRequestIds = new WeakMap();
       let catalogPriceRequestSequence = 0;
       let taxPreviewRequestId = 0;
+      let sourceRequestSequence = 0;
 
       return {
         formKey: config.formKey || '',
@@ -1073,7 +1074,7 @@
 
 	        async fetchSource(apiUrl) {
           if (apiUrl) {
-            await this.loadSourceFromUrl(apiUrl);
+            return this.loadSourceFromUrl(apiUrl);
           } else {
             this.autofillStep = 1;
             void this.fetchSourceDocuments();
@@ -1081,22 +1082,30 @@
         },
 
         async loadSourceFromUrl(apiUrl) {
+          const requestId = this.beginSourceRequest();
+          const contextSignature = this.sourceLookupSignature();
           this.sourceHydrationPending = true;
           this.loadingSource = true;
           this.sourceLoadError = '';
+          this.sourceItems = [];
           this.autofillStep = 2;
           try {
             const response = await fetch(apiUrl, { credentials: 'same-origin' });
             if (!response.ok) throw new Error(response.statusText || 'source request failed');
             const data = await response.json();
+            if (requestId !== sourceRequestSequence || contextSignature !== this.sourceLookupSignature()) return false;
             this.sourceItems = this.mapSourceItems(data.items);
-            this.loadingSource = false;
+            return true;
           } catch (err) {
+            if (requestId !== sourceRequestSequence || contextSignature !== this.sourceLookupSignature()) return false;
             console.warn('Error al obtener source lines:', err);
-            this.loadingSource = false;
             this.sourceLoadError = i18n.errorLoadingSource || 'No se pudieron cargar las líneas del documento origen.';
+            return false;
           } finally {
-            this.sourceHydrationPending = false;
+            if (requestId === sourceRequestSequence) {
+              this.loadingSource = false;
+              this.sourceHydrationPending = false;
+            }
           }
         },
 
@@ -1109,22 +1118,64 @@
           return result;
         },
 
-        async fetchSourceDocuments() {
-          const params = new URLSearchParams();
-          params.append('target_type', this.formKey.split('.')[1]);
-          params.append('company', this.header.company);
-          params.append('party_type', this.header.party_type);
-          params.append('party_id', this.header.party);
+        sourceLookupContext() {
+          return {
+            source_type: this.searchCriteria.source_type || '',
+            target_type: this.formKey.split('.')[1] || '',
+            company: this.header.company || '',
+            party_type: this.header.party_type || '',
+            party_id: this.header.party || '',
+          };
+        },
 
+        selectedSourceIds() {
+          return [...new Set(this.sourceDocuments.filter(isItemSelected).map(extractSourceId).filter(Boolean))];
+        },
+
+        sourceLookupSignature(selectedIds = []) {
+          return JSON.stringify({
+            ...this.sourceLookupContext(),
+            selected_source_ids: [...selectedIds].sort(),
+          });
+        },
+
+        beginSourceRequest() {
+          this.sourceHydrationPending = false;
+          return ++sourceRequestSequence;
+        },
+
+        showSourceDocuments() {
+          this.beginSourceRequest();
+          this.loadingSource = false;
+          this.sourceHydrationPending = false;
+          this.sourceItems = [];
+          this.autofillStep = 1;
+        },
+
+        async fetchSourceDocuments() {
+          const requestId = this.beginSourceRequest();
+          const context = this.sourceLookupContext();
+          const contextSignature = this.sourceLookupSignature();
+          const params = new URLSearchParams();
+          params.append('target_type', context.target_type);
+          params.append('company', context.company);
+          params.append('party_type', context.party_type);
+          params.append('party_id', context.party_id);
+
+          this.sourceDocuments = [];
+          this.sourceItems = [];
           this.loadingSource = true;
           try {
             const response = await fetch(`/api/document-flow/source-documents?${params.toString()}`, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error(response.statusText || 'source documents request failed');
             const data = await response.json();
+            if (requestId !== sourceRequestSequence || contextSignature !== this.sourceLookupSignature()) return;
             this.sourceDocuments = this.processSourceDocuments(data.source_documents);
-            this.loadingSource = false;
           } catch (err) {
+            if (requestId !== sourceRequestSequence || contextSignature !== this.sourceLookupSignature()) return;
             console.warn('Error al obtener source documents:', err);
-            this.loadingSource = false;
+          } finally {
+            if (requestId === sourceRequestSequence) this.loadingSource = false;
           }
         },
 
@@ -1141,28 +1192,45 @@
         },
 
         async fetchSourceItems() {
-          const selectedIds = this.sourceDocuments.filter(isItemSelected).map(extractSourceId);
-          if (!selectedIds.length) return;
+          const selectedIds = this.selectedSourceIds();
+          const requestId = this.beginSourceRequest();
+          const context = this.sourceLookupContext();
+          const requestSignature = this.sourceLookupSignature(selectedIds);
+          if (!selectedIds.length) {
+            this.sourceItems = [];
+            this.loadingSource = false;
+            return;
+          }
 
-          const params = this.buildSourceItemsParams(selectedIds);
+          const params = this.buildSourceItemsParams(selectedIds, context);
+          this.sourceItems = [];
           this.loadingSource = true;
           this.autofillStep = 2;
           try {
             const response = await fetch(`/api/document-flow/pending-lines?${params.toString()}`, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error(response.statusText || 'source items request failed');
             const data = await response.json();
+            if (
+              requestId !== sourceRequestSequence ||
+              requestSignature !== this.sourceLookupSignature(this.selectedSourceIds())
+            ) return;
             this.sourceItems = this.mapSourceItems(data.items);
-            this.loadingSource = false;
           } catch (err) {
+            if (
+              requestId !== sourceRequestSequence ||
+              requestSignature !== this.sourceLookupSignature(this.selectedSourceIds())
+            ) return;
             console.warn('Error al obtener source items:', err);
-            this.loadingSource = false;
+          } finally {
+            if (requestId === sourceRequestSequence) this.loadingSource = false;
           }
         },
 
-        buildSourceItemsParams(selectedIds) {
+        buildSourceItemsParams(selectedIds, context = this.sourceLookupContext()) {
           const params = new URLSearchParams();
-          params.append('source_type', this.searchCriteria.source_type);
-          params.append('target_type', this.formKey.split('.')[1]);
-          params.append('company', this.header.company);
+          params.append('source_type', context.source_type);
+          params.append('target_type', context.target_type);
+          params.append('company', context.company);
           for (const id of selectedIds) {
             params.append('source_id', id);
           }
@@ -1170,6 +1238,7 @@
         },
 
         applySource() {
+          if (this.loadingSource || this.sourceHydrationPending) return;
           this.processSelectedSourceItems();
           this.cleanupEmptyLines();
           if (!this.lines.length) this.addRow();

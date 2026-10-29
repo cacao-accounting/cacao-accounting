@@ -877,4 +877,191 @@ describe('transaction-form', function () {
     assert.strictEqual(create.pendingTimeoutCount(), 0);
   });
 
+  it('keeps source documents from the latest company lookup', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    globalThis.fetch = () => requests.shift().promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a', party_type: 'supplier', party: 'supplier-1' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+    component.searchCriteria.source_type = 'purchase_order';
+
+    const oldLookup = component.fetchSourceDocuments();
+    component.header.company = 'company-b';
+    const newLookup = component.fetchSourceDocuments();
+
+    newRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ source_documents: [{ source_id: 'PO-B', source_type: 'purchase_order' }] }),
+    });
+    await newLookup;
+    oldRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ source_documents: [{ source_id: 'PO-A', source_type: 'purchase_order' }] }),
+    });
+    await oldLookup;
+
+    assert.deepStrictEqual(component.sourceDocuments.map((doc) => doc.source_id), ['PO-B']);
+    assert.strictEqual(component.loadingSource, false);
+  });
+
+  it('keeps pending source lines from the latest document selection', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    globalThis.fetch = () => requests.shift().promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a', party_type: 'supplier', party: 'supplier-1' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+    component.searchCriteria.source_type = 'purchase_order';
+    component.sourceDocuments = [{ source_id: 'PO-A', selected: true }];
+
+    const oldLookup = component.fetchSourceItems();
+    component.showSourceDocuments();
+    component.sourceDocuments = [{ source_id: 'PO-B', selected: true }];
+    const newLookup = component.fetchSourceItems();
+
+    newRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ items: [{ source_id: 'PO-B', source_item_id: 'ROW-B', item_code: 'ITEM-B' }] }),
+    });
+    await newLookup;
+    oldRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ items: [{ source_id: 'PO-A', source_item_id: 'ROW-A', item_code: 'ITEM-A' }] }),
+    });
+    await oldLookup;
+
+    assert.deepStrictEqual(component.sourceItems.map((item) => item.source_item_id), ['ROW-B']);
+    assert.strictEqual(component.loadingSource, false);
+  });
+
+  it('rejects URL source lines when the target party changes during loading', async function () {
+    const pendingRequest = deferred();
+    globalThis.fetch = () => pendingRequest.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_quotation',
+      initialSourceType: 'sales_request',
+      initialHeader: { company: 'company-a', party_type: 'customer', party: 'customer-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+    component.lines = [];
+
+    const hydration = component.loadSourceFromUrl('/api/source-lines?request=REQ-A');
+    component.header.party = 'customer-b';
+    pendingRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ items: [{ item_code: 'ITEM-A', source_id: 'REQ-A', source_item_id: 'ROW-A' }] }),
+    });
+
+    const loaded = await hydration;
+    if (loaded) component.applySource();
+
+    assert.strictEqual(loaded, false);
+    assert.deepStrictEqual(component.sourceItems, []);
+    assert.deepStrictEqual(component.lines, []);
+    assert.strictEqual(component.sourceHydrationPending, false);
+    assert.strictEqual(component.loadingSource, false);
+  });
+
+  it('invalidates pending URL source hydration when returning to document selection', async function () {
+    const pendingRequest = deferred();
+    globalThis.fetch = () => pendingRequest.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialSourceType: 'purchase_order',
+      initialHeader: { company: 'company-a', party_type: 'supplier', party: 'supplier-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+    component.lines = [];
+
+    const hydration = component.loadSourceFromUrl('/api/source-lines?order=PO-A');
+    component.showSourceDocuments();
+    pendingRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ items: [{ item_code: 'ITEM-A', source_id: 'PO-A', source_item_id: 'ROW-A' }] }),
+    });
+
+    const loaded = await hydration;
+    if (loaded) component.applySource();
+
+    assert.strictEqual(loaded, false);
+    assert.deepStrictEqual(component.sourceItems, []);
+    assert.deepStrictEqual(component.lines, []);
+    assert.strictEqual(component.autofillStep, 1);
+    assert.strictEqual(component.sourceHydrationPending, false);
+    assert.strictEqual(component.loadingSource, false);
+  });
+
+  it('applies current URL source lines only after hydration completes', async function () {
+    globalThis.fetch = () => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({
+        items: [{ item_code: 'ITEM-A', item_name: 'Cacao', qty: 2, rate: 5, source_id: 'PO-A', source_item_id: 'ROW-A' }],
+      }),
+    });
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialSourceType: 'purchase_order',
+      initialHeader: { company: 'company-a', party_type: 'supplier', party: 'supplier-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+
+    const loaded = await component.loadSourceFromUrl('/api/source-lines?order=PO-A');
+    if (loaded) component.applySource();
+
+    assert.strictEqual(loaded, true);
+    assert.strictEqual(component.lines.length, 1);
+    assert.strictEqual(component.lines[0].source_id, 'PO-A');
+    assert.strictEqual(component.lines[0].amount, 10);
+    assert.strictEqual(component.sourceHydrationPending, false);
+    assert.strictEqual(component.loadingSource, false);
+  });
+
+  it('does not apply source lines while their lookup is still loading', function () {
+    const create = loadTransactionForm();
+    const component = create({ items: [], uoms: [], defaultRows: 1 });
+    component.init();
+    component.lines = [];
+    component.loadingSource = true;
+    component.sourceItems = [{
+      selected: true,
+      item_code: 'ITEM-001',
+      item_name: 'Caja de cacao',
+      qty: 1,
+      source_type: 'purchase_order',
+      source_id: 'PO-001',
+      source_item_id: 'PO-ROW-001',
+    }];
+
+    component.applySource();
+
+    assert.deepStrictEqual(component.lines, []);
+  });
+
 });

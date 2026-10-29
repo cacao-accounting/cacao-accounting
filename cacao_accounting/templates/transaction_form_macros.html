@@ -253,7 +253,7 @@
 {% macro transaction_grid(items_disponibles, uoms_disponibles, source_api_url=None, source_label='', warehouses_disponibles=None, title=None) %}
 {% set title = title if title is not none else _('Líneas de detalle') %}
 <section class="border rounded-2 p-3 mt-3"
-         {% if source_api_url %}x-init='loadSourceFromUrl({{ source_api_url | tojson }}).then(() => applySource())'{% endif %}>
+         {% if source_api_url %}x-init='loadSourceFromUrl({{ source_api_url | tojson }}).then((loaded) => { if (loaded) applySource(); })'{% endif %}>
   <div class="alert alert-danger" role="alert" x-show="sourceLoadError || submitError" x-text="sourceLoadError || submitError" x-cloak></div>
   <div class="ca-journal-toolbar mb-3">
     <h5 class="mb-0">{{ _(title) }}</h5>
@@ -641,13 +641,13 @@
         <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
           <i class="bi bi-x-circle me-1"></i>{{ _('Cancelar') }}
         </button>
-        <button type="button" class="btn btn-sm btn-primary" x-show="autofillStep === 1" :disabled="!sourceDocuments.some(d => d.selected)" @click="fetchSourceItems()">
+        <button type="button" class="btn btn-sm btn-primary" x-show="autofillStep === 1" :disabled="loadingSource || !sourceDocuments.some(d => d.selected)" @click="fetchSourceItems()">
           {{ _('Siguiente') }} <i class="bi bi-arrow-right ms-1"></i>
         </button>
-        <button type="button" class="btn btn-sm btn-outline-primary" x-show="autofillStep === 2" @click="autofillStep = 1">
+        <button type="button" class="btn btn-sm btn-outline-primary" x-show="autofillStep === 2" @click="showSourceDocuments()">
           <i class="bi bi-arrow-left me-1"></i> {{ _('Atrás') }}
         </button>
-        <button type="button" class="btn btn-sm btn-primary" x-show="autofillStep === 2" data-bs-dismiss="modal" @click="applySource()">
+        <button type="button" class="btn btn-sm btn-primary" x-show="autofillStep === 2" data-bs-dismiss="modal" :disabled="loadingSource" @click="applySource()">
           <i class="bi bi-arrow-repeat me-1"></i>{{ _('Actualizar') }}
         </button>
       </div>
