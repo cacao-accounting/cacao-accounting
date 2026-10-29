@@ -7,8 +7,10 @@ from __future__ import annotations
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import cast
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 
 from cacao_accounting.database import (
     OtpVerification,
@@ -171,10 +173,12 @@ def generar_token_recuperacion(user_id: str) -> str:
     return token
 
 
-def validar_token_recuperacion(token: str) -> User | None:
+def validar_token_recuperacion(token: str, consumir: bool = True) -> User | None:
     """Valida un token de recuperación y retorna el usuario asociado.
 
     Retorna ``None`` si el token no existe, está expirado o ya fue consumido.
+    ``consumir=False`` permite validar el enlace antes de mostrar el formulario;
+    el token se marca como usado cuando se procesa el cambio de contraseña.
     """
     now = _now_utc()
     registro = database.session.scalar(select(PasswordResetToken).filter_by(token=token, consumed=False))
@@ -191,8 +195,24 @@ def validar_token_recuperacion(token: str) -> User | None:
         database.session.flush()
         return None
 
-    registro.consumed = True
-    database.session.flush()
+    if consumir:
+        claim = cast(
+            CursorResult,
+            database.session.execute(
+                update(PasswordResetToken)
+                .where(
+                    PasswordResetToken.id == registro.id,
+                    PasswordResetToken.consumed.is_(False),
+                    PasswordResetToken.expires_at >= now,
+                )
+                .values(consumed=True)
+                .execution_options(synchronize_session=False)
+            ),
+        )
+        if claim.rowcount != 1:
+            return None
+        database.session.expire(registro, ["consumed"])
+        database.session.flush()
     return user
 
 

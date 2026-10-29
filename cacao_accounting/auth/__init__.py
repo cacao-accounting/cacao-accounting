@@ -251,7 +251,7 @@ def reset_password(token: str):  # pragma: no cover
     from cacao_accounting.auth.forms import ResetPasswordForm
     from cacao_accounting.auth.helpers import validar_clave_segura
 
-    user = validar_token_recuperacion(token)
+    user = validar_token_recuperacion(token, consumir=False)
     if user is None:
         flash(_("El enlace de recuperación no es válido o ha expirado."))
         return redirect(url_for("login.forgot_password"))
@@ -268,6 +268,11 @@ def reset_password(token: str):  # pragma: no cover
                 token=token,
                 titulo=_("Restablecer Contraseña"),
             )
+
+        user = validar_token_recuperacion(token)
+        if user is None:
+            flash(_("El enlace de recuperación no es válido o ha expirado."))
+            return redirect(url_for("login.forgot_password"))
 
         user.password = _proteger_passwd(form.new_password.data)
         database.session.commit()

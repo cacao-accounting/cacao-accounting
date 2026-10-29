@@ -30,6 +30,7 @@ def app():
             "TESTING": True,
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
             "SECRET_KEY": "test-secret-key",
+            "WTF_CSRF_ENABLED": False,
         }
     )
     with app.app_context():
@@ -138,6 +139,34 @@ class TestValidarTokenRecuperacion:
 
 
 class TestPasswordResetFlow:
+    def test_http_get_does_not_consume_token_before_password_post(self, app, user):
+        """Opening the emailed link must leave its token valid for the form POST."""
+        with app.app_context():
+            token = generar_token_recuperacion(user)
+            database.session.commit()
+
+        client = app.test_client()
+        get_response = client.get(f"/auth/reset-password/{token}")
+        assert get_response.status_code == 200, get_response.location
+
+        with app.app_context():
+            registro = database.session.scalar(database.select(PasswordResetToken).filter_by(token=token))
+            assert registro is not None
+            assert registro.consumed is False
+
+        post_response = client.post(
+            f"/auth/reset-password/{token}",
+            data={"new_password": "NewSecure123!", "confirm_password": "NewSecure123!"},
+        )
+        assert post_response.status_code == 302
+
+        with app.app_context():
+            registro = database.session.scalar(database.select(PasswordResetToken).filter_by(token=token))
+            refreshed = database.session.get(User, user)
+            assert registro is not None
+            assert registro.consumed is True
+            assert ph.verify(refreshed.password.decode(), "NewSecure123!")
+
     def test_full_reset_flow(self, app, user):
         """Test the full password reset flow: generate token, validate, new password would be set."""
         with app.app_context():
