@@ -1092,6 +1092,52 @@ def test_reconciliation_matrix_converts_subledger_to_ledger_currency(app_ctx):
     assert ar_row_nio["difference"] == Decimal("0")
 
 
+def test_tax_reconciliation_uses_invoice_status_at_historical_cutoff(app_ctx):
+    """Refs: 984; tax amounts include invoices only until their cancellation date."""
+    from datetime import datetime, timezone
+
+    from cacao_accounting.database import PurchaseInvoice, SalesInvoice, database
+    from cacao_accounting.reportes.services import (
+        ReconciliationFilters,
+        _reconcile_purchase_tax_amount,
+        _reconcile_sales_tax_amount,
+    )
+
+    cancelled_at = datetime(2026, 6, 10, 12, tzinfo=timezone.utc)
+    database.session.add_all(
+        [
+            SalesInvoice(
+                company="cacao",
+                posting_date=date(2026, 5, 1),
+                docstatus=2,
+                cancelled_at=cancelled_at,
+                tax_total=Decimal("15.00"),
+                grand_total=Decimal("115.00"),
+                base_grand_total=Decimal("115.00"),
+            ),
+            PurchaseInvoice(
+                company="cacao",
+                posting_date=date(2026, 5, 1),
+                docstatus=2,
+                cancelled_at=cancelled_at,
+                tax_total=Decimal("8.00"),
+                grand_total=Decimal("108.00"),
+                base_grand_total=Decimal("108.00"),
+            ),
+        ]
+    )
+    database.session.commit()
+
+    filters = ReconciliationFilters(company="cacao")
+    before_cancel = date(2026, 5, 31)
+    after_cancel = date(2026, 6, 11)
+
+    assert _reconcile_sales_tax_amount(filters, before_cancel) == Decimal("15.00")
+    assert _reconcile_purchase_tax_amount(filters, before_cancel) == Decimal("8.00")
+    assert _reconcile_sales_tax_amount(filters, after_cancel) == Decimal("0")
+    assert _reconcile_purchase_tax_amount(filters, after_cancel) == Decimal("0")
+
+
 def test_reconciliation_matrix_converts_bank_movements_to_selected_ledger_currency(app_ctx):
     """La matriz convierte cada movimiento bancario desde su moneda de cuenta."""
     from cacao_accounting.database import Bank, BankAccount, BankTransaction, Book, Currency, ExchangeRate, database

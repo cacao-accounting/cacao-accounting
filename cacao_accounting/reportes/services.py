@@ -743,7 +743,7 @@ def _reconcile_sales_tax_amount(filters: ReconciliationFilters, as_of_date: date
             for invoice in database.session.execute(
                 select(SalesInvoice).where(
                     SalesInvoice.company == filters.company,
-                    SalesInvoice.docstatus == 1,
+                    _document_active_at_cutoff(SalesInvoice, as_of_date),
                     SalesInvoice.posting_date <= as_of_date,
                 )
             ).scalars()
@@ -760,7 +760,7 @@ def _reconcile_purchase_tax_amount(filters: ReconciliationFilters, as_of_date: d
             for invoice in database.session.execute(
                 select(PurchaseInvoice).where(
                     PurchaseInvoice.company == filters.company,
-                    PurchaseInvoice.docstatus == 1,
+                    _document_active_at_cutoff(PurchaseInvoice, as_of_date),
                     PurchaseInvoice.posting_date <= as_of_date,
                 )
             ).scalars()
