@@ -47,6 +47,7 @@
 
   globalThis.dashboard = function dashboard() {
     const config = dashboardConfig();
+    let latestRequestId = 0;
 
     return {
       filters: {
@@ -89,8 +90,11 @@
         return config.companies;
       },
       fetchData() {
+        const requestId = ++latestRequestId;
         if (!this.filters.company) {
           this.payload = { sections: {} };
+          this.error = "";
+          this.loading = false;
           return;
         }
 
@@ -106,11 +110,16 @@
             const data = await response.json();
             return { ok: response.ok, data };
           })
-          .then((result) => this._handleDashboardSuccess(result))
+          .then((result) => {
+            if (requestId !== latestRequestId) return;
+            this._handleDashboardSuccess(result);
+          })
           .catch(() => {
+            if (requestId !== latestRequestId) return;
             this.error = config.messages.dashboardLoadError;
           })
           .finally(() => {
+            if (requestId !== latestRequestId) return;
             this.loading = false;
           });
       },
