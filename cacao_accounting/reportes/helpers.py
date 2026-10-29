@@ -474,17 +474,18 @@ def _resolve_company(company_code: str | None, modulo: str = "accounting") -> st
     ).scalar_one_or_none()
     if company_exists is None:
         abort(400, description=_("La compañía seleccionada no existe."))
+    _exige_acceso_reporte_compania(requested_company, modulo)
     return requested_company
 
 
-def _exige_acceso_reporte_compania(company_code: str) -> None:
-    """Valida que el usuario tenga acceso a la compañía del reporte financiero."""
+def _exige_acceso_reporte_compania(company_code: str, modulo: str = "accounting") -> None:
+    """Valida el permiso de reporte y el acceso a la compañía solicitada."""
     user_id = getattr(current_user, "id", None)
     if not getattr(current_user, "is_authenticated", False) or not user_id:
         # Las rutas de reportes exigen sesión; sin usuario no hay ACL que validar.
         return
-    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
-    if not permisos.tiene_acceso_compania(company_code):
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=user_id)
+    if not permisos.reportes or not permisos.tiene_acceso_compania(company_code):
         abort(403)
 
 
@@ -931,7 +932,6 @@ def _financial_period_filters(company_code: str) -> tuple[str | None, str | None
 
 def _financial_filters() -> FinancialReportFilters:
     company_code = _resolve_company(request.args.get("company"))
-    _exige_acceso_reporte_compania(company_code)
     show_cancellations = _bool_arg("show_cancellations")
     requested_status = request.args.get("status") or "submitted"
     status = None if show_cancellations else requested_status
@@ -1496,7 +1496,7 @@ def _render_operational_framework(
 
 def _operational_filters(modulo: str = "accounting") -> OperationalReportFilters:
     period_from, period_to = _period_params()
-    company = resolve_required_company(request.args.get("company"), modulo)
+    company = _resolve_company(request.args.get("company"), modulo)
     date_from, date_to = _resolve_date_bounds(company)
     return OperationalReportFilters(
         company=company,

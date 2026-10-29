@@ -383,3 +383,34 @@ def test_xlsx_filter_values_are_written_as_literal_text(app):
         total_cell = workbook.active["C6"]
         assert total_cell.data_type == "s"
         assert total_cell.value == "'=1+1+ 100.00"
+
+
+def test_operational_report_rejects_a_company_without_user_access(app):
+    """Refs: 989; an inventory report cannot expose another tenant's stock."""
+    from cacao_accounting.database import Item, StockBin, UOM, Warehouse
+
+    database.session.add_all(
+        [
+            Modules(id="inventory", module="inventory", default=False, enabled=True),
+            RolesAccess(rol_id="audit-role", module_id="inventory", access=True, report=True, view=True),
+            UOM(code="EA", name="Each"),
+            Item(code="ITEM-PRIVATE-B", name="Private stock", item_type="goods", is_stock_item=True, default_uom="EA"),
+            Warehouse(code="WH-PRIVATE-B", name="Private warehouse", company="B"),
+            StockBin(
+                company="B",
+                item_code="ITEM-PRIVATE-B",
+                warehouse="WH-PRIVATE-B",
+                actual_qty=Decimal("42"),
+                stock_value=Decimal("420"),
+            ),
+        ]
+    )
+    database.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = "auditor"
+        session["_fresh"] = True
+
+    assert client.get("/reports/stock-balance?company=A").status_code == 200
+    assert client.get("/reports/stock-balance?company=B").status_code == 403
