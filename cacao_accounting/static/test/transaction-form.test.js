@@ -1064,4 +1064,152 @@ describe('transaction-form', function () {
     assert.deepStrictEqual(component.lines, []);
   });
 
+  it('reports source document lookup failures to the user', async function () {
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    globalThis.fetch = async () => ({ ok: false, statusText: 'Unavailable' });
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a', party_type: 'supplier', party: 'supplier-1' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+
+    try {
+      await component.fetchSourceDocuments();
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    assert.strictEqual(component.sourceLoadError, 'No se pudieron cargar los documentos de origen.');
+    assert.strictEqual(component.loadingSource, false);
+    assert.deepStrictEqual(component.sourceDocuments, []);
+  });
+
+  it('reports pending source line failures and does not apply an empty result', async function () {
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    globalThis.fetch = async () => ({ ok: false, statusText: 'Unavailable' });
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a', party_type: 'supplier', party: 'supplier-1' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+    component.sourceDocuments = [{ source_id: 'PO-001', selected: true }];
+    const placeholder = component.lines[0];
+
+    try {
+      await component.fetchSourceItems();
+      component.applySource();
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    assert.notStrictEqual(component.sourceLoadError, '');
+    assert.strictEqual(component.loadingSource, false);
+    assert.strictEqual(component.lines[0], placeholder);
+    assert.deepStrictEqual(component.sourceItems, []);
+  });
+
+  it('ignores URL source errors from an obsolete party context', async function () {
+    const pendingRequest = deferred();
+    globalThis.fetch = () => pendingRequest.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_quotation',
+      initialSourceType: 'sales_request',
+      initialHeader: { company: 'company-a', party_type: 'customer', party: 'customer-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+    const originalWarn = console.warn;
+    console.warn = () => {};
+
+    let loaded;
+    try {
+      const hydration = component.loadSourceFromUrl('/api/source-lines?request=REQ-A');
+      component.header.party = 'customer-b';
+      pendingRequest.resolve({ ok: false, statusText: 'Not found' });
+      loaded = await hydration;
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.strictEqual(loaded, false);
+    assert.strictEqual(component.sourceLoadError, '');
+    assert.strictEqual(component.sourceHydrationPending, false);
+    assert.strictEqual(component.loadingSource, false);
+  });
+
+  it('clears URL source errors when the target party changes', async function () {
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    globalThis.fetch = async () => ({ ok: false, statusText: 'Unavailable' });
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_quotation',
+      initialSourceType: 'sales_request',
+      initialHeader: { company: 'company-a', party_type: 'customer', party: 'customer-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => { watchers[expression] = callback; };
+    component.init();
+
+    try {
+      await component.loadSourceFromUrl('/api/source-lines?request=REQ-A');
+      assert.notStrictEqual(component.sourceLoadError, '');
+      component.header.party = 'customer-b';
+      watchers['header.party']();
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    assert.strictEqual(component.sourceLoadError, '');
+  });
+
+  it('clears URL source errors when returning and retrying document lookup', async function () {
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    let component;
+    try {
+      globalThis.fetch = async () => ({ ok: false, statusText: 'Unavailable' });
+      const create = loadTransactionForm();
+      component = create({
+        formKey: 'purchases.purchase_invoice',
+        initialSourceType: 'purchase_order',
+        initialHeader: { company: 'company-a', party_type: 'supplier', party: 'supplier-a' },
+        items: [],
+        uoms: [],
+        defaultRows: 1,
+      });
+      component.init();
+      await component.loadSourceFromUrl('/api/source-lines?order=PO-A');
+      assert.notStrictEqual(component.sourceLoadError, '');
+
+      component.showSourceDocuments();
+      assert.strictEqual(component.sourceLoadError, '');
+      globalThis.fetch = async () => ({
+        ok: true,
+        json: async () => ({ source_documents: [{ source_id: 'PO-A', source_type: 'purchase_order' }] }),
+      });
+      await component.fetchSourceDocuments();
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    assert.deepStrictEqual(component.sourceDocuments.map((doc) => doc.source_id), ['PO-A']);
+    assert.strictEqual(component.sourceLoadError, '');
+  });
+
 });

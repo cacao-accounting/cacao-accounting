@@ -404,6 +404,7 @@ def _transaction_form_i18n_labels() -> dict[str, str]:
         "amountLabel": _("Precio / Costo Total"),
         # Mensajes de error
         "errorLoadingSource": _("No se pudieron cargar las líneas del documento origen."),
+        "errorLoadingSourceDocuments": _("No se pudieron cargar los documentos de origen."),
         "errorCurrencyRequired": _("La moneda transaccional es obligatoria."),
         "errorLinesRequired": _("El documento requiere al menos una línea."),
         "errorBatchRequired": _("El item {item_code} requiere lote."),

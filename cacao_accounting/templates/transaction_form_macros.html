@@ -539,6 +539,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
       </div>
       <div class="modal-body">
+        <div class="alert alert-danger" role="alert" x-show="sourceLoadError" x-text="sourceLoadError" x-cloak></div>
         {# --- Step 1: Search and Select Documents --- #}
         <div x-show="autofillStep === 1">
           <div class="row g-2 mb-3">
@@ -647,7 +648,7 @@
         <button type="button" class="btn btn-sm btn-outline-primary" x-show="autofillStep === 2" @click="showSourceDocuments()">
           <i class="bi bi-arrow-left me-1"></i> {{ _('Atrás') }}
         </button>
-        <button type="button" class="btn btn-sm btn-primary" x-show="autofillStep === 2" data-bs-dismiss="modal" :disabled="loadingSource" @click="applySource()">
+        <button type="button" class="btn btn-sm btn-primary" x-show="autofillStep === 2" data-bs-dismiss="modal" :disabled="loadingSource || !!sourceLoadError" @click="applySource()">
           <i class="bi bi-arrow-repeat me-1"></i>{{ _('Actualizar') }}
         </button>
       </div>

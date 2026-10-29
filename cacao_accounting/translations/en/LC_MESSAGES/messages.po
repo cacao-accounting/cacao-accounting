@@ -213,6 +213,9 @@ msgstr "Total Price / Cost"
 msgid "No se pudieron cargar las líneas del documento origen."
 msgstr "Could not load source document lines."
 
+msgid "No se pudieron cargar los documentos de origen."
+msgstr "Could not load source documents."
+
 #: cacao_accounting/__init__.py:400
 #: cacao_accounting/templates/transaction_form_macros.html:223
 msgid "La moneda transaccional es obligatoria."

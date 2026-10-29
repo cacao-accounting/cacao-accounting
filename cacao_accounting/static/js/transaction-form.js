@@ -412,6 +412,7 @@
             for (const field of fiscalFields) {
               this.$watch(`header.${field}`, () => {
                 if (pricingFields.has(field)) this.refreshCatalogPrices();
+                if (field === 'company' || field === 'party_type' || field === 'party') this.sourceLoadError = '';
                 this.queueTaxPreview();
               });
             }
@@ -1148,6 +1149,7 @@
           this.beginSourceRequest();
           this.loadingSource = false;
           this.sourceHydrationPending = false;
+          this.sourceLoadError = '';
           this.sourceItems = [];
           this.autofillStep = 1;
         },
@@ -1164,6 +1166,7 @@
 
           this.sourceDocuments = [];
           this.sourceItems = [];
+          this.sourceLoadError = '';
           this.loadingSource = true;
           try {
             const response = await fetch(`/api/document-flow/source-documents?${params.toString()}`, { credentials: 'same-origin' });
@@ -1174,6 +1177,7 @@
           } catch (err) {
             if (requestId !== sourceRequestSequence || contextSignature !== this.sourceLookupSignature()) return;
             console.warn('Error al obtener source documents:', err);
+            this.sourceLoadError = i18n.errorLoadingSourceDocuments || 'No se pudieron cargar los documentos de origen.';
           } finally {
             if (requestId === sourceRequestSequence) this.loadingSource = false;
           }
@@ -1204,6 +1208,7 @@
 
           const params = this.buildSourceItemsParams(selectedIds, context);
           this.sourceItems = [];
+          this.sourceLoadError = '';
           this.loadingSource = true;
           this.autofillStep = 2;
           try {
@@ -1221,6 +1226,7 @@
               requestSignature !== this.sourceLookupSignature(this.selectedSourceIds())
             ) return;
             console.warn('Error al obtener source items:', err);
+            this.sourceLoadError = i18n.errorLoadingSource || 'No se pudieron cargar las líneas del documento origen.';
           } finally {
             if (requestId === sourceRequestSequence) this.loadingSource = false;
           }
@@ -1238,7 +1244,7 @@
         },
 
         applySource() {
-          if (this.loadingSource || this.sourceHydrationPending) return;
+          if (this.loadingSource || this.sourceHydrationPending || this.sourceLoadError) return;
           this.processSelectedSourceItems();
           this.cleanupEmptyLines();
           if (!this.lines.length) this.addRow();
