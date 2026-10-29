@@ -547,6 +547,36 @@ describe('smart-select', function () {
     assert.strictEqual(component.loading, false);
   });
 
+  it('cancels the delayed close when the field is focused again', function () {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const timers = new Map();
+    let nextTimerId = 1;
+    globalThis.setTimeout = (callback) => {
+      const timerId = nextTimerId;
+      nextTimerId += 1;
+      timers.set(timerId, callback);
+      return timerId;
+    };
+    globalThis.clearTimeout = (timerId) => timers.delete(timerId);
+
+    try {
+      const create = loadSmartSelect();
+      const component = create({ doctype: 'company', name: 'company' });
+      component.options = [{ value: 'CACAO' }];
+      component.closeSoon();
+      component.onFocus();
+
+      for (const callback of timers.values()) callback();
+
+      assert.strictEqual(component.open, true);
+      assert.strictEqual(timers.size, 0);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
+    }
+  });
+
   it('positions the open menu with fixed viewport coordinates', function () {
     const addedListeners = [];
     const removedListeners = [];

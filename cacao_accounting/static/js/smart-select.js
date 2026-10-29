@@ -102,6 +102,7 @@
         onSelect: config.onSelect || null,
         _positionHandler: null,
         _defaultTimer: null,
+        _closeSoonTimer: null,
         _requestId: 0,
 
         init() {
@@ -196,6 +197,7 @@
         },
 
         onFocus() {
+          this._cancelCloseSoon();
           if (this.locked) return;
           if (this.preloadOnFocus) {
             this.handlePreloadOnFocus();
@@ -442,7 +444,17 @@
         },
 
         closeSoon() {
-          setTimeout(this._closeSoonHandler.bind(this), 300);
+          this._cancelCloseSoon();
+          this._closeSoonTimer = setTimeout(() => {
+            this._closeSoonTimer = null;
+            this._closeSoonHandler();
+          }, 300);
+        },
+
+        _cancelCloseSoon() {
+          if (this._closeSoonTimer === null) return;
+          clearTimeout(this._closeSoonTimer);
+          this._closeSoonTimer = null;
         },
 
         _closeSoonHandler() {
@@ -458,6 +470,7 @@
         },
 
         closeMenu() {
+          this._cancelCloseSoon();
           this.open = false;
           this.unbindMenuPositionListeners();
           this.clearMenuPosition();
