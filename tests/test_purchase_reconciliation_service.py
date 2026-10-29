@@ -12,6 +12,21 @@ from cacao_accounting.compras import purchase_reconciliation_service as service
 from cacao_accounting.document_flow import payment as payment_service
 
 
+@pytest.mark.parametrize("field", ["_line_qty", "_item_qty_in_base_uom"])
+def test_reconciliation_rejects_line_without_base_uom(field):
+    """Purchase matching never interprets commercial quantity as base quantity."""
+    reader = getattr(service, field)
+
+    with pytest.raises(service.PurchaseReconciliationError, match="no tiene cantidad en la UOM base"):
+        reader(SimpleNamespace(id="LINE-1", qty=Decimal("2"), qty_in_base_uom=None))
+
+
+def test_reconciliation_rejects_non_finite_base_quantity():
+    """Invalid base quantities fail before matching or allocation."""
+    with pytest.raises(service.PurchaseReconciliationError, match="debe ser finita"):
+        service._item_qty_in_base_uom(SimpleNamespace(id="LINE-1", qty_in_base_uom=Decimal("NaN")))
+
+
 @pytest.mark.parametrize("order_mode", [False, True])
 def test_available_line_slices_distributes_invoice_across_source_lines(monkeypatch, order_mode):
     """An invoice group consumes each compatible line instead of only the first."""
@@ -64,9 +79,23 @@ def test_reconcile_two_way_incompatible_item_raises_purchase_reconciliation_erro
         allow_price_difference=False,
     )
 
-    po_line = SimpleNamespace(id="PO-L1", item_code="ITEM-A", uom="UN", warehouse="WH1", qty=Decimal("10"), rate=Decimal("50"))
+    po_line = SimpleNamespace(
+        id="PO-L1",
+        item_code="ITEM-A",
+        uom="UN",
+        warehouse="WH1",
+        qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
+        rate=Decimal("50"),
+    )
     inv_line = SimpleNamespace(
-        id="INV-L1", item_code="ITEM-B", uom="UN", warehouse="WH1", qty=Decimal("10"), rate=Decimal("50")
+        id="INV-L1",
+        item_code="ITEM-B",
+        uom="UN",
+        warehouse="WH1",
+        qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
+        rate=Decimal("50"),
     )
 
     monkeypatch.setattr(service, "_load_purchase_order_for_invoice", lambda _inv: ("PO-1", po_obj))

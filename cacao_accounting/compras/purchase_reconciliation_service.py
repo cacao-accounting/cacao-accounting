@@ -197,7 +197,20 @@ def _decimal_value(value: Any) -> Decimal:
 
 
 def _line_qty(line: Any) -> Decimal:
-    return _decimal_value(getattr(line, "qty_in_base_uom", None) or getattr(line, "qty", None))
+    return _required_base_qty(line)
+
+
+def _required_base_qty(line: Any) -> Decimal:
+    """Read a persisted line quantity without interpreting its presentation UOM."""
+    value = getattr(line, "qty_in_base_uom", None)
+    if value is None:
+        raise PurchaseReconciliationError(
+            _("La línea %(item)s no tiene cantidad en la UOM base del artículo.") % {"item": getattr(line, "id", "")}
+        )
+    quantity = _decimal_value(value)
+    if not quantity.is_finite():
+        raise PurchaseReconciliationError(_("La cantidad en la UOM base debe ser finita."))
+    return quantity
 
 
 def _line_amount(line: Any) -> Decimal:
@@ -263,22 +276,8 @@ def _matched_amount_for_receipt_item(receipt_item_id: str) -> Decimal:
 
 
 def _item_qty_in_base_uom(item: Any) -> Decimal:
-    """Return a line quantity in base UOM for allocation limits."""
-    explicit = getattr(item, "qty_in_base_uom", None)
-    if explicit is not None:
-        return _decimal_value(explicit)
-    qty = _decimal_value(getattr(item, "qty", None))
-    uom = getattr(item, "uom", None)
-    item_record = database.session.get(Item, getattr(item, "item_code", None))
-    base_uom = getattr(item_record, "default_uom", None) if item_record else None
-    if not uom or not base_uom or uom == base_uom:
-        return qty
-    from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
-
-    try:
-        return _decimal_value(convert_item_qty(str(item.item_code), qty, str(uom), str(base_uom)))
-    except InventoryServiceError as exc:
-        raise PurchaseReconciliationError(str(exc)) from exc
+    """Return the stored canonical base quantity for allocation limits."""
+    return _required_base_qty(item)
 
 
 def _allocated_invoice_qty(invoice_item_id: str) -> Decimal:

@@ -26,6 +26,8 @@ from cacao_accounting.database import (
     PurchaseOrderItem,
     PurchaseReceipt,
     Party,
+    Item,
+    UOM,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
 from cacao_accounting.document_flow.service import (
@@ -58,6 +60,10 @@ def app_ctx():
 
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         master_data()
+        if database.session.get(UOM, "UN") is None:
+            database.session.add(UOM(code="UN", name="Unidad", is_active=True))
+        if database.session.get(Item, "TEST-ITEM-001") is None:
+            database.session.add(Item(code="TEST-ITEM-001", name="Artículo de prueba", item_type="goods", default_uom="UN"))
         database.session.commit()
         yield app
 
@@ -80,6 +86,7 @@ def _create_purchase_order(supplier, qty=Decimal("10"), rate=Decimal("100")):
         purchase_order_id=po.id,
         item_code="TEST-ITEM-001",
         qty=qty,
+        qty_in_base_uom=qty,
         rate=rate,
         amount=qty * rate,
     )

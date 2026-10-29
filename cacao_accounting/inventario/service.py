@@ -244,6 +244,54 @@ def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -
     raise InventoryServiceError(_("No existe conversion UOM para el item."))
 
 
+def item_qty_in_base_uom(item_code: str | None, quantity: Any, uom: str | None) -> Decimal:
+    """Normaliza una cantidad a la UOM base del artículo.
+
+    Centraliza la conversión de cantidades documentales a la unidad base. Si
+    falta la conversión necesaria o el artículo no tiene UOM base, rechaza el
+    cálculo: conservar la cantidad cruda permitiría eludir los límites de
+    recepción o facturación parcial.
+
+    Args:
+        item_code: Código del artículo.
+        quantity: Cantidad en la UOM de presentación.
+        uom: UOM en que se expresa la cantidad.
+
+    Returns:
+        Cantidad equivalente en la UOM base del artículo.
+
+    Raises:
+        InventoryServiceError: Si la cantidad no es finita, el artículo no
+            existe o no tiene UOM base, o no hay conversión configurada.
+    """
+    qty = _decimal_value(quantity)
+    if not qty.is_finite():
+        raise InventoryServiceError(_("La cantidad debe ser finita para calcular la UOM base."))
+    if not item_code:
+        raise InventoryServiceError(_("La línea requiere un artículo para determinar su UOM base."))
+    item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    if item is None or not item.default_uom:
+        raise InventoryServiceError(
+            _("El artículo %(item_code)s no existe o no tiene UOM base configurada.") % {"item_code": item_code}
+        )
+    base_uom = item.default_uom
+    from_uom = uom or base_uom
+    if not qty:
+        return qty
+    if base_uom == from_uom:
+        return qty
+    try:
+        return convert_item_qty(item_code, qty, from_uom, base_uom)
+    except InventoryServiceError as exc:
+        raise InventoryServiceError(
+            _(
+                "No se pudo convertir %(quantity)s %(from_uom)s a %(base_uom)s para el artículo %(item_code)s. "
+                "Configure la conversión de UOM antes de relacionar las líneas."
+            )
+            % {"quantity": qty, "from_uom": from_uom, "base_uom": base_uom, "item_code": item_code}
+        ) from exc
+
+
 def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None = None) -> None:
     batch_id = getattr(line, "batch_id", None)
     if not batch_id:

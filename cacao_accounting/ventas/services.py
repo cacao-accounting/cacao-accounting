@@ -64,6 +64,7 @@ from cacao_accounting.document_flow import (
 from cacao_accounting.document_flow.context import company_currency, effective_currency, validate_immutable_header
 
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, next_relation_revision
+from cacao_accounting.document_flow.service import qty_in_base_uom, source_qty_in_base_uom
 
 
 from cacao_accounting.decorators import (  # noqa: F401
@@ -83,7 +84,7 @@ from cacao_accounting.fiscal_persistence_service import (
     persist_document_fiscal_snapshot,
 )
 
-from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
+from cacao_accounting.inventario.service import convert_item_qty
 
 from cacao_accounting.list_filters import apply_list_filters
 
@@ -361,25 +362,12 @@ def _item_by_code(item_code: str) -> Item | None:
     return database.session.execute(database.select(Item).filter_by(code=item_code)).scalars().first()
 
 
-def _base_qty_for_sales_line(item: Any, item_obj: Item | None) -> Decimal:
-    """Convierte la cantidad de una línea de venta a la UOM base del artículo."""
-    stored_qty = item.qty_in_base_uom
-    if stored_qty is not None and Decimal(str(stored_qty)) > 0:
-        return Decimal(str(stored_qty))
-
-    line_qty = Decimal(str(item.qty or 0))
-    if item_obj is None:
-        item.qty_in_base_uom = line_qty
-        database.session.add(item)
-        return line_qty
-    line_uom = item.uom or item_obj.default_uom
+def _base_qty_for_sales_line(item: Any) -> Decimal:
+    """Lee la cantidad canónica de una línea de venta en UOM base."""
     try:
-        base_qty = convert_item_qty(item.item_code, line_qty, line_uom, item_obj.default_uom)
-    except InventoryServiceError as exc:
+        return source_qty_in_base_uom(item)
+    except DocumentFlowError as exc:
         raise ValueError(str(exc)) from exc
-    item.qty_in_base_uom = base_qty
-    database.session.add(item)
-    return base_qty
 
 
 def _reservation_warehouse_for_delivery_note(dn: DeliveryNote, item: DeliveryNoteItem, item_obj: Item | None) -> str:
@@ -443,7 +431,7 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
         bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         available = Decimal(str(bin_row.actual_qty or 0)) - Decimal(str(bin_row.reserved_qty or 0))
 
-        required_qty = _base_qty_for_sales_line(item, item_obj)
+        required_qty = _base_qty_for_sales_line(item)
         if available < required_qty:
             raise ValueError(
                 _("Stock insuficiente para %(item_code)s en %(warehouse)s: disponible %(available)s, requerido %(required)s.")
@@ -474,7 +462,7 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
 
         bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
-        new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item, item_obj))
+        new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item))
         bin_row.reserved_qty = new_reserved
 
 
@@ -494,7 +482,7 @@ def _release_reservation_for_closed_sales_order(so: SalesOrder) -> None:
             "delivery_note",
             exclude_draft_targets=True,
         )
-        release_qty = max(Decimal("0"), _base_qty_for_sales_line(item, _item_by_code(item.item_code)) - delivered_qty)
+        release_qty = max(Decimal("0"), _base_qty_for_sales_line(item) - delivered_qty)
         if release_qty <= 0:
             continue
         item_obj = _item_by_code(item.item_code)
@@ -537,7 +525,7 @@ def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
 
         bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
-        new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item, item_obj))
+        new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item))
         bin_row.reserved_qty = new_reserved
     dn.reservation_released = True
 
@@ -566,7 +554,7 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
 
         bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
-        bin_row.reserved_qty = reserved + _base_qty_for_sales_line(item, item_obj)
+        bin_row.reserved_qty = reserved + _base_qty_for_sales_line(item)
     dn.reservation_released = False
 
 
@@ -1107,6 +1095,7 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
                 discount_percentage=discount_percentage,
                 discount_amount=discount_amount,
             )
+            linea.qty_in_base_uom = qty_in_base_uom(item_code, qty, uom)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "sales_request", request_id, linea.id, qty, uom, rate, amount)
@@ -1151,6 +1140,7 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
                 discount_percentage=discount_percentage,
                 discount_amount=discount_amount,
             )
+            linea.qty_in_base_uom = qty_in_base_uom(item_code, qty, uom)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "sales_quotation", quotation_id, linea.id, qty, uom, rate, amount)
@@ -1208,6 +1198,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
                 batch_id=request.form.get(f"batch_id_{i}") or None,
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )
+            linea.qty_in_base_uom = qty_in_base_uom(item_code, qty, uom)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "delivery_note", note_id, linea.id, qty, uom, rate, amount)
@@ -1262,6 +1253,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 batch_id=request.form.get(f"batch_id_{i}") or None,
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )
+            linea.qty_in_base_uom = qty_in_base_uom(item_code, qty, uom)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "sales_invoice", invoice_id, linea.id, qty, uom, rate, amount)
@@ -1648,9 +1640,7 @@ def _validate_delivery_quantities_against_so(note_id: str) -> None:
             exclude_draft_targets=True,
             include_target_id=note_id,
         )
-        ordered = (
-            Decimal(str(so_item.qty_in_base_uom)) if so_item.qty_in_base_uom is not None else Decimal(str(so_item.qty or 0))
-        )
+        ordered = source_qty_in_base_uom(so_item)
         if consumed > ordered:
             raise ValueError(
                 _("Sobre-entrega: cantidad entregada {} excede la ordenada {} para el artículo {}.").format(

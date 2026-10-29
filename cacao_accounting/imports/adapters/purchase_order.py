@@ -4,12 +4,13 @@
 """Adaptador para importación de órdenes de compra."""
 
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any, cast
 from cacao_accounting.imports.utils.validation import is_period_open
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party, Warehouse, database
 from cacao_accounting.document_flow.context import company_currency
+from cacao_accounting.document_flow.service import qty_in_base_uom
 from cacao_accounting.document_identifiers import assign_document_identifier
 from cacao_accounting.i18n import _
 
@@ -45,13 +46,17 @@ class PurchaseOrderAdapter(BaseImportAdapter):
             pass
         for row in document_data:
             warehouse_code = row.get("bodega")
-            if not warehouse_code:
-                continue
-            warehouse = database.session.execute(
-                database.select(Warehouse).filter_by(code=warehouse_code)
-            ).scalar_one_or_none()
-            if warehouse is None or warehouse.company != company_id or not warehouse.is_active:
-                errors.append(f"La bodega '{warehouse_code}' no pertenece a la compañía o está inactiva.")
+            if warehouse_code:
+                warehouse = database.session.execute(
+                    database.select(Warehouse).filter_by(code=warehouse_code)
+                ).scalar_one_or_none()
+                if warehouse is None or warehouse.company != company_id or not warehouse.is_active:
+                    errors.append(f"La bodega '{warehouse_code}' no pertenece a la compañía o está inactiva.")
+            try:
+                quantity = Decimal(str(row.get("cantidad") or "0"))
+                qty_in_base_uom(row.get("producto"), quantity, None)
+            except (InvalidOperation, ValueError) as exc:
+                errors.append(str(exc))
         if posting_date is not None and not errors:
             try:
                 self._currency_and_rate(document_data[0], company_id, posting_date)
@@ -100,6 +105,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
                 item_code=row.get("producto"),
                 item_name=row.get("descripcion") or "",
                 qty=qty,
+                qty_in_base_uom=qty_in_base_uom(row.get("producto"), qty, None),
                 rate=rate,
                 amount=amount,
                 base_rate=(rate * exchange_rate).quantize(Decimal("0.0001")),

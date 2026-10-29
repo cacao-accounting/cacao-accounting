@@ -2493,6 +2493,7 @@ class PurchaseInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defin
     uom = database.Column(
         database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)

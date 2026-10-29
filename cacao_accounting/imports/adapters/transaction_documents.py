@@ -42,6 +42,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_identifiers import assign_document_identifier
 from cacao_accounting.document_flow.context import company_currency, effective_currency
+from cacao_accounting.document_flow.service import qty_in_base_uom
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.imports.utils.validation import is_period_open
 
@@ -134,6 +135,10 @@ class TransactionDocumentAdapter(BaseImportAdapter):
 
     def _validate_document_row(self, row: dict[str, Any], company_id: str, errors: list[str]) -> None:
         """Validate warehouse, stock-item and batch constraints for one row."""
+        try:
+            qty_in_base_uom(row.get("producto"), self._finite_decimal(row.get("cantidad"), "cantidad"), row.get("uom"))
+        except ValueError as exc:
+            errors.append(str(exc))
         warehouse_code = row.get("bodega")
         if warehouse_code:
             warehouse = database.session.execute(
@@ -236,7 +241,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 item_name=row.get("descripcion") or "",
                 qty=qty,
                 uom=row.get("uom") or None,
-                qty_in_base_uom=qty,
+                qty_in_base_uom=qty_in_base_uom(row.get("producto"), qty, row.get("uom")),
                 rate=rate,
                 amount=amount,
                 warehouse=row.get("bodega") or None,

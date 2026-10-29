@@ -37,6 +37,7 @@ def _seed_purchase_order(app_ctx):
         item_code="ART-001",
         item_name="Chocolate",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("50"),
@@ -213,32 +214,26 @@ def test_document_relation_allows_existing_headers_without_lines(app_ctx):
     assert relation.target_id == receipt.id
 
 
-def test_legacy_relation_persists_normalized_base_quantity(app_ctx):
-    """Las relaciones legacy se normalizan y quedan listas para el backfill."""
+def test_relation_without_base_quantity_is_rejected_without_mutation(app_ctx):
+    """Una lectura no convierte ni muta evidencia de relación sin UOM base."""
     from cacao_accounting.database import (
         DocumentRelation,
-        ItemUOMConversion,
         PurchaseReceipt,
         PurchaseReceiptItem,
-        UOM,
         database,
     )
     from cacao_accounting.document_flow.repository import consumed_qty_for_source
+    from cacao_accounting.document_flow import DocumentFlowError
 
     order_item = _seed_purchase_order(app_ctx)
-    database.session.add_all(
-        [
-            UOM(code="BOX", name="Caja"),
-            ItemUOMConversion(item_code="ART-001", from_uom="BOX", to_uom="UND", conversion_factor=10),
-        ]
-    )
-    receipt = PurchaseReceipt(id="PR-LEGACY", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    receipt = PurchaseReceipt(id="PR-BASE-MISSING", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     receipt_item = PurchaseReceiptItem(
-        purchase_receipt_id="PR-LEGACY",
+        purchase_receipt_id="PR-BASE-MISSING",
         item_code="ART-001",
         item_name="Chocolate",
         qty=Decimal("1"),
-        uom="BOX",
+        qty_in_base_uom=Decimal("1"),
+        uom="UND",
         rate=Decimal("50"),
         amount=Decimal("50"),
     )
@@ -247,20 +242,24 @@ def test_legacy_relation_persists_normalized_base_quantity(app_ctx):
         source_id="PO-001",
         source_item_id=order_item.id,
         target_type="purchase_receipt",
-        target_id="PR-LEGACY",
+        target_id="PR-BASE-MISSING",
         target_item_id=receipt_item.id,
         company="cacao",
         qty=Decimal("1"),
         qty_in_base_uom=None,
-        uom="BOX",
+        uom="UND",
         relation_type="receipt",
         status="active",
     )
     database.session.add_all([receipt, receipt_item, relation])
     database.session.flush()
 
-    assert consumed_qty_for_source("purchase_order", "PO-001", order_item.id, "purchase_receipt") == Decimal("10")
-    assert relation.qty_in_base_uom == Decimal("10")
+    with pytest.raises(DocumentFlowError, match="no tiene cantidad en la UOM base"):
+        consumed_qty_for_source("purchase_order", "PO-001", order_item.id, "purchase_receipt")
+
+    assert relation not in database.session.dirty
+    database.session.expire(relation)
+    assert database.session.get(DocumentRelation, relation.id).qty_in_base_uom is None
 
 
 def test_document_flow_source_lines_return_quantity_in_their_uom(app_ctx):
@@ -354,10 +353,11 @@ def test_document_flow_blocks_overconsumption(app_ctx):
         purchase_receipt_id="PR-002",
         item_code="ART-001",
         item_name="Chocolate",
-        qty=Decimal("11"),
+        qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         uom="UND",
         rate=Decimal("5"),
-        amount=Decimal("55"),
+        amount=Decimal("50"),
     )
     database.session.add_all([receipt, receipt_item])
     database.session.flush()
@@ -468,6 +468,107 @@ def test_document_flow_closes_manual_line_balance(app_ctx):
     assert Decimal(state["pending_qty"]) == Decimal("7")
     assert Decimal(items[0]["closed_qty"]) == Decimal("3")
     assert Decimal(items[0]["pending_qty"]) == Decimal("7")
+
+
+def test_document_status_rejects_line_without_base_quantity(monkeypatch):
+    """El motor de flujo rechaza líneas sin cantidad base en lugar de mezclar UOM."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.document_flow import DocumentFlowError, status
+
+    item = SimpleNamespace(id="PO-ITEM-NO-BASE", qty=Decimal("2"), qty_in_base_uom=None)
+    monkeypatch.setattr(status, "get_document_items", lambda *_args: [item])
+    monkeypatch.setattr(status, "get_line_flow_state", lambda *_args: None)
+    monkeypatch.setattr(status, "consumed_qty_for_source", lambda *_args, **_kwargs: Decimal("0"))
+
+    with pytest.raises(DocumentFlowError):
+        status._flow_progress("purchase_order", "PO-001", "purchase_receipt")
+
+
+def test_document_status_without_cached_state_uses_base_quantity(monkeypatch):
+    """El avance sin caché compara consumo y total en UOM base."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.document_flow import status
+
+    item = SimpleNamespace(id="PO-ITEM-BASE", qty=Decimal("2"), qty_in_base_uom=Decimal("20"))
+    monkeypatch.setattr(status, "get_document_items", lambda *_args: [item])
+    monkeypatch.setattr(status, "get_line_flow_state", lambda *_args: None)
+    monkeypatch.setattr(status, "consumed_qty_for_source", lambda *_args, **_kwargs: Decimal("5"))
+
+    progress = status._flow_progress("purchase_order", "PO-001", "purchase_receipt")
+
+    assert progress is not None
+    assert progress.total_qty == Decimal("20")
+    assert progress.processed_qty == Decimal("5")
+    assert progress.pending_qty == Decimal("15")
+    assert status._status_from_progress(progress).code == "partially_received"
+
+
+def test_close_line_balance_converts_presentation_uom_to_base(app_ctx):
+    """El cierre manual convierte la UOM recibida a la UOM base canónica."""
+    from cacao_accounting.database import ItemUOMConversion, UOM, database
+    from cacao_accounting.document_flow import close_line_balance
+    from cacao_accounting.document_flow.service import get_source_items
+
+    order_item = _seed_purchase_order(app_ctx)
+    order_item.qty = Decimal("2")
+    order_item.qty_in_base_uom = Decimal("20")
+    order_item.uom = "BOX"
+    database.session.add_all(
+        [
+            UOM(code="BOX", name="Caja"),
+            ItemUOMConversion(item_code="ART-001", from_uom="BOX", to_uom="UND", conversion_factor=10),
+        ]
+    )
+    database.session.flush()
+
+    state = close_line_balance(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        qty=Decimal("1"),
+        uom="BOX",
+        reason="Proveedor no enviara el saldo",
+    )
+
+    assert Decimal(state["closed_qty"]) == Decimal("10")
+    assert Decimal(state["pending_qty"]) == Decimal("10")
+    line = get_source_items("purchase_order", "PO-001", "purchase_receipt")[0]
+    assert Decimal(line["closed_qty"]) == Decimal("1")
+    assert Decimal(line["closed_qty_in_base_uom"]) == Decimal("10")
+    assert Decimal(line["pending_qty"]) == Decimal("1")
+    assert Decimal(line["pending_qty_in_base_uom"]) == Decimal("10")
+
+
+def test_close_line_balance_rejects_presentation_qty_over_base_pending(app_ctx):
+    """La validación compara el cierre convertido contra el pendiente base."""
+    from cacao_accounting.database import ItemUOMConversion, UOM, database
+    from cacao_accounting.document_flow import DocumentFlowError, close_line_balance
+
+    order_item = _seed_purchase_order(app_ctx)
+    order_item.qty = Decimal("2")
+    order_item.qty_in_base_uom = Decimal("20")
+    order_item.uom = "BOX"
+    database.session.add_all(
+        [
+            UOM(code="BOX", name="Caja"),
+            ItemUOMConversion(item_code="ART-001", from_uom="BOX", to_uom="UND", conversion_factor=10),
+        ]
+    )
+    database.session.flush()
+
+    with pytest.raises(DocumentFlowError):
+        close_line_balance(
+            source_type="purchase_order",
+            source_id="PO-001",
+            source_item_id=order_item.id,
+            target_type="purchase_receipt",
+            qty=Decimal("3"),
+            uom="BOX",
+            reason="Cierre mayor al pendiente",
+        )
 
 
 def test_draft_relation_does_not_consume_source_for_other_drafts(app_ctx):
@@ -1304,6 +1405,7 @@ def test_invoice_submit_validates_against_receipt(app_ctx):
         item_code="ART-001",
         item_name="Chocolate",
         qty=Decimal("5"),
+        qty_in_base_uom=Decimal("5"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("25"),
@@ -1314,6 +1416,7 @@ def test_invoice_submit_validates_against_receipt(app_ctx):
         item_code="ART-001",
         item_name="Chocolate",
         qty=Decimal("5"),
+        qty_in_base_uom=Decimal("5"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("25"),
@@ -1395,6 +1498,7 @@ def test_invoice_edit_cleans_old_relations(app_ctx):
         item_code="ART-001",
         item_name="Chocolate",
         qty=Decimal("5"),
+        qty_in_base_uom=Decimal("5"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("25"),
@@ -1489,6 +1593,7 @@ def test_invoice_submit_rejects_over_invoice(app_ctx):
         item_code="ART-001",
         item_name="Chocolate",
         qty=Decimal("5"),
+        qty_in_base_uom=Decimal("5"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("25"),
@@ -1499,6 +1604,7 @@ def test_invoice_submit_rejects_over_invoice(app_ctx):
         item_code="ART-001",
         item_name="Chocolate",
         qty=Decimal("6"),
+        qty_in_base_uom=Decimal("6"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("30"),
@@ -1515,6 +1621,7 @@ def test_invoice_submit_rejects_over_invoice(app_ctx):
         target_item_id=invoice_item.id,
         company="cacao",
         qty=Decimal("6"),
+        qty_in_base_uom=Decimal("6"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("30"),

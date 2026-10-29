@@ -1292,6 +1292,7 @@ def api_document_flow_close_line():
             source_item_id=str(payload.get("source_row_id") or payload.get("source_item_id") or ""),
             target_type=str(payload.get("target_document_type") or payload.get("target_type") or ""),
             qty=payload.get("qty"),
+            uom=str(payload.get("uom") or "") or None,
             reason=str(payload.get("reason") or ""),
         )
     except DocumentFlowError as exc:

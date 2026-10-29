@@ -55,7 +55,7 @@ from cacao_accounting.database import (
     WarehouseCompanyAccount,
     database,
 )
-from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.document_flow.service import compute_outstanding_amount, source_qty_in_base_uom
 from cacao_accounting.document_flow.payment import _document_active_at_cutoff
 from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, exclude_cancelled_stock_entries, primary_ledger_id
 
@@ -1276,7 +1276,7 @@ def get_inventory_transfers(filters: OperationalReportFilters) -> PaginatedRepor
                 "item_code": line.item_code,
                 "from_warehouse": line.source_warehouse or entry.from_warehouse,
                 "to_warehouse": line.target_warehouse or entry.to_warehouse,
-                "qty": _decimal_value(line.qty_in_base_uom or line.qty),
+                "qty": source_qty_in_base_uom(line),
                 "uom": line.uom,
                 "status": {0: "draft", 1: "submitted", 2: "cancelled"}.get(entry.docstatus, "unknown"),
             }

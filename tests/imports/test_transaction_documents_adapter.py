@@ -11,8 +11,18 @@ from decimal import Decimal
 import pytest
 
 from cacao_accounting import create_app
-from cacao_accounting.database import Entity, Warehouse, database
+from cacao_accounting.database import (
+    Entity,
+    Item,
+    ItemUOMConversion,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    UOM,
+    Warehouse,
+    database,
+)
 from cacao_accounting.database.helpers import inicia_base_de_datos
+from cacao_accounting.inventario.service import InventoryServiceError, item_qty_in_base_uom
 from cacao_accounting.imports.adapters.purchase_order import PurchaseOrderAdapter
 from cacao_accounting.imports.adapters.transaction_documents import PurchaseOrderAdapter as TransactionPurchaseOrderAdapter
 from cacao_accounting.imports.adapters.transaction_documents import (
@@ -70,6 +80,9 @@ def test_purchase_order_import_preserves_currency_and_base_amounts(app_ctx, monk
 
     monkeypatch.setattr(purchase_order, "company_currency", lambda _company: "NIO")
     with app_ctx.app_context():
+        database.session.add(UOM(code="UND-IMPORT", name="Unidad"))
+        database.session.add(Item(code="ITEM-1", name="Artículo importado", item_type="goods", default_uom="UND-IMPORT"))
+        database.session.flush()
         document = PurchaseOrderAdapter().build_document(
             [
                 {
@@ -93,6 +106,90 @@ def test_purchase_order_import_preserves_currency_and_base_amounts(app_ctx, monk
     assert order.exchange_rate == Decimal("36.5")
     assert order.base_total == Decimal("730.0000")
     assert item.base_amount == Decimal("730.0000")
+
+
+def test_transaction_document_import_converts_quantity_to_item_base_uom(app_ctx, monkeypatch) -> None:
+    """El adaptador guarda la cantidad base aunque el archivo use otra UOM."""
+    from cacao_accounting.imports.adapters import transaction_documents
+
+    monkeypatch.setattr(transaction_documents, "company_currency", lambda _company: "NIO")
+    with app_ctx.app_context():
+        database.session.add_all(
+            [
+                UOM(code="UND-BASE", name="Unidad"),
+                UOM(code="BOX-IMPORT", name="Caja"),
+                Item(
+                    code="ITEM-UOM-IMPORT",
+                    name="Artículo con conversión",
+                    item_type="goods",
+                    default_uom="UND-BASE",
+                ),
+                ItemUOMConversion(
+                    item_code="ITEM-UOM-IMPORT",
+                    from_uom="BOX-IMPORT",
+                    to_uom="UND-BASE",
+                    conversion_factor=10,
+                ),
+            ]
+        )
+        database.session.flush()
+        adapter = TransactionDocumentAdapter(
+            TransactionImportConfig(
+                entity_type="purchase_order",
+                header_model=PurchaseOrder,
+                item_model=PurchaseOrderItem,
+                parent_field="purchase_order_id",
+            )
+        )
+        document = adapter.build_document(
+            [
+                {
+                    "document_ref": "PO-UOM-IMPORT",
+                    "fecha": date.today().isoformat(),
+                    "moneda": "NIO",
+                    "producto": "ITEM-UOM-IMPORT",
+                    "uom": "BOX-IMPORT",
+                    "cantidad": "2",
+                    "precio_unitario": "5",
+                }
+            ],
+            {"company_id": "cacao"},
+        )
+        assert item_qty_in_base_uom("ITEM-UOM-IMPORT", Decimal("0"), None) == Decimal("0")
+
+    assert document["items"][0].qty == Decimal("2")
+    assert document["items"][0].qty_in_base_uom == Decimal("20")
+
+
+def test_item_base_quantity_rejects_non_finite_values(app_ctx) -> None:
+    """La conversión rechaza valores numéricos no finitos."""
+    with app_ctx.app_context(), pytest.raises(InventoryServiceError, match="debe ser finita"):
+        item_qty_in_base_uom("ITEM-MISSING", Decimal("NaN"), None)
+
+
+def test_item_base_quantity_requires_existing_item(app_ctx) -> None:
+    """La conversión exige un artículo existente para consultar su UOM base."""
+    with app_ctx.app_context():
+        with pytest.raises(InventoryServiceError, match="requiere un artículo"):
+            item_qty_in_base_uom(None, Decimal("1"), None)
+        with pytest.raises(InventoryServiceError, match="no existe o no tiene UOM base"):
+            item_qty_in_base_uom("ITEM-MISSING", Decimal("1"), None)
+
+
+def test_item_base_quantity_requires_configured_conversion(app_ctx) -> None:
+    """La conversión entre UOM solo procede con un factor explícito."""
+    with app_ctx.app_context():
+        database.session.add_all(
+            [
+                UOM(code="UND-CONVERT", name="Unidad"),
+                UOM(code="BOX-CONVERT", name="Caja"),
+                Item(code="ITEM-NO-CONVERSION", name="Artículo", item_type="goods", default_uom="UND-CONVERT"),
+            ]
+        )
+        database.session.flush()
+
+        with pytest.raises(InventoryServiceError, match="No se pudo convertir"):
+            item_qty_in_base_uom("ITEM-NO-CONVERSION", Decimal("2"), "BOX-CONVERT")
 
 
 @pytest.mark.parametrize(
@@ -205,7 +302,7 @@ def test_optional_item_fields_are_applied_consistently(app_ctx) -> None:
         assert item.serial_no == "SER-009"
 
 
-def test_build_document_keeps_transaction_and_base_amounts(monkeypatch) -> None:
+def test_build_document_keeps_transaction_and_base_amounts(app_ctx, monkeypatch) -> None:
     """El importador calcula importes base con la tasa declarada por el lote."""
     from importlib import import_module
 
@@ -221,20 +318,24 @@ def test_build_document_keeps_transaction_and_base_amounts(monkeypatch) -> None:
         )
     )
 
-    document = adapter.build_document(
-        [
-            {
-                "document_ref": "PO-USD-001",
-                "fecha": "2026-08-19",
-                "moneda": "USD",
-                "tipo_cambio": "36.5",
-                "producto": "ITEM-1",
-                "cantidad": "2",
-                "precio_unitario": "100",
-            }
-        ],
-        {"company_id": "cacao"},
-    )
+    with app_ctx.app_context():
+        database.session.add(UOM(code="UND-IMPORT", name="Unidad"))
+        database.session.add(Item(code="ITEM-1", name="Artículo importado", item_type="goods", default_uom="UND-IMPORT"))
+        database.session.flush()
+        document = adapter.build_document(
+            [
+                {
+                    "document_ref": "PO-USD-001",
+                    "fecha": "2026-08-19",
+                    "moneda": "USD",
+                    "tipo_cambio": "36.5",
+                    "producto": "ITEM-1",
+                    "cantidad": "2",
+                    "precio_unitario": "100",
+                }
+            ],
+            {"company_id": "cacao"},
+        )
 
     assert document["header"].transaction_currency == "USD"
     assert document["header"].base_currency == "NIO"

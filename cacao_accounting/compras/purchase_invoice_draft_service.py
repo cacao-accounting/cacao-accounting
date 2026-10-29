@@ -37,6 +37,7 @@ from cacao_accounting.document_flow import (
     create_document_relation,
     refresh_source_caches_for_target,
 )
+from cacao_accounting.document_flow.service import qty_in_base_uom
 from cacao_accounting.document_identifiers import assign_document_identifier
 from cacao_accounting.i18n import _
 
@@ -422,6 +423,7 @@ def _persist_draft_lines(
             base_amount=_decimal(line.amount * rate),
             expense_account_id=line.expense_account_id,
         )
+        invoice_line.qty_in_base_uom = qty_in_base_uom(item.code, line.quantity, invoice_line.uom)
         database.session.add(invoice_line)
         database.session.flush()
         _relate_line_to_source(invoice, invoice_line, line, command)

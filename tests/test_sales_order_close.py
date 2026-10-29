@@ -98,6 +98,7 @@ def _create_customer_and_order():
         sales_order_id=order.id,
         item_code="ITEM-001",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         rate=Decimal("100"),
         amount=Decimal("1000"),
     )
@@ -136,6 +137,7 @@ def test_sales_order_is_ready_to_close_returns_true_when_all_delivered(sales_clo
         delivery_note_id=dn.id,
         item_code="ITEM-001",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         rate=Decimal("100"),
         amount=Decimal("1000"),
     )
@@ -172,6 +174,7 @@ def test_sales_order_line_closure_reasons_with_delivery(sales_close_app):
         delivery_note_id=dn.id,
         item_code="ITEM-001",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         rate=Decimal("100"),
         amount=Decimal("1000"),
     )
@@ -210,6 +213,7 @@ def test_sales_order_line_closure_reasons_with_invoice(sales_close_app):
         sales_invoice_id=invoice.id,
         item_code="ITEM-001",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         rate=Decimal("100"),
         amount=Decimal("1000"),
     )
@@ -263,6 +267,7 @@ def test_close_sales_order_closes_flow_balances_and_blocks_new_fulfillment(sales
         delivery_note_id=delivery.id,
         item_code="ITEM-001",
         qty=Decimal("4"),
+        qty_in_base_uom=Decimal("4"),
         rate=Decimal("100"),
         amount=Decimal("400"),
     )

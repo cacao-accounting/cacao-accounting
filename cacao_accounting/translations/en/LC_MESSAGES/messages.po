@@ -24833,3 +24833,30 @@ msgstr "Column %(column)s appears more than once after normalizing the headers."
 #: cacao_accounting/imports/routes.py
 msgid "El estado actual del lote no permite esta acción."
 msgstr "The batch's current state does not allow this action."
+
+#: cacao_accounting/document_flow/service.py
+#, python-format
+msgid "La línea %(item)s no tiene cantidad en la UOM base del artículo."
+msgstr "Line %(item)s has no quantity in the item's base UOM."
+
+#: cacao_accounting/document_flow/service.py
+msgid "La cantidad debe ser finita para calcular la UOM base."
+msgstr "The quantity must be finite to calculate the base UOM."
+
+#: cacao_accounting/document_flow/service.py
+msgid "La línea requiere un artículo para determinar su UOM base."
+msgstr "The line needs an item to determine its base UOM."
+
+#: cacao_accounting/document_flow/service.py
+#, python-format
+msgid "El artículo %(item_code)s no existe o no tiene UOM base configurada."
+msgstr "Item %(item_code)s does not exist or has no base UOM configured."
+
+#: cacao_accounting/document_flow/service.py
+msgid "La cantidad en la UOM base debe ser finita."
+msgstr "The base UOM quantity must be finite."
+
+#: cacao_accounting/document_flow/repository.py
+#, python-format
+msgid "La relación %(relation_id)s no tiene cantidad en la UOM base."
+msgstr "Relation %(relation_id)s has no quantity in the base UOM."

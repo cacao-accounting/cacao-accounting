@@ -96,7 +96,7 @@ from cacao_accounting.document_flow.context import company_currency, effective_c
 
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, next_relation_revision
 
-from cacao_accounting.document_flow.service import _relation_qty_in_base_uom
+from cacao_accounting.document_flow.service import _relation_qty_in_base_uom, source_qty_in_base_uom
 
 
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
@@ -709,6 +709,7 @@ def _add_award_order_lines(order: PurchaseOrder, lines: list[PurchaseQuotationAw
             rate=award_line.rate,
             amount=award_line.amount,
         )
+        line.qty_in_base_uom = _relation_qty_in_base_uom(line, award_line.qty, line.uom)
         database.session.add(line)
         database.session.flush()
         create_document_relation(
@@ -992,6 +993,7 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
                 rate=Decimal("0"),
                 amount=Decimal("0"),
             )
+            linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "purchase_quotation", quotation_id, linea.id, qty, uom, Decimal("0"), Decimal("0"))
@@ -1024,6 +1026,7 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
                 rate=Decimal("0"),
                 amount=Decimal("0"),
             )
+            linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, linea.uom)
             database.session.add(linea)
             total_qty += qty
             line_count += 1
@@ -1062,6 +1065,7 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
                 rate=rate,
                 amount=amount,
             )
+            linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "supplier_quotation", quotation_id, linea.id, qty, uom, rate, amount)
@@ -1129,6 +1133,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
                 batch_id=request.form.get(f"batch_id_{i}") or None,
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )
+            linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
             database.session.add(linea)
             database.session.flush()
             if not getattr(receipt, "is_return", False):
@@ -1197,6 +1202,7 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 batch_id=request.form.get(f"batch_id_{i}") or None,
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )
+            linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, target_type, invoice_id, linea.id, qty, uom, rate, amount)
@@ -1854,9 +1860,7 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
             exclude_draft_targets=True,
             include_target_id=receipt_id,
         )
-        ordered = (
-            Decimal(str(po_item.qty_in_base_uom)) if po_item.qty_in_base_uom is not None else Decimal(str(po_item.qty or 0))
-        )
+        ordered = source_qty_in_base_uom(po_item)
         if consumed > ordered:
             raise ValueError(
                 _("Sobre-recepción: cantidad recibida {} excede la ordenada {} para el artículo {}.").format(
@@ -1912,11 +1916,7 @@ def _validate_purchase_invoice_relation(
         exclude_draft_targets=True,
         include_target_id=invoice_id,
     )
-    available = (
-        Decimal(str(item.qty_in_base_uom))
-        if getattr(item, "qty_in_base_uom", None) is not None
-        else Decimal(str(item.qty or 0))
-    )
+    available = source_qty_in_base_uom(item)
     if consumed > available:
         raise ValueError(
             _("Sobre-facturación: cantidad facturada {} excede la {} para el artículo {}.").format(

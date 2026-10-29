@@ -60,7 +60,12 @@ def _seed_purchase_chain(db):
 
     req = PurchaseRequest(id="REQ-001", company="TEST", posting_date=date(2026, 5, 1), docstatus=1)
     req_item = PurchaseRequestItem(
-        purchase_request_id="REQ-001", item_code="CHOC-001", item_name="Chocolate", qty=Decimal("10"), uom="UND"
+        purchase_request_id="REQ-001",
+        item_code="CHOC-001",
+        item_name="Chocolate",
+        qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
+        uom="UND",
     )
     db.session.add_all([req, req_item])
 
@@ -70,6 +75,7 @@ def _seed_purchase_chain(db):
         item_code="CHOC-001",
         item_name="Chocolate",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("50"),
@@ -82,6 +88,7 @@ def _seed_purchase_chain(db):
         item_code="CHOC-001",
         item_name="Chocolate",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("50"),
@@ -94,6 +101,7 @@ def _seed_purchase_chain(db):
         item_code="CHOC-001",
         item_name="Chocolate",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("50"),
@@ -162,6 +170,7 @@ def _seed_sales_chain(db):
         item_code="PROD-001",
         item_name="Producto",
         qty=Decimal("5"),
+        qty_in_base_uom=Decimal("5"),
         uom="UND2",
         rate=Decimal("100"),
         amount=Decimal("500"),
@@ -174,6 +183,7 @@ def _seed_sales_chain(db):
         item_code="PROD-001",
         item_name="Producto",
         qty=Decimal("5"),
+        qty_in_base_uom=Decimal("5"),
         uom="UND2",
         rate=Decimal("100"),
         amount=Decimal("500"),
@@ -464,6 +474,7 @@ def test_tree_uses_active_relation_after_link_is_recreated(app):
         item_code="CHOC-001",
         item_name="Chocolate",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         uom="UND",
     )
     second_order_line = PurchaseOrderItem(
@@ -471,6 +482,7 @@ def test_tree_uses_active_relation_after_link_is_recreated(app):
         item_code="CHOC-001",
         item_name="Chocolate",
         qty=Decimal("10"),
+        qty_in_base_uom=Decimal("10"),
         uom="UND",
         rate=Decimal("5"),
         amount=Decimal("50"),

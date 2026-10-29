@@ -8,6 +8,7 @@ from typing import Any
 
 from cacao_accounting.database import DocumentLineFlowState, DocumentRelation, database
 from cacao_accounting.document_flow.registry import DocumentType, get_document_type, normalize_doctype
+from cacao_accounting.i18n import _
 
 
 def decimal_or_zero(value: Any) -> Decimal:
@@ -127,28 +128,22 @@ def consumed_qty_for_source(
 ) -> Decimal:
     """Suma la cantidad consumida por relaciones activas.
 
-    Normaliza el consumo a la UOM base del artículo origen: si la relación
-    guarda ``qty_in_base_uom`` usa ese valor; en caso contrario (datos
-    históricos) recurre a ``qty``. Con ``exclude_draft_targets`` no se
+    El consumo se lee exclusivamente desde ``qty_in_base_uom`` para mantener
+    una unidad común y no mutar evidencia durante consultas. Con
+    ``exclude_draft_targets`` no se
     consumen destinos en borrador salvo el indicado por ``include_target_id``.
     """
-    source_item = get_document_item(source_type, source_item_id) if source_item_id else None
 
     def relation_qty_in_base(relation: DocumentRelation) -> Decimal:
-        """Normaliza relaciones legacy que aún no tienen cantidad base."""
-        if relation.qty_in_base_uom is not None:
-            return decimal_or_zero(relation.qty_in_base_uom)
-        from cacao_accounting.document_flow.service import _relation_qty_in_base_uom
+        """Exige que la evidencia de relación ya guarde cantidad base."""
+        if relation.qty_in_base_uom is None:
+            from cacao_accounting.document_flow.service import DocumentFlowError
 
-        normalized = _relation_qty_in_base_uom(
-            source_item,
-            decimal_or_zero(relation.qty),
-            getattr(relation, "uom", None),
-        )
-        # Keep the read path compatible with databases predating the backfill
-        # migration; the next transaction persists the normalized value.
-        relation.qty_in_base_uom = normalized
-        return normalized
+            raise DocumentFlowError(
+                _("La relación %(relation_id)s no tiene cantidad en la UOM base.") % {"relation_id": relation.id},
+                409,
+            )
+        return decimal_or_zero(relation.qty_in_base_uom)
 
     relations = iter_active_relations_for_source(
         source_type,
@@ -241,10 +236,10 @@ def recompute_line_flow_state(
     source_item = get_document_item(source_key, source_item_id)
     if source_item is None:
         source_qty = Decimal("0")
-    elif getattr(source_item, "qty_in_base_uom", None) is not None:
-        source_qty = decimal_or_zero(getattr(source_item, "qty_in_base_uom"))
     else:
-        source_qty = decimal_or_zero(getattr(source_item, "qty", 0))
+        from cacao_accounting.document_flow.service import source_qty_in_base_uom
+
+        source_qty = source_qty_in_base_uom(source_item)
     state = get_line_flow_state(source_key, source_id, source_item_id, target_key)
     if state is None:
         state = DocumentLineFlowState(

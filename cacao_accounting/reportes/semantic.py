@@ -32,7 +32,7 @@ from cacao_accounting.database import (
     StockEntryItem,
     database,
 )
-from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.document_flow.service import compute_outstanding_amount, source_qty_in_base_uom
 from cacao_accounting.reportes.services import (
     OperationalReportFilters,
     get_inventory_turnover,
@@ -426,7 +426,7 @@ def get_inventory_transfer_analysis(
             "item_code": line.item_code,
             "from_warehouse": line.source_warehouse or entry.from_warehouse,
             "to_warehouse": line.target_warehouse or entry.to_warehouse,
-            "quantity": _decimal(line.qty_in_base_uom or line.qty),
+            "quantity": source_qty_in_base_uom(line),
             "uom": line.uom,
             "status": {0: "draft", 1: "submitted", 2: "cancelled"}.get(entry.docstatus, "unknown"),
         }

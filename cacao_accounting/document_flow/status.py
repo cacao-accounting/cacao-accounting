@@ -19,7 +19,7 @@ from cacao_accounting.document_flow.repository import (
     get_document_items,
     get_line_flow_state,
 )
-from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.document_flow.service import compute_outstanding_amount, source_qty_in_base_uom
 
 
 @dataclass(frozen=True)
@@ -235,10 +235,8 @@ def _flow_progress(source_type: str, source_id: str, target_type: str) -> FlowPr
     processed = Decimal("0")
     closed = Decimal("0")
     for item in items:
-        base_qty = getattr(item, "qty_in_base_uom", None)
-        qty = decimal_or_zero(base_qty if base_qty is not None else getattr(item, "qty", 0))
+        total += source_qty_in_base_uom(item)
         state = get_line_flow_state(source_type, source_id, item.id, target_type)
-        total += qty
         processed += consumed_qty_for_source(
             source_type,
             source_id,

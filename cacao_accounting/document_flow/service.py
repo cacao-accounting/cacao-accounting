@@ -119,13 +119,38 @@ def _state_quantities(
     return decimal_or_zero(state.cancelled_qty), decimal_or_zero(state.closed_qty)
 
 
+def source_qty_in_base_uom(item: Any) -> Decimal:
+    """Devuelve la cantidad base canonica de una línea origen.
+
+    El motor de flujo solo admite líneas con ``qty_in_base_uom``. No existe una
+    segunda representación en UOM comercial: una línea sin cantidad base es un
+    dato inválido y se rechaza para evitar mezclar unidades.
+
+    Args:
+        item: Línea origen del flujo documental.
+
+    Returns:
+        Cantidad de la línea expresada en la UOM base del artículo.
+
+    Raises:
+        DocumentFlowError: Si la línea no tiene cantidad en UOM base.
+    """
+    base_qty = getattr(item, "qty_in_base_uom", None)
+    if base_qty is None:
+        raise DocumentFlowError(
+            _("La línea %(item)s no tiene cantidad en la UOM base del artículo.") % {"item": getattr(item, "id", "")},
+            409,
+        )
+    quantity = decimal_or_zero(base_qty)
+    if not quantity.is_finite():
+        raise DocumentFlowError(_("La cantidad en la UOM base debe ser finita."), 409)
+    return quantity
+
+
 def _quantity_in_source_uom(item: Any, base_quantity: Decimal) -> Decimal:
     """Convierte una cantidad base usando la proporción almacenada en la línea."""
     source_qty = decimal_or_zero(getattr(item, "qty", 0))
-    source_qty_in_base = getattr(item, "qty_in_base_uom", None)
-    if source_qty_in_base is None:
-        return base_quantity
-    source_qty_in_base = decimal_or_zero(source_qty_in_base)
+    source_qty_in_base = source_qty_in_base_uom(item)
     if source_qty_in_base == 0:
         return base_quantity
     return base_quantity * source_qty / source_qty_in_base
@@ -133,11 +158,7 @@ def _quantity_in_source_uom(item: Any, base_quantity: Decimal) -> Decimal:
 
 def _line_payload(source_type: str, source_id: str, item: Any, target_type: str | None = None) -> dict[str, Any]:
     """Construye la respuesta estandar para una línea origen."""
-    source_qty_base = decimal_or_zero(
-        getattr(item, "qty_in_base_uom", None)
-        if getattr(item, "qty_in_base_uom", None) is not None
-        else getattr(item, "qty", 0)
-    )
+    source_qty_base = source_qty_in_base_uom(item)
     parallel_quotations = _allows_parallel_purchase_quotations(source_type, target_type)
     consumed = (
         Decimal("0")
@@ -247,11 +268,7 @@ def pending_qty(
     source_item = get_document_item(source_type, source_item_id)
     if not source_item:
         raise DocumentFlowError(_(_MSG_LINEA_ORIGEN), 404)
-    qty = decimal_or_zero(
-        getattr(source_item, "qty_in_base_uom", None)
-        if getattr(source_item, "qty_in_base_uom", None) is not None
-        else getattr(source_item, "qty", 0)
-    )
+    qty = source_qty_in_base_uom(source_item)
     if _allows_parallel_purchase_quotations(source_type, target_type):
         return qty if qty > 0 else Decimal("0")
     consumed = consumed_qty_for_source(
@@ -396,14 +413,31 @@ def refresh_source_caches_for_target(target_type: str, target_id: str) -> None:
             )
 
 
+def qty_in_base_uom(item_code: str | None, qty: Any, uom: str | None) -> Decimal:
+    """Convierte una cantidad a la UOM base del artículo por su código.
+
+    Es la única vía de normalización dimensional para líneas y relaciones. Si
+    falta la conversión necesaria rechaza el cálculo: conservar la cantidad
+    cruda permitiría eludir los límites de recepción o facturación parcial.
+
+    Args:
+        item_code: Código del artículo.
+        qty: Cantidad en la UOM de presentación.
+        uom: UOM en que se expresa la cantidad.
+
+    Returns:
+        Cantidad equivalente en la UOM base del artículo.
+    """
+    from cacao_accounting.inventario.service import InventoryServiceError, item_qty_in_base_uom
+
+    try:
+        return item_qty_in_base_uom(item_code, qty, uom)
+    except InventoryServiceError as exc:
+        raise DocumentFlowError(str(exc), 409) from exc
+
+
 def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: str | None) -> Decimal:
     """Convierte una cantidad de relación a la UOM base del artículo origen.
-
-    Usa la UOM base del ítem (default_uom) como referencia dimensional para
-    que el consumo/pendiente de un flujo sea comparable incluso cuando la línea
-    destino se expresa en una unidad comercial distinta. Si falta la
-    conversión necesaria, rechaza la relación: conservar la cantidad cruda
-    permitiría eludir los límites de recepción o facturación parcial.
 
     Args:
         source_item: Línea origen del flujo documental.
@@ -413,29 +447,13 @@ def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: 
     Returns:
         Cantidad equivalente en la UOM base del artículo.
     """
-    item_code = getattr(source_item, "item_code", None)
-    if not item_code or not qty:
-        return qty
-    from cacao_accounting.database import Item
-
-    item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
-    base_uom = getattr(item, "default_uom", None) if item else None
-    from_uom = presentation_uom or getattr(source_item, "uom", None) or base_uom
-    if not base_uom or not from_uom or base_uom == from_uom:
-        return qty
-    from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
-
-    try:
-        return convert_item_qty(item_code, qty, from_uom, base_uom)
-    except InventoryServiceError as exc:
-        raise DocumentFlowError(
-            _(
-                "No se pudo convertir %(quantity)s %(from_uom)s a %(base_uom)s para el artículo %(item_code)s. "
-                "Configure la conversión de UOM antes de relacionar las líneas."
-            )
-            % {"quantity": qty, "from_uom": from_uom, "base_uom": base_uom, "item_code": item_code},
-            409,
-        ) from exc
+    if source_item is None:
+        return decimal_or_zero(qty)
+    return qty_in_base_uom(
+        getattr(source_item, "item_code", None),
+        qty,
+        presentation_uom or getattr(source_item, "uom", None),
+    )
 
 
 def create_document_relation(
@@ -689,13 +707,22 @@ def close_line_balance(
     source_item_id: str | None,
     target_type: str,
     qty: Any | None = None,
+    uom: str | None = None,
     reason: str = "",
 ) -> dict[str, Any]:
-    """Cierra manualmente saldo pendiente de una línea fuente."""
+    """Cierra manualmente saldo pendiente de una línea fuente.
+
+    ``qty`` se interpreta en ``uom`` (o en la UOM de la línea si se omite) y se
+    convierte a la UOM base antes de acumularse en ``closed_qty``. Si ``qty``
+    no se indica se cierra todo el pendiente, que ya está expresado en base.
+    """
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
     if not reason.strip():
         raise DocumentFlowError(_("Debe indicar el motivo del cierre de saldo."), 409)
+    source_item = get_document_item(source_key, source_item_id)
+    if source_item is None:
+        raise DocumentFlowError(_(_MSG_LINEA_ORIGEN), 404)
     available = pending_qty(
         source_key,
         source_id,
@@ -703,10 +730,13 @@ def close_line_balance(
         target_key,
         exclude_draft_targets=True,
     )
-    close_qty = available if qty in (None, "") else decimal_or_zero(qty)
+    if qty in (None, ""):
+        close_qty = available
+    else:
+        close_qty = _relation_qty_in_base_uom(source_item, decimal_or_zero(qty), uom or getattr(source_item, "uom", None))
     if close_qty <= 0:
         raise DocumentFlowError(_("La cantidad a cerrar debe ser mayor que cero."), 409)
-    if close_qty > available:
+    if close_qty.quantize(Decimal("0.000000001")) > available.quantize(Decimal("0.000000001")):
         raise DocumentFlowError(_("La cantidad a cerrar excede el pendiente disponible."), 409)
     company = get_document_company(source_key, source_id)
     state = recompute_line_flow_state(source_key, source_id, source_item_id, target_key, company)
@@ -748,7 +778,6 @@ def close_document_balances(
                     source_id=source_id,
                     source_item_id=item.id,
                     target_type=target_type,
-                    qty=available,
                     reason=reason,
                 )
             )
