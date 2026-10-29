@@ -45,6 +45,12 @@ def _decimal(value: Any) -> Decimal:
     return Decimal(str(value or "0"))
 
 
+def _positive_finite_rate(value: Any) -> Decimal | None:
+    """Return a positive finite rate or ``None`` for unusable stored values."""
+    rate = _decimal(value)
+    return rate if rate.is_finite() and rate > 0 else None
+
+
 def _document_type(document: Any) -> str:
     """Obtiene el tipo estable usado por el registro documental."""
     return str(getattr(document, "document_type", None) or getattr(document, "__tablename__", ""))
@@ -296,6 +302,36 @@ def _decrease_open_item_cache(open_item_id: str | None, amount: Decimal) -> None
     database.session.add(row)
 
 
+def _movement_book_exchange_rate(movement: ARAPLedgerEntry, book: Book) -> Decimal | None:
+    """Return the exchange-rate snapshot already recorded for a movement and book."""
+    rate = database.session.execute(
+        select(ARAPLedgerBookEntry.exchange_rate).where(
+            ARAPLedgerBookEntry.ledger_entry_id == movement.id,
+            ARAPLedgerBookEntry.ledger_id == book.id,
+        )
+    ).scalar_one_or_none()
+    return _positive_finite_rate(rate) if rate is not None else None
+
+
+def _open_item_book_exchange_rate(open_item: ARAPOpenItem, book: Book) -> Decimal | None:
+    """Return the original opening rate for an open item in a specific book."""
+    rate = database.session.execute(
+        select(ARAPLedgerBookEntry.exchange_rate)
+        .join(ARAPLedgerEntry, ARAPLedgerBookEntry.ledger_entry_id == ARAPLedgerEntry.id)
+        .where(
+            ARAPLedgerEntry.document_type == open_item.document_type,
+            ARAPLedgerEntry.document_id == open_item.document_id,
+            ARAPLedgerEntry.economic_line_id == open_item.economic_line_id,
+            ARAPLedgerEntry.event_type == "opening",
+            ARAPLedgerEntry.is_reversal.is_(False),
+            ARAPLedgerBookEntry.ledger_id == book.id,
+        )
+        .order_by(ARAPLedgerEntry.posting_date, ARAPLedgerEntry.id)
+        .limit(1)
+    ).scalar_one_or_none()
+    return _positive_finite_rate(rate) if rate is not None else None
+
+
 def _close_open_item_cache_for_movement(movement: ARAPLedgerEntry) -> None:
     """Cierra el snapshot rápido cuando una reversa ya neutraliza su origen."""
     economic_line_id = movement.economic_line_id or movement.document_id
@@ -324,22 +360,28 @@ def _book_exchange_rate(company: str, source: str, target: str, posting_date: da
         .order_by(ExchangeRate.date.desc())
         .limit(1)
     ).scalar_one_or_none()
-    if row and _decimal(row.rate) > 0:
-        return _decimal(row.rate)
+    direct_rate = _positive_finite_rate(row.rate) if row else None
+    if direct_rate is not None:
+        return direct_rate
     inverse = database.session.execute(
         select(ExchangeRate)
         .where(ExchangeRate.origin == target, ExchangeRate.destination == source, ExchangeRate.date <= posting_date)
         .order_by(ExchangeRate.date.desc())
         .limit(1)
     ).scalar_one_or_none()
-    if inverse and _decimal(inverse.rate) > 0:
-        return Decimal("1") / _decimal(inverse.rate)
+    inverse_rate = _positive_finite_rate(inverse.rate) if inverse else None
+    if inverse_rate is not None:
+        return Decimal("1") / inverse_rate
     company_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
-    if target == company_currency and fallback > 0:
-        return fallback
-    if source == company_currency and fallback > 0:
-        return Decimal("1") / fallback
-    return Decimal("1")
+    fallback_rate = _positive_finite_rate(fallback)
+    if target == company_currency and fallback_rate is not None:
+        return fallback_rate
+    from cacao_accounting.contabilidad.posting_service import PostingError
+
+    raise PostingError(
+        _("No existe tipo de cambio registrado para %(origin)s -> %(destination)s en la fecha %(posting_date)s.")
+        % {"origin": source, "destination": target, "posting_date": posting_date}
+    )
 
 
 def post_document_ar_ap(document: Any, entries: Iterable[GLEntry]) -> list[ARAPLedgerEntry]:
@@ -1255,11 +1297,11 @@ def _apply_journal_open_item(
     )
     posting_date = getattr(document, "date", None) or date.today()
     for book in _active_books(str(document.entity)):
-        target_rate = _book_exchange_rate(
-            str(document.entity), target.currency, str(book.currency or target.currency), posting_date, Decimal("1")
+        target_rate = _open_item_book_exchange_rate(target, book) or _book_exchange_rate(
+            str(document.entity), target.currency, str(book.currency or target.currency), posting_date, Decimal("0")
         )
-        source_rate = _book_exchange_rate(
-            str(document.entity), source.currency, str(book.currency or source.currency), posting_date, Decimal("1")
+        source_rate = _movement_book_exchange_rate(source, book) or _book_exchange_rate(
+            str(document.entity), source.currency, str(book.currency or source.currency), posting_date, Decimal("0")
         )
         _add_book_entry(target_movement, book=book, amount=target_delta * target_rate, gl_entry=None)
         source_value = -source_consumed if source_signed > 0 else source_consumed

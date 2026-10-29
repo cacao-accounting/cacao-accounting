@@ -374,6 +374,71 @@ def test_manual_journal_reference_allocates_and_cancellation_restores_open_items
     assert source.unallocated_amount == Decimal("40.0000")
 
 
+def test_manual_journal_reference_without_book_rate_rolls_back_subledger(arap_app):
+    """La asignación de diario no valora a 1:1 si falta la conversión al libro."""
+    from cacao_accounting.contabilidad.arap_ledger_service import post_journal_ar_ap
+    from cacao_accounting.contabilidad.posting import PostingError
+    from cacao_accounting.database import (
+        ARAPLedgerEntry,
+        ARAPOpenItem,
+        Accounts,
+        ComprobanteContable,
+        ComprobanteContableDetalle,
+        ExchangeRate,
+        database,
+    )
+
+    database.session.query(ExchangeRate).delete()
+    account = Accounts(
+        entity="cacao", code="AR-NO-RATE", name="Clientes", active=True, enabled=True, group=False, account_type="receivable"
+    )
+    target = ARAPOpenItem(
+        company="cacao",
+        ledger_type="AR",
+        party_type="customer",
+        party_id="P-ARAP",
+        account_id=account.id,
+        document_type="sales_invoice",
+        document_id="INV-NO-RATE",
+        document_no="INV-NO-RATE",
+        economic_line_id="invoice-line-no-rate",
+        posting_date=date(2026, 8, 1),
+        currency="USD",
+        original_amount=Decimal("100"),
+        unallocated_amount=Decimal("100"),
+        direction="debit",
+    )
+    journal = ComprobanteContable(entity="cacao", date=date(2026, 8, 2), status="submitted")
+    database.session.add_all([account, journal])
+    database.session.flush()
+    target.account_id = account.id
+    database.session.add(target)
+    database.session.flush()
+    line = ComprobanteContableDetalle(
+        entity="cacao",
+        account=account.code,
+        transaction="journal_entry",
+        transaction_id=journal.id,
+        order=1,
+        value=Decimal("-40"),
+        currency_id="USD",
+        third_type="customer",
+        third_code="P-ARAP",
+        reference_type="invoice",
+        reference_name=target.document_id,
+        economic_line_id="allocation-line-no-rate",
+    )
+    database.session.add(line)
+    database.session.flush()
+
+    with pytest.raises(PostingError, match="No existe tipo de cambio registrado"):
+        with database.session.begin_nested():
+            post_journal_ar_ap(journal, [])
+
+    assert database.session.query(ARAPLedgerEntry).filter_by(voucher_id=journal.id).count() == 0
+    assert target.unallocated_amount == Decimal("100")
+
+
 def test_manual_journal_reversal_links_subledger_and_closes_cache(arap_app):
     """La reversión publicada enlaza su movimiento AR con el origen y cierra cachés."""
     from cacao_accounting.contabilidad.arap_ledger_service import post_journal_ar_ap
@@ -889,8 +954,13 @@ def test_ledger_exchange_rate_resolution_and_guard_clauses(arap_app):
     inverse = _book_exchange_rate("cacao", "NIO", "EUR", posting_date, Decimal("1"))
     assert inverse == Decimal("0.025")
     assert _book_exchange_rate("cacao", "GBP", "NIO", posting_date, Decimal("5")) == Decimal("5")
-    assert _book_exchange_rate("cacao", "NIO", "GBP", posting_date, Decimal("5")) == Decimal("0.2")
-    assert _book_exchange_rate("cacao", "GBP", "EUR", posting_date, Decimal("0")) == Decimal("1")
+    from cacao_accounting.contabilidad.posting import PostingError
+
+    with pytest.raises(PostingError, match="No existe tipo de cambio registrado"):
+        _book_exchange_rate("cacao", "NIO", "GBP", posting_date, Decimal("1"))
+
+    with pytest.raises(PostingError, match="No existe tipo de cambio registrado"):
+        _book_exchange_rate("cacao", "GBP", "EUR", posting_date, Decimal("0"))
 
     assert post_document_ar_ap(SimpleNamespace(id="X"), []) == []
     incomplete = SalesInvoice(company="cacao", customer_id=None, transaction_currency="USD", grand_total=1)
@@ -905,3 +975,104 @@ def test_ledger_exchange_rate_resolution_and_guard_clauses(arap_app):
     _add_book_entry(movement, book=book, amount=Decimal("0"), gl_entry=None)
     _add_book_entry(movement, book=book, amount=Decimal("10"), gl_entry=None)
     database.session.commit()
+
+
+@pytest.mark.parametrize(
+    ("direct_rate", "fallback", "expected"),
+    [
+        (Decimal("Infinity"), Decimal("5"), Decimal("5")),
+        (Decimal("NaN"), Decimal("0"), None),
+        (None, Decimal("Infinity"), None),
+    ],
+)
+def test_book_exchange_rate_rejects_nonfinite_values(arap_app, monkeypatch, direct_rate, fallback, expected):
+    """Una fila histórica o fallback no finitos nunca se tratan como tasas válidas."""
+    from cacao_accounting.contabilidad.arap_ledger_service import _book_exchange_rate
+    from cacao_accounting.contabilidad.posting import PostingError
+    from cacao_accounting.database import database
+
+    class QueryResult:
+        """Suministra los tres resultados usados al resolver directa, inversa y moneda funcional."""
+
+        def __init__(self, value):
+            self.value = value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+    direct_row = SimpleNamespace(rate=direct_rate) if direct_rate is not None else None
+    results = iter([QueryResult(direct_row), QueryResult(None), QueryResult("NIO")])
+    session = database.session()
+    original_execute = session.execute
+
+    def execute_query(*args, **kwargs):
+        try:
+            return next(results)
+        except StopIteration:
+            return original_execute(*args, **kwargs)
+
+    monkeypatch.setattr(session, "execute", execute_query)
+
+    if expected is None:
+        with pytest.raises(PostingError, match="No existe tipo de cambio registrado"):
+            _book_exchange_rate("cacao", "GBP", "NIO", date(2026, 8, 2), fallback)
+        return
+
+    assert _book_exchange_rate("cacao", "GBP", "NIO", date(2026, 8, 2), fallback) == expected
+
+
+@pytest.mark.parametrize("lookup", ["movement", "open_item"])
+@pytest.mark.parametrize("snapshot_rate", [Decimal("Infinity"), Decimal("NaN")])
+def test_journal_book_rate_snapshots_reject_nonfinite_values(arap_app, monkeypatch, lookup, snapshot_rate):
+    """Los snapshots contaminados no evitan la validación de tasas del resolver."""
+    from cacao_accounting.contabilidad.arap_ledger_service import (
+        _movement_book_exchange_rate,
+        _open_item_book_exchange_rate,
+    )
+    from cacao_accounting.database import database
+
+    class QueryResult:
+        """Proporciona un snapshot no finito sin depender del dialecto de SQLite."""
+
+        def scalar_one_or_none(self):
+            return snapshot_rate
+
+    monkeypatch.setattr(database.session(), "execute", lambda *_args, **_kwargs: QueryResult())
+    book = SimpleNamespace(id="BOOK")
+    if lookup == "movement":
+        result = _movement_book_exchange_rate(SimpleNamespace(id="MOVEMENT"), book)
+    else:
+        open_item = SimpleNamespace(document_type="invoice", document_id="INV-1", economic_line_id="LINE-1")
+        result = _open_item_book_exchange_rate(open_item, book)
+
+    assert result is None
+
+
+def test_payment_posting_without_book_exchange_rate_rolls_back_ar_ap_rows(arap_app):
+    """Una tasa ausente revierte el movimiento y el cache dentro del savepoint de posting."""
+    from cacao_accounting.contabilidad.arap_ledger_service import post_payment_ar_ap
+    from cacao_accounting.contabilidad.posting import PostingError
+    from cacao_accounting.database import ARAPLedgerEntry, ARAPOpenItem, PaymentEntry, database
+
+    payment = PaymentEntry(
+        company="cacao",
+        payment_type="receive",
+        party_type="customer",
+        party_id="P-ARAP",
+        transaction_currency="GBP",
+        currency="GBP",
+        posting_date=date(2026, 8, 2),
+        paid_amount=Decimal("100"),
+        received_amount=Decimal("100"),
+        exchange_rate=Decimal("0"),
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.flush()
+
+    with pytest.raises(PostingError, match="No existe tipo de cambio registrado"):
+        with database.session.begin_nested():
+            post_payment_ar_ap(payment, [])
+
+    assert database.session.query(ARAPLedgerEntry).filter_by(document_id=payment.id).count() == 0
+    assert database.session.query(ARAPOpenItem).filter_by(document_id=payment.id).count() == 0
