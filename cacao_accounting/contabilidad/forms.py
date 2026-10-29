@@ -211,12 +211,23 @@ class FormularioMoneda(FlaskForm):
     default = BooleanField(_l("Predeterminada"), default=False)
 
 
+def _validate_exchange_rate_field(_form, field) -> None:
+    """Validate exchange rates with the same finite and storage rules as import."""
+    if field.data is None:
+        return
+    from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportService
+
+    _, error = ExchangeRateImportService.validate_positive_rate(field.data)
+    if error:
+        raise ValidationError(error)
+
+
 class FormularioTasaCambio(FlaskForm):
     """Formulario para crear tasas de cambio."""
 
     origin = SelectField(_l("Moneda Base"), validators=[DataRequired()])
     destination = SelectField(_l("Moneda Destino"), validators=[DataRequired()])
-    rate = DecimalField(_l("Tasa"), places=9, validators=[DataRequired(), NumberRange(min=0)])
+    rate = DecimalField(_l("Tasa"), places=9, validators=[DataRequired(), _validate_exchange_rate_field])
     date = DateField(_l("Fecha"), validators=[DataRequired()])
 
 

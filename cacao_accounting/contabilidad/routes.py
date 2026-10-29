@@ -2284,6 +2284,7 @@ def tasa_cambio():
 @verifica_acceso("accounting")
 def nueva_tasa_cambio():
     """Formulario para crear una nueva tasa de cambio."""
+    from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportService
     from cacao_accounting.contabilidad.forms import FormularioTasaCambio
     from cacao_accounting.database import ExchangeRate
 
@@ -2319,18 +2320,20 @@ def nueva_tasa_cambio():
                 form=formulario,
                 monedas=monedas_choices,
             )
-        if formulario.rate.data is None or formulario.rate.data <= 0:
-            flash(_("La tasa debe ser mayor a cero."), "danger")
+        rate, rate_error = ExchangeRateImportService.validate_positive_rate(formulario.rate.data)
+        if rate_error:
+            flash(rate_error, "danger")
             return render_template(
                 _TPL_TC_CREAR,
                 titulo=TITULO,
                 form=formulario,
                 monedas=monedas_choices,
             )
+        assert rate is not None
         DATA = ExchangeRate(
             origin=formulario.origin.data,
             destination=formulario.destination.data,
-            rate=formulario.rate.data,
+            rate=rate,
             date=formulario.date.data,
         )
         database.session.add(DATA)
@@ -2371,6 +2374,7 @@ def tipo_cambio(rate_id):
 @verifica_acceso("accounting")
 def editar_tasa_cambio(rate_id):
     """Editar una tasa de cambio."""
+    from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportService
     from cacao_accounting.contabilidad.forms import FormularioTasaCambio
     from cacao_accounting.database import ExchangeRate
 
@@ -2384,11 +2388,13 @@ def editar_tasa_cambio(rate_id):
     formulario.origin.choices = monedas_choices
     formulario.destination.choices = monedas_choices
     if formulario.validate_on_submit():
+        rate, rate_error = ExchangeRateImportService.validate_positive_rate(formulario.rate.data)
         if formulario.origin.data == formulario.destination.data:
             flash(_("La moneda origen y destino deben ser diferentes."), "danger")
-        elif formulario.rate.data is None or formulario.rate.data <= 0:
-            flash(_("La tasa debe ser mayor a cero."), "danger")
+        elif rate_error:
+            flash(rate_error, "danger")
         else:
+            assert rate is not None
             from cacao_accounting.database import ExchangeRevaluation, ExchangeRevaluationItem, GLEntry
 
             used_by_gl = database.session.execute(
@@ -2422,7 +2428,7 @@ def editar_tasa_cambio(rate_id):
             else:
                 registro.origin = formulario.origin.data
                 registro.destination = formulario.destination.data
-                registro.rate = formulario.rate.data
+                registro.rate = rate
                 registro.date = formulario.date.data
                 database.session.commit()
                 return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro.id))

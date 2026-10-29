@@ -2059,6 +2059,41 @@ def test_route_nueva_tasa_cambio_post(app_ctx):
     assert response.status_code in (200, 302)
 
 
+@pytest.mark.parametrize(
+    ("invalid_rate", "expected_message"),
+    [
+        ("Infinity", "Tipo de Cambio debe ser finito."),
+        ("NaN", "Tipo de Cambio debe ser finito."),
+        ("sNaN", "Tipo de Cambio debe ser finito."),
+        ("1e999", "Tipo de Cambio excede el rango permitido."),
+        ("100000000000", "Tipo de Cambio excede el rango permitido."),
+    ],
+)
+def test_route_nueva_tasa_cambio_rejects_unrepresentable_rate(app_ctx, invalid_rate, expected_message):
+    """La ruta no persiste tasas no finitas o fuera del rango NUMERIC(20,9)."""
+    from cacao_accounting.database import Currency, ExchangeRate, User, database
+
+    database.session.add_all(
+        [
+            Currency(code="USD", name="Dollar", decimals=2, active=True),
+            Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+        ]
+    )
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(
+        "/accounting/exchange/new",
+        data={"origin": "USD", "destination": "NIO", "rate": invalid_rate, "date": "2026-05-01"},
+    )
+
+    assert response.status_code == 200
+    assert expected_message in response.get_data(as_text=True)
+    assert database.session.execute(database.select(ExchangeRate)).scalars().all() == []
+
+
 def test_route_tasa_cambio_detail(app_ctx):
     from cacao_accounting.database import Currency, ExchangeRate, User, database
 
@@ -2132,6 +2167,45 @@ def test_route_editar_tasa_cambio_post(app_ctx):
         data={"origin": "USD", "destination": "NIO", "rate": "37.00", "date": "2026-06-01"},
     )
     assert response.status_code in (200, 302)
+
+
+@pytest.mark.parametrize(
+    ("invalid_rate", "expected_message"),
+    [
+        ("Infinity", "Tipo de Cambio debe ser finito."),
+        ("NaN", "Tipo de Cambio debe ser finito."),
+        ("sNaN", "Tipo de Cambio debe ser finito."),
+        ("1e999", "Tipo de Cambio excede el rango permitido."),
+        ("100000000000", "Tipo de Cambio excede el rango permitido."),
+    ],
+)
+def test_route_editar_tasa_cambio_rejects_unrepresentable_rate(app_ctx, invalid_rate, expected_message):
+    """La edición deja intacta la tasa cuando el valor no cabe en NUMERIC(20,9)."""
+    from cacao_accounting.database import Currency, ExchangeRate, User, database
+
+    database.session.add_all(
+        [
+            Currency(code="USD", name="Dollar", decimals=2, active=True),
+            Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+        ]
+    )
+    database.session.flush()
+    rate = ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.50"), date=date(2026, 5, 1))
+    database.session.add(rate)
+    database.session.commit()
+    user = User.query.filter_by(user="admin").first()
+    client = app_ctx.test_client()
+    _login(client, user.id)
+
+    response = client.post(
+        f"/accounting/exchange/{rate.id}/edit",
+        data={"origin": "USD", "destination": "NIO", "rate": invalid_rate, "date": "2026-06-01"},
+    )
+    database.session.refresh(rate)
+
+    assert response.status_code == 200
+    assert expected_message in response.get_data(as_text=True)
+    assert rate.rate == Decimal("36.50")
 
 
 def test_route_listar_comprobantes_filtro_periodo(app_ctx):

@@ -40,7 +40,14 @@
       </div>
       <div class="col-12 col-md-6">
         <label class="form-label" for="rate">{{ _('Tasa de Cambio') }} <span class="text-danger">*</span></label>
-        {{ form.rate(class="form-control form-control-sm", id="rate", type="number", step="0.000000001", required=True) }}
+        {{ form.rate(class="form-control form-control-sm" + (" is-invalid" if form.rate.errors else ""), id="rate", type="number", step="0.000000001", required=True) }}
+        {% if form.rate.errors %}
+        <div class="invalid-feedback d-block" role="alert">
+          {% for error in form.rate.errors %}
+          <div>{{ error }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
       <div class="col-12 col-md-6">
         <label class="form-label" for="date">{{ _('Fecha') }} <span class="text-danger">*</span></label>
