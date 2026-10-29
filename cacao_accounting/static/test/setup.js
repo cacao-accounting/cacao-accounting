@@ -26,7 +26,7 @@ function createEnvironment(domExtras) {
 
   // Mock Alpine.data so the IIFE registers the factory with us
   let capturedFactory = null;
-  globalThis.Alpine = {
+  const alpineMock = {
     data: function (name, factory) {
       if (name === 'smartSelect') {
         capturedFactory = factory;
@@ -38,6 +38,7 @@ function createEnvironment(domExtras) {
   if (domExtras) {
     Object.assign(window, domExtras);
   }
+  window.Alpine = alpineMock;
 
   // Fire alpine:init manually after loading the script
   const scriptSource = fs.readFileSync(

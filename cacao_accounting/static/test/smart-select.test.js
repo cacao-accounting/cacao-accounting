@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2025 - 2026 William Jose Moreno Reyes
 
 const assert = require('assert');
+const { createEnvironment } = require('./setup');
 
 function loadSmartSelect(overrides = {}) {
   const listeners = {};
@@ -52,6 +53,17 @@ describe('smart-select', function () {
     delete globalThis.Alpine;
     delete globalThis.fetch;
     delete globalThis.window;
+  });
+
+  it('registers the factory inside its isolated JSDOM context', function () {
+    const environment = createEnvironment();
+    try {
+      const component = environment.factory({ doctype: 'company', name: 'company' });
+      assert.strictEqual(component.doctype, 'company');
+      assert.strictEqual(component.selectedValue, '');
+    } finally {
+      environment.window.close();
+    }
   });
 
   it('does not preload on focus when preloadOnFocus is disabled', async function () {
