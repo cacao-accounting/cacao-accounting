@@ -85,6 +85,7 @@ describe('transaction-form', function () {
     delete globalThis.document;
     delete globalThis.bootstrap;
     delete globalThis.Alpine;
+    delete globalThis.ExcelJS;
     delete globalThis.fetch;
     delete globalThis.setTimeout;
     delete globalThis.clearTimeout;
@@ -1212,4 +1213,158 @@ describe('transaction-form', function () {
     assert.strictEqual(component.sourceLoadError, '');
   });
 
+  it('does not mark pasted rows valid using a stale import response', async function () {
+    const request = deferred();
+    globalThis.fetch = () => request.promise;
+    const create = loadTransactionForm();
+    const component = create({ formKey: 'purchases.purchase_invoice', items: [], uoms: [], defaultRows: 1 });
+    component.importModal.doctype = 'purchase_invoice';
+    component.importModal.schema = { columns: [{ key: 'item_code', label: 'Item' }] };
+    component.importModal.parsedRows = [{ item_code: 'OLD' }];
+
+    const validation = component.validateImport();
+    component.importModal.pastedText = 'Item\nNEW';
+    component.onPasteAreaInput();
+    request.resolve({ ok: true, json: () => Promise.resolve({ valid: true, rows: [{ item_code: 'OLD' }] }) });
+    await validation;
+
+    assert.deepStrictEqual(component.importModal.parsedRows, [{ item_code: 'NEW' }]);
+    assert.strictEqual(component.importModal.isValidated, false);
+  });
+
+  it('does not validate imported rows against an outdated company or currency', async function () {
+    const pendingRequest = deferred();
+    globalThis.fetch = () => pendingRequest.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a', currency: 'NIO' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    const watchers = {};
+    component.$watch = (path, callback) => { watchers[path] = callback; };
+    component.init();
+    component.importModal.doctype = 'purchase_invoice';
+    component.importModal.parsedRows = [{ item_code: 'ITEM-001' }];
+
+    const validation = component.validateImport();
+    component.header.company = 'company-b';
+    watchers['header.company']();
+    component.header.currency = 'USD';
+    watchers['header.currency']();
+    pendingRequest.resolve({ ok: true, json: () => Promise.resolve({ valid: true, rows: [{ item_code: 'ITEM-001' }] }) });
+    await validation;
+
+    assert.strictEqual(component.importModal.isValidated, false);
+    assert.strictEqual(component.importModal.validating, false);
+    assert.deepStrictEqual(component.importModal.parsedRows, [{ item_code: 'ITEM-001' }]);
+  });
+
+  it('keeps XLSX parsing when the company changes during file loading', async function () {
+    const pendingLoad = deferred();
+    globalThis.ExcelJS = {
+      Workbook: class {
+        constructor() {
+          this.worksheets = [{
+            eachRow(_options, callback) {
+              for (const value of ['Item', 'ITEM-001']) {
+                callback({ cellCount: 1, getCell: () => ({ value }) });
+              }
+            },
+          }];
+          this.xlsx = { load: () => pendingLoad.promise };
+        }
+      },
+    };
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    const watchers = {};
+    component.$watch = (path, callback) => { watchers[path] = callback; };
+    component.init();
+    component.importModal.schema = { columns: [{ key: 'item_code', label: 'Item' }] };
+    const upload = component.handleFileUpload({
+      target: { files: [{ name: 'items.xlsx', arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }], value: 'items.xlsx' },
+    });
+
+    component.header.company = 'company-b';
+    watchers['header.company']();
+    pendingLoad.resolve();
+    await upload;
+
+    assert.deepStrictEqual(component.importModal.parsedRows, [{ item_code: 'ITEM-001' }]);
+    assert.strictEqual(component.importModal.fileLoading, false);
+  });
+
+  it('clears the previous XLSX preview when a replacement file cannot be parsed', async function () {
+    globalThis.ExcelJS = {
+      Workbook: class {
+        constructor() {
+          this.worksheets = [];
+          this.xlsx = { load: () => Promise.reject(new Error('invalid workbook')) };
+        }
+      },
+    };
+    const create = loadTransactionForm();
+    const component = create({ formKey: 'purchases.purchase_invoice', items: [], uoms: [], defaultRows: 1 });
+    component.importModal.schema = { columns: [{ key: 'item_code', label: 'Item' }] };
+    component.importModal.parsedRows = [{ item_code: 'OLD-ITEM' }];
+    const originalError = console.error;
+    console.error = () => {};
+
+    await component.handleFileUpload({
+      target: { files: [{ name: 'broken.xlsx', arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }], value: 'broken.xlsx' },
+    });
+
+    console.error = originalError;
+    assert.deepStrictEqual(component.importModal.parsedRows, []);
+    assert.deepStrictEqual(component.importModal.errors, [{ message: 'Error al procesar el archivo XLSX.' }]);
+    assert.strictEqual(component.importModal.fileLoading, false);
+  });
+
+  it('keeps the newest XLSX rows when file reads finish out of order', async function () {
+    const oldLoad = deferred();
+    const newLoad = deferred();
+    let workbookIndex = 0;
+    globalThis.ExcelJS = {
+      Workbook: class {
+        constructor() {
+          const index = workbookIndex;
+          workbookIndex += 1;
+          const itemCode = index === 0 ? 'OLD' : 'NEW';
+          this.worksheets = [{
+            eachRow(_options, callback) {
+              for (const value of ['Item', itemCode]) {
+                callback({ cellCount: 1, getCell: () => ({ value }) });
+              }
+            },
+          }];
+          this.xlsx = { load: () => (index === 0 ? oldLoad.promise : newLoad.promise) };
+        }
+      },
+    };
+    const create = loadTransactionForm();
+    const component = create({ formKey: 'purchases.purchase_invoice', items: [], uoms: [], defaultRows: 1 });
+    component.importModal.schema = { columns: [{ key: 'item_code', label: 'Item' }] };
+    const fileEvent = (name) => ({
+      target: { files: [{ name, arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }], value: name },
+    });
+
+    const oldUpload = component.handleFileUpload(fileEvent('old.xlsx'));
+    const newUpload = component.handleFileUpload(fileEvent('new.xlsx'));
+    newLoad.resolve();
+    await newUpload;
+    oldLoad.resolve();
+    await oldUpload;
+
+    assert.deepStrictEqual(component.importModal.parsedRows, [{ item_code: 'NEW' }]);
+    assert.strictEqual(component.importModal.fileLoading, false);
+  });
 });

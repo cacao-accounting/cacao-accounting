@@ -1037,7 +1037,7 @@
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
           <i class="bi bi-x-circle me-1"></i>{{ _('Cancelar') }}
         </button>
-        <button type="button" class="btn btn-primary" :disabled="importModal.parsedRows.length === 0 || importModal.validating" x-show="!importModal.isValidated" @click="validateImport()">
+        <button type="button" class="btn btn-primary" :disabled="importModal.parsedRows.length === 0 || importModal.validating || importModal.fileLoading" x-show="!importModal.isValidated" @click="validateImport()">
           <span x-show="importModal.validating" class="spinner-border spinner-border-sm me-1"></span>
           <i class="bi bi-check2-circle me-1" x-show="!importModal.validating"></i>{{ _('Validar datos') }}
         </button>

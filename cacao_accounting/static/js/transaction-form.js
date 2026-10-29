@@ -326,6 +326,8 @@
       let catalogPriceRequestSequence = 0;
       let taxPreviewRequestId = 0;
       let sourceRequestSequence = 0;
+      let importValidationRequestId = 0;
+      let importFileRequestId = 0;
 
       return {
         formKey: config.formKey || '',
@@ -412,6 +414,7 @@
             for (const field of fiscalFields) {
               this.$watch(`header.${field}`, () => {
                 if (pricingFields.has(field)) this.refreshCatalogPrices();
+                if (field === 'company' || field === 'currency') this._invalidateImportValidation();
                 if (field === 'company' || field === 'party_type' || field === 'party') this.sourceLoadError = '';
                 this.queueTaxPreview();
               });
@@ -1331,6 +1334,8 @@
 
         async openImportModal() {
           if (!this.supportsLineImport()) return;
+          this._invalidateImportValidation();
+          this._invalidateImportFileLoad();
           this.importModal.doctype = this.documentType();
           this.importModal.schema = null;
           this.importModal.pastedText = "";
@@ -1361,7 +1366,10 @@
         },
 
         onPasteAreaInput() {
+          this._invalidateImportValidation();
+          this._invalidateImportFileLoad();
           this.importModal.isValidated = false;
+          this.importModal.errors = [];
           this.parsePastedText();
         },
 
@@ -1378,7 +1386,12 @@
         },
 
         async validateImport() {
+          if (this.importModal.fileLoading || !this.importModal.parsedRows.length) return;
+          const validation = this.importValidationSnapshot();
+          const validationSignature = JSON.stringify(validation);
+          const requestId = ++importValidationRequestId;
           this.importModal.validating = true;
+          this.importModal.isValidated = false;
           this.importModal.errors = [];
 
           const csrfInput = document.querySelector('input[name="csrf_token"]');
@@ -1392,17 +1405,14 @@
                 "X-CSRFToken": csrfToken,
               },
               credentials: "same-origin",
-              body: JSON.stringify({
-                doctype: this.importModal.doctype,
-                context: {
-                  company_id: this.header.company,
-                  currency_id: this.header.currency,
-                },
-                rows: this.importModal.parsedRows,
-              }),
+              body: JSON.stringify(validation),
             });
 
             const data = await response.json();
+            if (
+              requestId !== importValidationRequestId ||
+              validationSignature !== JSON.stringify(this.importValidationSnapshot())
+            ) return;
             if (response.ok && data.valid) {
               this.importModal.isValidated = true;
               this.importModal.parsedRows = data.rows;
@@ -1411,10 +1421,37 @@
               this.importModal.isValidated = false;
             }
           } catch (err) {
+            if (
+              requestId !== importValidationRequestId ||
+              validationSignature !== JSON.stringify(this.importValidationSnapshot())
+            ) return;
             this.handleImportValidationError(err);
           } finally {
-            this.importModal.validating = false;
+            if (requestId === importValidationRequestId) this.importModal.validating = false;
           }
+        },
+
+        importValidationSnapshot() {
+          return {
+            doctype: this.importModal.doctype,
+            context: {
+              company_id: this.header.company || '',
+              currency_id: this.header.currency || '',
+            },
+            rows: this.importModal.parsedRows.map((row) => ({ ...row })),
+          };
+        },
+
+        _invalidateImportValidation() {
+          importValidationRequestId += 1;
+          this.importModal.validating = false;
+          this.importModal.isValidated = false;
+          this.importModal.errors = [];
+        },
+
+        _invalidateImportFileLoad() {
+          importFileRequestId += 1;
+          this.importModal.fileLoading = false;
         },
 
         handleImportValidationError(err) {
@@ -1515,8 +1552,14 @@
         },
 
         async handleFileUpload(event) {
+          this._invalidateImportValidation();
+          this._invalidateImportFileLoad();
+          const requestId = ++importFileRequestId;
           const file = event.target.files[0];
+          this.importModal.parsedRows = [];
           if (!file) return;
+          this.importModal.isValidated = false;
+          this.importModal.errors = [];
           if (!/\.xlsx$/i.test(file.name || '')) {
             this.importModal.errors = [{ message: "Solo se permiten archivos .xlsx." }];
             this.importModal.parsedRows = [];
@@ -1531,12 +1574,15 @@
           try {
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(await file.arrayBuffer());
+            if (requestId !== importFileRequestId) return;
             this.importModal.parsedRows = mapImportedRows(worksheetToRows(workbook.worksheets[0]), this.importModal.schema);
           } catch (err) {
+            if (requestId !== importFileRequestId) return;
             console.error("Error processing XLSX:", err);
+            this.importModal.parsedRows = [];
             this.importModal.errors = [{ message: "Error al procesar el archivo XLSX." }];
           } finally {
-            this.importModal.fileLoading = false;
+            if (requestId === importFileRequestId) this.importModal.fileLoading = false;
           }
         },
       };
