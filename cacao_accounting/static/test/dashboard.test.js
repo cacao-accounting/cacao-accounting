@@ -133,5 +133,12 @@ describe("dashboard", function () {
     assert.strictEqual(dashboard.error, "");
   });
 
+  it("uses the warehouse to distinguish repeated inventory item rows", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
 
+    const firstKey = dashboard.rowKey({ item_code: "ITEM-001", warehouse: "Bodega Norte" });
+    const secondKey = dashboard.rowKey({ item_code: "ITEM-001", warehouse: "Bodega Sur" });
+
+    assert.notStrictEqual(firstKey, secondKey);
+  });
 });
