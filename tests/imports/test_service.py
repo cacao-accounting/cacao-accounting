@@ -8,7 +8,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.database import Book, database
 from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
-from cacao_accounting.imports.models import ImportBatch
+from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.imports.adapters import journal_entry as journal_entry_adapter
 from cacao_accounting.imports.services import import_service as import_service_module
@@ -42,6 +42,76 @@ def test_import_service_validate(tmp_path):
         updated_batch = database.session.get(ImportBatch, batch.id)
         assert updated_batch.import_status == 3
         assert updated_batch.total_rows == 1
+
+
+def test_business_error_keeps_global_source_row_after_grouping(tmp_path, monkeypatch):
+    """El error de un documento agrupado conserva la fila del archivo completo."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        database.create_all()
+        csv_file = tmp_path / "grouped_rows.csv"
+        csv_file.write_text("document_ref,value\nA,ok\nB,bad\n", encoding="utf-8")
+        batch = ImportBatch(
+            id=str(ULID()),
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            source_format="csv",
+            source_path=str(csv_file),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        class RejectBadRowAdapter:
+            required_columns = []
+
+            def validate_row(self, row):
+                return ["invalid value"] if row.get("value") == "bad" else []
+
+            def validate_document(self, _rows, _context):
+                return []
+
+        service = ImportService()
+        monkeypatch.setattr(service, "_get_adapter", lambda _record_type: RejectBadRowAdapter())
+        service.validate(batch.id)
+
+        error = ImportBatchError.query.filter_by(batch_id=batch.id, document_ref="B").one()
+        assert error.row_number == 2
+
+
+def test_business_error_keeps_global_source_row_without_document_reference(tmp_path, monkeypatch):
+    """Las filas sin documento también conservan su índice del archivo."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        database.create_all()
+        csv_file = tmp_path / "unreferenced_rows.csv"
+        csv_file.write_text("value\nok\nbad\n", encoding="utf-8")
+        batch = ImportBatch(
+            id=str(ULID()),
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            source_format="csv",
+            source_path=str(csv_file),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        class RejectBadRowAdapter:
+            required_columns = []
+
+            def validate_row(self, row):
+                return ["invalid value"] if row.get("value") == "bad" else []
+
+            def validate_document(self, _rows, _context):
+                return []
+
+        service = ImportService()
+        monkeypatch.setattr(service, "_get_adapter", lambda _record_type: RejectBadRowAdapter())
+        service.validate(batch.id)
+
+        error = ImportBatchError.query.filter_by(batch_id=batch.id).one()
+        assert error.row_number == 2
 
 
 def test_import_service_forbidden_columns(tmp_path):

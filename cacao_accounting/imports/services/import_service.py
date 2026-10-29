@@ -39,6 +39,14 @@ from cacao_accounting.i18n import _
 IMPORT_SYNC_MAX_ROWS = 100
 
 
+class _IndexedImportRow(dict[str, Any]):
+    """Conserva el número de fila fuente sin exponer metadatos al adaptador."""
+
+    def __init__(self, values: Dict[str, Any], row_number: int) -> None:
+        super().__init__(values)
+        self.row_number = row_number
+
+
 class ImportService:
     """Servicio principal para gestionar importaciones."""
 
@@ -190,13 +198,13 @@ class ImportService:
         """Recolecta errores de negocio de filas y documentos."""
         errors_count = 0
         for ref, rows in docs.items():
-            for i, row in enumerate(rows):
+            for i, row in enumerate(rows, start=1):
                 for err_msg in adapter.validate_row(row):
                     errors_count += 1
                     database.session.add(
                         ImportBatchError(
                             batch_id=batch_id,
-                            row_number=i + 1,
+                            row_number=getattr(row, "row_number", i),
                             document_ref=ref,
                             error_type="ROW_VALIDATION",
                             message=err_msg,
@@ -426,12 +434,12 @@ class ImportService:
             (column for column in ("document_ref", "reference", "document_reference") if column in columns), None
         )
         if reference_column is None:
-            return {f"row_{i}": [row] for i, row in enumerate(rows)}
+            return {f"row_{i}": [_IndexedImportRow(row, i + 1)] for i, row in enumerate(rows)}
 
         docs: Dict[str, List[Dict[str, Any]]] = {}
-        for row in rows:
+        for row_number, row in enumerate(rows, start=1):
             ref = str(row.get(reference_column) or "no_ref")
             if ref not in docs:
                 docs[ref] = []
-            docs[ref].append(row)
+            docs[ref].append(_IndexedImportRow(row, row_number))
         return docs
