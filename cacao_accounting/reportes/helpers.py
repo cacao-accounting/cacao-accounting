@@ -841,7 +841,7 @@ def _resolve_as_of_date(company: str) -> date | None:
     if not (period_from or period_to):
         legacy_name = request.args.get("accounting_period")
         if legacy_name:
-            period_from = period_to = _resolve_period_id_by_name(company, legacy_name)
+            period_from = period_to = _resolve_period_id_by_name(company, legacy_name) or legacy_name
     from cacao_accounting.reportes.periods import (
         reject_manual_date_overrides,
         resolve_period_range,

@@ -978,6 +978,44 @@ def test_reconciliation_matrix_isolates_selected_ledger(app_ctx):
     assert ar_row["difference"] == Decimal("-100.00")
 
 
+def test_reconciliation_matrix_resolves_legacy_period_by_id_or_name(app_ctx):
+    """Refs: 988; accounting_period is used when explicit range endpoints are absent."""
+    from cacao_accounting.database import AccountingPeriod, database
+    from cacao_accounting.reportes.helpers import _resolve_as_of_date
+    from cacao_accounting.reportes.routes import _reconciliation_matrix_period
+
+    database.session.add_all(
+        [
+            AccountingPeriod(
+                id="period-before-current",
+                entity="cacao",
+                name="2026-09",
+                enabled=True,
+                is_closed=True,
+                start=date(2026, 9, 1),
+                end=date(2026, 9, 30),
+            ),
+            AccountingPeriod(
+                id="period-current",
+                entity="cacao",
+                name="2026-10",
+                enabled=True,
+                is_closed=False,
+                start=date(2026, 10, 1),
+                end=date(2026, 10, 31),
+            ),
+        ]
+    )
+    database.session.commit()
+
+    assert _reconciliation_matrix_period("cacao", None, None, "2026-09") == "period-before-current"
+    assert _reconciliation_matrix_period("cacao", None, None, "period-before-current") == "period-before-current"
+    with app_ctx.test_request_context("/?accounting_period=period-before-current"):
+        assert _resolve_as_of_date("cacao") == date(2026, 9, 30)
+    with app_ctx.test_request_context("/?accounting_period=2026-09"):
+        assert _resolve_as_of_date("cacao") == date(2026, 9, 30)
+
+
 def test_reconciliation_matrix_converts_subledger_to_ledger_currency(app_ctx):
     _seed_accounting_admin()
     """La matriz convierte submayores de moneda funcional a moneda del libro con tasa histórica."""

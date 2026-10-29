@@ -66,6 +66,7 @@ from cacao_accounting.reportes.helpers import (
     _default_ledger_for_company,
     _default_period_for_company,
     _period_params,
+    _resolve_period_id_by_name,
     _resolve_as_of_date,
     _resolve_date_bounds,
     _financial_filters,
@@ -595,7 +596,11 @@ def _reconciliation_matrix_period(
 
     period_id_from, period_id_to = period_from, period_to
     if not (period_id_from or period_id_to):
-        period_range = resolve_period_range(company, None, None)
+        if raw_period:
+            period_value = _resolve_period_id_by_name(company, raw_period) or raw_period
+            period_range = resolve_period_range(company, period_value, period_value, default_to_current=False)
+        else:
+            period_range = resolve_period_range(company, None, None)
         if period_range is not None:
             period_id_from = period_id_to = period_range.from_id
     else:
