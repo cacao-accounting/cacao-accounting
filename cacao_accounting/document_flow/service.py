@@ -119,9 +119,21 @@ def _state_quantities(
     return decimal_or_zero(state.cancelled_qty), decimal_or_zero(state.closed_qty)
 
 
+def _quantity_in_source_uom(item: Any, base_quantity: Decimal) -> Decimal:
+    """Convierte una cantidad base usando la proporción almacenada en la línea."""
+    source_qty = decimal_or_zero(getattr(item, "qty", 0))
+    source_qty_in_base = getattr(item, "qty_in_base_uom", None)
+    if source_qty_in_base is None:
+        return base_quantity
+    source_qty_in_base = decimal_or_zero(source_qty_in_base)
+    if source_qty_in_base == 0:
+        return base_quantity
+    return base_quantity * source_qty / source_qty_in_base
+
+
 def _line_payload(source_type: str, source_id: str, item: Any, target_type: str | None = None) -> dict[str, Any]:
     """Construye la respuesta estandar para una línea origen."""
-    qty = decimal_or_zero(
+    source_qty_base = decimal_or_zero(
         getattr(item, "qty_in_base_uom", None)
         if getattr(item, "qty_in_base_uom", None) is not None
         else getattr(item, "qty", 0)
@@ -141,9 +153,14 @@ def _line_payload(source_type: str, source_id: str, item: Any, target_type: str 
     cancelled, closed = (
         _state_quantities(source_type, source_id, item.id, target_type) if target_type else (Decimal("0"), Decimal("0"))
     )
-    pending = qty - consumed - cancelled - closed
-    if pending < Decimal("0"):
-        pending = Decimal("0")
+    pending_base = source_qty_base - consumed - cancelled - closed
+    if pending_base < Decimal("0"):
+        pending_base = Decimal("0")
+    source_qty = _quantity_in_source_uom(item, source_qty_base)
+    consumed_qty = _quantity_in_source_uom(item, consumed)
+    cancelled_qty = _quantity_in_source_uom(item, cancelled)
+    closed_qty = _quantity_in_source_uom(item, closed)
+    pending = _quantity_in_source_uom(item, pending_base)
     rate = decimal_or_zero(getattr(item, "rate", 0))
     amount = pending * rate
     state = (
@@ -155,12 +172,18 @@ def _line_payload(source_type: str, source_id: str, item: Any, target_type: str 
         "source_item_id": item.id,
         "item_code": getattr(item, "item_code", ""),
         "item_name": getattr(item, "item_name", "") or "",
-        "source_qty": _to_json_number(qty),
-        "consumed_qty": _to_json_number(consumed),
-        "processed_qty": _to_json_number(consumed),
-        "cancelled_qty": _to_json_number(cancelled),
-        "closed_qty": _to_json_number(closed),
+        "source_qty": _to_json_number(source_qty),
+        "source_qty_in_base_uom": _to_json_number(source_qty_base),
+        "consumed_qty": _to_json_number(consumed_qty),
+        "consumed_qty_in_base_uom": _to_json_number(consumed),
+        "processed_qty": _to_json_number(consumed_qty),
+        "processed_qty_in_base_uom": _to_json_number(consumed),
+        "cancelled_qty": _to_json_number(cancelled_qty),
+        "cancelled_qty_in_base_uom": _to_json_number(cancelled),
+        "closed_qty": _to_json_number(closed_qty),
+        "closed_qty_in_base_uom": _to_json_number(closed),
         "pending_qty": _to_json_number(pending),
+        "pending_qty_in_base_uom": _to_json_number(pending_base),
         "line_status": state.line_status if state else "open",
         "qty": _to_json_number(pending),
         "uom": getattr(item, "uom", "") or "",
@@ -190,7 +213,7 @@ def get_source_items(source_type: str, source_id: str, target_type: str | None =
     return [
         payload
         for payload in (_line_payload(source_key, source_id, item, target_key) for item in source_items)
-        if decimal_or_zero(payload["pending_qty"]) > 0
+        if decimal_or_zero(payload["pending_qty_in_base_uom"]) > 0
     ]
 
 

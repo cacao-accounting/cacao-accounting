@@ -613,6 +613,7 @@
                   <th>{{ _('Descripción') }}</th>
                   <th>{{ _('Pendiente') }}</th>
                   <th>{{ _('Traer') }}</th>
+                  <th>{{ _('UOM') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -628,6 +629,7 @@
                              :max="si.pending_qty || si.qty" step="0.0001"
                              class="form-control form-control-sm" style="width:90px">
                     </td>
+                    <td x-text="si.uom"></td>
                   </tr>
                 </template>
               </tbody>

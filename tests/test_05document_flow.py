@@ -263,6 +263,87 @@ def test_legacy_relation_persists_normalized_base_quantity(app_ctx):
     assert relation.qty_in_base_uom == Decimal("10")
 
 
+def test_document_flow_source_lines_return_quantity_in_their_uom(app_ctx):
+    """Pending source quantities and unit prices use the source line UOM."""
+    from cacao_accounting.database import ItemUOMConversion, PurchaseReceipt, PurchaseReceiptItem, UOM, database
+    from cacao_accounting.document_flow import create_document_relation
+    from cacao_accounting.document_flow.service import get_source_items
+
+    order_item = _seed_purchase_order(app_ctx)
+    order_item.qty = Decimal("2")
+    order_item.qty_in_base_uom = Decimal("20")
+    order_item.uom = "BOX"
+    database.session.add_all(
+        [
+            UOM(code="BOX", name="Caja"),
+            ItemUOMConversion(item_code="ART-001", from_uom="BOX", to_uom="UND", conversion_factor=10),
+        ]
+    )
+    first_receipt = PurchaseReceipt(
+        id="PR-BOX-PARTIAL",
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        docstatus=1,
+    )
+    first_receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id=first_receipt.id,
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("0.5"),
+        qty_in_base_uom=Decimal("5"),
+        uom="BOX",
+        rate=Decimal("5"),
+        amount=Decimal("2.5"),
+    )
+    database.session.add_all([first_receipt, first_receipt_item])
+    database.session.flush()
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id=first_receipt.id,
+        target_item_id=first_receipt_item.id,
+        qty=Decimal("0.5"),
+        uom="BOX",
+    )
+
+    source_lines = get_source_items("purchase_order", "PO-001", "purchase_receipt")
+    source_line = source_lines[0]
+
+    assert Decimal(source_line["source_qty"]) == Decimal("2")
+    assert Decimal(source_line["source_qty_in_base_uom"]) == Decimal("20")
+    assert Decimal(source_line["consumed_qty"]) == Decimal("0.5")
+    assert Decimal(source_line["consumed_qty_in_base_uom"]) == Decimal("5")
+    assert Decimal(source_line["pending_qty"]) == Decimal("1.5")
+    assert Decimal(source_line["pending_qty_in_base_uom"]) == Decimal("15")
+    assert Decimal(source_line["qty"]) == Decimal("1.5")
+    assert source_line["uom"] == "BOX"
+    assert Decimal(source_line["rate"]) == Decimal("5")
+    assert Decimal(source_line["amount"]) == Decimal("7.5")
+
+    second_receipt = PurchaseReceipt(
+        id="PR-BOX-REMAINDER",
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        docstatus=0,
+    )
+    database.session.add(second_receipt)
+    database.session.flush()
+    relation = create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id=second_receipt.id,
+        target_item_id=None,
+        qty=Decimal(source_line["pending_qty"]),
+        uom=source_line["uom"],
+    )
+    assert relation.qty == Decimal("1.5")
+    assert relation.qty_in_base_uom == Decimal("15")
+
+
 def test_document_flow_blocks_overconsumption(app_ctx):
     from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
     from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
