@@ -10,8 +10,7 @@ function loadServiceWorker(options) {
   const overrides = options || {};
   const listeners = {};
   const calls = {
-    open: [],
-    put: [],
+    keys: 0,
     match: [],
     delete: [],
     skipWaiting: 0,
@@ -19,23 +18,14 @@ function loadServiceWorker(options) {
     fetch: [],
   };
 
-  const cache = {
-    addAll: overrides.addAll || (() => Promise.resolve()),
-    put: (request, response) => {
-      calls.put.push([request, response]);
-      return Promise.resolve();
-    },
-  };
-
   const caches = {
-    open: (name) => {
-      calls.open.push(name);
-      return Promise.resolve(cache);
+    keys: () => {
+      calls.keys += 1;
+      return Promise.resolve(overrides.keys || ['cacao-accounting-v5', 'old-cache']);
     },
-    keys: () => Promise.resolve(overrides.keys || ['cacao-accounting-v5', 'old-cache']),
     match: (request) => {
       calls.match.push(request);
-      return Promise.resolve(overrides.matchedResponse ? overrides.matchedResponse(request) : undefined);
+      return Promise.resolve(undefined);
     },
     delete: (name) => {
       calls.delete.push(name);
@@ -50,20 +40,20 @@ function loadServiceWorker(options) {
     },
     skipWaiting: () => {
       calls.skipWaiting += 1;
+      return Promise.resolve();
     },
     clients: {
       claim: () => {
         calls.claim += 1;
+        return Promise.resolve();
       },
     },
   };
 
-  const fetchImpl =
-    overrides.fetch ||
-    ((request) => {
-      calls.fetch.push(request);
-      return Promise.resolve({ ok: true, status: 200 });
-    });
+  const fetchImpl = (request) => {
+    calls.fetch.push(request);
+    return overrides.fetch ? overrides.fetch(request) : Promise.resolve({ ok: true, status: 200 });
+  };
 
   const sandbox = { self, caches, fetch: fetchImpl, URL, Promise, console };
   vm.createContext(sandbox);
@@ -72,111 +62,73 @@ function loadServiceWorker(options) {
   vm.runInContext(source, sandbox);
 
   function trigger(type, event) {
-    listeners[type](event);
+    if (listeners[type]) listeners[type](event);
   }
 
   return { listeners, calls, trigger };
 }
 
 describe('service worker', function () {
-  it('precaches static assets on install and activates immediately', async function () {
+  it('activates immediately without precaching resources', async function () {
     const sw = loadServiceWorker();
     let waited = null;
     sw.trigger('install', { waitUntil: (promise) => { waited = promise; } });
 
     assert.ok(waited && typeof waited.then === 'function');
     await waited;
-    assert.deepStrictEqual(sw.calls.open, ['cacao-accounting-v5']);
     assert.strictEqual(sw.calls.skipWaiting, 1);
+    assert.deepStrictEqual(sw.calls.fetch, []);
+    assert.strictEqual(typeof sw.listeners.fetch, 'function');
+    assert.strictEqual(sw.calls.keys, 0);
+    assert.strictEqual(sw.calls.match.length, 0);
+    assert.strictEqual(sw.calls.delete.length, 0);
   });
 
-  it('swallows precache failures during install', async function () {
-    const sw = loadServiceWorker({ addAll: () => Promise.reject(new Error('boom')) });
-    let waited = null;
-    sw.trigger('install', { waitUntil: (promise) => { waited = promise; } });
-
-    await waited;
-  });
-
-  it('removes outdated caches on activate', async function () {
-    const sw = loadServiceWorker();
+  it('removes only Cacao Accounting caches on activate', async function () {
+    const sw = loadServiceWorker({ keys: ['cacao-accounting-v5', 'cacao-accounting-v4', 'other-app-cache'] });
     let waited = null;
     sw.trigger('activate', { waitUntil: (promise) => { waited = promise; } });
 
     await waited;
-    assert.deepStrictEqual(sw.calls.delete, ['old-cache']);
+    assert.strictEqual(sw.calls.keys, 1);
+    assert.deepStrictEqual(sw.calls.delete, ['cacao-accounting-v5', 'cacao-accounting-v4']);
     assert.strictEqual(sw.calls.claim, 1);
   });
 
-  it('serves cached static assets and refreshes them in the background', async function () {
-    const cached = { body: 'cached' };
-    const networkChecks = [];
-    const sw = loadServiceWorker({
-      matchedResponse: () => cached,
-      fetch: (request) => {
-        networkChecks.push(request);
-        return Promise.resolve({ ok: true, status: 200 });
-      },
-    });
+  it('sends static and dynamic GET requests to network without CacheStorage', async function () {
+    const staticResponse = { body: 'network-static' };
+    const dynamicResponse = { body: 'network-page' };
+    const networkResponses = [staticResponse, dynamicResponse];
+    const sw = loadServiceWorker({ fetch: () => Promise.resolve(networkResponses.shift()) });
 
-    let responded = null;
-    const request = { method: 'GET', url: 'http://localhost/static/app.js' };
-    sw.trigger('fetch', { request, respondWith: (promise) => { responded = promise; } });
+    const requests = [
+      { method: 'GET', url: 'http://localhost/static/app.js' },
+      { method: 'GET', url: 'http://localhost/dashboard' },
+    ];
+    const responses = [];
+    for (const request of requests) {
+      let responded = null;
+      sw.trigger('fetch', { request, respondWith: (promise) => { responded = promise; } });
+      responses.push(await responded);
+    }
 
-    assert.strictEqual(await responded, cached);
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.strictEqual(networkChecks.length, 1);
-    assert.strictEqual(sw.calls.put.length, 1);
+    assert.deepStrictEqual(responses, [staticResponse, dynamicResponse]);
+    assert.strictEqual(sw.calls.fetch.length, 2);
+    assert.strictEqual(sw.calls.keys, 0);
+    assert.strictEqual(sw.calls.match.length, 0);
+    assert.strictEqual(sw.calls.delete.length, 0);
   });
 
-  it('does not cache background refresh responses that are not OK', async function () {
-    const cached = { body: 'cached' };
-    const sw = loadServiceWorker({
-      matchedResponse: () => cached,
-      fetch: () => Promise.resolve({ ok: false, status: 404 }),
-    });
-
-    let responded = null;
-    sw.trigger('fetch', {
-      request: { method: 'GET', url: 'http://localhost/static/app.js' },
-      respondWith: (promise) => { responded = promise; },
-    });
-
-    await responded;
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.strictEqual(sw.calls.put.length, 0);
-  });
-
-  it('falls back to the network when a static asset is not cached', async function () {
-    const network = { body: 'network' };
-    const sw = loadServiceWorker({
-      matchedResponse: () => undefined,
-      fetch: () => Promise.resolve(network),
-    });
-
-    let responded = null;
-    sw.trigger('fetch', {
-      request: { method: 'GET', url: 'http://localhost/static/missing.js' },
-      respondWith: (promise) => { responded = promise; },
-    });
-
-    assert.strictEqual(await responded, network);
-  });
-
-  it('uses network-first with cache fallback for dynamic requests', async function () {
-    const cached = { body: 'cached-html' };
-    const sw = loadServiceWorker({
-      matchedResponse: () => cached,
-      fetch: () => Promise.reject(new Error('offline')),
-    });
-
+  it('lets network errors surface without returning a cached response', async function () {
+    const sw = loadServiceWorker({ fetch: () => Promise.reject(new Error('offline')) });
     let responded = null;
     sw.trigger('fetch', {
       request: { method: 'GET', url: 'http://localhost/dashboard' },
       respondWith: (promise) => { responded = promise; },
     });
 
-    assert.strictEqual(await responded, cached);
+    await assert.rejects(responded, /offline/);
+    assert.strictEqual(sw.calls.match.length, 0);
   });
 
   it('ignores non-GET requests', function () {
