@@ -237,7 +237,10 @@ def resolve_item_price_record(
     )
     if uom:
         query = query.where((ItemPrice.uom.is_(None)) | (ItemPrice.uom == uom))
-    return database.session.execute(query).scalars().first()
+    price = database.session.execute(query).scalars().first()
+    if price is not None and not _decimal_value(price.price).is_finite():
+        return None
+    return price
 
 
 def get_item_price(

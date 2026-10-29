@@ -873,11 +873,15 @@ def precios_item():
         if not price_list:
             abort(404)
         _require_price_list_company_access(price_list)
+        price_value = _decimal_form("price")
+        if not price_value.is_finite():
+            flash(_("El precio debe ser finito."), "danger")
+            return redirect(url_for("admin.precios_item"))
         item_price = ItemPrice(
             item_code=request.form.get("item_code") or "",
             price_list_id=request.form.get("price_list_id") or "",
             uom=request.form.get("uom") or None,
-            price=_decimal_form("price"),
+            price=price_value,
             min_qty=_decimal_form("min_qty", "0"),
             valid_from=_date_form("valid_from"),
             valid_upto=_date_form("valid_upto"),
@@ -919,7 +923,11 @@ def actualizar_precio_item(item_price_id: str):
     if not price_list:
         abort(404)
     _require_price_list_company_access(price_list)
-    item_price.price = _decimal_form("price")
+    price_value = _decimal_form("price")
+    if not price_value.is_finite():
+        flash(_("El precio debe ser finito."), "danger")
+        return redirect(url_for("admin.precios_item"))
+    item_price.price = price_value
     item_price.min_qty = _decimal_form("min_qty", "0")
     item_price.valid_from = _date_form("valid_from")
     item_price.valid_upto = _date_form("valid_upto")

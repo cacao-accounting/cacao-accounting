@@ -2172,6 +2172,9 @@ msgstr "Price Lists"
 msgid "Precio de item creado correctamente."
 msgstr "Price of item created successfully."
 
+msgid "El precio debe ser finito."
+msgstr "Price must be finite."
+
 #: cacao_accounting/admin/routes.py:906
 #: cacao_accounting/admin/templates/admin/item_prices.html:3
 msgid "Precios por Item"

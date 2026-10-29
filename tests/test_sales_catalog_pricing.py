@@ -142,6 +142,85 @@ def test_unit_specific_price_precedes_generic_price_when_quantity_and_dates_tie(
         assert legacy_price.price == Decimal("80.0000")
 
 
+def test_item_price_routes_reject_non_finite_values_on_create_and_update(app_ctx):
+    """Admin routes must reject non-finite prices without changing stored values."""
+    with app_ctx.app_context():
+        _customer, item = _customer_and_item()
+        price_list = PriceList(name="Validación finitud", company="CACAO", is_selling=True, is_active=True)
+        database.session.add(price_list)
+        database.session.flush()
+        existing = ItemPrice(
+            item_code=item.code,
+            price_list_id=price_list.id,
+            uom=item.default_uom,
+            price=Decimal("100"),
+        )
+        database.session.add(existing)
+        database.session.commit()
+        item_code, price_list_id, item_price_id = item.code, price_list.id, existing.id
+
+    with app_ctx.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+        for value in ("NaN", "sNaN", "Infinity", "-Infinity"):
+            create = client.post(
+                "/settings/item-prices",
+                data={"item_code": item_code, "price_list_id": price_list_id, "price": value},
+                follow_redirects=True,
+            )
+            update = client.post(f"/settings/item-prices/{item_price_id}", data={"price": value}, follow_redirects=True)
+            assert b"El precio debe ser finito." in create.data
+            assert b"El precio debe ser finito." in update.data
+
+    with app_ctx.app_context():
+        stored = database.session.get(ItemPrice, item_price_id)
+        prices = (
+            database.session.execute(database.select(ItemPrice).filter_by(item_code=item_code, price_list_id=price_list_id))
+            .scalars()
+            .all()
+        )
+        assert stored is not None
+        assert stored.price == Decimal("100.0000")
+        assert len(prices) == 1
+
+
+def test_price_resolvers_reject_non_finite_persisted_rows(app_ctx):
+    """Persisted non-finite prices must not reach sales or legacy callers."""
+    from cacao_accounting.tax_pricing_service import TaxPricingError, get_item_price
+
+    with app_ctx.app_context():
+        customer, item = _customer_and_item()
+        price_list = PriceList(name="Lista inválida", company="CACAO", is_selling=True, is_active=True)
+        database.session.add(price_list)
+        database.session.flush()
+        company_party = database.session.execute(
+            database.select(CompanyParty).where(CompanyParty.company == "CACAO", CompanyParty.party_id == customer.id)
+        ).scalar_one_or_none()
+        if company_party is None:
+            company_party = CompanyParty(company="CACAO", party_id=customer.id)
+            database.session.add(company_party)
+        company_party.default_price_list_id = price_list.id
+        database.session.add_all(
+            [
+                ItemPrice(item_code=item.code, price_list_id=price_list.id, price=Decimal("100")),
+                ItemPrice(
+                    item_code=item.code,
+                    price_list_id=price_list.id,
+                    uom=item.default_uom,
+                    price=Decimal("Infinity"),
+                ),
+            ]
+        )
+        database.session.commit()
+
+        sales_price = resolve_sales_catalog_price(
+            "CACAO", customer.id, item.code, Decimal("1"), item.default_uom, date.today()
+        )
+        with pytest.raises(TaxPricingError, match="No existe precio vigente"):
+            get_item_price(item.code, price_list.id, Decimal("1"), item.default_uom, date.today())
+
+        assert sales_price is None
+
+
 def test_sales_catalog_api_returns_effective_customer_price(app_ctx):
     """The transaction grid API exposes the same price resolver as posting."""
     with app_ctx.app_context():
