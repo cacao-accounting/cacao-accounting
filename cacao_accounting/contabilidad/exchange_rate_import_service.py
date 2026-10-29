@@ -22,6 +22,8 @@ class ExchangeRateImportError(Exception):
 
 
 _EXPECTED_HEADERS = {"Moneda Base", "Moneda Destino", "Fecha", "Tipo de Cambio"}
+_MAX_EXCHANGE_RATE = Decimal("99999999999.999999999")
+_MIN_EXCHANGE_RATE = Decimal("0.000000001")
 _DATE_FORMATS = (
     "%Y-%m-%d",
     "%Y-%m-%d %H:%M:%S",
@@ -35,6 +37,48 @@ _DATE_FORMATS = (
     "%m/%d/%Y",
     "%m/%d/%Y %H:%M:%S",
 )
+
+
+def _parse_rate_input(raw_rate: str) -> tuple[Decimal | None, str | None]:
+    """Convert one raw rate to Decimal and return a field error when parsing fails."""
+    if not raw_rate:
+        return None, "Tipo de Cambio vacío."
+    try:
+        return Decimal(raw_rate), None
+    except InvalidOperation:
+        return None, f"Tipo de Cambio '{raw_rate}' no es numérico."
+
+
+def _rate_range_error(rate: Decimal) -> str | None:
+    """Return a localized validation error when a rate is outside its domain."""
+    if not rate.is_finite():
+        return _("Tipo de Cambio debe ser finito.")
+    if rate <= 0:
+        return _("Tipo de Cambio debe ser mayor a cero.")
+    if rate < _MIN_EXCHANGE_RATE:
+        return _("Tipo de Cambio debe ser al menos 0.000000001.")
+    if rate > _MAX_EXCHANGE_RATE:
+        return _("Tipo de Cambio excede el rango permitido.")
+    return None
+
+
+def _sqlite_rate_storage_error(rate: Decimal, dialect_name: str | None) -> str | None:
+    """Check that SQLite can persist the rate without overflow or lost precision."""
+    effective_dialect = dialect_name or database.session.get_bind().dialect.name
+    if effective_dialect != "sqlite":
+        return None
+    try:
+        expected_rate = rate.quantize(Decimal("0.000000001"))
+        sqlite_rate = Decimal(f"{float(rate):.9f}")
+    except (InvalidOperation, OverflowError):
+        return _("Tipo de Cambio excede el rango permitido.")
+    if not sqlite_rate.is_finite() or sqlite_rate <= 0:
+        return _("Tipo de Cambio debe ser al menos 0.000000001.")
+    if sqlite_rate > _MAX_EXCHANGE_RATE:
+        return _("Tipo de Cambio excede el rango permitido.")
+    if sqlite_rate != expected_rate:
+        return _("Tipo de Cambio no conserva la precisión de nueve decimales al almacenarse.")
+    return None
 
 
 class ExchangeRateImportService:
@@ -142,20 +186,30 @@ class ExchangeRateImportService:
             if rate_date is None:
                 errors.append(f"Fecha '{raw_date}' no válida. Use formato DD-MM-YYYY.")
 
-        rate = None
-        if not raw_rate:
-            errors.append("Tipo de Cambio vacío.")
-        else:
-            try:
-                rate = Decimal(raw_rate)
-                if rate <= 0:
-                    errors.append("Tipo de Cambio debe ser mayor a cero.")
-            except InvalidOperation:
-                errors.append(f"Tipo de Cambio '{raw_rate}' no es numérico.")
+        rate = self._parse_positive_rate(raw_rate, errors)
 
         if errors:
             return None, None, None, None
         return origin, dest, rate_date, rate
+
+    @staticmethod
+    def validate_positive_rate(value: Any, *, dialect_name: str | None = None) -> tuple[Decimal | None, str | None]:
+        """Validate one rate for form and import inputs against the stored NUMERIC column."""
+        errors: list[str] = []
+        raw_rate = "" if value is None else str(value)
+        rate = ExchangeRateImportService._parse_positive_rate(raw_rate, errors, dialect_name=dialect_name)
+        return rate, errors[0] if errors else None
+
+    @staticmethod
+    def _parse_positive_rate(raw_rate: str, errors: List[str], *, dialect_name: str | None = None) -> Decimal | None:
+        """Parsea una tasa y añade errores si no es finita y positiva."""
+        rate, error = _parse_rate_input(raw_rate)
+        if rate is not None:
+            error = error or _rate_range_error(rate) or _sqlite_rate_storage_error(rate, dialect_name)
+        if error:
+            errors.append(error)
+            return None
+        return rate
 
     @staticmethod
     def _parse_date(raw: str) -> Any:

@@ -1620,6 +1620,20 @@ msgstr "The amount cannot be stored to four decimal places without losing precis
 msgid "El monto del período %(period)s excede el rango o pierde precisión al almacenarse."
 msgstr "The amount for period %(period)s exceeds the range or loses precision when stored."
 
+msgid "Tipo de Cambio debe ser finito."
+msgstr "The exchange rate must be finite."
+
+msgid "Tipo de Cambio debe ser mayor a cero."
+msgstr "The exchange rate must be greater than zero."
+
+msgid "Tipo de Cambio excede el rango permitido."
+msgstr "The exchange rate exceeds the allowed range."
+
+msgid "Tipo de Cambio debe ser al menos 0.000000001."
+msgstr "The exchange rate must be at least 0.000000001."
+
+msgid "Tipo de Cambio no conserva la precisión de nueve decimales al almacenarse."
+msgstr "The exchange rate does not preserve nine-decimal precision when stored."
 
 #: cacao_accounting/accounting_engine/document_builders.py:1244
 msgid "Falta la cuenta puente para liquidar una factura de compra."

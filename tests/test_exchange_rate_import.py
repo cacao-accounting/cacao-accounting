@@ -109,6 +109,53 @@ class TestParseDate:
 class TestImportRates:
     """Pruebas de importación de tasas de cambio."""
 
+    @pytest.mark.parametrize(
+        ("raw_rate", "expected_error"),
+        [
+            ("Infinity", "finito"),
+            ("-Infinity", "finito"),
+            ("NaN", "finito"),
+            ("sNaN", "finito"),
+            ("1e999", "rango permitido"),
+            ("99999999999.999999999", "rango permitido"),
+            ("10000000000.000000001", "no conserva la precisión de nueve decimales"),
+            ("0.0000000001", "al menos 0.000000001"),
+            ("0", "mayor a cero"),
+            ("-1", "mayor a cero"),
+        ],
+    )
+    def test_import_rejects_invalid_rate_values(self, app_ctx, raw_rate, expected_error):
+        """Non-finite and non-positive rates are rejected before persistence."""
+        from cacao_accounting.contabilidad.exchange_rate_import_service import (
+            ExchangeRateImportError,
+            ExchangeRateImportService,
+        )
+        from cacao_accounting.database import ExchangeRate, database
+
+        csv_content = f"Moneda Base,Moneda Destino,Fecha,Tipo de Cambio\nUSD,NIO,2026-10-29,{raw_rate}\n"
+
+        with pytest.raises(ExchangeRateImportError, match=expected_error):
+            ExchangeRateImportService().import_rates("invalid-rate.csv", csv_content.encode("utf-8"))
+
+        assert database.session.execute(database.select(ExchangeRate)).scalars().all() == []
+
+    @pytest.mark.parametrize("dialect_name", ["postgresql", "mysql"])
+    def test_native_decimal_dialects_accept_rates_within_numeric_range(self, dialect_name):
+        """Native DECIMAL dialects keep the declared 20,9 range."""
+        from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportService
+
+        errors = []
+        maximum = Decimal("99999999999.999999999")
+        parsed = ExchangeRateImportService._parse_positive_rate(str(maximum), errors, dialect_name=dialect_name)
+        precise_rate = Decimal("10000000000.000000001")
+        parsed_precise_rate = ExchangeRateImportService._parse_positive_rate(
+            str(precise_rate), errors, dialect_name=dialect_name
+        )
+
+        assert parsed == maximum
+        assert parsed_precise_rate == precise_rate
+        assert errors == []
+
     def test_import_with_iso_datetime_format(self, app_ctx):
         """Verifica que fechas en formato ISO con hora se importan correctamente."""
         from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportService
