@@ -3,6 +3,16 @@
 
 const assert = require('assert');
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 function loadTransactionForm() {
   const listeners = {};
   let transactionFormFactory = null;
@@ -662,4 +672,111 @@ describe('transaction-form', function () {
     assert.deepStrictEqual(component.importModal.errors, [{ message: 'Error de conexión al validar.' }]);
     assert.strictEqual(warnings.length, 1);
   });
+
+  it('does not apply an old sales catalog price after pricing context changes', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    globalThis.fetch = () => requests.shift().promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+    });
+    const line = component.newLine();
+    line.item_code = 'ITEM-001';
+    line.uom = 'EA';
+    component.lines = [line];
+
+    const oldPrice = component.refreshCatalogPrice(line);
+    component.header.party = 'CUSTOMER-B';
+    const newPrice = component.refreshCatalogPrice(line);
+    newRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '80', price_list_name: 'B' }) });
+    await newPrice;
+    oldRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'A' }) });
+    await oldPrice;
+
+    assert.strictEqual(line.rate, 80);
+    assert.strictEqual(line.price_list_name, 'B');
+  });
+
+  it('refreshes the sales catalog price when the line UOM changes', async function () {
+    let requestUrl = '';
+    globalThis.fetch = async (url) => {
+      requestUrl = url;
+      return { ok: true, json: async () => ({ price: '24', price_list_name: 'Box prices' }) };
+    };
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'COMP', currency: 'USD' },
+    });
+    const line = component.newLine();
+    line.item_code = 'ITEM-001';
+    component.lines = [line];
+
+    await component.onUomChange(line, 'BOX');
+
+    assert.strictEqual(line.uom, 'BOX');
+    assert.strictEqual(line.rate, 24);
+    assert.strictEqual(new URL(requestUrl, 'http://localhost').searchParams.get('uom'), 'BOX');
+  });
+
+  it('clears the previous catalog price when the selected item has no price', async function () {
+    const responses = [
+      { price: '12', price_list_name: 'List' },
+      { price: null, price_list_name: null },
+    ];
+    globalThis.fetch = async () => ({ ok: true, json: async () => responses.shift() });
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'COMP', currency: 'USD' },
+    });
+    const line = component.newLine();
+    line.item_code = 'ITEM-A';
+    component.lines = [line];
+
+    await component.refreshCatalogPrice(line);
+    line.item_code = 'ITEM-B';
+    await component.refreshCatalogPrice(line);
+
+    assert.strictEqual(line.rate, 0);
+    assert.strictEqual(line.price_list_name, '');
+  });
+
+  it('does not replace a manually edited sales price with a pending lookup', async function () {
+    const request = deferred();
+    globalThis.fetch = () => request.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      canEditPrices: true,
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'COMP', currency: 'USD' },
+    });
+    const line = component.newLine();
+    line.item_code = 'ITEM-001';
+    component.lines = [line];
+
+    const lookup = component.refreshCatalogPrice(line);
+    line.rate = 75;
+    component.onRateInput(line);
+    request.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'List' }) });
+    await lookup;
+
+    assert.strictEqual(line.rate, 75);
+  });
+
 });

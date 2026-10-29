@@ -322,6 +322,8 @@
       const messages = buildMessages(config);
       const columnsList = resolveColumnsList(config);
       const flowLockedFields = resolveFlowLockedFields(config);
+      const catalogPriceRequestIds = new WeakMap();
+      let catalogPriceRequestSequence = 0;
 
       return {
         formKey: config.formKey || '',
@@ -604,21 +606,49 @@
           void this.refreshCatalogPrice(line);
         },
 
+        onUomChange(line, uom) {
+          line.uom = uom;
+          return this.refreshCatalogPrice(line);
+        },
+
+        onRateInput(line) {
+          this._invalidateCatalogPriceRequest(line);
+          this.calcAmount(line);
+        },
+
+        _invalidateCatalogPriceRequest(line) {
+          catalogPriceRequestIds.set(line, ++catalogPriceRequestSequence);
+        },
+
         async refreshCatalogPrice(line) {
           if (!this.enableSalesPriceLookup || line.source_item_id || !line.item_code || !this.header.company) return;
-          const itemCode = line.item_code;
-          const params = new URLSearchParams({
+          const requestId = ++catalogPriceRequestSequence;
+          catalogPriceRequestIds.set(line, requestId);
+          const getPricingContext = () => ({
             company: this.header.company,
             customer_id: this.header.party || '',
-            item_code: itemCode,
+            item_code: line.item_code,
             qty: toCurrencyString(line.qty || 1),
             uom: line.uom || '',
             posting_date: this.header.posting_date || '',
           });
+          const requestedContext = getPricingContext();
+          const params = new URLSearchParams(requestedContext);
           try {
             const response = await fetch(`/api/sales/catalog-price?${params.toString()}`, { credentials: 'same-origin' });
             const payload = await response.json();
-            if (!response.ok || line.item_code !== itemCode || payload.price === null) return;
+            if (
+              requestId !== catalogPriceRequestIds.get(line) ||
+              JSON.stringify(getPricingContext()) !== JSON.stringify(requestedContext) ||
+              line.source_item_id ||
+              !response.ok
+            ) return;
+            if (payload.price === null) {
+              line.rate = 0;
+              line.price_list_name = '';
+              this.calcAmount(line);
+              return;
+            }
             line.rate = toNumber(payload.price);
             line.price_list_name = payload.price_list_name || '';
             this.calcAmount(line);
