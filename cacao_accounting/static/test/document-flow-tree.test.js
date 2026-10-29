@@ -4,6 +4,20 @@
 const assert = require('assert');
 const { documentFlowTree, renderTree } = require('../js/document-flow-tree.js');
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushPromises() {
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
 const englishMessages = {
   total: 'Total:',
   relationship: 'Relationship:',
@@ -24,6 +38,10 @@ const englishMessages = {
 };
 
 describe('document-flow-tree', function () {
+  afterEach(function () {
+    delete globalThis.fetch;
+  });
+
   it('renders translated node, relation and expansion labels', function () {
     const current = {
       document_type: 'payment_entry',
@@ -119,5 +137,54 @@ describe('document-flow-tree', function () {
     assert.strictEqual(tree.isCancelled, true);
     assert.strictEqual(tree.currentAppliedAmount, 0);
     assert.strictEqual(tree.currentUnallocatedAmount, 0);
+  });
+
+  it('ignores stale responses and errors from earlier loads', async function () {
+    const firstRequest = deferred();
+    const secondRequest = deferred();
+    const requests = [firstRequest, secondRequest];
+    globalThis.fetch = () => requests.shift().promise;
+    const tree = documentFlowTree({ apiUrl: '/document-flow' });
+
+    tree.load();
+    tree.load();
+    secondRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ current: { document_id: 'new' }, upstream: [], downstream: [], meta: { node_count: 0 } }),
+    });
+    await flushPromises();
+    firstRequest.reject(new Error('stale request failed'));
+    await flushPromises();
+
+    assert.strictEqual(tree.current.document_id, 'new');
+    assert.strictEqual(tree.loaded, true);
+    assert.strictEqual(tree.error, false);
+    assert.strictEqual(tree.loading, false);
+  });
+
+  it('ignores a stale success after a newer load succeeds', async function () {
+    const firstRequest = deferred();
+    const secondRequest = deferred();
+    const requests = [firstRequest, secondRequest];
+    globalThis.fetch = () => requests.shift().promise;
+    const tree = documentFlowTree({ apiUrl: '/document-flow' });
+
+    tree.load();
+    tree.load();
+    secondRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ current: { document_id: 'new' }, upstream: [], downstream: [] }),
+    });
+    await flushPromises();
+    firstRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ current: { document_id: 'old' }, upstream: [], downstream: [] }),
+    });
+    await flushPromises();
+
+    assert.strictEqual(tree.current.document_id, 'new');
+    assert.strictEqual(tree.loaded, true);
+    assert.strictEqual(tree.error, false);
+    assert.strictEqual(tree.loading, false);
   });
 });

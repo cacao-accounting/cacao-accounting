@@ -198,6 +198,7 @@
   // ---------------------------------------------------------------------------
 
   function documentFlowTree(config) {
+    let latestLoadId = 0;
     const messages = {
       ...DEFAULT_MESSAGES,
       ...(config.messages || {}),
@@ -255,6 +256,7 @@
 
       load() {
         if (!this.apiUrl) return;
+        const requestId = ++latestLoadId;
         this.loading = true;
         this.error   = false;
         fetch(this.apiUrl, { credentials: 'same-origin' })
@@ -263,17 +265,20 @@
             return r.json();
           })
           .then((data) => {
+            if (requestId !== latestLoadId) return;
             this.current       = data.current        || null;
             this.upstream      = data.upstream       || [];
             this.downstream    = data.downstream     || [];
             this.createActions = data.create_actions || [];
             this.meta          = data.meta           || null;
             this.loaded  = true;
-            this.loading = false;
           })
           .catch(() => {
+            if (requestId !== latestLoadId) return;
             this.error   = true;
-            this.loading = false;
+          })
+          .finally(() => {
+            if (requestId === latestLoadId) this.loading = false;
           });
       },
 
