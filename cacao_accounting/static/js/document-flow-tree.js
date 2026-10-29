@@ -148,16 +148,6 @@
     return html;
   }
 
-  function sumApplied(nodes) {
-    if (!Array.isArray(nodes)) return 0;
-    let total = 0;
-    for (const node of nodes) {
-      if (node && node.applied_amount != null) total += Number(node.applied_amount) || 0;
-      total += sumApplied(node?.children || []);
-    }
-    return total;
-  }
-
   // ---------------------------------------------------------------------------
   // Componente Alpine
   // ---------------------------------------------------------------------------
@@ -191,14 +181,16 @@
       },
       get currentAppliedAmount() {
         if (!this.current || this.current.document_type !== 'payment_entry') return null;
-        return sumApplied(this.downstream);
+        const total = Number(this.current.total);
+        const unallocated = Number(this.current.unallocated_amount);
+        if (!Number.isFinite(total) || !Number.isFinite(unallocated)) return null;
+        return Math.max(0, total - Math.max(0, unallocated));
       },
       get currentUnallocatedAmount() {
         if (!this.current || this.current.document_type !== 'payment_entry') return null;
-        const total = Number(this.current.total);
-        if (!Number.isFinite(total)) return null;
-        const unallocated = total - (this.currentAppliedAmount || 0);
-        return unallocated > 0 ? unallocated : 0;
+        const unallocated = Number(this.current.unallocated_amount);
+        if (!Number.isFinite(unallocated)) return null;
+        return Math.max(0, unallocated);
       },
 
       toggle() {

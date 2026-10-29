@@ -31,7 +31,12 @@ _PARTY_NAME_FIELDS = ("party_name", "supplier_name", "customer_name")
 # ---------------------------------------------------------------------------
 
 
-def get_document_node(document_type: str, document_id: str) -> dict[str, Any]:
+def get_document_node(
+    document_type: str,
+    document_id: str,
+    *,
+    include_payment_balance: bool = False,
+) -> dict[str, Any]:
     """Construye el payload de metadatos de un nodo del árbol.
 
     Devuelve campos enriquecidos: label, url de detalle, estado, fecha,
@@ -58,6 +63,10 @@ def get_document_node(document_type: str, document_id: str) -> dict[str, Any]:
         "url": detail_url,
         "status": document_status_payload(doctype, document_id) if document else None,
     }
+    if include_payment_balance and doctype == "payment_entry" and document is not None:
+        from cacao_accounting.document_flow.payment import compute_payment_unallocated_amount
+
+        node["unallocated_amount"] = str(compute_payment_unallocated_amount(document))
     return node
 
 
@@ -269,7 +278,7 @@ def build_document_flow_tree(
     dict con claves ``current``, ``upstream``, ``downstream`` y ``meta``.
     """
     doctype = normalize_doctype(document_type)
-    current = get_document_node(doctype, document_id)
+    current = get_document_node(doctype, document_id, include_payment_balance=True)
 
     node_counter: list[int] = [0]
     cycle_detected = False
@@ -412,8 +421,13 @@ def _resolve_total(document: Any, spec: Any) -> str | None:
         return None
     if spec.key == "journal_entry":
         return _resolve_journal_total(document)
-    field = spec.total_field or "grand_total"
-    val = getattr(document, field, None)
+    if spec.key == "payment_entry":
+        val = getattr(document, "paid_amount", None) or getattr(document, "received_amount", None)
+        if val is None:
+            val = getattr(document, "paid_amount", None)
+    else:
+        field = spec.total_field or "grand_total"
+        val = getattr(document, field, None)
     if val is None:
         return None
     try:

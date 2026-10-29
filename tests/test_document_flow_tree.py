@@ -290,6 +290,87 @@ def test_get_document_node_unknown_document(app):
     assert node["status"] is None
 
 
+def test_payment_tree_uses_received_total_when_paid_amount_is_zero(app):
+    """A receive payment exposes its received amount as the payment total."""
+    from cacao_accounting.database import PaymentEntry, database
+    from cacao_accounting.document_flow.tree import build_document_flow_tree
+
+    _seed_entity(database)
+    payment = PaymentEntry(
+        id="PAY-RECEIVE-TOTAL",
+        company="TEST",
+        posting_date=date(2026, 5, 10),
+        docstatus=1,
+        payment_type="receive",
+        paid_amount=Decimal("0"),
+        received_amount=Decimal("150"),
+        currency="USD",
+    )
+    database.session.add(payment)
+    database.session.flush()
+
+    tree = build_document_flow_tree("payment_entry", payment.id, direction="upstream")
+
+    assert Decimal(tree["current"]["total"]) == Decimal("150")
+    assert Decimal(tree["current"]["unallocated_amount"]) == Decimal("150")
+
+
+def test_payment_tree_balance_uses_canonical_payment_currency_amounts(app):
+    """The summary honors FX amounts, discounts, gains and order exclusions."""
+    from cacao_accounting.database import PaymentEntry, PaymentReference, database
+    from cacao_accounting.document_flow.tree import build_document_flow_tree
+
+    _seed_entity(database)
+    payment = PaymentEntry(
+        id="PAY-FX-TOTAL",
+        company="TEST",
+        posting_date=date(2026, 5, 10),
+        docstatus=1,
+        payment_type="pay",
+        paid_amount=Decimal("200"),
+        currency="USD",
+    )
+    database.session.add(payment)
+    database.session.flush()
+    database.session.add(
+        PaymentReference(
+            payment_id=payment.id,
+            reference_type="purchase_invoice",
+            reference_id="PINV-FX-TOTAL",
+            currency="EUR",
+            allocated_amount=Decimal("150"),
+            payment_amount=Decimal("100"),
+        )
+    )
+    database.session.add(
+        PaymentReference(
+            payment_id=payment.id,
+            reference_type="purchase_invoice",
+            reference_id="PINV-DISCOUNT-TOTAL",
+            currency="USD",
+            allocated_amount=Decimal("60"),
+            discount_amount=Decimal("10"),
+            gain_loss_amount=Decimal("5"),
+        )
+    )
+    database.session.add(
+        PaymentReference(
+            payment_id=payment.id,
+            reference_type="purchase_order",
+            reference_id="PO-ORDER-TOTAL",
+            currency="USD",
+            allocated_amount=Decimal("50"),
+            payment_amount=Decimal("50"),
+        )
+    )
+    database.session.flush()
+
+    tree = build_document_flow_tree("payment_entry", payment.id, direction="upstream")
+
+    assert Decimal(tree["current"]["total"]) == Decimal("200")
+    assert Decimal(tree["current"]["unallocated_amount"]) == Decimal("55")
+
+
 # ---------------------------------------------------------------------------
 # Tests de upstream
 # ---------------------------------------------------------------------------
