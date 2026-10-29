@@ -32,6 +32,7 @@ from cacao_accounting.database import (
     SalesOrder,
     StockBin,
     StockLedgerEntry,
+    StockValuationLayer,
     UOM,
     User,
     UserCompanyAccess,
@@ -331,6 +332,157 @@ def test_analytics_kpis_exclude_fiscal_year_closing_entries(app):
         assert result["metrics"]["expenses"] == Decimal("80")
         assert result["metrics"]["cost"] == Decimal("20")
         assert result["metrics"]["net_income"] == Decimal("200")
+
+
+def test_analytics_inventory_value_uses_valuation_layers_at_cutoff(app):
+    """El KPI usa capas al corte y no el valor operativo actual de StockBin."""
+    from cacao_accounting.reportes.analytics import get_kpi_snapshot
+
+    with app.app_context():
+        database.session.add_all(
+            [
+                StockValuationLayer(
+                    id="SVL-KPI-SEED",
+                    item_code="ITEM-LOW",
+                    warehouse="WH-1",
+                    company="COMP",
+                    qty=Decimal("3"),
+                    rate=Decimal("0"),
+                    stock_value_difference=Decimal("0"),
+                    voucher_type="stock_entry",
+                    voucher_id="SE-1",
+                    posting_date=date(2024, 1, 18),
+                ),
+                StockLedgerEntry(
+                    id="SLE-KPI-HIST",
+                    posting_date=date(2024, 1, 25),
+                    item_code="ITEM-LOW",
+                    warehouse="WH-1",
+                    company="COMP",
+                    qty_change=Decimal("10"),
+                    stock_value_difference=Decimal("100"),
+                    voucher_type="stock_entry",
+                    voucher_id="SE-KPI-HIST",
+                ),
+                StockValuationLayer(
+                    id="SVL-KPI-HIST",
+                    item_code="ITEM-LOW",
+                    warehouse="WH-1",
+                    company="COMP",
+                    qty=Decimal("10"),
+                    rate=Decimal("10"),
+                    stock_value_difference=Decimal("100"),
+                    voucher_type="stock_entry",
+                    voucher_id="SE-KPI-HIST",
+                    posting_date=date(2024, 1, 25),
+                ),
+                StockValuationLayer(
+                    id="SVL-KPI-VALUE-ONLY",
+                    item_code="ITEM-LOW",
+                    warehouse="WH-1",
+                    company="COMP",
+                    qty=Decimal("0"),
+                    rate=Decimal("0"),
+                    stock_value_difference=Decimal("5"),
+                    voucher_type="import_landed_cost",
+                    voucher_id="ILC-KPI-VALUE-ONLY",
+                    posting_date=date(2024, 1, 28),
+                ),
+                StockLedgerEntry(
+                    id="SLE-KPI-FUTURE",
+                    posting_date=date(2024, 2, 15),
+                    item_code="ITEM-LOW",
+                    warehouse="WH-1",
+                    company="COMP",
+                    qty_change=Decimal("-2"),
+                    stock_value_difference=Decimal("-20"),
+                    voucher_type="delivery_note",
+                    voucher_id="DN-KPI-FUTURE",
+                ),
+                StockValuationLayer(
+                    id="SVL-KPI-FUTURE",
+                    item_code="ITEM-LOW",
+                    warehouse="WH-1",
+                    company="COMP",
+                    qty=Decimal("-2"),
+                    rate=Decimal("10"),
+                    stock_value_difference=Decimal("-20"),
+                    voucher_type="delivery_note",
+                    voucher_id="DN-KPI-FUTURE",
+                    posting_date=date(2024, 2, 15),
+                ),
+            ]
+        )
+        database.session.commit()
+
+        result = get_kpi_snapshot("COMP", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert result["metrics"]["inventory_value"] == Decimal("105")
+    assert result["complete"] is True
+
+
+def test_analytics_marks_inventory_incomplete_when_valuation_layers_are_missing(app):
+    """Un movimiento sin capa histórica no se sustituye por StockBin."""
+    from cacao_accounting.reportes.analytics import get_kpi_snapshot
+
+    with app.app_context():
+        result = get_kpi_snapshot("COMP", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert result["metrics"]["inventory_value"] is None
+    assert result["metrics"]["working_capital"] is None
+    assert result["complete"] is False
+
+
+def test_analytics_marks_inventory_incomplete_when_layer_value_disagrees(app):
+    """Coincidencia de cantidad no compensa una diferencia de valuación faltante."""
+    from cacao_accounting.reportes.analytics import get_kpi_snapshot
+
+    with app.app_context():
+        database.session.add_all(
+            [
+                StockValuationLayer(
+                    id="SVL-KPI-SEED-VALUE",
+                    item_code="ITEM-LOW",
+                    warehouse="WH-1",
+                    company="COMP",
+                    qty=Decimal("3"),
+                    rate=Decimal("0"),
+                    stock_value_difference=Decimal("0"),
+                    voucher_type="stock_entry",
+                    voucher_id="SE-1",
+                    posting_date=date(2024, 1, 18),
+                ),
+                StockLedgerEntry(
+                    id="SLE-KPI-VALUE",
+                    posting_date=date(2024, 1, 20),
+                    item_code="ITEM-LOW",
+                    warehouse="WH-1",
+                    company="COMP",
+                    qty_change=Decimal("5"),
+                    stock_value_difference=Decimal("50"),
+                    voucher_type="stock_entry",
+                    voucher_id="SE-KPI-VALUE",
+                ),
+                StockValuationLayer(
+                    id="SVL-KPI-VALUE",
+                    item_code="ITEM-LOW",
+                    warehouse="WH-1",
+                    company="COMP",
+                    qty=Decimal("5"),
+                    rate=Decimal("0"),
+                    stock_value_difference=Decimal("0"),
+                    voucher_type="stock_entry",
+                    voucher_id="SE-KPI-VALUE",
+                    posting_date=date(2024, 1, 20),
+                ),
+            ]
+        )
+        database.session.commit()
+
+        result = get_kpi_snapshot("COMP", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert result["metrics"]["inventory_value"] is None
+    assert result["complete"] is False
 
 
 def test_analytics_currency_conversion_uses_latest_prior_rate(app):

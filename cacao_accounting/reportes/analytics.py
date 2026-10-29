@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 
 from cacao_accounting.database import (
     Accounts,
@@ -21,7 +21,8 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     SalesInvoice,
     SalesInvoiceItem,
-    StockBin,
+    StockLedgerEntry,
+    StockValuationLayer,
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
@@ -170,6 +171,54 @@ def _document_base_factor(document: Any) -> Decimal:
     return rate if rate > 0 else Decimal("1")
 
 
+def _stock_movement_balances(model: Any, company: str, end: date) -> dict[tuple[Any, ...], tuple[Decimal, Decimal, Decimal]]:
+    """Aggregate stock quantity/value movements by voucher through the cutoff date."""
+    quantity = model.qty_change if model is StockLedgerEntry else model.qty
+    value = model.stock_value_difference
+    query = (
+        select(
+            model.item_code,
+            model.warehouse,
+            model.voucher_type,
+            model.voucher_id,
+            model.posting_date,
+            func.coalesce(func.sum(quantity), 0),
+            func.coalesce(func.sum(value), 0),
+            func.coalesce(func.sum(case((quantity != 0, func.coalesce(value, 0)), else_=0)), 0),
+        )
+        .where(model.company == company, model.posting_date <= end)
+        .group_by(model.item_code, model.warehouse, model.voucher_type, model.voucher_id, model.posting_date)
+    )
+    return {
+        tuple(row[:5]): (_decimal(row[5]), _decimal(row[6]), _decimal(row[7])) for row in database.session.execute(query).all()
+    }
+
+
+def _historical_inventory_value(company: str, end: date) -> tuple[Decimal | None, bool]:
+    """Return valuation-layer movement total and whether its quantity evidence is complete."""
+    source_movements = _stock_movement_balances(StockLedgerEntry, company, end)
+    valuation_movements = _stock_movement_balances(StockValuationLayer, company, end)
+    for key, (source_qty, source_value, source_nonzero_value) in source_movements.items():
+        valuation = valuation_movements.get(key)
+        if valuation is None:
+            if source_qty or source_value:
+                return None, False
+            continue
+        valuation_qty, valuation_value, valuation_nonzero_value = valuation
+        source_zero_value = source_value - source_nonzero_value
+        valuation_zero_value = valuation_value - valuation_nonzero_value
+        if (
+            source_qty != valuation_qty
+            or source_nonzero_value != valuation_nonzero_value
+            or (source_zero_value and source_zero_value != valuation_zero_value)
+        ):
+            return None, False
+    if any(key not in source_movements and qty for key, (qty, _, _) in valuation_movements.items()):
+        return None, False
+    total_value = sum((value for _, value, _ in valuation_movements.values()), Decimal("0"))
+    return total_value, True
+
+
 def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = None) -> dict[str, Any]:
     """Build a read-only KPI snapshot for a company and date range.
 
@@ -232,8 +281,8 @@ def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = 
             Decimal("0"),
         )
     )
-    inventory = database.session.execute(select(StockBin.stock_value).where(StockBin.company == company)).scalars()
-    inventory_value = _to_ledger(sum((_decimal(value) for value in inventory), Decimal("0")))
+    historical_inventory, inventory_complete = _historical_inventory_value(company, end)
+    inventory_value = _to_ledger(historical_inventory) if historical_inventory is not None else None
     return {
         "company_id": company,
         "date_from": start,
@@ -247,11 +296,11 @@ def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = 
             "net_income": gl["net_income"],
             "accounts_receivable": ar,
             "accounts_payable": ap,
-            "working_capital": ar + inventory_value - ap,
+            "working_capital": ar + inventory_value - ap if inventory_value is not None else None,
             "inventory_value": inventory_value,
         },
         "currency": _target,
-        "complete": True,
+        "complete": inventory_complete,
     }
 
 
