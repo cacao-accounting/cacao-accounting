@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from cacao_accounting import create_app
-from cacao_accounting.database import Book, CompanyParty, Entity, Party, database
+from cacao_accounting.database import Accounts, Book, CompanyParty, Entity, Party, database
 from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.services.import_service import ImportService
@@ -44,6 +44,67 @@ def test_import_service_validate(tmp_path):
         updated_batch = database.session.get(ImportBatch, batch.id)
         assert updated_batch.import_status == 3
         assert updated_batch.total_rows == 1
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        "codigo,nombre,padre,grupo,moneda,clasificacion,tipo",
+        "code,name,parent,group,currency,classification,type",
+    ],
+)
+def test_localized_chart_template_validates_and_executes(tmp_path, headers):
+    """Las cabeceras de plantillas españolas e inglesas funcionan al validar y ejecutar."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        database.create_all()
+        database.session.add(Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-LOCAL-COLUMNS"))
+        csv_file = tmp_path / "localized_chart.csv"
+        csv_file.write_text(f"{headers}\n9500,Localized Account,,false,,Asset,Asset\n", encoding="utf-8")
+        batch = ImportBatch(
+            id=str(ULID()),
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            source_format="csv",
+            source_path=str(csv_file),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        service = ImportService()
+        service.validate(batch.id)
+        assert database.session.get(ImportBatch, batch.id).import_status == 3
+
+        service.execute(batch.id)
+
+        assert Accounts.query.filter_by(entity="cacao", code="9500").one().name == "Localized Account"
+        assert database.session.get(ImportBatch, batch.id).import_status == 5
+
+
+def test_import_rejects_duplicate_columns_after_localization(tmp_path):
+    """Evita que aliases localizados colisionen y oculten valores de una columna."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        database.create_all()
+        csv_file = tmp_path / "duplicate_localized_columns.csv"
+        csv_file.write_text("codigo,code,nombre,clasificacion\n9500,ignored,Account,Asset\n", encoding="utf-8")
+        batch = ImportBatch(
+            id=str(ULID()),
+            record_type="chart_of_accounts",
+            company_id="cacao",
+            source_format="csv",
+            source_path=str(csv_file),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        ImportService().validate(batch.id)
+
+        assert database.session.get(ImportBatch, batch.id).import_status == 7
+        duplicate = ImportBatchError.query.filter_by(batch_id=batch.id, error_type="DUPLICATE_COLUMN").one()
+        assert duplicate.field_name == "codigo"
 
 
 @pytest.mark.parametrize(

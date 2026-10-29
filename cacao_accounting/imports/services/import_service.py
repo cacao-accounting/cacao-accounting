@@ -9,6 +9,7 @@ from typing import Dict, Type, List, Any
 from flask import current_app
 from sqlalchemy.exc import SQLAlchemyError
 from cacao_accounting.database import database
+from cacao_accounting.imports.column_labels import canonical_columns
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.readers.csv_reader import CSVReader
 from cacao_accounting.imports.readers.xls_reader import XLSReader
@@ -101,6 +102,12 @@ class ImportService:
         """Convierte filas de lista a diccionarios usando los nombres de columna."""
         return [dict(zip(columns, row)) for row in rows]
 
+    def _canonicalize_table_headers(self, table: Any, adapter: Any) -> None:
+        """Map localized template headers to the adapter's canonical names."""
+        expected_columns = getattr(adapter, "columns", None)
+        if expected_columns is not None:
+            table.columns = canonical_columns(table.columns, expected_columns)
+
     def validate(self, batch_id: str):
         """Valida estructuralmente y por reglas de negocio un lote de importación."""
         batch = database.session.get(ImportBatch, batch_id)
@@ -117,6 +124,7 @@ class ImportService:
             reader = self._get_reader(batch.source_format)
             adapter = self._get_adapter(batch.record_type)
             table = reader.read(batch.source_path)
+            self._canonicalize_table_headers(table, adapter)
             normalized_rows = self._normalize_rows(table.columns, table.rows)
 
             ImportBatchError.query.filter_by(batch_id=batch_id).delete()
@@ -156,6 +164,7 @@ class ImportService:
         """Recolecta errores estructurales de columnas."""
         errors = []
         available_columns = set(table.columns)
+        seen_columns = set()
         journal_aliases = {
             "document_ref": {"document_ref", "reference", "document_reference"},
             "fecha": {"fecha", "posting_date", "date"},
@@ -164,6 +173,17 @@ class ImportService:
             "credito": {"credito", "haber", "credit"},
         }
         for col in table.columns:
+            if col in seen_columns:
+                errors.append(
+                    ImportBatchError(
+                        batch_id=batch_id,
+                        field_name=col,
+                        error_type="DUPLICATE_COLUMN",
+                        message=_("La columna %(column)s aparece más de una vez después de normalizar los encabezados.")
+                        % {"column": col},
+                    )
+                )
+            seen_columns.add(col)
             if col.lower() in self.FORBIDDEN_COLUMNS:
                 errors.append(
                     ImportBatchError(
@@ -231,7 +251,9 @@ class ImportService:
             return {}
 
         reader = self._get_reader(batch.source_format)
+        adapter = self._get_adapter(batch.record_type)
         table = reader.read(batch.source_path)
+        self._canonicalize_table_headers(table, adapter)
         normalized_rows = self._normalize_rows(table.columns, table.rows)
         docs = self._group_by_reference(table.columns, normalized_rows)
 
@@ -342,6 +364,7 @@ class ImportService:
                 reader = self._get_reader(batch.source_format)
                 adapter = self._get_adapter(batch.record_type)
                 table = reader.read(batch.source_path)
+                self._canonicalize_table_headers(table, adapter)
                 normalized_rows = self._normalize_rows(table.columns, table.rows)
                 docs = self._group_by_reference(table.columns, normalized_rows)
 

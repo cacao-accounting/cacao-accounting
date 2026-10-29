@@ -24824,3 +24824,8 @@ msgstr "The operation changed after the review was requested."
 
 #~ msgid "La linea origen no pertenece al documento indicado."
 #~ msgstr "The source line does not belong to the specified document."
+
+#: cacao_accounting/imports/services/import_service.py
+#, python-format
+msgid "La columna %(column)s aparece más de una vez después de normalizar los encabezados."
+msgstr "Column %(column)s appears more than once after normalizing the headers."
