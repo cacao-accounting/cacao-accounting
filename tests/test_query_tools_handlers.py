@@ -7,16 +7,18 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import event
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     database,
+    AuditTrail,
     AccountingPeriod,
     Accounts,
     GLEntry,
@@ -1724,3 +1726,50 @@ def test_get_document_flow_matches_document_type_to_matching_id(app_instance):
 
         assert result["total_items"] == 1
         assert result["items"][0]["target_id"] == "SINV-RELATED-QT"
+
+
+def test_document_timeline_handler_reads_only_requested_page(app_instance):
+    """La paginación del historial limita también las filas cargadas desde SQL."""
+    with app_instance.app_context():
+        user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        context = QueryContext(user_id=user.id, permissions={"audit.reports.read"}, company_ids=["CACAO"])
+        document_id = "timeline-page-query-test"
+        timestamps = [datetime(2026, 5, 1, hour=hour) for hour in (1, 2, 3)]
+        database.session.add_all(
+            [
+                AuditTrail(
+                    id=f"timeline-page-event-{index}",
+                    document_type="purchase_order",
+                    document_id=document_id,
+                    company="CACAO",
+                    action="updated",
+                    timestamp=timestamp,
+                )
+                for index, timestamp in enumerate(timestamps, start=1)
+            ]
+        )
+        database.session.commit()
+
+        statements = []
+
+        def capture_statement(_connection, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement.lower())
+
+        event.listen(database.engine, "before_cursor_execute", capture_statement)
+        try:
+            result = h_audit_trail.get_document_timeline_handler.handler(
+                context=context,
+                company_id="CACAO",
+                document_type="purchase_order",
+                document_id=document_id,
+                page=2,
+                page_size=1,
+            )
+        finally:
+            event.remove(database.engine, "before_cursor_execute", capture_statement)
+
+        timeline_selects = [statement for statement in statements if "audit_trail" in statement]
+        assert result["total_items"] == 3
+        assert len(result["items"]) == 1
+        assert result["items"][0]["id"] == "timeline-page-event-2"
+        assert any("limit" in statement and "offset" in statement for statement in timeline_selects)

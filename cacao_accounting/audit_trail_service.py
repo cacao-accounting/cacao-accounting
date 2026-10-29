@@ -15,6 +15,7 @@ from typing import Any, cast
 
 from flask import has_request_context, request
 from flask_login import current_user
+from sqlalchemy import func
 
 from cacao_accounting.database import AuditTrail, database
 
@@ -274,16 +275,45 @@ def log_task_event(document: Any, action: str, comment: str) -> AuditTrail:
     return _log(action, document, after=document, comment=comment)
 
 
+def _document_timeline_filters(document_type: str, document_id: str, company: str | None) -> list[Any]:
+    """Build the shared document and company filters for timeline reads."""
+    filters: list[Any] = [
+        AuditTrail.document_type.in_(_document_type_aliases(document_type)),
+        AuditTrail.document_id == document_id,
+    ]
+    if company is not None:
+        filters.append(AuditTrail.company == company)
+    return filters
+
+
 def get_document_timeline(document_type: str, document_id: str, company: str | None = None) -> list[AuditTrail]:
     """Devuelve historial cronológico aceptando tipos legacy y snake_case."""
-    query = (
+    query = database.select(AuditTrail).where(*_document_timeline_filters(document_type, document_id, company))
+    ordered_query = query.order_by(AuditTrail.timestamp.asc(), AuditTrail.id.asc())
+    return list(database.session.execute(ordered_query).scalars().all())
+
+
+def get_document_timeline_page(
+    document_type: str,
+    document_id: str,
+    company: str,
+    *,
+    offset: int,
+    limit: int,
+) -> tuple[list[AuditTrail], int]:
+    """Return one bounded timeline page and the full matching event count."""
+    filters = _document_timeline_filters(document_type, document_id, company)
+    count_query = database.select(func.count(AuditTrail.id)).where(*filters)
+    total = database.session.execute(count_query).scalar_one()
+    page_query = (
         database.select(AuditTrail)
-        .where(AuditTrail.document_type.in_(_document_type_aliases(document_type)))
-        .where(AuditTrail.document_id == document_id)
+        .where(*filters)
+        .order_by(AuditTrail.timestamp.asc(), AuditTrail.id.asc())
+        .offset(offset)
+        .limit(limit)
     )
-    if company is not None:
-        query = query.where(AuditTrail.company == company)
-    return list(database.session.execute(query.order_by(AuditTrail.timestamp.asc(), AuditTrail.id.asc())).scalars().all())
+    rows = database.session.execute(page_query).scalars().all()
+    return list(rows), total
 
 
 _NOISE_FIELDS: frozenset[str] = frozenset(

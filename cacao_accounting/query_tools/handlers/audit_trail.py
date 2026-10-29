@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy import func
 
-from cacao_accounting.audit_trail_service import get_document_timeline
+from cacao_accounting.audit_trail_service import get_document_timeline_page
 from cacao_accounting.database import AuditTrail, database
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
@@ -56,11 +56,14 @@ def get_document_timeline_handler(
 
     _page, _page_size = paginate(page, page_size)
 
-    entries = get_document_timeline(document_type, document_id, company_id)
-
     start = (_page - 1) * _page_size
-    end = start + _page_size
-    page_entries = entries[start:end]
+    page_entries, total = get_document_timeline_page(
+        document_type,
+        document_id,
+        company_id,
+        offset=start,
+        limit=_page_size,
+    )
 
     items = [
         {
@@ -81,7 +84,7 @@ def get_document_timeline_handler(
     result = PaginatedResult(
         page=_page,
         page_size=_page_size,
-        total_items=len(entries),
+        total_items=total,
         items=items,
     )
     return result.to_dict()
