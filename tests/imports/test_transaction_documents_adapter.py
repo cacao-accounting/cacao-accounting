@@ -19,6 +19,7 @@ from cacao_accounting.imports.adapters.transaction_documents import (
     TransactionDocumentAdapter,
     TransactionImportConfig,
 )
+from cacao_accounting.imports.services.import_service import ImportService
 
 
 @pytest.fixture()
@@ -92,6 +93,42 @@ def test_purchase_order_import_preserves_currency_and_base_amounts(app_ctx, monk
     assert order.exchange_rate == Decimal("36.5")
     assert order.base_total == Decimal("730.0000")
     assert item.base_amount == Decimal("730.0000")
+
+
+@pytest.mark.parametrize(
+    "record_type",
+    [
+        "purchase_request",
+        "purchase_quotation",
+        "supplier_quotation",
+        "purchase_order",
+        "purchase_receipt",
+        "purchase_invoice",
+        "sales_request",
+        "sales_quotation",
+        "sales_order",
+        "delivery_note",
+        "sales_invoice",
+    ],
+)
+@pytest.mark.parametrize(("quantity", "is_valid"), [("0", False), ("-1", False), ("0.001", True)])
+def test_transaction_import_requires_positive_quantity(record_type: str, quantity: str, is_valid: bool) -> None:
+    """Todos los adaptadores transaccionales bloquean cantidades no positivas."""
+    adapter = ImportService()._get_adapter(record_type)
+    row = {
+        "document_ref": "TX-QTY-001",
+        "fecha": date.today().isoformat(),
+        "producto": "ITEM-1",
+        "cantidad": quantity,
+        "precio_unitario": "1",
+    }
+
+    errors = adapter.validate_row(row)
+
+    if is_valid:
+        assert not errors
+    else:
+        assert any("cantidad" in error.lower() and "mayor que cero" in error.lower() for error in errors)
 
 
 class _DummyItem:

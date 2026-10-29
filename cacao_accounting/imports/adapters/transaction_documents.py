@@ -98,9 +98,12 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         errors = super().validate_row(row_data)
         for field in ("cantidad", "precio_unitario"):
             try:
-                self._finite_decimal(row_data.get(field), field)
+                amount = self._finite_decimal(row_data.get(field), field)
             except ValueError:
                 errors.append(f"Valor numérico inválido en columna '{field}'.")
+                continue
+            if field == "cantidad" and amount <= 0:
+                errors.append(_("La cantidad debe ser mayor que cero."))
         return errors
 
     @staticmethod
