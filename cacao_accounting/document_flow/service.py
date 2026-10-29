@@ -527,9 +527,13 @@ def _validate_relation_status(source_key: str, source_id: str, target_key: str, 
     """Valida estados de documentos en una relación."""
     source_doc = get_document(source_key, source_id)
     target_doc = get_document(target_key, target_id)
-    if source_doc is not None and getattr(source_doc, "docstatus", None) != 1:
+    if source_doc is None:
+        raise DocumentFlowError(_("Documento origen no encontrado."), 404)
+    if target_doc is None:
+        raise DocumentFlowError(_("Documento destino no encontrado."), 404)
+    if getattr(source_doc, "docstatus", None) != 1:
         raise DocumentFlowError(_("El documento origen debe estar aprobado (docstatus=1) para crear la relación."), 409)
-    if target_doc is not None and getattr(target_doc, "docstatus", None) == 2:
+    if getattr(target_doc, "docstatus", None) == 2:
         raise DocumentFlowError(_("No se puede crear una relación hacia un documento cancelado (docstatus=2)."), 409)
 
 

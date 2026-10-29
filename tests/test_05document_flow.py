@@ -161,6 +161,58 @@ def test_document_flow_rejects_relation_without_required_uom_conversion(app_ctx)
         )
 
 
+@pytest.mark.parametrize("missing_endpoint", ["source", "target"])
+def test_document_relation_requires_existing_headers(app_ctx, missing_endpoint):
+    """A relation must not persist when either polymorphic header is missing."""
+    from cacao_accounting.database import PurchaseReceipt, database
+    from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
+
+    _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-RELATION-HEADER", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    database.session.add(receipt)
+    database.session.flush()
+    source_id = "MISSING-PO" if missing_endpoint == "source" else "PO-001"
+    target_id = "MISSING-PR" if missing_endpoint == "target" else receipt.id
+    missing_header = "origen" if missing_endpoint == "source" else "destino"
+
+    with pytest.raises(DocumentFlowError, match=f"Documento {missing_header} no encontrado"):
+        create_document_relation(
+            source_type="purchase_order",
+            source_id=source_id,
+            source_item_id=None,
+            target_type="purchase_receipt",
+            target_id=target_id,
+            target_item_id=None,
+            qty=Decimal("1"),
+            uom="UND",
+        )
+
+
+def test_document_relation_allows_existing_headers_without_lines(app_ctx):
+    """Header-only relations remain valid when both documents exist."""
+    from cacao_accounting.database import PurchaseReceipt, database
+    from cacao_accounting.document_flow import create_document_relation
+
+    _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-HEADER-ONLY", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    database.session.add(receipt)
+    database.session.flush()
+
+    relation = create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=None,
+        target_type="purchase_receipt",
+        target_id=receipt.id,
+        target_item_id=None,
+        qty=Decimal("1"),
+        uom="UND",
+    )
+
+    assert relation.source_id == "PO-001"
+    assert relation.target_id == receipt.id
+
+
 def test_legacy_relation_persists_normalized_base_quantity(app_ctx):
     """Las relaciones legacy se normalizan y quedan listas para el backfill."""
     from cacao_accounting.database import (

@@ -19372,6 +19372,10 @@ msgid ""
 "relación."
 msgstr ""
 "The target line uses a different item than the source line in the relation."
+#: cacao_accounting/document_flow/service.py
+msgid "Documento destino no encontrado."
+msgstr "Target document not found."
+
 
 #: cacao_accounting/document_flow/service.py:531
 msgid ""
