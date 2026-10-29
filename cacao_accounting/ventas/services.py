@@ -22,7 +22,6 @@ from cacao_accounting.database import (
     DeliveryNoteItem,
     DocumentRelation,
     Item,
-    ItemPrice,
     Party,
     PriceList,
     Roles,
@@ -87,6 +86,8 @@ from cacao_accounting.fiscal_persistence_service import (
 from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
 
 from cacao_accounting.list_filters import apply_list_filters
+
+from cacao_accounting.tax_pricing_service import resolve_item_price_record
 
 from cacao_accounting.party_settings import (
     draft_party_company_settings_rows,
@@ -1535,20 +1536,7 @@ def resolve_sales_catalog_price(
     price_list = _resolve_sales_price_list(company, customer_id)
     if not price_list or not pricing_date:
         return None
-    query = (
-        database.select(ItemPrice)
-        .where(
-            ItemPrice.item_code == item_code,
-            ItemPrice.price_list_id == price_list.id,
-            (ItemPrice.valid_from.is_(None) | (ItemPrice.valid_from <= pricing_date)),
-            (ItemPrice.valid_upto.is_(None) | (ItemPrice.valid_upto >= pricing_date)),
-            (ItemPrice.min_qty.is_(None) | (ItemPrice.min_qty <= qty)),
-        )
-        .order_by(ItemPrice.min_qty.desc().nullslast(), ItemPrice.valid_from.desc().nullslast())
-    )
-    if uom:
-        query = query.where(or_(ItemPrice.uom.is_(None), ItemPrice.uom == uom))
-    item_price = database.session.execute(query).scalars().first()
+    item_price = resolve_item_price_record(item_code, price_list.id, qty, uom, pricing_date)
     if item_price is None:
         return None
     return Decimal(str(item_price.price)), price_list

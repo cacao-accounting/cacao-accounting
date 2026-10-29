@@ -102,6 +102,46 @@ def test_customer_list_overrides_company_default_and_observes_quantity_break(app
         assert bulk is not None and bulk[0] == Decimal("80") and bulk[1].id == wholesale.id
 
 
+def test_unit_specific_price_precedes_generic_price_when_quantity_and_dates_tie(app_ctx):
+    """Exact-UOM prices win over generic fallbacks in both price resolvers."""
+    from cacao_accounting.tax_pricing_service import get_item_price
+
+    with app_ctx.app_context():
+        customer, item = _customer_and_item()
+        price_list = PriceList(name="UOM exacta", company="CACAO", is_selling=True, is_active=True)
+        database.session.add(price_list)
+        database.session.flush()
+
+        company_party = database.session.execute(
+            database.select(CompanyParty).where(CompanyParty.company == "CACAO", CompanyParty.party_id == customer.id)
+        ).scalar_one_or_none()
+        if company_party is None:
+            company_party = CompanyParty(company="CACAO", party_id=customer.id)
+            database.session.add(company_party)
+        company_party.default_price_list_id = price_list.id
+        database.session.add_all(
+            [
+                ItemPrice(item_code=item.code, price_list_id=price_list.id, price=Decimal("100")),
+                ItemPrice(
+                    item_code=item.code,
+                    price_list_id=price_list.id,
+                    uom=item.default_uom,
+                    price=Decimal("80"),
+                ),
+            ]
+        )
+        database.session.commit()
+
+        sales_price = resolve_sales_catalog_price(
+            "CACAO", customer.id, item.code, Decimal("1"), item.default_uom, date.today()
+        )
+        legacy_price = get_item_price(item.code, price_list.id, Decimal("1"), item.default_uom, date.today())
+
+        assert sales_price is not None
+        assert sales_price[0] == Decimal("80.0000")
+        assert legacy_price.price == Decimal("80.0000")
+
+
 def test_sales_catalog_api_returns_effective_customer_price(app_ctx):
     """The transaction grid API exposes the same price resolver as posting."""
     with app_ctx.app_context():

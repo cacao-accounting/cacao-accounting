@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 
 from cacao_accounting.database import ItemPrice, PriceList, Tax, TaxTemplate, TaxTemplateItem, database
 
@@ -215,6 +215,31 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
     )
 
 
+def resolve_item_price_record(
+    item_code: str,
+    price_list_id: str,
+    qty: Decimal,
+    uom: str | None,
+    posting_date: date,
+) -> ItemPrice | None:
+    """Return the effective item price using quantity, date and UOM specificity."""
+    query = (
+        select(ItemPrice)
+        .filter_by(item_code=item_code, price_list_id=price_list_id)
+        .where((ItemPrice.valid_from.is_(None)) | (ItemPrice.valid_from <= posting_date))
+        .where((ItemPrice.valid_upto.is_(None)) | (ItemPrice.valid_upto >= posting_date))
+        .where((ItemPrice.min_qty.is_(None)) | (ItemPrice.min_qty <= qty))
+        .order_by(
+            ItemPrice.min_qty.desc().nullslast(),
+            ItemPrice.valid_from.desc().nullslast(),
+            case((ItemPrice.uom == uom, 0), else_=1),
+        )
+    )
+    if uom:
+        query = query.where((ItemPrice.uom.is_(None)) | (ItemPrice.uom == uom))
+    return database.session.execute(query).scalars().first()
+
+
 def get_item_price(
     item_code: str,
     price_list_id: str,
@@ -227,17 +252,7 @@ def get_item_price(
     if not price_list or not price_list.is_active:
         raise TaxPricingError(_("La lista de precios no existe o esta inactiva."))
 
-    query = (
-        select(ItemPrice)
-        .filter_by(item_code=item_code, price_list_id=price_list_id)
-        .where((ItemPrice.valid_from.is_(None)) | (ItemPrice.valid_from <= posting_date))
-        .where((ItemPrice.valid_upto.is_(None)) | (ItemPrice.valid_upto >= posting_date))
-        .where((ItemPrice.min_qty.is_(None)) | (ItemPrice.min_qty <= qty))
-        .order_by(ItemPrice.min_qty.desc().nullslast(), ItemPrice.valid_from.desc().nullslast())
-    )
-    if uom:
-        query = query.where((ItemPrice.uom.is_(None)) | (ItemPrice.uom == uom))
-    price = database.session.execute(query).scalars().first()
+    price = resolve_item_price_record(item_code, price_list_id, qty, uom, posting_date)
     if not price:
         raise TaxPricingError(_("No existe precio vigente para el item en la lista indicada."))
     return PriceSuggestion(
