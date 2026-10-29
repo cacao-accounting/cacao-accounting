@@ -9,7 +9,8 @@ from typing import Any
 
 from sqlalchemy import func
 
-from cacao_accounting.database import BankAccount, BankTransaction, Bank, database
+from cacao_accounting.database import BankAccount, BankTransaction, Bank, GLEntry, database
+from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, primary_ledger_id
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import (
@@ -20,6 +21,28 @@ from cacao_accounting.query_tools.permissions import validate_permission
 from cacao_accounting.i18n import _l
 
 _PERM_BANKING_REPORTS_READ = "banking.reports.read"
+
+
+def _get_gl_balances(company_id: str, bank_account_ids: list[str]) -> dict[str, Any]:
+    """Calcula saldos del libro de lectura para las cuentas indicadas."""
+    if not bank_account_ids:
+        return {}
+
+    balance_query = exclude_cancelled_gl_entries(
+        database.select(
+            GLEntry.bank_account_id,
+            func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0).label("balance"),
+        )
+    ).where(
+        GLEntry.company == company_id,
+        GLEntry.bank_account_id.in_(bank_account_ids),
+    )
+    ledger_id = primary_ledger_id(company_id)
+    if ledger_id:
+        balance_query = balance_query.where(GLEntry.ledger_id == ledger_id)
+
+    balance_rows = database.session.execute(balance_query.group_by(GLEntry.bank_account_id)).all()
+    return {row.bank_account_id: row.balance for row in balance_rows}
 
 
 @query_tool(
@@ -66,6 +89,8 @@ def get_banking_accounts(
         query.order_by(Bank.name, BankAccount.account_no).offset((_page - 1) * _page_size).limit(_page_size)
     ).all()
 
+    balances_by_account = _get_gl_balances(company_id, [row.BankAccount.id for row in rows])
+
     items = [
         {
             "id": r.BankAccount.id,
@@ -73,7 +98,7 @@ def get_banking_accounts(
             "account_number": r.BankAccount.account_no,
             "account_type": r.BankAccount.account_name,
             "currency": r.BankAccount.currency,
-            "balance": "0",
+            "balance": str(balances_by_account.get(r.BankAccount.id, 0)),
             "status": r.BankAccount.status,
         }
         for r in rows

@@ -389,7 +389,8 @@ def test_get_banking_accounts_and_transactions_handlers(app_instance):
         # Test get_banking_accounts
         res_acc = h_banking.get_banking_accounts.handler(context=ctx, company_id="CACAO")
         assert res_acc["total_items"] > 0
-        assert any(item["account_number"] == "123456789" for item in res_acc["items"])
+        account_item = next(item for item in res_acc["items"] if item["account_number"] == "123456789")
+        assert account_item["balance"] == "0"
 
         # Test get_banking_transactions
         res_tx = h_banking.get_banking_transactions.handler(
@@ -1369,3 +1370,133 @@ def test_banking_balance_summary_applies_the_published_cutoff(app_instance):
         assert filters["as_of_date"] == "2026-05-01"
         assert "date_from" not in filters
         assert "date_to" not in filters
+
+
+def test_get_banking_accounts_returns_primary_ledger_balance(app_instance):
+    """Calcula desde el libro primario e ignora asientos excluidos del resumen."""
+    from cacao_accounting.database import Book
+    from cacao_accounting.reportes.services import BankingFilters, get_bank_balance_summary
+
+    with app_instance.app_context():
+        user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        context = QueryContext(user_id=user.id, permissions={"banking.reports.read"}, company_ids=["CACAO"])
+        primary_book = database.session.execute(
+            database.select(Book).where(
+                Book.entity == "CACAO",
+                Book.status == "activo",
+                Book.is_primary.is_(True),
+            )
+        ).scalar_one()
+        secondary_book = (
+            database.session.execute(
+                database.select(Book).where(
+                    Book.entity == "CACAO",
+                    Book.status == "activo",
+                    Book.is_primary.is_(False),
+                )
+            )
+            .scalars()
+            .first()
+        )
+        assert secondary_book is not None
+
+        bank = Bank(id="balance_test_bank", name="A Balance Test Bank", is_active=True)
+        gl_account = Accounts(
+            entity="CACAO",
+            code="TEST-BANK-BALANCE",
+            name="Test bank balance",
+            active=True,
+            enabled=True,
+            group=False,
+            currency="NIO",
+            classification="Activo",
+            type_="Cta. Bancaria",
+            account_type="bank",
+        )
+        database.session.add_all([bank, gl_account])
+        database.session.flush()
+        bank_account = BankAccount(
+            id="balance_test_account",
+            bank_id=bank.id,
+            company="CACAO",
+            account_name="Balance test account",
+            account_no="BALANCE-001",
+            currency="NIO",
+            gl_account_id=gl_account.id,
+            is_active=True,
+        )
+        database.session.add(bank_account)
+        database.session.flush()
+
+        common_entry = {
+            "company": "CACAO",
+            "account_id": gl_account.id,
+            "bank_account_id": bank_account.id,
+            "posting_date": date(2026, 5, 15),
+            "voucher_type": "Test",
+        }
+        database.session.add_all(
+            [
+                GLEntry(
+                    **common_entry,
+                    ledger_id=primary_book.id,
+                    voucher_id="balance-primary-debit",
+                    debit=Decimal("125"),
+                    credit=Decimal("0"),
+                ),
+                GLEntry(
+                    **common_entry,
+                    ledger_id=primary_book.id,
+                    voucher_id="balance-cancelled",
+                    debit=Decimal("10"),
+                    credit=Decimal("0"),
+                    is_cancelled=True,
+                ),
+                GLEntry(
+                    **common_entry,
+                    ledger_id=primary_book.id,
+                    voucher_id="balance-reversal",
+                    debit=Decimal("20"),
+                    credit=Decimal("0"),
+                    is_reversal=True,
+                ),
+                GLEntry(
+                    **common_entry,
+                    ledger_id=secondary_book.id,
+                    voucher_id="balance-secondary",
+                    debit=Decimal("900"),
+                    credit=Decimal("0"),
+                ),
+            ]
+        )
+        database.session.commit()
+
+        result = h_banking.get_banking_accounts.handler(
+            context=context,
+            company_id="CACAO",
+            page_size=500,
+        )
+
+        item = next(item for item in result["items"] if item["id"] == bank_account.id)
+        report = get_bank_balance_summary(BankingFilters(company="CACAO", bank_account_id=bank_account.id))
+        report_balance = report.rows[0].values["ending_balance"]
+
+        assert item["balance"] == "125.0000"
+        assert item["balance"] == str(report_balance)
+
+
+def test_get_banking_accounts_returns_empty_page_without_balances(app_instance):
+    """Evita consultar el mayor cuando la página solicitada no contiene cuentas."""
+    with app_instance.app_context():
+        user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        context = QueryContext(user_id=user.id, permissions={"banking.reports.read"}, company_ids=["CACAO"])
+
+        result = h_banking.get_banking_accounts.handler(
+            context=context,
+            company_id="CACAO",
+            page=9999,
+            page_size=1,
+        )
+
+        assert result["items"] == []
+        assert result["total_items"] > 0
