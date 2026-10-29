@@ -1008,13 +1008,18 @@ def _write_operational_report_xlsx(report, report_code: str, title: str, filter_
     sheet.title = report_code[:31]
     sheet.append([title])
     sheet.append([_("Fecha de generación"), date.today().isoformat()])
-    sheet.append([_("Usuario"), getattr(current_user, "user", "")])
+    sheet.append([_("Usuario"), _spreadsheet_value(str(getattr(current_user, "user", "")))])
     sheet.append([])
     if columns:
         sheet.append([_column_label(column, report.ledger_currency) for column in columns])
         sheet.freeze_panes = "A5"
     for row in rows:
-        sheet.append([_format_cell(column, row[index], report.ledger_currency) for index, column in enumerate(columns)])
+        sheet.append(
+            [
+                _spreadsheet_value(_format_cell(column, row[index], report.ledger_currency))
+                for index, column in enumerate(columns)
+            ]
+        )
     if report.totals:
         sheet.append([])
     for total_name, total_value in report.totals.items():
@@ -1022,7 +1027,7 @@ def _write_operational_report_xlsx(report, report_code: str, title: str, filter_
             [
                 _("TOTAL"),
                 _column_label(total_name, report.ledger_currency),
-                _format_cell(total_name, total_value, report.ledger_currency),
+                _spreadsheet_value(_format_cell(total_name, total_value, report.ledger_currency)),
             ]
         )
     for column_cells in sheet.columns:
@@ -1037,7 +1042,7 @@ def _write_operational_report_xlsx(report, report_code: str, title: str, filter_
     for key, value in filter_payload.items():
         if value in (None, "", False):
             continue
-        filters_sheet.append([_(key.replace("_", " ").title()), str(value)])
+        filters_sheet.append([_(key.replace("_", " ").title()), _spreadsheet_value(str(value))])
     filters_sheet.freeze_panes = "A2"
     content = BytesIO()
     workbook.save(content)
@@ -1104,14 +1109,19 @@ def _write_financial_report_xlsx(report, report_code: str, title: str, report_fi
     sheet.title = report_code[:31]
     sheet.append([title])
     sheet.append([_("Fecha de generación"), date.today().isoformat()])
-    sheet.append([_("Usuario"), getattr(current_user, "user", "")])
+    sheet.append([_("Usuario"), _spreadsheet_value(str(getattr(current_user, "user", "")))])
     sheet.append([])
     if columns:
         localized_headers = [_column_label(column, report.ledger_currency) for column in columns]
         sheet.append(localized_headers)
         sheet.freeze_panes = "A5"
     for row in rows:
-        sheet.append([_format_cell(column, row[index], report.ledger_currency) for index, column in enumerate(columns)])
+        sheet.append(
+            [
+                _spreadsheet_value(_format_cell(column, row[index], report.ledger_currency))
+                for index, column in enumerate(columns)
+            ]
+        )
     if report.totals:
         sheet.append([])
     for total_name, total_value in report.totals.items():
@@ -1119,7 +1129,7 @@ def _write_financial_report_xlsx(report, report_code: str, title: str, report_fi
             [
                 _("TOTAL"),
                 _column_label(total_name, report.ledger_currency),
-                _format_cell(total_name, total_value, report.ledger_currency),
+                _spreadsheet_value(_format_cell(total_name, total_value, report.ledger_currency)),
             ]
         )
     for column_cells in sheet.columns:
@@ -1135,7 +1145,7 @@ def _write_financial_report_xlsx(report, report_code: str, title: str, report_fi
         value = getattr(report_filters, key, None)
         if value in (None, "", False):
             continue
-        filters_sheet.append([_(key.replace("_", " ").title()), str(value)])
+        filters_sheet.append([_(key.replace("_", " ").title()), _spreadsheet_value(str(value))])
     filters_sheet.freeze_panes = "A2"
     content = BytesIO()
     workbook.save(content)

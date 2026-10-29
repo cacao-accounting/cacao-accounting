@@ -4,6 +4,7 @@
 """Regression tests for tenant-scoped evidence and optional report authorship."""
 
 from datetime import date, datetime
+from decimal import Decimal
 from io import BytesIO
 
 import pytest
@@ -355,3 +356,30 @@ def test_spreadsheet_evidence_is_literal_and_inactive_user_is_denied(app):
     database.session.commit()
     with pytest.raises(PermissionError):
         get_internal_control_report(InternalControlFilters(company="A"), user_id="auditor")
+
+
+def test_xlsx_filter_values_are_written_as_literal_text(app):
+    """Refs: 987; user-provided filters are not executable spreadsheet formulas."""
+    from cacao_accounting.reportes.helpers import _write_financial_report_xlsx, _write_operational_report_xlsx
+    from cacao_accounting.reportes.services import FinancialReportFilters
+
+    formula_user = User(id="formula-user", user="=1+1", name="Formula User", active=True, password=b"x")
+    database.session.add(formula_user)
+    database.session.commit()
+    report = PaginatedReport(rows=[], totals={"ending_balance": {"=1+1+": Decimal("100.00")}}, columns=[])
+    with app.test_request_context("/"):
+        login_user(formula_user)
+        operational = _write_operational_report_xlsx(report, "operational", "Operational", {"company": "=1+1"})
+        financial = _write_financial_report_xlsx(report, "financial", "Financial", FinancialReportFilters(company="=1+1"))
+
+    for content in (operational, financial):
+        workbook = load_workbook(BytesIO(content), data_only=False)
+        cell = workbook["Filtros"]["B2"]
+        assert cell.data_type == "s"
+        assert cell.value == "'=1+1"
+        user_cell = workbook.active["B3"]
+        assert user_cell.data_type == "s"
+        assert user_cell.value == "'=1+1"
+        total_cell = workbook.active["C6"]
+        assert total_cell.data_type == "s"
+        assert total_cell.value == "'=1+1+ 100.00"
