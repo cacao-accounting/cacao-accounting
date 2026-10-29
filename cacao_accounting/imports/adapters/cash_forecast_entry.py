@@ -32,9 +32,8 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         forecast = database.session.get(CashForecast, str(row_data.get("forecast_id", "")))
         if forecast is None:
             errors.append(f"Pronóstico no encontrado: {row_data.get('forecast_id')}")
-        entry_type = str(row_data.get("type", "")).strip().capitalize()
-        if entry_type not in ("Income", "Expense"):
-            errors.append(f"Tipo inválido: {row_data.get('type')}. Debe ser 'Income' o 'Expense'.")
+        if self._normalize_entry_type(row_data.get("type")) is None:
+            errors.append(_("El tipo debe ser Income o Expense."))
         try:
             Decimal(str(row_data.get("amount") or 0))
         except (ValueError, TypeError):
@@ -45,6 +44,14 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         except (ValueError, TypeError):
             errors.append(f"Fecha inválida: {row_data.get('estimated_date')}")
         return errors
+
+    @staticmethod
+    def _normalize_entry_type(value: Any) -> str | None:
+        """Return the canonical cash forecast entry type when supported."""
+        entry_type = str(value or "").strip().capitalize()
+        if entry_type not in ("Income", "Expense"):
+            return None
+        return entry_type
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
         """Validate that every forecast belongs to the import company."""
@@ -67,10 +74,13 @@ class CashForecastEntryAdapter(BaseImportAdapter):
             estimated_date = row.get("estimated_date")
             if isinstance(estimated_date, str):
                 estimated_date = date.fromisoformat(estimated_date)
+            entry_type = self._normalize_entry_type(row.get("type"))
+            if entry_type is None:
+                raise ValueError(_("El tipo debe ser Income o Expense."))
             entries.append(
                 {
                     "forecast_id": str(row.get("forecast_id", "")),
-                    "type": str(row.get("type", "")).strip(),
+                    "type": entry_type,
                     "concept": str(row.get("concept", "")).strip(),
                     "currency": str(row.get("currency", "NIO")).strip(),
                     "amount": Decimal(str(row.get("amount", 0))),

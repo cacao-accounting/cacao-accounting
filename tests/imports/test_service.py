@@ -2,7 +2,8 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 from datetime import date
-from decimal import InvalidOperation
+from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
 
 import pytest
 
@@ -551,3 +552,53 @@ def test_cash_forecast_import_rejects_forecast_from_other_company(monkeypatch):
     )
 
     assert errors == ["El pronóstico FORECAST-B pertenece a la compañía company-b, no a company-a."]
+
+
+@pytest.mark.parametrize(
+    ("raw_type", "canonical_type"),
+    [("income", "Income"), ("INCOME", "Income"), (" expense ", "Expense"), ("Expense", "Expense")],
+)
+def test_cash_forecast_import_normalizes_type_before_build(raw_type, canonical_type, monkeypatch):
+    """El tipo validado se persiste con el valor canónico que consume la proyección."""
+    monkeypatch.setattr(database.session, "get", lambda *_args: object())
+    row = {
+        "forecast_id": "FORECAST-1",
+        "type": raw_type,
+        "concept": "Import test",
+        "currency": "NIO",
+        "amount": "100",
+        "estimated_date": "2026-10-01",
+    }
+
+    adapter = CashForecastEntryAdapter()
+    assert adapter.validate_row(row) == []
+    entry_data = adapter.build_document([row], {})[0]
+    assert entry_data["type"] == canonical_type
+
+    from cacao_accounting.bancos import cash_forecast_service
+
+    monkeypatch.setattr(cash_forecast_service, "get_base_amount", lambda amount, *_args: amount)
+    entry = SimpleNamespace(**entry_data)
+    inflow, outflow = cash_forecast_service._compute_manual_projections(
+        [entry], date(2026, 10, 1), date(2026, 10, 31), "Projected", date(2026, 9, 1), "NIO"
+    )
+    expected = (Decimal("100"), Decimal("0")) if canonical_type == "Income" else (Decimal("0"), Decimal("100"))
+    assert (inflow, outflow) == expected
+
+
+def test_cash_forecast_import_rejects_unsupported_type_consistently(monkeypatch):
+    """Un valor no admitido no se valida ni se puede construir para persistencia."""
+    row = {
+        "forecast_id": "FORECAST-1",
+        "type": "transfer",
+        "concept": "Import test",
+        "currency": "NIO",
+        "amount": "100",
+        "estimated_date": "2026-10-01",
+    }
+
+    monkeypatch.setattr(database.session, "get", lambda *_args: None)
+    adapter = CashForecastEntryAdapter()
+    assert "El tipo debe ser Income o Expense." in adapter.validate_row(row)
+    with pytest.raises(ValueError, match="Income o Expense"):
+        adapter.build_document([row], {})
