@@ -967,7 +967,7 @@ def _fetch_maturity_documents(filters: MaturityFilters) -> list[tuple[Any, str, 
     if filters.party_type in (None, "customer"):
         query = select(SalesInvoice).where(
             SalesInvoice.company == filters.company,
-            SalesInvoice.docstatus == 1,
+            _document_active_at_cutoff(SalesInvoice, filters.as_of_date),
             or_(SalesInvoice.reversal_of.is_(None), SalesInvoice.reversal_of == ""),
         )
         query = query.where(SalesInvoice.posting_date <= filters.as_of_date)
@@ -977,7 +977,7 @@ def _fetch_maturity_documents(filters: MaturityFilters) -> list[tuple[Any, str, 
     if filters.party_type in (None, "supplier"):
         query = select(PurchaseInvoice).where(
             PurchaseInvoice.company == filters.company,
-            PurchaseInvoice.docstatus == 1,
+            _document_active_at_cutoff(PurchaseInvoice, filters.as_of_date),
             or_(PurchaseInvoice.reversal_of.is_(None), PurchaseInvoice.reversal_of == ""),
         )
         query = query.where(PurchaseInvoice.posting_date <= filters.as_of_date)
