@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import Any, Sequence, cast
 
 from sqlalchemy import and_, case, func, literal, or_, select
+from sqlalchemy.orm import aliased
 
 from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
 from cacao_accounting.database import (
@@ -1291,24 +1292,65 @@ def get_inventory_transfers(filters: OperationalReportFilters) -> PaginatedRepor
 
 
 def _append_slow_moving_row(
-    rows: list[ReportRow], row: Any, latest: dict[tuple[str, str], date], cutoff: date, threshold: date
+    rows: list[ReportRow],
+    item_code: str,
+    warehouse: str,
+    actual_qty: Decimal,
+    stock_value: Decimal,
+    latest: dict[tuple[str, str], date],
+    cutoff: date,
+    threshold: date,
 ) -> None:
     """Append a slow-moving item row if it meets the inactivity threshold."""
-    last_out = latest.get((row.item_code, row.warehouse))
+    last_out = latest.get((item_code, warehouse))
     if last_out is not None and last_out >= threshold:
         return
     rows.append(
         ReportRow(
             values={
-                "item_code": row.item_code,
-                "warehouse": row.warehouse,
-                "actual_qty": _decimal_value(row.actual_qty),
-                "stock_value": _decimal_value(row.stock_value),
+                "item_code": item_code,
+                "warehouse": warehouse,
+                "actual_qty": actual_qty,
+                "stock_value": stock_value,
                 "last_outgoing_date": last_out,
                 "inactive_days": (cutoff - last_out).days if last_out else None,
             }
         )
     )
+
+
+def _stock_reversal_ids_as_of(company: str, cutoff: date, item_code: str | None, warehouse: str | None) -> set[str]:
+    """Return stock movement IDs reversed by the requested cutoff."""
+    original = aliased(StockLedgerEntry)
+    reversal = aliased(StockLedgerEntry)
+    legacy_voucher_match = and_(
+        reversal.reversal_of.is_(None),
+        reversal.company == original.company,
+        reversal.voucher_type == original.voucher_type,
+        reversal.voucher_id == original.voucher_id,
+        reversal.item_code == original.item_code,
+        reversal.warehouse == original.warehouse,
+    )
+    query = (
+        select(original.id)
+        .join(
+            reversal,
+            or_(reversal.reversal_of == original.id, legacy_voucher_match),
+        )
+        .where(
+            original.company == company,
+            original.posting_date <= cutoff,
+            original.is_reversal.is_(False),
+            reversal.company == company,
+            reversal.posting_date <= cutoff,
+            reversal.is_reversal.is_(True),
+        )
+    )
+    if item_code:
+        query = query.where(original.item_code == item_code)
+    if warehouse:
+        query = query.where(original.warehouse == warehouse)
+    return {str(movement_id) for movement_id in database.session.execute(query).scalars()}
 
 
 def get_slow_moving_items(
@@ -1318,7 +1360,7 @@ def get_slow_moving_items(
     if inactivity_days < 1 or inactivity_days > 3650:
         raise ValueError(_("inactivity_days debe estar entre 1 y 3650"))
     cutoff = as_of_date or filters.date_to or date.today()
-    query = exclude_cancelled_stock_entries(select(StockLedgerEntry)).where(
+    query = select(StockLedgerEntry).where(
         StockLedgerEntry.company == filters.company,
         StockLedgerEntry.posting_date <= cutoff,
     )
@@ -1326,20 +1368,29 @@ def get_slow_moving_items(
         query = query.where(StockLedgerEntry.item_code == filters.item_code)
     if filters.warehouse:
         query = query.where(StockLedgerEntry.warehouse == filters.warehouse)
+    reversed_ids = _stock_reversal_ids_as_of(filters.company, cutoff, filters.item_code, filters.warehouse)
+    balances: dict[tuple[str, str], tuple[Decimal, Decimal]] = {}
     latest: dict[tuple[str, str], date] = {}
     for entry in database.session.execute(query).scalars():
-        if entry.qty_change is not None and _decimal_value(entry.qty_change) < 0:
-            key = (entry.item_code, entry.warehouse)
+        key = (entry.item_code, entry.warehouse)
+        qty, value = balances.get(key, (Decimal("0"), Decimal("0")))
+        balances[key] = (
+            qty + _decimal_value(entry.qty_change),
+            value + _decimal_value(entry.stock_value_difference),
+        )
+        if (
+            entry.qty_change is not None
+            and _decimal_value(entry.qty_change) < 0
+            and not entry.is_reversal
+            and str(entry.id) not in reversed_ids
+        ):
             latest[key] = max(latest.get(key, date.min), entry.posting_date)
-    bins = select(StockBin).where(StockBin.company == filters.company, StockBin.actual_qty > 0)
-    if filters.item_code:
-        bins = bins.where(StockBin.item_code == filters.item_code)
-    if filters.warehouse:
-        bins = bins.where(StockBin.warehouse == filters.warehouse)
     rows: list[ReportRow] = []
     threshold = cutoff - timedelta(days=inactivity_days)
-    for row in database.session.execute(bins.order_by(StockBin.item_code, StockBin.warehouse)).scalars():
-        _append_slow_moving_row(rows, row, latest, cutoff, threshold)
+    for (item_code, warehouse), (actual_qty, stock_value) in sorted(balances.items()):
+        if actual_qty <= 0:
+            continue
+        _append_slow_moving_row(rows, item_code, warehouse, actual_qty, stock_value, latest, cutoff, threshold)
     return PaginatedReport(
         rows=rows,
         totals={"stock_value": sum((_decimal_value(row.values["stock_value"]) for row in rows), Decimal("0"))},

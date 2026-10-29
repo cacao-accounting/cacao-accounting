@@ -1177,6 +1177,193 @@ def test_maturity_schedule_uses_invoice_status_at_historical_cutoff(app_ctx):
     assert after_cancel.totals["outstanding_amount"] == Decimal("0")
 
 
+def test_slow_moving_items_reconstructs_historical_stock_from_ledger(app_ctx):
+    """Refs: 986; later movements and the current bin do not alter an earlier cutoff."""
+    from cacao_accounting.database import Item, StockBin, StockLedgerEntry, UOM, Warehouse, database
+    from cacao_accounting.reportes.services import OperationalReportFilters, get_slow_moving_items
+
+    database.session.add_all(
+        [
+            UOM(code="EA", name="Each"),
+            Item(
+                code="ITEM-SLOW-CUTOFF",
+                name="Existencia histórica",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="EA",
+            ),
+            Warehouse(code="WH-SLOW-CUTOFF", name="Bodega histórica", company="cacao"),
+            StockBin(
+                company="cacao",
+                item_code="ITEM-SLOW-CUTOFF",
+                warehouse="WH-SLOW-CUTOFF",
+                actual_qty=Decimal("0"),
+                stock_value=Decimal("0"),
+            ),
+            StockLedgerEntry(
+                posting_date=date(2026, 1, 1),
+                item_code="ITEM-SLOW-CUTOFF",
+                warehouse="WH-SLOW-CUTOFF",
+                company="cacao",
+                qty_change=Decimal("10"),
+                stock_value_difference=Decimal("100"),
+                voucher_type="seed",
+                voucher_id="SLOW-CUTOFF-IN",
+            ),
+            StockLedgerEntry(
+                posting_date=date(2026, 6, 1),
+                item_code="ITEM-SLOW-CUTOFF",
+                warehouse="WH-SLOW-CUTOFF",
+                company="cacao",
+                qty_change=Decimal("-10"),
+                stock_value_difference=Decimal("-100"),
+                voucher_type="seed",
+                voucher_id="SLOW-CUTOFF-OUT",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    filters = OperationalReportFilters(company="cacao", item_code="ITEM-SLOW-CUTOFF")
+    historical = get_slow_moving_items(filters, as_of_date=date(2026, 5, 31))
+    current = get_slow_moving_items(filters, as_of_date=date(2026, 6, 2))
+
+    assert len(historical.rows) == 1
+    assert historical.rows[0].values["actual_qty"] == Decimal("10")
+    assert historical.rows[0].values["stock_value"] == Decimal("100")
+    assert current.rows == []
+
+
+def test_slow_moving_items_keeps_later_cancelled_outflow_at_earlier_cutoff(app_ctx):
+    """Refs: 986; a reversal only removes its original movement from later cuts."""
+    from cacao_accounting.database import Item, StockLedgerEntry, UOM, Warehouse, database
+    from cacao_accounting.reportes.services import OperationalReportFilters, get_slow_moving_items
+
+    database.session.add_all(
+        [
+            UOM(code="EA", name="Each"),
+            Item(
+                code="ITEM-SLOW-CANCEL",
+                name="Salida cancelada",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="EA",
+            ),
+            Warehouse(code="WH-SLOW-CANCEL", name="Bodega cancelada", company="cacao"),
+            StockLedgerEntry(
+                posting_date=date(2026, 4, 1),
+                item_code="ITEM-SLOW-CANCEL",
+                warehouse="WH-SLOW-CANCEL",
+                company="cacao",
+                qty_change=Decimal("10"),
+                stock_value_difference=Decimal("100"),
+                voucher_type="seed",
+                voucher_id="SLOW-CANCEL-IN",
+            ),
+            StockLedgerEntry(
+                id="SLOW-CANCEL-OUT",
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-SLOW-CANCEL",
+                warehouse="WH-SLOW-CANCEL",
+                company="cacao",
+                qty_change=Decimal("-5"),
+                stock_value_difference=Decimal("-50"),
+                voucher_type="seed",
+                voucher_id="SLOW-CANCEL-OUT-VOUCHER",
+                is_cancelled=True,
+            ),
+            StockLedgerEntry(
+                posting_date=date(2026, 6, 10),
+                item_code="ITEM-SLOW-CANCEL",
+                warehouse="WH-SLOW-CANCEL",
+                company="cacao",
+                qty_change=Decimal("5"),
+                stock_value_difference=Decimal("50"),
+                voucher_type="seed",
+                voucher_id="SLOW-CANCEL-OUT-VOUCHER",
+                is_reversal=True,
+                reversal_of="SLOW-CANCEL-OUT",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    filters = OperationalReportFilters(company="cacao", item_code="ITEM-SLOW-CANCEL")
+    before_cancel = get_slow_moving_items(filters, inactivity_days=14, as_of_date=date(2026, 5, 31))
+    after_cancel = get_slow_moving_items(filters, inactivity_days=14, as_of_date=date(2026, 6, 11))
+
+    assert len(before_cancel.rows) == 1
+    assert before_cancel.rows[0].values["actual_qty"] == Decimal("5")
+    assert before_cancel.rows[0].values["last_outgoing_date"] == date(2026, 5, 1)
+    assert len(after_cancel.rows) == 1
+    assert after_cancel.rows[0].values["actual_qty"] == Decimal("10")
+    assert after_cancel.rows[0].values["last_outgoing_date"] is None
+
+
+def test_slow_moving_items_recognizes_legacy_voucher_reversal_at_cutoff(app_ctx):
+    """Refs: 986; legacy reversal pairs without reversal_of are matched by voucher."""
+    from cacao_accounting.database import Item, StockLedgerEntry, UOM, Warehouse, database
+    from cacao_accounting.reportes.services import OperationalReportFilters, get_slow_moving_items
+
+    database.session.add_all(
+        [
+            UOM(code="EA", name="Each"),
+            Item(
+                code="ITEM-SLOW-LEGACY",
+                name="Reversa histórica",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="EA",
+            ),
+            Warehouse(code="WH-SLOW-LEGACY", name="Bodega histórica", company="cacao"),
+            StockLedgerEntry(
+                posting_date=date(2026, 4, 1),
+                item_code="ITEM-SLOW-LEGACY",
+                warehouse="WH-SLOW-LEGACY",
+                company="cacao",
+                qty_change=Decimal("10"),
+                stock_value_difference=Decimal("100"),
+                voucher_type="seed",
+                voucher_id="SLOW-LEGACY-IN",
+            ),
+            StockLedgerEntry(
+                id="SLOW-LEGACY-OUT",
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-SLOW-LEGACY",
+                warehouse="WH-SLOW-LEGACY",
+                company="cacao",
+                qty_change=Decimal("-5"),
+                stock_value_difference=Decimal("-50"),
+                voucher_type="seed",
+                voucher_id="SLOW-LEGACY-OUT-VOUCHER",
+                is_cancelled=True,
+            ),
+            StockLedgerEntry(
+                posting_date=date(2026, 6, 10),
+                item_code="ITEM-SLOW-LEGACY",
+                warehouse="WH-SLOW-LEGACY",
+                company="cacao",
+                qty_change=Decimal("5"),
+                stock_value_difference=Decimal("50"),
+                voucher_type="seed",
+                voucher_id="SLOW-LEGACY-OUT-VOUCHER",
+                is_reversal=True,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    filters = OperationalReportFilters(company="cacao", item_code="ITEM-SLOW-LEGACY")
+    before_cancel = get_slow_moving_items(filters, inactivity_days=14, as_of_date=date(2026, 5, 31))
+    after_cancel = get_slow_moving_items(filters, inactivity_days=14, as_of_date=date(2026, 6, 11))
+
+    assert len(before_cancel.rows) == 1
+    assert before_cancel.rows[0].values["last_outgoing_date"] == date(2026, 5, 1)
+    assert len(after_cancel.rows) == 1
+    assert after_cancel.rows[0].values["actual_qty"] == Decimal("10")
+    assert after_cancel.rows[0].values["last_outgoing_date"] is None
+
+
 def test_reconciliation_matrix_converts_bank_movements_to_selected_ledger_currency(app_ctx):
     """La matriz convierte cada movimiento bancario desde su moneda de cuenta."""
     from cacao_accounting.database import Bank, BankAccount, BankTransaction, Book, Currency, ExchangeRate, database
