@@ -7,7 +7,7 @@ from decimal import InvalidOperation
 import pytest
 
 from cacao_accounting import create_app
-from cacao_accounting.database import Book, database
+from cacao_accounting.database import Book, CompanyParty, Entity, Party, database
 from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.services.import_service import ImportService
@@ -43,6 +43,47 @@ def test_import_service_validate(tmp_path):
         updated_batch = database.session.get(ImportBatch, batch.id)
         assert updated_batch.import_status == 3
         assert updated_batch.total_rows == 1
+
+
+@pytest.mark.parametrize(
+    ("record_type", "party_name", "role_field", "series_prefix"),
+    [
+        ("customer", "Imported customer", "is_customer", "CUSTM-"),
+        ("vendor", "Imported vendor", "is_supplier", "SUPLR-"),
+    ],
+)
+def test_party_import_generates_code_and_company_link(tmp_path, record_type, party_name, role_field, series_prefix):
+    """La importación de clientes y proveedores usa el código canónico de terceros."""
+    from cacao_accounting.document_identifiers import ensure_global_naming_series
+
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        database.create_all()
+        database.session.add(Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-PARTY-IMPORT", currency="NIO"))
+        ensure_global_naming_series()
+        csv_file = tmp_path / f"{record_type}.csv"
+        csv_file.write_text(f"nombre\n{party_name}\n", encoding="utf-8")
+        batch = ImportBatch(
+            id=str(ULID()),
+            record_type=record_type,
+            company_id="cacao",
+            source_format="csv",
+            source_path=str(csv_file),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        service = ImportService()
+        service.validate(batch.id)
+        assert database.session.get(ImportBatch, batch.id).import_status == 3
+        service.execute(batch.id)
+
+        imported_party = Party.query.filter_by(name=party_name).one()
+        assert imported_party.code.startswith(series_prefix)
+        assert getattr(imported_party, role_field) is True
+        assert CompanyParty.query.filter_by(company="cacao", party_id=imported_party.id).one()
+        assert database.session.get(ImportBatch, batch.id).import_status == 5
 
 
 def test_business_error_keeps_global_source_row_after_grouping(tmp_path, monkeypatch):

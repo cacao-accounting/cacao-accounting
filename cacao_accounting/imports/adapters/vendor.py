@@ -4,6 +4,7 @@
 """Adaptador para importación de proveedores."""
 
 from typing import List, Dict, Any
+from ulid import ULID
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import Party, database, CompanyParty
 
@@ -18,6 +19,7 @@ class VendorAdapter(BaseImportAdapter):
         """Construye un objeto Party de tipo proveedor."""
         row = document_data[0]
         proveedor = Party(
+            code=str(ULID()),
             is_supplier=True,
             name=row.get("nombre"),
             comercial_name=row.get("nombre_comercial"),
@@ -32,6 +34,9 @@ class VendorAdapter(BaseImportAdapter):
         company_id = document["company_id"]
         database.session.add(proveedor)
         database.session.flush()
+        from cacao_accounting.party_management import generate_party_code
+
+        proveedor.code = generate_party_code(proveedor.id, company_id, "supplier")
 
         if company_id:
             cp = CompanyParty(company=company_id, party_id=proveedor.id, is_active=True)

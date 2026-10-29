@@ -4,6 +4,7 @@
 """Adaptador para importación de clientes."""
 
 from typing import List, Dict, Any
+from ulid import ULID
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import Party, database, CompanyParty
 
@@ -18,6 +19,7 @@ class CustomerAdapter(BaseImportAdapter):
         """Build a dictionary with customer and company info."""
         row = document_data[0]
         cliente = Party(
+            code=str(ULID()),
             is_customer=True,
             name=row.get("nombre"),
             comercial_name=row.get("nombre_comercial"),
@@ -32,6 +34,9 @@ class CustomerAdapter(BaseImportAdapter):
         company_id = document["company_id"]
         database.session.add(cliente)
         database.session.flush()
+        from cacao_accounting.party_management import generate_party_code
+
+        cliente.code = generate_party_code(cliente.id, company_id, "customer")
 
         if company_id:
             cp = CompanyParty(company=company_id, party_id=cliente.id, is_active=True)
