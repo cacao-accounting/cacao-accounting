@@ -1597,3 +1597,31 @@ def test_inventory_batch_and_serial_queries_are_company_scoped(app_instance):
         assert cacao_batch_rows[0]["warehouse"] == "QA-LEAK-CAC"
         assert cacao_batch_rows[0]["balance_qty"] == "3.000000000"
         assert "QA-LEAK-CAF" not in {row["warehouse"] for row in batches["items"]}
+
+
+def test_cost_center_discovery_omits_inactive_centers(app_instance):
+    """Cost center discovery must require both active and enabled flags."""
+    from cacao_accounting.database import CostCenter
+    import cacao_accounting.query_tools.handlers.discovery as h_discovery
+
+    with app_instance.app_context():
+        company = "CACAO"
+        database.session.add_all(
+            [
+                CostCenter(entity=company, code="QT-ACTIVE", name="Active", active=True, enabled=True, group=False),
+                CostCenter(entity=company, code="QT-INACTIVE", name="Inactive", active=False, enabled=True, group=False),
+            ]
+        )
+        database.session.commit()
+
+        context = QueryContext(
+            user_id="query-tool-service",
+            permissions={"accounting.reports.read"},
+            company_ids=[company],
+            is_service_principal=True,
+        )
+        result = h_discovery.list_cost_centers.handler(context=context, company_id=company)
+
+        codes = {row["code"] for row in result["items"]}
+        assert "QT-ACTIVE" in codes
+        assert "QT-INACTIVE" not in codes

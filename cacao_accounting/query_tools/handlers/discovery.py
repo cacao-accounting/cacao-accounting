@@ -314,7 +314,11 @@ def list_cost_centers(
 ) -> dict[str, Any]:
     validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
     current, size = _page(page, page_size)
-    statement = database.select(CostCenter).where(CostCenter.entity == company_id, CostCenter.enabled.is_(True))
+    statement = database.select(CostCenter).where(
+        CostCenter.entity == company_id,
+        CostCenter.active.is_(True),
+        CostCenter.enabled.is_(True),
+    )
     if query:
         statement = statement.where(or_(CostCenter.code.ilike(f"%{query}%"), CostCenter.name.ilike(f"%{query}%")))
     total = database.session.execute(database.select(database.func.count()).select_from(statement.subquery())).scalar() or 0
