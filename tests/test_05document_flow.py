@@ -605,6 +605,28 @@ def test_document_status_uses_single_operational_badge(app_ctx):
     assert completed_status.badge_class == "text-bg-success"
 
 
+@pytest.mark.parametrize("cached_source_qty", [None, Decimal("2")])
+def test_document_status_uses_base_quantity_when_flow_state_is_missing_or_stale(monkeypatch, cached_source_qty):
+    """Status progress uses the line's base quantity despite missing or stale cache."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.document_flow import status
+
+    item = SimpleNamespace(id="PO-ITEM-BASE", qty=Decimal("2"), qty_in_base_uom=Decimal("20"))
+    state = SimpleNamespace(source_qty=cached_source_qty, closed_qty=Decimal("0")) if cached_source_qty is not None else None
+    monkeypatch.setattr(status, "get_document_items", lambda *_args: [item])
+    monkeypatch.setattr(status, "get_line_flow_state", lambda *_args: state)
+    monkeypatch.setattr(status, "consumed_qty_for_source", lambda *_args, **_kwargs: Decimal("5"))
+
+    progress = status._flow_progress("purchase_order", "PO-001", "purchase_receipt")
+
+    assert progress is not None
+    assert progress.total_qty == Decimal("20")
+    assert progress.processed_qty == Decimal("5")
+    assert progress.pending_qty == Decimal("15")
+    assert status._status_from_progress(progress).code == "partially_received"
+
+
 def test_document_status_maps_journal_entry_state_without_docstatus(app_ctx):
     from types import SimpleNamespace
 
