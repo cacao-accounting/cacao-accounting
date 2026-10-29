@@ -296,6 +296,18 @@ def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
     assert Decimal(str(sections["sales"]["tables"]["top_customers"][0]["total"])) == Decimal("800")
 
 
+def test_analytics_normalizes_plural_account_classifications(app):
+    """La analítica reconoce clasificaciones plurales como los reportes oficiales."""
+    from cacao_accounting.reportes.analytics import metric_value
+
+    with app.app_context():
+        start, end = date(2024, 1, 1), date(2024, 1, 31)
+
+        assert metric_value("COMP", "income", start, end) == Decimal("300")
+        assert metric_value("COMP", "expenses", start, end) == Decimal("80")
+        assert metric_value("COMP", "gross_margin", start, end) == Decimal("280")
+
+
 def test_analytics_kpis_exclude_fiscal_year_closing_entries(app):
     """El cierre fiscal no debe netear los movimientos operativos del KPI."""
     from cacao_accounting.reportes.analytics import get_kpi_snapshot

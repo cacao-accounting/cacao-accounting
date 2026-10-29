@@ -26,6 +26,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.ledger_queries import primary_ledger_id
+from cacao_accounting.reportes.services import normalize_account_classification_value
 from cacao_accounting.i18n import _
 
 ALLOWED_METRICS = frozenset({"sales", "purchases", "income", "expenses", "gross_margin"})
@@ -129,7 +130,7 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
         query = query.where(GLEntry.ledger_id == effective_ledger)
     totals = {"income": Decimal("0"), "cost": Decimal("0"), "expense": Decimal("0")}
     for entry, account in database.session.execute(query).all():
-        classification = (getattr(account, "classification", "") or "").lower()
+        classification = normalize_account_classification_value(getattr(account, "classification", None)) or ""
         amount = _decimal(entry.credit) - _decimal(entry.debit)
         if classification in {"ingreso", "income"}:
             totals["income"] += amount
