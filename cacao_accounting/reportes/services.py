@@ -51,6 +51,7 @@ from cacao_accounting.database import (
     StockLedgerEntry,
     StockValuationLayer,
     WithholdingCertificate,
+    Warehouse,
     WarehouseCompanyAccount,
     database,
 )
@@ -3639,7 +3640,7 @@ def get_batch_report(filters: OperationalReportFilters) -> PaginatedReport:
     El saldo se calcula desde el ledger físico con el predicado compartido de
     exclusion de anulaciones, de modo que coincide con el saldo validado al
     emitir salidas por lote. Los lotes sin movimientos se listan con saldo
-    cero para dar visibilidad completa del maestro.
+    cero cuando la compañía tiene evidencia del lote pero no movimientos vigentes.
     """
     query = select(Batch)
     if filters.item_code:
@@ -3652,7 +3653,13 @@ def get_batch_report(filters: OperationalReportFilters) -> PaginatedReport:
             StockLedgerEntry.warehouse,
             func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
             func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
-        ).where(StockLedgerEntry.batch_id.isnot(None))
+        )
+        .join(Warehouse, Warehouse.code == StockLedgerEntry.warehouse)
+        .where(
+            StockLedgerEntry.batch_id.isnot(None),
+            StockLedgerEntry.company == filters.company,
+            Warehouse.company == filters.company,
+        )
     ).group_by(StockLedgerEntry.batch_id, StockLedgerEntry.warehouse)
     if filters.item_code:
         balances_query = balances_query.where(StockLedgerEntry.item_code == filters.item_code)
@@ -3705,7 +3712,8 @@ def get_batch_report(filters: OperationalReportFilters) -> PaginatedReport:
 
 def get_serial_report(filters: OperationalReportFilters) -> PaginatedReport:
     """Report inventory serial numbers."""
-    query = select(SerialNumber)
+    company_warehouses = select(Warehouse.code).where(Warehouse.company == filters.company)
+    query = select(SerialNumber).where(SerialNumber.warehouse.in_(company_warehouses))
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:

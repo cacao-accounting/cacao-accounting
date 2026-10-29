@@ -1500,3 +1500,100 @@ def test_get_banking_accounts_returns_empty_page_without_balances(app_instance):
 
         assert result["items"] == []
         assert result["total_items"] > 0
+
+
+def test_inventory_batch_and_serial_queries_are_company_scoped(app_instance):
+    """Un handler no filtra resultados de otra compañía por la autorización."""
+    from cacao_accounting.database import Batch, Entity, Item, SerialNumber, StockLedgerEntry, UOM, Warehouse
+    from cacao_accounting.query_tools.handlers import advanced as h_advanced
+
+    with app_instance.app_context():
+        user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+        context = QueryContext(user_id=user.id, permissions={"inventory.reports.read"}, company_ids=["CACAO"])
+        cafe_entity = database.session.execute(database.select(Entity).filter_by(code="CAFE")).scalar_one_or_none()
+        if cafe_entity is None:
+            database.session.add(
+                Entity(
+                    code="CAFE",
+                    name="Cafe QA",
+                    company_name="Cafe QA SA",
+                    tax_id="QA-CAFE-001",
+                    currency="NIO",
+                    enabled=True,
+                )
+            )
+            database.session.flush()
+        uom = database.session.execute(database.select(UOM).limit(1)).scalar_one()
+
+        item = Item(
+            code="QA-CROSS-COMPANY-ITEM",
+            name="QA cross-company item",
+            item_type="goods",
+            is_stock_item=True,
+            default_uom=uom.code,
+        )
+        cacao_warehouse = Warehouse(code="QA-LEAK-CAC", name="Cacao QA", company="CACAO")
+        cafe_warehouse = Warehouse(code="QA-LEAK-CAF", name="Cafe QA", company="CAFE")
+        database.session.add_all([item, cacao_warehouse, cafe_warehouse])
+        database.session.flush()
+
+        cacao_batch = Batch(item_code=item.code, batch_no="QA-BATCH-CAC")
+        cafe_batch = Batch(item_code=item.code, batch_no="QA-BATCH-CAF")
+        cacao_serial = SerialNumber(item_code=item.code, serial_no="QA-SERIAL-CAC", warehouse=cacao_warehouse.code)
+        cafe_serial = SerialNumber(item_code=item.code, serial_no="QA-SERIAL-CAF", warehouse=cafe_warehouse.code)
+        database.session.add_all([cacao_batch, cafe_batch, cacao_serial, cafe_serial])
+        database.session.flush()
+
+        database.session.add_all(
+            [
+                StockLedgerEntry(
+                    posting_date=date(2026, 5, 1),
+                    item_code=item.code,
+                    warehouse=cacao_warehouse.code,
+                    company="CACAO",
+                    qty_change=Decimal("3"),
+                    voucher_type="QA",
+                    voucher_id="QA-CA-1",
+                    batch_id=cacao_batch.id,
+                    serial_no=cacao_serial.serial_no,
+                ),
+                StockLedgerEntry(
+                    posting_date=date(2026, 5, 1),
+                    item_code=item.code,
+                    warehouse=cafe_warehouse.code,
+                    company="CAFE",
+                    qty_change=Decimal("7"),
+                    voucher_type="QA",
+                    voucher_id="QA-CAF-1",
+                    batch_id=cafe_batch.id,
+                    serial_no=cafe_serial.serial_no,
+                ),
+            ]
+        )
+        database.session.commit()
+
+        batches = h_advanced.get_inventory_batches.handler(
+            context=context,
+            company_id="CACAO",
+            item_code=item.code,
+        )
+        serials = h_advanced.get_inventory_serials.handler(
+            context=context,
+            company_id="CACAO",
+            item_code=item.code,
+        )
+
+        batch_numbers = {row["batch_no"] for row in batches["items"]}
+        serial_numbers = {row["serial_no"] for row in serials["items"]}
+        assert {"QA-BATCH-CAC", "QA-BATCH-CAF"} <= batch_numbers
+        assert serial_numbers == {"QA-SERIAL-CAC"}
+
+        foreign_batch_rows = [row for row in batches["items"] if row["batch_no"] == "QA-BATCH-CAF"]
+        cacao_batch_rows = [row for row in batches["items"] if row["batch_no"] == "QA-BATCH-CAC"]
+        assert len(foreign_batch_rows) == 1
+        assert foreign_batch_rows[0]["warehouse"] == ""
+        assert foreign_batch_rows[0]["balance_qty"] == "0"
+        assert len(cacao_batch_rows) == 1
+        assert cacao_batch_rows[0]["warehouse"] == "QA-LEAK-CAC"
+        assert cacao_batch_rows[0]["balance_qty"] == "3.000000000"
+        assert "QA-LEAK-CAF" not in {row["warehouse"] for row in batches["items"]}
