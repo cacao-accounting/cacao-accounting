@@ -120,22 +120,18 @@ def get_upstream_tree(
         database.session.execute(
             database.select(DocumentRelation)
             .filter(DocumentRelation.target_type.in_(rel_types), DocumentRelation.target_id == document_id)
-            .order_by(DocumentRelation.created)
+            .order_by(DocumentRelation.created, DocumentRelation.id)
         )
         .scalars()
         .all()
     )
 
-    seen_pairs: set[tuple[str, str]] = set()
+    relation_groups = _group_relations_by_document_pair(rows, upstream=True)
     result: list[dict[str, Any]] = []
 
-    for row in rows:
-        src_type = row.source_type
-        src_id = row.source_id
-        pair = (src_type, src_id)
-        if pair in seen_pairs:
-            continue
-        seen_pairs.add(pair)
+    for pair, pair_rows in relation_groups.items():
+        src_type, src_id = pair
+        row = _current_document_relation(pair_rows)
 
         if node_counter[0] >= max_nodes:
             result.append({"max_nodes_reached": True})
@@ -196,22 +192,19 @@ def get_downstream_tree(
         database.session.execute(
             database.select(DocumentRelation)
             .filter(DocumentRelation.source_type.in_(rel_types), DocumentRelation.source_id == document_id)
-            .order_by(DocumentRelation.created)
+            .order_by(DocumentRelation.created, DocumentRelation.id)
         )
         .scalars()
         .all()
     )
 
-    seen_pairs: set[tuple[str, str]] = set()
+    relation_groups = _group_relations_by_document_pair(rows, upstream=False)
+    seen_pairs = set(relation_groups)
     result: list[dict[str, Any]] = []
 
-    for row in rows:
-        tgt_type = row.target_type
-        tgt_id = row.target_id
-        pair = (tgt_type, tgt_id)
-        if pair in seen_pairs:
-            continue
-        seen_pairs.add(pair)
+    for pair, pair_rows in relation_groups.items():
+        tgt_type, tgt_id = pair
+        row = _current_document_relation(pair_rows)
 
         if node_counter[0] >= max_nodes:
             result.append({"max_nodes_reached": True})
@@ -248,6 +241,28 @@ def get_downstream_tree(
 
     visited.discard(key)
     return result
+
+
+def _group_relations_by_document_pair(
+    rows: list[DocumentRelation], *, upstream: bool
+) -> dict[tuple[str, str], list[DocumentRelation]]:
+    """Group relation history by the related document shown in the tree."""
+    grouped: dict[tuple[str, str], list[DocumentRelation]] = {}
+    for relation in rows:
+        if upstream:
+            pair = (relation.source_type, relation.source_id)
+        else:
+            pair = (relation.target_type, relation.target_id)
+        grouped.setdefault(pair, []).append(relation)
+    return grouped
+
+
+def _current_document_relation(relations: list[DocumentRelation]) -> DocumentRelation:
+    """Use an active line relation when present, otherwise its latest history row."""
+    for relation in reversed(relations):
+        if relation.status == "active":
+            return relation
+    return relations[-1]
 
 
 def build_document_flow_tree(

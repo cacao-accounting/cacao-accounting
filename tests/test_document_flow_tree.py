@@ -443,6 +443,79 @@ def test_downstream_desde_purchase_request(app):
     assert len(inv_node["children"]) == 0
 
 
+def test_tree_uses_active_relation_after_link_is_recreated(app):
+    """A newer active relation revision must supersede its reverted history."""
+    from cacao_accounting.database import PurchaseOrderItem, PurchaseRequestItem, database
+    from cacao_accounting.document_flow import create_document_relation
+    from cacao_accounting.document_flow.service import revert_relations_for_target
+    from cacao_accounting.document_flow.tree import get_downstream_tree, get_upstream_tree
+
+    _seed_entity(database)
+    _seed_purchase_chain(database)
+    request_line = (
+        database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id="REQ-001")).scalars().one()
+    )
+    order_line = (
+        database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id="PO-001")).scalars().one()
+    )
+
+    second_request_line = PurchaseRequestItem(
+        purchase_request_id="REQ-001",
+        item_code="CHOC-001",
+        item_name="Chocolate",
+        qty=Decimal("10"),
+        uom="UND",
+    )
+    second_order_line = PurchaseOrderItem(
+        purchase_order_id="PO-001",
+        item_code="CHOC-001",
+        item_name="Chocolate",
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("50"),
+    )
+    database.session.add_all([second_request_line, second_order_line])
+    database.session.flush()
+    create_document_relation(
+        source_type="purchase_request",
+        source_id="REQ-001",
+        source_item_id=second_request_line.id,
+        target_type="purchase_order",
+        target_id="PO-001",
+        target_item_id=second_order_line.id,
+        qty=Decimal("10"),
+        uom="UND",
+    )
+    assert revert_relations_for_target("purchase_order", "PO-001", reason="draft_edited") == 2
+    relation = create_document_relation(
+        source_type="purchase_request",
+        source_id="REQ-001",
+        source_item_id=request_line.id,
+        target_type="purchase_order",
+        target_id="PO-001",
+        target_item_id=order_line.id,
+        qty=Decimal("10"),
+        uom="UND",
+    )
+
+    assert relation.revision == 2
+    downstream = get_downstream_tree("purchase_request", "REQ-001")
+    upstream = get_upstream_tree("purchase_order", "PO-001")
+
+    assert len(downstream) == 1
+    assert len(upstream) == 1
+    assert downstream[0]["relation_status"] == "active"
+    assert upstream[0]["relation_status"] == "active"
+
+    assert revert_relations_for_target("purchase_order", "PO-001", reason="draft_edited") == 1
+    downstream = get_downstream_tree("purchase_request", "REQ-001")
+    upstream = get_upstream_tree("purchase_order", "PO-001")
+
+    assert downstream[0]["relation_status"] == "reverted"
+    assert upstream[0]["relation_status"] == "reverted"
+
+
 def test_downstream_desde_sales_invoice_incluye_pagos(app):
     """El downstream de SINV-001 incluye los pagos vía PaymentReference."""
     from cacao_accounting.database import database
