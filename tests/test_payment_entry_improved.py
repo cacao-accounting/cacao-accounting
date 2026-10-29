@@ -12,6 +12,7 @@ from werkzeug.exceptions import Conflict
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     Accounts,
+    ARAPLedgerEntry,
     Book,
     database,
     Party,
@@ -1214,6 +1215,13 @@ def test_advance_payment_from_purchase_order(app_ctx):
 
     database.session.refresh(pe)
     assert pe.docstatus == 1
+    assert compute_payment_unallocated_amount(pe) == 500
+    payment_movements = (
+        database.session.execute(database.select(ARAPLedgerEntry).filter_by(document_type="payment_entry", document_id=pe.id))
+        .scalars()
+        .all()
+    )
+    assert [movement.event_type for movement in payment_movements] == ["opening"]
 
     # GL entries should exist and balance
     entries = _payment_gl_entries(pe.id)
@@ -1287,6 +1295,13 @@ def test_advance_payment_from_sales_order(app_ctx):
 
     database.session.refresh(pe)
     assert pe.docstatus == 1
+    assert compute_payment_unallocated_amount(pe) == 800
+    payment_movements = (
+        database.session.execute(database.select(ARAPLedgerEntry).filter_by(document_type="payment_entry", document_id=pe.id))
+        .scalars()
+        .all()
+    )
+    assert [movement.event_type for movement in payment_movements] == ["opening"]
 
     entries = _payment_gl_entries(pe.id)
     assert len(entries) >= 2
@@ -1296,6 +1311,39 @@ def test_advance_payment_from_sales_order(app_ctx):
     bank_gl_account = bank.gl_account_id if bank else None
     assert any(aid != bank_gl_account for aid in account_ids)
     assert defaults.customer_advance_account_id in account_ids
+
+
+def test_payment_posting_cache_does_not_consume_order_references():
+    """Las referencias a órdenes conservan el saldo abierto del anticipo."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.contabilidad.arap_ledger_service import _PaymentPostingContext
+
+    context = _PaymentPostingContext(
+        document=PaymentEntry(id="PAY-ORDER-001"),
+        party_entries=[],
+        references=[
+            SimpleNamespace(
+                reference_type="purchase_order",
+                flow_source_type="purchase_order",
+                payment_amount=Decimal("500"),
+                allocated_amount=Decimal("500"),
+            ),
+            SimpleNamespace(
+                reference_type="sales_invoice",
+                flow_source_type="sales_invoice",
+                payment_amount=Decimal("25"),
+                allocated_amount=Decimal("25"),
+            ),
+        ],
+        total=Decimal("525"),
+        payment_sign=Decimal("-1"),
+        payment_currency="NIO",
+        payment_date=date.today(),
+        payment_account_id="AR-001",
+    )
+
+    assert context.consumed_cash == Decimal("25")
 
 
 def test_payment_from_purchase_order_prefills_reference_line(app_ctx):

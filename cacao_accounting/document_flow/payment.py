@@ -39,7 +39,7 @@ from cacao_accounting.database import (
     SalesOrder,
     database,
 )
-from cacao_accounting.document_flow.registry import normalize_doctype
+from cacao_accounting.document_flow.registry import normalize_doctype, payment_reference_affects_arap
 from cacao_accounting.document_flow.repository import decimal_or_zero
 
 from cacao_accounting.i18n import LazyText, _, _l
@@ -493,8 +493,10 @@ def _compute_cash_consumed_from_reference(
     payment_amount=None,
 ):
     """Calcula el efectivo consumido por una referencia de pago."""
-    source_type = normalize_doctype(str(flow_source_type or reference_type or ""))
-    if source_type in {"purchase_order", "sales_order"}:
+    if not payment_reference_affects_arap(
+        str(flow_source_type) if flow_source_type else None,
+        str(reference_type) if reference_type else None,
+    ):
         return Decimal("0"), None
     cash_consumed = decimal_or_zero(payment_amount) or decimal_or_zero(allocated_amount) - decimal_or_zero(
         discount_amount
@@ -530,14 +532,7 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
                 )
             ).scalars()
         )
-        pending_reference_amount = database.session.execute(
-            select(
-                func.coalesce(func.sum(func.coalesce(PaymentReference.payment_amount, PaymentReference.allocated_amount)), 0)
-            ).where(
-                PaymentReference.payment_id == payment.id,
-                ~PaymentReference.reference_id.in_(represented_reference_ids or {"__none__"}),
-            )
-        ).scalar_one()
+        pending_reference_amount = _pending_payment_reference_amount(payment, represented_reference_ids)
         remaining -= decimal_or_zero(pending_reference_amount)
         return remaining if remaining > 0 else Decimal("0")
     reference_rows = database.session.execute(
@@ -578,6 +573,29 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
     )
     remaining = payment_total - consumed
     return remaining if remaining > 0 else Decimal("0")
+
+
+def _pending_payment_reference_amount(payment: PaymentEntry, represented_reference_ids: set[Any]) -> Decimal:
+    """Suma referencias AR/AP pendientes sin contar referencias a órdenes."""
+    pending_reference_rows = database.session.execute(
+        select(
+            PaymentReference.flow_source_type,
+            PaymentReference.reference_type,
+            PaymentReference.payment_amount,
+            PaymentReference.allocated_amount,
+        ).where(
+            PaymentReference.payment_id == payment.id,
+            ~PaymentReference.reference_id.in_(represented_reference_ids or {"__none__"}),
+        )
+    ).all()
+    return sum(
+        (
+            decimal_or_zero(row.payment_amount or row.allocated_amount)
+            for row in pending_reference_rows
+            if payment_reference_affects_arap(row.flow_source_type, row.reference_type)
+        ),
+        Decimal("0"),
+    )
 
 
 def refresh_outstanding_amount_cache(document: Any, as_of_date: date | None = None) -> Decimal:

@@ -776,6 +776,16 @@ def normalize_doctype(value: str) -> str:
     return value.strip().lower().replace("-", "_").replace(" ", "_")
 
 
+def payment_reference_affects_arap(flow_source_type: str | None, reference_type: str | None) -> bool:
+    """Indica si una referencia de pago constituye una aplicación AR/AP.
+
+    Las referencias a órdenes conservan la trazabilidad del anticipo, pero no
+    liquidan un documento de cuentas por cobrar o pagar.
+    """
+    source_type = normalize_doctype(str(flow_source_type or reference_type or ""))
+    return source_type not in {"purchase_order", "sales_order"}
+
+
 def get_document_type(value: str) -> DocumentType:
     """Devuelve el contrato de un tipo documental conocido."""
     key = normalize_doctype(value)

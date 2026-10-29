@@ -35,6 +35,7 @@ from cacao_accounting.database import (
     SalesInvoice,
     database,
 )
+from cacao_accounting.document_flow.registry import payment_reference_affects_arap
 
 
 from cacao_accounting.i18n import _
@@ -603,7 +604,11 @@ class _PaymentPostingContext:
     def consumed_cash(self) -> Decimal:
         """Importe total aplicado por las referencias del pago."""
         return sum(
-            (_decimal(reference.payment_amount or reference.allocated_amount) for reference in self.references),
+            (
+                _decimal(reference.payment_amount or reference.allocated_amount)
+                for reference in self.references
+                if payment_reference_affects_arap(reference.flow_source_type, reference.reference_type)
+            ),
             Decimal("0"),
         )
 
