@@ -579,7 +579,51 @@
 {%- set effective_docstatus = docstatus if docstatus is not none else (document.docstatus|default(inferred_docstatus)) -%}
 {%- set api_url = url_for('api.api_document_flow_tree') ~ '?document_type=' ~ document_type ~ '&document_id=' ~ document.id -%}
 <div class="ca-card ca-document-flow mt-3"
-     x-data='documentFlowTree({ apiUrl: {{ api_url | tojson }}, docstatus: {{ effective_docstatus | int }}, createActions: {{ create_actions_json | safe }} })'>
+     x-data='documentFlowTree({
+       apiUrl: {{ api_url | tojson }},
+       docstatus: {{ effective_docstatus | int }},
+       createActions: {{ create_actions_json | safe }},
+       messages: {
+         total: {{ _("Total:") | tojson }},
+         relationship: {{ _("Relación:") | tojson }},
+         applied: {{ _("Aplicado:") | tojson }},
+         unallocated: {{ _("Sin asignar:") | tojson }},
+         voided: {{ _("Anulado") | tojson }},
+         current: {{ _("Actual") | tojson }},
+         cycleDetected: {{ _("Ciclo detectado") | tojson }},
+         maxDepthReached: {{ _("Profundidad máxima alcanzada") | tojson }},
+         maxNodesReached: {{ _("Límite de nodos alcanzado") | tojson }},
+         document: {{ _("documento") | tojson }},
+         documents: {{ _("documentos") | tojson }},
+         relatedDocument: {{ _("documento relacionado") | tojson }},
+         relatedDocuments: {{ _("documentos relacionados") | tojson }},
+         relationTypes: {
+           reuse: {{ _("Reutilización") | tojson }},
+           quotation: {{ _("Cotización") | tojson }},
+           order: {{ _("Orden") | tojson }},
+           receipt: {{ _("Recepción") | tojson }},
+           billing: {{ _("Facturación") | tojson }},
+           advance: {{ _("Anticipo") | tojson }},
+           credit_note: {{ _("Nota de crédito") | tojson }},
+           debit_note: {{ _("Nota de débito") | tojson }},
+           landed_cost: {{ _("Costo de importación") | tojson }},
+           payment: {{ _("Pago") | tojson }},
+           refund: {{ _("Reembolso") | tojson }},
+           delivery: {{ _("Entrega") | tojson }},
+           return: {{ _("Devolución") | tojson }},
+           stock: {{ _("Movimiento de inventario") | tojson }},
+           accounting: {{ _("Contabilidad") | tojson }},
+           collection: {{ _("Cobro") | tojson }},
+           invoice_reversal: {{ _("Reversión de factura") | tojson }},
+           payment_reference: {{ _("Referencia de pago") | tojson }},
+           purchase_order: {{ _("Orden de compra") | tojson }},
+           stock_entry: {{ _("Movimiento de inventario") | tojson }},
+           source: {{ _("Origen") | tojson }},
+           reference: {{ _("Referencia") | tojson }},
+           fulfillment: {{ _("Cumplimiento") | tojson }}
+         }
+       }
+     })'>
   <div class="ca-card-header" role="button" tabindex="0" @click="toggle()" @keydown.enter.prevent="toggle()" @keydown.space.prevent="toggle()">
     <div class="d-flex align-items-start gap-2">
       <i class="bi bi-diagram-3 mt-1"></i>

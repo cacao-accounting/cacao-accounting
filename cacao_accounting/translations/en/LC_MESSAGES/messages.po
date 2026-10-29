@@ -22655,6 +22655,78 @@ msgstr "Loading document flow..."
 msgid "No se pudo cargar el flujo documental."
 msgstr "The document stream could not be loaded."
 
+#: cacao_accounting/templates/macros.html
+msgid "Relación:"
+msgstr "Relationship:"
+
+#: cacao_accounting/templates/macros.html
+msgid "Aplicado:"
+msgstr "Applied:"
+
+#: cacao_accounting/templates/macros.html
+msgid "Sin asignar:"
+msgstr "Unallocated:"
+
+#: cacao_accounting/templates/macros.html
+msgid "Ciclo detectado"
+msgstr "Cycle detected"
+
+#: cacao_accounting/templates/macros.html
+msgid "Profundidad máxima alcanzada"
+msgstr "Maximum depth reached"
+
+#: cacao_accounting/templates/macros.html
+msgid "Límite de nodos alcanzado"
+msgstr "Node limit reached"
+
+#: cacao_accounting/templates/macros.html
+msgid "documento"
+msgstr "document"
+
+#: cacao_accounting/templates/macros.html
+msgid "documentos"
+msgstr "documents"
+
+#: cacao_accounting/templates/macros.html
+msgid "documento relacionado"
+msgstr "related document"
+
+#: cacao_accounting/templates/macros.html
+msgid "documentos relacionados"
+msgstr "related documents"
+
+#: cacao_accounting/templates/macros.html
+msgid "Reutilización"
+msgstr "Reuse"
+
+#: cacao_accounting/templates/macros.html
+msgid "Facturación"
+msgstr "Billing"
+
+#: cacao_accounting/templates/macros.html
+msgid "Anticipo"
+msgstr "Advance"
+
+#: cacao_accounting/templates/macros.html
+msgid "Reembolso"
+msgstr "Refund"
+
+#: cacao_accounting/templates/macros.html
+msgid "Entrega"
+msgstr "Delivery"
+
+#: cacao_accounting/templates/macros.html
+msgid "Reversión de factura"
+msgstr "Invoice reversal"
+
+#: cacao_accounting/templates/macros.html
+msgid "Referencia de pago"
+msgstr "Payment reference"
+
+#: cacao_accounting/templates/macros.html
+msgid "Cumplimiento"
+msgstr "Fulfillment"
+
 #: cacao_accounting/templates/macros.html:617
 msgid "Documento actual"
 msgstr "Current Document"
