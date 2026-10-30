@@ -181,21 +181,20 @@ def _validate_idempotency_replay(existing: PurchaseInvoice, command: PurchaseInv
     return existing
 
 
-def _validate_sources(command: PurchaseInvoiceDraftCommand, settings: CompanyParty) -> None:
-    order = database.session.get(PurchaseOrder, command.purchase_order_id) if command.purchase_order_id else None
-    receipt = database.session.get(PurchaseReceipt, command.purchase_receipt_id) if command.purchase_receipt_id else None
-    if command.matching_mode == "NON_PO_INVOICE":
-        if order or not settings.allow_purchase_invoice_without_order:
-            raise PurchaseInvoiceDraftError(
-                "PURCHASE_ORDER_REQUIRED",
-                _("La política del proveedor exige orden de compra."),
-            )
-        if receipt or not settings.allow_purchase_invoice_without_receipt:
-            raise PurchaseInvoiceDraftError(
-                "RECEIPT_REQUIRED",
-                _("La política del proveedor exige recepción."),
-            )
-        return
+def _validate_non_po_mode(command: PurchaseInvoiceDraftCommand, settings: CompanyParty, order, receipt) -> None:
+    if order or not settings.allow_purchase_invoice_without_order:
+        raise PurchaseInvoiceDraftError(
+            "PURCHASE_ORDER_REQUIRED",
+            _("La política del proveedor exige orden de compra."),
+        )
+    if receipt or not settings.allow_purchase_invoice_without_receipt:
+        raise PurchaseInvoiceDraftError(
+            "RECEIPT_REQUIRED",
+            _("La política del proveedor exige recepción."),
+        )
+
+
+def _validate_purchase_order(command: PurchaseInvoiceDraftCommand, order) -> None:
     if order is None or order.docstatus != 1:
         raise PurchaseInvoiceDraftError(
             "PURCHASE_ORDER_NOT_FOUND",
@@ -208,15 +207,28 @@ def _validate_sources(command: PurchaseInvoiceDraftCommand, settings: CompanyPar
         )
     if order.transaction_currency and order.transaction_currency != command.transaction_currency:
         raise PurchaseInvoiceDraftError("ORDER_CURRENCY_MISMATCH", _("La moneda no coincide con la orden."))
+
+
+def _validate_receipt(command: PurchaseInvoiceDraftCommand, receipt, order) -> None:
+    if receipt is None or receipt.docstatus != 1:
+        raise PurchaseInvoiceDraftError("RECEIPT_MISSING", _("La recepción requerida no está disponible."))
+    if (
+        receipt.company != command.company_id
+        or receipt.supplier_id != command.supplier_id
+        or receipt.purchase_order_id != order.id
+    ):
+        raise PurchaseInvoiceDraftError("RECEIPT_MISSING", _("La recepción no corresponde a la orden y proveedor."))
+
+
+def _validate_sources(command: PurchaseInvoiceDraftCommand, settings: CompanyParty) -> None:
+    order = database.session.get(PurchaseOrder, command.purchase_order_id) if command.purchase_order_id else None
+    receipt = database.session.get(PurchaseReceipt, command.purchase_receipt_id) if command.purchase_receipt_id else None
+    if command.matching_mode == "NON_PO_INVOICE":
+        _validate_non_po_mode(command, settings, order, receipt)
+        return
+    _validate_purchase_order(command, order)
     if command.matching_mode == "THREE_WAY_MATCH":
-        if receipt is None or receipt.docstatus != 1:
-            raise PurchaseInvoiceDraftError("RECEIPT_MISSING", _("La recepción requerida no está disponible."))
-        if (
-            receipt.company != command.company_id
-            or receipt.supplier_id != command.supplier_id
-            or receipt.purchase_order_id != order.id
-        ):
-            raise PurchaseInvoiceDraftError("RECEIPT_MISSING", _("La recepción no corresponde a la orden y proveedor."))
+        _validate_receipt(command, receipt, order)
 
 
 def _exchange_rate(company: Entity, command: PurchaseInvoiceDraftCommand) -> Decimal:

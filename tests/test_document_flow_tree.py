@@ -982,7 +982,9 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
         supplier_advance_account_id=advance.id,
         apply_advances_automatically=True,
     )
-    actor = User(id="ADV-ADMIN", user="advance-admin", name="Advance Admin", password=b"x", classification="admin", active=True)
+    actor = User(
+        id="ADV-ADMIN", user="advance-admin", name="Advance Admin", password=b"x", classification="admin", active=True
+    )
     module = Modules(module="accounting", default=True, enabled=True)
     database.session.add_all([defaults, actor, module])
     database.session.flush()

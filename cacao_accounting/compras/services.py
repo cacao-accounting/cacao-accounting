@@ -2486,10 +2486,8 @@ def _invoice_for_physical_return(receipt_id: str) -> str | None:
     return str(invoice_ids[0]) if invoice_ids else None
 
 
-def _purchase_invoice_source_context() -> dict[str, Any]:
-    """Resolve source documents and document type for a purchase invoice."""
-    posting_date = _parse_date(request.form.get("posting_date"))
-    supplier_id = request.form.get("supplier_id") or None
+def _read_source_request() -> tuple[Any, Any, Any, Any]:
+    """Read the source document ids from the request, inferring the order from the receipt."""
     from_order = request.form.get("from_order") or None
     from_receipt = request.form.get("from_receipt") or None
     if from_receipt and not from_order:
@@ -2500,18 +2498,40 @@ def _purchase_invoice_source_context() -> dict[str, Any]:
     requested_type = request.form.get("document_type") or request.args.get("document_type")
     if from_invoice and not requested_type:
         requested_type = PURCHASE_CREDIT_NOTE
+    return from_order, from_receipt, from_invoice, requested_type
+
+
+def _backfill_invoice_for_physical_return(source_receipt, source_ids: dict[str, Any]) -> tuple[Any, Any]:
+    """Resolve the original invoice behind a receipt that is a physical return."""
+    from_invoice = _invoice_for_physical_return(source_receipt.id)
+    source_ids["from_invoice_id"] = from_invoice
+    source_invoice = database.session.get(PurchaseInvoice, from_invoice) if from_invoice else None
+    return from_invoice, source_invoice
+
+
+def _apply_note_source_defaults(document_type: str, source_invoice, from_order: Any, from_receipt: Any) -> dict[str, Any]:
+    """Approve note types only with an approved source invoice, and inherit its order/receipt."""
+    if source_invoice is None and document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE):
+        raise ValueError(_("La nota de compra requiere una factura origen aprobada."))
+    if source_invoice is not None and document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE):
+        from_order = from_order or source_invoice.purchase_order_id
+        from_receipt = from_receipt or source_invoice.purchase_receipt_id
+    return {"from_order": from_order, "from_receipt": from_receipt}
+
+
+def _purchase_invoice_source_context() -> dict[str, Any]:
+    """Resolve source documents and document type for a purchase invoice."""
+    posting_date = _parse_date(request.form.get("posting_date"))
+    supplier_id = request.form.get("supplier_id") or None
+    from_order, from_receipt, from_invoice, requested_type = _read_source_request()
     source_ids = {"from_order_id": from_order, "from_receipt_id": from_receipt, "from_invoice_id": from_invoice}
     document_type = _purchase_invoice_document_type(source_ids, requested_type)
     source_order, source_receipt, source_invoice = _purchase_invoice_sources(source_ids)
     if document_type == PURCHASE_CREDIT_NOTE and source_invoice is None and source_receipt is not None:
-        from_invoice = _invoice_for_physical_return(source_receipt.id)
-        source_ids["from_invoice_id"] = from_invoice
-        source_invoice = database.session.get(PurchaseInvoice, from_invoice) if from_invoice else None
-    if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) and source_invoice is None:
-        raise ValueError(_("La nota de compra requiere una factura origen aprobada."))
-    if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) and source_invoice is not None:
-        from_order = from_order or source_invoice.purchase_order_id
-        from_receipt = from_receipt or source_invoice.purchase_receipt_id
+        from_invoice, source_invoice = _backfill_invoice_for_physical_return(source_receipt, source_ids)
+    note_sources = _apply_note_source_defaults(document_type, source_invoice, from_order, from_receipt)
+    from_order = note_sources["from_order"]
+    from_receipt = note_sources["from_receipt"]
     return {
         "posting_date": posting_date,
         "supplier_id": supplier_id,
