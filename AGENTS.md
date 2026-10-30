@@ -1,7 +1,7 @@
 # Introducción
 
 Cacao Accounting es un software contable que busca dar cobertura completa y robusta a los siguientes
-flujo de negocio:
+flujos de negocio:
 
 - Order to Cash (O2C): Flujo completo del ciclo de venta.
 - Source to Pay (S2P): Flujo completo del proceso de abastecimiento.
@@ -11,7 +11,7 @@ flujo de negocio:
 - Cash & Treasury Management (CTM): Gestión del efectivo en caja y bancos.
 
 Cacao Accounting no pretende ser un ERP, manufactura, gestión de nominas, activo fijo y similares
-estan fuera de el alcance.
+estan fuera de el alcance del proyecto.
 
 Cacao Accounting soporta dos modos de uso:
 - Modo Desktop: Limitado a una empresa y un usuario por base de datos.
@@ -208,6 +208,14 @@ Al hacer commit respeta el autor y correo configurado en git local, no agregues 
 Los commits deben ser revisados y firmados por un humano antes de incorporase al repositorio sin mezclar
 autoria de agentes de asistencia.
 
+## Regla de calidad de pruebas
+
+Todas las pruebas automatizadas deben ser reales, sustanciales y orientadas a validar comportamientos funcionales,
+reglas de negocio, invariantes y escenarios de uso auténticos. Se prohíbe crear pruebas artificiales, triviales,
+redundantes o diseñadas únicamente para incrementar métricas de cobertura. Las pruebas deben verificar resultados
+esperados independientes de la implementación, utilizar datos y escenarios representativos, minimizar mocks y
+ejecutar integraciones reales cuando corresponda. La prioridad es detectar defectos, regresiones e inconsistencias,
+no alcanzar porcentajes de cobertura ni acumular cantidad de pruebas.
 
 ## Trabajo de terceros
 
@@ -251,4 +259,3 @@ Al refactorizar código que supera el límite de complejidad, se deben seguir es
 > **Regla principal:** reducir la métrica de complejidad no es el objetivo final. El objetivo es producir código que pueda ser leído, entendido, modificado y mantenido por una persona. La métrica es únicamente una herramienta para ayudarnos a conseguirlo. Si un codigo es correcto, fluye con naturalidad esta bien probado y sus pruebas unitarias cubren correctamente los caminos posibles y las posibles exepciones es mejor mantenerlo con complejidad de 21, 22, 23 o 25 incluso si y solo si es realmente el mejor patron para implementar la solucion que se esta trabajando.
 
 No es necesario forzar esta regla con pruebas unitarias, solo con codigo productivo.
-
