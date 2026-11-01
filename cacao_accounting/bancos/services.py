@@ -88,7 +88,7 @@ from cacao_accounting.fiscal_persistence_service import load_document_fiscal_lin
 
 from cacao_accounting.list_filters import apply_list_filters, apply_period_filter, attach_period_picker, require_period_company
 
-from cacao_accounting.ledger_queries import primary_ledger_id
+from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, primary_ledger_id
 
 
 from cacao_accounting.audit_trail_service import log_create
@@ -346,15 +346,24 @@ def petty_cash_ledger_balance(petty_cash: PettyCashAccount, as_of_date: date | N
     """Devuelve el saldo contable de una caja chica derivado del GL a una fecha.
 
     El saldo no se almacena; se calcula como ``SUM(debit - credit)`` sobre la
-    cuenta contable asociada (patron de partida doble). Cuando se indica una
-    fecha de corte, excluye movimientos posteriores para conservar la
-    consistencia histórica de conciliaciones y reportes.
+    cuenta contable asociada (patrón de partida doble), sobre el libro activo
+    protagonista de lectura: el poste contable publica una fila ``GLEntry`` por
+    cada libro activo, de modo que no filtrar por libro consolidaría el saldo
+    multiplicado por la cantidad de libros. Cuando se indica una fecha de
+    corte, excluye movimientos posteriores para conservar la consistencia
+    histórica de conciliaciones y reportes.
     """
     if not petty_cash.account_id:
         return Decimal("0")
-    query = database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).filter_by(
-        account_id=petty_cash.account_id, company=petty_cash.company
+    query = exclude_cancelled_gl_entries(
+        database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0))
+    ).where(
+        GLEntry.account_id == petty_cash.account_id,
+        GLEntry.company == petty_cash.company,
     )
+    ledger_id = primary_ledger_id(str(petty_cash.company))
+    if ledger_id:
+        query = query.where(GLEntry.ledger_id == ledger_id)
     if as_of_date is not None:
         query = query.filter(GLEntry.posting_date <= as_of_date)
     result = database.session.execute(query).scalar()
