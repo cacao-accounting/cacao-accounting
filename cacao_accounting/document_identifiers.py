@@ -65,13 +65,21 @@ def parse_posting_date(posting_date_raw: date | str | None) -> date:
         raise IdentifierConfigurationError(_("La fecha de contabilizacion es inválida.")) from exc
 
 
-def validate_accounting_period(company: str | None, posting_date: date, allow_closing: bool = False) -> None:
-    """Aplica el cierre operativo y su excepción exclusiva para cierres contables.
+def validate_accounting_period(
+    company: str | None,
+    posting_date: date,
+    allow_closing: bool = False,
+    allow_fiscal_year_closing: bool = False,
+) -> None:
+    """Aplica el cierre contable y sus dos excepciones exclusivas de cierre.
 
     Compras, ventas, bancos e inventario deben postear con ``allow_closing=False`` y
-    quedan bloqueados cuando el periodo está cerrado o deshabilitado. Solo un
-    comprobante de diario marcado como cierre puede usar ``allow_closing=True`` para
-    completar el cierre. Si el año fiscal está cerrado, no se permite ningún movimiento.
+    quedan bloqueados cuando el período está cerrado o deshabilitado, así como en
+    un año fiscal cerrado. ``allow_closing=True`` desbloquea únicamente los
+    períodos cerrados o deshabilitados para los comprobantes de cierre operativo.
+    El asiento de cierre de año fiscal (``is_fiscal_year_closing``, creado
+    exclusivamente por el servicio de cierre) usa ``allow_fiscal_year_closing=True``
+    para numerar y postear dentro del propio año que cierra.
     """
     if not company:
         raise IdentifierConfigurationError(_("Debe indicar la compañía del documento."))
@@ -83,7 +91,7 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
         .where(FiscalYear.year_end_date >= posting_date)
     ).scalar_one_or_none()
 
-    if closed_fiscal_year and not allow_closing:
+    if closed_fiscal_year and not allow_fiscal_year_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un año fiscal cerrado."))
 
     period = (
@@ -531,6 +539,7 @@ def assign_document_identifier(
     external_number: str | None = None,
     external_context: dict | None = None,
     allow_closing: bool = False,
+    allow_fiscal_year_closing: bool = False,
 ) -> None:
     """Asigna document_no, naming_series_id y (opcionalmente) external_number a un documento.
 
@@ -559,13 +568,20 @@ def assign_document_identifier(
         external_number: Numero externo fisico a usar (o None para usar el sugerido por el contador)
         external_context: Contexto adicional para seleccion contextual de contador (payment_method, etc.)
         allow_closing: Permite asignar identificador en periodos cerrados si es comprobante de cierre.
+        allow_fiscal_year_closing: Exclusivo del asiento de cierre de año fiscal: permite
+            asignar identificador dentro del propio año fiscal que se cierra.
     """
     if str(getattr(document, "document_no", "") or "").strip():
         return
 
     posting_date = parse_posting_date(posting_date_raw)
     company = getattr(document, "company", None)
-    validate_accounting_period(company=company, posting_date=posting_date, allow_closing=allow_closing)
+    validate_accounting_period(
+        company=company,
+        posting_date=posting_date,
+        allow_closing=allow_closing,
+        allow_fiscal_year_closing=allow_fiscal_year_closing,
+    )
     company_code = cast(str, company)
 
     # 1. Identificador interno

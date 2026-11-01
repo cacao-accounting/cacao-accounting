@@ -285,7 +285,13 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     company = _company_for(document)
     posting_date = _posting_date_for(document)
     allow_closing = bool(getattr(document, "is_closing", False))
-    validate_accounting_period(company, posting_date, allow_closing=allow_closing)
+    is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
+    validate_accounting_period(
+        company,
+        posting_date,
+        allow_closing=allow_closing,
+        allow_fiscal_year_closing=is_fy_closing,
+    )
     accounting_period_id, fiscal_year_id = _find_period_ids(company, posting_date)
     entity = database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
     default_company_currency = getattr(entity, "currency", None) if entity else None
@@ -310,7 +316,6 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
             }
         )
     contexts: list[LedgerContext] = []
-    is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
     missing_rates: list[str] = []
     for book in _active_books(company, ledger_code):
         book_currency = getattr(book, "currency", None)
@@ -4945,7 +4950,12 @@ def _validate_cancel_accounting_period(document: Any, company: str) -> None:
     """Valida el periodo contable para cancelacion."""
     try:
         allow_closing = bool(getattr(document, "is_closing", False))
-        validate_accounting_period(company, _posting_date_for(document), allow_closing=allow_closing)
+        validate_accounting_period(
+            company,
+            _posting_date_for(document),
+            allow_closing=allow_closing,
+            allow_fiscal_year_closing=bool(getattr(document, "is_fiscal_year_closing", False)),
+        )
     except IdentifierConfigurationError as exc:
         raise PostingError(str(exc)) from exc
 
