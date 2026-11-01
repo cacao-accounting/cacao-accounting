@@ -61,6 +61,52 @@ def tercero_tiene_vinculo_autorizado(party_id: str, companies: Iterable[str]) ->
     )
 
 
+def companias_editables_de_modulo(module: str) -> list[str]:
+    """Compañías donde el usuario actual puede editar en el módulo dado (#1282)."""
+    from flask_login import current_user
+
+    from cacao_accounting.auth.permisos import Permisos as _Permisos
+    from cacao_accounting.database import Entity as _Entity
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre as _obtener_id
+
+    permisos = _Permisos(modulo=_obtener_id(module), usuario=getattr(current_user, "id", None))
+    if permisos.administrador:
+        return list(database.session.execute(database.select(_Entity.code).where(_Entity.enabled.is_(True))).scalars())
+    if not permisos.editar:
+        return []
+    return list(permisos.obtener_companias_autorizadas())
+
+
+def exigir_companias_tercero(party_id: str, module: str, submitted: Iterable[str], action: str = "editar") -> None:
+    """Exige autorización para cada compañía procesada en la configuración (#1280).
+
+    El POST procesa las compañías presentes en el formulario y elimina las
+    asociaciones omitidas: ambas listas se validan antes de mutar.
+    """
+    from cacao_accounting.decorators import exige_acceso_compania as _exige
+
+    presentes = [str(company).strip() for company in submitted if str(company).strip()]
+    restantes = list(database.session.execute(database.select(CompanyParty.company).filter_by(party_id=party_id)).scalars())
+    objetivo = list(dict.fromkeys(presentes + [company for company in restantes if company not in presentes]))
+    for company in objetivo:
+        _exige(module, company, action)
+
+
+def requiere_edicion_tercero(party_id: str, module: str) -> None:
+    """Guard de mutación de contactos/direcciones/roles de un tercero (#1282).
+
+    Exige permiso de edición del módulo y que el tercero tenga vínculo en
+    alguna compañía editable (los datos son compartidos entre compañías).
+    """
+    from flask import abort as _abort
+
+    editable = companias_editables_de_modulo(module)
+    if not editable:
+        _abort(403)
+    if not tercero_tiene_vinculo_autorizado(party_id, editable):
+        _abort(403)
+
+
 @dataclass(frozen=True)
 class ContactRow:
     """Contacto asociado a un tercero."""

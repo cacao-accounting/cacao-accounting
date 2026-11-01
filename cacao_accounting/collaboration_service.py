@@ -104,19 +104,32 @@ def create_document_task(
 
 
 def update_task_status(task_id: str, status: str, user_id: str) -> DocumentTask:
-    """Update a task status and audit the related document."""
+    """Update a task status and audit the related document.
+
+    #1328/#1467: la mutación exige ser el asignado o quien creó la tarea;
+    el acceso de lectura al documento solo concede consulta, no gestión.
+    """
     _ensure_cloud_mode()
     normalized_status = _validate_status(status)
     task = database.session.get(DocumentTask, task_id)
     if task is None:
-        raise CollaborationError(_("Tarea no encontrada."), 404)
-    document = _document_for_collaboration(task.document_type, task.document_id, user_id)
+        raise CollaborationError(_("Tarea no encontrado."), 404)
+    if str(task.assigned_to or "") != str(user_id) and str(task.assigned_by or "") != str(user_id):
+        # Solo el asignado o el creador gestionan el ciclo de la tarea.
+        raise CollaborationError(_("Solo el asignado o quien asignó la tarea puede cambiar su estado."), 403)
+    try:
+        document = _document_for_collaboration(task.document_type, task.document_id, user_id)
+    except CollaborationError as exc:
+        if exc.status_code != 404:
+            raise
+        document = None
 
     previous_status = task.status
     task.status = normalized_status
     task.completed_at = datetime.now(UTC) if normalized_status == "completed" else None
     action = _audit_action_for_status(normalized_status, previous_status)
-    log_task_event(document, action, f"Tarea '{task.title}' cambió de {previous_status} a {normalized_status}.")
+    if document is not None:
+        log_task_event(document, action, f"Tarea '{task.title}' cambió de {previous_status} a {normalized_status}.")
     database.session.commit()
     return task
 
