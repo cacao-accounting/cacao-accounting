@@ -448,21 +448,8 @@ class PrintService:
             raise PrintPermissionError(_("Document is not available for this company."))
 
         classification = str(getattr(user, "classification", "") or "").lower()
-        party_id = getattr(user, "party_id", None)
         if classification in {"customer", "supplier"}:
-            # #1562: el portal navega únicamente la compañía propia del
-            # usuario; que el tercero esté compartido con otra compañía no
-            # concede la impresión de esa otra compañía.
-            user_company = str(getattr(user, "company", "") or "")
-            if not user_company or user_company != str(company_code):
-                raise PrintPermissionError(_("Document is not available for this company."))
-        if classification == "customer":
-            if not party_id or getattr(document, "customer_id", None) != party_id:
-                raise PrintPermissionError(_("Document is not available for this customer."))
-            return
-        if classification == "supplier":
-            if not party_id or getattr(document, "supplier_id", None) != party_id:
-                raise PrintPermissionError(_("Document is not available for this supplier."))
+            self._authorize_portal_document(document, document_type, user, company_code, classification)
             return
 
         module_name = definition["permission"].split(".", 1)[0]
@@ -470,6 +457,27 @@ class PrintService:
             exige_acceso_compania(module_name, company_code, "consultar")
         except HTTPException as exc:
             raise PrintPermissionError(_("User has no permission to print this document.")) from exc
+
+    def _authorize_portal_document(
+        self,
+        document: Any,
+        document_type: str,
+        user: Any,
+        company_code: str,
+        classification: str,
+    ) -> None:
+        """Autorization for portal users (customer/supplier)."""
+        # #1562: el portal navega únicamente la compañía propia del
+        # usuario; que el tercero esté compartido con otra compañía no
+        # concede la impresión de esa otra compañía.
+        user_company = str(getattr(user, "company", "") or "")
+        if not user_company or user_company != str(company_code):
+            raise PrintPermissionError(_("Document is not available for this company."))
+        party_id = getattr(user, "party_id", None)
+        party_column = {"customer": "customer_id", "supplier": "supplier_id"}.get(classification, "customer_id")
+        if not party_id or getattr(document, party_column, None) != party_id:
+            verb = "customer" if classification == "customer" else "supplier"
+            raise PrintPermissionError(_("Document is not available for this %(verb)s.") % {"verb": verb})
 
     def _resolve_template_by_id(
         self,

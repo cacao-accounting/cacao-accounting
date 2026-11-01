@@ -126,7 +126,7 @@ def app():
         # nombre): esta tabla debe limpiarse antes de eliminar a los usuarios
         # o el FK roles_user_user_id aborta el teardown en motores con
         # integridad referencial activa (#CI Postgres).
-        from cacao_accounting.database import RolesUser
+        from cacao_accounting.database import RolesAccess, RolesUser
 
         usuarios_a_eliminar = list(
             database.session.scalars(
@@ -140,6 +140,11 @@ def app():
             database.session.delete(user)
         for entity in database.session.scalars(database.select(Entity).where(Entity.code.in_(["COMP-A", "COMP-B"]))):
             database.session.delete(entity)
+        # Los permisos por rol referencian a los módulos: deben eliminarse
+        # antes de los modules o el FK roles_access_module_id aborta el
+        # teardown en Postgres (#CI Postgres).
+        for acceso in database.session.scalars(database.select(RolesAccess)):
+            database.session.delete(acceso)
         for module in database.session.scalars(database.select(Modules).where(Modules.module == "accounting")):
             database.session.delete(module)
         database.session.commit()

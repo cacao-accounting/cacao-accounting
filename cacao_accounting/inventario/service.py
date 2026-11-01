@@ -743,14 +743,7 @@ def update_item_with_uoms(
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
     validate_default_warehouse(params.default_warehouse_id, action="editar")
-    if _item_has_records(item_code) and any(
-        (
-            item.is_stock_item != resolved_stock_flag,
-            item.has_batch != params.has_batch,
-            item.has_serial_no != params.has_serial_no,
-            item.has_expiry_date != params.has_expiry_date,
-        )
-    ):
+    if _item_has_records(item_code) and _controles_de_inventario_cambiaron(item, resolved_stock_flag, params):
         raise InventoryServiceError(_("No se pueden cambiar los controles de inventario después de usar el item."))
     validate_item_account_rows(
         resolved_item_type,
@@ -758,6 +751,27 @@ def update_item_with_uoms(
         resolved_account_rows,
         action="editar",
     )
+    _aplica_campos_item(item, params, resolved_item_type, resolved_stock_flag)
+    database.session.flush()
+    _reemplaza_conversiones_uom(item, resolved_uom_rows, params.default_uom)
+    _reemplaza_cuentas_contables(item, resolved_account_rows)
+    return item
+
+
+def _controles_de_inventario_cambiaron(item: Item, resolved_stock_flag: bool, params: ItemParams) -> bool:
+    """Detecta si al menos un control de inventario cambia siendo el item ya usado."""
+    return any(
+        (
+            item.is_stock_item != resolved_stock_flag,
+            item.has_batch != params.has_batch,
+            item.has_serial_no != params.has_serial_no,
+            item.has_expiry_date != params.has_expiry_date,
+        )
+    )
+
+
+def _aplica_campos_item(item: Item, params: ItemParams, resolved_item_type: str, resolved_stock_flag: bool) -> None:
+    """Escribe los campos de maestro del item y refresca la sesión."""
     item.name = params.name
     item.description = params.description
     item.item_type = resolved_item_type
@@ -784,44 +798,69 @@ def update_item_with_uoms(
     item.has_serial_no = params.has_serial_no
     item.has_expiry_date = params.has_expiry_date
     database.session.flush()
-    for old in database.session.execute(select(ItemUOMConversion).filter_by(item_code=item_code)).scalars():
+
+
+def _reemplaza_conversiones_uom(item: Item, resolved_uom_rows: list[ItemUOMRow], default_uom: str) -> None:
+    """Reemplaza por completo las conversiones UOM del item."""
+    for old in database.session.execute(select(ItemUOMConversion).filter_by(item_code=item.code)).scalars():
         database.session.delete(old)
     for uom_row in resolved_uom_rows:
         database.session.add(
             ItemUOMConversion(
                 item_code=item.code,
                 from_uom=uom_row.uom_code,
-                to_uom=params.default_uom,
+                to_uom=default_uom,
                 conversion_factor=uom_row.conversion_factor,
             )
         )
-    # #1418/#1542: el reemplazo completo solo toca las filas visibles/editables
-    # del usuario. Las compañías ajenas se preservan intactas y no se repite la
-    # misma empresa dentro del conjunto enviado por formulario.
-    editable_companies = _inventory_editable_companies()
-    persistidas = list(database.session.execute(select(ItemAccount).filter_by(item_code=item_code)).scalars())
-    seen_companies: set[str] = set()
 
+
+def _reemplaza_cuentas_contables(item: Item, resolved_account_rows: list[ItemAccountRow]) -> None:
+    """Reemplaza la configuracion contable por compania (#1418/#1542).
+
+    El reemplazo completo solo toca las filas de compañías editables por el
+    usuario; las compañías ajenas se conservan intactas.
+    """
+    editable_companies = _inventory_editable_companies()
+    persistidas = list(database.session.execute(select(ItemAccount).filter_by(item_code=item.code)).scalars())
+    companies_editadas = _actualiza_cuentas_persistidas(persistidas, resolved_account_rows, editable_companies)
+    _inserta_cuentas_nuevas(item, resolved_account_rows, editable_companies, companies_editadas)
+
+
+def _actualiza_cuentas_persistidas(
+    persistidas: list[ItemAccount],
+    resolved_account_rows: list[ItemAccountRow],
+    editable_companies: set[str] | None,
+) -> set[str]:
+    """Actualiza/borra filas persistidas editables; devuelve las compañías procesadas."""
+    companies_editadas: set[str] = set()
     for old_account in persistidas:
         company_code = str(old_account.company)
         if editable_companies is not None and company_code not in editable_companies:
             continue
         target_row = next((row for row in resolved_account_rows if str(row.company or "").strip() == company_code), None)
         if target_row is not None:
-            old_account.item_code = item.code
-            old_account.company = company_code
+            companies_editadas.add(company_code)
             old_account.expense_account_id = target_row.expense_account_id
             old_account.income_account_id = target_row.income_account_id
             old_account.cogs_account_id = target_row.cogs_account_id
             old_account.stock_adjustment_account_id = target_row.stock_adjustment_account_id
             old_account.cost_center_code = target_row.cost_center_code
-            seen_companies.add(company_code)
-        elif editable_companies is None or company_code in editable_companies:
+        else:
             database.session.delete(old_account)
+    return companies_editadas
 
+
+def _inserta_cuentas_nuevas(
+    item: Item,
+    resolved_account_rows: list[ItemAccountRow],
+    editable_companies: set[str] | None,
+    companies_editadas: set[str],
+) -> None:
+    """Inserta filas contables nuevas de compañías dentro del alcance editable."""
     for account_row in resolved_account_rows:
         company_code = str(account_row.company or "").strip()
-        if not company_code or company_code in seen_companies:
+        if not company_code or company_code in companies_editadas:
             continue
         if editable_companies is not None and company_code not in editable_companies:
             continue
@@ -836,7 +875,6 @@ def update_item_with_uoms(
                 cost_center_code=account_row.cost_center_code,
             )
         )
-    return item
 
 
 def list_item_uom_conversions(item_code: str) -> list[ItemUOMConversion]:

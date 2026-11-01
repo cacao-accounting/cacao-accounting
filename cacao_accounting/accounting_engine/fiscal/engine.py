@@ -50,37 +50,7 @@ class FiscalEngine:
                 # Use rounding manager
                 amount = rounding_manager.round(amount, context_key="fiscal")
 
-                # Update concept amounts for next rules
-                if rule.included_in_price:
-                    # ``goods`` represents the net merchandise amount once an
-                    # included tax has been decomposed.  Keep the accumulated
-                    # concept in sync so later rules cannot count that tax twice.
-                    concept_amounts["goods"] = concept_amounts.get("goods", goods_total) - amount
-                if rule.participates_in_next_base:
-                    if rule.concept not in concept_amounts:
-                        concept_amounts[rule.concept] = Decimal("0")
-                    concept_amounts[rule.concept] += amount
-
-                line = FiscalLine(
-                    line_id=f"TAX-{step_counter:03}",
-                    concept=rule.concept,
-                    type=rule.tax_type,
-                    rate=rule.rate,
-                    calculation_method=rule.calculation_method,
-                    base_amount=base_amount,
-                    amount=amount,
-                    recognition_event=rule.recognition_event,
-                    accounting_treatment=rule.accounting_treatment,
-                    affects_inventory=affects_inventory_from_treatment(rule.accounting_treatment),
-                    affects_document_total=rule.affects_document_total,
-                    included_in_price=rule.included_in_price,
-                    source_rule_id=rule.rule_id,
-                    applies_to_items=[item.line_id for item in context.items],
-                    depends_on=rule.include_concepts,
-                    participates_in_next_base=rule.participates_in_next_base,
-                    allocation_method=rule.allocation_method,
-                    account_id=rule.account_id,
-                )
+                line = self._build_fiscal_line(rule, concept_amounts, goods_total, base_amount, amount, step_counter, context)
                 tax_lines.append(line)
 
                 formula = self._get_formula(rule, base_amount)
@@ -100,6 +70,60 @@ class FiscalEngine:
             except (ArithmeticError, ValueError) as exc:
                 errors.append(f"Error calculating rule {rule.name}: {str(exc)}")
 
+        return self._consolidate_fiscal_result(tax_lines, goods_total, audit_trail, warnings, errors)
+
+    def _build_fiscal_line(
+        self,
+        rule: TaxRuleContext,
+        concept_amounts: Dict[str, Decimal],
+        goods_total: Decimal,
+        base_amount: Decimal,
+        amount: Decimal,
+        step_counter: int,
+        context: CalculationContext,
+    ) -> FiscalLine:
+        """Construyo la línea fiscal y sincronizo los conceptos acumulados."""
+        # Update concept amounts for next rules
+        if rule.included_in_price:
+            # ``goods`` represents the net merchandise amount once an
+            # included tax has been decomposed.  Keep the accumulated
+            # concept in sync so later rules cannot count that tax twice.
+            concept_amounts["goods"] = concept_amounts.get("goods", goods_total) - amount
+        if rule.participates_in_next_base:
+            if rule.concept not in concept_amounts:
+                concept_amounts[rule.concept] = Decimal("0")
+            concept_amounts[rule.concept] += amount
+
+        return FiscalLine(
+            line_id=f"TAX-{step_counter:03}",
+            concept=rule.concept,
+            type=rule.tax_type,
+            rate=rule.rate,
+            calculation_method=rule.calculation_method,
+            base_amount=base_amount,
+            amount=amount,
+            recognition_event=rule.recognition_event,
+            accounting_treatment=rule.accounting_treatment,
+            affects_inventory=affects_inventory_from_treatment(rule.accounting_treatment),
+            affects_document_total=rule.affects_document_total,
+            included_in_price=rule.included_in_price,
+            source_rule_id=rule.rule_id,
+            applies_to_items=[item.line_id for item in context.items],
+            depends_on=rule.include_concepts,
+            participates_in_next_base=rule.participates_in_next_base,
+            allocation_method=rule.allocation_method,
+            account_id=rule.account_id,
+        )
+
+    def _consolidate_fiscal_result(
+        self,
+        tax_lines: list[FiscalLine],
+        goods_total: Decimal,
+        audit_trail: list[AuditStep],
+        warnings: list[str],
+        errors: list[str],
+    ) -> FiscalResult:
+        """Consolidate totals from the calculated fiscal lines."""
         # Consolidate totals
         doc_tax_total = sum(
             (
@@ -139,15 +163,7 @@ class FiscalEngine:
         """Return rules ordered by dependency graph and configured order."""
         if not rules:
             return []
-        concept_to_rule_ids = {
-            rule.rule_id: {
-                candidate.rule_id
-                for candidate in rules
-                if candidate.concept in set(rule.include_concepts + rule.exclude_concepts)
-                and candidate.rule_id != rule.rule_id
-            }
-            for rule in rules
-        }
+        concept_to_rule_ids = self._dependency_map(rules)
         indegree = {rule.rule_id: len(concept_to_rule_ids[rule.rule_id]) for rule in rules}
         reverse_graph: dict[str, list[str]] = {rule.rule_id: [] for rule in rules}
         rule_map = {rule.rule_id: rule for rule in rules}
@@ -170,6 +186,18 @@ class FiscalEngine:
         if len(ordered) != len(rules):
             return None
         return ordered
+
+    def _dependency_map(self, rules: list[TaxRuleContext]) -> Dict[str, set[str]]:
+        """Map each rule id to the ids of the rules it depends on."""
+        return {
+            rule.rule_id: {
+                candidate.rule_id
+                for candidate in rules
+                if candidate.concept in set(rule.include_concepts + rule.exclude_concepts)
+                and candidate.rule_id != rule.rule_id
+            }
+            for rule in rules
+        }
 
     def _calculate_base(self, rule: TaxRuleContext, concept_amounts: Dict[str, Decimal], goods_total: Decimal) -> Decimal:
         if rule.base_mode == "goods":
