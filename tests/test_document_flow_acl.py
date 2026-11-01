@@ -23,6 +23,7 @@ from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AccountingPeriod,
     DocumentRelation,
     Entity,
     Item,
@@ -56,6 +57,22 @@ def _sembrar_escenario() -> dict[str, str]:
                 status="default",
             ),
             Entity(code="cafe", name="Cafe SA", company_name="Cafe SA", tax_id="J0002", currency="NIO", enabled=True),
+            AccountingPeriod(
+                entity="cacao",
+                name="PERIODO-AUTORIZADO-CACAO",
+                start=FECHA,
+                end=FECHA,
+                enabled=True,
+                is_closed=False,
+            ),
+            AccountingPeriod(
+                entity="cafe",
+                name="PERIODO-CONFIDENCIAL-CAFE",
+                start=FECHA,
+                end=FECHA,
+                enabled=True,
+                is_closed=False,
+            ),
             UOM(code="Unidad", name="Unidad"),
             Item(
                 code="CACAO-ABARROTES-EXPO",
@@ -134,6 +151,18 @@ def _iniciar_sesion(client) -> None:
     """Autentica al vendedor de la compañía 'cacao'."""
     response = client.post("/login", data={"usuario": "vendedor", "acceso": CONTRASENA}, follow_redirects=True)
     assert response.status_code == 200
+
+
+def test_dashboard_solo_serializa_periodos_de_companias_autorizadas(escenario_multicompania):
+    """Refs: 1608. El HTML inicial no debe revelar periodos de otra compañía."""
+    _, client, _ = escenario_multicompania
+    _iniciar_sesion(client)
+
+    response = client.get("/app")
+
+    assert response.status_code == 200
+    assert b"PERIODO-AUTORIZADO-CACAO" in response.data
+    assert b"PERIODO-CONFIDENCIAL-CAFE" not in response.data
 
 
 def _payload_crear(pedido_propio: str, lines: list[dict]) -> dict:
@@ -287,3 +316,36 @@ def test_el_vendedor_puede_cerrar_saldo_de_su_propia_linea(escenario_multicompan
     state = response.get_json()["state"]
     assert Decimal(str(state["closed_qty"])) == Decimal("50")
     assert Decimal(str(state["pending_qty"])) == Decimal("0")
+
+
+def test_items_del_flujo_rechazan_fuentes_de_otra_compania(escenario_multicompania):
+    """#1468: cada documento origen del endpoint de líneas exige su propio ACL."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client)
+    response = client.get(f"/api/document-flow/items?target_type=sales_invoice&source=sales_order:{ids['orden_ajena']}")
+    assert response.status_code == 403
+
+
+def test_items_del_flujo_rechaza_la_mezcla_de_origenes_ajenos(escenario_multicompania):
+    """Una petición con origen propio y ajeno no filtra el ajeno."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client)
+    response = client.get(
+        "/api/document-flow/items"
+        f"?target_type=sales_invoice&source=sales_request:{ids['pedido_propio']}&source=sales_order:{ids['orden_ajena']}"
+    )
+    assert response.status_code == 403
+    assert response.get_json() is None
+
+
+def test_items_del_flujo_devuelve_las_lineas_de_sus_propias_fuentes(escenario_multicompania):
+    """Control positivo: las líneas del propio pedido quedan disponibles."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client)
+    response = client.get(f"/api/document-flow/items?target_type=sales_order&source=sales_request:{ids['pedido_propio']}")
+    assert response.status_code == 200
+    datos = response.get_json()
+    assert datos["target_type"] == "sales_order"
+    items = datos["items"]
+    assert items
+    assert any(str(item.get("item_code") or "") == "CACAO-ABARROTES-EXPO" for item in items)

@@ -1093,6 +1093,13 @@ def api_document_flow_items():
     sources = request.args.getlist("source")
     if not target_type or not sources:
         abort(400)
+    for value in sources:
+        # Cada documento origen se autoriza de forma independiente: la
+        # petición puede mezclar orígenes y ninguno debe escapar al ACL.
+        if ":" not in value:
+            abort(400)
+        source_type, source_id = value.split(":", 1)
+        _require_document_read_access(source_type, source_id)
     try:
         items = get_document_flow_items(target_type, sources)
     except DocumentFlowError as exc:
