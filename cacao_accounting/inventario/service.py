@@ -220,6 +220,18 @@ def batch_balance_rows(batch_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def _factor_conversion_uom(factor: Decimal) -> Decimal:
+    """Guarda común de conversión UOM: el factor debe ser positivo y finito.
+
+    Un factor cero anula cantidades y un factor negativo invierte el signo
+    del saldo; la misma guarda aplica a la conversión directa y a la
+    inversa porque los registros pueden venir de migración o API.
+    """
+    if not factor.is_finite() or factor <= 0:
+        raise InventoryServiceError(_("La conversión de UOM requiere un factor positivo."))
+    return factor
+
+
 def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -> Decimal:
     """Convierte cantidad de un item entre UOM configuradas."""
     if from_uom == to_uom:
@@ -230,16 +242,14 @@ def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -
         .first()
     )
     if conversion:
-        return qty * _decimal_value(conversion.conversion_factor)
+        return qty * _factor_conversion_uom(_decimal_value(conversion.conversion_factor))
     inverse = (
         database.session.execute(select(ItemUOMConversion).filter_by(item_code=item_code, from_uom=to_uom, to_uom=from_uom))
         .scalars()
         .first()
     )
     if inverse:
-        factor = _decimal_value(inverse.conversion_factor)
-        if factor == 0:
-            raise InventoryServiceError(_("La conversion de UOM no puede tener factor cero."))
+        factor = _factor_conversion_uom(_decimal_value(inverse.conversion_factor))
         return qty / factor
     raise InventoryServiceError(_("No existe conversion UOM para el item."))
 
