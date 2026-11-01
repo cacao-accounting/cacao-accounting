@@ -453,9 +453,21 @@ class ImportService:
         """Finaliza la ejecución actualizando estados y contadores."""
         current_batch = database.session.get(ImportBatch, batch_id)
         if current_batch:
+            # La cancelación solicitada durante la ejecución puede haberse
+            # comprometido desde otra sesión; releeer el estado para no
+            # sobrescribirlo con completado.
+            database.session.expire(current_batch)
+            current_batch = database.session.get(ImportBatch, batch_id)
+            if current_batch is None:
+                return
             current_batch.success_rows = success_count
             current_batch.error_rows = error_count
             current_batch.completed_at = datetime.now()
+            if current_batch.import_status == 8 or current_batch.cancel_requested:
+                # La cancelación (estado 8) es terminal: los contadores
+                # parciales quedan tal como la ejecución los dejó.
+                database.session.commit()
+                return
             current_batch.import_status = 5 if error_count == 0 else 6
             database.session.commit()
 
