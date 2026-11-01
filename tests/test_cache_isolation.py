@@ -145,7 +145,10 @@ def app():
         # teardown en Postgres (#CI Postgres).
         for acceso in database.session.scalars(database.select(RolesAccess)):
             database.session.delete(acceso)
-        for module in database.session.scalars(database.select(Modules).where(Modules.module == "accounting")):
+        # Sales y accounting se siembran en este fixture; ambos deben
+        # limpiarse para no chocar con el índice único ix_modules_module
+        # en la siembra del siguiente test.
+        for module in database.session.scalars(database.select(Modules).where(Modules.module.in_(["accounting", "sales"]))):
             database.session.delete(module)
         database.session.commit()
         database.session.remove()
