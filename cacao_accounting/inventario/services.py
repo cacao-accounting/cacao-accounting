@@ -151,7 +151,15 @@ def _inventory_period_company() -> str | None:
         return period_company
     if getattr(current_user, "classification", None) == "admin":
         return period_company
-
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("inventory"),
+        usuario=current_user.id,
+    )
+    if permissions.consultar:
+        companies = list(permissions.obtener_companias_autorizadas())
+        if len(companies) == 1:
+            return companies[0]
+    return period_company
 
 def _apply_inventory_period_scope(base_query: Any, model: type[Any]) -> Any:
     """Apply accounting period filters when the inventory model supports posting dates."""

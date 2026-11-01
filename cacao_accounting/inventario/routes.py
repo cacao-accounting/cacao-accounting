@@ -478,7 +478,6 @@ def _bodega_predeterminada_visible(default_warehouse) -> Any:
 @login_required
 def inventario_articulo(item_id):
     """Detalle de artículo."""
-
     registro = database.session.execute(database.select(Item).filter_by(code=item_id)).first()
     if not registro:
         abort(404)

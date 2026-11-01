@@ -228,7 +228,9 @@ def test_login_real_logout_and_session_reset(app):
             user=username,
             name="Pilot User",
             password=proteger_passwd(password),
-            classification="user",
+            # El modo escritorio solo permite iniciar sesión a administradores
+            # (puede_iniciar_en_escritorio, política de la ruta /login).
+            classification="admin",
             active=True,
             company="cacao",
         )

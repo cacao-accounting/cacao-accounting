@@ -122,6 +122,15 @@ def app():
         # snapshot path runs; bulk deletes are rejected by the ICFR guard.
         for access in database.session.scalars(database.select(UserCompanyAccess)):
             database.session.delete(access)
+        # Los roles asignados referencian al usuario: esta tabla debe limpiarse
+        # antes de eliminar a los usuarios o el FK roles_user_user_id aborta el
+        # teardown en motores con integridad referencial activa (#CI Postgres).
+        from cacao_accounting.database import RolesUser
+
+        for rol_usuario in database.session.scalars(
+            database.select(RolesUser).where(RolesUser.user_id.in_(["cache-user-a", "cache-user-b", "cache-admin"]))
+        ):
+            database.session.delete(rol_usuario)
         for user in database.session.scalars(
             database.select(User).where(User.user.in_(["cache-user-a", "cache-user-b", "cache-admin"]))
         ):
