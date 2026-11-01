@@ -64,6 +64,7 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania, exige_acceso_compania_cualquiera
 from cacao_accounting.api.dashboard import user_can_access_company
+from cacao_accounting.company_context import authorized_company_codes
 from cacao_accounting.document_flow.registry import (
     DOCUMENT_TYPES,
     DocumentType,
@@ -936,7 +937,7 @@ def my_tasks():
         "tasks/my.html",
         tasks=tasks,
         document_url=document_url,
-        active_users=active_users(),
+        active_users=active_users(companies=authorized_company_codes()),
         open_task_count=open_task_count(str(current_user.id)),
         titulo=_("Mis tareas"),
     )

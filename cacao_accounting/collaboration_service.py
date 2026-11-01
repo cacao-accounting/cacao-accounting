@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import Any, NoReturn
+from typing import Any, NoReturn, Sequence
 
 from flask import abort, url_for
 from werkzeug.routing import BuildError
@@ -142,9 +142,29 @@ def list_user_tasks(
     due_date_from: date | None = None,
     due_date_to: date | None = None,
     company: str | None = None,
+    *,
+    restrict_by_access: bool = True,
 ) -> list[DocumentTask]:
-    """List tasks assigned to a user with optional filters."""
+    """List tasks assigned to a user with optional filters.
+
+    #1595/#1572: la bandeja solo muestra tareas cuya compañía sigue en el
+    alcance vigente del usuario (o tareas sin compañía asociada); un filtro
+    explícito de compañía también exige autorización.
+    """
     query = database.select(DocumentTask).where(DocumentTask.assigned_to == user_id)
+    if restrict_by_access:
+        from cacao_accounting.company_context import authorized_company_codes
+
+        authorized = authorized_company_codes()
+        allow = company in authorized
+        conditions = [DocumentTask.company.is_(None)]
+        if authorized:
+            conditions.append(DocumentTask.company.in_(authorized))
+        from sqlalchemy import or_
+
+        query = query.where(or_(*conditions))
+        if company and not allow:
+            return []
     if status:
         query = query.where(DocumentTask.status == _validate_status(status))
     if priority:
@@ -158,9 +178,21 @@ def list_user_tasks(
     return list(database.session.execute(query.order_by(DocumentTask.created_at.desc())).scalars().all())
 
 
-def active_users() -> list[User]:
-    """Return active users available for task assignment."""
-    return list(database.session.execute(database.select(User).filter_by(active=True).order_by(User.user)).scalars().all())
+def active_users(companies: Sequence[str] | None = None) -> list[User]:
+    """Usuarios activos disponibles para asignaciones (#1598).
+
+    Con ``companies`` el directorio se limita a los usuarios con alcance
+    explícito en esas compañías: el selector de asignaciones no revela el
+    directorio global de usuarios.
+    """
+    query = database.select(User).filter_by(active=True).order_by(User.user)
+    if companies:
+        from sqlalchemy import select as _select
+        from cacao_accounting.database import UserCompanyAccess
+
+        authorized_users = _select(UserCompanyAccess.user_id).where(UserCompanyAccess.company_code.in_(list(companies)))
+        query = query.where(User.id.in_(authorized_users))
+    return list(database.session.execute(query).scalars().all())
 
 
 def open_task_count(user_id: str) -> int:

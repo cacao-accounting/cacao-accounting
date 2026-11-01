@@ -313,12 +313,16 @@ def format_quantity(value: object | None) -> str:
 
 
 def collaboration_active_users() -> list:
-    """Return active users for collaboration widgets."""
+    """Active users scoped to the current viewer's authorized companies (#1598)."""
     if not is_cloud_mode():
         return []
     from cacao_accounting.collaboration_service import active_users
+    from cacao_accounting.company_context import authorized_company_codes
 
-    return active_users()
+    alcance = authorized_company_codes()
+    if not alcance:
+        return []
+    return active_users(companies=alcance)
 
 
 def document_collaboration_tasks(document_type: str, document_id: str) -> list:
