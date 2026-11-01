@@ -85,6 +85,7 @@ from cacao_accounting.inventario.services import (
     _handle_stock_entry_edit_post,
     _render_stock_entry_edit_form,
     _render_stock_reconciliation_edit_form,
+    _validate_stock_entry_company,
 )
 
 from cacao_accounting.i18n import _
@@ -721,6 +722,11 @@ def inventario_entrada_nuevo():
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
+    # #1173: el GET consulta y renderiza bodegas antes del POST; una
+    # compañía pedida explícitamente exige permiso de consulta en
+    # inventario (la selección por defecto se valida en el POST).
+    if request.values.get("company"):
+        _validate_stock_entry_company(selected_company, "consultar")
     formulario.naming_series.choices = _series_choices("stock_entry", selected_company)
     # INV-03: Filtrar bodegas por compañía
     warehouse_choices = [("", "")] + [
