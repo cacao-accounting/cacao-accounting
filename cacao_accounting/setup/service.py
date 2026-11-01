@@ -173,6 +173,11 @@ def get_setup_configuration() -> dict[str, Any]:
     }
 
 
+def is_setup_complete() -> bool:
+    """Indica si el asistente de configuración ya finalizó con éxito."""
+    return (get_setup_value(SETUP_COMPLETED, "") or "") == "True"
+
+
 def available_currencies() -> list[tuple[str, str]]:
     """Devuelve las monedas disponibles para el formulario de configuración."""
     from cacao_accounting.database import Currency
