@@ -1226,6 +1226,10 @@ def lista_usuarios():
 
         if action == "toggle":
             usuario.active = not bool(usuario.active)
+            if not usuario.active:
+                # La desactivación revoca el token persistido: un JWT en
+                # vigencia con credenciales válidas dejaría de autorizar.
+                usuario.token = None
             database.session.commit()
             estado = _("habilitado") if usuario.active else _("deshabilitado")
             flash(_("Usuario %(user)s %(status)s correctamente.") % {"user": usuario.user, "status": estado}, "success")

@@ -498,7 +498,7 @@ def token_requerido(f):  # pragma: no cover
             from cacao_accounting.database import User, database
 
             identidad = database.session.get(User, user_id)
-            if not identidad or identidad.token != token:
+            if not identidad or identidad.token != token or not identidad.active:
                 return {
                     "message": "Invalid or expired Authentication token!",
                     "data": None,
@@ -508,7 +508,14 @@ def token_requerido(f):  # pragma: no cover
             from flask_login import login_user
 
             if not current_user or not current_user.is_authenticated:
-                login_user(identidad, remember=False, force=False)
+                # El usuario pudo ser deshabilitado entre el login web y la
+                # llamada al API: sin sesión válida la vista no se ejecuta.
+                if not login_user(identidad, remember=False, force=False):
+                    return {
+                        "message": "Invalid or expired Authentication token!",
+                        "data": None,
+                        "error": "Unauthorized",
+                    }, 401
 
         except (KeyError, PyJWTError) as e:
             return {
