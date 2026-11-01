@@ -449,6 +449,13 @@ class PrintService:
 
         classification = str(getattr(user, "classification", "") or "").lower()
         party_id = getattr(user, "party_id", None)
+        if classification in {"customer", "supplier"}:
+            # #1562: el portal navega únicamente la compañía propia del
+            # usuario; que el tercero esté compartido con otra compañía no
+            # concede la impresión de esa otra compañía.
+            user_company = str(getattr(user, "company", "") or "")
+            if not user_company or user_company != str(company_code):
+                raise PrintPermissionError(_("Document is not available for this company."))
         if classification == "customer":
             if not party_id or getattr(document, "customer_id", None) != party_id:
                 raise PrintPermissionError(_("Document is not available for this customer."))
