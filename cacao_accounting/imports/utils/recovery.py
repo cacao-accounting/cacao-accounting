@@ -24,7 +24,10 @@ def recover_crashed_batches() -> int:
 
     timeout_limit = datetime.now() - timedelta(hours=4)
 
-    batches = ImportBatch.query.filter(ImportBatch.import_status == 4, ImportBatch.started_at < timeout_limit).all()
+    batches = ImportBatch.query.filter(
+        ImportBatch.import_status == 4,
+        (ImportBatch.started_at.is_(None)) | (ImportBatch.started_at < timeout_limit),
+    ).all()
     if not batches:
         return 0
 
