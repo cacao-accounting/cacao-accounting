@@ -549,7 +549,7 @@ class ApprovalEngine:
                 current_document=document,
             )
             return
-        if doctype not in {"sales_invoice", "sales_return"}:
+        if doctype not in {"sales_invoice", "sales_return", "sales_credit_note", "sales_debit_note"}:
             return
         from cacao_accounting.ventas import (
             _validate_invoice_prices_against_source,
@@ -566,12 +566,18 @@ class ApprovalEngine:
             )
         _validate_sales_invoice_quantities(document.id)
         _validate_invoice_prices_against_source(document)
-        if getattr(document, "document_type", None) in {"sales_credit_note", "sales_return"}:
+        if getattr(document, "document_type", None) in {"sales_credit_note", "sales_return", "sales_debit_note"} and getattr(
+            document, "reversal_of", None
+        ):
             _validate_reversal_of(
                 document.reversal_of or "",
                 document.customer_id,
                 document.company,
-                note_amount=Decimal(str(document.grand_total or "0")),
+                note_amount=(
+                    Decimal(str(document.grand_total or "0"))
+                    if document.document_type in {"sales_credit_note", "sales_return"}
+                    else None
+                ),
                 document_type=document.document_type,
                 posting_date=document.posting_date,
                 lock_source=True,
@@ -658,12 +664,16 @@ class ApprovalEngine:
             "delivery_note": (DeliveryNoteItem, "delivery_note_id"),
             "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
             "sales_return": (SalesInvoiceItem, "sales_invoice_id"),
+            "sales_credit_note": (SalesInvoiceItem, "sales_invoice_id"),
+            "sales_debit_note": (SalesInvoiceItem, "sales_invoice_id"),
             "purchase_request": (PurchaseRequestItem, "purchase_request_id"),
             "purchase_quotation": (PurchaseQuotationItem, "purchase_quotation_id"),
             "supplier_quotation": (SupplierQuotationItem, "supplier_quotation_id"),
             "purchase_order": (PurchaseOrderItem, "purchase_order_id"),
             "purchase_receipt": (PurchaseReceiptItem, "purchase_receipt_id"),
             "purchase_invoice": (PurchaseInvoiceItem, "purchase_invoice_id"),
+            "purchase_credit_note": (PurchaseInvoiceItem, "purchase_invoice_id"),
+            "purchase_debit_note": (PurchaseInvoiceItem, "purchase_invoice_id"),
             "stock_entry": (StockEntryItem, "stock_entry_id"),
         }
         if doctype not in item_models:
@@ -673,7 +683,15 @@ class ApprovalEngine:
         if hasattr(item_model, "is_superseded"):
             item_query = item_query.filter_by(is_superseded=False)
         items = db.session.execute(item_query).scalars().all()
-        if doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"}:
+        if doctype in {
+            "delivery_note",
+            "sales_invoice",
+            "sales_return",
+            "sales_credit_note",
+            "sales_debit_note",
+            "purchase_receipt",
+            "stock_entry",
+        }:
             from cacao_accounting.inventario.service import validate_batch_serial_draft
 
             validate_batch_serial_draft(items)
@@ -685,12 +703,14 @@ class ApprovalEngine:
             items=items,
             require_party=doctype not in {"stock_entry", "delivery_note", "purchase_request"},
             require_rate_positive=doctype not in {"delivery_note", "stock_entry", "sales_request", "purchase_request"},
-            require_amount_nonzero=doctype in {"sales_invoice", "sales_return", "purchase_invoice"},
-            require_warehouse=doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"},
+            require_amount_nonzero=doctype
+            in {"sales_invoice", "sales_return", "sales_credit_note", "sales_debit_note", "purchase_invoice"},
+            require_warehouse=doctype
+            in {"delivery_note", "sales_invoice", "sales_return", "sales_credit_note", "purchase_receipt", "stock_entry"},
         )
-        if doctype in {"sales_order", "sales_invoice", "sales_return"}:
+        if doctype in {"sales_order", "sales_invoice", "sales_return", "sales_credit_note", "sales_debit_note"}:
             ApprovalEngine._validate_sales_submission(doctype, document)
-        elif doctype == "purchase_invoice":
+        elif doctype in {"purchase_invoice", "purchase_credit_note", "purchase_debit_note"}:
             ApprovalEngine._validate_purchase_submission(document)
         elif doctype == "purchase_receipt":
             from cacao_accounting.compras import _validate_receipt_quantities_against_po
@@ -863,6 +883,8 @@ class ApprovalEngine:
                 if req.document_type.startswith("cancel_"):
                     actual_doc_type = req.document_type[7:]
                     actual_doc = database.session.get(get_model_class(actual_doc_type), req.document_id)
+                    if actual_doc is None:
+                        raise ValueError(_("El documento que se cancelaría ya no existe."))
                     cls._validate_final_cancellation(actual_doc_type, actual_doc)
                     cls._execute_cancel(
                         actual_doc_type,
@@ -997,7 +1019,12 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype in {"sales_invoice", "sales_return"}:
+        if doctype in {
+            "sales_invoice",
+            "sales_return",
+            "sales_credit_note",
+            "sales_debit_note",
+        }:
             from cacao_accounting.ventas import _create_delivery_note_from_invoice, _persist_sales_reversal_relation
 
             _submit_document_and_refresh_flow(doctype, document)
@@ -1007,7 +1034,7 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype == "purchase_invoice":
+        if doctype in {"purchase_invoice", "purchase_credit_note", "purchase_debit_note"}:
             from cacao_accounting.compras import _persist_purchase_reversal_relation
 
             _submit_document_and_refresh_flow(doctype, document)
@@ -1015,9 +1042,14 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype in {"purchase_receipt", "payment_entry", "stock_entry"}:
+        if doctype in {"purchase_receipt", "payment_entry", "stock_entry", "import_landed_cost"}:
             _submit_document_and_refresh_flow(doctype, document)
             log_submit(document)
+            return
+
+        raise ValueError(
+            _("El motor de aprobación no tiene flujo de envío para el tipo de documento %(doctype)s.") % {"doctype": doctype},
+        )
 
     @classmethod
     def _execute_cancel(
