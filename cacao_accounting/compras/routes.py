@@ -1734,6 +1734,10 @@ def compras_proveedor(supplier_id):
 def compras_proveedor_configuracion_compania(supplier_id: str):
     """Crea o actualiza la configuracion por compania de un proveedor."""
     _party_or_404(supplier_id)
+    # #1280: presentes y omitidas exigen edición por compañía antes de mutar.
+    from cacao_accounting.party_management import exigir_companias_tercero
+
+    exigir_companias_tercero(supplier_id, "purchases", request.form.getlist("company"))
     try:
         upsert_party_company_settings_rows(supplier_id, "supplier", request.form)
         database.session.commit()
@@ -1784,6 +1788,9 @@ def compras_proveedor_editar(supplier_id: str):
 def compras_proveedor_contacto_crear(supplier_id: str):
     """Crea un contacto para un proveedor."""
     _party_or_404(supplier_id)
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         create_party_contact(supplier_id, request.form)
         database.session.commit()
@@ -1800,6 +1807,9 @@ def compras_proveedor_contacto_crear(supplier_id: str):
 def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
     """Edita un contacto de proveedor."""
     _party_or_404(supplier_id)
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         update_party_contact(supplier_id, link_id, request.form)
         database.session.commit()
@@ -1828,6 +1838,9 @@ def compras_proveedor_contacto_desactivar(supplier_id: str, link_id: str):
 def compras_proveedor_direccion_crear(supplier_id: str):
     """Crea una direccion para un proveedor."""
     _party_or_404(supplier_id)
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         create_party_address(supplier_id, request.form)
         database.session.commit()
@@ -1844,6 +1857,9 @@ def compras_proveedor_direccion_crear(supplier_id: str):
 def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
     """Edita una direccion de proveedor."""
     _party_or_404(supplier_id)
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         update_party_address(supplier_id, link_id, request.form)
         database.session.commit()
@@ -3537,6 +3553,10 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
 @login_required
 def compras_proveedor_habilitar_cliente(supplier_id: str):
     """Habilita un proveedor como cliente."""
+    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         toggle_party_customer_role(supplier_id, enable=True, user_id=current_user.id)
         database.session.commit()
@@ -3553,6 +3573,10 @@ def compras_proveedor_habilitar_cliente(supplier_id: str):
 @login_required
 def compras_proveedor_deshabilitar_cliente(supplier_id: str):
     """Deshabilita el rol de cliente de un proveedor."""
+    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
+    from cacao_accounting.party_management import requiere_edicion_tercero
+
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         toggle_party_customer_role(supplier_id, enable=False, user_id=current_user.id)
         database.session.commit()
