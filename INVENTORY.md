@@ -1,6 +1,7 @@
 # INVENTORY: inventario de `cacao_accounting/`
 
 Generado: 2026-10-31 · Fuente de issues: GitHub API (issues abiertos: 363)
+Actualizado: 2026-11-01 · Estado de avance en rama `estabilizacion` (ver sección **Estado de issues atendidos**)
 
 ## Convenciones
 
@@ -10,6 +11,31 @@ Generado: 2026-10-31 · Fuente de issues: GitHub API (issues abiertos: 363)
 - El mapeo de issues usa referencias explícitas a rutas `*.py` en el título/cuerpo del issue y, en su defecto, referencias `archivo.py::simbolo` o símbolos únicos. Los issues sin referencia verificable se listan al final en **Issues sin mapear**.
 - Cada archivo lista sus issues abiertos. Un issue puede aparecer en más de un archivo cuando su evidencia menciona varios.
 - Los issues que referencian plantillas HTML se mapean al blueprint Python que las renderiza. Los cinco issues sin ruta explícita se asignaron manualmente tras revisar su evidencia (ver notas en el issue).
+
+## Estado de issues atendidos (fix-proposed, 2026-11-01)
+
+Los siguientes issues del bloque de auditoría quedaron atendidos en la rama `estabilizacion` — un commit por issue, comentario de fix propuesto en el issue y etiqueta `fix-proposed` (pendiente de validación de un segundo agente y del desarrollador a cargo). Cada fix va blindado con pruebas de negocio reales en un nuevo archivo de test de la suite reiniciada; los tests se verificaron como guardianes (fallan al revertir el fix).
+
+| Issue | Resumen del fix | Commit | Archivo de prueba |
+|---|---|---|---|
+| [#1019](https://github.com/cacao-accounting/cacao-accounting/issues/1019) | `create-target` autoriza la compañía destino y el documento real de cada línea (no solo la cabecera); fecha canonizada con `parse_posting_date` | `b5d6fd35` | `tests/test_document_flow_acl.py` |
+| [#1020](https://github.com/cacao-accounting/cacao-accounting/issues/1020) | `token_requerido` exige identidad activa + token vigente + login instaurado; deshabilitar revoca el token persistido | `28a33989` | `tests/test_token_requerido.py` |
+| [#1021](https://github.com/cacao-accounting/cacao-accounting/issues/1021) | `/setup/` sellado con `SETUP_COMPLETE` y restringido a administración del sistema (`_require_system_admin`) | `118dc017` | `tests/test_setup_access.py` |
+| [#1022](https://github.com/cacao-accounting/cacao-accounting/issues/1022) | Ramas de envío del motor de aprobación para notas (venta/compra) e `import_landed_cost`; sin rama → `ValueError` explícito; paridad de validaciones de líneas | `d41cb51a` | `tests/test_approval_engine_doctypes.py` |
+| [#1023](https://github.com/cacao-accounting/cacao-accounting/issues/1023) | Persistencia fiscal acumula `concept_amounts` (helper compartido con el calculador de totales): el total es reconstruible desde las líneas | `2f2381f4` | `tests/test_fiscal_snapshot_persistence.py` |
+| [#1024](https://github.com/cacao-accounting/cacao-accounting/issues/1024) | `allow_closing` desbloquea solo períodos; nuevo `allow_fiscal_year_closing` exclusivo del asiento de cierre de año (creación/numeración/poste/reversa) | `5bb96773` | `tests/test_fiscal_year_period_validation.py` |
+| [#1030](https://github.com/cacao-accounting/cacao-accounting/issues/1030) | Importes bancarios ambiguos se rechazan de forma simétrica (`1.000` / `1,000`); operador recibe el motivo en el error de fila | `9744105d` | `tests/test_bank_statement_import.py` |
+| [#1031](https://github.com/cacao-accounting/cacao-accounting/issues/1031) | `validate()` cierra el lote en estado 7 ante cualquier excepción de lector; `started_at` al marcar 4; recuperación cubre `started_at IS NULL` | `1a4e33b9` | `tests/test_import_batch_recovery.py` |
+| [#1032](https://github.com/cacao-accounting/cacao-accounting/issues/1032) | La cancelación en ejecución es terminal: `_finalize_execution` no reescribe el estado 8, conserva contadores parciales | `fd70511d` | `tests/test_import_batch_cancellation.py` |
+| [#1034](https://github.com/cacao-accounting/cacao-accounting/issues/1034) | Guardia común de factor de conversión UOM (positivo y finito) aplicada en ambos sentidos de `convert_item_qty` | `c83d15f6` | `tests/test_inventory_uom_conversion.py` |
+| [#1035](https://github.com/cacao-accounting/cacao-accounting/issues/1035) | `petty_cash_ledger_balance` lee el libro primario y excluye pares de anulación (paridad con `_compute_gl_balance`) | `6779d510` | `tests/test_petty_cash_multibook.py` |
+| [#1036](https://github.com/cacao-accounting/cacao-accounting/issues/1036) | `expected_cash = ledger_balance - open_vouchers` (sin doble descarga del gasto posteado); `explained = counted + open_vouchers` | `b812628f` | `tests/test_petty_cash_reconciliation_cash.py` |
+
+Notas de coordinación:
+
+- Las referencias de SHA evolucionaron tras un reorden de la rama (rebase) para #1031/#1032/#1034; ver los comentarios de actualización en cada issue.
+- Los fixes sobre el mismo archivo/símbolo se apilan en orden de atención; el `INVENTORY.md` de detalle sigue refiriendo las líneas del árbol en que fue generado (2026-10-31).
+- La batería acumulada de la tarea: 48/48 pruebas en verde (12 archivos nuevos + `test_app.py`).
 
 ## Resumen por directorio
 
