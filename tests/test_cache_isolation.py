@@ -122,18 +122,21 @@ def app():
         # snapshot path runs; bulk deletes are rejected by the ICFR guard.
         for access in database.session.scalars(database.select(UserCompanyAccess)):
             database.session.delete(access)
-        # Los roles asignados referencian al usuario: esta tabla debe limpiarse
-        # antes de eliminar a los usuarios o el FK roles_user_user_id aborta el
-        # teardown en motores con integridad referencial activa (#CI Postgres).
+        # Los roles asignados referencian al usuario (por ID ULID, no por
+        # nombre): esta tabla debe limpiarse antes de eliminar a los usuarios
+        # o el FK roles_user_user_id aborta el teardown en motores con
+        # integridad referencial activa (#CI Postgres).
         from cacao_accounting.database import RolesUser
 
-        for rol_usuario in database.session.scalars(
-            database.select(RolesUser).where(RolesUser.user_id.in_(["cache-user-a", "cache-user-b", "cache-admin"]))
-        ):
-            database.session.delete(rol_usuario)
-        for user in database.session.scalars(
-            database.select(User).where(User.user.in_(["cache-user-a", "cache-user-b", "cache-admin"]))
-        ):
+        usuarios_a_eliminar = list(
+            database.session.scalars(
+                database.select(User).where(User.user.in_(["cache-user-a", "cache-user-b", "cache-admin"]))
+            )
+        )
+        for user in usuarios_a_eliminar:
+            for rol_usuario in database.session.scalars(database.select(RolesUser).where(RolesUser.user_id == user.id)):
+                database.session.delete(rol_usuario)
+        for user in usuarios_a_eliminar:
             database.session.delete(user)
         for entity in database.session.scalars(database.select(Entity).where(Entity.code.in_(["COMP-A", "COMP-B"]))):
             database.session.delete(entity)

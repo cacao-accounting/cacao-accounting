@@ -161,6 +161,7 @@ def _inventory_period_company() -> str | None:
             return companies[0]
     return period_company
 
+
 def _apply_inventory_period_scope(base_query: Any, model: type[Any]) -> Any:
     """Apply accounting period filters when the inventory model supports posting dates."""
     from cacao_accounting.list_filters import apply_period_filter, require_period_company
