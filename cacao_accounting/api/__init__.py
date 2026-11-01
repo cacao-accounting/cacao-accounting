@@ -608,6 +608,76 @@ def _search_select_payload(
     return search_select(doctype=doctype, query=query, filters=filters, limit=limit, company_scope=company_scope)
 
 
+_SEARCH_SELECT_MODULE: dict[str, Any] = {
+    "account": "accounting",
+    "account_id": "accounting",
+    "account_code": "accounting",
+    "book": "accounting",
+    "accounting_period": "accounting",
+    "accounting_period_id": "accounting",
+    "fiscal_year_id": "accounting",
+    "budget": "accounting",
+    "tax_template": "accounting",
+    "tax_rule": "accounting",
+    "naming_series": "accounting",
+    "voucher_type": "accounting",
+    "document_no": "accounting",
+    "external_counter": "accounting",
+    "cost_center": "accounting",
+    "cost_center_id": "accounting",
+    "unit": "accounting",
+    "unit_id": "accounting",
+    "business_unit": "accounting",
+    "business_unit_id": "accounting",
+    "project": "accounting",
+    "project_id": "accounting",
+    "bank_account": "cash",
+    "bank": "cash",
+    "petty_cash": "cash",
+    "customer": "sales",
+    "supplier": "purchases",
+    # Catálogos compartidos de terceros/precios: cualquiera de los módulos
+    # comerciales que los usan concede la consulta.
+    "party": ("sales", "purchases"),
+    "party_group": ("sales", "purchases"),
+    "customer_group": ("sales", "purchases"),
+    "supplier_group": ("sales", "purchases"),
+    "price_list": ("sales", "purchases"),
+    # Catálogos de ítems y medidas usados por compras, ventas e inventario.
+    "item": ("sales", "purchases", "inventory"),
+    "batch": ("sales", "purchases", "inventory"),
+    "item_category": ("sales", "purchases", "inventory"),
+    "warehouse": ("sales", "purchases", "inventory"),
+    # Catálogos generales sin módulo dueño: su alcance lo maneja la compañía.
+    "company": None,
+    "currency": None,
+    "uom": None,
+    "user": None,
+}
+
+
+def _puede_consultar_modulo_compania(modulo: str, company: str | None) -> bool:
+    """Verificación no abortante de consulta por módulo y compañía."""
+    try:
+        autenticado = bool(current_user and current_user.is_authenticated)
+    except Exception:
+        autenticado = False
+    if not autenticado:
+        return False
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=current_user.id)
+    return bool(permisos.administrador or (permisos.consultar and permisos.tiene_acceso_compania(company)))
+
+
+def _catalogo_permitido(doctype: str, company: str | None) -> bool:
+    """Exige el permiso de consulta del módulo dueño de los datos del catálogo."""
+    dueño = _SEARCH_SELECT_MODULE.get(doctype)
+    if dueño is None:
+        return True
+    if isinstance(dueño, str):
+        return _puede_consultar_modulo_compania(dueño, company)
+    return any(_puede_consultar_modulo_compania(modulo, company) for modulo in dueño)
+
+
 @api.route("/api/search-select")
 @login_required
 def api_search_select():
@@ -615,6 +685,8 @@ def api_search_select():
     doctype, query, raw_limit, filters = _search_select_request_values()
     _require_search_select_company_access(filters)
     company_scope = _search_select_company_scope(doctype, filters)
+    if not _catalogo_permitido(doctype, filters.get("company", [None])[0] if filters.get("company") else None):
+        return jsonify({"error": _("No se encuentra autorizado para consultar este catálogo.")}), 403
     try:
         payload = _search_select_payload(doctype, query, filters, raw_limit, company_scope)
     except ValueError as exc:
@@ -1129,7 +1201,15 @@ def api_document_flow_source_documents():
         )
     except (DocumentFlowError, KeyError):
         abort(400)
-    return jsonify({"target_type": target_type, "source_documents": sources})
+    # #1515: el acceso al módulo destino no concede consulta de los módulos
+    # de los orígenes; cada fila de la lista se filtra por su módulo fuente
+    # para que no se anuncie un origen cuyo detalle el usuario no puede pedir.
+    fuentes_visibles = []
+    for row in sources:
+        modulo_fuente = _module_for_document_type(str(row.get("source_type") or ""))
+        if modulo_fuente and _puede_consultar_modulo_compania(modulo_fuente, str(row.get("company") or "") or company):
+            fuentes_visibles.append(row)
+    return jsonify({"target_type": target_type, "source_documents": fuentes_visibles})
 
 
 @api.route("/api/document-flow/pending-lines")
