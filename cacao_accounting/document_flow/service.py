@@ -42,7 +42,11 @@ from cacao_accounting.document_flow.repository import (
     save_relation,
 )
 from cacao_accounting.audit_trail_service import log_create
-from cacao_accounting.document_identifiers import assign_document_identifier
+from cacao_accounting.document_identifiers import (
+    IdentifierConfigurationError,
+    assign_document_identifier,
+    parse_posting_date,
+)
 from cacao_accounting.i18n import _
 
 _MSG_LINEA_ORIGEN = "Línea origen no encontrada."
@@ -968,7 +972,10 @@ def create_target_document(payload: dict[str, Any], *, commit: bool = True) -> d
     """
     target_type = normalize_doctype(str(payload.get("target_document_type", "")))
     company = payload.get("company") or payload.get("company_id")
-    posting_date = payload.get("posting_date")
+    try:
+        posting_date = parse_posting_date(payload.get("posting_date"))
+    except IdentifierConfigurationError as exc:
+        raise DocumentFlowError(str(exc), 400) from exc
     lines = payload.get("lines") or []
     if not target_type or not company or not posting_date or not lines:
         raise DocumentFlowError(_("Debe indicar destino, compañía, fecha y líneas."), 400)

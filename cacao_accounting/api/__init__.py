@@ -64,8 +64,13 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania, exige_acceso_compania_cualquiera
 from cacao_accounting.api.dashboard import user_can_access_company
-from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
-from cacao_accounting.document_flow.repository import get_document
+from cacao_accounting.document_flow.registry import (
+    DOCUMENT_TYPES,
+    DocumentType,
+    get_document_type,
+    normalize_doctype,
+)
+from cacao_accounting.document_flow.repository import get_document, get_document_company, get_document_item
 from cacao_accounting.document_flow.service import get_source_items
 from cacao_accounting.i18n import _
 from cacao_accounting.document_flow.status import document_status_payload
@@ -169,6 +174,44 @@ def _module_for_document_type(document_type: str) -> str | None:
         "journal_entry": "accounting",
         "payment_entry": "cash",
     }.get(document_type)
+
+
+def _require_flow_target_access(payload: dict[str, Any], action: str = "crear") -> None:
+    """Autoriza la compañía destino de un documento destino genérico.
+
+    La guardia de la cabecera fuente no concede permiso para operar la
+    compañía en la que se materializará el documento destino.
+    """
+    target_type = normalize_doctype(str(payload.get("target_document_type") or payload.get("target_type") or ""))
+    company = str(payload.get("company") or payload.get("company_id") or "")
+    module = _module_for_document_type(target_type)
+    if module and company:
+        exige_acceso_compania(module, company, action)
+
+
+def _require_flow_source_lines_access(payload: dict[str, Any], action: str = "crear") -> None:
+    """Autoriza el documento fuente real de cada línea seleccionada.
+
+    El destino se construye desde las líneas, no desde la cabecera del
+    payload, y cada línea puede referenciar un documento distinto: se valida
+    la pertenencia a compañía del documento padre real de la línea física.
+    """
+    for selected in payload.get("lines") or []:
+        source_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
+        item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
+        if not source_type or not item_id:
+            continue
+        source_item = get_document_item(source_type, item_id)
+        if not source_item:
+            continue
+        source_spec = get_document_type(source_type)
+        parent_id = str(getattr(source_item, source_spec.parent_field))
+        claimed_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
+        if claimed_id and claimed_id != parent_id:
+            abort(400)
+        module = _module_for_document_type(source_type)
+        if module:
+            exige_acceso_compania(module, get_document_company(source_type, parent_id), action)
 
 
 _FISCAL_PREVIEW_MODULES = {
@@ -1271,6 +1314,8 @@ def api_document_flow_create_target():
     try:
         payload = request.get_json(silent=True) or {}
         _require_flow_company_access(payload, "crear")
+        _require_flow_target_access(payload, "crear")
+        _require_flow_source_lines_access(payload, "crear")
         result = create_target_document(payload)
     except DocumentFlowError as exc:
         abort(exc.status_code)
