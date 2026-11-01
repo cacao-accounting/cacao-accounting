@@ -52,7 +52,6 @@ from cacao_accounting.decorators import exige_acceso_compania
 
 from cacao_accounting.i18n import _
 from cacao_accounting.auth.permisos import Permisos
-from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 
 class InventoryServiceError(ValueError):
@@ -800,7 +799,6 @@ def update_item_with_uoms(
     # del usuario. Las compañías ajenas se preservan intactas y no se repite la
     # misma empresa dentro del conjunto enviado por formulario.
     editable_companies = _inventory_editable_companies()
-    submitted_companies = {str(row.company) for row in resolved_account_rows if row.company}
     persistidas = list(database.session.execute(select(ItemAccount).filter_by(item_code=item_code)).scalars())
     seen_companies: set[str] = set()
 

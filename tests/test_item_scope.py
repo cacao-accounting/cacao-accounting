@@ -13,8 +13,6 @@ que el usuario no puede editar.
 from decimal import Decimal
 
 import pytest
-from flask_login import login_user
-
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
@@ -22,6 +20,7 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predete
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import database
 from cacao_accounting.inventario.service import ItemParams, update_item_with_uoms
+from flask_login import login_user
 
 CONTRASENA = "articulos-alcance-2026"
 
@@ -176,8 +175,6 @@ def test_el_guardado_parcial_actualiza_las_filas_autorizadas(inventario_articulo
     """El usuario con edición autorizada solo modifica su fila; la ajena se conserva."""
     application = inventario_articulos
     with application.test_request_context("/"):
-        from flask_login import login_user
-
         from cacao_accounting.database import ItemAccount, User, database
 
         user = database.session.execute(database.select(User).filter_by(user="editor")).scalar_one()
