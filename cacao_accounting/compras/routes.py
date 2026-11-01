@@ -161,6 +161,7 @@ from cacao_accounting.party_settings import (
 from cacao_accounting.version import APPNAME
 
 from cacao_accounting.compras.services import (
+    _authorized_companies,
     _logistics_values,
     _copy_logistics,
     _landed_cost_snapshot,
@@ -1619,10 +1620,15 @@ def compras_factura_compra_nota_credito_nueva():
 @login_required
 def compras_proveedor_lista():
     """Listado de proveedores."""
+    from cacao_accounting.party_management import filtrar_parties_por_companias
+
     consulta = _paginate_list(
         Party,
         (Party.code, Party.name, Party.comercial_name, Party.tax_id),
-        database.select(Party).filter(Party.is_supplier.is_(True)),
+        filtrar_parties_por_companias(
+            database.select(Party).filter(Party.is_supplier.is_(True)),
+            _authorized_companies(("purchases",)),
+        ),
         include_status=False,
     )
     titulo = _("Listado de Proveedores") + " - " + APPNAME
@@ -1701,9 +1707,15 @@ def compras_proveedor_nuevo():
 @login_required
 def compras_proveedor(supplier_id):
     """Detalle de proveedor."""
+    from cacao_accounting.party_management import tercero_tiene_vinculo_autorizado
+
     registro = database.session.execute(database.select(Party).filter_by(id=supplier_id, is_supplier=True)).first()
     if not registro:
         abort(404)
+    # #1525: el detalle solo se muestra si el usuario consulta compras en una
+    # de las compañías vinculadas al tercero.
+    if not tercero_tiene_vinculo_autorizado(registro[0].id, _authorized_companies(("purchases",))):
+        abort(403)
     titulo = registro[0].name + " - " + APPNAME
     detail = build_party_detail_context(registro[0])
     return render_template(

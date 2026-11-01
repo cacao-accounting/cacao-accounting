@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Mapping
 
 from sqlalchemy import select
+from typing import Any, Iterable
 
 from cacao_accounting.contabilidad.default_accounts import account_label
 from cacao_accounting.database import (
@@ -31,6 +32,33 @@ from cacao_accounting.i18n import LazyText, _, _l
 
 NATIONALITY_LABELS: dict[str, LazyText] = {"national": _l("Nacional"), "foreign": _l("Extranjero")}
 PERSON_TYPE_LABELS: dict[str, LazyText] = {"natural": _l("Natural"), "juridical": _l("Jurídica")}
+
+
+def filtrar_parties_por_companias(query: Any, companies: Iterable[str]) -> Any:
+    """Limita una consulta de Party a los tercero vinculados a compañías concretas.
+
+    Los terceros son registros globales; su aislamiento comercial vive en los
+    vínculos ``CompanyParty``. Una consulta sin compañías autorizadas no
+    devuelve ninguna fila, evitando que un usuario con acceso vacío pueda
+    enumerar tercero privados (#1525).
+    """
+    autorizadas = [str(company) for company in companies if str(company).strip()]
+    if not autorizadas:
+        return query.where(database.false())
+    return query.where(Party.id.in_(database.select(CompanyParty.party_id).where(CompanyParty.company.in_(autorizadas))))
+
+
+def tercero_tiene_vinculo_autorizado(party_id: str, companies: Iterable[str]) -> bool:
+    """Indica si un tercero tiene un vínculo en alguna de las compañías autorizadas."""
+    autorizadas = [str(company) for company in companies]
+    if not autorizadas:
+        return False
+    return (
+        database.session.execute(
+            database.select(CompanyParty.id).where(CompanyParty.party_id == party_id, CompanyParty.company.in_(autorizadas))
+        ).first()
+        is not None
+    )
 
 
 @dataclass(frozen=True)

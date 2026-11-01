@@ -1474,6 +1474,26 @@ def _apply_cash_company_scope(base_query: Any, model: Any) -> Any:
         if not companies:
             return base_query.where(database.false())
         return base_query.where(model.company.in_(companies))
+    if hasattr(model, "bank_account_id"):
+        # #1320: la compañía del movimiento bancario vive en la cuenta; el
+        # alcance se resuelve por la cuenta en lugar de devolver la consulta
+        # sin restricción.
+        from cacao_accounting.database import BankAccount
+
+        company_arg = request.args.get("company")
+        if company_arg:
+            exige_acceso_compania("cash", company_arg, "consultar")
+            return base_query.where(
+                model.bank_account_id.in_(database.select(BankAccount.id).where(BankAccount.company == company_arg))
+            )
+        if getattr(current_user, "classification", None) == "admin":
+            return base_query
+        companies = _cash_authorized_companies()
+        if not companies:
+            return base_query.where(database.false())
+        return base_query.where(
+            model.bank_account_id.in_(database.select(BankAccount.id).where(BankAccount.company.in_(companies)))
+        )
     return base_query
 
 

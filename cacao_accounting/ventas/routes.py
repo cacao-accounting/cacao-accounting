@@ -93,6 +93,7 @@ from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 
 from cacao_accounting.ventas.services import (
+    _authorized_companies,
     _sales_logistics_values,
     _copy_sales_logistics,
     _parse_date,
@@ -813,10 +814,15 @@ def ventas_factura_venta_devolucion_nueva():
 @login_required
 def ventas_cliente_lista():
     """Listado de clientes."""
+    from cacao_accounting.party_management import filtrar_parties_por_companias
+
     consulta = _paginate_list(
         Party,
         (Party.code, Party.name, Party.comercial_name, Party.tax_id),
-        database.select(Party).filter(Party.is_customer.is_(True)),
+        filtrar_parties_por_companias(
+            database.select(Party).filter(Party.is_customer.is_(True)),
+            _authorized_companies(("sales",)),
+        ),
         include_status=False,
     )
     titulo = _("Listado de Clientes") + " - " + APPNAME
@@ -854,11 +860,17 @@ def ventas_cliente_nuevo():
 @login_required
 def ventas_cliente(customer_id):
     """Detalle de cliente."""
+    from cacao_accounting.party_management import tercero_tiene_vinculo_autorizado
+
     registro = database.session.execute(
         database.select(Party).filter_by(id=customer_id).filter(Party.is_customer.is_(True))
     ).first()
     if not registro:
         abort(404)
+    # #1525: el detalle solo se muestra si el usuario consulta ventas en una
+    # de las compañías vinculadas al tercero.
+    if not tercero_tiene_vinculo_autorizado(registro[0].id, _authorized_companies(("sales",))):
+        abort(403)
     titulo = registro[0].name + " - " + APPNAME
     detail = build_party_detail_context(registro[0])
     return render_template(
