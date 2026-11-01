@@ -13,6 +13,8 @@ from flask_login import login_user
 from sqlalchemy import delete
 
 from cacao_accounting import create_app
+from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
+from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.cache import invalidate_cache
 from cacao_accounting.config import TESTING_MODE, configuracion
 from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
@@ -90,7 +92,15 @@ def app():
         user_b = User(user="cache-user-b", name="User B", password=b"x", active=True)
         admin = User(user="cache-admin", name="Cache Admin", password=b"x", classification="admin", active=True)
         database.session.add_all(
-            [company_a, company_b, user_a, user_b, admin, Modules(module="accounting", default=True, enabled=True)]
+            [
+                company_a,
+                company_b,
+                user_a,
+                user_b,
+                admin,
+                Modules(module="accounting", default=True, enabled=True),
+                Modules(module="sales", default=False, enabled=True),
+            ]
         )
         database.session.flush()
         database.session.add_all(
@@ -100,6 +110,10 @@ def app():
             ]
         )
         database.session.commit()
+        crea_roles_predeterminados()
+        cargar_permisos_predeterminados()
+        for username in ("cache-user-a", "cache-user-b"):
+            asigna_rol_a_usuario(username, "sales_auxiliar")
     yield application
     with application.app_context():
         database.session.execute(delete(CompanyParty).where(CompanyParty.company.in_(["COMP-A", "COMP-B"])))

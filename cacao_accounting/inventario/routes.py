@@ -5,8 +5,8 @@
 
 import logging
 
-
 from decimal import Decimal
+from typing import Any
 
 
 from cacao_accounting.exceptions import flash_error
@@ -56,12 +56,14 @@ from cacao_accounting.inventario.service import (
     batch_balance_rows,
     create_batch,
     create_item_with_uoms,
-    list_item_account_rows,
+    list_item_account_rows_editable,
+    list_item_account_rows_visible,
     list_item_uom_conversions,
 )
 
 from cacao_accounting.inventario.services import (
     _inventory_company_scoped_select,
+    _inventory_authorized_companies,
     _paginate_list,
     _series_choices,
     _item_params_from_form,
@@ -85,7 +87,6 @@ from cacao_accounting.inventario.services import (
     _handle_stock_entry_edit_post,
     _render_stock_entry_edit_form,
     _render_stock_reconciliation_edit_form,
-    _validate_stock_entry_company,
 )
 
 from cacao_accounting.i18n import _
@@ -422,7 +423,7 @@ def inventario_articulo_editar(item_id):
             "stock_adjustment_account_id": a.stock_adjustment_account_id or "",
             "cost_center_code": a.cost_center_code or "",
         }
-        for a in list_item_account_rows(item.code)
+        for a in list_item_account_rows_editable(item.code)
     ] or [
         {
             "company": "",
@@ -461,12 +462,22 @@ def inventario_articulo_editar(item_id):
     )
 
 
+def _bodega_predeterminada_visible(default_warehouse) -> Any:
+    """Oculta la bodega predeterminada del detalle si su compañía no es consultable."""
+    if default_warehouse is None:
+        return None
+    authorized = _inventory_authorized_companies()
+    if getattr(default_warehouse, "company", None) in authorized:
+        return default_warehouse
+    logger.info("Detalle de artículo oculta bodega de compañía no autorizada: %s", default_warehouse.code)
+    return None
+
+
 @inventario.route("/item/<item_id>")
 @modulo_activo("inventory")
 @login_required
 def inventario_articulo(item_id):
     """Detalle de artículo."""
-    from flask import abort
 
     registro = database.session.execute(database.select(Item).filter_by(code=item_id)).first()
     if not registro:
@@ -491,10 +502,10 @@ def inventario_articulo(item_id):
         registro=item,
         titulo=titulo,
         item_category=item_category,
-        default_warehouse=default_warehouse,
+        default_warehouse=_bodega_predeterminada_visible(default_warehouse),
         default_supplier=default_supplier,
         uom_conversions=list_item_uom_conversions(item.code),
-        item_accounts=list_item_account_rows(item.code),
+        item_accounts=list_item_account_rows_visible(item.code),
     )
 
 
@@ -716,6 +727,7 @@ def inventario_entrada_nuevo():
     """Formulario para crear una entrada de almacén."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
+    from cacao_accounting.inventario.services import _validate_stock_entry_company
 
     formulario = FormularioEntradaAlmacen()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()

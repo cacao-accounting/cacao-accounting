@@ -49,7 +49,14 @@ def pagina_inicio():
         if authorized_codes
         else []
     )
-    periodos = database.session.query(AccountingPeriod).order_by(AccountingPeriod.start.desc()).all()
+    periodos = (
+        database.session.query(AccountingPeriod)
+        .filter(AccountingPeriod.entity.in_(authorized_codes))
+        .order_by(AccountingPeriod.start.desc())
+        .all()
+        if authorized_codes
+        else []
+    )
     dashboard_entities = [
         {"id": entity.id, "code": entity.code, "name": entity.name or entity.company_name} for entity in entidades
     ]

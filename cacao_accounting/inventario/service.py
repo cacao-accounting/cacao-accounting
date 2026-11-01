@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import date
 from typing import Any, Mapping, Sequence
 
+from flask_login import current_user
 from sqlalchemy import func, select
 
 from cacao_accounting.database import (
@@ -44,11 +45,14 @@ from cacao_accounting.database import (
     Warehouse,
     obtiene_texto_unico,
 )
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 from cacao_accounting.decorators import exige_acceso_compania
 
 
 from cacao_accounting.i18n import _
+from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 
 class InventoryServiceError(ValueError):
@@ -701,6 +705,26 @@ def rebuild_stock_valuation_layers(
     return StockRebuildResult(rebuilt_bins=0, rebuilt_layers=len(final_layers))
 
 
+def _inventory_editable_companies() -> set[str] | None:
+    """Compañías cuyas filas contables de item puede editar el usuario.
+
+    ``None`` significa sin restricción (administrador o tarea interna sin
+    sesión de usuario): el reemplazo completo conserva su semántica.
+    """
+    try:
+        autenticado = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        return None
+    if not autenticado:
+        return None
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("inventory"), usuario=current_user.id)
+    if permissions.administrador:
+        return None
+    if not permissions.editar:
+        return set()
+    return set(str(company) for company in permissions.obtener_companias_autorizadas())
+
+
 def update_item_with_uoms(
     item_code: str,
     params: ItemParams,
@@ -772,13 +796,41 @@ def update_item_with_uoms(
                 conversion_factor=uom_row.conversion_factor,
             )
         )
-    for old_account in database.session.execute(select(ItemAccount).filter_by(item_code=item_code)).scalars():
-        database.session.delete(old_account)
+    # #1418/#1542: el reemplazo completo solo toca las filas visibles/editables
+    # del usuario. Las compañías ajenas se preservan intactas y no se repite la
+    # misma empresa dentro del conjunto enviado por formulario.
+    editable_companies = _inventory_editable_companies()
+    submitted_companies = {str(row.company) for row in resolved_account_rows if row.company}
+    persistidas = list(database.session.execute(select(ItemAccount).filter_by(item_code=item_code)).scalars())
+    seen_companies: set[str] = set()
+
+    for old_account in persistidas:
+        company_code = str(old_account.company)
+        if editable_companies is not None and company_code not in editable_companies:
+            continue
+        target_row = next((row for row in resolved_account_rows if str(row.company or "").strip() == company_code), None)
+        if target_row is not None:
+            old_account.item_code = item.code
+            old_account.company = company_code
+            old_account.expense_account_id = target_row.expense_account_id
+            old_account.income_account_id = target_row.income_account_id
+            old_account.cogs_account_id = target_row.cogs_account_id
+            old_account.stock_adjustment_account_id = target_row.stock_adjustment_account_id
+            old_account.cost_center_code = target_row.cost_center_code
+            seen_companies.add(company_code)
+        elif editable_companies is None or company_code in editable_companies:
+            database.session.delete(old_account)
+
     for account_row in resolved_account_rows:
+        company_code = str(account_row.company or "").strip()
+        if not company_code or company_code in seen_companies:
+            continue
+        if editable_companies is not None and company_code not in editable_companies:
+            continue
         database.session.add(
             ItemAccount(
                 item_code=item.code,
-                company=account_row.company,
+                company=company_code,
                 expense_account_id=account_row.expense_account_id,
                 income_account_id=account_row.income_account_id,
                 cogs_account_id=account_row.cogs_account_id,
@@ -917,6 +969,39 @@ def list_item_account_rows(item_code: str) -> list[ItemAccount]:
     """Lista la configuracion contable por compania de un item."""
     query = select(ItemAccount).filter_by(item_code=item_code).order_by(ItemAccount.company)
     return list(database.session.execute(query).scalars().all())
+
+
+def _item_accounts_para(alcanze_editable: bool, item_code: str) -> list[ItemAccount]:
+    """Acota las filas contables de un item al alcance del usuario actual.
+
+    ``alcanze_editable=True`` exige además el permiso de edición (usado
+    por el formulario para no exponer filas que su reenvío anularía).
+    """
+    try:
+        autenticado = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        return []
+    if not autenticado:
+        return []
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("inventory"), usuario=current_user.id)
+    if permissions.administrador:
+        return list_item_account_rows(item_code)
+    if alcanze_editable and not permissions.editar:
+        return []
+    if not permissions.consultar and not permissions.editar:
+        return []
+    autorizadas = set(str(company) for company in permissions.obtener_companias_autorizadas())
+    return [row for row in list_item_account_rows(item_code) if str(row.company) in autorizadas]
+
+
+def list_item_account_rows_visible(item_code: str) -> list[ItemAccount]:
+    """Filas contables del item visibles por consulta para el usuario actual."""
+    return _item_accounts_para(False, item_code)
+
+
+def list_item_account_rows_editable(item_code: str) -> list[ItemAccount]:
+    """Filas contables del item que el usuario puede editar."""
+    return _item_accounts_para(True, item_code)
 
 
 def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:

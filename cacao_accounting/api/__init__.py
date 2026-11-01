@@ -665,7 +665,13 @@ def _puede_consultar_modulo_compania(modulo: str, company: str | None) -> bool:
     if not autenticado:
         return False
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=current_user.id)
-    return bool(permisos.administrador or (permisos.consultar and permisos.tiene_acceso_compania(company)))
+    if permisos.administrador:
+        return True
+    if not permisos.consultar:
+        return False
+    if company is None:
+        return bool(permisos.obtener_companias_autorizadas())
+    return bool(permisos.tiene_acceso_compania(company))
 
 
 def _catalogo_permitido(doctype: str, company: str | None) -> bool:
