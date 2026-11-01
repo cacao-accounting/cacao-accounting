@@ -259,3 +259,7 @@ Al refactorizar código que supera el límite de complejidad, se deben seguir es
 > **Regla principal:** reducir la métrica de complejidad no es el objetivo final. El objetivo es producir código que pueda ser leído, entendido, modificado y mantenido por una persona. La métrica es únicamente una herramienta para ayudarnos a conseguirlo. Si un codigo es correcto, fluye con naturalidad esta bien probado y sus pruebas unitarias cubren correctamente los caminos posibles y las posibles exepciones es mejor mantenerlo con complejidad de 21, 22, 23 o 25 incluso si y solo si es realmente el mejor patron para implementar la solucion que se esta trabajando.
 
 No es necesario forzar esta regla con pruebas unitarias, solo con codigo productivo.
+
+## Defensive Development & Edge-Case Validation:
+
+Every implementation must be designed beyond the happy path. Before considering any feature or fix complete, agents must analyze and validate boundary conditions, invalid inputs, state transitions, concurrent operations, transaction atomicity, idempotency, reversals, historical consistency, multi-company isolation, and multi-ledger/multi-currency behavior wherever applicable. Tests must exercise realistic failure scenarios and verify business invariants, not merely confirm successful execution. A feature is not complete simply because its primary workflow works.
