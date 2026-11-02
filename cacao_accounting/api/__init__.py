@@ -75,7 +75,6 @@ from cacao_accounting.document_flow.repository import get_document, get_document
 from cacao_accounting.document_flow.service import get_source_items
 from cacao_accounting.i18n import _
 from cacao_accounting.document_flow.status import document_status_payload
-from cacao_accounting.document_flow.tracing import document_flow_tree
 from cacao_accounting.document_flow.tree import build_document_flow_tree
 from cacao_accounting.fiscal_preview_service import fiscal_preview
 from cacao_accounting.cache import user_scoped_cache
@@ -1483,15 +1482,12 @@ def api_document_flow_tree():
         direction       ``all`` (defecto), ``upstream`` o ``downstream``.
         max_depth       Profundidad máxima (defecto 10).
         max_nodes       Número máximo de nodos (defecto 100).
-        legacy          Si ``1``, usa el formato plano original de document_flow_tree.
     """
     document_type = request.args.get("document_type", "")
     document_id = request.args.get("document_id", "")
     if not document_type or not document_id:
         abort(400)
     _require_document_read_access(document_type, document_id)
-    if (request.args.get("legacy") or "").lower() in {"1", "true"}:
-        return jsonify(document_flow_tree(document_type, document_id))
     direction = request.args.get("direction", "all")
     if direction not in {"all", "upstream", "downstream"}:
         abort(400)

@@ -5318,7 +5318,6 @@ _Sin issues abiertos mapeados._
 | Variable de módulo | `DEFAULT_ACCOUNT_DEFINITIONS` | `DEFAULT_ACCOUNT_DEFINITIONS: tuple[DefaultAccountDefinition, ...] = (DefaultA...` | 34 |
 | Variable de módulo | `DEFAULT_ACCOUNT_FIELDS` | `DEFAULT_ACCOUNT_FIELDS: tuple[str, ...] = tuple((item.field for item in DEFAU...` | 107 |
 | Variable de módulo | `DEFAULT_ACCOUNT_DEFINITION_BY_FIELD` | `DEFAULT_ACCOUNT_DEFINITION_BY_FIELD = {item.field: item for item in DEFAULT_A...` | 108 |
-| Variable de módulo | `SPECIAL_ACCOUNT_TYPES` | `SPECIAL_ACCOUNT_TYPES: frozenset[str] = frozenset({'bank', 'cash', 'petty_cas...` | 110 |
 | Variable de módulo | `ACCOUNT_TYPE_ALLOWED_VOUCHERS` | `ACCOUNT_TYPE_ALLOWED_VOUCHERS: dict[str, frozenset[str]] = {'bank': frozenset...` | 144 |
 | Variable de módulo | `MANUAL_BLOCKED_ACCOUNT_TYPES` | `MANUAL_BLOCKED_ACCOUNT_TYPES: frozenset[str] = frozenset({'inventory'})` | 171 |
 | Función | `default_account_json_path` | `default_account_json_path(catalog_file: str \| Path) -> Path` | 178 |
@@ -9688,9 +9687,6 @@ _Sin issues abiertos mapeados._
 
 | Tipo | Símbolo | Detalle | Línea |
 |---|---|---|---:|
-| Función | `_document_payload` | `_document_payload(document_type: str, document_id: str) -> dict[str, Any]` | 18 |
-| Función | `document_flow_tree` | `document_flow_tree(document_type: str, document_id: str) -> dict[str, Any]` | 31 |
-| Función | `_relation_payload` | `_relation_payload(relation: DocumentRelation, upstream: bool) -> dict[str, Any]` | 59 |
 | Función | `_is_create_actions_enabled` | `_is_create_actions_enabled(document: Any) -> bool` | 73 |
 | Función | `_create_action_payload` | `_create_action_payload(action: Any, document_id: str) -> dict[str, Any]` | 80 |
 | Función | `get_create_actions` | `get_create_actions(document_type: str, document_id: str) -> list[dict[str, Any]]` | 105 |

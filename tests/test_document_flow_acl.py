@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     Entity,
     Item,
     Modules,
+    SalesInvoice,
     SalesOrder,
     SalesOrderItem,
     SalesRequest,
@@ -349,3 +350,73 @@ def test_items_del_flujo_devuelve_las_lineas_de_sus_propias_fuentes(escenario_mu
     items = datos["items"]
     assert items
     assert any(str(item.get("item_code") or "") == "CACAO-ABARROTES-EXPO" for item in items)
+
+
+def test_arbol_documental_expone_el_contrato_recursivo_actual(escenario_multicompania):
+    """Refs: #1071. El árbol activo devuelve nodos y metadatos recursivos."""
+    application, client, ids = escenario_multicompania
+    with application.app_context():
+        destino = SalesOrder(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="SO-CACAO-ARBOL-1",
+            customer_name="Cliente Cacao",
+        )
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="INV-CACAO-ARBOL-1",
+            customer_name="Cliente Cacao",
+            total=Decimal("50"),
+            grand_total=Decimal("50"),
+        )
+        database.session.add_all([destino, factura])
+        database.session.flush()
+        database.session.add_all(
+            [
+                DocumentRelation(
+                    source_type="sales_request",
+                    source_id=ids["pedido_propio"],
+                    target_type="sales_order",
+                    target_id=destino.id,
+                    company="cacao",
+                    qty=Decimal("5"),
+                    qty_in_base_uom=Decimal("5"),
+                    uom="Unidad",
+                    relation_type="sales_order",
+                    status="active",
+                ),
+                DocumentRelation(
+                    source_type="sales_order",
+                    source_id=destino.id,
+                    target_type="sales_invoice",
+                    target_id=factura.id,
+                    company="cacao",
+                    qty=Decimal("5"),
+                    qty_in_base_uom=Decimal("5"),
+                    uom="Unidad",
+                    relation_type="sales_invoice",
+                    status="active",
+                ),
+            ]
+        )
+        database.session.commit()
+        orden_id = destino.id
+        factura_id = factura.id
+
+    _iniciar_sesion(client)
+    response = client.get(
+        "/api/document-flow/tree" f"?document_type=sales_request&document_id={ids['pedido_propio']}&direction=downstream"
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["current"]["document_id"] == ids["pedido_propio"]
+    assert [node["document_id"] for node in payload["downstream"]] == [orden_id]
+    orden = payload["downstream"][0]
+    assert orden["document_no"] == "SO-CACAO-ARBOL-1"
+    assert [node["document_id"] for node in orden["children"]] == [factura_id]
+    assert orden["children"][0]["document_no"] == "INV-CACAO-ARBOL-1"
+    assert payload["meta"]["node_count"] == 2
