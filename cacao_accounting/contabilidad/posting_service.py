@@ -4916,12 +4916,19 @@ def _cancel_fiscal_year_closing_document(
 
 
 def _lock_document_for_transition(document: Any) -> Any:
-    """Lock and refresh a persistent document before a state transition."""
+    """Lock and refresh a persistent document before a state transition.
+
+    En PostgreSQL y MySQL serializa escritores concurrentes; SQLite ignora
+    ``FOR UPDATE``. ``populate_existing`` evita validar sobre una instancia
+    obsoleta del identity map: la guardia ve la fila comprometida viva.
+    """
     document_id = getattr(document, "id", None)
     if not document_id:
         raise PostingError(_("El documento debe estar persistido antes de cambiar su estado."))
     model = type(document)
-    locked = database.session.execute(select(model).where(model.id == document_id).with_for_update()).scalar_one_or_none()
+    locked = database.session.execute(
+        select(model).where(model.id == document_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if locked is None:
         raise PostingError(_("El documento no existe."))
     return locked
