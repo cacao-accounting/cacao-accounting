@@ -1161,8 +1161,27 @@ def update_petty_cash_reconciliation(
     return reconciliation
 
 
+def _lock_row_for_transition(model: Any, record_id: str) -> Any:
+    """Bloquea y refresca una fila persistida antes de validar su transicion de estado.
+
+    Aplica el mismo patron de ``_lock_document_for_transition`` (posting_service):
+    en PostgreSQL y MySQL ``FOR UPDATE`` serializa escritores concurrentes; SQLite
+    ignora la clausula y conserva la semantica de un usuario en modo desktop.
+    ``populate_existing`` obliga a reflcar la fila comprometida para que la
+    guardia posterior sea una transicion condicional real y no lea el estado
+    obsoleto de una instancia ya presente en el identity map.
+    """
+    locked = database.session.execute(
+        database.select(model).where(model.id == record_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if locked is None:
+        raise ValueError(_("El documento no existe."))
+    return locked
+
+
 def reconcile_petty_cash(reconciliation: PettyCashReconciliation, *, actor_id: str | None = None):
     """Marca una conciliacion como conciliada conservando sus cifras originales."""
+    reconciliation = cast(PettyCashReconciliation, _lock_row_for_transition(PettyCashReconciliation, reconciliation.id))
     if reconciliation.status != "borrador":
         raise ValueError(_("Solo se puede conciliar un documento en borrador."))
     if reconciliation.difference and not (reconciliation.explanation or "").strip():
@@ -1182,6 +1201,7 @@ def post_petty_cash_reconciliation_adjustment(
     actor_id: str | None = None,
 ) -> ComprobanteContable:
     """Registra explicitamente el sobrante o faltante de una conciliacion."""
+    reconciliation = cast(PettyCashReconciliation, _lock_row_for_transition(PettyCashReconciliation, reconciliation.id))
     if reconciliation.status != "conciliado":
         raise ValueError(_("La conciliación debe estar conciliada antes de registrar el ajuste."))
     if not reconciliation.difference:
@@ -1218,6 +1238,7 @@ def post_petty_cash_reconciliation_adjustment(
             {
                 "order": 2,
                 "account": credit_code,
+                "cost_center": cost_center_code or "",
                 "debit": "",
                 "credit": str(amount),
                 "remarks": "Diferencia de Caja Chica",
@@ -1270,7 +1291,14 @@ def create_petty_cash_replenishment(
     ids = list(dict.fromkeys(str(item) for item in expense_ids if item))
     if not ids:
         raise ValueError(_("Seleccione al menos un gasto para reponer."))
-    expenses = list(database.session.execute(database.select(PettyCashExpense).filter(PettyCashExpense.id.in_(ids))).scalars())
+    expenses = list(
+        database.session.execute(
+            database.select(PettyCashExpense)
+            .filter(PettyCashExpense.id.in_(ids))
+            .order_by(PettyCashExpense.id)
+            .with_for_update()
+        ).scalars()
+    )
     if len(expenses) != len(ids) or any(
         expense.company != company
         or expense.petty_cash_id != petty_cash_id
@@ -1314,6 +1342,7 @@ def set_petty_cash_replenishment_status(
     replenishment: PettyCashReplenishment, new_status: str, *, actor_id: str | None = None
 ) -> PettyCashReplenishment:
     """Avanza una solicitud de reposicion sin contabilizarla prematuramente."""
+    replenishment = cast(PettyCashReplenishment, _lock_row_for_transition(PettyCashReplenishment, replenishment.id))
     current = replenishment.status or "borrador"
     transitions = {"borrador": {"solicitado"}, "solicitado": {"aprobado"}, "aprobado": {"reembolsado"}}
     if new_status not in transitions.get(current, set()):
@@ -1337,6 +1366,7 @@ def replenish_petty_cash(
     actor_id: str | None = None,
 ) -> PettyCashReplenishment:
     """Crea la Nota de Debito bancaria que repone el fondo seleccionado."""
+    replenishment = cast(PettyCashReplenishment, _lock_row_for_transition(PettyCashReplenishment, replenishment.id))
     if replenishment.status != "aprobado":
         raise ValueError(_("Solo se puede reponer una solicitud aprobada."))
     if replenishment.bank_debit_note_id:
