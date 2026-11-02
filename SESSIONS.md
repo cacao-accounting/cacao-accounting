@@ -2899,3 +2899,73 @@ Como implementador se aplicaron los pendientes que el QA dejó en needs-work:
   checklist de la misma sección).
 - Los cambios de matching config en Desktop se aplican sin revisión
   (coherente con `require_review`, que no existe en desktop).
+## 2026-11-02 (Atomicidad/idempotencia/concurrencia financiera — #1653)
+
+### Fase 1 — Diagnóstico (verificado en código sobre esta rama)
+
+Referencia de patrón: `_lock_document_for_transition` (contabilidad/posting_service.py) ya se aplica en
+`submit_document`, `cancel_document`, pagos AR/AP (document_flow/payment.py:1109,1291,1433,1505,1975),
+conciliación bancaria (bancos/reconciliation_service.py:739,769,868,971,991) y submayores
+(contabilidad/arap_ledger_service.py:296). Esos flujos ya cumplen la invariante; se cubren con pruebas, no se reescriben.
+
+| Issue | Operación | Invariante | Estado en código | Mecanismo mínimo |
+|---|---|---|---|---|
+| #1093/#1094/#1187/#1267/#1288 | `create_petty_cash_replenishment` (bancos/services.py:1259) | un gasto reservado a lo más una reposición | el `select` de gastos es plano, guard `replenishment_id is None` read-then-post | `with_for_update` en el `select` de gastos (re-verificación tras lock) |
+| #1191/#1268/#1289 | `replenish_petty_cash` (bancos/services.py:1333) | una reposición a lo más una nota de débito | guards `status`/`bank_debit_note_id` sin lock | lock del documento de reposición antes de los guards |
+| #1231 | `set_petty_cash_replenishment_status` (bancos/services.py:1313) | transiciones de estado válidas | verificación-plano-then-actuar | lock previo a la transición |
+| #1189/#1271/#1289 | `reconcile_petty_cash` + `post_petty_cash_reconciliation_adjustment` (bancos/services.py:1164,1177) | un ajuste por conciliación | guards sin lock; journal draft queda si `submit_journal` falla (sin efecto GL) | lock previo; el borrador huérfano en fallo se preserva (sin efecto contable) y permite reintento |
+| #1690 | `ExchangeRevaluationService.void` (exchange_revaluation_service.py:290) | un reverso por corrida | guard `status != posted` sin lock | `select ... with_for_update` de la corrida + re-check (session.get no relee identity map) |
+| #1691 | `ExchangeRevaluationService.run` (exchange_revaluation_service.py:85) | una corrida activa por empresa/periodo | sin locks; dos `run()` concurrentes duplican asientos | lock de la fila `AccountingPeriod` (agregado empresa+periodo) antes de leer corridas previas |
+| #1690/`_reverse_prior_period_runs` | reverso automático de corridas de periodos previos | no abortar por corrida ya anulada por otro proceso | `void` lanza si status != posted | la reversión automática salta corridas ya `voided` (transición condicional) |
+
+Refutado/ya corregido (verificado, solo pruebas de cobertura): pagos AR/AP, conciliación bancaria,
+submayores AR/AP, `submit_document`/`cancel_document` (lock + begin_nested).
+
+Selección mecanismo: lock + transición condicional (patrón existente), sin columnas `idempotency_key` ni
+unique parcial nuevos: la decisión Tier-1 sobre unique parcial queda needs-review en #1653; el τους lock cubre
+PostgreSQL/MySQL, SQLite ignora `with_for_update` (semántica desktop de un solo usuario + guards de servicio).
+
+### Fase 2 — Batería de pruebas
+
+`tests/test_concurrent_uniqueness.py`: escenarios en SQLite en memoria (reserva duplicada, reembolso doble,
+ajuste doble, doble reverso de revaluación, intercalado con esperas, reintentos tras fallo, orphanos GL/PL),
+más pruebas reales de concurrencia PostgreSQL (`pytest.mark.database`, engine de DATABASE_URL) con dos
+sesiones intercaladas en puntos deterministas.
+
+### Fases 3-5 — Implementación y verificación (2026-11-02, sesión #1653)
+
+Cambios productivos (mínimos, compartidos entre Desktop y Cloud):
+
+- `bancos/services.py`: `_lock_row_for_transition(model, id)` (select FOR UPDATE + populate_existing)
+  aplicado en `reconcile_petty_cash`, `post_petty_cash_reconciliation_adjustment`, `create_petty_cash_replenishment`
+  (lock de filas de gastos con orden determinista por id), `set_petty_cash_replenishment_status` y
+  `replenish_petty_cash`. Además: la línea 2 del payload del ajuste de conciliación ahora recibe el centro de
+  costo — el flujo de sobrante fallaba siempre por validación del journar (bug funcional detectado por la batería).
+- `contabilidad/posting_service.py`: `_lock_document_for_transition` también usa populate_existing (mismo blindaje
+  para submit/cancel de todos los documentos operativos).
+- `contabilidad/exchange_revaluation_service.py`: `void()` re-lee la corrida con FOR UPDATE + populate_existing
+  (transición condicional; dos anulaciones concurrentes → una sola colección de reversos); `run()` bloquea la fila
+  del `AccountingPeriod` (agregado empresa+periodo) antes de leer corridas previas; `_reverse_prior_period_runs`
+  salta corridas ya anuladas por otra transacción (idempotente ante carrera entre periodos).
+
+Hallazgo técnico clave verificado con PostgreSQL 16 real: `SELECT ... FOR UPDATE` NO actualiza la instancia ya
+presente en el identity map de SQLAlchemy; sin `populate_existing` la guardia post-lock leía el estado obsoleto
+y el reembolso concurrente duplicaba la nota de débito (reproducido por el test antes del fix, verificado después).
+
+Pruebas: `tests/test_concurrent_uniqueness.py` — 8 escenarios SQLite en verde (reserva doble, reembolso doble,
+reintento tras fallo sin huérfanos, transión inválida, ajuste único, doble reverso, doble corrida, rollback total
+de revaluación) + 3 escenarios PostgreSQL reales marcados `database` (dos sesiones intercaladas con barrera:
+reembolso, reserva y anulación concurrentes → exactamente un efecto). Verificado localmente contra
+PostgreSQL 16.15 (clúster efímero `cnc_<uuid>` creado y destruido por prueba).
+
+Regresión: suite local completa 133 passed / 18 skipped; solo `test_cache_isolation.py` falla (fallo preexistente
+confirmado por el desarrollador). Lint: black, ruff, flake8, pydocstyle y complexipy (≤20) en verde; mypy omitido
+por el problema conocido de `pathspec`.
+
+Temas pendientes / decisión de diseño abierta (needs-review en #1653): idempotencia de solicitud con unique
+parcial en la BD (columna/constraint) vs verificación con lock — se eligió lock + transición condicional, el
+mismo patrón del sistema; sin columnas idempotency_key nuevas. Flujos hijos no cubiertos en este pase:
+liquidación de vales (#1266/#1187/#1273) y reserva de caja chica predeterminada (#1326), aplicaciones AR/AP
+(#1689/#1139/#1145, con locks siguientes a confirmar en batería) y cierres/presupuestos/config (#1692/#1694/#1697).
+
+Refs: #1653 #1093 #1094 #1190 #1191 #1267 #1268 #1271 #1288 #1289 #1189 #1290 #1231 #1159 #1690 #1691
