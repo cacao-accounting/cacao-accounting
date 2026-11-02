@@ -327,9 +327,9 @@ def test_roles():  # pragma: no cover
     """Verifica los permisos del usuario actual."""
     from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.auth.roles import obtener_roles_por_usuario
-    from cacao_accounting.database import Modulos
+    from cacao_accounting.database import Modules
 
-    MODULOS = Modulos.query.all()
+    MODULOS = Modules.query.all()
 
     return render_template(
         "test_roles.html",

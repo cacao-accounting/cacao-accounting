@@ -212,16 +212,11 @@ class BaseTransaccion(BaseTabla):
     date = database.Column(database.Date())
     reference = database.Column(database.String(50))
     memo = database.Column(database.String(200), nullable=True)
-    canceled = database.Column(database.DateTime(timezone=True), nullable=True)
-    canceled_by = database.Column(database.String(26), nullable=True)
     cancelled_at = database.Column(database.DateTime(timezone=True), nullable=True)
     cancelled_by = database.Column(database.String(26), nullable=True)
     cancel_reason = database.Column(database.Text(), nullable=True)
     applied = database.Column(database.DateTime(timezone=True), nullable=True)
-    applied_by = database.Column(database.String(26), nullable=True)
     serie = database.Column(database.String(100), nullable=True)
-    sequential = database.Column(database.Integer(), nullable=True)
-    sequential_id = database.Column(database.String(26), nullable=True)
 
 
 class BaseTercero(BaseTabla):
@@ -457,10 +452,6 @@ class Modules(database.Model, BaseTabla):  # type: ignore[name-defined]
     enabled = database.Column(database.Boolean(), nullable=True)
 
 
-# Alias para compatibilidad
-Modulos = Modules
-
-
 # <---------------------------------------------------------------------------------------------> #
 # Descripción de la estructura funcional de la entidad (Compañía).
 # <---------------------------------------------------------------------------------------------> #
@@ -494,15 +485,6 @@ class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
     enabled = database.Column(database.Boolean(), default=True, nullable=False)
     default = database.Column(database.Boolean())
     valuation_method = database.Column(database.String(20), default="moving_average")
-
-    @property
-    def is_active(self) -> bool:
-        """Alias de compatibilidad para lifecycle activo/inactivo."""
-        return bool(self.enabled)
-
-    @is_active.setter
-    def is_active(self, value: bool) -> None:
-        self.enabled = bool(value)
 
 
 class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -555,9 +537,6 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
         """Return the flat list of all descendant Unit records (recursive)."""
         return _get_hierarchy_descendants(self, Unit)
 
-
-# Alias para compatibilidad
-Unidad = Unit
 
 # <---------------------------------------------------------------------------------------------> #
 # Multi-Ledger: soporte para multiples libros contables paralelos.
@@ -3392,8 +3371,6 @@ class ArApReconciliationPolicy(database.Model, BaseTabla):  # type: ignore[name-
     mode = database.Column(database.String(10), nullable=False, default="strict")
     tolerance = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=Decimal("0.01"))
     enabled = database.Column(database.Boolean(), nullable=False, default=True)
-    # Alias retained for callers that used the earlier all-caps model name.
-    is_enabled = synonym("enabled")
 
 
 class ARAPOpenItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -3454,13 +3431,6 @@ class ARAPOpenItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     source_voucher_id = database.Column(database.String(26), nullable=True, index=True)
     version = database.Column(database.Integer(), nullable=False, default=1)
     memo = database.Column(database.Text(), nullable=True)
-
-
-# Backwards-compatible spelling used by the AR/AP ledger service.  Keep one
-# mapped class for this table: declaring a second SQLAlchemy model with the
-# same ``__tablename__`` makes application imports fail before the metadata can
-# be created.
-ARAPReconciliationPolicy = ArApReconciliationPolicy
 
 
 class ARAPLedgerEntry(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -3640,16 +3610,6 @@ class ARAPLedgerBookEntry(database.Model, BaseTabla):  # type: ignore[name-defin
     )
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False, index=True)
     memo = database.Column(database.Text(), nullable=True)
-
-    amount_document = synonym("document_amount")
-    amount_in_book_currency = synonym("book_amount")
-    functional_amount = synonym("book_amount")
-    functional_currency = synonym("book_currency")
-    book_id = synonym("ledger_id")
-    source_currency = synonym("document_currency")
-    destination_currency = synonym("book_currency")
-    amount_in_document_currency = synonym("document_amount")
-    amount_in_functional_currency = synonym("book_amount")
 
     ledger_entry = database.relationship(
         "ARAPLedgerEntry",
