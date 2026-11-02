@@ -1577,7 +1577,7 @@ def _persisted_ledger_is_cancelled(connection, state, target) -> bool:
         value = identity[0]
     if value is None:
         return False
-    row = connection.execute(select(column).where(table.c[table.primary_key[0].key] == value)).first()
+    row = connection.execute(select(column).where(table.c[state.mapper.primary_key[0].key] == value)).first()
     return bool(row is not None and row[0])
 
 

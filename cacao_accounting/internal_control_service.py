@@ -67,6 +67,10 @@ FLOW_EVIDENCE_TRANSITIONS = {
     "purchase_credit_note_allocation": frozenset({"status"}),
 }
 FLOW_PROVIDER_STAMPS = frozenset({"modified", "modified_by"})
+# Structural, mode-agnostic evidence: audit writes, ledger lines and the
+# documentary flow links that downstream reports reconcile against never
+# accept UPDATE/DELETE from application code, whatever the runtime mode
+# (Desktop assumes the same guarantees as Cloud).
 SENSITIVE_MODELS = (
     "User",
     "Roles",
@@ -102,8 +106,6 @@ MUTABLE_STATE = frozenset(
         "cancelled_at",
         "cancelled_by",
         "cancel_reason",
-        "canceled",
-        "canceled_by",
         "is_cancelled",
         "outstanding_amount",
         "base_outstanding_amount",
@@ -185,6 +187,24 @@ def _enabled() -> bool:
     if override is not None:
         return bool(override)
     return is_cloud_mode() and not current_app.config.get("TESTING", False)
+
+
+def _structural_enabled() -> bool:
+    """Return whether structural evidence guards are active for the app.
+
+    La evidencia contable (ledgers, vínculos documentales y bitácoras de
+    auditoría) es inmutable en ambos modos de operación: proteger solo Cloud
+    dejaría expuesta la misma evidencia por la ruta Desktop. Se exceptúan las
+    corridas fuera de la aplicación (sin contexto Flask) y las suites de
+    prueba genéricas (``TESTING`` sin ``INTERNAL_CONTROLS_ENFORCE`` explícito),
+    que necesitarían bloquear la siembra y limpieza de sus fixtures; las
+    suites ICFR dedicadas optan explícitamente por esa configuración.
+    """
+    if not has_app_context():
+        return False
+    if current_app.config.get("TESTING", False) and current_app.config.get("INTERNAL_CONTROLS_ENFORCE") is None:
+        return False
+    return True
 
 
 def _sensitive(target: Any) -> bool:
@@ -364,9 +384,31 @@ def _guard_lifecycle(target: Any) -> None:
         raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
 
 
+def _guard_evidence_flush(session: Session) -> None:
+    """Reject ORM rewrites and deletes of structural evidence in both modes.
+
+    Los mapper-level guards ya protegen los modelos del ledger sin importar el
+    modo; aquí se cubren las bitácoras de auditoría y los vínculos del flujo
+    documental, que solo tenían la capa Cloud de ``_guard_flush``.
+    """
+    if _enabled() or not _structural_enabled():
+        return
+    for target in set(session.dirty).union(session.deleted):
+        table = target.__table__.name
+        if table not in EVIDENCE_TABLES and table not in FLOW_EVIDENCE_TABLES:
+            continue
+        changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
+        deleted = target in session.deleted
+        if table in EVIDENCE_TABLES and (deleted or changed):
+            raise ValueError(_("La evidencia de auditoría es inmutable."))
+        _guard_flow_evidence(target, table, changed, deleted)
+        _guard_authorized_transition(target, table, changed)
+
+
 def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
     """Protect existing evidence and posted document financial values."""
     del flush_context, instances
+    _guard_evidence_flush(session)
     if not _enabled():
         return
     _guard_new_lines(session)
@@ -556,6 +598,14 @@ def _stamp_line_editor(parent: Any) -> None:
 
 POLYMORPHIC_EVIDENCE_TABLES = frozenset({"document_tax_summary", "document_tax_line", "landed_cost_allocation"})
 
+# Structural, mode-agnostic evidence: audit writes, ledger lines and the
+# documentary flow links that downstream reports reconcile against never
+# accept UPDATE/DELETE from application code, whatever the runtime mode
+# (Desktop assumes the same guarantees as Cloud; these structural guards
+# are independent of the Cloud INTERNAL_CONTROLS process-wide workflow
+# controls, which additionally demand audited service scopes).
+STRUCTURAL_EVIDENCE_TABLES = frozenset(EVIDENCE_TABLES.union(LEDGER_TABLES, FLOW_EVIDENCE_TABLES, POLYMORPHIC_EVIDENCE_TABLES))
+
 
 def _field_values(target: Any, key: str) -> tuple[Any, ...]:
     """Return current and persisted values for a mapped relationship field."""
@@ -666,7 +716,11 @@ def _raw_sql_protected_tables() -> set[str]:
 def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any, context: Any, executemany: Any) -> None:
     """Reject textual writes that cannot participate in mapped evidence controls."""
     del cursor, parameters, executemany
-    if not _enabled() or (context.compiled is not None and isinstance(context.compiled.statement, (Insert, Update, Delete))):
+    if context.compiled is not None and isinstance(context.compiled.statement, (Insert, Update, Delete)):
+        return
+    if raw_sql_mutates_protected_table(statement, STRUCTURAL_EVIDENCE_TABLES, connection.dialect.name):
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    if not _enabled():
         return
     if raw_sql_mutates_protected_table(statement, _raw_sql_protected_tables(), connection.dialect.name):
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
@@ -674,15 +728,31 @@ def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any
 
 def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, execution_options: Any) -> None:
     """Reject evidence SQL mutations, including Core and ORM bulk statements."""
-    if not _enabled():
+    if not _enabled() and not _structural_enabled():
         return
     table_name = getattr(getattr(clause, "table", None), "name", None)
     if _is_orm_unit_of_work(execution_options, table_name):
         return
     if isinstance(clause, Insert):
+        if table_name == "audit_trail" and _AUDIT_TRAIL_INSERT_ACTIVE.get():
+            return
+        if table_name in STRUCTURAL_EVIDENCE_TABLES:
+            raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+        if not _enabled():
+            return
         _guard_bulk_insert(connection, clause, multiparams, params, table_name)
         return
     if not isinstance(clause, (Update, Delete)):
+        return
+    if table_name in POLYMORPHIC_EVIDENCE_TABLES:
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    if table_name in LEDGER_TABLES:
+        _guard_ledger_statement(clause, multiparams, params)
+    if table_name in FLOW_EVIDENCE_TABLES:
+        _guard_flow_evidence_statement(clause, multiparams, params)
+    if table_name in EVIDENCE_TABLES:
+        raise ValueError(_("La evidencia de auditoría es inmutable."))
+    if not _enabled():
         return
     _guard_bulk_update(connection, clause, multiparams, params, table_name)
 
