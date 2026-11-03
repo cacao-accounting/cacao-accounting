@@ -774,6 +774,11 @@
                if (modal) modal.hide();
                window.location.reload();
              }, 1500);
+           } else if (res.status === 207 && res.body.partial) {
+             this.alertType = 'warning';
+             this.alertMessage = (res.body.message || '{{ _("El correo se envió parcialmente.") }}')
+               + (res.body.recipients && res.body.recipients.length ? ' {{ _("Entregado a:") }} ' + res.body.recipients.join(', ') + '.' : '')
+               + (res.body.errors && res.body.errors.length ? ' {{ _("No entregado a:") }} ' + res.body.errors.join('; ') + '.' : '');
            } else {
              this.alertType = 'danger';
              this.alertMessage = res.body.error || '{{ _("Error al enviar el correo.") }}';
