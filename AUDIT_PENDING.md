@@ -1,25 +1,24 @@
-## Cola vigente de auditoría — únicamente elementos pendientes (2026-11-03)
+## Cola vigente de auditoría — únicamente elementos pendientes (2026-11-04)
 
 Esta tabla es la vista de continuidad al reanudar; conserva el historial y hallazgos anteriores. Incluye solo rutas sin cierre completo, deduplicadas por archivo y tomadas de la última fila vigente del manifiesto.
 
-Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 archivos pendientes de cierre** de 557 rutas únicas. La lista tiene 294 parciales, 212 pendientes, 3 deltas por revalidar y 3 sujetos a criterio.
+Rama `estabilizacion`, HEAD de código auditado `73fcbd3feab0f7c56bdbd082c4b7422a41ce473f`; **473 archivos pendientes de cierre** de 557 rutas únicas. La lista tiene 287 parciales, 186 pendientes, 0 deltas por revalidar y 2 pendientes de criterio (#1888, #1889). Las 84 rutas restantes tienen cierre documentado; nuevas expresiones de estado de cancelación reabrieron dos plantillas.
 
 | Archivo | Funcion/Clase | estatus |
 |---|---|---|
-| `cacao_accounting/database/__init__.py` | Batch (#1175), SerialNumber, StockEntry/StockEntryItem y SLE/StockBin/SVL revisados; sin unicidad de artículo+bodega en líneas de conciliación; StockEntryItem amount >= 0, qty/base qty sin CHECK; demás modelos/DDL/consumidores pendientes | Parcial |
+| `cacao_accounting/database/__init__.py` | `StockLedgerEntry` listeners de inmutabilidad/tombstone, `StockBin` y `StockValuationLayer` revalidados independientemente; `Batch`, `SerialNumber`, `StockEntry`, `StockEntryItem`, constraints/FK/índices y callers cotejados parcialmente; FKs de `batch_id` solo prueban existencia, no `Batch.item_code == line.item_code` (#1754); `StockEntryItem.amount >= 0` sin qty/base CHECK ni unique por item+bodega; SVL sin link FK a SLE ni guarda inmutable; header delete→FK cascade y guards Desktop #759; StockBin UNIQUE(item,warehouse), first-insert race #332; company↔Warehouse alignment queda solo en callers; resto de modelos/DDL/consumidores y writers pendientes | Parcial |
 | `cacao_accounting/database/helpers.py` | ensure helpers SQLite verificados; bootstrap parcial confirmado y reintento falso positivo por usuario ya creado (#1848); PostgreSQL/MySQL, contrato de upgrade y resto pendientes | Parcial |
 | `cacao_accounting/__init__.py` | `get_balance_confirmations_history` consumers omit company (#1796); resto de app factory pendiente | Parcial |
 | `cacao_accounting/__main__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/api/__init__.py` | colaboración, correo, guards y contrato de respuesta parcial cotejados; otros endpoints pendientes | Parcial |
 | `cacao_accounting/api/dashboard.py` | revisado de principio a fin el contrato del endpoint y consultas (checkpoint 2026-11-03); sin hallazgo confirmado, pendiente callers/revisores cruzados | Parcial |
 | `cacao_accounting/api/templates/empy.html` | revisado en checkpoint 2026-11-03: archivo vacío sin callers, candidata a retirar en #1658 | Parcial |
-| `cacao_accounting/approval_engine.py` | lectores de RolesUser y filtro active revisados; checkpoint 2026-11-03: `request_cancellation`, `_resolve_doctype`, `_finalize_approval`, `_execute_cancel`, `_validate_final_cancellation`, `_validate_purchase_submission`, `_cancel_posted_document` cotejados para S2P; notas omitidas por executor, misma causa que #1642 | Parcial |
+| `cacao_accounting/approval_engine.py` | lectores de RolesUser y filtro active revisados; `request_cancellation`, `_resolve_doctype`, `_finalize_approval`, `_execute_cancel`, `_validate_final_cancellation`, `_validate_purchase_submission`, `_cancel_posted_document` cotejados parcialmente; revalidación independiente confirma rama aceptada `cancel_stock_entry` no revierte relación/cache (#1872), y retorno `None` de solicitud se ignora (#1728); notas omitidas por executor, misma causa que #1642; callers y demás tipos pendientes | Parcial |
 | `cacao_accounting/approval_policy.py` | module_access/module_rank/authorized cotejados con permisos por rol | Parcial |
 | `cacao_accounting/attachment_service.py` | upload/list/get/delete y ciclo de imágenes cotejados; alcance global Party #1284, imagen de artículo #1376 y helpers heredados sin caller #1658; restantes callers/estados pendientes | Parcial |
 | `cacao_accounting/audit_chain.py` | cadena v1/v2, verificador/topología, orden de filas pendientes y lock PostgreSQL reconciliados con hash vigente; límites restantes de DB privilege/Tier 2/concurrencia pendientes | Parcial |
 | `cacao_accounting/audit_trail_service.py` | `_log`/`log_create` y S2P #1794 previos; `log_update`/`get_document_timeline` cotejados para StockEntry; timeline filtra AuditTrail por tipo/ID y la duplicación Desktop #1854 carece de inserción; snapshot de edición selectivo pendiente; otras acciones/contratos pendientes | Parcial |
 | `cacao_accounting/cache.py` | class DummyCache (métodos: __init__, init_app, get, set, delete); _crear_cache(); _redis_cache_is_enabled(); _generation_key(); _build_user_cache_key(); user_scoped_cache(); invalidate_cache(); init_cache() | Pendiente |
-| `cacao_accounting/cancellation_scope.py` | ordinary_gl_scope(); audit_gl_scope(); cancelled_originals_scope(); append_only_gl_scope() | Pendiente |
 | `cacao_accounting/cli.py` | `db_init` retorna éxito al hallar usuario aunque falte el seed tras fallo parcial (#1848); otros comandos CLI pendientes | Parcial |
 | `cacao_accounting/collaboration_service.py` | 24/24 funciones del servicio cotejadas; consumidores y delta de hash pendiente | Parcial |
 | `cacao_accounting/company_context.py` | acceso/compañías autorizadas cotejados en flujos asociados; callers restantes pendientes | Parcial |
@@ -30,19 +29,19 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/document_flow/context.py` | 3/3 helpers revisados; callers O2C/S2P cotejados parcialmente, ACL y consumidores restantes pendientes | Parcial |
 | `cacao_accounting/document_flow/currency_resolver.py` | 8/8 funciones revisadas; rutas de alta, conversión de factura y validadores de posting cotejados parcialmente; causas/configuración restantes pendientes | Parcial |
 | `cacao_accounting/document_flow/payment.py` | saldo histórico y cache revisados | Parcial |
-| `cacao_accounting/document_flow/registry.py` | 20 specs, acciones, 69 flows y 5 helpers cotejados; líneas snapshot y guards UOM relacionados con #1847; contratos de consumidores pendientes | Parcial |
-| `cacao_accounting/document_flow/repository.py` | consumo y cachés revisados; concurrencia de consumo agregado y cierre sin bloqueo pendiente de repro; resto pendiente | Parcial |
-| `cacao_accounting/document_flow/service.py` | relación/disponibilidad/compañía y estados; writer no bloquea la línea fuente; `source_qty_in_base_uom` consume snapshot afectable por cambio UOM (#1847); candidato S2P concurrente y resto pendientes | Parcial |
+| `cacao_accounting/document_flow/registry.py` | 20 specs, acciones, 69 flows y 5 helpers cotejados; líneas snapshot/UOM #1847; DeliveryNote→StockEntry permitido y StockEntry→StockEntry reuse permitido; PurchaseReceipt→StockEntry anunciado pero no permitido (criterio); pares purpose de reuso no acotados, decisión pendiente; contratos consumidores pendientes | Parcial |
+| `cacao_accounting/document_flow/repository.py` | consumo y cachés revisados; destinos `docstatus=2` se excluyen al recalcular consumo; estado cacheado puede conservarse en rama aprobación StockEntry anulada (#1872); concurrencia de consumo agregado/cierre sin bloqueo y resto pendientes | Parcial |
+| `cacao_accounting/document_flow/service.py` | relación/disponibilidad/compañía y estados; writer no bloquea la línea fuente; `source_qty_in_base_uom` consume snapshot afectable por cambio UOM (#1847); cancelación aprobada conserva estado de relación/cache visible (#1872); candidato carrera entre creación de relación y cancelación directa StockEntry (#1872, sin repro); candidato S2P concurrente y resto pendientes | Parcial |
 | `cacao_accounting/document_flow/tracing.py` | 3/3 funciones revisadas; tipo inválido depende de #1225, permisos/URLs destino pendientes | Parcial |
-| `cacao_accounting/document_flow/tree.py` | 22 funciones revisadas; fuga de metadatos por ACL solo de raíz vinculada a #1515/#1649; límites configurables sin clamp pendientes | Parcial |
+| `cacao_accounting/document_flow/tree.py` | 22 funciones revisadas; fuga de metadatos por ACL solo de raíz vinculada a #1515/#1649; árbol muestra vínculo activo de StockEntry anulado vía ApprovalEngine (#1872); límites configurables sin clamp pendientes | Parcial |
 | `cacao_accounting/document_flow/validation.py` | 11/11 funciones revisadas; callers y enforcement completo siguen pendientes | Parcial |
 | `cacao_accounting/document_identifiers.py` | evidencia en histórico | Parcial |
-| `cacao_accounting/exceptions/__init__.py` | class CacaoAccountingException; class DataError; class IntegrityError; class TransactionError; class OperationalError; class AccessDenied; flash_error() | Pendiente |
+| `cacao_accounting/exceptions/__init__.py` | clases de excepción y `flash_error()` revisados; helper solo flashea y retorna `None`; varios callers todavía pendientes de contrato de retorno | Parcial |
 | `cacao_accounting/exceptions/mensajes.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/fiscal_persistence_service.py` | checkpoint 2026-11-03: 36 funciones revisadas; contrato alta/edición→snapshot→posting/AP/GL cotejado; bordes de payload, modelo y consumidores globales pendientes | Parcial |
 | `cacao_accounting/fiscal_preview_service.py` | `fiscal_preview()`/currency fallback y filtro de reglas por moneda cotejados con API/JS/#1438; demás parsers/funciones pendientes | Parcial |
 | `cacao_accounting/i18n.py` | class _Stringifiable (métodos: __str__); _get_locale(); _get_timezone() | Pendiente |
-| `cacao_accounting/internal_control_service.py` | guards de ApprovalRequest/ledger AR/AP previos; `_audit_insert`/`_write_event` cotejados como listener para DocBase activo solo con `_enabled()` (Cloud; Desktop lo desactiva), factor de causa raíz de #1854; alcance de otras tablas/guards restante | Parcial |
+| `cacao_accounting/internal_control_service.py` | guards de ApprovalRequest/ledger AR/AP previos; `_audit_insert`/`_write_event` cotejados como listener para DocBase activo solo con `_enabled()` (Cloud; Desktop lo desactiva), factor #1854; `_guard_line` y guards de financial children/Core/raw SQL se omiten en Desktop (#759); en Cloud ese guard bloquea cambios internos de la línea al postear conciliación StockEntry (#1877); otras tablas/guards restantes | Parcial |
 | `cacao_accounting/internal_control_sql.py` | uso de `raw_sql_mutates_protected_table()` para impedir mutación textual de ApprovalAction y otras tablas de evidencia cotejado; lexer restante pendiente | Parcial |
 | `cacao_accounting/ledger_queries.py` | predicado de stock excluye original cancelado, su voucher y contra is_reversal; coherente con cancelación intra-período comprobada; otros consumidores pendientes | Parcial |
 | `cacao_accounting/limiter.py` | revisado en checkpoint 2026-11-03; pendiente decoradores aplicados en blueprints | Parcial |
@@ -56,19 +55,19 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/search_select.py` | Batch usa id como value y filtros item_code/activo; el modelo sin company no recibe filtro de alcance; selector y consumidores restantes pendientes (#1175/#1649) | Parcial |
 | `cacao_accounting/server.py` | server() | Pendiente |
 | `cacao_accounting/static/js/dashboard.js` | initDashboardModule, buildFallbackConfig, dashboardConfig, dashboard, money | Pendiente |
-| `cacao_accounting/static/js/document-flow-tree.js` | helpers de escape/render, estados de carga/saldo y payload del árbol cotejados; formato/lifecycle/casos nulos pendientes | Parcial |
+| `cacao_accounting/static/js/document-flow-tree.js` | helpers de escape/render, estados de carga/saldo y payload del árbol cotejados; no tacha vínculo `active` aunque destino StockEntry esté anulado (#1872); formato/lifecycle/casos nulos pendientes | Parcial |
 | `cacao_accounting/static/js/smart-select.js` | item_category (#1850) y propagación id para selección Batch cotejadas; resto de funciones/callers pendiente | Parcial |
 | `cacao_accounting/static/js/sw.js` | Módulo JS: eventos, listeners y llamadas API pendientes | Pendiente |
-| `cacao_accounting/static/js/transaction-form.js` | factura #1438, carga async de documentos fuente y serialización de lote/serial revisadas; validación UI de presencia no sustituye qty/estado del servidor; otros doctype/handlers pendientes | Parcial |
+| `cacao_accounting/static/js/transaction-form.js` | `transactionForm` rows/prepareSubmit y carga fuente cotejados parcialmente; permite huecos por fila vacía que el parser StockEntry trunca (#1871); validación UI de batch/serial no sustituye qty/estado del servidor; factura #1438; otros doctypes/handlers pendientes | Parcial |
 | `cacao_accounting/tax_pricing_service.py` | checkpoint 2026-11-03: cálculo de taxes por plantilla cotejado para S2P; precio ItemPrice y tolerancia de venta pendientes | Parcial |
 | `cacao_accounting/tax_rule_service.py` | 15/15 funciones inspeccionadas con rutas, TaxRuleContext/FiscalEngine y snapshots; consumidores y validaciones de frontera restantes pendientes | Parcial |
 | `cacao_accounting/templates/400.html` | Jinja/HTML dinámico (8 expresiones/controles) | Pendiente |
 | `cacao_accounting/templates/403.html` | Jinja/HTML dinámico (8 expresiones/controles) | Pendiente |
 | `cacao_accounting/templates/404.html` | Jinja/HTML dinámico (8 expresiones/controles) | Pendiente |
 | `cacao_accounting/templates/base.html` | blocks test, contenido | Pendiente |
-| `cacao_accounting/templates/detail_view_macros.html` | tabla de líneas y JS del modal cotejados con factura de compra; resto pendiente | Parcial |
+| `cacao_accounting/templates/detail_view_macros.html` | `detail_lines_table`/modal revisados para StockEntry: destino de transferencia, descripción `item_name`, trazabilidad por línea y etiqueta batch visibles incompletos (#1810/#1889); Jinja autoescape y render JS con `textContent`; otros callers pendientes | Parcial |
 | `cacao_accounting/templates/document_flow_related_list.html` | herencia/enlaces/specs, null fallbacks y guards de contenido condicional cotejados; macro status y productor pendiente | Parcial |
-| `cacao_accounting/templates/macros.html` | modal de correo y panel de colaboración cotejados; restantes macros/consumidores pendientes | Parcial |
+| `cacao_accounting/templates/macros.html` | `lineas_tabla_lectura` cotejada como wrapper de detalle StockEntry; modal correo/colaboración previos; restantes macros/consumidores pendientes | Parcial |
 | `cacao_accounting/templates/party_company_settings_form.html` | checkpoint 2026-11-03: campos Alpine, payload y compañía | Parcial |
 | `cacao_accounting/templates/party_detail_sections.html` | checkpoint 2026-11-03: formularios de contactos/direcciones | Parcial |
 | `cacao_accounting/templates/party_legal_fields.html` | checkpoint 2026-11-03: campos legales cotejados con WTForms/apply_party_profile | Parcial |
@@ -80,13 +79,13 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/templates/public/validation_result.html` | Jinja/HTML dinámico (33 expresiones/controles) | Pendiente |
 | `cacao_accounting/templates/smart_select_field.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/templates/tasks/my.html` | permisos, filtros, estados y etiquetas visibles cotejados; demás plantillas/callers pendientes | Parcial |
-| `cacao_accounting/templates/transaction_form_macros.html` | picker Batch/Serial, x-model, serial requerido y sincronización al hidden input cotejados con transaction-form.js; servidor conserva validación de qty/estado; macros/consumidores restantes pendientes; #1788/#444 | Parcial |
+| `cacao_accounting/templates/transaction_form_macros.html` | picker Batch/Serial, x-model y sincronización hidden cotejados; inputs rate/amount usan restricciones cliente, no validación server-side (#1864); XSS reflejado desde `source_id` query en StockEntry (#1867); revisión parcial del macro StockEntry confirmó controles de detalle/cargos enviados pero ignorados por el POST (#1888, criterio pendiente); #1871/#1788 cubren huecos de filas; otros callers/macros pendientes | Parcial |
 | `cacao_accounting/translations/en/LC_MESSAGES/messages.po` | msgid/msgstr y contexto de traducción | Pendiente |
 | `cacao_accounting/version/__init__.py` | build_version() | Pendiente |
 | `cacao_accounting/withholding_service.py` | _decimal(); create_withholding_certificate(); cancel_withholding_certificate(); withholding_certificate_lines() | Pendiente |
 | `cacao_accounting/admin/__init__.py` | __getattr__(); __dir__() | Pendiente |
 | `cacao_accounting/admin/navigation.py` | class ConfigurationLink; class ConfigurationSection | Pendiente |
-| `cacao_accounting/admin/routes.py` | correo, sesión y acciones de aprobación cotejadas; rutas/settings restantes pendientes | Parcial |
+| `cacao_accounting/admin/routes.py` | correo, sesión y acciones de aprobación cotejadas; settings de valuación cotejado: company query inválida puede terminar en 500 (#1866); restantes endpoints/settings pendientes | Parcial |
 | `cacao_accounting/admin/services.py` | configuración SMTP y acciones de aprobación cotejadas; servicios restantes pendientes | Parcial |
 | `cacao_accounting/admin/session_security_service.py` | revalidado junto a dispositivo/OTP; resto de configuración de sesión pendiente | Parcial |
 | `cacao_accounting/admin/templates/admin.html` | blocks contenido | Pendiente |
@@ -97,7 +96,6 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/admin/templates/admin/email_log.html` | estados, acciones, escape y CSRF cotejados; contratos restantes de administración pendientes | Parcial |
 | `cacao_accounting/admin/templates/admin/email_settings.html` | campos SMTP, contraseña, estados y CSRF cotejados; integración completa pendiente | Parcial |
 | `cacao_accounting/admin/templates/admin/external_document_validation.html` | blocks contenido | Pendiente |
-| `cacao_accounting/admin/templates/admin/inventory_valuation.html` | blocks contenido | Pendiente |
 | `cacao_accounting/admin/templates/admin/item_prices.html` | blocks contenido | Pendiente |
 | `cacao_accounting/admin/templates/admin/ledger_mapping_rules.html` | checkpoint dependiente ledger mapping 2026-11-03 | Parcial |
 | `cacao_accounting/admin/templates/admin/modulos.html` | blocks contenido | Pendiente |
@@ -154,23 +152,15 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/templates/admin/balance_confirmation_detail.html` | blocks contenido | Pendiente |
 | `cacao_accounting/templates/admin/balance_confirmation_new.html` | blocks contenido; Alpine (4 directivas) | Pendiente |
 | `cacao_accounting/templates/setup/setup.html` | plantilla informativa heredada y traducciones cotejadas; búsqueda no encontró caller productivo, relación con la ruta Blueprint pendiente de resolver | Parcial |
-| `cacao_accounting/accounting_engine/__init__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
-| `cacao_accounting/accounting_engine/common/__init__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/accounting_engine/common/context.py` | ItemContext dimensions/defaults revisados como dependencia de LandedCostEngine; otros contratos pendientes | Parcial |
-| `cacao_accounting/accounting_engine/common/fiscal.py` | affects_inventory_from_treatment() | Pendiente |
 | `cacao_accounting/accounting_engine/common/rounding.py` | round, precisión/política y residual revisados para LandedCostEngine; otros consumidores pendientes | Parcial |
 | `cacao_accounting/accounting_engine/document_builders.py` | `_build_import_landed_cost_context`/`_build_landed_cost_item_contexts` cotejados; dimensions omitidas #1758 y amount transaccional hacia inventario #1793; otros builders pendientes | Parcial |
-| `cacao_accounting/accounting_engine/fiscal/__init__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/accounting_engine/fiscal/engine.py` | class FiscalEngine (métodos: calculate, _build_fiscal_line, _consolidate_fiscal_result, _order_rules, _dependency_map, _calculate_base, _calculate_amount, _included_rules_with_same_base, _get_formula) | Pendiente |
 | `cacao_accounting/accounting_engine/fiscal/resolver.py` | class RuleResolver (métodos: resolve, _applicable_rules, _rule_groups, _rule_matches_context, _apply_merge_strategy, _final_rules, _matches_conditions) | Pendiente |
 | `cacao_accounting/accounting_engine/gl_posting_builder.py` | post_proforma_to_gl(); _persistence_context(); _gl_entry_from_line(); _bank_account_id_for_line(); _proforma_for_ledger(); _is_balanced(); _calculation_context_for_ledger(); _payment_open_balance_in_ledger(); _reference_carrying_in_ledger(); _reference_balance_in_ledger() | Pendiente |
-| `cacao_accounting/accounting_engine/landed_cost/__init__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
-| `cacao_accounting/accounting_engine/orchestrator/__init__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/accounting_engine/orchestrator/event_orchestrator.py` | llamada LandedCostEngine y propagación de resultado/error verificadas; otros eventos y contratos pendientes | Parcial |
 | `cacao_accounting/accounting_engine/orchestrator/mapper.py` | class AccountingMapper (métodos: map_to_proforma, _map_document_event, _map_settlement_event, _build_settlement_balance_line, _map_cash_line, _map_settlement_tax_lines, _map_settlement_adjustment_lines, _settlement_balance_side, _settlement_cash_side, _settlement_tax_side, _map_fiscal_lines, _build_party_line, _build_exchange_difference_line, _build_unrealized_exchange_difference_line, _build_unrealized_party_offset_line, _build_payment_discount_line, _build_line, _finalize_proforma, _map_explicit_account_lines, _requires_party_balance, _balance_against_party, _resolve_goods_account, _resolve_cash_account, _resolve_tax_account, _document_exchange_rate, _settlement_exchange_rate) | Pendiente |
-| `cacao_accounting/accounting_engine/settlement/__init__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/accounting_engine/settlement/engine.py` | class SettlementOptions; class SettlementEngine (métodos: calculate, _uses_foreign_currency, _calculate_exchange_difference, _calculate_unrealized_exchange_difference) | Pendiente |
-| `cacao_accounting/accounting_engine/snapshots/__init__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/accounting_engine/snapshots/serializer.py` | class EngineJSONEncoder (métodos: default); class SnapshotSerializer (métodos: serialize, to_json) | Pendiente |
 | `cacao_accounting/contabilidad/__init__.py` | __getattr__(); __dir__() | Pendiente |
 | `cacao_accounting/contabilidad/arap_allocation.py` | class AllocationError; class AllocationCurrencyError; class AllocationOverpaymentError; class AllocationIdempotencyError; _decimal(); class ARAPOpenItem (métodos: __post_init__, from_model); class AllocationRequest; class AllocationLine; class AllocationPlan (métodos: allocated_source_amount, remaining_source_amount, is_full); class OpenItemResolver (métodos: __init__, _key, from_ledger, from_models, add, resolve, all, consume, snapshot, restore); list_open_items(); list_cached_open_items(); resolve_open_item(); class AllocationPlanner (métodos: __init__, plan, _rate); class AllocationExecutor (métodos: __init__, execute); plan_allocation(); apply_allocation() | Pendiente |
@@ -182,7 +172,6 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/contabilidad/budget_import_service.py` | staging, validación e inserción cotejados para #1699; resto del servicio pendiente | Parcial |
 | `cacao_accounting/contabilidad/budget_report_service.py` | agregaciones/dimensiones y filtros; rango cuenta omitido (#1237); acepta budget draft (#1785) | Parcial |
 | `cacao_accounting/contabilidad/budget_service.py` | unicidad/dimensiones y totales cotejados para #1699; resto del servicio pendiente | Parcial |
-| `cacao_accounting/contabilidad/cancellation_service.py` | resolve_cancellation valida actor/motivo, dependencias, idempotencia y mismo período abierto; permite fecha posterior a la original, aunque la política vigente exige fecha idéntica (#761); base de contra SLE #1175 y serial #444 | Parcial |
 | `cacao_accounting/contabilidad/ctas/__init__.py` | _value(); _is_group(); cargar_catalogos() | Pendiente |
 | `cacao_accounting/contabilidad/ctas/catalogos/base_en.csv` | Lógica ejecutable/dinámica según superficie inventariada | Pendiente |
 | `cacao_accounting/contabilidad/ctas/catalogos/base_en.json` | Claves: catalog, default_accounts | Pendiente |
@@ -197,7 +186,7 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/contabilidad/currency_guard.py` | reglas de activación/desactivación y moneda predeterminada revisadas | Parcial |
 | `cacao_accounting/contabilidad/default_accounts.py` | delta revalidado con SHA vigente; 13/13 funciones inspeccionadas; consumidores y criterio de cuentas inactivas pendientes | Parcial |
 | `cacao_accounting/contabilidad/exchange_rate_import_service.py` | validación, importación, duplicados y savepoint revisados; parsers/casos límite pendientes | Parcial |
-| `cacao_accounting/contabilidad/exchange_revaluation_service.py` | evidencia anterior conservada; run/void/period lock y caller de cierre mensual cotejados en HEAD actual, resto de métodos pendiente | Revalidar delta |
+| `cacao_accounting/contabilidad/exchange_revaluation_service.py` | run/void/period lock y caller de cierre mensual cotejados en HEAD actual; resto de métodos pendiente | Parcial |
 | `cacao_accounting/contabilidad/fiscal_year_closing.py` | cálculo, multilibro, guards, reversa y referencias de cierre cotejadas; consumidores posteriores pendientes | Parcial |
 | `cacao_accounting/contabilidad/forms.py` | además FormularioLibro/FiscalYear/AccountingPeriod y validación de fechas cotejados | Parcial |
 | `cacao_accounting/contabilidad/gl/__init__.py` | gl_list(); gl_new() | Pendiente |
@@ -207,8 +196,7 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/contabilidad/journal_repository.py` | add_journal(); get_journal(); list_journals(); list_journal_lines(); replace_journal_lines() | Pendiente |
 | `cacao_accounting/contabilidad/journal_service.py` | evidencia en histórico | Parcial |
 | `cacao_accounting/contabilidad/ledger_mapping_service.py` | validación de compañía/dirección y aplicación por libro cotejadas; dependencia de Book edit pendiente | Parcial |
-| `cacao_accounting/contabilidad/posting.py` | __getattr__(); __dir__() | Pendiente |
-| `cacao_accounting/contabilidad/posting_service.py` | cancel_document bloquea/recarga documento y encierra GL/SLE/ARAP en savepoint; misma fecha incumplida #761; reversas SLE #1175, serial #444, capacidad por orden #1857, capas FIFO #1858; libros/tasas y delta pendientes | Revalidar delta |
+| `cacao_accounting/contabilidad/posting_service.py` | writers receipt/issue/transfer/reconciliation y GL cotejados parcialmente; AR/AP no-op válido para StockEntry y transfer same-account `entries=[]`; conciliación con 2 SVL `-3/-6` y `0/-2` vs SLE `-3/-8` al cancelar distorsiona FIFO aunque bin vuelva 5/10, ampliado #1858; fan-out GL por línea/libro cotejado por dos revisores, sin discrepancia monetaria nueva; Unit/Project de otra compañía pueden llegar a GL en StockEntry no-reconciliation (#1890); líneas repetidas/transfer y matching línea↔SLE↔SVL #1858; amount-only #1878/#1879; batch cruzado #1754; límites #761/#1857/#1868/#1876/#1211/#444 | Parcial |
 | `cacao_accounting/contabilidad/presupuesto.py` | CRUD/líneas/aprobación/cierre/import/reporte; draft validación servidor ausente (#1785) | Parcial |
 | `cacao_accounting/contabilidad/project_capitalization_service.py` | elegibilidad, grouping, transacción por voucher y concurrencia de capitalización cotejados parcialmente | Parcial |
 | `cacao_accounting/contabilidad/recurring_journal_service.py` | apply_recurring_template y validación de compañía/vigencia/duplicados cotejados; resto pendiente | Parcial |
@@ -273,38 +261,23 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/contabilidad/templates/contabilidad/unidad_crear.html` | smartSelect y selector parent revisados | Parcial |
 | `cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html` | macro recursivo y toolbar revisados | Parcial |
 | `cacao_accounting/contabilidad/templates/contabilidad_cash_flow_config.html` | formulario GET/POST, `account_ids`, valores dinámicos, CSRF y autorización cotejados con ruta y #1789 | Parcial |
-| `cacao_accounting/inventario/__init__.py` | __getattr__(); __dir__() | Pendiente |
-| `cacao_accounting/inventario/forms.py` | UOM, categoría (#1850), lote/serial y FormularioEntradaAlmacen cotejados; el formulario de cabecera no define transaction_currency/currency; demás formularios pendientes | Parcial |
-| `cacao_accounting/inventario/routes.py` | alta/detalle/edición/duplicación/submit/cancel StockEntry, ACL y docstatus; currency #1811; fecha efectiva suministrada por formulario incumple misma fecha #761; rama ApprovalEngine #1728, duplicación Desktop #1854, capacidad de reversa #1857; otros handlers pendientes | Parcial |
-| `cacao_accounting/inventario/service.py` | UOM/categoría (#1847/#1850), Batch, validación serial/qty/estado/bodega y update_serial_state cotejados; carreras #1178/#1306/#1653, retorno #1754 y cancelaciones #444/#1539/#1177; resto pendiente | Parcial |
-| `cacao_accounting/inventario/services.py` | alta/edición StockEntry, UOM, relaciones, compañía/bodega, conciliación/snapshots cotejados; permite guardar repetidamente artículo+bodega en líneas sin unicidad y cada línea se postea secuencialmente (#1857); moneda #1811; snapshot de audit incompleto y demás helpers pendientes | Parcial |
-| `cacao_accounting/inventario/templates/inventario.html` | blocks contenido | Pendiente |
-| `cacao_accounting/inventario/templates/inventario/articulo.html` | lookup de categoría por FK y render `item_category.name` cotejados (#1850); expresiones/controles restantes de detalle pendientes | Parcial |
-| `cacao_accounting/inventario/templates/inventario/articulo_lista.html` | blocks contenido | Pendiente |
-| `cacao_accounting/inventario/templates/inventario/articulo_nuevo.html` | pickers y contrato item_category→hidden `item_category_id` cotejados (#1850); validación de conversiones UOM pendiente (#1737), demás expresiones/casos por revisar | Parcial |
-| `cacao_accounting/inventario/templates/inventario/bodega.html` | blocks contenido | Pendiente |
-| `cacao_accounting/inventario/templates/inventario/bodega_lista.html` | blocks contenido | Pendiente |
-| `cacao_accounting/inventario/templates/inventario/bodega_nuevo.html` | blocks contenido; Alpine (22 directivas) | Pendiente |
-| `cacao_accounting/inventario/templates/inventario/entrada.html` | `workflow_buttons`, cabecera con moneda, tabla, flujo documental, adjuntos, auditoría y colaboración cotejados con rutas/permisos; formulario de anulación omite fecha y usa el default del servidor (#761); expresiones/macros restantes pendientes | Parcial |
-| `cacao_accounting/inventario/templates/inventario/entrada_lista.html` | filtros de estado/periodo y paginación cotejados con `_paginate_list` y scope de compañía; la columna Total no expresa compañía/moneda ni formatea importe, pendiente validar alcance/calleres antes de hallar; otras expresiones pendientes | Parcial |
-| `cacao_accounting/inventario/templates/inventario/entrada_nuevo.html` | Jinja de header, purpose, almacenes y transaction_grid contrastado con ruta/config; macro transaccional incluye moneda, serial/lote; expresiones y callers restantes pendientes | Parcial |
-| `cacao_accounting/inventario/templates/inventario/lote.html` | expresiones Jinja y tablas de saldo/movimientos cotejadas; datos del backend carecen de alcance por compañía (#1175); base/macros comunes pendientes | Parcial |
-| `cacao_accounting/inventario/templates/inventario/lote_lista.html` | herencia, enlaces, tabla y paginación cotejados; el listado recibe lotes sin scope (#1175); base/macro de paginación pendientes | Parcial |
-| `cacao_accounting/inventario/templates/inventario/lote_nuevo.html` | expresiones Jinja, CSRF, campos de fechas/activo y POST cotejados con FormularioLote; base/macros comunes pendientes | Parcial |
-| `cacao_accounting/inventario/templates/inventario/stock_reconciliation_nuevo.html` | Jinja/Alpine revisados; `addLine()` permite repetir artículo+bodega sin guard (#1857); falta currency #1811; snapshot fetch sin guard de respuesta obsoleta/catch pendiente de validación | Parcial |
-| `cacao_accounting/inventario/templates/inventario/uom.html` | blocks contenido | Pendiente |
-| `cacao_accounting/inventario/templates/inventario/uom_lista.html` | blocks contenido | Pendiente |
-| `cacao_accounting/inventario/templates/inventario/uom_nuevo.html` | CSRF y campos revisados (#1736) | Parcial |
-| `cacao_accounting/inventario/valuation_settings.py` | valuation_method_choices(); valuation_method_label(); normalize_valuation_method(); get_company_valuation_method(); company_has_inventory_activity(); update_company_valuation_method(); list_companies_with_valuation() | Pendiente |
-| `cacao_accounting/warehouse_accounting.py` | warehouse_inventory_account_id(); inventory_account_id_for_document_line() | Pendiente |
+| `cacao_accounting/inventario/routes.py` | listados StockEntry, alta/detalle/edición/duplicación/submit/cancel parciales; `inventario_entrada()` consulta solo `StockEntryItem` sin join Item/Batch ni `DocumentRelation` por línea (#1810/#1889); alta bodega: permisos/scope y criterios #1736/#1739; amount-only #1878; IntegrityError dinámico #1864; cancelación #1728/#1872; posting Cloud #1877, #1876/#761/#1811/#332/#1857; editores #1865/#1810/#1871/#1870; UOM #1747/#1182/#1183/#1736; Batch scope #1175; demás handlers pendientes | Parcial |
+| `cacao_accounting/inventario/service.py` | UOM/categoría (#1847/#1850), Batch y validación serial/qty/estado/bodega cotejados; `validate_batch_serial()` omite un `batch_id` suministrado si el item no controla lote/vencimiento, permite SKU cruzado en StockEntry (#1754); retornos O2C/S2P y criterio sobre lote fuente también bajo #1754; factor UOM `1e-10` persiste cero por escala #1174/#1650, conversiones #1174/#1737; candidatos de rango Item/default supplier; carrera de lote duplicado puede dejar IntegrityError sin capturar en POST (sin repro); carreras #1178/#1306/#1653, cancelaciones #444/#1539/#1177; rebuild SVL pierde batch/consumed_layers y borra capas (#651/#1336/#1715), único caller `rebuild_stock_bins()` sin caller productivo hallado; resto helpers/callers pendientes | Parcial |
+| `cacao_accounting/inventario/services.py` | alta/edición StockEntry, UOM, relaciones, compañía/bodega, reconciliación/snapshots cotejados; `_save_stock_entry_item()` copia batch del POST sin validar la pareja con artículo, en combinación con guard condicional de `validate_batch_serial()` permite SKU cruzado (#1754); POST acepta Unit/Project sin ownership por compañía (#1890); edición genérica borra dimensiones de cabecera omitidas, extensión comentada en #1863. Resto: `_form_decimal`/CHECK amount #1864; amount-only con batch #1878 (criterio); filas vacías #1871; renderer #1810; title #1838/#1870; duplicados #1857; snapshot #1863/#207; relation delete #1865; lote/serial #1215; UOM #841; pares de reuso siguen criterio; demás helpers pendientes | Parcial |
+| `cacao_accounting/inventario/templates/inventario/articulo.html` | Jinja dinámico/escape, estado, links, campos Item, categorías (#1850), UOM, cuentas visibles, bodega filtrada, Party global y formas de imagen Cloud cotejados; `registro.item_type` muestra `goods/service` sin gettext (#1838); exposición de detalle/proveedor sin ACL `consultar`, botones que muestran 403 y alcance imagen en revisión (#1181/#1376); resto del contexto/caller pendiente | Parcial |
+| `cacao_accounting/inventario/templates/inventario/entrada.html` | reabierta: el detalle pasa `docstatus` crudo a `detail_header`, así una solicitud de cancelación aprobable sigue mostrando «presentado» y la acción «Anular» (#1803/#1728); el árbol tras aprobación aceptada sigue bajo #1872 | Parcial |
+| `cacao_accounting/inventario/templates/inventario/entrada_lista.html` | reabierta: usa `document_status_for`, que no encuentra `cancel_<doctype>` y omite «Anulación Pendiente» (#1803); otros hallazgos del listado #1838/#1861 y cero oculto siguen registrados | Parcial |
+| `cacao_accounting/inventario/templates/inventario/entrada_nuevo.html` | alta cotejada; reabierta por contrato de edición: el contexto no precarga moneda/bodegas y la plantilla omite dimensiones de cabecera; la edición con líneas sigue bloqueada antes del render por #1810; pérdida potencial estática relacionada con #1863/#1890 | Parcial |
+| `cacao_accounting/inventario/templates/inventario/stock_reconciliation_nuevo.html` | alta/snapshot cotejados; reabierta por edición: smart_select recibe initialValue vacío y su x-effect pisa company/cuenta/dimensiones preconfigurados; requiere volver a elegir company/serie y al guardar se pueden limpiar cuenta/dimensiones (#1835, comentario); límites estáticos sin ejecución de navegador | Parcial |
+| `cacao_accounting/inventario/valuation_settings.py` | las 7 funciones y callers admin/posting revisados; choices moving_average/FIFO, validación y compañía inexistente; actividad incluye SLE/SVL aunque estén cancelados (conserva evidencia append-only); label dinámico «Costo promedio» sin msgid inglés (#1838); guard de cambio vs posting carece lock/CAS, candidato concurrente en #1881 (sin reproducción PG); revisar bootstrap/importadores y estrategia Tier 1 | Parcial |
 | `cacao_accounting/compras/forms.py` | Party.name/#1722 y FormularioImportLandedCost/choices/defaults cotejados; handlers no usan validate_on_submit, guards del writer revisados | Parcial |
 | `cacao_accounting/compras/purchase_invoice_draft_service.py` | 19 métodos revisados; no hay caller productivo/tests actuales (#1366); mode/source, finite values, active item, account company-scope, replay-payload equivalence y commit=False boundary requieren validación | Parcial |
 | `cacao_accounting/compras/purchase_order_comparison_service.py` | claves, ocurrencias, rounds y origen cotejados; creador sin caller/ruta/registro detectado, posible código muerto por confirmar | Parcial |
-| `cacao_accounting/compras/purchase_reconciliation_service.py` | 2-way/3-way totals, locks, replay y cancelación cotejados; diferencia de índice MySQL revalidada sin issue (la misma invoice cancelada no admite retry normal); pending/as-of/reportes y resto pendiente (#1134/#1135/#1689) | Parcial |
+| `cacao_accounting/compras/purchase_reconciliation_service.py` | 2-way/3-way totals, locks, replay y cancelación cotejados; asignación de devolución por artículo/cantidad no coteja batch de la recepción fuente (#1754); diferencia de índice MySQL revalidada sin issue (la misma invoice cancelada no admite retry normal); pending/as-of/reportes y resto pendiente (#1134/#1135/#1689) | Parcial |
 | `cacao_accounting/compras/purchase_request_comparison_service.py` | recomendaciones, autorización, cobertura/cierre y generación de OC desde adjudicación cotejados; locks/idempotencia y resto pendientes | Parcial |
 | `cacao_accounting/compras/purchase_sourcing_service.py` | rondas, participantes, adjudicación y cierre manual cotejados; UOM #1429/#1481; race/locks y resto pendiente | Parcial |
-| `cacao_accounting/compras/routes.py` | writer/GET/edición/submit/cancel/duplicado/listas notas; #1438/#758/#1753/#1790/#1792/#1795; auth fuente GET y #1223 origen relacionado; PO/solicitudes/RFQ/comparativo/tercero pendientes (#1302/#1496/#1532) | Parcial |
-| `cacao_accounting/compras/services.py` | writer/edición factura y landed cost (moneda/base/rate/auditoría), persistencia serial de recibos/facturas y retornos cotejados; snapshot de Solicitud #1847; demás validadores pendientes | Parcial |
+| `cacao_accounting/compras/routes.py` | writer/GET/edición/submit/cancel/duplicado/listas notas; #1438/#758/#1753/#1790/#1792/#1795; auth fuente GET y #1223 origen relacionado; devolución de recepción permite batch ajeno al artículo: `validate_batch_serial_draft()` solo exige presencia antes del writer (#1754); PO/solicitudes/RFQ/comparativo/tercero pendientes (#1302/#1496/#1532) | Parcial |
+| `cacao_accounting/compras/services.py` | writer/edición factura y landed cost (moneda/base/rate/auditoría), persistencia serial de recibos/facturas y retornos cotejados; retorno persiste batch posteado sin cotejar propiedad artículo (causa junto a #1754); snapshot de Solicitud #1847; demás validadores pendientes | Parcial |
 | `cacao_accounting/compras/templates/compras.html` | enlaces/badges cotejados con endpoints; ACL de cada destino pendiente | Parcial |
 | `cacao_accounting/compras/templates/compras/comparativo_ofertas.html` | estados, líneas, ofertas, CSRF y guards POST cotejados; cobertura/concurrencia pendientes | Parcial |
 | `cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html` | tabla/estados/acciones/paginación cotejados con lista filtrada por compañía; destino de selección y demás estados pendientes | Parcial |
@@ -312,17 +285,17 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/compras/templates/compras/comparativo_ordenes_seleccionar.html` | selección HTML/CSRF cotejada con ACL y validación de participantes; cambio de docstatus concurrente pendiente | Parcial |
 | `cacao_accounting/compras/templates/compras/comparativo_solicitud.html` | presentación de líneas/ofertas, controles por estado y POST para crear órdenes cotejados; resto pendiente | Parcial |
 | `cacao_accounting/compras/templates/compras/cotizacion_proveedor.html` | acciones por docstatus, CSRF, print/create, timeline y componentes compartidos cotejados; resto pendiente | Parcial |
-| `cacao_accounting/compras/templates/compras/cotizacion_proveedor_lista.html` | blocks contenido | Pendiente |
+| `cacao_accounting/compras/templates/compras/cotizacion_proveedor_lista.html` | total nominal sin moneda (#1869); expresiones y callers restantes pendientes | Parcial |
 | `cacao_accounting/compras/templates/compras/cotizacion_proveedor_nueva.html` | from_request/from_rfq, ronda, smart-select y source_api_url cotejados; criterios de tercero #1302/#1496/#1532; resto pendiente | Parcial |
 | `cacao_accounting/compras/templates/compras/factura_compra.html` | estados/acciones/moneda/líneas cotejados con rutas y macro compartida; resto pendiente | Parcial |
-| `cacao_accounting/compras/templates/compras/factura_compra_devolucion_lista.html` | nota debit/credit: estado/paginación incorrectos (#1792), CTA de alta sin origen requerido (#1795), total sin moneda; resto pendiente | Parcial |
-| `cacao_accounting/compras/templates/compras/factura_compra_lista.html` | filtros/estado/paginacion y enlace a detalle cotejados con ruta; total no identifica moneda y combinacion de filtros queda pendiente de criterio | Parcial |
+| `cacao_accounting/compras/templates/compras/factura_compra_devolucion_lista.html` | nota debit/credit: estado/paginación incorrectos (#1792), CTA de alta sin origen requerido (#1795), total sin moneda; resto pendiente; total nominal sin moneda en lista (#1869) | Parcial |
+| `cacao_accounting/compras/templates/compras/factura_compra_lista.html` | filtros/estado/paginacion y enlace a detalle cotejados con ruta; total no identifica moneda y combinacion de filtros queda pendiente de criterio; total nominal sin moneda en lista (#1869) | Parcial |
 | `cacao_accounting/compras/templates/compras/factura_compra_nuevo.html` | x-data, ramas de origen/grid, preview #1438, CTA sin origen #1795 y selector credit_note_type sin selected en edición (#1790) cotejados; resto pendiente | Parcial |
 | `cacao_accounting/compras/templates/compras/import_landed_cost.html` | detalle, botones por estado y macros de documento cotejados con GET/transiciones; moneda de importes y macros compartidos pendientes | Parcial |
-| `cacao_accounting/compras/templates/compras/import_landed_cost_lista.html` | filtros, paginación y navegación cotejados con listado por compañía; total sin moneda queda para dedupe transversal | Parcial |
+| `cacao_accounting/compras/templates/compras/import_landed_cost_lista.html` | filtros, paginación y navegación cotejados con listado por compañía; total sin moneda queda para dedupe transversal; total nominal sin moneda en lista (#1869) | Parcial |
 | `cacao_accounting/compras/templates/compras/import_landed_cost_nuevo.html` | Alpine transactionForm, grilla de líneas de factura, cargos dinámicos, CSRF y origen cotejados; interfaz restante pendiente | Parcial |
 | `cacao_accounting/compras/templates/compras/orden_compra.html` | permisos de lectura, botones por docstatus, moneda/logística, líneas y macros flujo/adjuntos/auditoría cotejados; contrato compartido pendiente | Parcial |
-| `cacao_accounting/compras/templates/compras/orden_compra_lista.html` | filtros de estado/periodo, lista por compañía, enlaces y paginación cotejados; total sin moneda queda para dedupe transversal | Parcial |
+| `cacao_accounting/compras/templates/compras/orden_compra_lista.html` | filtros de estado/periodo, lista por compañía, enlaces y paginación cotejados; total sin moneda queda para dedupe transversal; total nominal sin moneda en lista (#1869) | Parcial |
 | `cacao_accounting/compras/templates/compras/orden_compra_nuevo.html` | contexto `transactionForm`, smart-selects y `transaction_grid` cotejados con configuración de compra; resto de presentación pendiente | Parcial |
 | `cacao_accounting/compras/templates/compras/proveedor.html` | contexto Party y detalle; llamada de historial sin company ligada a #1796 | Parcial |
 | `cacao_accounting/compras/templates/compras/proveedor_lista.html` | blocks contenido | Pendiente |
@@ -330,7 +303,7 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/compras/templates/compras/purchase_reconciliation.html` | tabs 2-way/3-way, filtros de compañía, columnas y valores de service cotejados; formato de moneda y presentación integral pendientes | Parcial |
 | `cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html` | grupos/estados y colapso inspeccionados; dos enlaces fallan al generar URL (hallazgo) | Parcial |
 | `cacao_accounting/compras/templates/compras/recepcion.html` | status, acciones, moneda, líneas, document flow, adjuntos y timeline cotejados con GET; macros compartidos pendientes | Parcial |
-| `cacao_accounting/compras/templates/compras/recepcion_lista.html` | normal/devoluciones, ACL de creación UI, status, filtros y paginación cotejados; Total crudo comparte patrón de moneda | Parcial |
+| `cacao_accounting/compras/templates/compras/recepcion_lista.html` | normal/devoluciones, ACL de creación UI, status, filtros y paginación cotejados; Total crudo comparte patrón de moneda; total nominal sin moneda en lista (#1869) | Parcial |
 | `cacao_accounting/compras/templates/compras/recepcion_nuevo.html` | `from_order` API, `from_receipt` retorno, formulario proveedor/bodega y grid cotejados; datos/líneas de devolución no se hidratan | Parcial |
 | `cacao_accounting/compras/templates/compras/solicitud_compra.html` | blocks contenido | Pendiente |
 | `cacao_accounting/compras/templates/compras/solicitud_compra_lista.html` | blocks contenido | Pendiente |
@@ -346,17 +319,17 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/ventas/templates/ventas/cliente_lista.html` | Jinja/list_filters/paginación y consulta `CompanyParty` por compañías autorizadas cotejadas | Parcial |
 | `cacao_accounting/ventas/templates/ventas/cliente_nuevo.html` | checkpoint 2026-11-03: selector Alpine de grupo y alta Party | Parcial |
 | `cacao_accounting/ventas/templates/ventas/cotizacion.html` | detalle Jinja y `_require_sales_document_access` cotejados en checkpoint de entrada O2C | Parcial |
-| `cacao_accounting/ventas/templates/ventas/cotizacion_lista.html` | listado/`_paginate_list` y patrón total sin moneda cotejados en checkpoint de entrada O2C | Parcial |
+| `cacao_accounting/ventas/templates/ventas/cotizacion_lista.html` | listado/`_paginate_list` y patrón total sin moneda cotejados en checkpoint de entrada O2C; total nominal sin moneda en lista (#1869) | Parcial |
 | `cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html` | rama desde solicitud, payload Alpine y contrato de alta revisados; guard de origen GET y dependencias compartidas pendientes | Parcial |
 | `cacao_accounting/ventas/templates/ventas/entrega.html` | detalle de remisión, moneda y ruta de consulta cotejados en checkpoint de entrada O2C | Parcial |
-| `cacao_accounting/ventas/templates/ventas/entrega_lista.html` | listado/`_paginate_list` y total crudo sin moneda cotejados en checkpoint de entrada O2C | Parcial |
+| `cacao_accounting/ventas/templates/ventas/entrega_lista.html` | listado/`_paginate_list` y total crudo sin moneda cotejados en checkpoint de entrada O2C; total nominal sin moneda en lista (#1869) | Parcial |
 | `cacao_accounting/ventas/templates/ventas/entrega_nuevo.html` | ramas origen/devolución y contrato de alta revisados; ACL dual y validación de bodega/retorno pendientes | Parcial |
 | `cacao_accounting/ventas/templates/ventas/factura_venta.html` | detalle fiscal, importes con moneda y ruta cotejados en checkpoint de entrada O2C | Parcial |
-| `cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html` | endpoints/filters; #1792 por paginación y tipo para helper de estado, evidencia agregada al issue | Parcial |
-| `cacao_accounting/ventas/templates/ventas/factura_venta_lista.html` | listado/`_paginate_list` y total crudo sin moneda cotejados en checkpoint de entrada O2C | Parcial |
+| `cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html` | endpoints/filters; #1792 por paginación y tipo para helper de estado, evidencia agregada al issue; total nominal sin moneda en lista (#1869) | Parcial |
+| `cacao_accounting/ventas/templates/ventas/factura_venta_lista.html` | listado/`_paginate_list` y total crudo sin moneda cotejados en checkpoint de entrada O2C; total nominal sin moneda en lista (#1869) | Parcial |
 | `cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html` | ramas origen/tipo, CSRF, Alpine y contratos de alta/previsualización cotejados; permisos de origen GET y dependencias compartidas pendientes | Parcial |
 | `cacao_accounting/ventas/templates/ventas/orden_venta.html` | detalle de orden, importes con moneda y ruta cotejados en checkpoint de entrada O2C | Parcial |
-| `cacao_accounting/ventas/templates/ventas/orden_venta_lista.html` | listado/`_paginate_list` y total crudo sin moneda cotejados en checkpoint de entrada O2C | Parcial |
+| `cacao_accounting/ventas/templates/ventas/orden_venta_lista.html` | listado/`_paginate_list` y total crudo sin moneda cotejados en checkpoint de entrada O2C; total nominal sin moneda en lista (#1869) | Parcial |
 | `cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html` | ramas de origen, configuración Alpine y contrato de alta cotejados; validación de macros/JS compartidos y guards de origen sigue pendiente | Parcial |
 | `cacao_accounting/ventas/templates/ventas/solicitud_venta.html` | detalle de pedido de venta, moneda y guard de consulta cotejados en checkpoint de entrada O2C | Parcial |
 | `cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html` | listado/`_paginate_list` y total crudo sin moneda cotejados en checkpoint de entrada O2C | Parcial |
@@ -367,7 +340,7 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/bancos/forms.py` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/reconciliation_service.py` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/routes.py` | evidencia en histórico | Parcial |
-| `cacao_accounting/bancos/services.py` | evidencia anterior conservada | Revalidar delta |
+| `cacao_accounting/bancos/services.py` | helper de numeración, cancelación de pagos y delta de locks de caja chica cotejados; #1290 conserva una ventana entre draft commit y vínculo idempotente; resto pendiente | Parcial |
 | `cacao_accounting/bancos/statement_service.py` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos.html` | blocks contenido | Pendiente |
 | `cacao_accounting/bancos/templates/bancos/banco.html` | evidencia en histórico | Parcial |
@@ -377,29 +350,20 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/bancos/templates/bancos/banco_lista.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/banco_nuevo.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/caja_chica.html` | evidencia en histórico | Parcial |
-| `cacao_accounting/bancos/templates/bancos/caja_chica_conciliacion_lista.html` | evidencia en histórico | Parcial |
-| `cacao_accounting/bancos/templates/bancos/caja_chica_conciliacion_nueva.html` | evidencia en histórico | Parcial |
-| `cacao_accounting/bancos/templates/bancos/caja_chica_gasto_lista.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/caja_chica_gasto_nuevo.html` | evidencia en histórico | Parcial |
-| `cacao_accounting/bancos/templates/bancos/caja_chica_lista.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/caja_chica_nuevo.html` | evidencia en histórico | Parcial |
-| `cacao_accounting/bancos/templates/bancos/caja_chica_reposicion_lista.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/caja_chica_reposicion_nueva.html` | evidencia en histórico | Parcial |
-| `cacao_accounting/bancos/templates/bancos/caja_chica_vale_lista.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/caja_chica_vale_nuevo.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html` | selección/estados/tabla/escape cotejados en 2026-11-03; callers de layout y CTM restantes pendientes | Parcial |
 | `cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html` | estado, acciones/CSRF, matriz y detalle manual cotejados en 2026-11-03; macros/layout y CTM restantes pendientes | Parcial |
 | `cacao_accounting/bancos/templates/bancos/cash_forecast_entradas.html` | expresiones de compañía, pronóstico, filas y acciones cotejadas en 2026-11-03; layout y CTM restantes pendientes | Parcial |
 | `cacao_accounting/bancos/templates/bancos/cash_forecast_lista.html` | filtros, loops y presentación de estados cotejados en 2026-11-03; layout y CTM restantes pendientes | Parcial |
 | `cacao_accounting/bancos/templates/bancos/cash_forecast_nuevo.html` | formulario y valores de compañía/FY/periodicidad cotejados en 2026-11-03; layout y CTM restantes pendientes | Parcial |
-| `cacao_accounting/bancos/templates/bancos/conciliacion_bancaria.html` | verificar criterio de cierre | Pendiente de criterio |
 | `cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html` | evidencia en histórico | Parcial |
-| `cacao_accounting/bancos/templates/bancos/extracto_importar.html` | verificar criterio de cierre | Pendiente de criterio |
 | `cacao_accounting/bancos/templates/bancos/nota_nueva.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/pago.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/pago_lista.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/pago_nuevo.html` | evidencia en histórico | Parcial |
-| `cacao_accounting/bancos/templates/bancos/reglas_matching.html` | verificar criterio de cierre | Pendiente de criterio |
 | `cacao_accounting/bancos/templates/bancos/transaccion_lista.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/bancos/templates/bancos/transferencia_nueva.html` | evidencia en histórico | Parcial |
 | `cacao_accounting/messaging/__init__.py` | revisado completo en batch 7 (checkpoint 2026-11-03): solo docstring | Parcial |
@@ -430,7 +394,6 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/query_tools/context.py` | class QueryContext | Pendiente |
 | `cacao_accounting/query_tools/decorators.py` | class QueryTool; _validate_read_only(); query_tool() | Pendiente |
 | `cacao_accounting/query_tools/errors.py` | class ErrorCode; class QueryToolError (métodos: __str__, to_dict) | Pendiente |
-| `cacao_accounting/query_tools/handlers/__init__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/query_tools/handlers/accounting.py` | list_accounting_periods(); search_accounts(); get_trial_balance(); get_general_ledger() | Pendiente |
 | `cacao_accounting/query_tools/handlers/advanced.py` | inventory.get_transfers y accounting.get_budget_variance, permisos/payload revisados | Parcial |
 | `cacao_accounting/query_tools/handlers/aging.py` | class AgingQuery; get_aging_result(); _load_aging_report(); _load_documents(); _paginated_result(); _document_model(); _aging_item() | Pendiente |
@@ -448,7 +411,6 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `cacao_accounting/query_tools/pagination.py` | class PaginatedResult (métodos: total_pages, has_next_page, to_dict); paginate() | Pendiente |
 | `cacao_accounting/query_tools/permissions.py` | scope accounting reports y fail-closed compañía verificados para #1783 | Parcial |
 | `cacao_accounting/query_tools/registry.py` | class Registry (métodos: __init__, register, get, list_tools, get_tools_for_permissions, _tool_to_schema, get_count); _serialize_schema() | Pendiente |
-| `cacao_accounting/query_tools/schemas/__init__.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/query_tools/schemas/accounting.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/query_tools/schemas/audit_trail.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/query_tools/schemas/banking.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
@@ -516,5 +478,4 @@ Rama `estabilizacion`, HEAD `4ab661bbee531d43238b69fe2abd2bc33faab54b`; **512 ar
 | `scripts/run_tests_by_file.sh` | Lógica ejecutable/dinámica según superficie inventariada | Pendiente |
 | `scripts/update_translations.sh` | Lógica ejecutable/dinámica según superficie inventariada | Pendiente |
 | `setup.cfg` | Claves/secciones: max-line-length, extend-ignore, exclude, license_files | Pendiente |
-| `wsgi.py` | Módulo Python: constantes, listeners o declaraciones pendientes | Pendiente |
 | `cacao_accounting/migrations/20261015_0001_audit_hash_version.py` | upgrade idempotente y downgrade reproducido; al quitar `hash_version`, el lector anterior v1 no puede validar filas v2; criterio de soporte rollback pendiente, relacionado pero no duplicado de #926 | Parcial |
