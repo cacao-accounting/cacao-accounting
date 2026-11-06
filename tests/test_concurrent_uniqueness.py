@@ -44,7 +44,6 @@ from cacao_accounting.contabilidad import posting_service
 from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
 from cacao_accounting.database import database
 
-
 COMPANY = "cacao"
 MONTO = Decimal("100")
 
@@ -693,10 +692,9 @@ def _base_aislada_concurrencia():
 def _soltar_base(url_aislada) -> None:
     """Elimina la base dedicada al finalizar el escenario."""
     from sqlalchemy import create_engine, text
-    from sqlalchemy.engine import make_url
 
     nombre = url_aislada.database
-    admin_url = make_url(str(url_aislada)).set(database="postgres")
+    admin_url = url_aislada.set(database="postgres")
     admin_engine = create_engine(admin_url)
     try:
         with admin_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
@@ -717,7 +715,9 @@ class TestConcurrenciaPostgreSQL:
     @pytest.fixture
     def pg_app_caja(self):
         url_aislada = _base_aislada_concurrencia()
-        application = create_app({**_configuracion_base(), "SQLALCHEMY_DATABASE_URI": str(url_aislada)})
+        application = create_app(
+            {**_configuracion_base(), "SQLALCHEMY_DATABASE_URI": url_aislada.render_as_string(hide_password=False)}
+        )
         with application.app_context():
             database.create_all()
             _seed_empresa(application, COMPANY)
@@ -731,7 +731,9 @@ class TestConcurrenciaPostgreSQL:
     @pytest.fixture
     def pg_app_reval(self):
         url_aislada = _base_aislada_concurrencia()
-        application = create_app({**_configuracion_base(), "SQLALCHEMY_DATABASE_URI": str(url_aislada)})
+        application = create_app(
+            {**_configuracion_base(), "SQLALCHEMY_DATABASE_URI": url_aislada.render_as_string(hide_password=False)}
+        )
         with application.app_context():
             database.create_all()
             _seed_empresa(application, COMPANY)
