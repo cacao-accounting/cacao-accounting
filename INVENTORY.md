@@ -1,7 +1,7 @@
 # INVENTORY: inventario de `cacao_accounting/`
 
-Generado: 2026-10-31 · Fuente de issues: GitHub API (issues abiertos: 363)
-Actualizado: 2026-11-01 · Estado de avance en rama `estabilizacion` (ver sección **Estado de issues atendidos**)
+Inventario AST generado el 2026-10-31; nombres de símbolos y líneas requieren regenerarse/cotejarse contra HEAD antes de usarlos como evidencia de auditoría. Este documento enumera estructura, no certifica revisión funcional de clases o funciones.
+Actualizado parcialmente: 2026-11-06 · El mapeo de issues por archivo conserva un snapshot antiguo (363 issues) y no es fuente vigente; `ISSUE.md` contiene 1041 issues abiertos y se reconcilió con GitHub el 2026-11-06. La reconciliación integral del mapeo por archivo de este inventario sigue pendiente.
 
 ## Convenciones
 
@@ -378,7 +378,7 @@ Notas de coordinación:
 
 **Issues abiertos:**
 
-_Sin issues abiertos mapeados._
+Root de código sin consumidor #1658; ver checkpoint de auditoría: `ERROR1`, `ERROR3` y `ERROR4` no tienen callers; `ERROR2` permanece utilizado.
 
 | Tipo | Símbolo | Detalle | Línea |
 |---|---|---|---:|
@@ -1162,6 +1162,7 @@ _Sin issues abiertos mapeados._
 | [#1122](https://github.com/cacao-accounting/cacao-accounting/issues/1122) | fix: conserva saldos GL antes de anulación | needs-work |
 | [#1035](https://github.com/cacao-accounting/cacao-accounting/issues/1035) | Caja chica: petty_cash_ledger_balance no filtra por libro y consolida el saldo duplicado | bug, severity-high, banks, accounting, accounting-book |
 | [#1025](https://github.com/cacao-accounting/cacao-accounting/issues/1025) | Multilibro: sin libro activo, los consumidores de primary_ledger_id agregan todos los libros | bug, severity-medium, accounting, multicurrency, needs-review, R2R |
+| [#1251](https://github.com/cacao-accounting/cacao-accounting/issues/1251) | Alinea moneda del saldo bancario reportado | needs-work, needs-review |
 
 | Tipo | Símbolo | Detalle | Línea |
 |---|---|---|---:|
@@ -1730,6 +1731,7 @@ _Sin issues abiertos mapeados._
 | Issue | Título | Etiquetas |
 |---|---|---|
 | [#1027](https://github.com/cacao-accounting/cacao-accounting/issues/1027) | Retenciones: un certificado cancelado no se re-emite al re-publicar el pago y queda irrecuperable | bug, severity-medium, accounting, S2P |
+| [#1807](https://github.com/cacao-accounting/cacao-accounting/issues/1807) | [AUDIT][S2P] Permite cancelar pagos con certificado de retención emitido | needs-work |
 
 | Tipo | Símbolo | Detalle | Línea |
 |---|---|---|---:|
@@ -5709,6 +5711,11 @@ _Sin issues abiertos mapeados._
 | [#1164](https://github.com/cacao-accounting/cacao-accounting/issues/1164) | Valida el balance de diarios con tasas por línea | needs-work |
 | [#1163](https://github.com/cacao-accounting/cacao-accounting/issues/1163) | Respeta los libros seleccionados en comprobantes | needs-work |
 | [#1152](https://github.com/cacao-accounting/cacao-accounting/issues/1152) | fix: muestra aplicaciones recurrentes pendientes en cierre | needs-work |
+| [#1816](https://github.com/cacao-accounting/cacao-accounting/issues/1816) | [MEDIUM][R2R] El cierre mensual falla si todas las plantillas recurrentes ya estaban aplicadas | needs-work |
+| [#1815](https://github.com/cacao-accounting/cacao-accounting/issues/1815) | [HIGH][R2R] La idempotencia de recurrentes depende del nombre mutable del período | needs-work |
+| [#1776](https://github.com/cacao-accounting/cacao-accounting/issues/1776) | [LOW][AUDIT][R2R] Hace recuperables los pasos parciales recurrentes | needs-review |
+| [#1493](https://github.com/cacao-accounting/cacao-accounting/issues/1493) | Define y aplica la frecuencia de plantillas recurrentes | needs-review |
+| [#1492](https://github.com/cacao-accounting/cacao-accounting/issues/1492) | Valida el balance de líneas recurrentes individualmente | needs-work |
 | [#1151](https://github.com/cacao-accounting/cacao-accounting/issues/1151) | fix: controla la reaplicación de diarios revertidos | needs-work, needs-review |
 | [#1150](https://github.com/cacao-accounting/cacao-accounting/issues/1150) | fix: valida cada línea recurrente antes de guardarla | needs-work |
 | [#1148](https://github.com/cacao-accounting/cacao-accounting/issues/1148) | fix: crea reversos de diarios de forma atómica | needs-work |
@@ -6772,6 +6779,9 @@ _Sin issues abiertos mapeados._
 | [#1007](https://github.com/cacao-accounting/cacao-accounting/issues/1007) | Fiscal: rechazar valores no finitos en líneas manuales | bug, accounting, needs-work |
 | [#1005](https://github.com/cacao-accounting/cacao-accounting/issues/1005) | Series: activaciones concurrentes dejan dos valores predeterminados | bug, needs-work |
 | [#1004](https://github.com/cacao-accounting/cacao-accounting/issues/1004) | Numeración: fecha retroactiva colisiona al reiniciar serie | bug, needs-work |
+| [#1731](https://github.com/cacao-accounting/cacao-accounting/issues/1731) | [LOW][DB] db_version falla con PostgreSQL psycopg2 | needs-work |
+| [#1898](https://github.com/cacao-accounting/cacao-accounting/issues/1898) | [AUDIT][DB] Decide política de upgrades incrementales y reparación del esquema | needs-review |
+| [#1922](https://github.com/cacao-accounting/cacao-accounting/issues/1922) | [AUDIT][DB] Define reset mensual con prefijo sin mes | needs-review |
 | [#1002](https://github.com/cacao-accounting/cacao-accounting/issues/1002) | Audit: impedir borrar la cadena en modo Desktop | bug, security, audit, needs-work |
 | [#1000](https://github.com/cacao-accounting/cacao-accounting/issues/1000) | OTP: hacer atómico el consumo de códigos de un solo uso | bug, security, auth, needs-work |
 | [#999](https://github.com/cacao-accounting/cacao-accounting/issues/999) | Conciliación: rechazar referencias con subtipo documental falso | bug, accounting, needs-work |
@@ -11445,7 +11455,9 @@ _Sin issues abiertos mapeados._
 
 **Issues abiertos:**
 
-_Sin issues abiertos mapeados._
+| Issue | Título | Etiquetas |
+|---|---|---|
+| [#1904](https://github.com/cacao-accounting/cacao-accounting/issues/1904) | [AUDIT][QUERY] Valida page_size en PaginatedResult | bug, audit, needs-work, severity-medium |
 
 | Tipo | Símbolo | Detalle | Línea |
 |---|---|---|---:|
@@ -13179,4 +13191,9 @@ _Sin issues abiertos mapeados._
 
 ## Issues sin mapear
 
-Ninguno: los 363 issues abiertos quedaron asociados al menos a un archivo del inventario.
+Este mapa es un snapshot histórico: no prueba la cobertura de los issues abiertos actuales y requiere reconciliación contra `ISSUE.md`/GitHub.
+
+
+## Reconciliación de símbolos — advertencia vigente (2026-11-06)
+
+Los números de línea de la tabla se generaron en el árbol del 2026-10-31 y no deben citarse como ubicación actual sin `rg`/AST sobre el HEAD vigente. La auditoría funcional mantiene sus estados por ruta en `AUDIT_PENDING.md`/`AUDIT_COMPLETE.md`, y documenta evidencia por lote en `AUDIT_PROGRESS.md`; el inventario no reemplaza la inspección de todos los métodos/callers ni de las plantillas Jinja. Corte vigente: rama `estabilizacion`, HEAD `85eed67b20d818150895fe2bc8a691d2ae5d2f4f`, 564 rutas auditables (111 completas revalidadas, 453 parciales/en proceso; plantillas HTML/Jinja 72 completas y 180 parciales); 1020 issues abiertos (24 root, 996 code, último cotejo con GitHub), con agrupaciones causales todavía provisionales.
