@@ -5,10 +5,12 @@ Este archivo incluye únicamente issues abiertos; es una copia de consulta, no s
 Tipo: `root` cuando GitHub etiqueta el issue `root` o `causa-raiz`; `code` en los demás casos.
 Estatus: etiquetas de seguimiento (`needs-review`, `needs-work`, `fix-proposed`, `fix-confirmed`, `fixed`, `verified`) o `abierto`. Si un issue tiene varias, prevalece el orden mostrado aquí.
 
-Total: **1041 issues abiertos** (24 root y 1017 code; actualizado desde GitHub el 2026-11-06).
+Total: **1043 issues abiertos** (24 root y 1019 code; actualizado desde GitHub el 2026-11-06).
 
 | Issue | Descripción corta | Módulo | Tipo | Estatus |
 |---|---|---|---|---|
+| [#2046](https://github.com/cacao-accounting/cacao-accounting/issues/2046) | [AUDIT][I2F][UX] Indica lista de bodegas vacía | Inventario I2F | code | needs-work |
+| [#2045](https://github.com/cacao-accounting/cacao-accounting/issues/2045) | [AUDIT][O2C] Revisa origen from_order sin consumo | Ventas O2C | code | needs-review |
 | [#2044](https://github.com/cacao-accounting/cacao-accounting/issues/2044) | [AUDIT][CTM] Conserva el formulario al rechazar transferencia | Bancos CTM | code | needs-work |
 | [#2043](https://github.com/cacao-accounting/cacao-accounting/issues/2043) | [AUDIT][CTM] Define moneda mostrada en listas de transferencias | Bancos CTM | code | needs-review |
 | [#2042](https://github.com/cacao-accounting/cacao-accounting/issues/2042) | [AUDIT][CTM] Conserva la ruta al paginar notas y transferencias | Bancos CTM | code | needs-work |
