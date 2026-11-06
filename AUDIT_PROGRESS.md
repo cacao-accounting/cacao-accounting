@@ -3063,6 +3063,8 @@ Estado transversal de símbolos revisados en esta ronda:
 | Macros `list_filters`, `period_list_filters`, `rendizar_paginacion` | Parciales globales | Uso y query string comprobados desde este caller; callers restantes y browser/selector smart-select aún pendientes. |
 | `document_status_for()` | Parcial | Caller y estado normal comprobados; solicitud pendiente de cancelación no se proyecta (#1803), y otros tipos documentales faltan. |
 
+Reprobe en esta continuación: un test temporal creó 12 cotizaciones en cacao + una en secreta. La consulta de viewer devuelve 10+2, `status=submitted` reduce a la enviada, `company=secreta` da 403 y la página vacía produce `0 items encontrados / Página 1 de 0` sin estado de tabla. Probe pasó 1/1 y se borró. #2047 recibió comentario con evidencia actual (`6687284952`). Sin `AccountingPeriod` sembrados no hay selector de rango que ejercitar en esa fixture; el pendiente de períodos se conserva. Esta sonda respalda los símbolos por caller ya anotados, no los cierra globalmente.
+
 ### O2C — detalle de cliente y acciones del Party — 2026-11-06 (reconciliación focal)
 
 Revalidé `cacao_accounting/ventas/templates/ventas/cliente.html` (SHA `9feac59c8089c3fedb6225ad81b2c1c94b081d427cb7aec05f17c950de5a8ad9`) junto a `ventas_cliente()`, `build_party_detail_context()`, helpers de contacto/dirección/configuración, macro de adjuntos y el context processor del historial. La prueba existente se ejecutó ahora en `.venv`: cuatro casos pasaron (listado scoped, usuario sin compañías, detalle de Party ajeno 403 y detalle de Party autorizado 200). Esto valida la frontera de lectura básica y render del detalle, no las acciones.
