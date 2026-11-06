@@ -3094,6 +3094,23 @@ Revisé `cliente_lista.html` (SHA `b2ff54e91b72ebd5e2fe9f346b8c40d2ecd2968ca4a0d
 
 La plantilla continúa Parcial por empty state, CTA y flujo de alta, no por fuga demostrada. No se alteran los conteos globales ni el producto. La fila vigente y resultado de sonda constan en `AUDIT_PENDING.md`.
 
+### O2C — alta/edición de cliente y configuración por compañía — 2026-11-06
+
+Auditada `cliente_nuevo.html` (SHA `68a42b79e4370b2666076896a640f4725fa4770b4dae8c0d83d3db0879771ffa`), `FormularioCliente`, includes `party_profile_fields.html`, `party_company_settings_form.html`, `party_legal_fields.html`, ruta alta/edición, writers, helpers de perfil/grupo/configuración y llamadas Smart Select (`company`, `customer_group`, `account`, `price_list`, `tax_rule`, `tax_template`). Se ejecutaron dos probes temporales Flask/SQLite con CSRF verdadero activo (cada archivo borrado tras ejecutar): (1) POST sin token 400/no persistencia y POST válido de `sinacceso` respondió 302 y creó Party cliente con vínculo `CompanyParty(cacao)`; (2) POST vacío `name=""` de la misma identidad respondió 302 y persistió `Party(name="")`. Ambas pruebas pasaron 1/1. La primera evidencia quedó en #1524 (`6687107047`); la segunda en #1722 (`6687119731`). El token protege contra CSRF, no agrega autorización.
+
+| Símbolo / bloque | Estado | Evidencia / límite |
+|---|---|---|
+| `ventas_cliente_nuevo()` / `_handle_cliente_create()` | Parciales, #1524/#1722 | GET login-only; POST exige token CSRF pero no permiso `sales.crear`. `sinacceso` con token crea y vincula Party en `cacao`. No se probaron concurrencia/rollback o roles autorizados. |
+| `ventas_cliente_editar()` / `_handle_cliente_update()` | Parciales, #1524/#1722/#1725 | código omite guard de `editar` y `validate_on_submit`; evidencia previa de modificación no-role fue con CSRF deshabilitado, no extrapolar token. Party dual y rol cross se relacionan con #1725. Falta repro CSRF real y campos de configuración en actualización. |
+| `FormularioCliente` | Parcial, #1722 | `name` usa `DataRequired`, pero ambos writers leen `request.form` y nunca llaman `validate_on_submit`; POST vacío creó registro. Campos Email son `StringField` sin validadores de formato; fecha y enums validan parcialmente en helpers. |
+| `apply_party_group()` / `validate_party_group()` | Parciales | Helper rechaza grupo inexistente/inactivo/rol incorrecto y limpia al faltar ID; sin runtime branch tests en esta ruta. |
+| `apply_party_profile()` / `_clean_text()` / `_parse_date()` | Parciales | Revisión de asignación y guardas de nationality/person_type/fecha; no se probaron valores inválidos, whitespace, caracteres extensos ni rollback desde POST. |
+| `_upsert_customer_company_settings_from_request()` / `upsert_party_company_settings_rows()` / `_delete_removed_company_settings()` | Parciales | Form serializa filas paralelas y rutas actualizan/eliminan vínculos; alta válida añadió vínculo de compañía y actor sin permisos pudo elegirlo. Duplicados/misalign arrays/remoción de PartyAccount y atomicidad no probados. |
+| `_validate_account()` / `_validate_tax_template()` / `_validate_tax_rule()` / `_validate_price_list()` / `upsert_party_company_settings()` | Parciales | Código valida pertenencia, tipo, rol, vigencia; no se corrieron casos de IDs manipulados ni referencias cross-company. No asumir que el selector de UI es una barrera server-side. |
+| `party_company_settings_form.html` / Smart Select / `/api/search-select` | Parciales | Hidden values dependen de Alpine y el API aplica filtros/ACL por catálogo; no se hizo navegación browser ni prueba de cambio de compañía, resultados, respuestas tardías o IDs alterados. |
+
+Plantilla y writers siguen Parciales; la evidencia confirma los dos hallazgos existentes, sin crear duplicados. No hubo cambios de producto ni de tests permanentes. ISSUE.md ya lista ambos issues abiertos. Próximo pase: formularios O2C siguientes o cerrar cadena de cliente con navegador y matriz positiva/negativa de roles/settings.
+
 Próximo paso: continuar con la siguiente plantilla parcial de Ventas y cerrar su cadena template → endpoint → query helpers → macros/JS → evidencia de render y permisos. Mantener el conteo reconciliado actual de HTML/Jinja (**85 completas, 167 parciales de 252**) hasta que una ruta se cierre realmente; completar las asociaciones de métodos por caller antes de retomar la cola general de Python.
 
 ### O2C — listados de facturas/órdenes/pedidos/remisiones y notas — 2026-11-06
