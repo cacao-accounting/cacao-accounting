@@ -3237,7 +3237,7 @@ cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,"e
 cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,"formulario [línea 17, elemento 3]",Parcial,Render 200 en estado vacío vía curl; GET de compañía filtrado y escapado
 cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,"acción HTML [línea 22, elemento 4]",Parcial,Render 200 en estado vacío vía curl; botón Filtrar operativo
 cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,"enlace de acción [línea 27, elemento 5]",Parcial,Render 200 en estado vacío vía curl; enlace al panel conserva company
-cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,contenido: condicional Jinja [línea 33],Pendiente,
+cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,contenido: condicional Jinja [línea 33],Parcial,Render 200 en estado vacío vía curl; estado vacío mostrado
 cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,macro contenido.status_badge,Pendiente,
 cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,contenido.status_badge: condicional Jinja [línea 44],Pendiente,
 cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,contenido.status_badge: condicional Jinja [línea 48],Pendiente,
