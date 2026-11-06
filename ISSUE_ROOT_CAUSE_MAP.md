@@ -1,11 +1,11 @@
 # Mapa provisional de issues abiertos por causa raíz
-**Estado al 2026-11-06:** cotejado con `gh issue list --state open`: 1051 issues abiertos (24 root/1027 code); las relaciones causales siguen provisionales y la asignación integral no está validada.
-**Fuente:** `ISSUE.md` contiene los mismos 1051 IDs abiertos, cotejados con GitHub el 2026-11-06; la agrupación causal en este mapa continúa parcial y requiere validar mecanismos.
+**Estado al 2026-11-06:** cotejado con `gh issue list --state open`: 1052 issues abiertos (24 root/1028 code); las relaciones causales siguen provisionales y la asignación integral no está validada.
+**Fuente:** `ISSUE.md` contiene los mismos 1052 IDs abiertos, cotejados con GitHub el 2026-11-06; la agrupación causal en este mapa continúa parcial y requiere validar mecanismos.
 **Uso:** proponer una agrupación solo cuando el mecanismo causal coincide; proximidad de módulo o síntoma no basta. `needs-review` conserva el criterio pendiente y no autoriza una solución.
 
 ## Índice de paraguas abiertos
 
-La instantánea vigente tiene 24 issues clasificados `root` y 1027 `code` (1051 issues abiertos en total). Este índice enumera los paraguas y sus etiquetas actuales; no demuestra que todos los 1027 issues `code` estén asignados. La tabla de relaciones de abajo sigue siendo una muestra parcial por mecanismos ya revisados.
+La instantánea vigente tiene 24 issues clasificados `root` y 1028 `code` (1052 issues abiertos en total). Este índice enumera los paraguas y sus etiquetas actuales; no demuestra que todos los 1028 issues `code` estén asignados. La tabla de relaciones de abajo sigue siendo una muestra parcial por mecanismos ya revisados.
 
 | Issue root | Descripción | Estatus |
 |---|---|---|
@@ -79,6 +79,7 @@ La instantánea vigente tiene 24 issues clasificados `root` y 1027 `code` (1051 
 
 | Issue | Root | Confianza | Mecanismo/nota |
 |---|---|---|---|
+| #2055 | #1711 candidato | Alta | `document_print_button()` genera preview/PDF sin `company`; para un usuario autorizado a varias compañías, documento OWN visible con compañía actual FOR produce 404. El mismo URL con `company=OWN` funciona. Fallo de disponibilidad por contexto omitido, no bypass de ACL; #1649 es secundario únicamente por el contexto de scope. |
 | #1923 | Sin root actual | Alta | `_safe_return_url()` admite path con backslash inicial `/\\evil.example/path`; `build_print_html()` lo escapa como atributo, pero el parser URL WHATWG lo resuelve a origen externo. Issue de open redirect, distinto de CSS no seguro (#1563) y CSRF admin (#1761). |
 | #1925 | Sin root actual | Alta | Tipo de documento de impresión no registrado causa HTTP 500: servicio lanza `ValueError`, ruta captura solo `PrintingError`; `PrintableDocumentNotRegisteredError` está declarado pero no tiene caller, posible integración. |
 | #1928 | #1711 | Alta | Tres templates Jinja usan `block content`, pero base declara `contenido`; endpoints 200 no renderizan contenido propio. |
