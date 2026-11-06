@@ -68,3 +68,19 @@ para los documentos históricos de seguimiento. Verifica que corresponda a la im
 y que permita identificar el símbolo revisado antes de usarla. La evidencia agregada de un archivo
 no acredita automáticamente todos sus símbolos. No crees bitácoras locales paralelas ni checkpoints
 manuales de avance: los indicadores se derivan de la matriz y la narrativa vive en los issues.
+
+## No saturar la API de github
+
+Implementa una estrategia de consulta local para los issues de `cacao-accounting/cacao-accounting`, con el objetivo de reducir drásticamente las peticiones a la API de GitHub durante la auditoría de la rama `estabilizacion`.
+
+Descarga inicialmente todos los issues abiertos, incluyendo sus metadatos, descripciones, etiquetas y comentarios necesarios, mediante paginación y respetando los límites de la API. Almacena el snapshot fuera del repositorio de código, en un formato estructurado y reutilizable (JSONL o SQLite).
+
+Implementa sincronización incremental basada en `updated_at`, con un margen de solapamiento y deduplicación por ID. Debe detectar también issues que dejaron de estar abiertos y manejar correctamente paginación, errores, interrupciones y rate limits.
+
+A partir de ese momento, todos los agentes deben utilizar exclusivamente el snapshot local para consultar, clasificar, comparar, agrupar y analizar issues. GitHub se utilizará únicamente para sincronización controlada y publicación de hallazgos verificables.
+
+Evita consultas individuales repetitivas, especialmente para comprobar duplicados. Permite compartir una única cache entre agentes y garantiza que ninguna sincronización sobrescriba o corrompa datos utilizados por otros procesos.
+
+No modifiques código funcional de Cacao Accounting, no cierres issues, no cambies etiquetas ni alteres el inventario existente. No agregues archivos de seguimiento al repositorio. Mantén la rama `estabilizacion` congelada durante la auditoría.
+
+Documenta brevemente cómo realizar la descarga inicial, actualizar el snapshot, consultar sus datos y verificar cuándo se sincronizó por última vez.
