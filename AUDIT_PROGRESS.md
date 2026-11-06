@@ -3080,6 +3080,20 @@ Revalidé `cacao_accounting/ventas/templates/ventas/cliente.html` (SHA `9feac59c
 
 No se cambia el conteo de cierre: la plantilla y su cadena mutante permanecen Parciales. No hay cambios de producto ni tests permanentes. Ver fila vigente de la plantilla en `AUDIT_PENDING.md`.
 
+### O2C — listado de clientes y filtros de Party — 2026-11-06
+
+Revisé `cliente_lista.html` (SHA `b2ff54e91b72ebd5e2fe9f346b8c40d2ecd2968ca4a0d2e52a0377f6a9c24299`) con `ventas_cliente_lista()` → `filtrar_parties_por_companias()` → `_authorized_companies()` → `_paginate_list()` → `_apply_company_scope()`/`_apply_period_scope()` → `apply_list_filters()` → `attach_period_picker()` y macros `list_filters()`/`rendizar_paginacion()`. Además de 4 tests existentes de compañía/detalle (4 passed), ejecuté una sonda temporal de Flask/SQLite (2 passed, archivo temporal eliminado): 12 Parties autorizados producen 10 filas en página 1 y 2 en página 2; búsqueda y paginación se conservan. `?status=cancelled` queda en el href pero no filtra, porque la ruta configura `include_status=False` y Party no expone docstatus. El parámetro manual `?company=secreta` no es aplicado: `Party` no tiene `company`; la consulta se restringe por `CompanyParty` a todas las compañías consultables y el Party ajeno no aparece. No se interpreta como fuga ni se abre issue: la UI no expone selector de compañía en este maestro global.
+
+| Símbolo | Estado para este caller | Evidencia / límite |
+|---|---|---|
+| `ventas_cliente_lista()` / `filtrar_parties_por_companias()` / `_authorized_companies()` | Completo para scope básico de este caller; Parcial global | 4 tests permanentes prueban vendedor scoped y usuario sin compañías; query real confirma que no se incluye Party secreto. Sin roles adicionales ni multi-company user en esta ronda. |
+| `_paginate_list()` / `_apply_company_scope()` | Parciales para este caller | Página 1=10 y página 2=2; filtro company en Party se hace por vínculos autorizados. `?company=` se ignora por el modelo global, y no hay selector en UI. No aplican igual a modelos transaccionales que sí tienen company. |
+| `apply_list_filters()` | Completo para búsqueda en este caller; status no aplicable | Search reduce a 12 resultados; status no se aplica intencionalmente en la llamada (`include_status=False`). Macros conservan un `status` manipulado en query string, detalle de URL sin efecto funcional. |
+| `list_filters()` / `rendizar_paginacion()` | Parciales globales | Search, vacíos y paginación renderizados; empty state es solo `0 items encontrados / Página 1 de 0` (#2049). CTA Nuevo aparece sin permiso y conduce a ruta de alta con problema #1524. Caller y casos globales restantes abiertos. |
+| `_apply_period_scope()` / `attach_period_picker()` | No aplicables al modelo Party | `Party` no publica `posting_date`; selector de período no se adjunta. |
+
+La plantilla continúa Parcial por empty state, CTA y flujo de alta, no por fuga demostrada. No se alteran los conteos globales ni el producto. La fila vigente y resultado de sonda constan en `AUDIT_PENDING.md`.
+
 Próximo paso: continuar con la siguiente plantilla parcial de Ventas y cerrar su cadena template → endpoint → query helpers → macros/JS → evidencia de render y permisos. Mantener el conteo reconciliado actual de HTML/Jinja (**85 completas, 167 parciales de 252**) hasta que una ruta se cierre realmente; completar las asociaciones de métodos por caller antes de retomar la cola general de Python.
 
 ### O2C — listados de facturas/órdenes/pedidos/remisiones y notas — 2026-11-06
