@@ -573,7 +573,7 @@ El rango incluye 411 issues abiertos: 24 roots y 387 hijos. El cotejo distingue 
 | Issue hijo | Root primario | Root secundario / dimensión | Nota |
 |---|---|---|---|
 | #1515 | #1719 | #1649 | Destinos/source permitidos en árbol y flow; ACL/company ownership como factor secundario. |
-| #1971 | #1649 | — | `GET` del formulario de cotización carga y serializa nombre/compañía de `SalesRequest` cross-company antes de validar acceso al origen; sin lectura de líneas reproducida. |
+| #1971 | #1649 | — | `GET` de formularios O2C carga y serializa metadatos de origen cross-company antes de ACL: cotización desde `SalesRequest` (`/quotation/new`), factura desde `SalesInvoice` (`from_invoice`), orden desde `SalesQuotation` (`from_quotation`, evidencia `6685976057`) y orden desde `SalesRequest` (mismo GET, `initialHeader` serializa `customer_name`/`company`). POSTs observados se rechazan; sin lectura de líneas por esas pantallas ni bypass de escritura reproducido. |
 | #1972 | #1650 | — | `Decimal('NaN')` en monto de conciliación bancaria escapa como `InvalidOperation` antes del try/except; reproducción focal en `test_request_context`, no HTTP autenticado. |
 | #1973 | #1658 candidato | — | `transaction_grid()` declara `source_label`, `items_disponibles`, `uoms_disponibles` y `warehouses_disponibles`, pero no consume esos cuatro argumentos; los callers sí los pasan. No se probó efecto en el flujo de carga; resolver contrato integrando o retirando en pase coordinado. |
 | #1532 | #1718 | #1652 | Import agrupado/paridad de contexto; lectura tabular solo dimensión secundaria. |
