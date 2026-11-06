@@ -3063,6 +3063,23 @@ Estado transversal de símbolos revisados en esta ronda:
 | Macros `list_filters`, `period_list_filters`, `rendizar_paginacion` | Parciales globales | Uso y query string comprobados desde este caller; callers restantes y browser/selector smart-select aún pendientes. |
 | `document_status_for()` | Parcial | Caller y estado normal comprobados; solicitud pendiente de cancelación no se proyecta (#1803), y otros tipos documentales faltan. |
 
+### O2C — detalle de cliente y acciones del Party — 2026-11-06 (reconciliación focal)
+
+Revalidé `cacao_accounting/ventas/templates/ventas/cliente.html` (SHA `9feac59c8089c3fedb6225ad81b2c1c94b081d427cb7aec05f17c950de5a8ad9`) junto a `ventas_cliente()`, `build_party_detail_context()`, helpers de contacto/dirección/configuración, macro de adjuntos y el context processor del historial. La prueba existente se ejecutó ahora en `.venv`: cuatro casos pasaron (listado scoped, usuario sin compañías, detalle de Party ajeno 403 y detalle de Party autorizado 200). Esto valida la frontera de lectura básica y render del detalle, no las acciones.
+
+| Símbolo / bloque | Estado individual | Evidencia / límite |
+|---|---|---|
+| `ventas_cliente()` / `tercero_tiene_vinculo_autorizado()` / `_authorized_companies()` | Completa para lectura de este caller; parcial global | Party de compañía vinculada 200 y ajeno 403; prueba focal 2 positivos/negativos más allow/deny anterior. No prueba matrices de permisos granulares con varias compañías/roles. |
+| `build_party_detail_context()` / `party_company_settings_rows()` | Parciales | Inspección confirma que recoge settings, contactos y direcciones del Party compartido, no filtra contenido por compañía. Consistente con #1284 `needs-review`; alcance de datos comunes no se decide en auditoría. |
+| `party_detail_sections.html` / endpoints contacto-dirección | Parciales, #1282 | Crear/editar llaman `requiere_edicion_tercero`; los dos endpoints `*_desactivar` llaman deactivate + commit sin guard, y la vista muestra acciones. Evidencia anterior confirma defectos de permisos; no repetir mutación. |
+| CTA Editar/Nuevo / `ventas_cliente_editar()` / `_handle_cliente_update()` | Parciales, #1524/#1649 | CTA se muestra sin permiso; evidencia previa con fixture CSRF-disabled confirma GET/POST edit no-role y mutación persistida. No presentar esa fixture como validación de CSRF real; guard de acción falta en el handler. |
+| `party_company_settings_form.html` / `ventas_cliente_configuracion_compania()` / `exigir_companias_tercero()` / `upsert_party_company_settings_rows()` | Parciales para este caller | Form separado contiene CSRF; handler exige edición para compañías enviadas y existentes antes del upsert/eliminación, valida IDs de cuenta/impuesto/lista. Esta ronda no prueba POST CSRF activo, duplicados, manipulación cross-company ni rollback. |
+| `document_attachments_panel()` / `list_attachments()` | Parciales, #1284 `needs-review` | Macro usa referencia `customer` global al Party; decisión sobre aislamiento por compañía sigue abierta. No se probó descarga/subida en este caller. |
+| `get_balance_confirmations_history()` | Parcial con defecto #1796 | Context processor devuelve `[]` si no recibe `company`; template lo invoca solo con party ID y party type, así historial Cloud se muestra vacío aunque existan confirmaciones. No cubierto por los cuatro tests. |
+| `party_group_label()` / `list_party_contacts()` / `list_party_addresses()` / formatters del detalle | Parciales | Sus resultados inspeccionados a través del contexto; sin matriz de Party sin relación, registros inactivos, XSS de valores ni combinaciones Cloud/Desktop. |
+
+No se cambia el conteo de cierre: la plantilla y su cadena mutante permanecen Parciales. No hay cambios de producto ni tests permanentes. Ver fila vigente de la plantilla en `AUDIT_PENDING.md`.
+
 Próximo paso: continuar con la siguiente plantilla parcial de Ventas y cerrar su cadena template → endpoint → query helpers → macros/JS → evidencia de render y permisos. Mantener el conteo reconciliado actual de HTML/Jinja (**85 completas, 167 parciales de 252**) hasta que una ruta se cierre realmente; completar las asociaciones de métodos por caller antes de retomar la cola general de Python.
 
 ### O2C — listados de facturas/órdenes/pedidos/remisiones y notas — 2026-11-06
