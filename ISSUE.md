@@ -5,10 +5,11 @@ Este archivo incluye únicamente issues abiertos; es una copia de consulta, no s
 Tipo: `root` cuando GitHub etiqueta el issue `root` o `causa-raiz`; `code` en los demás casos.
 Estatus: etiquetas de seguimiento (`needs-review`, `needs-work`, `fix-proposed`, `fix-confirmed`, `fixed`, `verified`) o `abierto`. Si un issue tiene varias, prevalece el orden mostrado aquí.
 
-Total: **1045 issues abiertos** (24 root y 1021 code; actualizado desde GitHub el 2026-11-06).
+Total: **1046 issues abiertos** (24 root y 1022 code; actualizado desde GitHub el 2026-11-06).
 
 | Issue | Descripción corta | Módulo | Tipo | Estatus |
 |---|---|---|---|---|
+| [#2049](https://github.com/cacao-accounting/cacao-accounting/issues/2049) | [AUDIT][O2C][UX] Indica búsqueda de clientes vacía | Ventas O2C | code | needs-work |
 | [#2048](https://github.com/cacao-accounting/cacao-accounting/issues/2048) | [AUDIT][I2F][UX] Indica búsqueda de lotes vacía | Inventario I2F | code | needs-work |
 | [#2047](https://github.com/cacao-accounting/cacao-accounting/issues/2047) | [AUDIT][O2C][UX] Muestra listas de venta vacías | Ventas O2C | code | needs-work |
 | [#2046](https://github.com/cacao-accounting/cacao-accounting/issues/2046) | [AUDIT][I2F][UX] Indica lista de bodegas vacía | Inventario I2F | code | needs-work |

@@ -715,7 +715,7 @@ Conteo vigente: **121/564 rutas completas, 443 parciales; HTML/Jinja 82/252 comp
 |---|---|---|
 | `cacao_accounting/bancos/templates/bancos/extracto_importar.html` | `a6152a0bee480fd3f28a088220020b69551b1810f3c800c147cdd45339ee0b82` | Completa por cobertura y clasificada como plantilla sin consumidor local. Búsqueda de referencias no encontró `render_template` ni otra inclusión; la traducción PO conserva referencias históricas, no ejecución. La única ruta `/bank-statement/import` redirige a `imports.new`, y el flujo activo registra `BankStatementAdapter`; el menú aún usa el shim. Curl/auth existentes: anónimo 302 login; admin 302 al wizard; usuario sin permiso Imports llega al shim y el destino responde 403. No hay formulario ni carga propia en esta plantilla. Hallazgo agrupado bajo #1046 (`6682010582`); no se retiró el template ni el shim porque el contrato externo de URL sigue en revisión bajo #1658. SHA coincide. Sin cambios de producto/tests. |
 
-Conteo vigente: **123/564 rutas completas, 441 parciales; HTML/Jinja 84/252 completas y 168 parciales**.
+Conteo al cierre del bloque: **123/564 rutas completas, 441 parciales; HTML/Jinja 84/252 completas y 168 parciales**.
 
 
 ### Cierre Jinja — listado compartido de pagos — 2026-11-06
