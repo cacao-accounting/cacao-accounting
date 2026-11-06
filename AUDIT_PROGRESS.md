@@ -3094,6 +3094,22 @@ Revisé `cliente_lista.html` (SHA `b2ff54e91b72ebd5e2fe9f346b8c40d2ecd2968ca4a0d
 
 La plantilla continúa Parcial por empty state, CTA y flujo de alta, no por fuga demostrada. No se alteran los conteos globales ni el producto. La fila vigente y resultado de sonda constan en `AUDIT_PENDING.md`.
 
+### O2C — revalidación del detalle de cotización — 2026-11-06
+
+Revalidé `ventas/templates/ventas/cotizacion.html` (SHA `6a890c775ebe730bf782466dc56cddba22691546294d0d0bd1846f70807d81fe`) con `ventas_cotizacion()` → `_require_sales_document_access()` → carga de `SalesQuotationItem`/`format_document_timeline()`, más el API del macro de árbol documental. Probe temporal Flask/SQLite: anónimo 302; sin permiso 403; viewer con permiso en cacao ve cotización propia 200; cotización de `secreta` 403; el HTML incluye editar/aprobar aunque el viewer no tiene esas acciones. La prueba del API `document-flow/tree` fue 200 propia, 403 ajena y `direction=invalid` 400. Dos probes temporales pasaron (1+1); archivos borrados. Evidencia comentada a #1711 (`6687203909`, `6687215910`). La visibilidad del botón no prueba bypass: edit y submit vuelven a verificar acción/compañía en sus handlers.
+
+| Símbolo / bloque | Estado para este caller | Evidencia / límite |
+|---|---|---|
+| `ventas_cotizacion()` / `_require_sales_document_access()` | Completo para GET scope básico; Parcial global | Login, permiso de consulta y compañía ajena/control positivo 302/403/200/403. Sin multi-company ampliada ni documentos sin company. |
+| `SalesQuotationItem` lookup / `format_document_timeline()` | Parciales | Código carga líneas por ID de la cotización y timeline por tipo/ID; probe usó documento sin líneas/eventos, por lo que contenido real no quedó ejercitado. |
+| `detail_header()` / `workflow_buttons()` / CTA de edición | Parciales, #1638/#1803/#1711 | Estado se alimenta de `docstatus` raw; no proyecta solicitud de cancelación pendiente. Viewer ve CTAs; no se probó cada POST válido/negado en esta ronda. |
+| `document_flow_tree()` → `api_document_flow_tree()` → `_require_document_read_access()` | Completo para ACL de este caller; Parcial global | API 200 propia, 403 documento ajeno, 400 dirección fuera de whitelist. No se probaron relaciones reales, ciclos, límites, concurrencia ni browser Alpine. |
+| `document_attachments_panel()` / `list_attachments()` / `attachments_editable()` | Parciales | Macro inspeccionado; fixture no tenía adjuntos. Descarga/subida y ACL de archivo no se probaron aquí. |
+| `document_create_actions()` / `get_create_actions()` / `document_print_button()` | Parciales | Se inspeccionaron URLs/macros, sin acción de creación ni impresión ejecutada por este caller; omisión de company en print sigue pendiente según #2055/otros callers. |
+| `audit_timeline()` | Parcial | Layout inspeccionado; sin eventos reales no se comprobó formato/histórico, paginado ni etiquetas. |
+
+La plantilla continúa Parcial y no altera conteos. CTA/macro y guards quedan separados por símbolo; la fila `AUDIT_PENDING.md` contiene los límites actualizados.
+
 ### O2C — alta/edición de cliente y configuración por compañía — 2026-11-06
 
 Auditada `cliente_nuevo.html` (SHA `68a42b79e4370b2666076896a640f4725fa4770b4dae8c0d83d3db0879771ffa`), `FormularioCliente`, includes `party_profile_fields.html`, `party_company_settings_form.html`, `party_legal_fields.html`, ruta alta/edición, writers, helpers de perfil/grupo/configuración y llamadas Smart Select (`company`, `customer_group`, `account`, `price_list`, `tax_rule`, `tax_template`). Se ejecutaron dos probes temporales Flask/SQLite con CSRF verdadero activo (cada archivo borrado tras ejecutar): (1) POST sin token 400/no persistencia y POST válido de `sinacceso` respondió 302 y creó Party cliente con vínculo `CompanyParty(cacao)`; (2) POST vacío `name=""` de la misma identidad respondió 302 y persistió `Party(name="")`. Ambas pruebas pasaron 1/1. La primera evidencia quedó en #1524 (`6687107047`); la segunda en #1722 (`6687119731`). El token protege contra CSRF, no agrega autorización.
