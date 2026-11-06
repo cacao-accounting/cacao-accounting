@@ -1,7 +1,7 @@
 # INVENTORY: inventario de `cacao_accounting/`
 
 Inventario AST generado el 2026-10-31; nombres de símbolos y líneas requieren regenerarse/cotejarse contra HEAD antes de usarlos como evidencia de auditoría. Este documento enumera estructura, no certifica revisión funcional de clases o funciones.
-Actualizado parcialmente: 2026-11-06 · El mapeo de issues por archivo conserva un snapshot antiguo (363 issues) y no es fuente vigente; `ISSUE.md` contiene 1044 issues abiertos y se reconcilió con GitHub el 2026-11-06. La reconciliación integral del mapeo por archivo de este inventario sigue pendiente.
+Actualizado parcialmente: 2026-11-06 · El mapeo de issues por archivo conserva un snapshot antiguo (363 issues) y no es fuente vigente; `ISSUE.md` contiene 1045 issues abiertos y se reconcilió con GitHub el 2026-11-06. La reconciliación integral del mapeo por archivo de este inventario sigue pendiente.
 
 ## Convenciones
 
@@ -13196,4 +13196,4 @@ Este mapa es un snapshot histórico: no prueba la cobertura de los issues abiert
 
 ## Reconciliación de símbolos — advertencia vigente (2026-11-06)
 
-Los números de línea de la tabla se generaron en el árbol del 2026-10-31 y no deben citarse como ubicación actual sin `rg`/AST sobre el HEAD vigente. La auditoría funcional mantiene sus estados por ruta en `AUDIT_PENDING.md`/`AUDIT_COMPLETE.md`, y documenta evidencia por lote en `AUDIT_PROGRESS.md`; el inventario no reemplaza la inspección de todos los métodos/callers ni de las plantillas Jinja. Corte vigente: rama `estabilizacion`, HEAD `85eed67b20d818150895fe2bc8a691d2ae5d2f4f`, 564 rutas auditables (123 completas revalidadas, 441 parciales/en proceso; plantillas HTML/Jinja 84 completas y 168 parciales); 1044 issues abiertos (24 root, 1020 code; cotejo con GitHub 2026-11-06), con agrupaciones causales todavía provisionales.
+Los números de línea de la tabla se generaron en el árbol del 2026-10-31 y no deben citarse como ubicación actual sin `rg`/AST sobre el HEAD vigente. La auditoría funcional mantiene sus estados por ruta en `AUDIT_PENDING.md`/`AUDIT_COMPLETE.md`, y documenta evidencia por lote en `AUDIT_PROGRESS.md`; el inventario no reemplaza la inspección de todos los métodos/callers ni de las plantillas Jinja. Corte vigente: rama `estabilizacion`, HEAD `85eed67b20d818150895fe2bc8a691d2ae5d2f4f`, 564 rutas auditables (124 completas revalidadas, 440 parciales/en proceso; plantillas HTML/Jinja 85 completas y 167 parciales); 1045 issues abiertos (24 root, 1021 code; cotejo con GitHub 2026-11-06), con agrupaciones causales todavía provisionales.
