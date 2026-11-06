@@ -5,11 +5,12 @@ Este archivo incluye únicamente issues abiertos; es una copia de consulta, no s
 Tipo: `root` cuando GitHub etiqueta el issue `root` o `causa-raiz`; `code` en los demás casos.
 Estatus: etiquetas de seguimiento (`needs-review`, `needs-work`, `fix-proposed`, `fix-confirmed`, `fixed`, `verified`) o `abierto`. Si un issue tiene varias, prevalece el orden mostrado aquí.
 
-Total: **1050 issues abiertos** (24 root y 1026 code; actualizado desde GitHub el 2026-11-06).
+Total: **1051 issues abiertos** (24 root y 1027 code; actualizado desde GitHub el 2026-11-06).
 
 | Issue | Descripción corta | Módulo | Tipo | Estatus |
 |---|---|---|---|---|
-| [#2053](https://github.com/cacao-accounting/cacao-accounting/issues/2053) | Factura de venta: oculta acciones sin permiso | Ventas O2C | code | needs-work |
+| [#2054](https://github.com/cacao-accounting/cacao-accounting/issues/2054) | Orden de venta: traduce estado operativo raw | Ventas O2C | code | needs-work |
+| [#2053](https://github.com/cacao-accounting/cacao-accounting/issues/2053) | O2C: filtra CTAs de detalle según permisos | Ventas O2C | code | needs-work |
 | [#2052](https://github.com/cacao-accounting/cacao-accounting/issues/2052) | Remisiones: CTA Nuevo no coincide con permisos del POST | Ventas O2C | code | needs-review |
 | [#2051](https://github.com/cacao-accounting/cacao-accounting/issues/2051) | Remisiones: Inventory-only no puede elegir período | Ventas O2C | code | needs-work |
 | [#2050](https://github.com/cacao-accounting/cacao-accounting/issues/2050) | O2C: notas de débito paginan como devoluciones | Ventas O2C | code | needs-work |
