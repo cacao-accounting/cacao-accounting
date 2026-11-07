@@ -2813,14 +2813,14 @@ cacao_accounting/compras/services.py,_purchase_quotation_transaction_config(),Pa
 cacao_accounting/compras/services.py,_create_purchase_quotation_from_request(),Parcial,Faltan pruebas de permisos y persistencia
 cacao_accounting/compras/services.py,_handle_purchase_quotation_edit_post(),Parcial,Faltan pruebas de permisos y persistencia
 cacao_accounting/compras/services.py,_create_purchase_receipt_from_form(),Pendiente,
-cacao_accounting/compras/services.py,_handle_purchase_receipt_edit_post(),Pendiente,
-cacao_accounting/compras/services.py,_set_purchase_receipt_totals(),Pendiente,
+cacao_accounting/compras/services.py,_handle_purchase_receipt_edit_post(),Parcial,"Revierte relaciones, marca líneas sustituidas y recalcula totales, pero omite transaction_currency y acepta company nueva conservando purchase_order_id; FX/currency stale y fuente cross-company quedan en #1822 (comentario vigente)."
+cacao_accounting/compras/services.py,_set_purchase_receipt_totals(),Parcial,"Recalcula base_currency, FX y base_total desde moneda/company persistida; handler de edición no copia moneda enviada, hallazgo #1822."
 cacao_accounting/compras/services.py,_set_purchase_document_totals(),Parcial,Faltan pruebas de permisos y persistencia
-cacao_accounting/compras/services.py,_validate_purchase_source_link(),Pendiente,
-cacao_accounting/compras/services.py,_validate_receipt_quantities_against_po(),Pendiente,
-cacao_accounting/compras/services.py,_validate_invoice_quantities_against_receipt(),Pendiente,
-cacao_accounting/compras/services.py,_validate_purchase_invoice_relation(),Pendiente,
-cacao_accounting/compras/services.py,_validate_invoice_requires_supplier_link(),Pendiente,
+cacao_accounting/compras/services.py,_validate_purchase_source_link(),Parcial,"Exige origen aprobado, misma compañía/proveedor/moneda y relaciones por línea; solo chequea docstatus y deja concurrencia/estado de fuente al servicio DocumentFlow."
+cacao_accounting/compras/services.py,_validate_receipt_quantities_against_po(),Parcial,"Valida fuente, proveedor y consumo acumulado en UOM base contra OC; omite relación con source_item ausente y depende de checks upstream para integridad del conjunto."
+cacao_accounting/compras/services.py,_validate_invoice_quantities_against_receipt(),Parcial,"Valida vínculo por cabecera y recorre relaciones activas para límite acumulado; comportamiento distinto para líneas sin source_item y notas necesita cobertura específica."
+cacao_accounting/compras/services.py,_validate_purchase_invoice_relation(),Parcial,"Controla consumo agregado en UOM base contra recibo/OC; ignora otros source types y retorna silencioso si falta la línea de origen."
+cacao_accounting/compras/services.py,_validate_invoice_requires_supplier_link(),Parcial,"Aplica CompanyParty flags a links activos; retorna si falta CompanyParty, por lo que depende del alta histórica/membresía previa para imponer la política."
 cacao_accounting/compras/services.py,_purchase_invoice_selected_company(),Pendiente,
 cacao_accounting/compras/services.py,_purchase_invoice_supplier_choices(),Pendiente,
 cacao_accounting/compras/services.py,_purchase_invoice_source_ids(),Pendiente,
@@ -2833,7 +2833,7 @@ cacao_accounting/compras/services.py,_purchase_exchange_rate(),Parcial,"Moneda f
 cacao_accounting/compras/services.py,_capture_purchase_state(),Pendiente,
 cacao_accounting/compras/services.py,_validate_supplier_invoice_flags(),Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
 cacao_accounting/compras/services.py,_validate_supplier_company_membership(),Parcial,"Exige CompanyParty activa cuando supplier/company están presentes; ambos ausentes pasan y caller debe garantizar Party supplier/compañía requeridos."
-cacao_accounting/compras/services.py,_validate_purchase_tax_template(),Pendiente,
+cacao_accounting/compras/services.py,_validate_purchase_tax_template(),Parcial,"Valida existencia, actividad, ámbito buying, company y currency cuando ambas se informan; plantilla con currency o documento sin currency omite comparación."
 cacao_accounting/compras/services.py,_validate_duplicate_supplier_invoice(),Parcial,"Bloquea Party para serializar, excluye canceladas y hace precheck; comparación de campo crudo no coincide con supplier_invoice_key.strip(): duplicado con espacios evade el SELECT y produce IntegrityError no capturado (#208; evidencia comentada)."
 cacao_accounting/compras/services.py,_load_reversal_source(),Parcial,"Aplica FOR UPDATE solo cuando caller lo solicita; creación de borrador no bloquea, submit sí, y capacidad se recalcula bajo lock."
 cacao_accounting/compras/services.py,_validate_reversal_source(),Parcial,"Exige docstatus aprobado y proveedor/compañía coincidentes si se suministran; no valida moneda ni tipo de documento origen (#1223)."
@@ -2856,22 +2856,22 @@ cacao_accounting/compras/services.py,_build_purchase_invoice(),Parcial,"Persiste
 cacao_accounting/compras/services.py,_validate_purchase_invoice_source(),Parcial,"Valida fuentes de factura normal; retorna para notas y delega a reversa, pero no enlaza explícitamente sus fuentes (#1223)."
 cacao_accounting/compras/services.py,_finalize_purchase_invoice(),Parcial,"Calcula FX/totales/fiscal y valida tope nominal; allocations posteriores tienen brechas #1138/#1522 y cancelación #1222."
 cacao_accounting/compras/services.py,_create_purchase_invoice_from_request(),Parcial,"Orquesta fuente/ACL/tercero/duplicado/FX/líneas/fiscal/reversa; IntegrityError de clave normalizada no se captura en borde de duplicado con espacios (#208). Falta cotejar atomicidad y concurrencia de capacidad de crédito; #490/#510."
-cacao_accounting/compras/services.py,_handle_purchase_invoice_edit_post(),Parcial,"Recrea líneas en draft y recalcula FX/fiscal; permite editar compañía/proveedor sin revalidar coherencia de reversal/source (#1223)."
-cacao_accounting/compras/services.py,_resolve_supplier_from_invoice(),Pendiente,
-cacao_accounting/compras/services.py,_parse_grid_rows_from_form(),Pendiente,
+cacao_accounting/compras/services.py,_handle_purchase_invoice_edit_post(),Parcial,"Recrea líneas y recalcula FX/fiscal, pero omite transaction_currency/base_currency del POST; cambio de company deja snapshot stale (#1822). En notas no revalida coherencia de reversal/source (#1223)."
+cacao_accounting/compras/services.py,_resolve_supplier_from_invoice(),Parcial,"Devuelve supplier_id/name por factura sin ACL propia; caller landed cost valida origen/compañía antes del POST (#490). Exposición GET de from_invoice está cubierta por ruta #2097, no por este helper."
+cacao_accounting/compras/services.py,_parse_grid_rows_from_form(),Parcial,"Agrupa campos prefijados por sufijo sin validar índice numérico ni filas completas; Decimal/validadores de writer rechazan valores usados."
 cacao_accounting/compras/services.py,_save_import_landed_cost_items(),Parcial,"amount se calcula qty×rate y rechaza cantidad/tasa negativa; persiste base como amount×FX y valida artículo/bodega solo en etapas posteriores. Hallazgo histórico #562 corregido."
 cacao_accounting/compras/services.py,_save_import_landed_cost_charges(),Parcial,"Rechaza importes negativos y guarda base_amount con FX; concepto vacío se omite y charge_type/account_id no se validan localmente."
 cacao_accounting/compras/services.py,_link_landed_cost_to_invoice(),Parcial,"Crea relación por cada item coincidente del costo con líneas activas de factura; usa primera coincidencia de item_code y no detecta repetidos ni faltantes."
 cacao_accounting/compras/services.py,_landed_cost_currency_context(),Parcial,"Toma FX de factura o busca tasa; fallback a búsqueda si tasa fuente ausente/no positiva; ruta debe preservar moneda/tasa coherentes (#518, #490)."
 cacao_accounting/compras/services.py,_create_import_landed_cost_from_request(),Parcial,"Valida ACL company, factura aprobada/misma compañía, método, tasa y persiste cabecera/líneas/enlaces; operación no está envuelta en try/rollback local y log_create ocurre tras commit (issues #1211 #1217/#1727 #1218 #1642)."
-cacao_accounting/compras/services.py,_get_import_landed_cost_items(),Pendiente,
-cacao_accounting/compras/services.py,_get_import_landed_cost_charges(),Pendiente,
-cacao_accounting/compras/services.py,_group_items_by_budget_dimensions(),Pendiente,
-cacao_accounting/compras/services.py,_resolve_document_no_for_budget(),Pendiente,
-cacao_accounting/compras/services.py,_build_budget_exceeded_message(),Pendiente,
-cacao_accounting/compras/services.py,_log_budget_exceeded(),Pendiente,
-cacao_accounting/compras/services.py,_execute_budget_policy(),Pendiente,
-cacao_accounting/compras/services.py,check_budget_control(),Pendiente,
+cacao_accounting/compras/services.py,_get_import_landed_cost_items(),Parcial,"Consulta líneas por parent ID; ACL debe quedar garantizada por caller de detalle (#448 fue corregido en ruta)."
+cacao_accounting/compras/services.py,_get_import_landed_cost_charges(),Parcial,"Consulta cargos por parent ID; depende de autorización previa de ruta para aislamiento multiempresa (#448 corregido)."
+cacao_accounting/compras/services.py,_group_items_by_budget_dimensions(),Parcial,"Agrupa por cuenta/centro/dimensiones; si base_amount falta usa amount transaccional, desajustando presupuesto ledger para compras extranjeras (#2133)."
+cacao_accounting/compras/services.py,_resolve_document_no_for_budget(),Parcial,"Solo resuelve document_no para purchase_request y purchase_order; otros tipos del control se auditan con document_id."
+cacao_accounting/compras/services.py,_build_budget_exceeded_message(),Parcial,"Formatea presupuesto/disponible/solicitud/exceso y varía texto por política; presupone resultado completo de BudgetService."
+cacao_accounting/compras/services.py,_log_budget_exceeded(),Parcial,"Agrega AuditTrail a transacción caller y conserva actor/compañía/importes; tipos no mapeados usan document_id."
+cacao_accounting/compras/services.py,_execute_budget_policy(),Parcial,"Aplica block/notify; política desconocida se comporta como do-nothing y su validez depende de configuración."
+cacao_accounting/compras/services.py,check_budget_control(),Parcial,"Se ejecuta en submit de solicitud/OC/recepción, pero amount de líneas extranjeras se compara sin conversión con presupuesto ledger (#2133); concurrencia entre aprobaciones pendiente."
 cacao_accounting/compras/templates/compras.html,bloque contenido,Pendiente,
 cacao_accounting/compras/templates/compras.html,contenido: condicional Jinja [línea 6],Pendiente,
 cacao_accounting/compras/templates/compras.html,"enlace de acción [línea 14, elemento 1]",Pendiente,
@@ -4209,12 +4209,12 @@ cacao_accounting/contabilidad/routes.py,nuevo_cierre_mensual(),Pendiente,
 cacao_accounting/contabilidad/routes.py,ejecutar_capitalizacion_cierre(),Pendiente,
 cacao_accounting/contabilidad/routes.py,ver_cierre_mensual(),Pendiente,
 cacao_accounting/contabilidad/routes.py,aplicar_recurrentes_cierre(),Pendiente,
-cacao_accounting/contabilidad/routes.py,ejecutar_revalorizacion_cierre(),Pendiente,
+cacao_accounting/contabilidad/routes.py,ejecutar_revalorizacion_cierre(),Parcial,Revisado caller de cierre; delega en servicio; falta prueba integrada
 cacao_accounting/contabilidad/routes.py,finalizar_cierre_mensual(),Pendiente,
-cacao_accounting/contabilidad/routes.py,revalorizaciones_cambiarias(),Pendiente,
-cacao_accounting/contabilidad/routes.py,nueva_revalorizacion_cambiaria(),Pendiente,
-cacao_accounting/contabilidad/routes.py,ver_revalorizacion_cambiaria(),Pendiente,
-cacao_accounting/contabilidad/routes.py,anular_revalorizacion_cambiaria(),Pendiente,
+cacao_accounting/contabilidad/routes.py,revalorizaciones_cambiarias(),Parcial,Curl 200; filtro de estado inoperante y sin alcance de compañía (#1649 #2134)
+cacao_accounting/contabilidad/routes.py,nueva_revalorizacion_cambiaria(),Parcial,Curl 200 GET y POST; valida compañía y período con CSRF
+cacao_accounting/contabilidad/routes.py,ver_revalorizacion_cambiaria(),Parcial,Curl 200; ACL por identifier; 302 si no existe
+cacao_accounting/contabilidad/routes.py,anular_revalorizacion_cambiaria(),Parcial,Curl 302; CSRF y servicio void; estado no-posted redirige
 cacao_accounting/contabilidad/routes.py,nuevo_comprobante(),Pendiente,
 cacao_accounting/contabilidad/routes.py,contabilizar_comprobante(),Pendiente,
 cacao_accounting/contabilidad/routes.py,rechazar_comprobante(),Pendiente,
@@ -4488,53 +4488,53 @@ cacao_accounting/contabilidad/templates/contabilidad/entidad_lista.html,"enlace 
 cacao_accounting/contabilidad/templates/contabilidad/entidad_lista.html,contenido: condicional Jinja [línea 88],Pendiente,
 cacao_accounting/contabilidad/templates/contabilidad/entidad_lista.html,"enlace de acción [línea 89, elemento 10]",Pendiente,
 cacao_accounting/contabilidad/templates/contabilidad/entidad_lista.html,"enlace de acción [línea 91, elemento 11]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,bloque contenido,Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"enlace de acción [línea 7, elemento 1]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"enlace de acción [línea 8, elemento 2]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"enlace de acción [línea 9, elemento 3]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,contenido: condicional Jinja [línea 24],Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"formulario [línea 25, elemento 4]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"acción HTML [línea 27, elemento 5]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"enlace de acción [línea 32, elemento 6]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,contenido: condicional Jinja [línea 38],Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,contenido: bucle Jinja [línea 74],Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,bloque contenido,Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,"enlace de acción [línea 8, elemento 1]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,"enlace de acción [línea 9, elemento 2]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,contenido: condicional Jinja [línea 17],Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,"enlace de acción [línea 18, elemento 3]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,contenido: bucle Jinja [línea 42],Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,"enlace de acción [línea 44, elemento 4]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,bloque contenido,Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"enlace de acción [línea 6, elemento 1]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"enlace de acción [línea 7, elemento 2]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"enlace de acción [línea 8, elemento 3]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"formulario [línea 17, elemento 4]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"componente Alpine [línea 21, elemento 5]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @input [línea 39, elemento 6]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @focus [línea 39, elemento 7]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @blur [línea 39, elemento 8]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 41, elemento 9]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @click [línea 41, elemento 10]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 47, elemento 11]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @mousedown.prevent [línea 47, elemento 12]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"componente Alpine [línea 59, elemento 13]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @input [línea 81, elemento 14]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @focus [línea 81, elemento 15]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @blur [línea 81, elemento 16]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 83, elemento 17]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @click [línea 83, elemento 18]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 89, elemento 19]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @mousedown.prevent [línea 89, elemento 20]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"componente Alpine [línea 101, elemento 21]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @input [línea 123, elemento 22]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @focus [línea 123, elemento 23]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @blur [línea 123, elemento 24]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 125, elemento 25]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @click [línea 125, elemento 26]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 131, elemento 27]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @mousedown.prevent [línea 131, elemento 28]",Pendiente,
-cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 142, elemento 29]",Pendiente,
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,bloque contenido,Parcial,Curl 200 con estados posted y completed_no_changes; #2134
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"enlace de acción [línea 7, elemento 1]",Parcial,Curl 200; breadcrumb renderizado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"enlace de acción [línea 8, elemento 2]",Parcial,Curl 200; breadcrumb renderizado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"enlace de acción [línea 9, elemento 3]",Parcial,Curl 200; breadcrumb renderizado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,contenido: condicional Jinja [línea 24],Parcial,Curl 200; rama posted muestra Anular
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"formulario [línea 25, elemento 4]",Parcial,Curl 200; POST con CSRF a /void
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"acción HTML [línea 27, elemento 5]",Parcial,Curl 200; botón Anular
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,"enlace de acción [línea 32, elemento 6]",Parcial,Curl 200; enlace Listado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,contenido: condicional Jinja [línea 38],Parcial,Curl 200; período seleccionado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html,contenido: bucle Jinja [línea 74],Parcial,Curl 200; estado vacío sin líneas
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,bloque contenido,Parcial,Curl 200; listado con filtro y paginación; #2134
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,"enlace de acción [línea 8, elemento 1]",Parcial,Curl 200; breadcrumb renderizado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,"enlace de acción [línea 9, elemento 2]",Parcial,Curl 200; breadcrumb renderizado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,contenido: condicional Jinja [línea 17],Parcial,Curl 200; botón Nueva según permiso
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,"enlace de acción [línea 18, elemento 3]",Parcial,Curl 200; enlace a nueva revaluación
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,contenido: bucle Jinja [línea 42],Parcial,Curl 200 con fila EXR-TEST
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html,"enlace de acción [línea 44, elemento 4]",Parcial,Curl 200; enlace al detalle
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,bloque contenido,Parcial,Curl 200; formulario con 3 smart selects y CSRF
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"enlace de acción [línea 6, elemento 1]",Parcial,Curl 200; breadcrumb renderizado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"enlace de acción [línea 7, elemento 2]",Parcial,Curl 200; breadcrumb renderizado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"enlace de acción [línea 8, elemento 3]",Parcial,Curl 200; breadcrumb renderizado
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"formulario [línea 17, elemento 4]",Parcial,Curl 200; POST valida compañía y período con CSRF
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"componente Alpine [línea 21, elemento 5]",Parcial,Curl 200; smartSelect company con preload
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @input [línea 39, elemento 6]",Parcial,Revisado estáticamente; búsqueda de compañía sin Playwright
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @focus [línea 39, elemento 7]",Parcial,Revisado estáticamente; búsqueda de compañía sin Playwright
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @blur [línea 39, elemento 8]",Parcial,Revisado estáticamente; búsqueda de compañía sin Playwright
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 41, elemento 9]",Parcial,Curl 200; botón limpiar compañía
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @click [línea 41, elemento 10]",Parcial,Revisado estáticamente; limpia selección
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 47, elemento 11]",Parcial,Curl 200; opción de compañía renderizada
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @mousedown.prevent [línea 47, elemento 12]",Parcial,Revisado estáticamente; selecciona opción
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"componente Alpine [línea 59, elemento 13]",Parcial,Curl 200; fiscal_year_id filtrado por company
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @input [línea 81, elemento 14]",Parcial,Revisado estáticamente; búsqueda de año fiscal sin Playwright
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @focus [línea 81, elemento 15]",Parcial,Revisado estáticamente; búsqueda de año fiscal sin Playwright
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @blur [línea 81, elemento 16]",Parcial,Revisado estáticamente; búsqueda de año fiscal sin Playwright
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 83, elemento 17]",Parcial,Curl 200; limpiar año fiscal
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @click [línea 83, elemento 18]",Parcial,Revisado estáticamente; limpia selección
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 89, elemento 19]",Parcial,Curl 200; opción de año fiscal renderizada
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @mousedown.prevent [línea 89, elemento 20]",Parcial,Revisado estáticamente; selecciona opción
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"componente Alpine [línea 101, elemento 21]",Parcial,Curl 200; period_id filtrado por company y año
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @input [línea 123, elemento 22]",Parcial,Revisado estáticamente; búsqueda de período sin Playwright
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @focus [línea 123, elemento 23]",Parcial,Revisado estáticamente; búsqueda de período sin Playwright
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @blur [línea 123, elemento 24]",Parcial,Revisado estáticamente; búsqueda de período sin Playwright
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 125, elemento 25]",Parcial,Curl 200; limpiar período
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @click [línea 125, elemento 26]",Parcial,Revisado estáticamente; limpia selección
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 131, elemento 27]",Parcial,Curl 200; opción de período renderizada
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"handler @mousedown.prevent [línea 131, elemento 28]",Parcial,Revisado estáticamente; selecciona opción
+cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html,"acción HTML [línea 142, elemento 29]",Parcial,Curl 200; botón Ejecutar
 cacao_accounting/contabilidad/templates/contabilidad/external_counter_ajuste.html,bloque contenido,Parcial,"Evidencia de flujo/plantilla a nivel de archivo; falta evidencia individual del símbolo; HTTP, ajuste, motivo y bitácora cotejados; hallazgos abiertos; #1601 #1649 #1780"
 cacao_accounting/contabilidad/templates/contabilidad/external_counter_ajuste.html,"enlace de acción [línea 7, elemento 1]",Parcial,"Evidencia de flujo/plantilla a nivel de archivo; falta evidencia individual del símbolo; HTTP, ajuste, motivo y bitácora cotejados; hallazgos abiertos; #1601 #1649 #1780"
 cacao_accounting/contabilidad/templates/contabilidad/external_counter_ajuste.html,"enlace de acción [línea 8, elemento 2]",Parcial,"Evidencia de flujo/plantilla a nivel de archivo; falta evidencia individual del símbolo; HTTP, ajuste, motivo y bitácora cotejados; hallazgos abiertos; #1601 #1649 #1780"
@@ -5514,141 +5514,141 @@ cacao_accounting/control_review_service.py,reject_review(),Parcial,Rechaza solo 
 cacao_accounting/control_review_service.py,review_pending_info(),Parcial,Inbox con etiquetas y URL; pendiente importe cero y requester sin nombre.
 cacao_accounting/control_review_service.py,period_review_payload(),Parcial,Hash de todo GL del periodo; pendiente costo en periodos grandes y staleness.
 cacao_accounting/database/__init__.py,[módulo],Parcial,Modelos y guards cotejados parcialmente; faltan writers/readers y lifecycle; #1649 #1708
-cacao_accounting/database/__init__.py,StatusWeb,Pendiente,
-cacao_accounting/database/__init__.py,obtiene_texto_unico(),Pendiente,
-cacao_accounting/database/__init__.py,obtiene_texto_unico_cuid2(),Pendiente,
-cacao_accounting/database/__init__.py,CacaoConfig,Pendiente,
-cacao_accounting/database/__init__.py,BaseTabla,Pendiente,
-cacao_accounting/database/__init__.py,BaseTransaccion,Pendiente,
-cacao_accounting/database/__init__.py,BaseTercero,Pendiente,
-cacao_accounting/database/__init__.py,DocBase,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
-cacao_accounting/database/__init__.py,Currency,Pendiente,
-cacao_accounting/database/__init__.py,ExchangeRate,Pendiente,
-cacao_accounting/database/__init__.py,User,Pendiente,
-cacao_accounting/database/__init__.py,User.is_portal_customer(),Pendiente,
-cacao_accounting/database/__init__.py,User.is_portal_supplier(),Pendiente,
-cacao_accounting/database/__init__.py,User.token() [línea 367],Pendiente,
-cacao_accounting/database/__init__.py,User.token() [línea 381],Pendiente,
-cacao_accounting/database/__init__.py,Roles,Pendiente,
-cacao_accounting/database/__init__.py,RolesAccess,Pendiente,
-cacao_accounting/database/__init__.py,RolesUser,Pendiente,
-cacao_accounting/database/__init__.py,Modules,Pendiente,
-cacao_accounting/database/__init__.py,Entity,Pendiente,
-cacao_accounting/database/__init__.py,Unit,Pendiente,
-cacao_accounting/database/__init__.py,Unit.parent(),Pendiente,
-cacao_accounting/database/__init__.py,Unit.children(),Pendiente,
-cacao_accounting/database/__init__.py,Unit.ancestors(),Pendiente,
-cacao_accounting/database/__init__.py,Unit.descendants(),Pendiente,
-cacao_accounting/database/__init__.py,Book,Parcial,"Campos, unicidad y callers cotejados; falta lifecycle completo por compañía"
-cacao_accounting/database/__init__.py,LedgerMappingRule,Pendiente,
-cacao_accounting/database/__init__.py,FiscalYear,Parcial,Modelo/callers cotejados en subset; faltan transiciones y writers
-cacao_accounting/database/__init__.py,AccountingPeriod,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
-cacao_accounting/database/__init__.py,Accounts,Pendiente,
-cacao_accounting/database/__init__.py,CostCenter,Pendiente,
-cacao_accounting/database/__init__.py,BusinessUnit,Pendiente,
-cacao_accounting/database/__init__.py,BusinessUnit.parent(),Pendiente,
-cacao_accounting/database/__init__.py,BusinessUnit.children(),Pendiente,
-cacao_accounting/database/__init__.py,BusinessUnit.ancestors(),Pendiente,
-cacao_accounting/database/__init__.py,BusinessUnit.descendants(),Pendiente,
-cacao_accounting/database/__init__.py,Project,Pendiente,
-cacao_accounting/database/__init__.py,Project.parent(),Pendiente,
-cacao_accounting/database/__init__.py,Project.children(),Pendiente,
-cacao_accounting/database/__init__.py,Project.ancestors(),Pendiente,
-cacao_accounting/database/__init__.py,Project.descendants(),Pendiente,
-cacao_accounting/database/__init__.py,NamingSeries,Pendiente,
-cacao_accounting/database/__init__.py,Sequence,Pendiente,
-cacao_accounting/database/__init__.py,SeriesSequenceMap,Pendiente,
-cacao_accounting/database/__init__.py,GeneratedIdentifierLog,Pendiente,
-cacao_accounting/database/__init__.py,ExternalCounter,Pendiente,
-cacao_accounting/database/__init__.py,ExternalCounter.next_suggested(),Pendiente,
-cacao_accounting/database/__init__.py,ExternalCounter.next_suggested_formatted(),Pendiente,
-cacao_accounting/database/__init__.py,ExternalCounterAuditLog,Pendiente,
-cacao_accounting/database/__init__.py,SeriesExternalCounterMap,Pendiente,
-cacao_accounting/database/__init__.py,ExternalNumberUsage,Pendiente,
-cacao_accounting/database/__init__.py,PartyGroup,Pendiente,
+cacao_accounting/database/__init__.py,StatusWeb,Parcial,Mapa constante de estado visual; claves y leyendas traducibles se definen aquí pero no se valida uso ni cobertura de estados.
+cacao_accounting/database/__init__.py,obtiene_texto_unico(),Parcial,Genera ULID para IDs; unicidad depende del generador y no hay retry ante colisión al persistir.
+cacao_accounting/database/__init__.py,obtiene_texto_unico_cuid2(),Parcial,Genera CUID2 de 10 caracteres para detalles; menor espacio de colisión que ULID y no hay retry explícito.
+cacao_accounting/database/__init__.py,CacaoConfig,Parcial,Config key/value indexada pero `key` no es única; varios valores para una clave pueden producir lecturas ambiguas según callers.
+cacao_accounting/database/__init__.py,BaseTabla,Parcial,Base común nullable para status/auditoría; created_by/modified_by sin FK a usuario y defaults de timestamps dependen del servidor.
+cacao_accounting/database/__init__.py,BaseTransaccion,Parcial,FK empresa/libro opcionales y `user_id` sin FK; contrato de obligatoriedad y consistencia compañía-libro queda delegado a writers.
+cacao_accounting/database/__init__.py,BaseTercero,Parcial,Base heredada conserva campos requeridos/nullable mixtos y no define alcance de compañía; revisión de writers queda por clase concreta.
+cacao_accounting/database/__init__.py,DocBase,Parcial,"Campos de ciclo de vida compartidos mayormente nullable, `reversal_of`/voucher sin FK y versión optimista solo declarada; validar callers y constraints por documento."
+cacao_accounting/database/__init__.py,Currency,Parcial,"`default` no es único en esquema y alta manual permite varios defaults (#1766, confirmado por POST HTTP y consulta SQLite temporal); validar todos los consumers y transiciones de moneda."
+cacao_accounting/database/__init__.py,ExchangeRate,Parcial,"Único por par/fecha, sin constraint de positividad ni inmutabilidad; detector de uso solo fecha exacta vs posting histórico (#546); alta y edición duplicadas causan 500 al chocar unique (#1763)."
+cacao_accounting/database/__init__.py,User,Parcial,Usuario global con username/email únicos; `company` y `party_id` opcionales y no hay unicidad de relación user/party, revisar aprovisionamiento y ciclo de acceso.
+cacao_accounting/database/__init__.py,User.is_portal_customer(),Parcial,Confía en classification o consulta rol por ID; acceso a roles delega en auth.roles y no se verifica consistencia de ambas fuentes.
+cacao_accounting/database/__init__.py,User.is_portal_supplier(),Parcial,Confía en classification o consulta rol por ID; acceso a roles delega en auth.roles y no se verifica consistencia de ambas fuentes.
+cacao_accounting/database/__init__.py,User.token() [línea 367],Parcial,Lee token de caché si está disponible y fallback volátil; sin caché distribuida el token no persiste entre procesos, además cache.get puede fallar fuera de excepciones listadas.
+cacao_accounting/database/__init__.py,User.token() [línea 381],Parcial,Escribe/elimina caché de forma best-effort y guarda fallback volátil; no invalida sesiones paralelas y errores del backend fuera del set capturado se propagan.
+cacao_accounting/database/__init__.py,Roles,Parcial,Nombre único pero no se cotejó semántica de roles sistema ni protección de borrado de roles asignados.
+cacao_accounting/database/__init__.py,RolesAccess,Parcial,"FK role/module nullable y sin unicidad por par; duplicados pueden multiplicar permisos o hacer ambiguous reads según consumidor."
+cacao_accounting/database/__init__.py,RolesUser,Parcial,"FK user/role nullable y sin unique por par; `active` nullable, revisar duplicados y transiciones de asignación."
+cacao_accounting/database/__init__.py,Modules,Parcial,Nombre único; `default` requerido pero `enabled` nullable y sin check de combinación, bootstrap y guards pendientes.
+cacao_accounting/database/__init__.py,Entity,Parcial,"Entidad tiene `currency`/`default` opcionales; los contratos duplicados `default`/`status` y la desactivación de la única compañía Desktop siguen inconsistentes (#1770 #1771); falta ciclo completo."
+cacao_accounting/database/__init__.py,Unit,Parcial,"FK de parent no codifica entidad y SQLite no la aplica por defecto; alta/edición admiten padre cross-company o inexistente (#1705 #1579); árboles y ACL #793 pendientes."
+cacao_accounting/database/__init__.py,Unit.parent(),Parcial,"Resuelve por ID sin comprobar entidad del padre; la relación cross-company puede atravesar el lector de jerarquía (#1705 #793)."
+cacao_accounting/database/__init__.py,Unit.children(),Parcial,"Consulta por parent_id sin scope de entidad; puede devolver hijos de otra compañía si existe vínculo inválido (#1705 #793)."
+cacao_accounting/database/__init__.py,Unit.ancestors(),Parcial,"Recorre `parent` sin validar entidad; corta ciclos por ID, pero la relación cross-company sigue siendo navegable (#1705 #793)."
+cacao_accounting/database/__init__.py,Unit.descendants(),Parcial,"Helper filtra por entidad y evita ciclos repetidos; callers hijos/ancestros no aplican el mismo scope (#1705 #793)."
+cacao_accounting/database/__init__.py,Book,Parcial,"Campos y guards de edición cotejados; `entity`/`currency` son nullable y `is_primary/default` sin unicidad; cambios pueden dejar reglas activas huérfanas (#1775), falta lifecycle completo."
+cacao_accounting/database/__init__.py,LedgerMappingRule,Parcial,"No garantiza libros fuente/destino distintos ni compañías iguales, ni una sola regla por combinación/cuenta; callers de mapeo deben imponer coherencia."
+cacao_accounting/database/__init__.py,FiscalYear,Parcial,"Modelo y CRUD cotejados; sin constraint de orden/solapamiento y permite alterar fechas con cierre financiero (#1974 #1172 #1171); lifecycle pendiente."
+cacao_accounting/database/__init__.py,AccountingPeriod,Parcial,"Modelo y CRUD cotejados; sin constraint de rango/solapamiento, edición de cerrado bypass reapertura y falta contención/año compañía (#1941 #1155 #1154 #1656)."
+cacao_accounting/database/__init__.py,Accounts,Parcial,"Unicidad entidad/código, pero catálogo y detalle permiten lectura fuera del scope autorizado (#1546); callers de escritura, jerarquía y referencias contables pendientes."
+cacao_accounting/database/__init__.py,CostCenter,Parcial,"`parent` es código sin FK; borrado de padre deja hijos huérfanos y desmarcar grupo puede bloquearlos (#1778 #1779); ACL catálogo #1546."
+cacao_accounting/database/__init__.py,BusinessUnit,Parcial,"Self-FK de jerarquía no asegura igualdad de entidad; API devuelve relaciones del nodo y no hay writer/CRUD productivo identificado; verificar lifecycle y contrato de dimensionado."
+cacao_accounting/database/__init__.py,BusinessUnit.parent(),Parcial,"Resuelve por ID sin scope de entidad; no se encontró writer productivo del modelo, falta verificar datos/importadores y lector API."
+cacao_accounting/database/__init__.py,BusinessUnit.children(),Parcial,"Consulta solo parent_id y no entidad; no se encontró writer productivo, falta verificar integridad histórica."
+cacao_accounting/database/__init__.py,BusinessUnit.ancestors(),Parcial,"Recorre padres sin comprobar entidad; corta ciclos por ID, pero no acredita integridad de la cadena."
+cacao_accounting/database/__init__.py,BusinessUnit.descendants(),Parcial,"Helper filtra descendientes por entidad y corta ciclos; falta rastrear escritores y contrato de jerarquía BusinessUnit."
+cacao_accounting/database/__init__.py,Project,Parcial,"Padre y cuenta capitalizable son FKs sin ownership compuesto; alta/edición aceptan padres cross-company o inexistentes (#1705 #1579) y catálogo tiene brecha ACL (#1546)."
+cacao_accounting/database/__init__.py,Project.parent(),Parcial,"Resuelve por ID sin comprobar entidad; la escritura permite padre cross-company/inexistente (#1705 #1579)."
+cacao_accounting/database/__init__.py,Project.children(),Parcial,"Consulta por parent_id sin scope de entidad; vínculos inválidos afectan API de jerarquía (#1705 #793)."
+cacao_accounting/database/__init__.py,Project.ancestors(),Parcial,"Recorre padres sin comprobar entidad; ciclo se corta, pero no ownership de cada ancestro (#1705)."
+cacao_accounting/database/__init__.py,Project.descendants(),Parcial,"Helper filtra por entidad y evita ciclos repetidos; no acredita el resto de lectores ni relaciones de padre (#1705 #793)."
+cacao_accounting/database/__init__.py,NamingSeries,Parcial,"Unicidad cubre tipo/compañía/nombre, no un solo default concurrente (#1005); reset mensual con prefijo sin mes colisiona (#1922); lifecycle y activación pendientes."
+cacao_accounting/database/__init__.py,Sequence,Parcial,"`current_value` es contador compartido por períodos; resets/backdating pueden reutilizar identificadores (#1293 #1577), y `monthly` sin mes colisiona (#1922)."
+cacao_accounting/database/__init__.py,SeriesSequenceMap,Parcial,"Permite mapas duplicados y empates de prioridad; selector usa primer map por prioridad e ignora condition. La edición de contador asume un map singular y falla con múltiples filas (#1734)."
+cacao_accounting/database/__init__.py,GeneratedIdentifierLog,Parcial,"`full_identifier` único conserva no reutilización; resets/backdating intentan repetir IDs y fallan al insertar (#1293 #1577 #1922); falta tratar colisión en el flujo."
+cacao_accounting/database/__init__.py,ExternalCounter,Parcial,"Edición general muta `last_used` sin auditoría y contador con múltiples maps rompe edición (#1733 #1734); registro alternativo sin audit y prefijo inválido (#1294 #1580)."
+cacao_accounting/database/__init__.py,ExternalCounter.next_suggested(),Parcial,Devuelve `last_used + 1`; no reserva el número y concurrencia puede sugerir el mismo valor a múltiples documentos antes de registrar uso.
+cacao_accounting/database/__init__.py,ExternalCounter.next_suggested_formatted(),Parcial,Formatea sugerencia con prefijo/padding sin reserva atómica; unicidad del uso evita duplicado al registrar pero carreras fallan al flush.
+cacao_accounting/database/__init__.py,ExternalCounterAuditLog,Parcial,FK nullable preserva historial al borrar contador; motivo/valores requeridos, pero modelo por sí solo no es append-only ni exige writer de auditoría (#1733).
+cacao_accounting/database/__init__.py,SeriesExternalCounterMap,Parcial,"Permite múltiples contextos y mapas duplicados/empates; selección resuelve por especificidad y prioridad, pero no hay desempate contractual ni integridad de referencias no nulas."
+cacao_accounting/database/__init__.py,ExternalNumberUsage,Parcial,"Unique(counter, number) no limita duplicados con counter NULL; FK SET NULL puede producir ese estado al borrar contador, aunque preserva historial. Escritura con prefijo inválido acepta número truncado (#1580)."
+cacao_accounting/database/__init__.py,PartyGroup,Parcial,"Unique `(group_type,name)` y `is_active`; no limita valores de group_type ni lifecycle de cambios/desactivación referidos por terceros."
 cacao_accounting/database/__init__.py,Party,Parcial,Relaciones y callers Ventas/Compras cotejados; alcance compartido pendiente; #1282 #1649
 cacao_accounting/database/__init__.py,Contact,Parcial,Writer/caller y desactivación sin permiso cotejados; alcance compartido pendiente; #1282
 cacao_accounting/database/__init__.py,Address,Parcial,Relaciones con Party cotejadas; impacto de desactivación compartida pendiente
 cacao_accounting/database/__init__.py,PartyContact,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
 cacao_accounting/database/__init__.py,PartyAddress,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
-cacao_accounting/database/__init__.py,PaymentTerms,Pendiente,
+cacao_accounting/database/__init__.py,PaymentTerms,Parcial,"Nombre único, pero due/discount days y porcentaje no tienen checks de rango/coherencia; revisar validación del formulario y consumidores."
 cacao_accounting/database/__init__.py,CompanyParty,Parcial,Relaciones y permiso por compañía cotejados; ciclo de desactivación pendiente; #1282 #1649
-cacao_accounting/database/__init__.py,UOM,Pendiente,
-cacao_accounting/database/__init__.py,Item,Pendiente,
-cacao_accounting/database/__init__.py,ItemUOMConversion,Pendiente,
-cacao_accounting/database/__init__.py,Warehouse,Pendiente,
-cacao_accounting/database/__init__.py,WarehouseCompanyAccount,Pendiente,
-cacao_accounting/database/__init__.py,ItemCategory,Pendiente,
-cacao_accounting/database/__init__.py,Batch,Pendiente,
+cacao_accounting/database/__init__.py,UOM,Parcial,"Código único y activo nullable no; activa required con default. La conversión y desactivación con referencias dependen del servicio, lifecycle pendiente."
+cacao_accounting/database/__init__.py,Item,Parcial,"Código global único y relaciones UOM/bodega/proveedor no codifican compañía; flags goods/service, stock y lote/serie no tienen checks cruzados (#1204 #1629)."
+cacao_accounting/database/__init__.py,ItemUOMConversion,Parcial,"Unique item/from/to pero factor no tiene check positivo ni impide from=to; el servicio resuelve directa/inversa y debe garantizar coherencia (#1629)."
+cacao_accounting/database/__init__.py,Warehouse,Parcial,"Unique global de `code` vuelve redundante unicidad por compañía; `parent_warehouse` es texto sin FK y compañía de relaciones no queda compuesta (#1214 #1649)."
+cacao_accounting/database/__init__.py,WarehouseCompanyAccount,Parcial,"Unique warehouse/company, pero FKs separadas permiten asociar bodega y cuenta a compañías distintas; servicio/readers deben validar ownership."
+cacao_accounting/database/__init__.py,ItemCategory,Parcial,"Nombre no único ni scope company; permite categorías duplicadas, lifecycle depende de referencias de item."
+cacao_accounting/database/__init__.py,Batch,Parcial,"Unique item/batch y FK restrict; fechas de expiración/fabricación y su orden no tienen checks, desactivación/uso en ledger pendiente."
 cacao_accounting/database/__init__.py,SerialNumber,Parcial,"Modelo, validadores y callers cotejados; falta ciclo y concurrencia; #1215 #1214 #1629"
 cacao_accounting/database/__init__.py,StockEntry,Parcial,Faltan pruebas HTTP de duplicación y relaciones
 cacao_accounting/database/__init__.py,StockEntryItem,Parcial,Faltan pruebas HTTP de duplicación y relaciones
 cacao_accounting/database/__init__.py,StockEntryItem.rate(),Parcial,Falta probar reuso de líneas y datos de lote
 cacao_accounting/database/__init__.py,StockLedgerEntry,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
-cacao_accounting/database/__init__.py,_persisted_ledger_is_cancelled(),Pendiente,
-cacao_accounting/database/__init__.py,_reject_ledger_mutation(),Pendiente,
-cacao_accounting/database/__init__.py,_reject_ledger_delete(),Pendiente,
+cacao_accounting/database/__init__.py,_persisted_ledger_is_cancelled(),Parcial,"Consulta el flag persistido por PK para decidir monotonicidad cuando ORM no conserva historial; retorno False ante identidad/ID no disponible podría dejar caso transient sin distinguir, revisar callers de actualización. SQL directo fuera de scope."
+cacao_accounting/database/__init__.py,_reject_ledger_mutation(),Parcial,"Guard ORM comprueba campos inmutables y False→True; asignar `is_cancelled=0` pasa por comparación `is False`, reproducido en SQLite temporal. SQL directo queda fuera de scope."
+cacao_accounting/database/__init__.py,_reject_ledger_delete(),Parcial,Rechaza borrado físico por ORM; el comportamiento está cubierto en el flujo normal, SQL directo queda fuera de scope.
 cacao_accounting/database/__init__.py,StockBin,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
 cacao_accounting/database/__init__.py,StockValuationLayer,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
-cacao_accounting/database/__init__.py,LandedCostAllocation,Pendiente,
-cacao_accounting/database/__init__.py,Incoterm,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseOrder,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseOrderItem,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseQuotation,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseQuotationItem,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseRequest,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseRequestItem,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseNegotiationRound,Pendiente,
-cacao_accounting/database/__init__.py,SupplierQuotation,Pendiente,
-cacao_accounting/database/__init__.py,SupplierQuotationItem,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseOrderComparison,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseOrderComparisonOrder,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseOrderComparisonRound,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseOrderComparisonRoundOrder,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseRequestComparison,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseRequestComparisonOffer,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseRequestComparisonLine,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseQuotationAward,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseQuotationAwardItem,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseReceipt,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseReceiptItem,Pendiente,
-cacao_accounting/database/__init__.py,PurchaseInvoice,Pendiente,
-cacao_accounting/database/__init__.py,_purchase_invoice_supplier_key(),Pendiente,
-cacao_accounting/database/__init__.py,_set_purchase_invoice_supplier_key(),Pendiente,
-cacao_accounting/database/__init__.py,PurchaseInvoiceItem,Pendiente,
-cacao_accounting/database/__init__.py,ImportLandedCost,Pendiente,
-cacao_accounting/database/__init__.py,ImportLandedCostItem,Pendiente,
-cacao_accounting/database/__init__.py,ImportLandedCostCharge,Pendiente,
-cacao_accounting/database/__init__.py,SalesOrder,Pendiente,
-cacao_accounting/database/__init__.py,SalesRequest,Pendiente,
-cacao_accounting/database/__init__.py,SalesRequestItem,Pendiente,
-cacao_accounting/database/__init__.py,SalesQuotation,Pendiente,
-cacao_accounting/database/__init__.py,SalesQuotationItem,Pendiente,
-cacao_accounting/database/__init__.py,SalesOrderItem,Pendiente,
-cacao_accounting/database/__init__.py,DeliveryNote,Pendiente,
-cacao_accounting/database/__init__.py,DeliveryNoteItem,Pendiente,
-cacao_accounting/database/__init__.py,SalesInvoice,Pendiente,
-cacao_accounting/database/__init__.py,SalesInvoiceItem,Pendiente,
-cacao_accounting/database/__init__.py,Bank,Pendiente,
-cacao_accounting/database/__init__.py,BankAccount,Pendiente,
-cacao_accounting/database/__init__.py,PettyCashAccount,Pendiente,
-cacao_accounting/database/__init__.py,PettyCashVoucher,Pendiente,
-cacao_accounting/database/__init__.py,PettyCashExpense,Pendiente,
-cacao_accounting/database/__init__.py,PettyCashReconciliation,Pendiente,
-cacao_accounting/database/__init__.py,PettyCashReplenishment,Pendiente,
-cacao_accounting/database/__init__.py,BankAccountNumberingConfig,Pendiente,
-cacao_accounting/database/__init__.py,PaymentEntry,Pendiente,
-cacao_accounting/database/__init__.py,PaymentReference,Pendiente,
-cacao_accounting/database/__init__.py,ArApReconciliationPolicy,Pendiente,
-cacao_accounting/database/__init__.py,ARAPOpenItem,Pendiente,
+cacao_accounting/database/__init__.py,LandedCostAllocation,Parcial,"Unique polimórfico document_type/id/line, montos no negativos; FK polimórfico al documento no existe y allocated/final cost sin reconciliación declarativa."
+cacao_accounting/database/__init__.py,Incoterm,Parcial,"PK compuesta code/version evita colisión de versiones; catálogo no fija unicidad de nombre ni transiciones de inactivación, callers pendientes."
+cacao_accounting/database/__init__.py,PurchaseOrder,Parcial,"Cabecera hereda DocBase nullable y relaciones supplier/request/company; cascada ORM delete-orphan de líneas vs FK RESTRICT requiere verificar borrado y submit/cancel; #1649 #1822."
+cacao_accounting/database/__init__.py,PurchaseOrderItem,Parcial,"Checks qty/rate/amount y FK restrict; qty base, acumulados received/billed y warehouse nullable; relación de padre ORM y flujo de reemplazo requieren validación de invariantes (#1822)."
+cacao_accounting/database/__init__.py,PurchaseQuotation,Parcial,"DocBase y proveedor/campos de entrega nullable; sin constraint que alinee supplier/company/currency; flujo RFQ y lifecycle pendiente."
+cacao_accounting/database/__init__.py,PurchaseQuotationItem,Parcial,"Checks qty/rate/amount, pero UOM/base qty y warehouse opcionales; no unique de línea y ownership de catálogo queda a writer."
+cacao_accounting/database/__init__.py,PurchaseRequest,Parcial,"Status libre en String y totales nullable; no constraint para transición ni compañía/solicitante, revisar writers y workflow."
+cacao_accounting/database/__init__.py,PurchaseRequestItem,Parcial,"Qty positiva, pero rate/amount sin checks y item/UOM no garantizan compañía o conversión; lifecycle de líneas pendiente."
+cacao_accounting/database/__init__.py,PurchaseNegotiationRound,Parcial,"Unique quotation/round y status abierto; round_number sin check positivo ni orden de transiciones, lifecycle pendiente."
+cacao_accounting/database/__init__.py,SupplierQuotation,Parcial,"Supplier y solicitud/ronda opcionales y no se imponen misma compañía/round; importes nullable, flujo de adjudicación debe reconciliar fuentes."
+cacao_accounting/database/__init__.py,SupplierQuotationItem,Parcial,"Checks qty/rate/amount; UOM/base qty nullable y sin referencia a línea solicitada, match se valida en comparativo/adjudicación."
+cacao_accounting/database/__init__.py,PurchaseOrderComparison,Parcial,"Compañía y OC base declaradas sin FK compuesta que valide misma compañía ni unicidad por solicitud; estados/rondas gobernados por servicio."
+cacao_accounting/database/__init__.py,PurchaseOrderComparisonOrder,Parcial,"Unique comparison/PO, pero no garantiza exactamente un base ni que PO pertenezca a company/comparison; revisión de writer #1822."
+cacao_accounting/database/__init__.py,PurchaseOrderComparisonRound,Parcial,"Unique comparison/round; `round_number` sin check positivo y snapshot JSON requiere validación/versionamiento del writer."
+cacao_accounting/database/__init__.py,PurchaseOrderComparisonRoundOrder,Parcial,"Unique round/PO pero vínculos pueden cruzar comparativos vía FKs simples; snapshots/cotizaciones y total deben validar coherencia en servicio."
+cacao_accounting/database/__init__.py,PurchaseRequestComparison,Parcial,"Compañía/base requeridos y solicitud nullable, sin FK compuesta para misma compañía ni constraint para estado/selección."
+cacao_accounting/database/__init__.py,PurchaseRequestComparisonOffer,Parcial,"Oferta relacionada a comparación y cotización con FKs simples; no constraint de proveedor/compañía/moneda ni protección de duplicidad por proveedor."
+cacao_accounting/database/__init__.py,PurchaseRequestComparisonLine,Parcial,"Línea de comparación con source IDs y cantidades/importes opcionales; no impone item/origen/moneda ni límites y depende del servicio."
+cacao_accounting/database/__init__.py,PurchaseQuotationAward,Parcial,"Award requiere company, quotation y status, pero FK simple no asegura company de quotation; auditoría autorización opcional y no hay unique para adjudicación activa."
+cacao_accounting/database/__init__.py,PurchaseQuotationAwardItem,Parcial,"FKs independientes no garantizan que líneas pertenezcan a quotation/supplier quotation indicadas; cantidades/importes no tienen check ni unique por solicitud."
+cacao_accounting/database/__init__.py,PurchaseReceipt,Parcial,"Cabecera soporta retorno y orden/factura con relaciones opcionales; sin FK compuesta para proveedor/company/currency; edición deja snapshot FX stale (#1822)."
+cacao_accounting/database/__init__.py,PurchaseReceiptItem,Parcial,"Checks qty/rate/amount; batch/serial/warehouse/UOM opcionales y sin checks de consistencia con item; asociación a OC se guarda vía DocumentRelation."
+cacao_accounting/database/__init__.py,PurchaseInvoice,Parcial,"Unique proveedor/clave normalizada e idempotency key; supplier_id y sources nullable, y relación company/source no compuesta; edición de currency stale (#1822), nota/reversa #1223."
+cacao_accounting/database/__init__.py,_purchase_invoice_supplier_key(),Parcial,"Normaliza trim y omite canceladas/sin número; docstatus=2 es único criterio de cancelación, espacios quedan None."
+cacao_accounting/database/__init__.py,_set_purchase_invoice_supplier_key(),Parcial,"Sincroniza clave en before_insert/update ORM; SQL directo fuera de scope. Asegura persistencia en flujo ORM y necesita caller usar mismo criterio de duplicidad (#208)."
+cacao_accounting/database/__init__.py,PurchaseInvoiceItem,Parcial,"Checks qty/rate/amount; UOM/base qty y warehouse opcionales, cuentas/batch/serial sin ownership compuesto; reemplazo de líneas y allocations requiere lifecycle (#1822)."
+cacao_accounting/database/__init__.py,ImportLandedCost,Parcial,"Cabecera ancla factura requerida; compañía/proveedor/warehouse y total son independientes, no hay constraints que amarren costo a la compañía/factura."
+cacao_accounting/database/__init__.py,ImportLandedCostItem,Parcial,"Checks qty/rate/amount; allocation y valores finales nullable, sin vínculo a línea fuente ni constraint de conciliación de costos."
+cacao_accounting/database/__init__.py,ImportLandedCostCharge,Parcial,"Amount no negativo; base_amount nullable y sin restricción de charge_type/accounting_treatment; cuenta opcional pese a tratamiento capitalizable por default."
+cacao_accounting/database/__init__.py,SalesOrder,Parcial,"Cliente y vínculos customer/quote/address/contact son opcionales y no garantizan misma compañía; status String libre y totales nullable, revisar workflow/composición (#1649 #1822)."
+cacao_accounting/database/__init__.py,SalesRequest,Parcial,"DocBase y cliente/totales opcionales; sin constraint de ownership ni estado, lifecycle de solicitud y relación con compañía delegados a servicios."
+cacao_accounting/database/__init__.py,SalesRequestItem,Parcial,"Checks qty/rate/amount; descuento sin límites y UOM/warehouse/base qty no aseguran coherencia con item/company."
+cacao_accounting/database/__init__.py,SalesQuotation,Parcial,"Solicitud y customer FK simple no garantizan mismo cliente/compañía, valid_until no se contrasta con fecha; estado heredado queda a servicio."
+cacao_accounting/database/__init__.py,SalesQuotationItem,Parcial,"Checks qty/rate/amount; porcentaje de descuento sin rango y no existe unicidad ni ownership de UOM/warehouse por compañía."
+cacao_accounting/database/__init__.py,SalesOrderItem,Parcial,"Checks de monto/cantidad, pero delivered/billed pueden ser negativos o superar ordered qty sin DB checks; servicio debe serializar consumo."
+cacao_accounting/database/__init__.py,DeliveryNote,Parcial,"Cabecera soporta retorno, orden/cliente/address opcionales y reserva; no FK compuesta de ownership ni restricciones de cantidades de devolución."
+cacao_accounting/database/__init__.py,DeliveryNoteItem,Parcial,"FK delivery nullable con SET NULL en línea transaccional; checks de qty/rate/amount, pero campos de descuento/batch/serial sin coherencia garantizada."
+cacao_accounting/database/__init__.py,SalesInvoice,Parcial,"Cabecera y relaciones fuente/cliente/tax opcionales; outstanding mutable permitido, pero company/source consistency no compuesta; flujo de reversa/AR pendiente."
+cacao_accounting/database/__init__.py,SalesInvoiceItem,Parcial,"Checks qty/rate/amount; descuento/cuenta/warehouse/batch/serial sin restricciones de rango/ownership, relación source via DocumentRelation."
+cacao_accounting/database/__init__.py,Bank,Parcial,Bank has no unique name/SWIFT constraint; duplicates allowed and references depend on active flag enforced by callers.
+cacao_accounting/database/__init__.py,BankAccount,Parcial,"Unique company/account_no permits multiple NULLs; bank/currency/GL account FKs do not ensure same-company ownership and default numbering references may be cross-company."
+cacao_accounting/database/__init__.py,PettyCashAccount,Parcial,"Unique company/name; account/currency ownership not composed, float has no nonnegative check and one default per company is not constrained."
+cacao_accounting/database/__init__.py,PettyCashVoucher,Parcial,"Unique company/voucher_no allows multiple NULLs; voucher_status is free text and amount has no nonnegative check; expense_id nullable/nonunique permits multiple vouchers pointing to one expense."
+cacao_accounting/database/__init__.py,PettyCashExpense,Parcial,"Amount unbounded and account code is text; petty cash/voucher/company consistency and unique journal link rely on service workflow."
+cacao_accounting/database/__init__.py,PettyCashReconciliation,Parcial,"Unique cash/date/company, but cash figures can be negative/inconsistent and adjustment journal/account are independent; service must reconcile expected/difference."
+cacao_accounting/database/__init__.py,PettyCashReplenishment,Parcial,"Amount unbounded; bank account/cash/company ownership and one request per expense not encoded; status free-form and debit note link lacks unique guard."
+cacao_accounting/database/__init__.py,BankAccountNumberingConfig,Parcial,"Unique account/payment_type, but free payment_type and external-counter/naming-series ownership or active status not constrained."
+cacao_accounting/database/__init__.py,PaymentEntry,Parcial,"Many amount/party/account fields nullable with no sign/type checks; payment/reference allocations and currency consistency delegated to payment service (#1649 #1708)."
+cacao_accounting/database/__init__.py,PaymentReference,Parcial,"Unique payment/reference triple; reference polymorphic, company uses String(26) without FK, amounts/rates lack sign and balance constraints; reconciliation is service-owned."
+cacao_accounting/database/__init__.py,ArApReconciliationPolicy,Parcial,"Company unique, mode/tolerance checked and safe default documented; enabled default only ORM-side and policy behavior requires service integration verification."
+cacao_accounting/database/__init__.py,ARAPOpenItem,Parcial,"Source-line unique and amount/direction checks; polymorphic document/source voucher IDs lack FK and currency/party/account/company ownership not composed; cache status reconciliation pending."
 cacao_accounting/database/__init__.py,ARAPLedgerEntry,Parcial,Synonyms legacy y callers cotejados; uso de aliases pendiente; #1684
-cacao_accounting/database/__init__.py,ARAPLedgerEntry.document_balance(),Pendiente,
-cacao_accounting/database/__init__.py,ARAPLedgerBookEntry,Pendiente,
-cacao_accounting/database/__init__.py,_reject_ar_ap_ledger_mutation(),Pendiente,
-cacao_accounting/database/__init__.py,_reject_ar_ap_ledger_delete(),Pendiente,
-cacao_accounting/database/__init__.py,_reject_ar_ap_book_ledger_mutation(),Pendiente,
-cacao_accounting/database/__init__.py,_populate_ar_ap_book_debit_credit(),Pendiente,
-cacao_accounting/database/__init__.py,_reject_ar_ap_book_ledger_delete(),Pendiente,
+cacao_accounting/database/__init__.py,ARAPLedgerEntry.document_balance(),Parcial,"Suma documental por type/id/date/currency incluyendo cancelaciones como evidencia; no filtra compañía, callers deben usar ID globalmente único o scope explícito."
+cacao_accounting/database/__init__.py,ARAPLedgerBookEntry,Parcial,"Unique ledger/book y checks debit/credit/rate; GL link nullable y currency/book/company pairing no compuesto; lifecycle guard ORM revisado."
+cacao_accounting/database/__init__.py,_reject_ar_ap_ledger_mutation(),Parcial,"Delega al guard ORM compartido; monotonicidad usa `is_cancelled is False` y permite asignación entera cero (#925). SQL directo fuera de scope."
+cacao_accounting/database/__init__.py,_reject_ar_ap_ledger_delete(),Parcial,Delega rechazo físico ORM del ledger documental; comportamiento del flujo normal revisado. SQL directo fuera de scope.
+cacao_accounting/database/__init__.py,_reject_ar_ap_book_ledger_mutation(),Parcial,"Delega al guard ORM compartido, incluido el edge case de cancelación con valor entero 0 (#925)."
+cacao_accounting/database/__init__.py,_populate_ar_ap_book_debit_credit(),Parcial,"Deriva debit/credit solo cuando ambos vienen cero; valores explícitos no se normalizan, aunque constraint rechaza ambos no positivos o ambos positivos."
+cacao_accounting/database/__init__.py,_reject_ar_ap_book_ledger_delete(),Parcial,Delega rechazo de borrado ORM al guard común de evidencia financiera.
 cacao_accounting/database/__init__.py,WithholdingCertificate,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
 cacao_accounting/database/__init__.py,DocumentRelation,Pendiente,
 cacao_accounting/database/__init__.py,DocumentRelation.__init__(),Pendiente,
@@ -5667,10 +5667,10 @@ cacao_accounting/database/__init__.py,RecurringJournalTemplate,Pendiente,
 cacao_accounting/database/__init__.py,RecurringJournalItem,Pendiente,
 cacao_accounting/database/__init__.py,RecurringJournalApplication,Pendiente,
 cacao_accounting/database/__init__.py,ComprobanteContableDetalle,Pendiente,
-cacao_accounting/database/__init__.py,GLEntry,Parcial,Constraints y guards de mutación cotejados; callers cross-company pendientes; #1649 #1708
-cacao_accounting/database/__init__.py,DimensionType,Pendiente,
-cacao_accounting/database/__init__.py,DimensionValue,Pendiente,
-cacao_accounting/database/__init__.py,GLEntryDimension,Pendiente,
+cacao_accounting/database/__init__.py,GLEntry,Parcial,"Modelo y constraints cotejados; el guard ORM permite reactivar con valor entero `0` (#925); relaciones company↔ledger/account y callers multiempresa pendientes (#1649 #1708)."
+cacao_accounting/database/__init__.py,DimensionType,Parcial,"Admin permite toggle y creación; alta de valores no valida tipo activo (#1339); revisar ciclo y consumidores."
+cacao_accounting/database/__init__.py,DimensionValue,Parcial,"No hay unicidad por tipo/valor/compañía (#1340); el alta tampoco valida tipo activo (#1339); regla global/local requiere decisión."
+cacao_accounting/database/__init__.py,GLEntryDimension,Parcial,"Tabla declarada sin writers/readers de producción, validación de valor/tipo ni guard append-only; capacidad dormida ya registrada (#1337 #1359 #1368 #1706)."
 cacao_accounting/database/__init__.py,ItemAccount,Pendiente,
 cacao_accounting/database/__init__.py,PartyAccount,Pendiente,
 cacao_accounting/database/__init__.py,CompanyDefaultAccount,Pendiente,
