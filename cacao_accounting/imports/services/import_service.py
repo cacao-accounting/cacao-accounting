@@ -4,7 +4,7 @@
 """Servicio centralizado de importación."""
 
 import threading
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Dict, Type, List, Any
 from flask import current_app
 from sqlalchemy.exc import SQLAlchemyError
@@ -122,6 +122,7 @@ class ImportService:
             return False
 
         batch.import_status = 4
+        batch.started_at = datetime.now(UTC)
         database.session.commit()
 
         try:
@@ -148,7 +149,12 @@ class ImportService:
             batch.import_status = 2 if business_errors_count > 0 else 3
             database.session.commit()
 
-        except (ArithmeticError, SQLAlchemyError, ValueError, OSError) as e:
+        except Exception as e:
+            # Cualquier falla del lector o del adaptador es un lote inválido:
+            # estado 7 con el error registrado. Un archivo corrupto que pasa
+            # el chequeo MIME (zip truncado, hoja no soportada) no debe dejar
+            # el lote atrapado en 'procesando'.
+            database.session.rollback()
             self._handle_validation_error(batch, batch_id, e)
         return True
 
@@ -447,9 +453,21 @@ class ImportService:
         """Finaliza la ejecución actualizando estados y contadores."""
         current_batch = database.session.get(ImportBatch, batch_id)
         if current_batch:
+            # La cancelación solicitada durante la ejecución puede haberse
+            # comprometido desde otra sesión; releeer el estado para no
+            # sobrescribirlo con completado.
+            database.session.expire(current_batch)
+            current_batch = database.session.get(ImportBatch, batch_id)
+            if current_batch is None:
+                return
             current_batch.success_rows = success_count
             current_batch.error_rows = error_count
             current_batch.completed_at = datetime.now()
+            if current_batch.import_status == 8 or current_batch.cancel_requested:
+                # La cancelación (estado 8) es terminal: los contadores
+                # parciales quedan tal como la ejecución los dejó.
+                database.session.commit()
+                return
             current_batch.import_status = 5 if error_count == 0 else 6
             database.session.commit()
 

@@ -13,7 +13,7 @@ from typing import Any, Mapping
 
 from cacao_accounting.exceptions import flash_error
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for
 
 from flask_login import current_user
 
@@ -123,23 +123,33 @@ def _inventory_authorized_companies() -> list[str]:
 
 def _apply_inventory_company_scope(base_query: Any, model: type[Any]) -> Any:
     """Apply explicit or authorized company scope to an inventory list query."""
-    if hasattr(model, "company"):
-        company = request.args.get("company")
-        if company:
-            return base_query.filter(model.company == company)
-        if getattr(current_user, "classification", None) == "admin":
-            return base_query
-        companies = _inventory_authorized_companies()
-        if not companies:
-            return base_query.where(database.false())
-        return base_query.where(model.company.in_(companies))
-    return base_query
+    if not hasattr(model, "company"):
+        return base_query
+    explicit_company = request.args.get("company")
+    if explicit_company:
+        # #1176/#1543: un parámetro de filtro no debe ampliar el alcance;
+        # hay que autorizar en Inventario la compañía pedida antes de usarla.
+        if explicit_company not in _inventory_authorized_companies():
+            abort(403)
+        return base_query.filter(model.company == explicit_company)
+    if getattr(current_user, "classification", None) == "admin":
+        return base_query
+    companies = _inventory_authorized_companies()
+    if not companies:
+        return base_query.where(database.false())
+    return base_query.where(model.company.in_(companies))
 
 
 def _inventory_period_company() -> str | None:
     """Resolve the sole authorized company used by inventory period filters."""
     period_company: str | None = request.args.get("company")
-    if period_company or getattr(current_user, "classification", None) == "admin":
+    if period_company:
+        # Mismo alcance exigido que el filtro de listado: sin autorización de
+        # Inventario sobre la compañía pedida, la resolvemos sin ampliarla.
+        if period_company not in _inventory_authorized_companies():
+            abort(403)
+        return period_company
+    if getattr(current_user, "classification", None) == "admin":
         return period_company
     permissions = Permisos(
         modulo=obtener_id_modulo_por_nombre("inventory"),

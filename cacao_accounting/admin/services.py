@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from datetime import date
 
-from flask import Blueprint, abort, flash, redirect, request, url_for
+from flask import abort, flash, redirect, request, url_for
 
 from flask_login import current_user
 
@@ -40,8 +40,6 @@ from cacao_accounting.exceptions import flash_error
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 from cacao_accounting.i18n import _, _l
-
-admin = Blueprint("admin", __name__, template_folder="templates")
 
 LISTA_MODULOS = "admin.lista_modulos"
 

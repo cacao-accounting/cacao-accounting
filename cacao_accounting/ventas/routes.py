@@ -73,6 +73,8 @@ from cacao_accounting.party_settings import (
 
 from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
+    exigir_companias_tercero,
+    requiere_edicion_tercero,
     apply_party_profile,
     build_party_detail_context,
     create_party_address,
@@ -93,6 +95,7 @@ from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 
 from cacao_accounting.ventas.services import (
+    _authorized_companies,
     _sales_logistics_values,
     _copy_sales_logistics,
     _parse_date,
@@ -813,10 +816,15 @@ def ventas_factura_venta_devolucion_nueva():
 @login_required
 def ventas_cliente_lista():
     """Listado de clientes."""
+    from cacao_accounting.party_management import filtrar_parties_por_companias
+
     consulta = _paginate_list(
         Party,
         (Party.code, Party.name, Party.comercial_name, Party.tax_id),
-        database.select(Party).filter(Party.is_customer.is_(True)),
+        filtrar_parties_por_companias(
+            database.select(Party).filter(Party.is_customer.is_(True)),
+            _authorized_companies(("sales",)),
+        ),
         include_status=False,
     )
     titulo = _("Listado de Clientes") + " - " + APPNAME
@@ -854,11 +862,17 @@ def ventas_cliente_nuevo():
 @login_required
 def ventas_cliente(customer_id):
     """Detalle de cliente."""
+    from cacao_accounting.party_management import tercero_tiene_vinculo_autorizado
+
     registro = database.session.execute(
         database.select(Party).filter_by(id=customer_id).filter(Party.is_customer.is_(True))
     ).first()
     if not registro:
         abort(404)
+    # #1525: el detalle solo se muestra si el usuario consulta ventas en una
+    # de las compañías vinculadas al tercero.
+    if not tercero_tiene_vinculo_autorizado(registro[0].id, _authorized_companies(("sales",))):
+        abort(403)
     titulo = registro[0].name + " - " + APPNAME
     detail = build_party_detail_context(registro[0])
     return render_template(
@@ -881,6 +895,9 @@ def ventas_cliente_configuracion_compania(customer_id: str):
     ).scalar_one_or_none()
     if not registro:
         abort(404)
+    # #1280: el POST procesa compañías presentes y elimina las omitidas;
+    # ambas listas exigen permiso de edición por compañía antes de mutar.
+    exigir_companias_tercero(registro.id, "sales", request.form.getlist("company"))
     try:
         upsert_party_company_settings_rows(customer_id, "customer", request.form)
         database.session.commit()
@@ -931,6 +948,7 @@ def ventas_cliente_editar(customer_id: str):
 def ventas_cliente_contacto_crear(customer_id: str):
     """Crea un contacto para un cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         create_party_contact(customer_id, request.form)
         database.session.commit()
@@ -947,6 +965,7 @@ def ventas_cliente_contacto_crear(customer_id: str):
 def ventas_cliente_contacto_editar(customer_id: str, link_id: str):
     """Edita un contacto de cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         update_party_contact(customer_id, link_id, request.form)
         database.session.commit()
@@ -975,6 +994,7 @@ def ventas_cliente_contacto_desactivar(customer_id: str, link_id: str):
 def ventas_cliente_direccion_crear(customer_id: str):
     """Crea una direccion para un cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         create_party_address(customer_id, request.form)
         database.session.commit()
@@ -991,6 +1011,7 @@ def ventas_cliente_direccion_crear(customer_id: str):
 def ventas_cliente_direccion_editar(customer_id: str, link_id: str):
     """Edita una direccion de cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         update_party_address(customer_id, link_id, request.form)
         database.session.commit()
@@ -2489,6 +2510,8 @@ def ventas_factura_venta_cancel(invoice_id: str):
 @login_required
 def ventas_cliente_habilitar_proveedor(customer_id: str):
     """Habilita un cliente como proveedor."""
+    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         toggle_party_supplier_role(customer_id, enable=True, user_id=current_user.id)
         database.session.commit()
@@ -2505,6 +2528,8 @@ def ventas_cliente_habilitar_proveedor(customer_id: str):
 @login_required
 def ventas_cliente_deshabilitar_proveedor(customer_id: str):
     """Deshabilita el rol de proveedor de un cliente."""
+    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         toggle_party_supplier_role(customer_id, enable=False, user_id=current_user.id)
         database.session.commit()

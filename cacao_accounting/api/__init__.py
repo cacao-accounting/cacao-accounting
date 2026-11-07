@@ -64,12 +64,17 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania, exige_acceso_compania_cualquiera
 from cacao_accounting.api.dashboard import user_can_access_company
-from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
-from cacao_accounting.document_flow.repository import get_document
+from cacao_accounting.company_context import authorized_company_codes
+from cacao_accounting.document_flow.registry import (
+    DOCUMENT_TYPES,
+    DocumentType,
+    get_document_type,
+    normalize_doctype,
+)
+from cacao_accounting.document_flow.repository import get_document, get_document_company, get_document_item
 from cacao_accounting.document_flow.service import get_source_items
 from cacao_accounting.i18n import _
 from cacao_accounting.document_flow.status import document_status_payload
-from cacao_accounting.document_flow.tracing import document_flow_tree
 from cacao_accounting.document_flow.tree import build_document_flow_tree
 from cacao_accounting.fiscal_preview_service import fiscal_preview
 from cacao_accounting.cache import user_scoped_cache
@@ -169,6 +174,44 @@ def _module_for_document_type(document_type: str) -> str | None:
         "journal_entry": "accounting",
         "payment_entry": "cash",
     }.get(document_type)
+
+
+def _require_flow_target_access(payload: dict[str, Any], action: str = "crear") -> None:
+    """Autoriza la compañía destino de un documento destino genérico.
+
+    La guardia de la cabecera fuente no concede permiso para operar la
+    compañía en la que se materializará el documento destino.
+    """
+    target_type = normalize_doctype(str(payload.get("target_document_type") or payload.get("target_type") or ""))
+    company = str(payload.get("company") or payload.get("company_id") or "")
+    module = _module_for_document_type(target_type)
+    if module and company:
+        exige_acceso_compania(module, company, action)
+
+
+def _require_flow_source_lines_access(payload: dict[str, Any], action: str = "crear") -> None:
+    """Autoriza el documento fuente real de cada línea seleccionada.
+
+    El destino se construye desde las líneas, no desde la cabecera del
+    payload, y cada línea puede referenciar un documento distinto: se valida
+    la pertenencia a compañía del documento padre real de la línea física.
+    """
+    for selected in payload.get("lines") or []:
+        source_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
+        item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
+        if not source_type or not item_id:
+            continue
+        source_item = get_document_item(source_type, item_id)
+        if not source_item:
+            continue
+        source_spec = get_document_type(source_type)
+        parent_id = str(getattr(source_item, source_spec.parent_field))
+        claimed_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
+        if claimed_id and claimed_id != parent_id:
+            abort(400)
+        module = _module_for_document_type(source_type)
+        if module:
+            exige_acceso_compania(module, get_document_company(source_type, parent_id), action)
 
 
 _FISCAL_PREVIEW_MODULES = {
@@ -455,7 +498,7 @@ def token_requerido(f):  # pragma: no cover
             from cacao_accounting.database import User, database
 
             identidad = database.session.get(User, user_id)
-            if not identidad or identidad.token != token:
+            if not identidad or identidad.token != token or not identidad.active:
                 return {
                     "message": "Invalid or expired Authentication token!",
                     "data": None,
@@ -465,7 +508,14 @@ def token_requerido(f):  # pragma: no cover
             from flask_login import login_user
 
             if not current_user or not current_user.is_authenticated:
-                login_user(identidad, remember=False, force=False)
+                # El usuario pudo ser deshabilitado entre el login web y la
+                # llamada al API: sin sesión válida la vista no se ejecuta.
+                if not login_user(identidad, remember=False, force=False):
+                    return {
+                        "message": "Invalid or expired Authentication token!",
+                        "data": None,
+                        "error": "Unauthorized",
+                    }, 401
 
         except (KeyError, PyJWTError) as e:
             return {
@@ -558,6 +608,82 @@ def _search_select_payload(
     return search_select(doctype=doctype, query=query, filters=filters, limit=limit, company_scope=company_scope)
 
 
+_SEARCH_SELECT_MODULE: dict[str, Any] = {
+    "account": "accounting",
+    "account_id": "accounting",
+    "account_code": "accounting",
+    "book": "accounting",
+    "accounting_period": "accounting",
+    "accounting_period_id": "accounting",
+    "fiscal_year_id": "accounting",
+    "budget": "accounting",
+    "tax_template": "accounting",
+    "tax_rule": "accounting",
+    "naming_series": "accounting",
+    "voucher_type": "accounting",
+    "document_no": "accounting",
+    "external_counter": "accounting",
+    "cost_center": "accounting",
+    "cost_center_id": "accounting",
+    "unit": "accounting",
+    "unit_id": "accounting",
+    "business_unit": "accounting",
+    "business_unit_id": "accounting",
+    "project": "accounting",
+    "project_id": "accounting",
+    "bank_account": "cash",
+    "bank": "cash",
+    "petty_cash": "cash",
+    "customer": "sales",
+    "supplier": "purchases",
+    # Catálogos compartidos de terceros/precios: cualquiera de los módulos
+    # comerciales que los usan concede la consulta.
+    "party": ("sales", "purchases"),
+    "party_group": ("sales", "purchases"),
+    "customer_group": ("sales", "purchases"),
+    "supplier_group": ("sales", "purchases"),
+    "price_list": ("sales", "purchases"),
+    # Catálogos de ítems y medidas usados por compras, ventas e inventario.
+    "item": ("sales", "purchases", "inventory"),
+    "batch": ("sales", "purchases", "inventory"),
+    "item_category": ("sales", "purchases", "inventory"),
+    "warehouse": ("sales", "purchases", "inventory"),
+    # Catálogos generales sin módulo dueño: su alcance lo maneja la compañía.
+    "company": None,
+    "currency": None,
+    "uom": None,
+    "user": None,
+}
+
+
+def _puede_consultar_modulo_compania(modulo: str, company: str | None) -> bool:
+    """Verificación no abortante de consulta por módulo y compañía."""
+    try:
+        autenticado = bool(current_user and current_user.is_authenticated)
+    except Exception:
+        autenticado = False
+    if not autenticado:
+        return False
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=current_user.id)
+    if permisos.administrador:
+        return True
+    if not permisos.consultar:
+        return False
+    if company is None:
+        return bool(permisos.obtener_companias_autorizadas())
+    return bool(permisos.tiene_acceso_compania(company))
+
+
+def _catalogo_permitido(doctype: str, company: str | None) -> bool:
+    """Exige el permiso de consulta del módulo dueño de los datos del catálogo."""
+    dueño = _SEARCH_SELECT_MODULE.get(doctype)
+    if dueño is None:
+        return True
+    if isinstance(dueño, str):
+        return _puede_consultar_modulo_compania(dueño, company)
+    return any(_puede_consultar_modulo_compania(modulo, company) for modulo in dueño)
+
+
 @api.route("/api/search-select")
 @login_required
 def api_search_select():
@@ -565,6 +691,8 @@ def api_search_select():
     doctype, query, raw_limit, filters = _search_select_request_values()
     _require_search_select_company_access(filters)
     company_scope = _search_select_company_scope(doctype, filters)
+    if not _catalogo_permitido(doctype, filters.get("company", [None])[0] if filters.get("company") else None):
+        return jsonify({"error": _("No se encuentra autorizado para consultar este catálogo.")}), 403
     try:
         payload = _search_select_payload(doctype, query, filters, raw_limit, company_scope)
     except ValueError as exc:
@@ -808,7 +936,7 @@ def my_tasks():
         "tasks/my.html",
         tasks=tasks,
         document_url=document_url,
-        active_users=active_users(),
+        active_users=active_users(companies=authorized_company_codes()),
         open_task_count=open_task_count(str(current_user.id)),
         titulo=_("Mis tareas"),
     )
@@ -1043,6 +1171,13 @@ def api_document_flow_items():
     sources = request.args.getlist("source")
     if not target_type or not sources:
         abort(400)
+    for value in sources:
+        # Cada documento origen se autoriza de forma independiente: la
+        # petición puede mezclar orígenes y ninguno debe escapar al ACL.
+        if ":" not in value:
+            abort(400)
+        source_type, source_id = value.split(":", 1)
+        _require_document_read_access(source_type, source_id)
     try:
         items = get_document_flow_items(target_type, sources)
     except DocumentFlowError as exc:
@@ -1072,7 +1207,15 @@ def api_document_flow_source_documents():
         )
     except (DocumentFlowError, KeyError):
         abort(400)
-    return jsonify({"target_type": target_type, "source_documents": sources})
+    # #1515: el acceso al módulo destino no concede consulta de los módulos
+    # de los orígenes; cada fila de la lista se filtra por su módulo fuente
+    # para que no se anuncie un origen cuyo detalle el usuario no puede pedir.
+    fuentes_visibles = []
+    for row in sources:
+        modulo_fuente = _module_for_document_type(str(row.get("source_type") or ""))
+        if modulo_fuente and _puede_consultar_modulo_compania(modulo_fuente, str(row.get("company") or "") or company):
+            fuentes_visibles.append(row)
+    return jsonify({"target_type": target_type, "source_documents": fuentes_visibles})
 
 
 @api.route("/api/document-flow/pending-lines")
@@ -1271,6 +1414,8 @@ def api_document_flow_create_target():
     try:
         payload = request.get_json(silent=True) or {}
         _require_flow_company_access(payload, "crear")
+        _require_flow_target_access(payload, "crear")
+        _require_flow_source_lines_access(payload, "crear")
         result = create_target_document(payload)
     except DocumentFlowError as exc:
         abort(exc.status_code)
@@ -1337,15 +1482,12 @@ def api_document_flow_tree():
         direction       ``all`` (defecto), ``upstream`` o ``downstream``.
         max_depth       Profundidad máxima (defecto 10).
         max_nodes       Número máximo de nodos (defecto 100).
-        legacy          Si ``1``, usa el formato plano original de document_flow_tree.
     """
     document_type = request.args.get("document_type", "")
     document_id = request.args.get("document_id", "")
     if not document_type or not document_id:
         abort(400)
     _require_document_read_access(document_type, document_id)
-    if (request.args.get("legacy") or "").lower() in {"1", "true"}:
-        return jsonify(document_flow_tree(document_type, document_id))
     direction = request.args.get("direction", "all")
     if direction not in {"all", "upstream", "downstream"}:
         abort(400)

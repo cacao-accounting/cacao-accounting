@@ -323,7 +323,7 @@ def monedas():
 @contabilidad.route("/currency/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nueva_moneda():
     """Formulario para crear una nueva moneda."""
     from cacao_accounting.contabilidad.forms import FormularioMoneda
@@ -374,7 +374,7 @@ def moneda(code):
 @contabilidad.route("/currency/<code>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_moneda(code):
     """Edita una moneda."""
     from cacao_accounting.contabilidad.forms import FormularioMoneda
@@ -520,7 +520,7 @@ def entidad(entidad_id):
 @contabilidad.route("/entity/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nueva_entidad():
     """Formulario para crear una nueva entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
@@ -581,7 +581,7 @@ def nueva_entidad():
 @contabilidad.route("/entity/edit/<id_entidad>", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_entidad(id_entidad):
     """Formulario para editar una entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
@@ -828,7 +828,7 @@ def eliminar_unidad(id_unidad):
 @contabilidad.route("/unit/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nueva_unidad():
     """Formulario para crear una nueva unidad de negocios."""
     from cacao_accounting.contabilidad.forms import FormularioUnidad
@@ -879,7 +879,7 @@ def nueva_unidad():
 @contabilidad.route("/unit/<id_unidad>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_unidad(id_unidad):
     """Editar una unidad de negocios."""
     from cacao_accounting.contabilidad.forms import FormularioUnidad
@@ -1037,7 +1037,7 @@ def eliminar_libro(id_unidad):
 @contabilidad.route("/book/edit/<id_libro>", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_libro(id_libro):
     """Editar un libro de contabilidad."""
     from cacao_accounting.contabilidad.forms import FormularioLibro
@@ -1151,7 +1151,7 @@ def editar_libro(id_libro):
 @contabilidad.route("/book/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nuevo_libro():
     """Formulario para crear un nuevo libro de contabilidad."""
     from cacao_accounting.contabilidad.forms import FormularioLibro
@@ -1300,7 +1300,7 @@ def cuenta(entity, id_cta):
 @contabilidad.route("/account/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nueva_cuenta():
     """Formulario para crear una nueva cuenta contable."""
     from cacao_accounting.contabilidad.forms import FormularioCuenta
@@ -1373,7 +1373,7 @@ def nueva_cuenta():
 @contabilidad.route("/account/<entity>/<id_cta>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_cuenta(entity, id_cta):
     """Formulario para editar una cuenta contable existente."""
     from cacao_accounting.database import Accounts
@@ -1470,7 +1470,7 @@ def ccostos():
 @contabilidad.route("/costs_center/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nuevo_centro_costo():
     """Formulario para crear un nuevo centro de costos."""
     from cacao_accounting.contabilidad.forms import FormularioCentroCosto
@@ -1542,7 +1542,7 @@ def nuevo_centro_costo():
 @contabilidad.route("/costs_center/<id_cc>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_centro_costo(id_cc):
     """Editar un centro de costos existente."""
     from cacao_accounting.database import CostCenter
@@ -1684,7 +1684,7 @@ def proyectos():
 @contabilidad.route("/project/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nuevo_proyecto():
     """Formulario para crear un nuevo proyecto."""
     from cacao_accounting.contabilidad.forms import FormularioProyecto
@@ -1776,7 +1776,7 @@ def proyecto(project_id):
 @contabilidad.route("/project/<project_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_proyecto(project_id):
     """Editar un proyecto existente."""
     from cacao_accounting.contabilidad.forms import FormularioProyecto
@@ -1875,7 +1875,7 @@ def fiscal_year_list():
 @contabilidad.route("/fiscal_year/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def fiscal_year_new():
     """Crear un nuevo año fiscal."""
     from cacao_accounting.contabilidad.forms import FormularioFiscalYear
@@ -1908,7 +1908,7 @@ def fiscal_year_new():
 @contabilidad.route("/fiscal_year/<fy_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def fiscal_year_edit(fy_id):
     """Editar un año fiscal."""
     from cacao_accounting.contabilidad.forms import FormularioFiscalYear
@@ -1991,7 +1991,7 @@ def fiscal_year_detail(fy_id):
 @login_required
 @modulo_activo("accounting")
 @verifica_permiso("accounting", "eliminar")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "anular")
 def fiscal_year_delete(fy_id):
     """Elimina un año fiscal."""
     from cacao_accounting.database import AccountingPeriod, Budget, CashForecast, ComprobanteContable, FiscalYear, GLEntry
@@ -2023,7 +2023,7 @@ def fiscal_year_delete(fy_id):
 @contabilidad.route("/accounting_period/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def accounting_period_new():
     """Crear un nuevo período contable."""
     from cacao_accounting.contabilidad.forms import FormularioAccountingPeriod
@@ -2082,7 +2082,7 @@ def accounting_period_new():
 @contabilidad.route("/accounting_period/<period_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def accounting_period_edit(period_id):
     """Editar un período contable."""
     from cacao_accounting.contabilidad.forms import FormularioAccountingPeriod
@@ -2191,7 +2191,7 @@ def accounting_period_reopen(period_id: str):
 @login_required
 @modulo_activo("accounting")
 @verifica_permiso("accounting", "eliminar")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "anular")
 def accounting_period_delete(period_id):
     """Elimina un período contable."""
     from cacao_accounting.database import AccountingPeriod, BudgetLine, ComprobanteContable, GLEntry, PeriodCloseRun

@@ -285,7 +285,13 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     company = _company_for(document)
     posting_date = _posting_date_for(document)
     allow_closing = bool(getattr(document, "is_closing", False))
-    validate_accounting_period(company, posting_date, allow_closing=allow_closing)
+    is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
+    validate_accounting_period(
+        company,
+        posting_date,
+        allow_closing=allow_closing,
+        allow_fiscal_year_closing=is_fy_closing,
+    )
     accounting_period_id, fiscal_year_id = _find_period_ids(company, posting_date)
     entity = database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
     default_company_currency = getattr(entity, "currency", None) if entity else None
@@ -310,7 +316,6 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
             }
         )
     contexts: list[LedgerContext] = []
-    is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
     missing_rates: list[str] = []
     for book in _active_books(company, ledger_code):
         book_currency = getattr(book, "currency", None)
@@ -4911,12 +4916,19 @@ def _cancel_fiscal_year_closing_document(
 
 
 def _lock_document_for_transition(document: Any) -> Any:
-    """Lock and refresh a persistent document before a state transition."""
+    """Lock and refresh a persistent document before a state transition.
+
+    En PostgreSQL y MySQL serializa escritores concurrentes; SQLite ignora
+    ``FOR UPDATE``. ``populate_existing`` evita validar sobre una instancia
+    obsoleta del identity map: la guardia ve la fila comprometida viva.
+    """
     document_id = getattr(document, "id", None)
     if not document_id:
         raise PostingError(_("El documento debe estar persistido antes de cambiar su estado."))
     model = type(document)
-    locked = database.session.execute(select(model).where(model.id == document_id).with_for_update()).scalar_one_or_none()
+    locked = database.session.execute(
+        select(model).where(model.id == document_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if locked is None:
         raise PostingError(_("El documento no existe."))
     return locked
@@ -4945,7 +4957,12 @@ def _validate_cancel_accounting_period(document: Any, company: str) -> None:
     """Valida el periodo contable para cancelacion."""
     try:
         allow_closing = bool(getattr(document, "is_closing", False))
-        validate_accounting_period(company, _posting_date_for(document), allow_closing=allow_closing)
+        validate_accounting_period(
+            company,
+            _posting_date_for(document),
+            allow_closing=allow_closing,
+            allow_fiscal_year_closing=bool(getattr(document, "is_fiscal_year_closing", False)),
+        )
     except IdentifierConfigurationError as exc:
         raise PostingError(str(exc)) from exc
 

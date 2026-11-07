@@ -105,7 +105,7 @@ def user_can_access_company(user: Any, company: Entity | None) -> bool:
     for module_name in (MODULE_ACCOUNTING, MODULE_BANKS, MODULE_PURCHASES, MODULE_INVENTORY, MODULE_SALES):
         module_id = obtener_id_modulo_por_nombre(module_name)
         permissions = Permisos(modulo=module_id, usuario=user.id)
-        if permissions.administrador or (permissions.autorizado and permissions.tiene_acceso_compania(company_code)):
+        if permissions.administrador or (permissions.consultar and permissions.tiene_acceso_compania(company_code)):
             return True
     return False
 
@@ -198,11 +198,11 @@ def _has_module_access(module_name: str, company: str | None = None) -> bool:
     """Indica si el usuario actual puede consultar un módulo."""
     module_id = obtener_id_modulo_por_nombre(module_name)
     permissions = Permisos(modulo=module_id, usuario=current_user.id)
-    if not permissions.autorizado:
+    if not permissions.consultar:
         return False
     if permissions.administrador:
         return True
-    return permissions.autorizado and permissions.tiene_acceso_compania(company)
+    return permissions.consultar and permissions.tiene_acceso_compania(company)
 
 
 def _hidden_section(title: str, subtitle: str) -> dict[str, Any]:

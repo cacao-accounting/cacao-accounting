@@ -1049,6 +1049,7 @@ def _assign_identifier_if_needed(journal: ComprobanteContable, naming_series_id:
             posting_date_raw=journal.date,
             naming_series_id=naming_series_id,
             allow_closing=allow_closing,
+            allow_fiscal_year_closing=bool(getattr(journal, "is_fiscal_year_closing", False)),
         )
     except IdentifierConfigurationError:
         return

@@ -50,40 +50,52 @@ def post_proforma_to_gl(
     entries: list[GLEntry] = []
     for ledger_context in _document_contexts(document, ledger_code=ledger_code):  # type: ignore[misc]
         ledger_proforma = _proforma_for_ledger(document, context, proforma, ledger_context)
-        persistence_context = ledger_context
-        if ledger_context.company_currency != context.company_currency:
-            persistence_context = replace(ledger_context, document_base_currency=ledger_context.company_currency)
+        persistence_context = _persistence_context(context, ledger_context)
         for line in ledger_proforma.lines:
-            account_id = str(line.account_id or "").strip()
-            if not account_id:
-                raise PostingError(
-                    _("Falta una cuenta contable requerida para contabilizar el asiento.")
-                )  # type: ignore[misc]
-            debit = Decimal(line.debit or Decimal("0"))
-            credit = Decimal(line.credit or Decimal("0"))
-            debit_in_account_currency = line.amount_transaction_currency if debit > 0 else None
-            credit_in_account_currency = line.amount_transaction_currency if credit > 0 else None
-            entry = _create_gl_entry(  # type: ignore[misc]
-                context=persistence_context,
-                params=GLEntryParams(
-                    account_id=account_id,
-                    debit=debit,
-                    credit=credit,
-                    debit_in_account_currency=debit_in_account_currency,
-                    credit_in_account_currency=credit_in_account_currency,
-                    exchange_rate=Decimal(line.exchange_rate_used or Decimal("1")),
-                    party_type=context.party_type if line.party_id else None,
-                    party_id=line.party_id,
-                    bank_account_id=_bank_account_id_for_line(document, account_id),
-                    cost_center_code=line.cost_center_id,
-                    project_code=line.project_id,
-                    entry_remarks=line.description or proforma.memo,
-                ),
-            )
+            entry = _gl_entry_from_line(document, context, persistence_context, proforma, line)
             if entry.debit == 0 and entry.credit == 0:
                 continue
             entries.append(entry)
     return _add_entries(entries)  # type: ignore[misc]
+
+
+def _persistence_context(context: CalculationContext, ledger_context: LedgerContext) -> LedgerContext:
+    """Pick the persistence context for a foreign-currency ledger."""
+    if ledger_context.company_currency != context.company_currency:
+        return replace(ledger_context, document_base_currency=ledger_context.company_currency)
+    return ledger_context
+
+
+def _gl_entry_from_line(
+    document: Any,
+    context: CalculationContext,
+    persistence_context: LedgerContext,
+    proforma: JournalEntryProforma,
+    line: Any,
+) -> GLEntry:
+    """Build one GLEntry from a pro-forma line."""
+    account_id = str(line.account_id or "").strip()
+    if not account_id:
+        raise PostingError(_("Falta una cuenta contable requerida para contabilizar el asiento."))  # type: ignore[misc]
+    debit = Decimal(line.debit or Decimal("0"))
+    credit = Decimal(line.credit or Decimal("0"))
+    return _create_gl_entry(  # type: ignore[misc]
+        context=persistence_context,
+        params=GLEntryParams(
+            account_id=account_id,
+            debit=debit,
+            credit=credit,
+            debit_in_account_currency=line.amount_transaction_currency if debit > 0 else None,
+            credit_in_account_currency=line.amount_transaction_currency if credit > 0 else None,
+            exchange_rate=Decimal(line.exchange_rate_used or Decimal("1")),
+            party_type=context.party_type if line.party_id else None,
+            party_id=line.party_id,
+            bank_account_id=_bank_account_id_for_line(document, account_id),
+            cost_center_code=line.cost_center_id,
+            project_code=line.project_id,
+            entry_remarks=line.description or proforma.memo,
+        ),
+    )
 
 
 def _bank_account_id_for_line(document: Any, account_id: str) -> str | None:

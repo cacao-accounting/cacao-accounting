@@ -512,7 +512,7 @@ def config() -> None:
         ("Environment", _entorno_actual()),
         ("Database", motor),
         ("Debug", depuracion),
-        ("Host", "0.0.0.0"),
+        ("Host", "0.0.0.0"),  # nosec B104
         ("Port", str(PORT)),
         ("Threads", str(THREADS)),
         ("Cache", str(configuracion.get("CACHE_TYPE", ""))),

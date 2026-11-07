@@ -93,6 +93,7 @@ class ExchangeRevaluationService:
     ) -> ExchangeRevaluation:
         """Ejecuta una revalorizacion para compania y periodo."""
         period, year, month = self._resolve_period(company, year, month, period_id)
+        period = self._lock_period_for_run(period)
         defaults = self._validated_defaults(company)
         ledgers = self._active_ledgers(company)
         summary_ledger = self._summary_ledger(company, ledgers)
@@ -163,6 +164,24 @@ class ExchangeRevaluationService:
         if year is None or month is None:
             raise ExchangeRevaluationError(_("El año y el mes son requeridos para ejecutar la revalorización."))
         return self._period_for(company, year, month), year, month
+
+    def _lock_period_for_run(self, period: AccountingPeriod) -> AccountingPeriod:
+        """Serializa corridas concurrentes por periodo con la fila del agregado.
+
+        La fila de ``AccountingPeriod`` es el recurso compartido real de la
+        revaluacion (misma empresa y mismo periodo): bloquearla antes de leer
+        corridas previas evita que dos ejecuciones intercalen la lectura y
+        dupliquen asientos en el GL.
+        """
+        locked = database.session.execute(
+            select(AccountingPeriod)
+            .where(AccountingPeriod.id == period.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if locked is None or locked.is_closed:
+            raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
+        return locked
 
     def _void_previous_runs(
         self,
@@ -297,7 +316,16 @@ class ExchangeRevaluationService:
         reversal_date: date | None = None,
     ) -> ExchangeRevaluation:
         """Anula una revalorizacion contabilizada mediante reversos GL."""
-        run = database.session.get(ExchangeRevaluation, run_id)
+        # Lock del agregado antes de la guardia: en PostgreSQL serializa dos
+        # anulaciones concurrentes y la relectura post-lock evita duplicar reversos
+        # (transicion condicional). SQLite ignora FOR UPDATE y conserva
+        # la semantica de un solo usuario del modo desktop.
+        run = database.session.execute(
+            select(ExchangeRevaluation)
+            .where(ExchangeRevaluation.id == run_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
         if run is None:
             raise ExchangeRevaluationError(_("La revalorizacion indicada no existe."))
         if run.status != EXCHANGE_REVALUATION_STATUS_POSTED:
@@ -372,14 +400,23 @@ class ExchangeRevaluationService:
             )
             .order_by(ExchangeRevaluation.run_date, ExchangeRevaluation.created)
         ).scalars()
-        for prior_run in prior_runs:
-            self.void(
-                run_id=str(prior_run.id),
-                user_id=user_id,
-                reason="Reversa automática al inicio del siguiente período de revaluación",
-                commit=False,
-                reversal_date=reversal_date,
-            )
+        for prior_run in list(prior_runs):
+            try:
+                self.void(
+                    run_id=str(prior_run.id),
+                    user_id=user_id,
+                    reason="Reversa automática al inicio del siguiente período de revaluación",
+                    commit=False,
+                    reversal_date=reversal_date,
+                )
+            except ExchangeRevaluationError:
+                # Otra transaccion ya anulo la corrida (post-lock re-lectura): la
+                # reversa automatica es idempotente y no debe abortar la corrida nueva.
+                current = database.session.execute(
+                    select(ExchangeRevaluation.status).where(ExchangeRevaluation.id == prior_run.id).with_for_update()
+                ).scalar_one_or_none()
+                if current != EXCHANGE_REVALUATION_STATUS_VOIDED:
+                    raise
 
     def list_runs(self) -> list[ExchangeRevaluation]:
         """Lista ejecuciones recientes de revalorizacion."""
