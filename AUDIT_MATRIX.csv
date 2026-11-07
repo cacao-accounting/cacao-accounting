@@ -290,9 +290,9 @@ cacao_accounting/admin/routes.py,desactivar_regla_mapeo_libros(),Parcial,Desacti
 cacao_accounting/admin/routes.py,lista_precios(),Parcial,CSRF #1743; checkbox no respeta desmarcado #2066; tarifas negativas #1741; booleans crudos #2065
 cacao_accounting/admin/routes.py,precios_item(),Parcial,CSRF #1743; decimal/fecha 500 #1742; artículo/UOM #1764; tarifa negativa #1741
 cacao_accounting/admin/routes.py,actualizar_precio_item(),Parcial,CSRF #1743; decimal/fecha 500 #1742; tarifa negativa #1741
-cacao_accounting/admin/routes.py,config_conciliacion_compras(),Parcial,Edición resetea valores #2012; anticipos evaden aprobación #1567; enums crudos #2067; dato numérico #1742
+cacao_accounting/admin/routes.py,config_conciliacion_compras(),Parcial,Edición resetea valores #2012; anticipos evaden aprobación #1567; enums crudos #2067; dato numérico #1742; compañía no revalidada y 500 (#1649)
 cacao_accounting/admin/routes.py,config_abastecimiento_compras(),Parcial,Error de conversión expone detalle Python #1996
-cacao_accounting/admin/routes.py,config_conciliacion_ventas(),Parcial,Edición resetea valores #2012; enums crudos #2067; dato numérico #1742
+cacao_accounting/admin/routes.py,config_conciliacion_ventas(),Parcial,Edición resetea valores #2012; enums crudos #2067; dato numérico #1742; compañía no revalidada y 500 (#1649)
 cacao_accounting/admin/routes.py,config_control_presupuestario(),Parcial,Enum de acción sin etiqueta localizada #1963; falta validar compañía seleccionada
 cacao_accounting/admin/routes.py,cuentas_predeterminadas(),Parcial,Eliminar CompanyDefaultAccount choca con guard sensible #2062
 cacao_accounting/admin/routes.py,lista_usuarios(),Parcial,Desactivar no revoca sesión #1732; puede quitar último admin #1767; rol inactivo listado #2064
@@ -2559,7 +2559,7 @@ cacao_accounting/compras/purchase_reconciliation_service.py,_find_order_item_for
 cacao_accounting/compras/purchase_reconciliation_service.py,_available_line_slices(),Parcial,Suma saldos sin lock propio; requiere serialización del documento fuente.
 cacao_accounting/compras/purchase_reconciliation_service.py,_within_tolerance(),Parcial,Lógica revisada; tipos inválidos caen a tolerancia absoluta (#1362).
 cacao_accounting/compras/purchase_reconciliation_service.py,get_matching_config(),Parcial,Defaults estrictos; valores persistidos no validan enums/rangos (#1362).
-cacao_accounting/compras/purchase_reconciliation_service.py,seed_matching_config_for_company(),Parcial,Ya parcial; creación no bloquea inserciones simultáneas por compañía.
+cacao_accounting/compras/purchase_reconciliation_service.py,seed_matching_config_for_company(),Parcial,Ya parcial; creación no bloquea inserciones simultáneas por compañía; puede crear fila huérfana en desktop (#1649)
 cacao_accounting/compras/purchase_reconciliation_service.py,emit_economic_event(),Parcial,Idempotencia solo para eventos documentales; atomicidad depende de caller.
 cacao_accounting/compras/purchase_reconciliation_service.py,mark_event_processed(),Parcial,Compatibilidad legacy sin callers internos; confirmar API externa antes de retirar (#1841)
 cacao_accounting/compras/purchase_reconciliation_service.py,_evaluate_matching_result(),Parcial,Revisado contra #292/#339/#491 cerrados; faltan pruebas de reglas y tolerancias.
@@ -3204,33 +3204,33 @@ cacao_accounting/compras/templates/compras/proveedor_nuevo.html,"handler @click 
 cacao_accounting/compras/templates/compras/proveedor_nuevo.html,"acción HTML [línea 70, elemento 13]",Pendiente,
 cacao_accounting/compras/templates/compras/proveedor_nuevo.html,"handler @mousedown.prevent [línea 70, elemento 14]",Pendiente,
 cacao_accounting/compras/templates/compras/proveedor_nuevo.html,contenido: condicional Jinja [línea 79],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,bloque contenido,Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 6, elemento 1]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 7, elemento 2]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"formulario [línea 17, elemento 3]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"acción HTML [línea 22, elemento 4]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 27, elemento 5]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"acción HTML [línea 37, elemento 6]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"acción HTML [línea 42, elemento 7]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"acción HTML [línea 47, elemento 8]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: bucle Jinja [línea 78],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 81, elemento 9]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 91],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 93],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 100],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 102],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: bucle Jinja [línea 140],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 143, elemento 10]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 151],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 152, elemento 11]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: bucle Jinja [línea 195],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 198, elemento 12]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 208],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 209, elemento 13]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: bucle Jinja [línea 246],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 249, elemento 14]",Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 259],Pendiente,
-cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 261],Pendiente,
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,bloque contenido,Parcial,Curl 200 con datos; tablas y enlaces correctos; importes sin moneda (#1427)
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 6, elemento 1]",Parcial,Curl 200; enlace a Inicio renderizado
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 7, elemento 2]",Parcial,Curl 200; enlace a Compras renderizado
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"formulario [línea 17, elemento 3]",Parcial,Curl 200; GET de compañía renderizado
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"acción HTML [línea 22, elemento 4]",Parcial,Curl 200; botón Filtrar renderizado
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 27, elemento 5]",Parcial,Curl 200; enlace al panel con company
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"acción HTML [línea 37, elemento 6]",Parcial,Curl 200; tab de órdenes renderizado
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"acción HTML [línea 42, elemento 7]",Parcial,Curl 200; tab de facturas renderizado
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"acción HTML [línea 47, elemento 8]",Parcial,Curl 200; tab de recepciones renderizado
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: bucle Jinja [línea 78],Parcial,Curl 200 con orden PO-001
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 81, elemento 9]",Parcial,Curl 200; enlace a compras_orden_compra con order_id
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 91],Parcial,Curl 200; rama Completado no ejercitada
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 93],Parcial,Curl 200; rama Parcial ejercitada
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 100],Parcial,Curl 200; rama Completado no ejercitada
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 102],Parcial,Curl 200; rama Parcial ejercitada
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: bucle Jinja [línea 140],Parcial,Curl 200 con factura PI-001
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 143, elemento 10]",Parcial,Curl 200; enlace a compras_factura_compra con invoice_id
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 151],Parcial,Curl 200; rama con OC no ejercitada
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 152, elemento 11]",Parcial,Endpoint compras_orden_compra verificado; rama no ejercitada
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: bucle Jinja [línea 195],Parcial,Curl 200 con recepción RID-BY-ID
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 198, elemento 12]",Parcial,Curl 200; enlace a compras_recepcion con receipt_id
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 208],Parcial,Curl 200; rama con OC no ejercitada
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 209, elemento 13]",Parcial,Endpoint compras_orden_compra verificado; rama no ejercitada
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: bucle Jinja [línea 246],Parcial,Curl 200 con línea pendiente
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,"enlace de acción [línea 249, elemento 14]",Parcial,Curl 200; enlace a compras_recepcion con receipt_id
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 259],Parcial,Curl 200; rama Abierto ejercitada
+cacao_accounting/compras/templates/compras/purchase_reconciliation.html,contenido: condicional Jinja [línea 261],Parcial,Curl 200; rama Parcial no ejercitada
 cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,bloque contenido,Parcial,Render 200 sin filas y 500 con filas por url_for roto; #1428 #1484 #1711
 cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,"enlace de acción [línea 7, elemento 1]",Parcial,Render 200 en estado vacío vía curl; enlace a /index correcto
 cacao_accounting/compras/templates/compras/purchase_reconciliation_panel.html,"enlace de acción [línea 10, elemento 2]",Parcial,Render 200 en estado vacío vía curl; endpoint compras_ registrado
@@ -3343,44 +3343,44 @@ cacao_accounting/config.py,probar_modo_escritorio(),Parcial,Flags truthy incorre
 cacao_accounting/contabilidad/__init__.py,[módulo],Pendiente,
 cacao_accounting/contabilidad/__init__.py,__getattr__(),Pendiente,
 cacao_accounting/contabilidad/__init__.py,__dir__(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,[módulo],Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationError,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationCurrencyError,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationOverpaymentError,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationIdempotencyError,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,_decimal(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,ARAPOpenItem,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,ARAPOpenItem.__post_init__(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,ARAPOpenItem.from_model(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationRequest,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationLine,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationPlan,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationPlan.allocated_source_amount(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationPlan.remaining_source_amount(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationPlan.is_full(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.__init__(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver._key(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.from_ledger(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.from_models(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.add(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.resolve(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.all(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.consume(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.snapshot(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.restore(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,list_open_items(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,list_cached_open_items(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,resolve_open_item(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationPlanner,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationPlanner.__init__(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationPlanner.plan(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationPlanner._rate(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationExecutor,Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationExecutor.__init__(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,AllocationExecutor.execute(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,plan_allocation(),Pendiente,
-cacao_accounting/contabilidad/arap_allocation.py,apply_allocation(),Pendiente,
+cacao_accounting/contabilidad/arap_allocation.py,[módulo],Parcial,Revisado contrato del motor; moneda tasa y saldos; ver #1836 #1144 #1103 #1841
+cacao_accounting/contabilidad/arap_allocation.py,AllocationError,Parcial,Error base de dominio; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationCurrencyError,Parcial,Moneda o tasa inválida; revisado en _rate
+cacao_accounting/contabilidad/arap_allocation.py,AllocationOverpaymentError,Parcial,Sobre-asignación y efectivo; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationIdempotencyError,Parcial,Clave repetida con distinto contenido; ver #1144
+cacao_accounting/contabilidad/arap_allocation.py,_decimal(),Parcial,Conversión Decimal con error de dominio; revisada
+cacao_accounting/contabilidad/arap_allocation.py,ARAPOpenItem,Parcial,DTO de open item con validaciones; revisado
+cacao_accounting/contabilidad/arap_allocation.py,ARAPOpenItem.__post_init__(),Parcial,Exige documento tipo moneda y saldo no negativo; revisado
+cacao_accounting/contabilidad/arap_allocation.py,ARAPOpenItem.from_model(),Parcial,Mapea unallocated_amount y metadatos; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationRequest,Parcial,DTO de solicitud con amount rate key; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationLine,Parcial,Línea validada para persistencia; revisada
+cacao_accounting/contabilidad/arap_allocation.py,AllocationPlan,Parcial,Plan inmutable con líneas; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationPlan.allocated_source_amount(),Parcial,Suma de fuente consumida; revisada
+cacao_accounting/contabilidad/arap_allocation.py,AllocationPlan.remaining_source_amount(),Parcial,Remanente de efectivo; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationPlan.is_full(),Parcial,Plan completo si remanente cero; revisado
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver,Parcial,Índice transaccional de open items; revisado
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.__init__(),Parcial,Rechaza documentos duplicados por clave; revisado
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver._key(),Parcial,Clave estable por open_item o documento+línea; revisada
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.from_ledger(),Parcial,Construye desde list_open_items; revisado
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.from_models(),Parcial,Construye desde filas ORM; revisado
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.add(),Parcial,Inserta y detecta duplicados; revisado
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.resolve(),Parcial,Resuelve por id o documento único; revisado
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.all(),Parcial,Devuelve instantánea de items; revisado
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.consume(),Parcial,Descuenta saldo y rechaza exceso; revisado
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.snapshot(),Parcial,Captura estado para rollback; revisada
+cacao_accounting/contabilidad/arap_allocation.py,OpenItemResolver.restore(),Parcial,Restaura snapshot; revisado
+cacao_accounting/contabilidad/arap_allocation.py,list_open_items(),Parcial,Reconstruye saldos del ledger; metadatos nulos por diseño; ver #1146
+cacao_accounting/contabilidad/arap_allocation.py,list_cached_open_items(),Parcial,Lee cache positivo sin status; ver #1070 #1103
+cacao_accounting/contabilidad/arap_allocation.py,resolve_open_item(),Parcial,Sin callers; candidato #1841
+cacao_accounting/contabilidad/arap_allocation.py,AllocationPlanner,Parcial,Valida monedas saldos e importes; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationPlanner.__init__(),Parcial,Asocia resolver al planificador; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationPlanner.plan(),Parcial,Omite claves existentes sin comparar contenido #1836; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationPlanner._rate(),Parcial,Exige tasa 1 en misma moneda y positiva entre monedas; revisada
+cacao_accounting/contabilidad/arap_allocation.py,AllocationExecutor,Parcial,Ejecuta plan con rollback; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationExecutor.__init__(),Parcial,Comparte memoria de idempotencia del resolver; revisado
+cacao_accounting/contabilidad/arap_allocation.py,AllocationExecutor.execute(),Parcial,Revierte estado y clave repetida #1144; revisado
+cacao_accounting/contabilidad/arap_allocation.py,plan_allocation(),Parcial,API estable de planificación; revisada
+cacao_accounting/contabilidad/arap_allocation.py,apply_allocation(),Parcial,API estable de aplicación; revisada
 cacao_accounting/contabilidad/arap_gl_reconciliation.py,[módulo],Pendiente,
 cacao_accounting/contabilidad/arap_gl_reconciliation.py,ARAPGLReconciliationError,Parcial,Resultados AR/AP revisados; faltan moneda histórica y concurrencia; #1837
 cacao_accounting/contabilidad/arap_gl_reconciliation.py,ARAPGLReconciliationError.__init__(),Pendiente,
@@ -3401,63 +3401,63 @@ cacao_accounting/contabilidad/arap_gl_reconciliation.py,_gl_totals(),Parcial,Fal
 cacao_accounting/contabilidad/arap_gl_reconciliation.py,reconcile_arap_to_gl(),Parcial,Falta valorar moneda histórica y concurrencia; #1837
 cacao_accounting/contabilidad/arap_gl_reconciliation.py,enforce_arap_gl_policy(),Parcial,Falta valorar moneda histórica y concurrencia; #1837
 cacao_accounting/contabilidad/arap_gl_reconciliation.py,reconcile_companies_arap_to_gl(),Parcial,Falta valorar moneda histórica y concurrencia; #1837
-cacao_accounting/contabilidad/arap_ledger_service.py,[módulo],Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_decimal(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_positive_finite_rate(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_document_type(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_is_return_document(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_ledger_type(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_payment_party_sign(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_party_id(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_document_amount(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_currency(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_party_gl_entries(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_book_value_from_gl(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_book_entries_for(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_add_book_entry(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,MovementOptions,Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_new_movement(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_active_books(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_upsert_open_item_cache(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_decrease_open_item_cache(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_movement_book_exchange_rate(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_open_item_book_exchange_rate(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_close_open_item_cache_for_movement(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_book_exchange_rate(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,post_document_ar_ap(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_populate_existing_payment_opening_books(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_process_payment_reference(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_PaymentPostingContext,Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_PaymentPostingContext.consumed_cash(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_load_payment_references(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_find_existing_payment_opening(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_has_postable_payment_context(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_build_payment_posting_context(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_create_payment_opening_movement(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_record_payment_open_item_cache(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_value_payment_movement_in_books(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,post_payment_ar_ap(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_resolve_application_target_item(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_resolve_application_payment_item(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,ApplicationMovementContext,Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_build_application_movements(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,post_payment_application_ar_ap(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_cache_for_movement(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_party_account_from_gl(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_journal_party_lines(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_journal_account(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_journal_line_signed_amount(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_find_target_open_item(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_normalize_journal_reference_type(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_apply_journal_open_item(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_process_journal_line_reference(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_populate_journal_line_books(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_process_journal_party_line(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,post_journal_ar_ap(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_cancellation_originals(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,_reverse_arap_movement(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,cancel_document_ar_ap(),Pendiente,
-cacao_accounting/contabilidad/arap_ledger_service.py,cancel_document_ar_ap.lambda [línea 1601](),Pendiente,Unidad nueva del extractor; evidencia individual pendiente
+cacao_accounting/contabilidad/arap_ledger_service.py,[módulo],Parcial,Revisados contratos y llamadores; faltan pruebas de doble reversa y aperturas sintéticas sin libro.
+cacao_accounting/contabilidad/arap_ledger_service.py,_decimal(),Parcial,Revisada normalización Decimal; sin validación de finitos salvo en tasas; falta prueba de NaN e infinito.
+cacao_accounting/contabilidad/arap_ledger_service.py,_positive_finite_rate(),Parcial,Revisado rechazo de tasas no finitas o no positivas; cubierto por issue 961; falta prueba unitaria directa.
+cacao_accounting/contabilidad/arap_ledger_service.py,_document_type(),Parcial,Revisado fallback a __tablename__; no valida tipos desconocidos; falta prueba para subtipos de nota.
+cacao_accounting/contabilidad/arap_ledger_service.py,_is_return_document(),Parcial,Revisado criterio is_return/is_reversal y notas de crédito; no lista sales_return; falta probar datos legacy.
+cacao_accounting/contabilidad/arap_ledger_service.py,_ledger_type(),Parcial,Revisado AR/AP por modelo y prefijo sales_; payment_type desconocido cae a AP; falta validación explícita.
+cacao_accounting/contabilidad/arap_ledger_service.py,_payment_party_sign(),Parcial,Revisado signo por receive y ledger; faltan pruebas de reembolsos y transferencias internas.
+cacao_accounting/contabilidad/arap_ledger_service.py,_party_id(),Parcial,Revisado orden customer/supplier/party_id; sin validación de tercero vacío; falta prueba de pago sin tercero.
+cacao_accounting/contabilidad/arap_ledger_service.py,_document_amount(),Parcial,Revisado orden grand_total/paid/received; el operador or ignora ceros; falta prueba de importes cero.
+cacao_accounting/contabilidad/arap_ledger_service.py,_currency(),Parcial,Revisado fallback transaction_currency/currency; no valida moneda vacía; falta prueba de pago sin moneda.
+cacao_accounting/contabilidad/arap_ledger_service.py,_party_gl_entries(),Parcial,Revisado filtro por party_id; agrega todas las cuentas del tercero; falta probar retenciones y multilinea.
+cacao_accounting/contabilidad/arap_ledger_service.py,_book_value_from_gl(),Parcial,Revisado signo AR/AP; sin prueba de líneas de retención o cuentas ajenas al control.
+cacao_accounting/contabilidad/arap_ledger_service.py,_book_entries_for(),Parcial,Revisado filtro por ledger_id exacto; solo acepta id no code; falta prueba de GL legacy.
+cacao_accounting/contabilidad/arap_ledger_service.py,_add_book_entry(),Parcial,Revisado signo debit/credit y tasa; no persiste account_id ni account_code; falta prueba de tasa cero.
+cacao_accounting/contabilidad/arap_ledger_service.py,MovementOptions,Parcial,Revisado dataclass de enrutamiento; campos usados por movimientos; falta prueba de todas las opciones.
+cacao_accounting/contabilidad/arap_ledger_service.py,_new_movement(),Parcial,Revisado defaults de fecha moneda y voucher; no valida moneda ni tercero; falta prueba de datos incompletos.
+cacao_accounting/contabilidad/arap_ledger_service.py,_active_books(),Parcial,Revisado filtro status activo; no valida moneda del libro; falta prueba sin libros y con libros nulos.
+cacao_accounting/contabilidad/arap_ledger_service.py,_upsert_open_item_cache(),Parcial,Revisado upsert y version; sobrescribe saldo por clave sin empresa; falta prueba multibook y concurrencia.
+cacao_accounting/contabilidad/arap_ledger_service.py,_decrease_open_item_cache(),Parcial,Revisado clamp a cero y bloqueo; no revalida saldo bajo lock; cubierto por 1145; falta prueba SQLite.
+cacao_accounting/contabilidad/arap_ledger_service.py,_movement_book_exchange_rate(),Parcial,Revisado snapshot de tasa por movimiento y libro; falta prueba de tasa inválida y ausencia.
+cacao_accounting/contabilidad/arap_ledger_service.py,_open_item_book_exchange_rate(),Parcial,Revisado tasa original por línea; no filtra empresa; falta prueba de apertura revertida.
+cacao_accounting/contabilidad/arap_ledger_service.py,_close_open_item_cache_for_movement(),Parcial,Revisado cierre forzado del cache; usado en reversa de diario; falta prueba de reapertura.
+cacao_accounting/contabilidad/arap_ledger_service.py,_book_exchange_rate(),Parcial,Revisado directa inversa y fallback; bloquea sin tasa según 961; falta prueba de fechas y moneda funcional.
+cacao_accounting/contabilidad/arap_ledger_service.py,post_document_ar_ap(),Parcial,Revisada apertura idempotente y signo de notas; faltan pruebas de libros múltiples y terceros sin GL.
+cacao_accounting/contabilidad/arap_ledger_service.py,_populate_existing_payment_opening_books(),Parcial,Revisado backfill solo sin book_entries; no agrega libros nuevos parciales; falta prueba de libro tardío.
+cacao_accounting/contabilidad/arap_ledger_service.py,_process_payment_reference(),Parcial,Revisada aplicación y signos; no revalida saldo ni empresa; cubierto parcial por 1140 y 1573; falta prueba.
+cacao_accounting/contabilidad/arap_ledger_service.py,_PaymentPostingContext,Parcial,Revisado contexto inmutable del pago; falta prueba de referencias mixtas y montos cero.
+cacao_accounting/contabilidad/arap_ledger_service.py,_PaymentPostingContext.consumed_cash(),Parcial,Revisado filtro de referencias a órdenes; no resta descuentos ni diferencia; falta prueba de descuento.
+cacao_accounting/contabilidad/arap_ledger_service.py,_load_payment_references(),Parcial,Revisado listado por payment_id; sin orden ni filtro de relación; falta prueba de referencias revertidas.
+cacao_accounting/contabilidad/arap_ledger_service.py,_find_existing_payment_opening(),Parcial,Revisado búsqueda por documento sin empresa; falta prueba de apertura parcial o revertida.
+cacao_accounting/contabilidad/arap_ledger_service.py,_has_postable_payment_context(),Parcial,Revisado criterio referencias o tercero; permite pago sin moneda; falta prueba de pago interno.
+cacao_accounting/contabilidad/arap_ledger_service.py,_build_payment_posting_context(),Parcial,Revisado total y cuenta desde GL; no valida moneda ni tercero; falta prueba de pago sin GL.
+cacao_accounting/contabilidad/arap_ledger_service.py,_create_payment_opening_movement(),Parcial,Revisado signo de apertura y flush; sin book entries directos; falta prueba de signo por reembolso.
+cacao_accounting/contabilidad/arap_ledger_service.py,_record_payment_open_item_cache(),Parcial,Revisado remanente total menos consumido; no considera descuentos; cubierto parcial por 1404 y 1459.
+cacao_accounting/contabilidad/arap_ledger_service.py,_value_payment_movement_in_books(),Parcial,Revisado tasa y vínculo GL; no asocia GL con referencias; falta prueba multilibro.
+cacao_accounting/contabilidad/arap_ledger_service.py,post_payment_ar_ap(),Parcial,Revisada apertura y referencias; early return no procesa referencias nuevas; falta prueba de reintento.
+cacao_accounting/contabilidad/arap_ledger_service.py,_resolve_application_target_item(),Parcial,Revisada apertura destino y cache; la apertura sintética no crea book entries; falta prueba de libro.
+cacao_accounting/contabilidad/arap_ledger_service.py,_resolve_application_payment_item(),Parcial,Revisada apertura pago y validación; la apertura sintética no crea book entries; falta prueba de libro.
+cacao_accounting/contabilidad/arap_ledger_service.py,ApplicationMovementContext,Parcial,Revisado contexto de aplicación; falta prueba de líneas múltiples y monedas distintas.
+cacao_accounting/contabilidad/arap_ledger_service.py,_build_application_movements(),Parcial,Revisada idempotencia por referencia; omite segunda línea del mismo documento; falta prueba de línea.
+cacao_accounting/contabilidad/arap_ledger_service.py,post_payment_application_ar_ap(),Parcial,Revisada validación de tercero y montos; no valida empresa del documento; relación con 1145 y 1545.
+cacao_accounting/contabilidad/arap_ledger_service.py,_cache_for_movement(),Parcial,Revisado lookup por línea económica; no filtra empresa; falta prueba de cache ausente.
+cacao_accounting/contabilidad/arap_ledger_service.py,_party_account_from_gl(),Parcial,Revisado lookup de cuenta por voucher y tercero; depende de voucher_type correcto; falta prueba legacy.
+cacao_accounting/contabilidad/arap_ledger_service.py,_journal_party_lines(),Parcial,Revisado filtro por tercero y orden; no valida empresa de la línea; falta prueba de líneas mixtas.
+cacao_accounting/contabilidad/arap_ledger_service.py,_journal_account(),Parcial,Revisado resolución por id código y GL; puede devolver cuenta de otra empresa; falta prueba de alcance.
+cacao_accounting/contabilidad/arap_ledger_service.py,_journal_line_signed_amount(),Parcial,Revisado signo AP invertido; depende del signo de value; falta prueba de débito y crédito.
+cacao_accounting/contabilidad/arap_ledger_service.py,_find_target_open_item(),Parcial,Revisada resolución por id o número; fallback no usa document_no ni línea; cubierto parcial por 1146 y 1573.
+cacao_accounting/contabilidad/arap_ledger_service.py,_normalize_journal_reference_type(),Parcial,Revisado mapeo español e inglés; no cubre variantes no listadas; falta prueba de tipos desconocidos.
+cacao_accounting/contabilidad/arap_ledger_service.py,_apply_journal_open_item(),Parcial,Revisada dirección opuesta y tasas snapshot; no marca allocations como reversa; falta prueba de reversa.
+cacao_accounting/contabilidad/arap_ledger_service.py,_process_journal_line_reference(),Parcial,Revisada prioridad de referencia; ignora reference_open_item_id si hay nombre; cubierto por 1147.
+cacao_accounting/contabilidad/arap_ledger_service.py,_populate_journal_line_books(),Parcial,Revisada valoración por línea GL; no crea libro si falta candidato; falta prueba de reversa multilibro.
+cacao_accounting/contabilidad/arap_ledger_service.py,_process_journal_party_line(),Parcial,Revisada apertura y cache; en reversa guarda documento origen lo que rompe anulación; falta prueba.
+cacao_accounting/contabilidad/arap_ledger_service.py,post_journal_ar_ap(),Parcial,Revisada idempotencia por voucher; no valida estado ni empresa; falta prueba de reversa y cancelación.
+cacao_accounting/contabilidad/arap_ledger_service.py,_cancellation_originals(),Parcial,Revisado filtro de originales; incluye ya revertidos y omite apertura de reversa; cubierto parcial por 1070.
+cacao_accounting/contabilidad/arap_ledger_service.py,_reverse_arap_movement(),Parcial,Revisada contrapartida exacta por libro y cache; no marca is_cancelled; falta prueba de doble reversa.
+cacao_accounting/contabilidad/arap_ledger_service.py,cancel_document_ar_ap(),Parcial,Revisada orquestación append-only; no es idempotente por sí misma; falta prueba de anulación cruzada.
+cacao_accounting/contabilidad/arap_ledger_service.py,cancel_document_ar_ap.lambda [línea 1601](),Parcial,Revisado orden apertura primero; combinado con 1070 reabre cache; falta prueba de múltiples aplicaciones.Unidad nueva del extractor; evidencia individual pendiente
 cacao_accounting/contabilidad/auxiliares.py,[módulo],Pendiente,
 cacao_accounting/contabilidad/auxiliares.py,obtener_lista_entidades_por_id_razonsocial(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/contabilidad/auxiliares.py,_lista_entidades_cacheada(),Parcial,Revisión del caller; faltan escenarios
@@ -3675,61 +3675,61 @@ cacao_accounting/contabilidad/exchange_rate_import_service.py,ExchangeRateImport
 cacao_accounting/contabilidad/exchange_rate_import_service.py,ExchangeRateImportService._matrix_to_dicts(),Pendiente,
 cacao_accounting/contabilidad/exchange_rate_import_service.py,ExchangeRateImportService._row_has_content(),Pendiente,
 cacao_accounting/contabilidad/exchange_rate_import_service.py,ExchangeRateImportService._row_has_content_raw(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,[módulo],Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationError,Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,RevaluationCandidate,Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,RevaluationLineDraft,Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService,Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService.run(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._resolve_period(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._lock_period_for_run(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._void_previous_runs(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._build_run_record(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._post_revaluation_entries(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._compute_run_totals(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._sum_account_credits(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._sum_account_debits(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._converted_totals(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._converted_amount(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService.void(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._reverse_prior_period_runs(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService.list_runs(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService.list_lines(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._period_for(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._ensure_period_open(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._validated_defaults(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._active_ledgers(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._summary_ledger(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._open_candidates(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._document_has_gl(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._open_sales_invoices(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._open_purchase_invoices(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._open_bank_accounts(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._calculate_lines(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._build_entries_and_items(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._entries_for_draft(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._entry_sides(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._item_for_draft(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._link_items_to_entries(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._validate_entries(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._current_ledger_balance(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._source_gl_balance(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._active_revaluation_balance(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._normal_balance(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._bank_original_balance(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._closing_rate(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._closing_rate._rate(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._closing_rate._nearest_rate(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._closing_rate._validated_rate(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._party_account(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._document_currency(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._account_code(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._period_ids(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._create_journal(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._assign_identifier(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._active_run_entries(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._date_for(),Pendiente,
-cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._decimal(),Pendiente,
+cacao_accounting/contabilidad/exchange_revaluation_service.py,[módulo],Parcial,Revisado contrato y dependencias; falta acreditar flujo Cloud con controles internos.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationError,Parcial,Revisado uso en servicio y rutas; falta validar que todo error de negocio use este tipo.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,RevaluationCandidate,Parcial,Revisado contrato de candidatos AR/AP y banco; falta cubrir series de moneda y saldos negativos.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,RevaluationLineDraft,Parcial,Revisado cálculo incremental por libro; falta probar redondeos y diferencias cero.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService,Parcial,Revisado servicio completo; falta prueba integrada de todos sus métodos.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService.run(),Parcial,Revisado orquestación atomicidad y locks; falta corregir bloqueo Cloud y corridas fuera de orden.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._resolve_period(),Parcial,Revisado resolución por period_id y año/mes; falta validar período exacto y enabled.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._lock_period_for_run(),Parcial,Revisado lock por período; falta cubrir SQLite y período deshabilitado.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._void_previous_runs(),Parcial,Revisado anulación previa del mes y reversa anterior; falta probar meses divididos.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._build_run_record(),Parcial,Revisado alta docstatus e identificador; falta corregir mutación posteada bloqueada en Cloud.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._post_revaluation_entries(),Parcial,Revisado persistencia y enlace de líneas; falta cubrir fallo entre flush y enlace.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._compute_run_totals(),Parcial,Revisado totales resumen y fallback; falta bloquear tasas faltantes.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._sum_account_credits(),Parcial,Revisado suma de créditos por cuenta; falta caso cuenta nula y libro secundario.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._sum_account_debits(),Parcial,Revisado suma de débitos por cuenta; falta caso cuenta nula y libro secundario.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._converted_totals(),Parcial,Revisado conversión de totales secundarios; falta propagar error de tasa ausente.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._converted_amount(),Parcial,Revisado conversión con tasa de cierre; falta eliminar retorno silencioso cero.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService.void(),Parcial,Revisado lock transición reversa y período; falta cubrir Cloud y cancelación genérica.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._reverse_prior_period_runs(),Parcial,Revisado reversa de corridas previas; falta impedir corridas futuras activas.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService.list_runs(),Parcial,Método sin callers en producción; la ruta lista sin filtro de compañía; falta decidir retirar o conectar.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService.list_lines(),Parcial,Revisado lectura por corrida; falta filtro de compañía propio.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._period_for(),Parcial,Revisado selección por intersección de mes; falta período exacto y enabled.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._ensure_period_open(),Parcial,Revisado cierre de período; falta exigir enabled y lock de período.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._validated_defaults(),Parcial,Revisado cuentas no realizadas; falta validar cuentas AR/AP y tipos.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._active_ledgers(),Parcial,Revisado filtro de libros activos y moneda; falta traducir error de moneda ausente.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._summary_ledger(),Parcial,Revisado selección por moneda de entidad; falta probar entidad sin libro coincidente.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._open_candidates(),Parcial,Revisado composición de candidatos; falta excluir notas aplicadas y duplicados.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._document_has_gl(),Parcial,Revisado filtro de GL activo por fecha; falta cubrir reversas y anulaciones.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._open_sales_invoices(),Parcial,Revisado saldo abierto AR y tipo de cambio; falta notas relacionadas y corte histórico.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._open_purchase_invoices(),Parcial,Revisado saldo abierto AP y tipo de cambio; falta notas relacionadas y corte histórico.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._open_bank_accounts(),Parcial,Revisado candidato por libro y saldo original; falta saldos negativos y moneda mixta.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._calculate_lines(),Parcial,Revisado tasa por libro y saldo previo; falta medir corridas futuras y tasa ausente.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._build_entries_and_items(),Parcial,Revisado armado de asientos e ítems; falta probar listas vacías.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._entries_for_draft(),Parcial,Revisado lados y moneda de asientos; falta validar importes en moneda de cuenta.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._entry_sides(),Parcial,Revisado señal de diferencia y cuenta offset; falta caso cuentas iguales.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._item_for_draft(),Parcial,Revisado tasas y montos persistidos; falta cubrir saldo previo cero.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._link_items_to_entries(),Parcial,Revisado enlace estricto por orden; falta prueba de orden alterado.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._validate_entries(),Parcial,Revisado signo balance y uso de cuentas; falta validar período y compañía.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._current_ledger_balance(),Parcial,Revisado saldo original más revaluaciones; falta corte temporal.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._source_gl_balance(),Parcial,Revisado valor en libros y fallback; falta filtrar pagos cancelados y fecha de corte.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._active_revaluation_balance(),Parcial,Revisado saldo activo por documento y libro; falta filtrar corridas posteriores al corte.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._normal_balance(),Parcial,Revisado cálculo débito/crédito; falta caso importes negativos.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._bank_original_balance(),Parcial,Revisado saldo bancario por libro y fallback funcional; falta moneda mixta y redondeo.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._closing_rate(),Parcial,Revisado tasa exacta e inversa con fallback; falta límite temporal de vigencia.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._closing_rate._rate(),Parcial,Revisado búsqueda exacta; falta validar duplicados de tasa.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._closing_rate._nearest_rate(),Parcial,Revisado fallback a fecha anterior; falta límite de antigüedad y fecha futura.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._closing_rate._validated_rate(),Parcial,Revisado rechazo de tasas no finitas y no positivas; falta caso Decimal nulo.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._party_account(),Parcial,Revisado cuenta de tercero y default; falta evitar cadena None cuando falta default.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._document_currency(),Parcial,Revisado moneda de documento y entidad; falta evitar cadena None sin moneda.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._account_code(),Parcial,Revisado obtención de código; falta validar cuenta inexistente.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._period_ids(),Parcial,Revisado período y año fiscal habilitado; falta bloquear período deshabilitado.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._create_journal(),Parcial,Revisado cabecera de comprobante; falta cubrir cancelación genérica y moneda.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._assign_identifier(),Parcial,Revisado asignación y fallback manual; falta evitar ValueError en Cloud.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._active_run_entries(),Parcial,Revisado selección de líneas activas; falta cubrir anulación genérica parcial.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._date_for(),Parcial,Revisado fecha contable; falta cubrir fecha nula.
+cacao_accounting/contabilidad/exchange_revaluation_service.py,ExchangeRevaluationService._decimal(),Parcial,Revisado conversión y error; falta cubrir valores NaN e infinito.
 cacao_accounting/contabilidad/fiscal_year_closing.py,[módulo],Pendiente,
 cacao_accounting/contabilidad/fiscal_year_closing.py,FiscalYearClosingError,Pendiente,
 cacao_accounting/contabilidad/fiscal_year_closing.py,_cross_year_reversal_pairs(),Pendiente,
@@ -5501,11 +5501,11 @@ cacao_accounting/contabilidad/templates/contabilidad_cash_flow_config.html,conte
 cacao_accounting/contabilidad/templates/contabilidad_cash_flow_config.html,contenido: condicional Jinja [línea 89],Pendiente,
 cacao_accounting/contabilidad/templates/contabilidad_cash_flow_config.html,"acción HTML [línea 101, elemento 8]",Pendiente,
 cacao_accounting/control_review_service.py,[módulo],Pendiente,
-cacao_accounting/control_review_service.py,_operation_actor(),Pendiente,
+cacao_accounting/control_review_service.py,_operation_actor(),Parcial,Exige actor autorizado por compañía y módulo; ValueError sin capturar en rutas admin (#1649)
 cacao_accounting/control_review_service.py,_digest(),Pendiente,
 cacao_accounting/control_review_service.py,_event(),Pendiente,
 cacao_accounting/control_review_service.py,_preparation_policy(),Pendiente,
-cacao_accounting/control_review_service.py,require_review(),Pendiente,
+cacao_accounting/control_review_service.py,require_review(),Parcial,Valida actor y crea o invalida propuestas; flujo revisado con #1649; falta cobertura de concurrencia
 cacao_accounting/control_review_service.py,review_is_allowed(),Pendiente,
 cacao_accounting/control_review_service.py,reviewed_bank_difference(),Pendiente,
 cacao_accounting/control_review_service.py,_execute(),Pendiente,
@@ -7004,10 +7004,10 @@ cacao_accounting/logistics.py,logistics_signature(),Pendiente,
 cacao_accounting/logistics.py,ensure_compatible_logistics(),Pendiente,
 cacao_accounting/logistics.py,incoterm_options(),Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
 cacao_accounting/logs.py,[módulo],Pendiente,
-cacao_accounting/matching_config_service.py,[módulo],Pendiente,
-cacao_accounting/matching_config_service.py,_plain(),Pendiente,
-cacao_accounting/matching_config_service.py,_normalize(),Pendiente,
-cacao_accounting/matching_config_service.py,update_matching_config(),Pendiente,
+cacao_accounting/matching_config_service.py,[módulo],Parcial,Modelos y campos por dominio; enums/rangos delegados a callers (#1362 #1568)
+cacao_accounting/matching_config_service.py,_plain(),Parcial,Serializa Decimal a str para el payload; revisado en update_matching_config
+cacao_accounting/matching_config_service.py,_normalize(),Parcial,Convierte decimales; acepta no finitos y no valida enums ni rangos (#1568 #1263)
+cacao_accounting/matching_config_service.py,update_matching_config(),Parcial,Bloqueo y expected_before revisados; compañía no revalidada y ValueError escapa a rutas (#1649); enums sin validar (#1362)
 cacao_accounting/messaging/__init__.py,[módulo],Completo,Marcador de paquete y consumidores verificados
 cacao_accounting/messaging/email.py,[módulo],Pendiente,
 cacao_accounting/messaging/email.py,EmailError,Pendiente,
@@ -8135,96 +8135,96 @@ cacao_accounting/search_select.py,_serialize_result(),Parcial,Faltan pruebas HTT
 cacao_accounting/search_select.py,_allowed_uoms_for_item(),Pendiente,
 cacao_accounting/server.py,[módulo],Parcial,Arranque Waitress inicializa DB con usuario/contraseña cacao por defecto (#2061)
 cacao_accounting/server.py,server(),Parcial,Fallback de credenciales ignora resolver_credenciales_iniciales (#2061)
-cacao_accounting/setup/__init__.py,[módulo],Pendiente,
+cacao_accounting/setup/__init__.py,[módulo],Parcial,Blueprint y rutas de setup; guard admin y sello vía #1021
 cacao_accounting/setup/__init__.py,setup(),Parcial,Guard admin y sello verificados (#1021); faltan step inválido y concurrencia
-cacao_accounting/setup/__init__.py,_handle_setup_post(),Pendiente,
-cacao_accounting/setup/__init__.py,_handle_setup_language_step(),Pendiente,
-cacao_accounting/setup/__init__.py,_handle_setup_regional_step(),Pendiente,
+cacao_accounting/setup/__init__.py,_handle_setup_post(),Parcial,Back y despacho por paso; step inválido produce flash; falta sesión manipulada
+cacao_accounting/setup/__init__.py,_handle_setup_language_step(),Parcial,Valida formulario y guarda idioma; mensaje de error fijo en español
+cacao_accounting/setup/__init__.py,_handle_setup_regional_step(),Parcial,Valida moneda y zona y persiste; falta concurrencia
 cacao_accounting/setup/__init__.py,_handle_setup_company_step(),Parcial,ValueError de finalize_setup sin capturar; HTTP 500 por código duplicado o catálogo (#2101); #1952
 cacao_accounting/setup/__init__.py,_build_company_data(),Parcial,Omite pais; Entity.country queda NULL (#2100)
-cacao_accounting/setup/__init__.py,_setup_form(),Pendiente,
-cacao_accounting/setup/catalogs.py,[módulo],Pendiente,
-cacao_accounting/setup/catalogs.py,CountryOption,Pendiente,
-cacao_accounting/setup/catalogs.py,normalize_language(),Pendiente,
-cacao_accounting/setup/catalogs.py,setup_texts(),Pendiente,
-cacao_accounting/setup/catalogs.py,entity_type_choices(),Pendiente,
-cacao_accounting/setup/catalogs.py,country_choices(),Pendiente,
-cacao_accounting/setup/catalogs.py,country_currency_map(),Pendiente,
-cacao_accounting/setup/catalogs.py,country_timezone_map(),Pendiente,
-cacao_accounting/setup/catalogs.py,timezone_choices(),Pendiente,
-cacao_accounting/setup/catalogs.py,catalog_choices(),Pendiente,
-cacao_accounting/setup/catalogs.py,setup_template_context(),Pendiente,
-cacao_accounting/setup/forms.py,[módulo],Pendiente,
-cacao_accounting/setup/forms.py,SetupLanguageForm,Pendiente,
-cacao_accounting/setup/forms.py,SetupRegionalForm,Pendiente,
-cacao_accounting/setup/forms.py,SetupRegionalForm.__init__(),Pendiente,
-cacao_accounting/setup/forms.py,SetupCompanyForm,Pendiente,
-cacao_accounting/setup/forms.py,SetupCompanyForm.__init__(),Pendiente,
-cacao_accounting/setup/forms.py,SetupConfirmationForm,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
-cacao_accounting/setup/repository.py,[módulo],Pendiente,
+cacao_accounting/setup/__init__.py,_setup_form(),Parcial,Hidrata pasos 1 y 2; paso 3 recrea formulario sin datos del POST
+cacao_accounting/setup/catalogs.py,[módulo],Parcial,Catálogos estáticos ES/EN y helpers de setup
+cacao_accounting/setup/catalogs.py,CountryOption,Parcial,Dataclass inmutable con país/moneda/zona; catálogo América
+cacao_accounting/setup/catalogs.py,normalize_language(),Parcial,Idioma desconocido cae a es
+cacao_accounting/setup/catalogs.py,setup_texts(),Parcial,Textos ES/EN por clave; sin gettext
+cacao_accounting/setup/catalogs.py,entity_type_choices(),Parcial,Etiquetas localizadas con valores estables
+cacao_accounting/setup/catalogs.py,country_choices(),Parcial,Países de América según idioma
+cacao_accounting/setup/catalogs.py,country_currency_map(),Parcial,Moneda sugerida por país
+cacao_accounting/setup/catalogs.py,country_timezone_map(),Parcial,Zona sugerida por país
+cacao_accounting/setup/catalogs.py,timezone_choices(),Parcial,Filtra zoneinfo con / o UTC; fallback UTC
+cacao_accounting/setup/catalogs.py,catalog_choices(),Parcial,Opciones preexistente/en cero localizadas
+cacao_accounting/setup/catalogs.py,setup_template_context(),Parcial,Agrupa textos y mapas para la plantilla
+cacao_accounting/setup/forms.py,[módulo],Parcial,Formularios WTForms del asistente
+cacao_accounting/setup/forms.py,SetupLanguageForm,Parcial,Select de idioma con DataRequired
+cacao_accounting/setup/forms.py,SetupRegionalForm,Parcial,País/moneda/zona con choices dinámicos
+cacao_accounting/setup/forms.py,SetupRegionalForm.__init__(),Parcial,Etiquetas y choices por idioma; importa timezone_choices en runtime
+cacao_accounting/setup/forms.py,SetupCompanyForm,Parcial,Datos de empresa y catálogo; fechas sin validación cruzada (#1952)
+cacao_accounting/setup/forms.py,SetupCompanyForm.__init__(),Parcial,Choices de entidad/catálogo; no conserva datos tras POST inválido
+cacao_accounting/setup/forms.py,SetupConfirmationForm,Parcial,No consumido; step oculto sin uso (#1909)
+cacao_accounting/setup/repository.py,[módulo],Parcial,Repositorio de defaults de setup
 cacao_accounting/setup/repository.py,get_setup_value(),Parcial,Falta completar revisión de persistencia y setup
 cacao_accounting/setup/repository.py,set_setup_value(),Parcial,Falta completar revisión de persistencia y setup
 cacao_accounting/setup/repository.py,create_default_entity(),Parcial,Persiste country solo si el caller envía pais; setup no lo envía (#2100); duplicado propaga ValueError (#2101)
-cacao_accounting/setup/repository.py,create_default_book(),Pendiente,
-cacao_accounting/setup/repository.py,create_default_cost_center(),Pendiente,
-cacao_accounting/setup/repository.py,create_default_uoms(),Pendiente,
-cacao_accounting/setup/repository.py,create_default_price_lists(),Pendiente,
-cacao_accounting/setup/repository.py,_default_uom_catalog(),Pendiente,
-cacao_accounting/setup/repository.py,_default_price_list_catalog(),Pendiente,
-cacao_accounting/setup/repository.py,_add_months(),Pendiente,
+cacao_accounting/setup/repository.py,create_default_book(),Parcial,Crea o localiza libro default; posible múltiple default si ya existe primario
+cacao_accounting/setup/repository.py,create_default_cost_center(),Parcial,Crea centro MAIN por compañía; idempotente
+cacao_accounting/setup/repository.py,create_default_uoms(),Parcial,Inserta UOM faltantes; catálogo ES/EN
+cacao_accounting/setup/repository.py,create_default_price_lists(),Parcial,Crea listas venta/compra y precios de items; idempotencia parcial
+cacao_accounting/setup/repository.py,_default_uom_catalog(),Parcial,Catálogo UOM ES/EN
+cacao_accounting/setup/repository.py,_default_price_list_catalog(),Parcial,Listas venta/compra ES/EN
+cacao_accounting/setup/repository.py,_add_months(),Parcial,Suma meses con ajuste de fin de mes
 cacao_accounting/setup/repository.py,_generate_fiscal_period_ranges(),Parcial,Rangos y rollback cotejados; falta criterio de duración; #1954
-cacao_accounting/setup/repository.py,create_default_fiscal_year(),Pendiente,
-cacao_accounting/setup/repository.py,create_default_accounting_period(),Pendiente,
-cacao_accounting/setup/repository.py,get_default_entity(),Pendiente,
-cacao_accounting/setup/repository.py,create_default_party_groups(),Pendiente,
-cacao_accounting/setup/service.py,[módulo],Pendiente,
-cacao_accounting/setup/service.py,catalog_display_name(),Pendiente,
-cacao_accounting/setup/service.py,available_catalog_files(),Pendiente,
-cacao_accounting/setup/service.py,choose_catalog_file(),Pendiente,
+cacao_accounting/setup/repository.py,create_default_fiscal_year(),Parcial,Defaults calendario; una sola fecha se descarta (#1372); rango invertido llega a #1952
+cacao_accounting/setup/repository.py,create_default_accounting_period(),Parcial,Genera periodos mensuales; scalar_one_or_none falla si ya existen periodos
+cacao_accounting/setup/repository.py,get_default_entity(),Parcial,Busca status default; múltiples defaults lanzan MultipleResultsFound
+cacao_accounting/setup/repository.py,create_default_party_groups(),Parcial,Grupos ES/EN; idempotente por tipo/nombre
+cacao_accounting/setup/service.py,[módulo],Parcial,Constantes y servicio del asistente
+cacao_accounting/setup/service.py,catalog_display_name(),Parcial,Alias de catálogo o nombre de archivo
+cacao_accounting/setup/service.py,available_catalog_files(),Parcial,Lista CSV con mapping; requiere directorio existente
+cacao_accounting/setup/service.py,choose_catalog_file(),Parcial,Ignora país/idioma y devuelve base ES sin archivo (#2106)
 cacao_accounting/setup/service.py,create_company(),Parcial,Faltan POST válido y atomicidad de creación; errores no capturados por setup (#2101)
-cacao_accounting/setup/service.py,save_language(),Pendiente,
-cacao_accounting/setup/service.py,save_regional_settings(),Pendiente,
-cacao_accounting/setup/service.py,save_company_details(),Pendiente,
-cacao_accounting/setup/service.py,mark_setup_complete(),Pendiente,
-cacao_accounting/setup/service.py,get_setup_configuration(),Pendiente,
-cacao_accounting/setup/service.py,is_setup_complete(),Pendiente,
-cacao_accounting/setup/service.py,available_currencies(),Pendiente,
-cacao_accounting/setup/service.py,_activate_and_set_default_currency(),Pendiente,
-cacao_accounting/setup/service.py,finalize_setup(),Pendiente,
-cacao_accounting/setup/templates/setup.html,bucle Jinja [línea 270],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 271] (ocurrencia 1),Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 271] (ocurrencia 2),Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 272],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 281],Pendiente,
-cacao_accounting/setup/templates/setup.html,bucle Jinja [línea 282],Pendiente,
-cacao_accounting/setup/templates/setup.html,"formulario [línea 290, elemento 1]",Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 293],Pendiente,
-cacao_accounting/setup/templates/setup.html,"acción HTML [línea 300, elemento 2]",Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 301],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 306],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 315],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 322],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 329],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 336],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 346],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 353],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 360],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 367],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 384],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 391],Pendiente,
-cacao_accounting/setup/templates/setup.html,bucle Jinja [línea 401],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 410],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 415],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 418],Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 430],Pendiente,
-cacao_accounting/setup/templates/setup.html,"acción HTML [línea 430, elemento 3]",Pendiente,
-cacao_accounting/setup/templates/setup.html,"acción HTML [línea 433, elemento 4]",Pendiente,
-cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 434],Pendiente,
-cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2](),Pendiente,
-cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2].callback [línea 9](),Pendiente,
-cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2].callback [línea 33](),Pendiente,
-cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2].syncCatalogOrigin(),Pendiente,
-cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2].callback [línea 54](),Pendiente,
+cacao_accounting/setup/service.py,save_language(),Parcial,Normaliza y guarda idioma; commit propio
+cacao_accounting/setup/service.py,save_regional_settings(),Parcial,Valida moneda activa y zona; commit propio
+cacao_accounting/setup/service.py,save_company_details(),Parcial,Guarda SETUP_ENTITY; sin commit
+cacao_accounting/setup/service.py,mark_setup_complete(),Parcial,Marca SETUP_COMPLETE=True; sin commit
+cacao_accounting/setup/service.py,get_setup_configuration(),Parcial,Defaults NI/NIO/Managua; normaliza idioma
+cacao_accounting/setup/service.py,is_setup_complete(),Parcial,Comparación exacta True
+cacao_accounting/setup/service.py,available_currencies(),Parcial,Solo monedas activas; sin ellas el paso 2 no avanza
+cacao_accounting/setup/service.py,_activate_and_set_default_currency(),Parcial,Activa y marca default única; rama de creación inalcanzable desde setup
+cacao_accounting/setup/service.py,finalize_setup(),Parcial,Crea compañía/defaults y sella; errores de create_company suben a #2101
+cacao_accounting/setup/templates/setup.html,bucle Jinja [línea 270],Parcial,Curl 200 en pasos 1-3; stepper renderiza 3 pasos
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 271] (ocurrencia 1),Parcial,Curl 200; rama is-active en paso actual
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 271] (ocurrencia 2),Parcial,Curl 200; rama is-complete en pasos previos
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 272],Parcial,Curl 200; check en pasos completados
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 281],Parcial,Curl 200 con flash en POST inválido
+cacao_accounting/setup/templates/setup.html,bucle Jinja [línea 282],Parcial,Curl 200; mensajes flash renderizados
+cacao_accounting/setup/templates/setup.html,"formulario [línea 290, elemento 1]",Parcial,Curl 200; POST con CSRF en pasos 1-3
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 293],Parcial,Curl 200 en paso 1
+cacao_accounting/setup/templates/setup.html,"acción HTML [línea 300, elemento 2]",Parcial,Curl 200; auto-submit de idioma presente
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 301],Parcial,Revisado estáticamente; errores de campo no se muestran en este flujo
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 306],Parcial,Curl 200 en paso 2
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 315],Parcial,Revisado estáticamente; error de país no ejercitado
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 322],Parcial,Revisado estáticamente; error de moneda no ejercitado
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 329],Parcial,Revisado estáticamente; error de zona no ejercitado
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 336],Parcial,Curl 200 en paso 3
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 346],Parcial,Revisado estáticamente; error de código no ejercitado
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 353],Parcial,Revisado estáticamente; error de tipo no ejercitado
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 360],Parcial,Revisado estáticamente; error de id fiscal no se muestra
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 367],Parcial,Revisado estáticamente; error de razón social no ejercitado
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 384],Parcial,Revisado estáticamente; error de fecha inicial no ejercitado
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 391],Parcial,Revisado estáticamente; error de fecha final no ejercitado
+cacao_accounting/setup/templates/setup.html,bucle Jinja [línea 401],Parcial,Curl 200; radios de catálogo renderizados
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 410],Parcial,Revisado estáticamente; error de catálogo no ejercitado
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 415],Parcial,Curl 200; catálogo en cero deshabilita el origen
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 418],Parcial,Revisado estáticamente; error de catálogo origen no ejercitado
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 430],Parcial,Curl 200; botón Atrás deshabilitado en paso 1
+cacao_accounting/setup/templates/setup.html,"acción HTML [línea 430, elemento 3]",Parcial,Curl 200; botón Atrás renderizado
+cacao_accounting/setup/templates/setup.html,"acción HTML [línea 433, elemento 4]",Parcial,Curl 200; Siguiente en pasos 1-2 y Finalizar en paso 3
+cacao_accounting/setup/templates/setup.html,condicional Jinja [línea 434],Parcial,Curl 200; etiqueta Finalizar en paso 3
+cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2](),Parcial,Revisado estáticamente; sin Playwright
+cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2].callback [línea 9](),Parcial,Revisado estáticamente; cambio país sugiere moneda y zona
+cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2].callback [línea 33](),Parcial,Revisado estáticamente; cambio de idioma autoenvía
+cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2].syncCatalogOrigin(),Parcial,Curl 200; wrapper deshabilitado con en_cero
+cacao_accounting/setup/templates/setup.html,script [línea 442].callback [línea 2].callback [línea 54](),Parcial,Revisado estáticamente; sincroniza origen del catálogo
 cacao_accounting/static/css/cacaoaccounting.css,[configuración],Parcial,Revisión histórica del archivo; faltan comprobaciones
 cacao_accounting/static/css/checkout.css,[configuración],Parcial,Revisión histórica del archivo; faltan comprobaciones
 cacao_accounting/static/css/dashboard.css,[configuración],Parcial,Revisión histórica del archivo; faltan comprobaciones
@@ -8576,82 +8576,82 @@ cacao_accounting/templates/403.html,"enlace de acción [línea 10, elemento 1]",
 cacao_accounting/templates/403.html,"enlace de acción [línea 17, elemento 2]",Parcial,"Evidencia de flujo/plantilla a nivel de archivo; falta evidencia individual del símbolo; Handler, traducción y respuesta cotejados; mensaje genérico"
 cacao_accounting/templates/404.html,"enlace de acción [línea 10, elemento 1]",Parcial,"Evidencia de flujo/plantilla a nivel de archivo; falta evidencia individual del símbolo; Handler, traducción y respuesta cotejados; mensaje genérico"
 cacao_accounting/templates/404.html,"enlace de acción [línea 17, elemento 2]",Parcial,"Evidencia de flujo/plantilla a nivel de archivo; falta evidencia individual del símbolo; Handler, traducción y respuesta cotejados; mensaje genérico"
-cacao_accounting/templates/admin/balance_confirmation_detail.html,bloque contenido,Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 6, elemento 1]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 8],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 9, elemento 2]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 11, elemento 3]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 15],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 16, elemento 4]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 18, elemento 5]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 31],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 33],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 35],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 37],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 39],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 41],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 43],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 57],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 61],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 65],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 81],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: bucle Jinja [línea 97],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 104],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 105],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: bucle Jinja [línea 115],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 118],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 140],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"formulario [línea 141, elemento 6]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"acción HTML [línea 143, elemento 7]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 145],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"formulario [línea 146, elemento 8]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"handler onsubmit [línea 146, elemento 9]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"acción HTML [línea 148, elemento 10]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 152],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"formulario [línea 153, elemento 11]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"handler onsubmit [línea 153, elemento 12]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"acción HTML [línea 155, elemento 13]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 159],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 160, elemento 14]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 162, elemento 15]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: bucle Jinja [línea 175],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 179],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 181],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 183],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 185],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 193],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 196],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 199],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: bucle Jinja [línea 216],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 223],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 225],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 227],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 229],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 231],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 233],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 235],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 237],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 243],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,bloque contenido,Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 6, elemento 1]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,contenido: condicional Jinja [línea 8],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 9, elemento 2]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 11, elemento 3]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,contenido: condicional Jinja [línea 15],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 16, elemento 4]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 18, elemento 5]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"componente Alpine [línea 29, elemento 6]",Pendiente,
+cacao_accounting/templates/admin/balance_confirmation_detail.html,bloque contenido,Parcial,Curl 200 con snapshot vacío; 500 con snapshot ausente (#2109)
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 6, elemento 1]",Parcial,Curl 200; breadcrumb Inicio
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 8],Parcial,Curl 200; rama customer
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 9, elemento 2]",Parcial,Curl 200; enlace a lista de clientes
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 11, elemento 3]",Parcial,Curl 200; enlace al cliente
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 15],Parcial,Curl 200; misma rama customer
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 16, elemento 4]",Parcial,Curl 200; enlace al cliente
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 18, elemento 5]",Parcial,Curl 200; enlace al cliente
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 31],Parcial,Curl 200; rama draft; otras ramas estáticas
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 33],Parcial,Curl 200; rama draft; otras ramas estáticas
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 35],Parcial,Curl 200; rama draft; otras ramas estáticas
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 37],Parcial,Curl 200; rama draft; otras ramas estáticas
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 39],Parcial,Curl 200; rama draft; otras ramas estáticas
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 41],Parcial,Curl 200; rama draft; otras ramas estáticas
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 43],Parcial,Curl 200; rama draft; otras ramas estáticas
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 57],Parcial,Curl 200; rama confirmed/disputed no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 61],Parcial,Revisado estáticamente; comentario de respuesta no ejercitado
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 65],Parcial,Revisado estáticamente; hash de respuesta no ejercitado
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 81],Parcial,Curl 200 con items vacíos
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: bucle Jinja [línea 97],Parcial,Curl 200 con items vacíos; 500 si snapshot ausente (#2109)
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 104],Parcial,Curl 200; rama snapshot con items no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 105],Parcial,Curl 200; rama sin items ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: bucle Jinja [línea 115],Parcial,Curl 200 con totals vacío
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 118],Parcial,Curl 200; rama draft
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 140],Parcial,Curl 200; formulario de envío en draft
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"formulario [línea 141, elemento 6]",Parcial,Curl 200; POST con CSRF al endpoint de envío
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"acción HTML [línea 143, elemento 7]",Parcial,Curl 200; botón Enviar por Correo
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 145],Parcial,Curl 200; rama sent/viewed no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"formulario [línea 146, elemento 8]",Parcial,Revisado estáticamente; reenvío con CSRF
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"handler onsubmit [línea 146, elemento 9]",Parcial,Revisado estáticamente; confirm de reenvío
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"acción HTML [línea 148, elemento 10]",Parcial,Revisado estáticamente; botón Reenviar
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 152],Parcial,Curl 200; rama de cancelación en draft
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"formulario [línea 153, elemento 11]",Parcial,Curl 200; POST con CSRF al endpoint de cancelación
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"handler onsubmit [línea 153, elemento 12]",Parcial,Curl 200; confirm de cancelación presente
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"acción HTML [línea 155, elemento 13]",Parcial,Curl 200; botón Cancelar Solicitud
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 159],Parcial,Curl 200; rama customer
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 160, elemento 14]",Parcial,Curl 200; enlace Regresar al Cliente
+cacao_accounting/templates/admin/balance_confirmation_detail.html,"enlace de acción [línea 162, elemento 15]",Parcial,Curl 200; enlace Regresar al Proveedor (rama estática)
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: bucle Jinja [línea 175],Parcial,Curl 200 con invitación BI-TEST
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 179],Parcial,Curl 200; rama responded no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 181],Parcial,Curl 200; rama viewed no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 183],Parcial,Curl 200; rama cancelled no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 185],Parcial,Curl 200; rama expired no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 193],Parcial,Curl 200; rama sent_at no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 196],Parcial,Curl 200; rama last_access no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 199],Parcial,Curl 200; rama failed_attempts no ejercitada
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: bucle Jinja [línea 216],Parcial,Curl 200; timeline de auditoría renderizado
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 223],Parcial,Revisado estáticamente; etiqueta de acción de auditoría
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 225],Parcial,Revisado estáticamente; etiqueta de acción de auditoría
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 227],Parcial,Revisado estáticamente; etiqueta de acción de auditoría
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 229],Parcial,Revisado estáticamente; etiqueta de acción de auditoría
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 231],Parcial,Revisado estáticamente; etiqueta de acción de auditoría
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 233],Parcial,Revisado estáticamente; etiqueta de acción de auditoría
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 235],Parcial,Revisado estáticamente; etiqueta de acción de auditoría
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 237],Parcial,Revisado estáticamente; etiqueta de acción de auditoría
+cacao_accounting/templates/admin/balance_confirmation_detail.html,contenido: condicional Jinja [línea 243],Parcial,Revisado estáticamente; etiqueta de acción de auditoría
+cacao_accounting/templates/admin/balance_confirmation_new.html,bloque contenido,Parcial,Curl 200 en formulario nuevo; Alpine y CSRF presentes
+cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 6, elemento 1]",Parcial,Curl 200; breadcrumb Inicio
+cacao_accounting/templates/admin/balance_confirmation_new.html,contenido: condicional Jinja [línea 8],Parcial,Curl 200; rama customer
+cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 9, elemento 2]",Parcial,Curl 200; enlace a lista de clientes
+cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 11, elemento 3]",Parcial,Curl 200; enlace al cliente
+cacao_accounting/templates/admin/balance_confirmation_new.html,contenido: condicional Jinja [línea 15],Parcial,Curl 200; misma rama customer
+cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 16, elemento 4]",Parcial,Curl 200; enlace al cliente
+cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 18, elemento 5]",Parcial,Curl 200; enlace al cliente
+cacao_accounting/templates/admin/balance_confirmation_new.html,"componente Alpine [línea 29, elemento 6]",Parcial,Curl 200; x-data serializa correos sugeridos
 cacao_accounting/templates/admin/balance_confirmation_new.html,"formulario [línea 30, elemento 7]",Parcial,Formulario revisado; faltan escenarios
-cacao_accounting/templates/admin/balance_confirmation_new.html,contenido: bucle Jinja [línea 42],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"handler @keydown.enter.prevent [línea 60, elemento 8]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"acción HTML [línea 61, elemento 9]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"handler @click [línea 61, elemento 10]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"acción HTML [línea 73, elemento 11]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"handler @click [línea 73, elemento 12]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,contenido: condicional Jinja [línea 81],Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 82, elemento 13]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 84, elemento 14]",Pendiente,
-cacao_accounting/templates/admin/balance_confirmation_new.html,"acción HTML [línea 86, elemento 15]",Pendiente,
+cacao_accounting/templates/admin/balance_confirmation_new.html,contenido: bucle Jinja [línea 42],Parcial,Curl 200; compañías autorizadas renderizadas
+cacao_accounting/templates/admin/balance_confirmation_new.html,"handler @keydown.enter.prevent [línea 60, elemento 8]",Parcial,Revisado estáticamente; agrega correo con Enter; sin Playwright
+cacao_accounting/templates/admin/balance_confirmation_new.html,"acción HTML [línea 61, elemento 9]",Parcial,Curl 200; botón Agregar renderizado
+cacao_accounting/templates/admin/balance_confirmation_new.html,"handler @click [línea 61, elemento 10]",Parcial,Revisado estáticamente; agrega correo sin duplicados
+cacao_accounting/templates/admin/balance_confirmation_new.html,"acción HTML [línea 73, elemento 11]",Parcial,Curl 200; botón eliminar correo renderizado
+cacao_accounting/templates/admin/balance_confirmation_new.html,"handler @click [línea 73, elemento 12]",Parcial,Revisado estáticamente; elimina correo del arreglo
+cacao_accounting/templates/admin/balance_confirmation_new.html,contenido: condicional Jinja [línea 81],Parcial,Curl 200; rama customer
+cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 82, elemento 13]",Parcial,Curl 200; enlace al cliente
+cacao_accounting/templates/admin/balance_confirmation_new.html,"enlace de acción [línea 84, elemento 14]",Parcial,Curl 200; enlace al cliente
+cacao_accounting/templates/admin/balance_confirmation_new.html,"acción HTML [línea 86, elemento 15]",Parcial,Curl 200; botón Crear Borrador renderizado
 cacao_accounting/templates/base.html,condicional Jinja [línea 15],Pendiente,
 cacao_accounting/templates/base.html,condicional Jinja [línea 21],Pendiente,
 cacao_accounting/templates/base.html,bucle Jinja [línea 24],Pendiente,
@@ -9296,30 +9296,30 @@ cacao_accounting/ventas/routes.py,ventas_entrega_cancel(),Parcial,Revisión del 
 cacao_accounting/ventas/routes.py,ventas_factura_venta_nuevo(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/routes.py,ventas_factura_venta(),Pendiente,
 cacao_accounting/ventas/routes.py,_validate_sales_invoice_editable(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/routes.py,_build_sales_invoice_edit_config(),Pendiente,
+cacao_accounting/ventas/routes.py,_build_sales_invoice_edit_config(),Parcial,Refs #2112: omite descuentos de initialLines; JS recalcula el bruto al abrir edición.
 cacao_accounting/ventas/routes.py,ventas_factura_venta_editar(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/routes.py,ventas_factura_venta_duplicar(),Pendiente,
+cacao_accounting/ventas/routes.py,ventas_factura_venta_duplicar(),Parcial,Refs #1617 #1618 #529: omite relaciones/descuentos; la copia de NC evita el tope por cantidad.
 cacao_accounting/ventas/routes.py,ventas_factura_venta_submit(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/routes.py,ventas_factura_venta_cancel(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/routes.py,ventas_cliente_habilitar_proveedor(),Pendiente,
-cacao_accounting/ventas/routes.py,ventas_cliente_deshabilitar_proveedor(),Pendiente,
-cacao_accounting/ventas/services.py,[módulo],Pendiente,
-cacao_accounting/ventas/services.py,_raise_posting_error(),Pendiente,
-cacao_accounting/ventas/services.py,_msg_item_repetido(),Pendiente,
+cacao_accounting/ventas/routes.py,ventas_cliente_habilitar_proveedor(),Parcial,Refs #1282 #1524: agrega rol proveedor usando permiso de Ventas sin ACL de Compras.
+cacao_accounting/ventas/routes.py,ventas_cliente_deshabilitar_proveedor(),Parcial,Refs #1282 #1524: rol proveedor cambia con permiso de Ventas y sin ACL de Compras.
+cacao_accounting/ventas/services.py,[módulo],Completo,Imports y constantes revisados; blueprint compartido con routes y registrado por la app.
+cacao_accounting/ventas/services.py,_raise_posting_error(),Completo,Propaga PostingError como excepción tipada que los flujos O2C capturan como ValueError.
+cacao_accounting/ventas/services.py,_msg_item_repetido(),Completo,Refs #571: mensaje parametrizado y traducido usado al rechazar ítems duplicados.
 cacao_accounting/ventas/services.py,_sales_logistics_values(),Parcial,"Falta probar valores ausentes, HTML y locale"
 cacao_accounting/ventas/services.py,_copy_sales_logistics(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/services.py,_sales_exchange_rate(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/services.py,_set_sales_document_totals(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/services.py,_sales_invoice_currency_and_rate(),Pendiente,
-cacao_accounting/ventas/services.py,_set_sales_invoice_totals(),Pendiente,
-cacao_accounting/ventas/services.py,_parse_date(),Pendiente,
-cacao_accounting/ventas/services.py,_series_choices(),Pendiente,
-cacao_accounting/ventas/services.py,_party_or_404(),Pendiente,
-cacao_accounting/ventas/services.py,_stock_bin_or_create(),Pendiente,
-cacao_accounting/ventas/services.py,_require_sales_warehouse(),Pendiente,
-cacao_accounting/ventas/services.py,_resolve_item_warehouse(),Pendiente,
+cacao_accounting/ventas/services.py,_sales_invoice_currency_and_rate(),Parcial,Refs #758: lookup valida tasa nueva; la heredada no valida signo ni finitud.
+cacao_accounting/ventas/services.py,_set_sales_invoice_totals(),Parcial,Refs #758: confía tasa del origen sin validar que sea positiva y finita.
+cacao_accounting/ventas/services.py,_parse_date(),Completo,Devuelve fecha ISO o None; submit valida posting_date antes de contabilizar.
+cacao_accounting/ventas/services.py,_series_choices(),Completo,Limita opciones activas por tipo y compañía; asignación valida serie explícita.
+cacao_accounting/ventas/services.py,_party_or_404(),Parcial,Refs #1841: sin callers y party_type no usado; decidir integrar o retirar.
+cacao_accounting/ventas/services.py,_stock_bin_or_create(),Completo,Refs #332: crea bajo savepoint y relee bajo lock ante colisión única.
+cacao_accounting/ventas/services.py,_require_sales_warehouse(),Completo,Rechaza bodega inexistente ajena o inactiva antes de usarla.
+cacao_accounting/ventas/services.py,_resolve_item_warehouse(),Completo,Prioriza bodega de línea y default; callers validan compañía y estado antes de reservar.
 cacao_accounting/ventas/services.py,_item_by_code(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/services.py,_base_qty_for_sales_line(),Pendiente,
+cacao_accounting/ventas/services.py,_base_qty_for_sales_line(),Completo,Delega cantidad base canónica; convierte ausencia o no finitud en ValueError.
 cacao_accounting/ventas/services.py,_reservation_warehouse_for_delivery_note(),Parcial,Falta probar replay y conciliación de reservas
 cacao_accounting/ventas/services.py,_validate_and_reserve_stock_for_sales_order(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/services.py,_release_reservation_for_sales_order(),Parcial,Revisión del caller; faltan escenarios
@@ -9327,10 +9327,10 @@ cacao_accounting/ventas/services.py,_release_reservation_for_closed_sales_order(
 cacao_accounting/ventas/services.py,_release_reservation_for_delivery_note(),Parcial,Falta probar replay y conciliación de reservas
 cacao_accounting/ventas/services.py,_restore_reservation_for_delivery_note(),Parcial,Falta validar replay y reservas históricas
 cacao_accounting/ventas/services.py,_upsert_customer_company_settings_from_request(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/services.py,_capture_sales_state(),Pendiente,
+cacao_accounting/ventas/services.py,_capture_sales_state(),Parcial,Refs #2111: omite update_inventory del snapshot antes/después.
 cacao_accounting/ventas/services.py,_authorized_companies(),Parcial,CompanyParty y caller cotejados; falta HTTP de ACL y paginación
 cacao_accounting/ventas/services.py,_apply_company_scope(),Parcial,Caller de cotizaciones cotejado; cobertura de otros callers pendiente
-cacao_accounting/ventas/services.py,_period_company_for_query(),Pendiente,
+cacao_accounting/ventas/services.py,_period_company_for_query(),Parcial,Refs #2110: combina permisos por módulo pero elige el primer default individual.
 cacao_accounting/ventas/services.py,_apply_period_scope(),Parcial,Caller de cotizaciones cotejado; cobertura de otros callers pendiente
 cacao_accounting/ventas/services.py,_paginate_list(),Parcial,Caller de cotizaciones cotejado; cobertura de otros callers pendiente
 cacao_accounting/ventas/services.py,_require_delivery_note_access(),Parcial,Revisión del caller; faltan escenarios
@@ -9340,8 +9340,8 @@ cacao_accounting/ventas/services.py,_handle_cliente_create(),Parcial,Revisión d
 cacao_accounting/ventas/services.py,_handle_cliente_update(),Parcial,Falta probar CSRF y configuración
 cacao_accounting/ventas/services.py,_handle_sales_request_update(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/services.py,_handle_sales_order_update(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/services.py,_form_decimal(),Pendiente,
-cacao_accounting/ventas/services.py,_line_amount(),Pendiente,
+cacao_accounting/ventas/services.py,_form_decimal(),Parcial,Refs #1007: acepta NaN/Infinity de Decimal sin validar finitud.
+cacao_accounting/ventas/services.py,_line_amount(),Parcial,Refs #1841: helper sin consumidores; decidir integrar o retirar.
 cacao_accounting/ventas/services.py,_sales_source_line_reference(),Parcial,Falta probar permisos y asociación de fuentes
 cacao_accounting/ventas/services.py,_sales_source_line_model(),Parcial,Falta probar permisos y asociación de fuentes
 cacao_accounting/ventas/services.py,_source_line_rate(),Parcial,Falta probar creación desde fuente y referencias manipuladas
@@ -9355,26 +9355,26 @@ cacao_accounting/ventas/services.py,_save_sales_request_items(),Parcial,Revisió
 cacao_accounting/ventas/services.py,_save_sales_quotation_items(),Parcial,Línea válida probada; validaciones de precio y cantidad pendientes
 cacao_accounting/ventas/services.py,_save_delivery_note_items(),Parcial,Falta prueba multi-company
 cacao_accounting/ventas/services.py,_save_sales_invoice_items(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/services.py,_create_delivery_note_from_invoice(),Pendiente,
-cacao_accounting/ventas/services.py,_load_sales_tolerance_config(),Pendiente,
-cacao_accounting/ventas/services.py,_calculate_price_variance(),Pendiente,
-cacao_accounting/ventas/services.py,_validate_single_item_price(),Pendiente,
-cacao_accounting/ventas/services.py,_validate_invoice_prices_against_source(),Pendiente,
-cacao_accounting/ventas/services.py,_resolve_sales_price_list(),Pendiente,
-cacao_accounting/ventas/services.py,resolve_sales_catalog_price(),Pendiente,
+cacao_accounting/ventas/services.py,_create_delivery_note_from_invoice(),Parcial,Refs #1812 #570: puede autogenerar DN aunque las líneas ya provengan de otra DN.
+cacao_accounting/ventas/services.py,_load_sales_tolerance_config(),Parcial,Refs #2108: devuelve tolerancia negativa sin validar rango al cargar configuración.
+cacao_accounting/ventas/services.py,_calculate_price_variance(),Parcial,Revisión: porcentaje divide por rate origen; depende de guardas externas y tipo configurado.
+cacao_accounting/ventas/services.py,_validate_single_item_price(),Parcial,Refs #2107: aplica tolerancia al rate numérico sin contexto de moneda.
+cacao_accounting/ventas/services.py,_validate_invoice_prices_against_source(),Parcial,Refs #2107: compara tasas sin normalizar moneda de catálogo frente a la factura.
+cacao_accounting/ventas/services.py,_resolve_sales_price_list(),Parcial,"Refs #2107: prioriza lista de cliente/default sin filtrar su moneda."
+cacao_accounting/ventas/services.py,resolve_sales_catalog_price(),Parcial,"Refs #2107: consulta lista sin cotejar moneda con la transacción."
 cacao_accounting/ventas/services.py,is_sales_price_editor(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/services.py,_validate_sales_catalog_rate(),Parcial,Línea válida probada; validaciones de precio y cantidad pendientes
-cacao_accounting/ventas/services.py,_resolve_catalog_sales_rate(),Pendiente,
-cacao_accounting/ventas/services.py,_resolve_source_item_rate(),Pendiente,
-cacao_accounting/ventas/services.py,_validate_delivery_quantities_against_so(),Pendiente,
-cacao_accounting/ventas/services.py,_validate_sales_invoice_quantities(),Pendiente,
-cacao_accounting/ventas/services.py,_discounted_line_amount(),Pendiente,
-cacao_accounting/ventas/services.py,_validate_sales_invoice_line_amounts(),Pendiente,
+cacao_accounting/ventas/services.py,_resolve_catalog_sales_rate(),Parcial,"Refs #2107: retorna precio sin validar moneda de la lista frente al documento."
+cacao_accounting/ventas/services.py,_resolve_source_item_rate(),Parcial,Revisión: relación activa directa; faltan escenarios de vínculos huérfanos o múltiples.
+cacao_accounting/ventas/services.py,_validate_delivery_quantities_against_so(),Completo,Refs #686 #570: bloquea la línea fuente y valida consumo en entrega manual y automática.
+cacao_accounting/ventas/services.py,_validate_sales_invoice_quantities(),Parcial,Refs #828 #529: retornos sin factura origen omiten límites monetario y de cantidad.
+cacao_accounting/ventas/services.py,_discounted_line_amount(),Completo,Refs #820: calcula neto por porcentaje o importe y tolera modelos legacy sin campos de descuento.
+cacao_accounting/ventas/services.py,_validate_sales_invoice_line_amounts(),Completo,Refs #299 #820: valida monto positivo y neto post-descuento en factura y entrega.
 cacao_accounting/ventas/services.py,_validate_sales_source_link(),Parcial,Guards cotejados estáticamente; falta probar flujos de origen
 cacao_accounting/ventas/services.py,_validate_sales_invoice_source_links(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/services.py,_validate_sales_order_requirement(),Pendiente,
-cacao_accounting/ventas/services.py,_validate_sales_invoice_relation(),Pendiente,
-cacao_accounting/ventas/services.py,_lock_flow_source_item(),Pendiente,
+cacao_accounting/ventas/services.py,_validate_sales_order_requirement(),Parcial,Refs #463: fallback acepta relación de línea sin verificar cliente ni encabezado.
+cacao_accounting/ventas/services.py,_validate_sales_invoice_relation(),Parcial,Refs #686: valida consumo bajo lock; faltan escenarios de UOM y relaciones huérfanas.
+cacao_accounting/ventas/services.py,_lock_flow_source_item(),Completo,Refs #686: bloquea línea fuente antes de medir consumo; callers mantienen el lock hasta commit.
 cacao_accounting/ventas/services.py,_persist_sales_invoice_fiscal_snapshot(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/services.py,_sales_order_initial_source_type(),Parcial,"Falta probar valores ausentes, HTML y locale"
 cacao_accounting/ventas/services.py,_build_sales_order_transaction_config(),Parcial,"Falta probar valores ausentes, HTML y locale"
@@ -9385,250 +9385,250 @@ cacao_accounting/ventas/services.py,_handle_delivery_note_edit_post(),Parcial,Re
 cacao_accounting/ventas/services.py,_execute_delivery_note_cancellation(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/services.py,_sales_invoice_sources_and_type(),Parcial,Revisión del caller; faltan escenarios
 cacao_accounting/ventas/services.py,_sales_invoice_catalogs(),Parcial,Pendientes de navegación
-cacao_accounting/ventas/services.py,_sales_invoice_source(),Pendiente,
+cacao_accounting/ventas/services.py,_sales_invoice_source(),Parcial,Refs #1224: prioriza orden o entrega sobre factura revertida; puede heredar moneda ajena al reversal.
 cacao_accounting/ventas/services.py,_prepare_sales_invoice_creation(),Parcial,Falta probar alta válida y rollback
 cacao_accounting/ventas/services.py,_build_sales_invoice_from_context(),Parcial,Pendientes de navegación
-cacao_accounting/ventas/services.py,_validate_sales_invoice_reversal_result(),Pendiente,
+cacao_accounting/ventas/services.py,_validate_sales_invoice_reversal_result(),Parcial,Refs #1224: delega el tope sin validar moneda entre nota y factura origen.
 cacao_accounting/ventas/services.py,_create_sales_invoice_from_form(),Parcial,Falta probar alta válida y rollback
-cacao_accounting/ventas/services.py,_sales_reversal_source(),Pendiente,
-cacao_accounting/ventas/services.py,_persist_sales_reversal_relation(),Pendiente,
-cacao_accounting/ventas/services.py,_refresh_sales_reversal_source(),Pendiente,
-cacao_accounting/ventas/services.py,_handle_sales_invoice_edit_post(),Pendiente,
-cacao_accounting/ventas/services.py,_cancel_linked_delivery_note(),Pendiente,
-cacao_accounting/ventas/services.py,_validate_credit_limit_and_overdue(),Pendiente,
-cacao_accounting/ventas/services.py,_approved_customer_invoices(),Pendiente,
-cacao_accounting/ventas/services.py,_sales_base_amount(),Pendiente,
-cacao_accounting/ventas/services.py,_approved_customer_order_exposure(),Pendiente,
-cacao_accounting/ventas/services.py,_reject_overdue_invoices(),Pendiente,
-cacao_accounting/ventas/services.py,_validate_reversal_of(),Parcial,Revisión del caller; faltan escenarios
-cacao_accounting/ventas/services.py,sales_order_line_closure_reasons(),Pendiente,
+cacao_accounting/ventas/services.py,_sales_reversal_source(),Parcial,Refs #1616: admite notas de débito sin origen y retorna None.
+cacao_accounting/ventas/services.py,_persist_sales_reversal_relation(),Parcial,Refs #1616: append-only para notas vinculadas; sin origen no persiste relación ni AR asociada.
+cacao_accounting/ventas/services.py,_refresh_sales_reversal_source(),Parcial,Delega recomputación del saldo; faltan escenarios de origen ausente y conversión base.
+cacao_accounting/ventas/services.py,_handle_sales_invoice_edit_post(),Parcial,Refs #1812: acepta update_inventory en factura ligada a entrega origen; revisar edición y cancelación.
+cacao_accounting/ventas/services.py,_cancel_linked_delivery_note(),Parcial,Refs #1040: cancela entrega hija sin revertir relaciones ni refrescar caches derivados.
+cacao_accounting/ventas/services.py,_validate_credit_limit_and_overdue(),Completo,Verificado en submit directo y aprobación diferida; incluye deuda vencida y exposición de facturas y órdenes y documento actual.
+cacao_accounting/ventas/services.py,_approved_customer_invoices(),Parcial,Refs #1616: excluye débitos; omite notas aprobadas sin factura origen.
+cacao_accounting/ventas/services.py,_sales_base_amount(),Parcial,Revisadas rutas base almacenada y tasa histórica; faltan escenarios de conversión parcial e inválida.
+cacao_accounting/ventas/services.py,_approved_customer_order_exposure(),Parcial,Revisada cadena orden-entrega-factura y exclusiones; faltan escenarios parciales y cancelaciones.
+cacao_accounting/ventas/services.py,_reject_overdue_invoices(),Parcial,Refs #1616: aplica saldo y fecha límite; excluye débitos sin origen por el filtro de entrada.
+cacao_accounting/ventas/services.py,_validate_reversal_of(),Parcial,Refs #1224: valida origen y bloquea concurrencia; falta validar moneda antes de comparar saldo.
+cacao_accounting/ventas/services.py,sales_order_line_closure_reasons(),Parcial,Revisado: valida relaciones activas y estado aprobado; faltan escenarios de cierre y devoluciones.
 cacao_accounting/ventas/services.py,sales_order_is_ready_to_close(),Parcial,
-cacao_accounting/ventas/templates/ventas.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas.html,contenido: condicional Jinja [línea 6],Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 14, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,contenido: condicional Jinja [línea 36],Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 38, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 42, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 46, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,contenido: condicional Jinja [línea 72],Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 74, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 78, elemento 6]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 82, elemento 7]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 86, elemento 8]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 90, elemento 9]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 94, elemento 10]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 98, elemento 11]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,contenido: condicional Jinja [línea 124],Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 126, elemento 12]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 130, elemento 13]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 134, elemento 14]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 138, elemento 15]",Parcial,
-cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 142, elemento 16]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 4],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 10, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 11, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 12, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 21],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 24, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 25, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 26, elemento 6]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 27],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"formulario [línea 28, elemento 7]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"acción HTML [línea 30, elemento 8]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 33],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 34, elemento 9]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 62],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 83],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: bucle Jinja [línea 84],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 87, elemento 10]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 95],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 97],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 99],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 101],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 103],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 105],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 112],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 114],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 121],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 123],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_lista.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_lista.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_lista.html,contenido: bucle Jinja [línea 36],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_lista.html,"enlace de acción [línea 38, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,contenido: condicional Jinja [línea 4],Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"enlace de acción [línea 10, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"enlace de acción [línea 11, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"enlace de acción [línea 12, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"enlace de acción [línea 21, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"acción HTML [línea 22, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"formulario [línea 25, elemento 6]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"componente Alpine [línea 47, elemento 7]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @input.debounce.300ms [línea 65, elemento 8]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @focus [línea 65, elemento 9]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @blur [línea 65, elemento 10]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"acción HTML [línea 66, elemento 11]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @click [línea 66, elemento 12]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"acción HTML [línea 70, elemento 13]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @mousedown.prevent [línea 70, elemento 14]",Parcial,
-cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,contenido: condicional Jinja [línea 79],Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion.html,"enlace de acción [línea 10, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion.html,contenido: condicional Jinja [línea 17],Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion.html,"enlace de acción [línea 18, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion.html,contenido: condicional Jinja [línea 23],Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion.html,"formulario [línea 24, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion.html,"acción HTML [línea 27, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,contenido: bucle Jinja [línea 38],Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,contenido: condicional Jinja [línea 6],Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"enlace de acción [línea 14, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"enlace de acción [línea 16, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"enlace de acción [línea 17, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"formulario [línea 24, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"componente Alpine [línea 24, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,contenido: condicional Jinja [línea 26],Parcial,
-cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,contenido: condicional Jinja [línea 55],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/entrega.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega.html,"enlace de acción [línea 10, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega.html,contenido: condicional Jinja [línea 17],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega.html,"enlace de acción [línea 18, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega.html,contenido: condicional Jinja [línea 22],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega.html,"formulario [línea 23, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega.html,"acción HTML [línea 25, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_lista.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_lista.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_lista.html,contenido: condicional Jinja [línea 20],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_lista.html,contenido: bucle Jinja [línea 38],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 6],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"enlace de acción [línea 14, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"enlace de acción [línea 16, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"enlace de acción [línea 17, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"formulario [línea 23, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"componente Alpine [línea 23, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 25],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 26],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 68],Parcial,
-cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 73],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta.html,"enlace de acción [línea 10, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta.html,contenido: condicional Jinja [línea 17],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta.html,"enlace de acción [línea 18, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta.html,contenido: condicional Jinja [línea 23],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta.html,"formulario [línea 24, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta.html,"acción HTML [línea 27, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,contenido: bucle Jinja [línea 38],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 21, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 24, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 27, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,contenido: bucle Jinja [línea 46],Parcial,Estado calculado #1803; falta validar contenido/filtros por registro
-cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 48, elemento 6]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 6],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"enlace de acción [línea 14, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"enlace de acción [línea 16, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"enlace de acción [línea 17, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"formulario [línea 23, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"componente Alpine [línea 23, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 25],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 26],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 27],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 28],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 30],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 32],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 60],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 73],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 78],Parcial,
-cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 83],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,"enlace de acción [línea 10, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,contenido: condicional Jinja [línea 17],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,"enlace de acción [línea 18, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,contenido: condicional Jinja [línea 23],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,"formulario [línea 24, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,"acción HTML [línea 26, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,contenido: condicional Jinja [línea 37],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,"formulario [línea 38, elemento 6]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta.html,"acción HTML [línea 40, elemento 7]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,contenido: bucle Jinja [línea 38],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 6],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"enlace de acción [línea 14, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"enlace de acción [línea 16, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"enlace de acción [línea 17, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"formulario [línea 23, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"componente Alpine [línea 23, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 25],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 28],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 57],Parcial,
-cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 62],Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"enlace de acción [línea 10, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta.html,contenido: condicional Jinja [línea 17],Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"enlace de acción [línea 18, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta.html,contenido: condicional Jinja [línea 23],Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"formulario [línea 24, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"acción HTML [línea 27, elemento 5]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,contenido: condicional Jinja [línea 5],Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,contenido: bucle Jinja [línea 38],Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,bloque contenido,Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,"enlace de acción [línea 7, elemento 1]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,"enlace de acción [línea 9, elemento 2]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,"formulario [línea 14, elemento 3]",Parcial,
-cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,"componente Alpine [línea 14, elemento 4]",Parcial,
-cacao_accounting/version/__init__.py,[módulo],Parcial,VERSION y consumidores cotejados; falta validar build runtime
-cacao_accounting/version/__init__.py,build_version(),Parcial,Prioridad de sufijos y callers cotejados; falta build runtime
-cacao_accounting/warehouse_accounting.py,[módulo],Parcial,Funciones y callers cotejados; mismatch pendiente; #1827
-cacao_accounting/warehouse_accounting.py,warehouse_inventory_account_id(),Parcial,Funciones y callers cotejados; mismatch pendiente; #1827
-cacao_accounting/warehouse_accounting.py,inventory_account_id_for_document_line(),Parcial,Funciones y callers cotejados; mismatch pendiente; #1827
-cacao_accounting/withholding_service.py,[módulo],Parcial,
+cacao_accounting/ventas/templates/ventas.html,bloque contenido,Parcial,"Refs #2024: bloque de reportes depende de sales.access, aunque cada reporte requiere sales.report; discrepancia de navegación confirmada."
+cacao_accounting/ventas/templates/ventas.html,contenido: condicional Jinja [línea 6],Parcial,TESTING marker referencia la ruta correcta; validación dinámica del HTML sigue pendiente.
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 14, elemento 1]",Parcial,"Breadcrumb Inicio; endpoint estático existente, respuesta de runtime no validada."
+cacao_accounting/ventas/templates/ventas.html,contenido: condicional Jinja [línea 36],Parcial,Configuración aparece solo con sales.configurar; route mapping revisado estáticamente.
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 38, elemento 2]",Parcial,Clientes; el listado tiene brechas ACL y exposición de alcance multiempresa (#1525).
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 42, elemento 3]",Parcial,Tipos de Cliente enlaza admin.lista_grupos_terceros; acceso exacto depende del contrato admin.
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 46, elemento 4]",Parcial,Contacto/Direcciones ancla listado; ruta incluye datos de contactos cuya ACL ya está registrada en #1524/#1525.
+cacao_accounting/ventas/templates/ventas.html,contenido: condicional Jinja [línea 72],Parcial,"Operaciones visibles con sales.access; en else se omiten Pedido, Cotización y Notas aunque el permiso sea el mismo."
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 74, elemento 5]",Parcial,"Pedidos de Venta endpoint existente, protegido por módulo; lista/consulta aún requiere revisión de ACL/compañía."
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 78, elemento 6]",Parcial,"Órdenes de Venta endpoint existente; contratos de lectura, permisos y estados parcialmente revisados."
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 82, elemento 7]",Parcial,Cotizaciones; listado y detalle con brechas de CTA/flujo ya anotadas en #2052/#2053.
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 86, elemento 8]",Parcial,"Remisiones; permiso requerido varía con Inventory/Sales (#2051/#2052), por lo que badge genérico no refleja el caso completo."
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 90, elemento 9]",Parcial,Facturas de Venta; navegación genérica no expresa el permiso/compañía específico de cada ruta.
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 94, elemento 10]",Parcial,Notas de Débito endpoint listado existe; alias y contrato de lectura por separado pendiente.
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 98, elemento 11]",Parcial,"Notas de Crédito y Devoluciones; ambos flujos comparten enlace, estados y permisos no validados completamente."
+cacao_accounting/ventas/templates/ventas.html,contenido: condicional Jinja [línea 124],Parcial,Refs #2024: bloque de reportes se condiciona a sales.access; sus rutas exigen sales.report y compañía autorizada.
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 126, elemento 12]",Parcial,"Aging AR: enlace visible con sales.access, pero `_resolve_company` exige sales.report y acceso de compañía (#2024)."
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 130, elemento 13]",Parcial,Cuentas por Cobrar: misma divergencia de visibilidad frente al permiso sales.report requerido (#2024).
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 134, elemento 14]",Parcial,Ventas por Cliente: ruta operativa exige sales.report al resolver compañía; enlace condicionado por sales.access (#2024).
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 138, elemento 15]",Parcial,Ventas por Artículo: ruta operativa exige sales.report al resolver compañía; enlace condicionado por sales.access (#2024).
+cacao_accounting/ventas/templates/ventas.html,"enlace de acción [línea 142, elemento 16]",Parcial,Margen Bruto: ruta operativa exige sales.report al resolver compañía; enlace condicionado por sales.access (#2024).
+cacao_accounting/ventas/templates/ventas/cliente.html,bloque contenido,Parcial,"Guard detalle exige vínculo en alguna compañía autorizada, pero carga settings/contactos/direcciones de todas #1525; edición y mutaciones de tercero con brechas ACL #1524; CTA confirmación expone PII GET #1998; historial siempre vacío #1796."
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 4],Parcial,TESTING marker correcto; no hay HTML servido validado por curl en esta ronda.
+cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 10, elemento 1]",Parcial,"Breadcrumb Inicio; endpoint existente, respuesta runtime pendiente."
+cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 11, elemento 2]",Parcial,"Breadcrumb Ventas; ruta existente, sin validación HTTP actual."
+cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 12, elemento 3]",Parcial,"Breadcrumb Clientes; listado aplica scope por compañía (#1525), estado vacío #2047."
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 21],Parcial,"Badge global Party activo/inactivo; datos de perfil global se muestran a quien tenga vínculo en cualquier compañía, aunque settings/contactos incluyen todas #1525."
+cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 24, elemento 4]",Parcial,Volver al listado; query usa compañías autorizadas del usuario (#1525).
+cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 25, elemento 5]",Parcial,Editar siempre visible; ruta GET/POST carece de guard de acción y compañía #1524.
+cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 26, elemento 6]",Parcial,Nuevo siempre visible; ruta de alta carece de permiso/alcance #1524.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 27],Parcial,Botón solo si no es proveedor; no valida permiso en UI. El POST de rol exige edición sales por compañía.
+cacao_accounting/ventas/templates/ventas/cliente.html,"formulario [línea 28, elemento 7]",Parcial,"CSRF presente; POST `habilitar_proveedor` usa guard `requiere_edicion_tercero(sales)`, aunque CTA sigue visible a lector."
+cacao_accounting/ventas/templates/ventas/cliente.html,"acción HTML [línea 30, elemento 8]",Parcial,Botón de conversión a proveedor condicionado por rol; endpoint exige editar tercero en ventas.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 33],Parcial,Muestra bloque Cloud; la acción de confirmación deja expuesta la ficha GET sin ACL #1998.
+cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 34, elemento 9]",Parcial,GET `crear_confirmacion_form` recibe Party ID sin company y carga email/contactos antes del guard #1998.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 62],Parcial,Sección Cloud de historial; helper se invoca sin company y retorna [] siempre #1796.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 83],Parcial,Condición siempre falsa por llamada sin company; muestra estado vacío aunque exista BalanceConfirmation #1796.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: bucle Jinja [línea 84],Parcial,No se ejecuta con el helper actual; contrato esperado debe filtrar compañías autorizadas (#1796).
+cacao_accounting/ventas/templates/ventas/cliente.html,"enlace de acción [línea 87, elemento 10]",Parcial,"Enlace a detalle de confirmación; endpoint comprueba `accounting.consultar` por compañía, pero helper actual no entrega filas #1796."
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 95],Parcial,"Rama de estado de confirmación, no renderizada actualmente porque helper retorna lista vacía #1796."
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 97],Parcial,Rama de estado disputada; permanece inalcanzable con helper invocado sin company #1796.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 99],Parcial,Rama de estado enviada; permanece inalcanzable con helper invocado sin company #1796.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 101],Parcial,Rama de estado visualizada; permanece inalcanzable con helper invocado sin company #1796.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 103],Parcial,Rama de estado cancelada; permanece inalcanzable con helper invocado sin company #1796.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 105],Parcial,Rama de estado expirada/alternativa; no validé cobertura runtime del estado.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 112],Parcial,Presenta resultado confirmado; respuesta de confirmación no aparece en historial actual #1796.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 114],Parcial,Presenta resultado disputado; respuesta no aparece mientras falla helper #1796.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 121],Parcial,Condición de correo/identidad del respondiente; no ejercitada porque historial siempre vacío #1796.
+cacao_accounting/ventas/templates/ventas/cliente.html,contenido: condicional Jinja [línea 123],Parcial,Comentario del respondiente se presentaría en claro al lector; query de historial debe limitar compañías autorizadas #1796/#1525.
+cacao_accounting/ventas/templates/ventas/cliente_lista.html,bloque contenido,Parcial,Lista limita Party a CompanyParty de compañías autorizadas (#1525); falta estado vacío #2047; CTA Nuevo refleja POST sin permiso/alcance #1524; sin curl runtime.
+cacao_accounting/ventas/templates/ventas/cliente_lista.html,contenido: condicional Jinja [línea 5],Parcial,TESTING marker correcto; HTML servido no validado en esta pasada.
+cacao_accounting/ventas/templates/ventas/cliente_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,Breadcrumb apunta a Inicio/Ventas; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cliente_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,Breadcrumb apunta a Inicio/Ventas; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cliente_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,Breadcrumb apunta a Inicio/Ventas; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cliente_lista.html,contenido: bucle Jinja [línea 36],Parcial,Query evita enumeración sin compañías autorizadas #1525; tabla no tiene rama de estado vacío #2047; campos escapan via Jinja.
+cacao_accounting/ventas/templates/ventas/cliente_lista.html,"enlace de acción [línea 38, elemento 4]",Parcial,Breadcrumb apunta a Inicio/Ventas; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,bloque contenido,Parcial,"POST alta/edición solo login+módulo, sin permiso acción ni alcance de compañías #1524; nombre vacío pasa handler #1722; edición dual-role pisa flags/quita vínculo proveedor #1725; CSRF presente."
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,contenido: condicional Jinja [línea 4],Parcial,Marcador TESTING correcto; no validé HTML servido con curl en esta pasada.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"enlace de acción [línea 10, elemento 1]",Parcial,Breadcrumb a inicio existente; render runtime pendiente.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"enlace de acción [línea 11, elemento 2]",Parcial,Breadcrumb a Ventas existente; sin render HTTP actual.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"enlace de acción [línea 12, elemento 3]",Parcial,Breadcrumb a lista de clientes; enlace requiere seguir ACL del listado.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"enlace de acción [línea 21, elemento 4]",Parcial,Cancelar vuelve al listado; no cambia datos.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"acción HTML [línea 22, elemento 5]",Parcial,Guardar visible para cualquier sesión con acceso al módulo; POST sin permiso/alcance #1524.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"formulario [línea 25, elemento 6]",Parcial,CSRF presente; handler no ejecuta validate_on_submit; Party.name vacío se persiste #1722; company settings pueden mutar compañías no autorizadas #1524 y perder settings de Party dual #1725.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"componente Alpine [línea 47, elemento 7]",Parcial,Selector de grupo filtra customer_group/is_active; validación server-side de rol y vigencia existe. El subform company settings es solo UI y POST alta no autoriza compañía #1524; edición afecta flags supplier #1725.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @input.debounce.300ms [línea 65, elemento 8]",Parcial,Búsqueda Alpine delega a api/search-select; error/latencia cliente sin curl/browser runtime.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @focus [línea 65, elemento 9]",Parcial,Carga opciones al foco; API exige login y aplica filtro customer_group/is_active.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @blur [línea 65, elemento 10]",Parcial,Cierre diferido del menú; no prueba de interacción navegador.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"acción HTML [línea 66, elemento 11]",Parcial,Botón limpiar del selector opcional; salida valida en server por apply_party_group.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @click [línea 66, elemento 12]",Parcial,clearSelection limpia selección del grupo; no validación de browser.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"acción HTML [línea 70, elemento 13]",Parcial,Opción renderiza display_name mediante x-text; selección usa opción proveniente de API.
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,"handler @mousedown.prevent [línea 70, elemento 14]",Parcial,"Selecciona grupo; apply_party_group revalida existencia, tipo customer y activo en servidor."
+cacao_accounting/ventas/templates/ventas/cliente_nuevo.html,contenido: condicional Jinja [línea 79],Parcial,Checkbox global de Party usa estado inicial; POST ausente se traduce a False intencionalmente para is_active.
+cacao_accounting/ventas/templates/ventas/cotizacion.html,bloque contenido,Parcial,Detalle verifica ACL de compañía; árbol con nodos sin permiso #1407; estado crudo omite anulación pendiente #1803; edición bloqueable por ApprovalRequest #1799; CTAs #2053; impresión sin company #2055; timeline presente #247.
+cacao_accounting/ventas/templates/ventas/cotizacion.html,contenido: condicional Jinja [línea 5],Parcial,TESTING marker correcto; no hay servicio web para curl/render actual.
+cacao_accounting/ventas/templates/ventas/cotizacion.html,"enlace de acción [línea 10, elemento 1]",Parcial,Breadcrumb usa rutas existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion.html,"enlace de acción [línea 12, elemento 2]",Parcial,Breadcrumb usa rutas existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion.html,contenido: condicional Jinja [línea 17],Parcial,Editar visible según docstatus; si hay ApprovalRequest pendiente el handler permite alterar snapshot #1799; CTA no filtra permiso #2053.
+cacao_accounting/ventas/templates/ventas/cotizacion.html,"enlace de acción [línea 18, elemento 3]",Parcial,Breadcrumb usa rutas existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion.html,contenido: condicional Jinja [línea 23],Parcial,Duplicar en docstatus 0/1; duplicador separa de fuente y conserva descuentos; botón no filtra permiso create #2053.
+cacao_accounting/ventas/templates/ventas/cotizacion.html,"formulario [línea 24, elemento 4]",Parcial,POST duplicar con CSRF; backend exige crear y compañía; acceso visual no filtra permiso #2053.
+cacao_accounting/ventas/templates/ventas/cotizacion.html,"acción HTML [línea 27, elemento 5]",Parcial,"Botón duplicar se muestra por estado, no por permiso efectivo; handler rechaza no autorizado #2053."
+cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,bloque contenido,Parcial,"Query `_paginate_list` aplica scope/período Sales; `grand_total` omite moneda #1869; CTA Nuevo aparece sin gate create, POST puede 403 #2052; badge deriva estado con limitación cancelación pendiente #1803."
+cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,contenido: condicional Jinja [línea 5],Parcial,TESTING marker con ruta correcta; sin servidor activo ni HTML runtime en esta pasada.
+cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,Breadcrumb enlaza endpoints existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,Breadcrumb enlaza endpoints existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,Breadcrumb enlaza endpoints existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,contenido: bucle Jinja [línea 38],Parcial,Items paginados y scopeados por compañía/período; total sin código de moneda #1869; badge puede omitir estado cancelación pendiente #1803.
+cacao_accounting/ventas/templates/ventas/cotizacion_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,Breadcrumb enlaza endpoints existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,bloque contenido,Parcial,Alta directa no valida rol/actividad/CompanyParty de customer #2056/#1649; source GET expone metadatos sin ACL #1971; descuento source SalesRequest no se hereda #1041; no HTML runtime.
+cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,contenido: condicional Jinja [línea 6],Parcial,"Marcador TESTING cita ruta cotizacion_nueva.html, typo frente al archivo cotizacion_nuevo.html; sin render servidor validado."
+cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"enlace de acción [línea 14, elemento 1]",Parcial,Breadcrumb apunta a endpoints existentes; respuesta HTML real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"enlace de acción [línea 16, elemento 2]",Parcial,Breadcrumb apunta a endpoints existentes; respuesta HTML real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"enlace de acción [línea 17, elemento 3]",Parcial,Breadcrumb apunta a endpoints existentes; respuesta HTML real pendiente.
+cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"formulario [línea 24, elemento 4]",Parcial,"CSRF presente; POST exige crear en compañía; no valida rol/activo/membresía del tercero #2056/#1649. Si hay origen, igualdad de cliente se verifica; source ACL GET #1971."
+cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,"componente Alpine [línea 24, elemento 5]",Parcial,Selector limita party_type/compañía en UI; no sustituye validación POST (#2056/#1649); precio y descuento de línea requieren respetar origen (#1041).
+cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,contenido: condicional Jinja [línea 26],Parcial,Hidden from_request permite ID alterado; GET serializa company/party antes de validar ACL del origen #1971.
+cacao_accounting/ventas/templates/ventas/cotizacion_nuevo.html,contenido: condicional Jinja [línea 55],Parcial,"Grid de origen usa pending-lines con company y source id; el endpoint verifica ACL, pero metadatos ya salen en GET #1971; descuento no heredado #1041."
+cacao_accounting/ventas/templates/ventas/entrega.html,bloque contenido,Parcial,"Detalle autoriza compañía vía ventas/inventory; árbol puede filtrar nodo relacionado #1407/#1410; status crudo omite anulación pendiente #1803; CTAs/adjuntos dependen estado, guards POST protegen #2053; duplicado incompleto #1617."
+cacao_accounting/ventas/templates/ventas/entrega.html,contenido: condicional Jinja [línea 5],Parcial,Marcador TESTING condicional; no hay servidor activo ni HTML servido validado con curl.
+cacao_accounting/ventas/templates/ventas/entrega.html,"enlace de acción [línea 10, elemento 1]",Parcial,Breadcrumb resuelve endpoints; render real pendiente.
+cacao_accounting/ventas/templates/ventas/entrega.html,"enlace de acción [línea 12, elemento 2]",Parcial,Breadcrumb resuelve endpoints; render real pendiente.
+cacao_accounting/ventas/templates/ventas/entrega.html,contenido: condicional Jinja [línea 17],Parcial,Marcador TESTING condicional; no hay servidor activo ni HTML servido validado con curl.
+cacao_accounting/ventas/templates/ventas/entrega.html,"enlace de acción [línea 18, elemento 3]",Parcial,Breadcrumb resuelve endpoints; render real pendiente.
+cacao_accounting/ventas/templates/ventas/entrega.html,contenido: condicional Jinja [línea 22],Parcial,Marcador TESTING condicional; no hay servidor activo ni HTML servido validado con curl.
+cacao_accounting/ventas/templates/ventas/entrega.html,"formulario [línea 23, elemento 4]",Parcial,POST duplicar incluye CSRF y permiso create; el borrador conserva cabecera pero pierde relaciones/descuentos y no aprueba #1617.
+cacao_accounting/ventas/templates/ventas/entrega.html,"acción HTML [línea 25, elemento 5]",Parcial,"Botón duplicar visible sin gate de permiso, aunque el handler lo aplica #2053; copia de líneas incompleta #1617."
+cacao_accounting/ventas/templates/ventas/entrega_lista.html,bloque contenido,Parcial,Query _paginate_list scopea sales/inventory y fecha; picker usa solo sales #2051; CTA depende inventory.create pero POST exige sales.create #2052; total sin moneda #1869; badge omite anulación pendiente #1803; sin curl runtime.
+cacao_accounting/ventas/templates/ventas/entrega_lista.html,contenido: condicional Jinja [línea 5],Parcial,Marcador TESTING condicional; no hay servidor activo ni validación de HTML servido.
+cacao_accounting/ventas/templates/ventas/entrega_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,Breadcrumb con endpoints definidos; existencia/render HTTP sin comprobar en runtime.
+cacao_accounting/ventas/templates/ventas/entrega_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,Breadcrumb con endpoints definidos; existencia/render HTTP sin comprobar en runtime.
+cacao_accounting/ventas/templates/ventas/entrega_lista.html,contenido: condicional Jinja [línea 20],Parcial,"CTA se muestra con Inventory create, mientras POST requiere Sales create; reproducción/decisión en #2052."
+cacao_accounting/ventas/templates/ventas/entrega_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,Breadcrumb con endpoints definidos; existencia/render HTTP sin comprobar en runtime.
+cacao_accounting/ventas/templates/ventas/entrega_lista.html,contenido: bucle Jinja [línea 38],Parcial,Lista viene scopeada por compañía y período; monto grand_total sin transaction_currency #1869; badge no muestra cancelación pendiente #1803.
+cacao_accounting/ventas/templates/ventas/entrega_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,Breadcrumb con endpoints definidos; existencia/render HTTP sin comprobar en runtime.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,bloque contenido,Parcial,Compañía/moneda derivan del origen; GET sin ACL #2104; cliente no valida rol/estado/membresía #2116 ni conserva tercero origen; retorno ligado a OV falla al aprobar #1802; reserva retorno #699.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 6],Parcial,Marcador TESTING condicional; sin HTML generado validado en servidor.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"enlace de acción [línea 14, elemento 1]",Parcial,Breadcrumb apunta a endpoints existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"enlace de acción [línea 16, elemento 2]",Parcial,Breadcrumb apunta a endpoints existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"enlace de acción [línea 17, elemento 3]",Parcial,Breadcrumb apunta a endpoints existentes; render HTTP real pendiente.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"formulario [línea 23, elemento 4]",Parcial,CSRF y permiso Inventory crear; POST permite tercero inválido o distinto al origen #2116; from_note ligado a OV falla al aprobar #1802.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,"componente Alpine [línea 23, elemento 5]",Parcial,Filtros party/compañía y bodega solo en UI; customer no es required; origen expone metadatos sin ACL #2104.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 25],Parcial,Hidden from_order admite ID manipulable; carga de origen sin ACL antes de renderizar #2104.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 26],Parcial,Hidden from_note carga origen sin ACL #2104; retorno ligado a OV crea relación DN y submit valida OV #1802.
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 68],Parcial,"Grid de orden usa pending-lines; API valida su acceso, pero GET ya serializó metadatos #2104; exceso histórico #209 cerrado."
+cacao_accounting/ventas/templates/ventas/entrega_nuevo.html,contenido: condicional Jinja [línea 73],Parcial,Grid from_note vincula líneas con DN origen; submit no encuentra relación esperada con OV heredada #1802.
+cacao_accounting/ventas/templates/ventas/factura_venta.html,bloque contenido,Parcial,"Detalle aplica ACL; título de notas incorrecto #2115; árbol #1407, acción origen #1971 y duplicación #1617/#1618"
+cacao_accounting/ventas/templates/ventas/factura_venta.html,contenido: condicional Jinja [línea 5],Parcial,Marcador TESTING condicionado; HTML generado no validado con curl
+cacao_accounting/ventas/templates/ventas/factura_venta.html,"enlace de acción [línea 10, elemento 1]",Parcial,"Breadcrumb inicio; ruta existente, render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/factura_venta.html,"enlace de acción [línea 12, elemento 2]",Parcial,"Breadcrumb ventas; ruta existente, render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/factura_venta.html,contenido: condicional Jinja [línea 17],Parcial,"Editar sólo borradores; endpoint revalida ACL compañía, aprobación y docstatus"
+cacao_accounting/ventas/templates/ventas/factura_venta.html,"enlace de acción [línea 18, elemento 3]",Parcial,Enlace de edición sobre documento autorizado; sin comprobación de HTML runtime
+cacao_accounting/ventas/templates/ventas/factura_venta.html,contenido: condicional Jinja [línea 23],Parcial,Duplicar disponible draft/approved; omite descuentos y relaciones de línea #1617 #1618
+cacao_accounting/ventas/templates/ventas/factura_venta.html,"formulario [línea 24, elemento 4]",Parcial,POST con CSRF y ACL create; copia conserva tipo/reversal pero no relaciones de línea #1617 #1618
+cacao_accounting/ventas/templates/ventas/factura_venta.html,"acción HTML [línea 27, elemento 5]",Parcial,Botón duplicar CSRF-protegido; el borrador puede conservar importe neto sin metadata #1618
+cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,bloque contenido,Parcial,Query scopeado; total sin moneda #1869; caption muerto/incorrecto #1841; estado calculado #1803
+cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,contenido: condicional Jinja [línea 5],Parcial,Marcador TESTING condicionado; HTML generado no validado con curl
+cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,"Breadcrumb inicio; endpoint existente, render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,"Breadcrumb ventas; endpoint existente, render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,Crear usa tipo específico y endpoint con permiso crear; botón no refleja ACL visual
+cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,contenido: bucle Jinja [línea 38],Parcial,Filas company-scoped; grand_total sin moneda #1869; caption accesible fijo incorrecto #1841
+cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,Detalle valida ACL compañía antes de renderizar el documento
+cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,bloque contenido,Parcial,Query limita a sales_invoice y aplica ACL compañía; total sin moneda #1869; status #1803
+cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,contenido: condicional Jinja [línea 5],Parcial,Marcador TESTING condicionado; HTML generado no validado con curl
+cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,"Breadcrumb inicio, ruta existente; render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,"Breadcrumb ventas, ruta existente; render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 21, elemento 3]",Parcial,Nuevo abre endpoint que exige permiso crear; botón se muestra sin ACL visual
+cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 24, elemento 4]",Parcial,Navega a listado de notas débito; ruta aplica login/módulo y scope documental
+cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 27, elemento 5]",Parcial,Navega a listado de devoluciones/NC; ruta aplica login/módulo y scope documental
+cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,contenido: bucle Jinja [línea 46],Parcial,"Filas company-scoped, estado #1803; grand_total sin moneda ya cubierto por #1869"
+cacao_accounting/ventas/templates/ventas/factura_venta_lista.html,"enlace de acción [línea 48, elemento 6]",Parcial,Detalle carga documento por ID y verifica ACL de compañía antes de renderizar
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,bloque contenido,Parcial,Orígenes GET sin ACL #1971; tercero sólo filtrado en UI #1649; descuentos edit #2112; autoentrega #1812; devolución sin origen #828
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 6],Parcial,Marcador TESTING condicionado; HTML generado no validado con curl
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"enlace de acción [línea 14, elemento 1]",Parcial,"Breadcrumb inicio; endpoint existente, render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"enlace de acción [línea 16, elemento 2]",Parcial,"Breadcrumb ventas; endpoint existente, render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"enlace de acción [línea 17, elemento 3]",Parcial,"Breadcrumb listado de facturas; endpoint existente, render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"formulario [línea 23, elemento 4]",Parcial,CSRF y permiso crear; rol/CompanyParty del cliente no validado #1649; GET origen filtra metadatos #1971
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,"componente Alpine [línea 23, elemento 5]",Parcial,"Filtros de cliente/origen en UI; descuentos al editar #2112, autoentrega al importar DN sin header #1812"
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 25],Parcial,from_order se serializa y configura antes de comprobar ACL del origen #1971
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 26],Parcial,from_note se serializa y configura antes de comprobar ACL del origen #1971
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 27],Parcial,from_invoice se serializa y configura antes de comprobar ACL del origen #1971
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 28],Parcial,from_return se serializa y configura antes de comprobar ACL del origen #1971; NC/devolución sin origen #828
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 30],Parcial,document_type proviene de parámetro/payload; alta de notas sin origen queda en #1616/#828
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 32],Parcial,is_return representa nota/devolución; rutas y validación de origen aún incompletas #828
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 60],Parcial,Checkbox sólo se oculta con from_note; importar líneas de DN sin cabecera puede crear otra entrega #1812
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 73],Parcial,Origen factura/devolución se carga por ID sin ACL previo #1971; límites de devolución #828
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 78],Parcial,Origen entrega se carga por ID sin ACL previo #1971; endpoint pending-lines sí aplica guard
+cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html,contenido: condicional Jinja [línea 83],Parcial,Origen orden se carga por ID sin ACL previo #1971; endpoint pending-lines sí aplica guard
+cacao_accounting/ventas/templates/ventas/orden_venta.html,bloque contenido,Parcial,"Detalle aplica ACL; árbol #1407, cancelación concurrente #2113; cierre parcial ya cubierto por #730"
+cacao_accounting/ventas/templates/ventas/orden_venta.html,contenido: condicional Jinja [línea 5],Parcial,Marcador TESTING condicionado; HTML generado no validado con curl
+cacao_accounting/ventas/templates/ventas/orden_venta.html,"enlace de acción [línea 10, elemento 1]",Parcial,"Breadcrumb inicio; endpoint existente, render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/orden_venta.html,"enlace de acción [línea 12, elemento 2]",Parcial,"Breadcrumb ventas; endpoint existente, render HTTP pendiente"
+cacao_accounting/ventas/templates/ventas/orden_venta.html,contenido: condicional Jinja [línea 17],Parcial,"Editar sólo borradores; ruta vuelve a validar ACL, aprobación y docstatus"
+cacao_accounting/ventas/templates/ventas/orden_venta.html,"enlace de acción [línea 18, elemento 3]",Parcial,Enlace de edición para documento autorizado; sin comprobación HTTP real
+cacao_accounting/ventas/templates/ventas/orden_venta.html,contenido: condicional Jinja [línea 23],Parcial,Duplicación visible en draft/approved; la cancelación comparte carrera de relación #2113
+cacao_accounting/ventas/templates/ventas/orden_venta.html,"formulario [línea 24, elemento 4]",Parcial,POST con CSRF; endpoint verifica permiso y compañía antes de duplicar
+cacao_accounting/ventas/templates/ventas/orden_venta.html,"acción HTML [línea 26, elemento 5]",Parcial,Botón de duplicar CSRF-protegido; validación runtime pendiente
+cacao_accounting/ventas/templates/ventas/orden_venta.html,contenido: condicional Jinja [línea 37],Parcial,"Can_close deriva de líneas cubiertas; cierre manual de saldos #730, carrera de altas #2113"
+cacao_accounting/ventas/templates/ventas/orden_venta.html,"formulario [línea 38, elemento 6]",Parcial,CSRF presente; endpoint exige autorizar y revalida readiness antes del cierre
+cacao_accounting/ventas/templates/ventas/orden_venta.html,"acción HTML [línea 40, elemento 7]",Parcial,"Botón Cerrar condicionado a readiness, no a permiso autorizar en UI; POST sí lo exige"
+cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,bloque contenido,Parcial,Query aplica scope de compañía; totales sin moneda ya cubiertos por #1869; falta HTML runtime
+cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,contenido: condicional Jinja [línea 5],Parcial,Marcador TESTING condicionado; HTML generado no validado con curl
+cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,Breadcrumb inicio con endpoint existente; render HTTP pendiente
+cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,Breadcrumb ventas con endpoint existente; render HTTP pendiente
+cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,"Nuevo se muestra; GET exige permiso crear, falta validar respuesta HTTP"
+cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,contenido: bucle Jinja [línea 38],Parcial,Filas company-scoped y autoescaped; grand_total sin moneda #1869
+cacao_accounting/ventas/templates/ventas/orden_venta_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,Detalle aplica ACL de compañía; sin validación HTML runtime
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,bloque contenido,Parcial,GET de origen no valida ACL y tercero sólo se filtra en UI; #1971 #1649; cancelación/relación concurrente #2113
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 6],Parcial,Marcador TESTING condicionado al contexto; HTML generado no validado con curl
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"enlace de acción [línea 14, elemento 1]",Parcial,Breadcrumb inicio con ruta válida por referencia; falta comprobar render HTML
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"enlace de acción [línea 16, elemento 2]",Parcial,"Breadcrumb ventas; ruta existente, sin comprobación HTTP de la página"
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"enlace de acción [línea 17, elemento 3]",Parcial,"Breadcrumb listado de órdenes; ruta existente, sin comprobación HTTP"
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"formulario [línea 23, elemento 4]",Parcial,CSRF y permiso crear; POST omite validar rol/CompanyParty de cliente #1649; GET filtra metadatos origen #1971
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,"componente Alpine [línea 23, elemento 5]",Parcial,"Selectores cliente y líneas filtran en UI; ACL source API existe, pero GET expone origen #1971; sin runtime"
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 25],Parcial,Campo oculto conserva from_request; fuente cargada antes de ACL en GET #1971
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 28],Parcial,Campo oculto conserva from_quotation; fuente cargada antes de ACL en GET #1971
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 57],Parcial,La carga de pendientes serializa ID y compañía de cotización sin guard de origen en GET #1971
+cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html,contenido: condicional Jinja [línea 62],Parcial,La carga de pendientes serializa ID y compañía de solicitud sin guard de origen en GET #1971
+cacao_accounting/ventas/templates/ventas/solicitud_venta.html,bloque contenido,Parcial,"GET aplica ACL compañía; árbol #1407, acción de cotizar #1971 y carrera cancelación/relación #2113"
+cacao_accounting/ventas/templates/ventas/solicitud_venta.html,contenido: condicional Jinja [línea 5],Parcial,Marcador TESTING depende del contexto; HTML generado no validado con curl
+cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"enlace de acción [línea 10, elemento 1]",Parcial,Enlace de inicio resuelve ruta existente; sin prueba HTTP/render real
+cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"enlace de acción [línea 12, elemento 2]",Parcial,Enlace al módulo de ventas; acceso del detalle se valida antes de renderizar
+cacao_accounting/ventas/templates/ventas/solicitud_venta.html,contenido: condicional Jinja [línea 17],Parcial,Edit se muestra en borrador; endpoint vuelve a verificar edición y docstatus
+cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"enlace de acción [línea 18, elemento 3]",Parcial,URL de edición usa ID de documento autorizado; falta comprobar HTML runtime
+cacao_accounting/ventas/templates/ventas/solicitud_venta.html,contenido: condicional Jinja [línea 23],Parcial,Duplicar se muestra en borrador/aprobado; carrera de cancelación y relación origen #2113
+cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"formulario [línea 24, elemento 4]",Parcial,"CSRF presente; handler valida crear y ACL, pero no bloquea cancelación contra nueva relación #2113"
+cacao_accounting/ventas/templates/ventas/solicitud_venta.html,"acción HTML [línea 27, elemento 5]",Parcial,Botón duplicar usa POST con CSRF; macros de flujo ofrecen acciones por estado sin gate visual de permiso
+cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,bloque contenido,Parcial,Listado usa _paginate_list con scope; total multimoneda sin etiqueta #2114; falta HTML runtime
+cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,contenido: condicional Jinja [línea 5],Parcial,Marcador TESTING condicionado al contexto; no validado en HTML generado
+cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,"enlace de acción [línea 11, elemento 1]",Parcial,Enlace de breadcrumb resuelve inicio; sin validación HTTP de la plantilla
+cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,"enlace de acción [línea 12, elemento 2]",Parcial,Enlace de breadcrumb resuelve módulo ventas; sin validación HTTP de la plantilla
+cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,"enlace de acción [línea 20, elemento 3]",Parcial,Acción Nuevo visible sin comprobar permiso crear; el POST debe rechazar falta de permiso
+cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,contenido: bucle Jinja [línea 38],Parcial,Filas company-scoped y autoescaped; total omite transaction_currency #2114
+cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html,"enlace de acción [línea 40, elemento 4]",Parcial,Detalle enlaza ID de fila ya filtrada; endpoint aplica autorización de compañía
+cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,bloque contenido,Parcial,"POST GET y edición del pedido no validan rol/CompanyParty del cliente en servidor; #1649"
+cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,"enlace de acción [línea 7, elemento 1]",Parcial,Controles de navegación sin evidencia runtime; página depende de autorización granular del handler
+cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,"enlace de acción [línea 9, elemento 2]",Parcial,Controles de navegación sin evidencia runtime; página depende de autorización granular del handler
+cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,"formulario [línea 14, elemento 3]",Parcial,"CSRF presente; backend valida permiso y compañía, pero no rol de cliente/CompanyParty; #1649"
+cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html,"componente Alpine [línea 14, elemento 4]",Parcial,"Selector filtra tercero por compañía en UI; POST no impone ese filtro ni is_customer; #1649"
+cacao_accounting/version/__init__.py,[módulo],Completo,Constantes y VERSION derivada cotejadas con metadatos dinámicos de setuptools
+cacao_accounting/version/__init__.py,build_version(),Parcial,Prioridad prerelease/postrelease y caller cotejados; argumentos arbitrarios no se validan
+cacao_accounting/warehouse_accounting.py,[módulo],Completo,Importa modelos y declara helpers sin efectos de importación
+cacao_accounting/warehouse_accounting.py,warehouse_inventory_account_id(),Completo,Filtra cuenta activa por bodega y compañía; unicidad y FK cotejadas
+cacao_accounting/warehouse_accounting.py,inventory_account_id_for_document_line(),Parcial,Precedencia genérica no coincide con bodega efectiva en salidas; #1827
+cacao_accounting/withholding_service.py,[módulo],Completo,Importaciones y declaraciones sin efectos de base de datos al cargar el módulo
 cacao_accounting/withholding_service.py,_decimal(),Completo,
-cacao_accounting/withholding_service.py,create_withholding_certificate(),Parcial,Idempotencia y transacción cotejadas; falta prueba runtime; #1027
-cacao_accounting/withholding_service.py,cancel_withholding_certificate(),Parcial,Transición y caller cotejados; falta probar cancelación; #1807
-cacao_accounting/withholding_service.py,withholding_certificate_lines(),Parcial,JSON y consumidores cotejados; falta contrato de impresión
+cacao_accounting/withholding_service.py,create_withholding_certificate(),Parcial,Posting bloqueado y mismo savepoint confirmados; reemisión tras cancelación pendiente #1027
+cacao_accounting/withholding_service.py,cancel_withholding_certificate(),Completo,"Transición monotónica en savepoint de cancelación; #1807 bloquea caller antes de alcanzarla"
+cacao_accounting/withholding_service.py,withholding_certificate_lines(),Parcial,"Contrato interno emite lista de dicts; tolera JSON corrupto, faltan validación y contrato custom de impresión"
