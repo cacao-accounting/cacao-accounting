@@ -1427,10 +1427,10 @@ cacao_accounting/bancos/routes.py,bancos_pago(),Parcial,ACL consultar; carga GL/
 cacao_accounting/bancos/routes.py,bancos_pago_submit(),Parcial,ACL autorizar/docstatus; approval o post+commit; captura PostingError.
 cacao_accounting/bancos/routes.py,bancos_pago_cancel(),Parcial,ACL anular; solicitud approval vs cancel y estado omitido #1638/#1728.
 cacao_accounting/bancos/services.py,[módulo],Parcial,"Módulo auditado estáticamente; quedan riesgos abiertos verificados en snapshot: #1088/#1089 reasignación de cuenta GL de caja chica y moneda/historial; #1095/#1809 permisos y transición de reposición a reembolsada sin pago; #1186/#1991 commits de journal antes del subledger y #1187 liquidación concurrente de vale; #1192 permiso de anulación; #1511 precarga de referencias sin ACL; #1650 coerción Decimal sin guardas finitas; #1830 estado actual en saldo histórico; #2030 cancelación GL/subledger no atómica. Dead code confirmado por referencias textuales (solo definición) para _get_default_entity_type_for_payment_type, petty_cash_account_choices, update_petty_cash_voucher, _bank_account_for_note y _payment_identifier_inputs; reportado en #1841. Los detalles y límites por flujo están en las filas de funciones. Sin cambios al código funcional."
-cacao_accounting/bancos/services.py,_safe_bank_reconciliation_candidates(),Parcial,Pendiente
-cacao_accounting/bancos/services.py,PaymentPayload,Parcial,Payload JSON se convierte con cast sin validar que la raíz sea objeto; entrada válida no objeto puede producir 500. #2080. La validación de esquema completa sigue pendiente.
-cacao_accounting/bancos/services.py,_series_choices(),Parcial,Sin callers en cacao_accounting; dead code candidato #1841.
-cacao_accounting/bancos/services.py,_validate_naming_series_default(),Parcial,"Valida existencia, actividad, tipo y alcance global/compañía; cobertura de borde pendiente. #1808 para incompatibilidad del tipo al usar defaults bancarios."
+cacao_accounting/bancos/services.py,_safe_bank_reconciliation_candidates(),Parcial,Usado por ambas pantallas bancarias; solo absorbe BankReconciliationError. El motor descarta reversas de períodos posteriores (#1502); quedan escenarios de error sin dominio.
+cacao_accounting/bancos/services.py,PaymentPayload,Parcial,"TypedDict(total=False) es solo estático: parser hace cast de JSON sin validar raíz/esquema ni elementos lines (#2080); tipos numéricos no finitos en frontera #1650."
+cacao_accounting/bancos/services.py,_series_choices(),Parcial,Sin referencias fuera de definición en todo cacao_accounting; homónimas de otros módulos tienen callers propios. Dead code agregado a #1841.
+cacao_accounting/bancos/services.py,_validate_naming_series_default(),Parcial,Valida existencia/actividad/alcance y exige entity_type dado; caller usa payment_entry aunque posteo requiere bank_* y rechaza al asignar (#1808).
 cacao_accounting/bancos/services.py,_validate_payment_series_default(),Parcial,Acepta solo entity_type payment_entry; el flujo numera tipos bank_* y el desajuste está reportado en #1808.
 cacao_accounting/bancos/services.py,_validate_checkbook_default(),Parcial,"Valida existencia, actividad, tipo checkbook y compañía exacta; falta validar escenarios funcionales completos."
 cacao_accounting/bancos/services.py,_validate_bank_account_numbering_defaults(),Parcial,Compone validadores de defaults; serie payment_entry incompatible con entity_type bancario de emisión según #1808.
@@ -1536,29 +1536,29 @@ cacao_accounting/bancos/services.py,_payment_reference_totals(),Parcial,Iniciali
 cacao_accounting/bancos/services.py,_process_payment_reference_line(),Parcial,Valida y omite asignaciones cero; estructura JSON de cada línea no garantizada (#2080).
 cacao_accounting/bancos/services.py,_apply_payment_reference_line(),Parcial,"Carga/valida documento y saldo, pero dirección de factura ordinaria no se valida (#1227); actualiza outstanding cache en draft (#1102), saldo no revalidado al postear (#1140), ajustes negativos #1831."
 cacao_accounting/bancos/services.py,_refresh_payment_reference_document(),Parcial,"Resuelve modelo por tipo y recalcula cache; unknown types se omiten silenciosamente, los callers deben usar tipos permitidos."
-cacao_accounting/bancos/services.py,_resolve_payment_numbering(),Parcial,Selecciona configuración o defaults legacy; puede usar referencias inactivas/incompatibles (#1982/#1983) y fallback payment_entry contra bank_* (#1808).
+cacao_accounting/bancos/services.py,_resolve_payment_numbering(),Parcial,Payload de UI manda IDs vacíos y `is None` omite config por cuenta/tipo; default general sustituye serie/chequera (#2181). Incompatibilidad y defaults legacy #1982/#1983/#1808.
 cacao_accounting/bancos/services.py,_finalize_and_commit_payment(),Parcial,"Persiste snapshot fiscal, valida total y confirma pago/referencias de una vez; tipos de línea/esquema y ajustes negativos siguen en #2080/#1831."
 cacao_accounting/bancos/services.py,_create_payment_from_request(),Parcial,Rollback de errores y responde excepciones de negocio; payload JSON/nested lines no validados producen errores genéricos (#2080).
 cacao_accounting/bancos/services.py,_payment_payload_from_request(),Parcial,JSON parse y cast sin validar mapping ni esquema; raíz/lines malformados producen AttributeError no controlado (#2080). Fallback form reduce campos.
 cacao_accounting/bancos/services.py,_resolve_payment_exchange_rate(),Parcial,Pasa posting_date textual a _lookup_exchange_rate para cuenta en moneda extranjera; bug SQLite de bind DATE #1323. Sin moneda funcional devuelve tasa 1.
 cacao_accounting/bancos/services.py,_internal_transfer_rate(),Parcial,Revisión de flujo documentada; faltan escenarios
 cacao_accounting/bancos/services.py,_apply_internal_transfer_amounts(),Parcial,Revisión de flujo documentada; faltan escenarios
-cacao_accounting/bancos/services.py,_build_payment_from_payload(),Parcial,Pendientes
-cacao_accounting/bancos/services.py,_resolve_gl_accounts(),Parcial,"Usa GL del banco para transferencias o acepta cuentas del payload; ownership validado aparte, pero no exige correspondencia bancaria en pagos normales."
-cacao_accounting/bancos/services.py,_validate_payment_gl_accounts(),Parcial,Comprueba pertenencia a compañía y correspondencia origen/destino en transferencias; validación de tipo/cuenta activa no completa fuera de ese flujo.
-cacao_accounting/bancos/services.py,_parse_reference_date(),Parcial,Parsea fecha ISO y deja que ValueError suba al handler; no aplica reglas de período/historia por sí misma.
-cacao_accounting/bancos/services.py,_parse_payment_date(),Parcial,Fecha inválida cae a hoy para cálculos internos; asignación de identificador después valida el valor crudo y suele rechazar el guardado.
-cacao_accounting/bancos/services.py,_get_payment_currency(),Parcial,Exige moneda configurada en cuenta bancaria; depende de validación previa de compañía/actividad.
-cacao_accounting/bancos/services.py,_payment_base_currency(),Parcial,Obtiene snapshot Entity.currency o None; no valida presencia/actividad de Currency al armar pago.
-cacao_accounting/bancos/services.py,_create_payment_entry(),Parcial,"Construye borrador con campos normalizados; tipo desconocido deja ambos importes en cero (#1497), y cantidad no finita llega al modelo (#1650)."
-cacao_accounting/bancos/services.py,_update_payment_amounts(),Parcial,Actualiza importes base por enum conocido; desconocidos no reciben amount (#1497) y Decimal no finito no está rechazado (#1650).
-cacao_accounting/bancos/services.py,_payment_identifier_inputs(),Parcial,Sin consumidores productivos; dead code candidato #1841.
-cacao_accounting/bancos/services.py,_payment_identifier_context(),Parcial,Contexto incluye cuenta solo para cheques; selection de contador/serie depende de referencias vigentes (#1982/#1983).
-cacao_accounting/bancos/services.py,_validate_payment_reference_totals(),Parcial,"Solo limita pago aplicado máximo, sin validar suma finita/no negativa ni tolerancias de inputs (#1650/#1831)."
-cacao_accounting/bancos/services.py,_allows_fully_withheld_payment(),Parcial,Permite monto cero si pay/receive tiene alguna línea asignada positiva; no valida shape de líneas (#2080) ni caso tributario completo.
-cacao_accounting/bancos/services.py,_payment_withholding_total(),Parcial,Suma líneas withholding persistidas; contrato de snapshot fiscal y signo/base depende del motor fiscal (#1707).
-cacao_accounting/bancos/services.py,_payment_source_rows_from_request(),Parcial,Carga documentos por IDs de query antes de comprobar acceso a sus compañías (#1511).
-cacao_accounting/bancos/services.py,_apply_payment_cancellation_hooks(),Parcial,"Revierte relaciones, marca ítems y desvincula bancos dentro de transición autorizada; saldos AR/AP cacheados y cancelación histórica tienen brechas en #1103/#1305/#1351."
+cacao_accounting/bancos/services.py,_build_payment_from_payload(),Parcial,Validado contra código vigente: type sin allowlist (#1497), Decimal sin guardas finitas (#1650), fecha textual al resolver FX (#1323); precisión del payload #1512 y estructura JSON #2080. Refs: 757
+cacao_accounting/bancos/services.py,_resolve_gl_accounts(),Parcial,Transfiere cuentas explícitas; para transferencias completa desde ambas cuentas bancarias. Caller valida existencia/compañía GL y coincidencia bancaria en transferencias; faltan pruebas integrales de flujos y posteo.
+cacao_accounting/bancos/services.py,_validate_payment_gl_accounts(),Parcial,Valida existencia/compañía y coherencia de transferencias; no rechaza cuentas inactivas/deshabilitadas/agrupadoras en notas, aunque el selector las filtra (#2180).
+cacao_accounting/bancos/services.py,_parse_reference_date(),Parcial,None/vacío retorna None; fecha inválida eleva ValueError y el caller revierte/controla el error. Sin evidencia del contrato temporal frente a posting_date.
+cacao_accounting/bancos/services.py,_parse_payment_date(),Parcial,Usado para resolver FX de la pierna destino; inválida cae temporalmente en hoy, pero assign_document_identifier valida el valor crudo y aborta/rollback antes de persistir.
+cacao_accounting/bancos/services.py,_get_payment_currency(),Parcial,Caller valida cuenta existente/activa y compañía; helper exige currency no nula. #2040 afecta solo el display del selector; falta validar vigencia de moneda y flujo integral.
+cacao_accounting/bancos/services.py,_payment_base_currency(),Parcial,Devuelve Entity.currency o None sin comprobar Currency.active; usado por pagos y reposición. Posting bloquea snapshot ausente y valida divergencia con moneda vigente (#758/#1655).
+cacao_accounting/bancos/services.py,_create_payment_entry(),Parcial,"Tipo inválido deja importes en cero (#1497); omite is_advance (#1704) y external_number en notas (#2039); monto no finito llega al modelo (#1650). Refs: 757."
+cacao_accounting/bancos/services.py,_update_payment_amounts(),Parcial,Calcula base_amount con tasa resuelta; type desconocido deja importes en cero (#1497) y monto no finito sin guard (#1650). Transferencia sobrescribe luego received/base_received en helper dedicado.
+cacao_accounting/bancos/services.py,_payment_identifier_inputs(),Parcial,Sin referencias fuera de definición; resolver activo es _resolve_payment_numbering() y compone la lógica con config/defaults. Dead code confirmado (#1100/#1841).
+cacao_accounting/bancos/services.py,_payment_identifier_context(),Parcial,Caller único entrega payment_type/mode y bank_account_id solo para cheque al resolver mapeos externos; vigencia/tipo de referencias queda en #1982/#1983.
+cacao_accounting/bancos/services.py,_validate_payment_reference_totals(),Parcial,"Solo aplica cota superior con amount + withholding; withholding del payload puede inflar margen (#1637); signos negativos #1831 y valores no finitos #1650."
+cacao_accounting/bancos/services.py,_allows_fully_withheld_payment(),Parcial,Permite cero con una asignación positiva, sin comprobar retención canónica; límite depende de withholding manipulable (#1637). Elementos de línea no objeto fallan en get() (#2080).
+cacao_accounting/bancos/services.py,_payment_withholding_total(),Parcial,Suma amount de todas las líneas persistidas tipo withholding sin recalcular base ni validar finitud; afecta cota de asignación (#1637/#1650), contrato fiscal canónico #1707.
+cacao_accounting/bancos/services.py,_payment_source_rows_from_request(),Parcial,Lee IDs de ocho parámetros request.values y carga documentos sin ACL antes de renderizar datos cross-company (#1096; duplicado probable #1511).
+cacao_accounting/bancos/services.py,_apply_payment_cancellation_hooks(),Parcial,"Cancela relaciones/items y desvincula solo BankTransaction halladas por payment_entry_id; no recalcula asignaciones restantes (#1228). Cache AR/AP de pago cancelado puede reabrirse (#1103/#1305, duplicado probable); corte histórico #1351."
 cacao_accounting/bancos/statement_service.py,[módulo],Parcial,Flujo revisado; faltan escenarios completos del ajuste y de errores (#1841).
 cacao_accounting/bancos/statement_service.py,BankStatementError,Parcial,Usado por ruta activa y helpers; falta validar propagación y rollback de errores.
 cacao_accounting/bancos/statement_service.py,BankImportRow,Parcial,Solo consumido por el importador CSV legacy sin caller (#1841).
@@ -7156,139 +7156,139 @@ cacao_accounting/portal/__init__.py,supplier_invoice(),Parcial,Alias factura/not
 cacao_accounting/portal/__init__.py,supplier_order(),Parcial,Detalle filtra company/docstatus y supplier_id; acceso persiste con tercero/vínculo inactivo (#1919); falta validación HTTP de ramas.
 cacao_accounting/portal/__init__.py,supplier_quotation(),Parcial,Detalle filtra company/docstatus y supplier_id; acceso persiste con tercero/vínculo inactivo (#1919); falta validación HTTP de ramas.
 cacao_accounting/portal/__init__.py,supplier_receipt(),Parcial,Detalle filtra company/docstatus y supplier_id; tercero inactivo mantiene acceso (#1919); macro de líneas puede exponer batch_id interno (#1960).
-cacao_accounting/portal/templates/portal/base_portal.html,condicional Jinja [línea 16],Pendiente,
-cacao_accounting/portal/templates/portal/base_portal.html,bucle Jinja [línea 19],Pendiente,
-cacao_accounting/portal/templates/portal/base_portal.html,condicional Jinja [línea 21],Pendiente,
-cacao_accounting/portal/templates/portal/base_portal.html,condicional Jinja [línea 23],Pendiente,
-cacao_accounting/portal/templates/portal/base_portal.html,condicional Jinja [línea 25],Pendiente,
-cacao_accounting/portal/templates/portal/base_portal.html,bloque contenido,Pendiente,
-cacao_accounting/portal/templates/portal/customer_dashboard.html,bloque contenido,Pendiente,
-cacao_accounting/portal/templates/portal/customer_dashboard.html,contenido: bucle Jinja [línea 31],Pendiente,
-cacao_accounting/portal/templates/portal/customer_dashboard.html,"enlace de acción [línea 38, elemento 1]",Pendiente,
-cacao_accounting/portal/templates/portal/customer_dashboard.html,contenido: bucle Jinja [línea 70],Pendiente,
-cacao_accounting/portal/templates/portal/customer_dashboard.html,"enlace de acción [línea 77, elemento 2]",Pendiente,
-cacao_accounting/portal/templates/portal/customer_dashboard.html,contenido: bucle Jinja [línea 109],Pendiente,
-cacao_accounting/portal/templates/portal/customer_dashboard.html,"enlace de acción [línea 116, elemento 3]",Pendiente,
-cacao_accounting/portal/templates/portal/customer_dashboard.html,contenido: bucle Jinja [línea 148],Pendiente,
-cacao_accounting/portal/templates/portal/customer_dashboard.html,"enlace de acción [línea 155, elemento 4]",Pendiente,
-cacao_accounting/portal/templates/portal/delivery_detail.html,bloque contenido,Pendiente,
-cacao_accounting/portal/templates/portal/delivery_detail.html,contenido: condicional Jinja [línea 9],Pendiente,
-cacao_accounting/portal/templates/portal/delivery_detail.html,"enlace de acción [línea 10, elemento 1]",Pendiente,
-cacao_accounting/portal/templates/portal/delivery_detail.html,"enlace de acción [línea 12, elemento 2]",Pendiente,
-cacao_accounting/portal/templates/portal/invoice_detail.html,bloque contenido,Pendiente,
-cacao_accounting/portal/templates/portal/invoice_detail.html,contenido: condicional Jinja [línea 9],Pendiente,
-cacao_accounting/portal/templates/portal/invoice_detail.html,"enlace de acción [línea 10, elemento 1]",Pendiente,
-cacao_accounting/portal/templates/portal/invoice_detail.html,"enlace de acción [línea 12, elemento 2]",Pendiente,
-cacao_accounting/portal/templates/portal/order_detail.html,bloque contenido,Pendiente,
-cacao_accounting/portal/templates/portal/order_detail.html,contenido: condicional Jinja [línea 9],Pendiente,
-cacao_accounting/portal/templates/portal/order_detail.html,"enlace de acción [línea 10, elemento 1]",Pendiente,
-cacao_accounting/portal/templates/portal/order_detail.html,"enlace de acción [línea 12, elemento 2]",Pendiente,
-cacao_accounting/portal/templates/portal/quotation_detail.html,bloque contenido,Pendiente,
-cacao_accounting/portal/templates/portal/quotation_detail.html,contenido: condicional Jinja [línea 9],Pendiente,
-cacao_accounting/portal/templates/portal/quotation_detail.html,"enlace de acción [línea 10, elemento 1]",Pendiente,
-cacao_accounting/portal/templates/portal/quotation_detail.html,"enlace de acción [línea 12, elemento 2]",Pendiente,
-cacao_accounting/portal/templates/portal/receipt_detail.html,bloque contenido,Pendiente,
-cacao_accounting/portal/templates/portal/receipt_detail.html,contenido: condicional Jinja [línea 9],Pendiente,
-cacao_accounting/portal/templates/portal/receipt_detail.html,"enlace de acción [línea 10, elemento 1]",Pendiente,
-cacao_accounting/portal/templates/portal/receipt_detail.html,"enlace de acción [línea 12, elemento 2]",Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,bloque contenido,Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 31],Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 38, elemento 1]",Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 70],Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 77, elemento 2]",Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 109],Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 116, elemento 3]",Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 149],Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: condicional Jinja [línea 153],Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: condicional Jinja [línea 155],Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 165, elemento 4]",Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 197],Pendiente,
-cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 204, elemento 5]",Pendiente,
-cacao_accounting/printing/__init__.py,[módulo],Pendiente,
-cacao_accounting/printing/__init__.py,init_printing(),Pendiente,
-cacao_accounting/printing/admin_routes.py,[módulo],Pendiente,
-cacao_accounting/printing/admin_routes.py,list_templates(),Pendiente,
-cacao_accounting/printing/admin_routes.py,validation_settings(),Pendiente,
-cacao_accounting/printing/admin_routes.py,create_template(),Pendiente,
-cacao_accounting/printing/admin_routes.py,edit_template(),Pendiente,
-cacao_accounting/printing/admin_routes.py,duplicate_template(),Pendiente,
-cacao_accounting/printing/admin_routes.py,publish_template(),Pendiente,
-cacao_accounting/printing/admin_routes.py,archive_template(),Pendiente,
-cacao_accounting/printing/admin_routes.py,set_default_template(),Pendiente,
-cacao_accounting/printing/admin_routes.py,preview_template(),Pendiente,
-cacao_accounting/printing/admin_routes.py,template_versions(),Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
-cacao_accounting/printing/admin_routes.py,_update_template_from_form(),Pendiente,
-cacao_accounting/printing/admin_routes.py,_render_form(),Pendiente,
-cacao_accounting/printing/admin_routes.py,_bank_account_options(),Pendiente,
-cacao_accounting/printing/admin_routes.py,_form_bank_account_id(),Pendiente,
-cacao_accounting/printing/admin_routes.py,_get_template(),Pendiente,
-cacao_accounting/printing/admin_routes.py,_clear_default(),Pendiente,
-cacao_accounting/printing/admin_routes.py,_copy_code(),Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
-cacao_accounting/printing/admin_routes.py,_current_user_id(),Pendiente,
-cacao_accounting/printing/admin_routes.py,_require_print_admin(),Pendiente,
-cacao_accounting/printing/admin_routes.py,_is_print_admin(),Pendiente,
-cacao_accounting/printing/context.py,[módulo],Pendiente,
-cacao_accounting/printing/context.py,_resolve_lang(),Pendiente,
-cacao_accounting/printing/context.py,build_common_context(),Pendiente,
-cacao_accounting/printing/context.py,build_journal_entry_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_sales_invoice_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_purchase_invoice_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_purchase_order_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_delivery_note_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_stock_entry_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_quotation_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_sales_order_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_sales_request_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_purchase_request_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_supplier_quotation_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_request_for_quotation_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_purchase_receipt_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_landed_cost_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_check_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_check_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_payment_entry_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_withholding_certificate_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_withholding_certificate_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_exchange_revaluation_print_context(),Pendiente,
-cacao_accounting/printing/context.py,build_journal_entry_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_sales_invoice_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_purchase_order_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_delivery_note_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_sales_order_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_sales_request_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_purchase_request_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_supplier_quotation_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_request_for_quotation_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_purchase_receipt_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_landed_cost_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_payment_entry_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_stock_entry_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_exchange_revaluation_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,build_quotation_sample_context(),Pendiente,
-cacao_accounting/printing/context.py,_build_invoice_context(),Pendiente,
-cacao_accounting/printing/context.py,_build_line_document_context(),Pendiente,
-cacao_accounting/printing/context.py,_line_context(),Pendiente,
-cacao_accounting/printing/context.py,_sample_common_context(),Pendiente,
-cacao_accounting/printing/context.py,_sample_party(),Pendiente,
-cacao_accounting/printing/context.py,_sample_line(),Pendiente,
-cacao_accounting/printing/context.py,_first_attr(),Pendiente,
-cacao_accounting/printing/context.py,_text(),Pendiente,
-cacao_accounting/printing/context.py,_number(),Pendiente,
-cacao_accounting/printing/context.py,_date_text(),Pendiente,
-cacao_accounting/printing/context.py,_document_number(),Pendiente,
-cacao_accounting/printing/context.py,_document_status(),Pendiente,
-cacao_accounting/printing/context.py,_user_name(),Pendiente,
-cacao_accounting/printing/exceptions.py,[módulo],Pendiente,
-cacao_accounting/printing/exceptions.py,PrintingError,Pendiente,
-cacao_accounting/printing/exceptions.py,PrintTemplateNotFoundError,Pendiente,
-cacao_accounting/printing/exceptions.py,PrintPermissionError,Pendiente,
-cacao_accounting/printing/exceptions.py,PrintableDocumentNotRegisteredError,Parcial,Revisión parcial; faltan escenarios de riesgo aplicables
-cacao_accounting/printing/exceptions.py,TemplateValidationError,Pendiente,
-cacao_accounting/printing/models.py,[módulo],Pendiente,
-cacao_accounting/printing/models.py,PrintTemplate,Pendiente,
-cacao_accounting/printing/models.py,PrintTemplateVersion,Pendiente,
-cacao_accounting/printing/models.py,PrintJobLog,Pendiente,
-cacao_accounting/printing/models.py,PublicDocumentValidation,Pendiente,
+cacao_accounting/portal/templates/portal/base_portal.html,condicional Jinja [línea 16],Parcial,"Render HTTP /portal/customer 200; cuatro categorías flash y escape HTML verificados con SQLite. Macro heredado, modos/consumidores y casos de integración aún no cubiertos."
+cacao_accounting/portal/templates/portal/base_portal.html,bucle Jinja [línea 19],Parcial,"Render HTTP /portal/customer 200; cuatro categorías flash y escape HTML verificados con SQLite. Macro heredado, modos/consumidores y casos de integración aún no cubiertos."
+cacao_accounting/portal/templates/portal/base_portal.html,condicional Jinja [línea 21],Parcial,"Render HTTP /portal/customer 200; cuatro categorías flash y escape HTML verificados con SQLite. Macro heredado, modos/consumidores y casos de integración aún no cubiertos."
+cacao_accounting/portal/templates/portal/base_portal.html,condicional Jinja [línea 23],Parcial,"Render HTTP /portal/customer 200; cuatro categorías flash y escape HTML verificados con SQLite. Macro heredado, modos/consumidores y casos de integración aún no cubiertos."
+cacao_accounting/portal/templates/portal/base_portal.html,condicional Jinja [línea 25],Parcial,"Render HTTP /portal/customer 200; cuatro categorías flash y escape HTML verificados con SQLite. Macro heredado, modos/consumidores y casos de integración aún no cubiertos."
+cacao_accounting/portal/templates/portal/base_portal.html,bloque contenido,Parcial,"Render HTTP /portal/customer 200; cuatro categorías flash y escape HTML verificados con SQLite. Macro heredado, modos/consumidores y casos de integración aún no cubiertos."
+cacao_accounting/portal/templates/portal/customer_dashboard.html,bloque contenido,Parcial,"SQLite HTTP /portal/customer: 101 facturas producen 100 enlaces y badge 100 (#1564); consulta limita los cuatro listados. Validación de estados vacíos y enlaces detalle aún incompleta."
+cacao_accounting/portal/templates/portal/customer_dashboard.html,contenido: bucle Jinja [línea 31],Parcial,"SQLite HTTP /portal/customer: 101 facturas producen 100 enlaces y badge 100 (#1564); consulta limita los cuatro listados. Validación de estados vacíos y enlaces detalle aún incompleta."
+cacao_accounting/portal/templates/portal/customer_dashboard.html,"enlace de acción [línea 38, elemento 1]",Parcial,"SQLite HTTP /portal/customer: 101 facturas producen 100 enlaces y badge 100 (#1564); consulta limita los cuatro listados. Validación de estados vacíos y enlaces detalle aún incompleta."
+cacao_accounting/portal/templates/portal/customer_dashboard.html,contenido: bucle Jinja [línea 70],Parcial,"SQLite HTTP /portal/customer: 101 facturas producen 100 enlaces y badge 100 (#1564); consulta limita los cuatro listados. Validación de estados vacíos y enlaces detalle aún incompleta."
+cacao_accounting/portal/templates/portal/customer_dashboard.html,"enlace de acción [línea 77, elemento 2]",Parcial,"SQLite HTTP /portal/customer: 101 facturas producen 100 enlaces y badge 100 (#1564); consulta limita los cuatro listados. Validación de estados vacíos y enlaces detalle aún incompleta."
+cacao_accounting/portal/templates/portal/customer_dashboard.html,contenido: bucle Jinja [línea 109],Parcial,"SQLite HTTP /portal/customer: 101 facturas producen 100 enlaces y badge 100 (#1564); consulta limita los cuatro listados. Validación de estados vacíos y enlaces detalle aún incompleta."
+cacao_accounting/portal/templates/portal/customer_dashboard.html,"enlace de acción [línea 116, elemento 3]",Parcial,"SQLite HTTP /portal/customer: 101 facturas producen 100 enlaces y badge 100 (#1564); consulta limita los cuatro listados. Validación de estados vacíos y enlaces detalle aún incompleta."
+cacao_accounting/portal/templates/portal/customer_dashboard.html,contenido: bucle Jinja [línea 148],Parcial,"SQLite HTTP /portal/customer: 101 facturas producen 100 enlaces y badge 100 (#1564); consulta limita los cuatro listados. Validación de estados vacíos y enlaces detalle aún incompleta."
+cacao_accounting/portal/templates/portal/customer_dashboard.html,"enlace de acción [línea 155, elemento 4]",Parcial,"SQLite HTTP /portal/customer: 101 facturas producen 100 enlaces y badge 100 (#1564); consulta limita los cuatro listados. Validación de estados vacíos y enlaces detalle aún incompleta."
+cacao_accounting/portal/templates/portal/delivery_detail.html,bloque contenido,Parcial,"GET HTTP autenticado de delivery_detail con SQLite confirma batch_id interno en data-batch-no y omite Batch.batch_no (#1960). Role customer/supplier alterno, macro compartido y ramas de render aún sin cobertura completa."
+cacao_accounting/portal/templates/portal/delivery_detail.html,contenido: condicional Jinja [línea 9],Parcial,"GET HTTP autenticado de delivery_detail con SQLite confirma batch_id interno en data-batch-no y omite Batch.batch_no (#1960). Role customer/supplier alterno, macro compartido y ramas de render aún sin cobertura completa."
+cacao_accounting/portal/templates/portal/delivery_detail.html,"enlace de acción [línea 10, elemento 1]",Parcial,"GET HTTP autenticado de delivery_detail con SQLite confirma batch_id interno en data-batch-no y omite Batch.batch_no (#1960). Role customer/supplier alterno, macro compartido y ramas de render aún sin cobertura completa."
+cacao_accounting/portal/templates/portal/delivery_detail.html,"enlace de acción [línea 12, elemento 2]",Parcial,"GET HTTP autenticado de delivery_detail con SQLite confirma batch_id interno en data-batch-no y omite Batch.batch_no (#1960). Role customer/supplier alterno, macro compartido y ramas de render aún sin cobertura completa."
+cacao_accounting/portal/templates/portal/invoice_detail.html,bloque contenido,Parcial,"GET HTTP autenticado de factura portal confirma ID interno batch_id en data-batch-no y omite Batch.batch_no (#1960). Rama proveedor/labels y macro compartido requieren más validación."
+cacao_accounting/portal/templates/portal/invoice_detail.html,contenido: condicional Jinja [línea 9],Parcial,"GET HTTP autenticado de factura portal confirma ID interno batch_id en data-batch-no y omite Batch.batch_no (#1960). Rama proveedor/labels y macro compartido requieren más validación."
+cacao_accounting/portal/templates/portal/invoice_detail.html,"enlace de acción [línea 10, elemento 1]",Parcial,"GET HTTP autenticado de factura portal confirma ID interno batch_id en data-batch-no y omite Batch.batch_no (#1960). Rama proveedor/labels y macro compartido requieren más validación."
+cacao_accounting/portal/templates/portal/invoice_detail.html,"enlace de acción [línea 12, elemento 2]",Parcial,"GET HTTP autenticado de factura portal confirma ID interno batch_id en data-batch-no y omite Batch.batch_no (#1960). Rama proveedor/labels y macro compartido requieren más validación."
+cacao_accounting/portal/templates/portal/order_detail.html,bloque contenido,Parcial,"HTTP/SQLite real: rutas customer y supplier devuelven 200, breadcrumbs y labels correctos; no muestran línea vacía espuria. Sin defectos específicos encontrados; macro con líneas, print y ACL pendientes."
+cacao_accounting/portal/templates/portal/order_detail.html,contenido: condicional Jinja [línea 9],Parcial,"HTTP/SQLite real: rutas customer y supplier devuelven 200, breadcrumbs y labels correctos; no muestran línea vacía espuria. Sin defectos específicos encontrados; macro con líneas, print y ACL pendientes."
+cacao_accounting/portal/templates/portal/order_detail.html,"enlace de acción [línea 10, elemento 1]",Parcial,"HTTP/SQLite real: rutas customer y supplier devuelven 200, breadcrumbs y labels correctos; no muestran línea vacía espuria. Sin defectos específicos encontrados; macro con líneas, print y ACL pendientes."
+cacao_accounting/portal/templates/portal/order_detail.html,"enlace de acción [línea 12, elemento 2]",Parcial,"HTTP/SQLite real: rutas customer y supplier devuelven 200, breadcrumbs y labels correctos; no muestran línea vacía espuria. Sin defectos específicos encontrados; macro con líneas, print y ACL pendientes."
+cacao_accounting/portal/templates/portal/quotation_detail.html,bloque contenido,Parcial,"HTTP/SQLite real: rutas customer y supplier devuelven 200, breadcrumbs y labels correctos; no muestran línea vacía espuria. Sin defectos específicos encontrados; macro con líneas, print y ACL pendientes."
+cacao_accounting/portal/templates/portal/quotation_detail.html,contenido: condicional Jinja [línea 9],Parcial,"HTTP/SQLite real: rutas customer y supplier devuelven 200, breadcrumbs y labels correctos; no muestran línea vacía espuria. Sin defectos específicos encontrados; macro con líneas, print y ACL pendientes."
+cacao_accounting/portal/templates/portal/quotation_detail.html,"enlace de acción [línea 10, elemento 1]",Parcial,"HTTP/SQLite real: rutas customer y supplier devuelven 200, breadcrumbs y labels correctos; no muestran línea vacía espuria. Sin defectos específicos encontrados; macro con líneas, print y ACL pendientes."
+cacao_accounting/portal/templates/portal/quotation_detail.html,"enlace de acción [línea 12, elemento 2]",Parcial,"HTTP/SQLite real: rutas customer y supplier devuelven 200, breadcrumbs y labels correctos; no muestran línea vacía espuria. Sin defectos específicos encontrados; macro con líneas, print y ACL pendientes."
+cacao_accounting/portal/templates/portal/receipt_detail.html,bloque contenido,Parcial,"GET HTTP autenticado de proveedor confirma que `PurchaseReceiptItem.batch_id` se expone como ID en data-batch-no y omite Batch.batch_no (#1960). Escape/macro compartido y otras ramas quedan pendientes."
+cacao_accounting/portal/templates/portal/receipt_detail.html,contenido: condicional Jinja [línea 9],Parcial,"GET HTTP autenticado de proveedor confirma que `PurchaseReceiptItem.batch_id` se expone como ID en data-batch-no y omite Batch.batch_no (#1960). Escape/macro compartido y otras ramas quedan pendientes."
+cacao_accounting/portal/templates/portal/receipt_detail.html,"enlace de acción [línea 10, elemento 1]",Parcial,"GET HTTP autenticado de proveedor confirma que `PurchaseReceiptItem.batch_id` se expone como ID en data-batch-no y omite Batch.batch_no (#1960). Escape/macro compartido y otras ramas quedan pendientes."
+cacao_accounting/portal/templates/portal/receipt_detail.html,"enlace de acción [línea 12, elemento 2]",Parcial,"GET HTTP autenticado de proveedor confirma que `PurchaseReceiptItem.batch_id` se expone como ID en data-batch-no y omite Batch.batch_no (#1960). Escape/macro compartido y otras ramas quedan pendientes."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,bloque contenido,Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 31],Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 38, elemento 1]",Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 70],Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 77, elemento 2]",Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 109],Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 116, elemento 3]",Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 149],Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: condicional Jinja [línea 153],Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: condicional Jinja [línea 155],Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 165, elemento 4]",Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,contenido: bucle Jinja [línea 197],Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/portal/templates/portal/supplier_dashboard.html,"enlace de acción [línea 204, elemento 5]",Parcial,"HTTP/SQLite: 101 PurchaseInvoice aprobadas dan 100 filas y badge 100; ruta limita los cinco listados y la plantilla cuenta resultados truncados (#1564). Detalles y ramas de tipo siguen parciales."
+cacao_accounting/printing/__init__.py,[módulo],Parcial,"Integración SQLite efímera: init_printing registra 25 tipos y siembra 25 defaults; segunda llamada conserva 25 sin duplicados. Carrera del seed global cubierta por #2131; excepción SQLAlchemy silenciada aún requiere escenarios."
+cacao_accounting/printing/__init__.py,init_printing(),Parcial,"Integración SQLite efímera: init_printing registra 25 tipos y siembra 25 defaults; segunda llamada conserva 25 sin duplicados. Carrera del seed global cubierta por #2131; excepción SQLAlchemy silenciada aún requiere escenarios."
+cacao_accounting/printing/admin_routes.py,[módulo],Parcial,"Rutas de impresión reproducen bypass de guard con rol inexistente/inactivo (#1845 #1343); formulario vacío documentado en #1928. Operaciones aún tienen cobertura parcial."
+cacao_accounting/printing/admin_routes.py,list_templates(),Parcial,"GET HTTP SQLite actual permite usuario con asignación admin inactiva y con rol admin ausente (#1343 #1845); cuerpo vacío en UI por #1928."
+cacao_accounting/printing/admin_routes.py,validation_settings(),Parcial,"Guard común vulnerable a rol ausente/revocado (#1845 #1343); pantalla no renderiza por #1928 y URL externa sin validación en #2131."
+cacao_accounting/printing/admin_routes.py,create_template(),Parcial,"HTTP SQLite: segundo POST con mismo código responde 500 por unique (Refs #1929); formulario sin CSRF y cuerpo vacío (#1761 #1928); guard #1343 #1845."
+cacao_accounting/printing/admin_routes.py,edit_template(),Parcial,"Guard permite rol admin revocado o ausente (#1343 #1845); POST sin CSRF (#1761) y formulario vacío (#1928)."
+cacao_accounting/printing/admin_routes.py,duplicate_template(),Parcial,"Colisión del código fijo `_copy` reproducida en #1929; guard común #1343 #1845 e i18n pendiente #1932."
+cacao_accounting/printing/admin_routes.py,publish_template(),Parcial,"Validación de plantillas comparte bypass de validación documentado en #2131; guard admin #1343 #1845."
+cacao_accounting/printing/admin_routes.py,archive_template(),Parcial,"Acción POST comparte guard vulnerable a rol ausente/revocado (#1845 #1343); transición de archivo aún sin escenarios completos."
+cacao_accounting/printing/admin_routes.py,set_default_template(),Parcial,"Acción POST comparte guard vulnerable a rol ausente/revocado (#1845 #1343); consistencia del default aún con escenarios pendientes."
+cacao_accounting/printing/admin_routes.py,preview_template(),Parcial,"Preview administrativo comparte guard #1343 #1845; error visible sin traducir reportado en #1932."
+cacao_accounting/printing/admin_routes.py,template_versions(),Parcial,"Historial no visible en UI por #1931 y página vacía por #1928; guard común #1343 #1845."
+cacao_accounting/printing/admin_routes.py,_update_template_from_form(),Parcial,"Valida y revierte ante TemplateValidationError/SQLAlchemyError; guarda snapshot antes de mutar. Papel/orientación persistidos pero no consumidos (#1930); publicación sigue expuesta a brechas de validación (#2131)."
+cacao_accounting/printing/admin_routes.py,_render_form(),Parcial,"Carga catálogos y schemas por document_type; el HTML hijo no se inserta por mismatch de bloque en #1928. Alcance de catálogos y ramas de edición quedan sin render funcional."
+cacao_accounting/printing/admin_routes.py,_bank_account_options(),Parcial,"JOIN BankAccount/Bank lista opciones para panel admin; no filtra compañía porque el guard es global. Visibilidad y selección por cuenta quedan pendientes de verificar con banco inactivo/huérfano."
+cacao_accounting/printing/admin_routes.py,_form_bank_account_id(),Parcial,"Rechaza cuenta inexistente y mismatch cuando hay compañía efectiva; con plantilla global no compara compañía del banco. Política de cuenta bancaria en formato global requiere confirmar."
+cacao_accounting/printing/admin_routes.py,_get_template(),Parcial,"Carga por ID y responde 404 ante ausencia; alcance global depende del guard admin que falla para asignaciones revocadas o rol inexistente (#1343 #1845)."
+cacao_accounting/printing/admin_routes.py,_clear_default(),Parcial,"UPDATE acota por compañía, tipo y cuenta bancaria exactos antes de marcar default; concurrencia y defaults NULL sin constraint requieren revisión adicional (#2131)."
+cacao_accounting/printing/admin_routes.py,_copy_code(),Parcial,"Devuelve sufijo fijo `_copy`; segunda duplicación del mismo origen choca con unique y da HTTP 500 (#1929)."
+cacao_accounting/printing/admin_routes.py,_current_user_id(),Parcial,"Normaliza current_user.id a str para auditoría; callers administrativos son login_required. Casos de ID ausente/anonymous quedan protegidos por la ruta y no se probaron por separado."
+cacao_accounting/printing/admin_routes.py,_require_print_admin(),Parcial,"HTTP GET a lista reproduce que el guard acepta rol admin inexistente o asignación inactiva (#1845 #1343)."
+cacao_accounting/printing/admin_routes.py,_is_print_admin(),Parcial,"HTTP GET actual a lista: rol admin ausente y RolesUser.active=False reciben 200 (#1845 #1343)."
+cacao_accounting/printing/context.py,[módulo],Parcial,"51 símbolos inventariados; revisados helpers de idioma/contexto base e builders de muestra de factura, persisten builders y esquemas pendientes."
+cacao_accounting/printing/context.py,_resolve_lang(),Parcial,"Override de idioma y fallback a locale verificados estáticamente; faltan límites de opciones/locale y consumidores."
+cacao_accounting/printing/context.py,build_common_context(),Parcial,"Entity se busca por código de compañía y fallback vacío; falta validar unicidad, multiempresa y datos nulos en ejecución."
+cacao_accounting/printing/context.py,build_journal_entry_print_context(),Parcial,"Revisado estáticamente: carga asiento, líneas y cuentas por compañía; faltan pruebas de cancelación, saldos y datos incompletos."
+cacao_accounting/printing/context.py,build_sales_invoice_print_context(),Parcial,"Delegación modelo/FK/raíz customer revisada; faltan escenarios runtime y validación del orden de partidas."
+cacao_accounting/printing/context.py,build_purchase_invoice_print_context(),Parcial,"Delegación modelo/FK/raíz supplier revisada; faltan escenarios runtime y validación del orden de partidas."
+cacao_accounting/printing/context.py,build_purchase_order_print_context(),Parcial,"Delegación modelo/FK/raíz revisada; faltan escenarios runtime y validación del orden de partidas."
+cacao_accounting/printing/context.py,build_delivery_note_print_context(),Parcial,"Delegación DeliveryNote/FK delivery_note_id/raíz receipt revisada; faltan escenarios runtime y orden estable de líneas."
+cacao_accounting/printing/context.py,build_stock_entry_print_context(),Parcial,"Delegación modelo/FK/raíz adjustment revisada; faltan escenarios runtime e invariantes de inventario."
+cacao_accounting/printing/context.py,build_quotation_print_context(),Parcial,"Delegación SalesQuotation/FK/raíz quote revisada; faltan escenarios runtime y orden estable de líneas."
+cacao_accounting/printing/context.py,build_sales_order_print_context(),Parcial,"Delegación modelo/FK/raíz revisada; faltan escenarios runtime y trazabilidad de líneas."
+cacao_accounting/printing/context.py,build_sales_request_print_context(),Parcial,"Delegación modelo/FK/raíz revisada; faltan escenarios runtime y orden estable de líneas."
+cacao_accounting/printing/context.py,build_purchase_request_print_context(),Parcial,"Delegación modelo/FK/raíz revisada; faltan escenarios runtime y orden estable de líneas."
+cacao_accounting/printing/context.py,build_supplier_quotation_print_context(),Parcial,"Delegación modelo/FK/raíz revisada; faltan escenarios runtime y orden estable de líneas."
+cacao_accounting/printing/context.py,build_request_for_quotation_print_context(),Parcial,"Delegación modelo/FK/raíz revisada; faltan escenarios runtime y orden estable de líneas."
+cacao_accounting/printing/context.py,build_purchase_receipt_print_context(),Parcial,"Delegación modelo/FK/raíz revisada; faltan escenarios runtime y verificación de cantidades/lotes."
+cacao_accounting/printing/context.py,build_landed_cost_print_context(),Parcial,"Delegación modelo/FK/raíz revisada; faltan escenarios runtime y reconciliación de asignaciones."
+cacao_accounting/printing/context.py,build_check_print_context(),Parcial,"Revisados locale, cuenta/chequera, monto en letras y referencias; la consulta de referencias no tiene orden (#2177); falta prueba persistida."
+cacao_accounting/printing/context.py,build_check_sample_context(),Parcial,"Sample ejecutado vía registry; raíz check y mes/importe en palabras dependen de locale; faltan variantes y contrato completo del schema."
+cacao_accounting/printing/context.py,build_payment_entry_print_context(),Parcial,"Mapea pago y referencias de asignación; consulta sin ORDER BY (#2177); faltan pruebas de multi-moneda y reversas."
+cacao_accounting/printing/context.py,build_withholding_certificate_print_context(),Parcial,"Mapea certificado inmutable y líneas JSON vía withholding_service; faltan datos corruptos, compañía y estado cancelado en runtime."
+cacao_accounting/printing/context.py,build_withholding_certificate_sample_context(),Parcial,"Sample ejecutado; raíz y líneas coinciden estructuralmente; faltan validación del schema y variantes de idioma."
+cacao_accounting/printing/context.py,build_exchange_revaluation_print_context(),Parcial,"Mapea corrida y diferencias; items sin ORDER BY (#2177); falta reconciliar muestra con ledger persistido."
+cacao_accounting/printing/context.py,build_journal_entry_sample_context(),Parcial,"Sample ejecutado; débitos/créditos de ejemplo balancean; faltan validación de schema y casos multi-libro/moneda."
+cacao_accounting/printing/context.py,build_sales_invoice_sample_context(),Parcial,"Repro en .venv: registry asigna este sample a purchase_invoice/credit_note/debit_note; devuelve customer Example Customer y FAC-2026-00001 (#1844)."
+cacao_accounting/printing/context.py,build_purchase_order_sample_context(),Parcial,"Sample ejecutado: raíz supplier, pero usa datos de cliente CUST-001/buyer@example.com (#1844)."
+cacao_accounting/printing/context.py,build_delivery_note_sample_context(),Parcial,"Sample ejecutado; raíz receipt y party customer coinciden con definición; faltan prueba de schema y casos de devolución."
+cacao_accounting/printing/context.py,build_sales_order_sample_context(),Parcial,"Sample ejecutado; raíz customer coincide con definición; faltan validación de schema y escenarios parciales."
+cacao_accounting/printing/context.py,build_sales_request_sample_context(),Parcial,"Sample ejecutado; raíz customer coincide con definición; faltan validación de schema y escenarios parciales."
+cacao_accounting/printing/context.py,build_purchase_request_sample_context(),Parcial,"Sample ejecutado: raíz supplier, pero usa datos de cliente CUST-001/buyer@example.com (#1844)."
+cacao_accounting/printing/context.py,build_supplier_quotation_sample_context(),Parcial,"Sample ejecutado: raíz supplier, pero usa datos de cliente CUST-001/buyer@example.com (#1844)."
+cacao_accounting/printing/context.py,build_request_for_quotation_sample_context(),Parcial,"Sample ejecutado: raíz supplier, pero usa datos de cliente CUST-001/buyer@example.com (#1844)."
+cacao_accounting/printing/context.py,build_purchase_receipt_sample_context(),Parcial,"Sample ejecutado: raíz supplier, pero usa datos de cliente CUST-001/buyer@example.com (#1844)."
+cacao_accounting/printing/context.py,build_landed_cost_sample_context(),Parcial,"Sample ejecutado; estructura raíz y líneas retornan correctamente; faltan correspondencia con asignaciones/costos reales."
+cacao_accounting/printing/context.py,build_payment_entry_sample_context(),Parcial,"Sample ejecutado; raíz payment coincide con definición; faltan escenarios de pagos parciales, moneda y signos."
+cacao_accounting/printing/context.py,build_stock_entry_sample_context(),Parcial,"Sample ejecutado; raíz adjustment coincide con definición; faltan cantidades base, bodega, lote y serial."
+cacao_accounting/printing/context.py,build_exchange_revaluation_sample_context(),Parcial,"Sample ejecutado; raíz, tasas y totales devueltos; falta contrastar importes con redondeo y libro destino."
+cacao_accounting/printing/context.py,build_quotation_sample_context(),Parcial,"Sample ejecutado; raíz quote/customer coincide con definición; faltan escenarios de descuento e impuestos."
+cacao_accounting/printing/context.py,_build_invoice_context(),Parcial,"Revisado helper común: agrega tercero al contexto base; faltan pruebas para nombres/tax_id ausentes y relaciones."
+cacao_accounting/printing/context.py,_build_line_document_context(),Parcial,"Consulta líneas sin ORDER BY; numera con orden incidental y modelos carecen de ordinal común (#2177). Falta cobertura runtime."
+cacao_accounting/printing/context.py,_line_context(),Parcial,"Mapeo de cantidades/importes revisado; fallback de campos y precisión decimal requieren escenarios runtime."
+cacao_accounting/printing/context.py,_sample_common_context(),Parcial,"Contexto común inspeccionado y ejecutado por builders; datos de compañía y timestamps son fijos de ejemplo, faltan contrato de schema/locale."
+cacao_accounting/printing/context.py,_sample_party(),Parcial,"Reproduce datos de cliente CUST-001/buyer@example.com aun cuando se usa bajo supplier en muestras de compra (#1844)."
+cacao_accounting/printing/context.py,_sample_line(),Parcial,"Estructura ejecutada y coincide en nombres con LINE_SCHEMA; faltan escenarios de valores límite y redondeo."
+cacao_accounting/printing/context.py,_first_attr(),Parcial,"Probé atributos ausentes, None, vacío y cero: omite los dos primeros y conserva 0; faltan propiedades con excepción/atributos dinámicos."
+cacao_accounting/printing/context.py,_text(),Parcial,"Probé objeto/None y fallback; valor falsy retorna fallback; falta decidir contrato para texto numérico cero."
+cacao_accounting/printing/context.py,_number(),Parcial,"Probé Decimal exacto, None, entrada inválida, NaN e Infinity: conserva Decimal finito y devuelve cero en no finitos/errores."
+cacao_accounting/printing/context.py,_date_text(),Parcial,"Probé date, datetime con zona y texto no ISO; normaliza a fecha YYYY-MM-DD o conserva texto sin validar."
+cacao_accounting/printing/context.py,_document_number(),Parcial,"Probé fallback document_no → name → id; faltan documentos con propiedades que lanzan excepción."
+cacao_accounting/printing/context.py,_document_status(),Parcial,"Probé cancelado, posted y draft; docstatus=2 prevalece sobre status posted; faltan estados anómalos y reversas."
+cacao_accounting/printing/context.py,_user_name(),Parcial,"Probé None y objeto autenticado con user/id; falta verificar tipos de usuario anónimo y wrappers reales de Flask-Login."
+cacao_accounting/printing/exceptions.py,[módulo],Parcial,"Jerarquía de errores y usos inspeccionados; la excepción para tipo no registrado permanece sin consumidor (#1925)."
+cacao_accounting/printing/exceptions.py,PrintingError,Parcial,"Base común capturada por rutas públicas/admin; seguridad de mensajes heredada por _safe_for_display; falta probar normalización de errores."
+cacao_accounting/printing/exceptions.py,PrintTemplateNotFoundError,Parcial,"Usada para plantilla ausente, no disponible o no publicada; rutas capturan la base; faltan respuestas HTTP por cada caso."
+cacao_accounting/printing/exceptions.py,PrintPermissionError,Parcial,"Usada en autorización de documento/compañía; rutas capturan PrintingError; faltan escenarios HTTP multiempresa/portal."
+cacao_accounting/printing/exceptions.py,PrintableDocumentNotRegisteredError,Parcial,"Sin consumidores fuera de la declaración en HEAD 7dda7530; issue y respuesta 500 existentes (#1925)."
+cacao_accounting/printing/exceptions.py,TemplateValidationError,Parcial,"Usada en validación de plantilla y formulario de cuenta bancaria; faltan casos de mensajes/excepciones en rutas."
+cacao_accounting/printing/models.py,[módulo],Parcial,"Modelos de plantillas, versiones, logs y validación pública inspeccionados; brechas de unicidad global y validación ya están en #2131."
+cacao_accounting/printing/models.py,PrintTemplate,Parcial,"Unique(company_code,document_type,code) permite duplicados con company_code NULL; cubierto en #2131. Sin validar constraints en todos motores."
+cacao_accounting/printing/models.py,PrintTemplateVersion,Parcial,"Historial sin Unique(template_id,version); visibilidad del historial pendiente de decisión confirmada (#1931); concurrencia de actualizaciones sin acreditar."
+cacao_accounting/printing/models.py,PrintJobLog,Parcial,"Campos obligatorios y FKs de compañía/usuario inspeccionados; faltan política de retención, acceso al historial y escenarios de fallo de commit."
+cacao_accounting/printing/models.py,PublicDocumentValidation,Parcial,"Token único pero sin unique compuesto de documento/compañía; carrera SELECT-INSERT reportada en #2131."
 cacao_accounting/printing/registry.py,[módulo],Parcial,registry: 25 tipos con snippets; #1844 usa builder de venta en compras; faltan pruebas
 cacao_accounting/printing/registry.py,PrintableDocumentDefinition,Parcial,TypedDict del contrato; campos usados por service y admin; sin validación en runtime
 cacao_accounting/printing/registry.py,register_printable_document(),Parcial,Sobrescribe en silencio el mismo tipo; sin guardas ni normalización
@@ -7296,17 +7296,17 @@ cacao_accounting/printing/registry.py,get_printable_document(),Parcial,Lookup di
 cacao_accounting/printing/registry.py,list_printable_documents(),Parcial,Ordena por tipo y resuelve LazyText al listar; usado por admin; sin pruebas
 cacao_accounting/printing/registry.py,init_printing_registry(),Parcial,Limpia y re-registra 25 tipos; concurrencia con seed sin protección; sin pruebas
 cacao_accounting/printing/registry.py,_register(),Parcial,Construye el dict del contrato; comparte la misma lista de snippets; sin validación
-cacao_accounting/printing/routes.py,[módulo],Pendiente,
-cacao_accounting/printing/routes.py,validate_document(),Pendiente,
-cacao_accounting/printing/routes.py,preview_document(),Parcial,Falta validar otros callers y compañía
-cacao_accounting/printing/routes.py,document_pdf(),Parcial,Falta validar otros callers y compañía
-cacao_accounting/printing/routes.py,_current_company(),Pendiente,
+cacao_accounting/printing/routes.py,[módulo],Parcial,"Handlers públicos y selección de compañía inspeccionados; tipo no registrado devuelve 500 (#1925), selección de formato de cheque y fallback de compañía tienen issues (#1342/#1770)."
+cacao_accounting/printing/routes.py,validate_document(),Parcial,"Delegación a ValidationService revisada; trust/hash de validación y unicidad del token/documento requieren escenarios ampliados (#2131)."
+cacao_accounting/printing/routes.py,preview_document(),Parcial,"Handler captura PrintingError; ValueError por tipo no registrado escapa y produce 500 (#1925); template_id de otra cuenta de cheque aceptado (#1342)."
+cacao_accounting/printing/routes.py,document_pdf(),Parcial,"Handler captura PrintingError; tipo no registrado escapa como 500 (#1925); template_id de otra cuenta de cheque aceptado (#1342)."
+cacao_accounting/printing/routes.py,_current_company(),Parcial,"Cloud prioriza user.company y fallback status=""default"" sin orden; divergencia frente a Entity.default documentada (#1770)."
 cacao_accounting/printing/routes.py,_safe_return_url(),Parcial,Guard revisado; faltan escenarios de redirección; #1923
-cacao_accounting/printing/seed.py,[módulo],Pendiente,
-cacao_accounting/printing/seed.py,_get_base_locale(),Pendiente,
-cacao_accounting/printing/seed.py,seed_print_templates(),Pendiente,
-cacao_accounting/printing/seed.py,_seed_print_templates_internal(),Pendiente,
-cacao_accounting/printing/seed.py,_ensure_system_template(),Pendiente,
+cacao_accounting/printing/seed.py,[módulo],Parcial,"Siembra, templates base y manejo de locale revisados; race/atomicidad #2131, literales sin gettext #1932 y papel/orientación no aplicados #1930."
+cacao_accounting/printing/seed.py,_get_base_locale(),Parcial,"Obtiene locale base y fallback es ante cualquier excepción; falta probar instalación con setup inaccesible y fallas de BD."
+cacao_accounting/printing/seed.py,seed_print_templates(),Parcial,"Inicializa registry y repite toda la siembra ante cualquier Exception, aun tras commits parciales; race global #2131 y literales visibles #1932."
+cacao_accounting/printing/seed.py,_seed_print_templates_internal(),Parcial,"Recorre registry secuencialmente; cada plantilla confirma por separado dentro del helper, dejando estados parciales ante interrupción (#2131)."
+cacao_accounting/printing/seed.py,_ensure_system_template(),Parcial,"Busca código+company=NULL, actualiza solo versiones menores y persiste por plantilla; colisión global NULL/race #2131; CSS fijo y labels #1930/#1932."
 cacao_accounting/printing/service.py,[módulo],Parcial,service: orquesta render y validación; riesgo XSS por plantilla y CSS (#1563); sin tests
 cacao_accounting/printing/service.py,TemplateValidationResult,Parcial,Dataclass sin consumidores en todo el repo; candidato dead code #1841
 cacao_accounting/printing/service.py,PrintService,Parcial,Sandbox Jinja con StrictUndefined y autoescape; filtros frágiles; sin tests
@@ -7342,51 +7342,51 @@ cacao_accounting/printing/settings.py,_get_config_value(),Parcial,scalar_one_or_
 cacao_accounting/printing/settings.py,_set_config_value(),Parcial,SELECT-INSERT no atómico; sin lock ni constraint único (#1697)
 cacao_accounting/printing/snippets.py,[módulo],Parcial,snippets: tres snippets compartidos; textos en inglés sin gettext (#1932)
 cacao_accounting/printing/snippets.py,get_common_snippets(),Parcial,Copia superficial; Audit Footer aplica datetime a printed_at string y rompe render
-cacao_accounting/printing/templates/admin/print_template_form.html,bloque content,Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 6],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,"formulario [línea 9, elemento 1]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 31],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: bucle Jinja [línea 32],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 33],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 39],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 47],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: bucle Jinja [línea 49],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 50],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: bucle Jinja [línea 58],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 59],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 69],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 70],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 78],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 79],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 84],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,"acción HTML [línea 91, elemento 2]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 94],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_form.html,"enlace de acción [línea 95, elemento 3]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,bloque content,Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"enlace de acción [línea 8, elemento 1]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"enlace de acción [línea 11, elemento 2]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,content: bucle Jinja [línea 35],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 42] (ocurrencia 1),Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 42] (ocurrencia 2),Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"enlace de acción [línea 51, elemento 3]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 54],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"enlace de acción [línea 55, elemento 4]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"formulario [línea 59, elemento 5]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"acción HTML [línea 61, elemento 6]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 65],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"formulario [línea 66, elemento 7]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"acción HTML [línea 68, elemento 8]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 73],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"formulario [línea 74, elemento 9]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"acción HTML [línea 76, elemento 10]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 81],Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"formulario [línea 82, elemento 11]",Pendiente,
-cacao_accounting/printing/templates/admin/print_template_list.html,"acción HTML [línea 84, elemento 12]",Pendiente,
-cacao_accounting/printing/templates/admin/print_validation_settings.html,bloque content,Pendiente,
-cacao_accounting/printing/templates/admin/print_validation_settings.html,"enlace de acción [línea 7, elemento 1]",Pendiente,
-cacao_accounting/printing/templates/admin/print_validation_settings.html,"formulario [línea 14, elemento 2]",Pendiente,
-cacao_accounting/printing/templates/admin/print_validation_settings.html,content: condicional Jinja [línea 22],Pendiente,
-cacao_accounting/printing/templates/admin/print_validation_settings.html,"acción HTML [línea 44, elemento 3]",Pendiente,
+cacao_accounting/printing/templates/admin/print_template_form.html,bloque content,Parcial,"El bloque no coincide con base.html (contenido); HTTP 200 omite cuerpo y controles (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 6],Parcial,"La vista condicional editar/nuevo está dentro del bloque invisible (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,"formulario [línea 9, elemento 1]",Parcial,"Form POST está dentro del bloque invisible (#1928) y carece de token CSRF (#1761)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 31],Parcial,"El selector de tipo se renderiza condicionalmente, pero todo el bloque queda omitido (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: bucle Jinja [línea 32],Parcial,"Opciones de tipo dependen de doc_types; bloque no se renderiza (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 33],Parcial,"Deshabilitado en edición; control no visible por mismatch de bloque (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 39],Parcial,"Condición de plantilla en campo code; rama no visible por mismatch (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 47],Parcial,"Selección global/compañía invisible por mismatch de bloque (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: bucle Jinja [línea 49],Parcial,"Lista de compañías invisible junto al bloque no renderizado (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 50],Parcial,"Selección de compañía en edición no renderiza (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: bucle Jinja [línea 58],Parcial,"Opciones de cuenta bancaria no renderizan (#1928); el scope cuenta/compañía tiene casos no resolubles (#1342)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 59],Parcial,"Selección de cuenta bancaria queda oculta por mismatch (#1928); relación con papel documentada en #1342."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 69],Parcial,"Selector de tamaño no renderiza (#1928); propiedad configurada no afecta PDF (#1930)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 70],Parcial,"Opción letter/A4 no renderiza (#1928); tamaño almacenado no aplicado al PDF (#1930)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 78],Parcial,"Selector de orientación no renderiza (#1928); propiedad configurada no afecta PDF (#1930)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 79],Parcial,"Opción portrait/landscape no renderiza (#1928); orientación no aplicada (#1930)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 84],Parcial,"Nota de cambio y versión solo aparecen en edición; el bloque no renderiza (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,"acción HTML [línea 91, elemento 2]",Parcial,"Botón POST está oculto por mismatch; además sin CSRF (#1928/#1761)."
+cacao_accounting/printing/templates/admin/print_template_form.html,content: condicional Jinja [línea 94],Parcial,"Vista previa condicional en edición no renderiza (#1928)."
+cacao_accounting/printing/templates/admin/print_template_form.html,"enlace de acción [línea 95, elemento 3]",Parcial,"Enlace preview existe en edición, pero el bloque padre se omite (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,bloque content,Parcial,"El bloque no coincide con base.html (contenido); el GET real devuelve 200 sin encabezado/listado (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"enlace de acción [línea 8, elemento 1]",Parcial,"Enlace a configuración queda oculto por mismatch; ruta no aparece en la UI (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"enlace de acción [línea 11, elemento 2]",Parcial,"Enlace Nuevo formato no aparece en HTML real (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,content: bucle Jinja [línea 35],Parcial,"Iteración de plantillas queda omitida; se confirmó respuesta sin filas/encabezado (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 42] (ocurrencia 1),Parcial,"Condición de estado dentro de bloque no renderizado (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 42] (ocurrencia 2),Parcial,"Badge de estado dentro de bloque omitido; estado/document_type además no usan traducción (#1928/#1932)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"enlace de acción [línea 51, elemento 3]",Parcial,"Enlace de preview no es visible debido al bloque omitido (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 54],Parcial,"Rama de edición condicional no renderiza (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"enlace de acción [línea 55, elemento 4]",Parcial,"Enlace de edición no aparece mientras el bloque coincide mal (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"formulario [línea 59, elemento 5]",Parcial,"Formulario de duplicación incluye csrf_token, pero UI completa queda omitida (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"acción HTML [línea 61, elemento 6]",Parcial,"Acción duplicar no visible porque no renderiza el bloque padre (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 65],Parcial,"Rama de publicación está oculta con el listado (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"formulario [línea 66, elemento 7]",Parcial,"Formulario publicar incluye csrf_token, pero no se muestra por mismatch (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"acción HTML [línea 68, elemento 8]",Parcial,"Acción publicar no aparece en HTML del listado (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 73],Parcial,"Condición de predeterminada no renderiza (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"formulario [línea 74, elemento 9]",Parcial,"Formulario para default incluye CSRF, pero el bloque no llega al HTML (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"acción HTML [línea 76, elemento 10]",Parcial,"Acción set-default queda invisible por mismatch (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,content: condicional Jinja [línea 81],Parcial,"Condición de archivado dentro del bloque omitido (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"formulario [línea 82, elemento 11]",Parcial,"Formulario archivar incluye CSRF; inaccesible desde listado renderizado (#1928)."
+cacao_accounting/printing/templates/admin/print_template_list.html,"acción HTML [línea 84, elemento 12]",Parcial,"Acción archivar no aparece en el cuerpo HTTP (#1928)."
+cacao_accounting/printing/templates/admin/print_validation_settings.html,bloque content,Parcial,"Mismo bloque content/contenido; GET real da HTTP 200 sin el formulario de settings (#1928)."
+cacao_accounting/printing/templates/admin/print_validation_settings.html,"enlace de acción [línea 7, elemento 1]",Parcial,"Link de regreso está dentro del bloque invisible; no aparece en respuesta (#1928)."
+cacao_accounting/printing/templates/admin/print_validation_settings.html,"formulario [línea 14, elemento 2]",Parcial,"Incluye csrf_token; sin embargo el bloque padre no se renderiza (#1928); URL base requiere validación server-side (#2131)."
+cacao_accounting/printing/templates/admin/print_validation_settings.html,content: condicional Jinja [línea 22],Parcial,"Checkbox checked depende de validation_enabled, pero el control no llega al HTML (#1928)."
+cacao_accounting/printing/templates/admin/print_validation_settings.html,"acción HTML [línea 44, elemento 3]",Parcial,"Botón Guardar configuración no visible en HTTP 200 actual (#1928)."
 cacao_accounting/printing/validation.py,[módulo],Parcial,validation: validación QR pública con hashing canónico; sin pruebas dedicadas del módulo
 cacao_accounting/printing/validation.py,PublicValidationView,Parcial,Vista pública segura; total Decimal y fecha cruda; usada por route y template
 cacao_accounting/printing/validation.py,generate_validation_token(),Parcial,secrets.token_urlsafe(32); token público impredecible
@@ -7411,25 +7411,25 @@ cacao_accounting/printing/validation.py,_as_decimal(),Parcial,Convierte sin floa
 cacao_accounting/printing/validators.py,[módulo],Parcial,validators: validadores de plantilla y CSS; allowlist insuficiente y escaneo de la fuente
 cacao_accounting/printing/validators.py,validate_template_security(),Parcial,Escanea fuente no salida; bypass con {{''}}; permite iframe/object/javascript:/on*
 cacao_accounting/printing/validators.py,validate_css_safety(),Parcial,Solo bloquea expression(); permite cierre style y urls/@import (#1563/#1344)
-cacao_accounting/query_tools/__init__.py,[módulo],Pendiente,
-cacao_accounting/query_tools/audit.py,[módulo],Pendiente,
-cacao_accounting/query_tools/audit.py,_serialize_value(),Pendiente,
-cacao_accounting/query_tools/audit.py,serialize_parameters(),Parcial,Sanitización cotejada; faltan diccionarios en listas
-cacao_accounting/query_tools/audit.py,log_query_tool_event(),Parcial,Sin caller local; falta contrato externo; #1658
-cacao_accounting/query_tools/bootstrap.py,[módulo],Pendiente,
-cacao_accounting/query_tools/bootstrap.py,load_query_tools(),Pendiente,
+cacao_accounting/query_tools/__init__.py,[módulo],Parcial,"Los 15 nombres de __all__ importan y resuelven en .venv; PaginatedResult expone borde page_size=0 (#1904) y la API pública conserva contrato de fechas/rangos pendiente (#1969)."
+cacao_accounting/query_tools/audit.py,[módulo],Parcial,"Auditoría query tool revisada; la sanitización omite secretos en listas anidadas (#2178); logger sin caller local (#1658)."
+cacao_accounting/query_tools/audit.py,_serialize_value(),Parcial,"Serializa Decimal/datetime; retorna listas sin recorrer, permitiendo claves sensibles anidadas sin redacción (#2178)."
+cacao_accounting/query_tools/audit.py,serialize_parameters(),Parcial,"Dicts recursivos redacted; listas de dicts preservan api_key/password/token y llegan a after_json (#2178)."
+cacao_accounting/query_tools/audit.py,log_query_tool_event(),Parcial,"Construye AuditTrail.after_json con serialize_parameters; sin callers locales; la fuga de listas es latente (#2178; contexto #1658)."
+cacao_accounting/query_tools/bootstrap.py,[módulo],Parcial,"Bootstrap carga 13 módulos y 69 handlers si se invoca; sin callers locales fuera del re-export, consumidor API externo pendiente (#1658)."
+cacao_accounting/query_tools/bootstrap.py,load_query_tools(),Parcial,"Importación explícita registra 69 herramientas; repetir queda estable por cache de imports; ninguna llamada local encontrada (#1658)."
 cacao_accounting/query_tools/context.py,[módulo],Parcial,"QueryContext, compañías y permisos cotejados; falta revisar límites; #1338"
 cacao_accounting/query_tools/context.py,QueryContext,Parcial,"Campos, defaults, compañías y permisos cotejados; falta límite externo; #1338"
-cacao_accounting/query_tools/decorators.py,[módulo],Pendiente,
-cacao_accounting/query_tools/decorators.py,QueryTool,Parcial,Faltan adaptadores y contrato externo
-cacao_accounting/query_tools/decorators.py,_validate_read_only(),Parcial,Faltan adaptadores y contrato externo
-cacao_accounting/query_tools/decorators.py,query_tool(),Parcial,Revisión individual documentada; faltan comprobaciones
-cacao_accounting/query_tools/decorators.py,query_tool.wrapper(),Pendiente,
-cacao_accounting/query_tools/errors.py,[módulo],Pendiente,
-cacao_accounting/query_tools/errors.py,ErrorCode,Parcial,Falta validar contrato de transporte y diagnóstico
-cacao_accounting/query_tools/errors.py,QueryToolError,Parcial,Falta validar contrato de transporte y diagnóstico
-cacao_accounting/query_tools/errors.py,QueryToolError.__str__(),Pendiente,
-cacao_accounting/query_tools/errors.py,QueryToolError.to_dict(),Pendiente,
+cacao_accounting/query_tools/decorators.py,[módulo],Parcial,"Decorator y descriptor revisados; shared mutable response schema y mutación cruzada reproducidos (#2179)."
+cacao_accounting/query_tools/decorators.py,QueryTool,Parcial,"frozen=True no inmoviliza sus dicts; response_schema global se comparte entre tools y muta otros contratos (#2179)."
+cacao_accounting/query_tools/decorators.py,_validate_read_only(),Parcial,"Valida metadato read_only; el decorator lo fija siempre en True y los handlers revisados no contienen escrituras; contrato externo pendiente."
+cacao_accounting/query_tools/decorators.py,query_tool(),Parcial,"Configura schemas y registra descriptors; conserva referencias a dicts mutables, reproducido en #2179; validación de parámetros queda fuera del decorator."
+cacao_accounting/query_tools/decorators.py,query_tool.wrapper(),Parcial,"Wrapper crea y registra descriptor, no envuelve callable; schemas por referencia comparten mutaciones (#2179); falta contrato del consumidor externo."
+cacao_accounting/query_tools/errors.py,[módulo],Parcial,"Errores de query tools inspeccionados; contrato de serialización/consumidor externo no está definido en esta capa."
+cacao_accounting/query_tools/errors.py,ErrorCode,Parcial,"Códigos y usos locales cotejados; varios están disponibles para handlers/plugins externos; falta contrato de transporte/API."
+cacao_accounting/query_tools/errors.py,QueryToolError,Parcial,"Probé error code/message/request_id/details; clase marca mensaje safe-for-display, pero no hay contrato de exposición/diagnóstico."
+cacao_accounting/query_tools/errors.py,QueryToolError.__str__(),Parcial,"Probado: produce [code] + mensaje; exposición del texto depende del consumidor externo y falta validar su sanitización."
+cacao_accounting/query_tools/errors.py,QueryToolError.to_dict(),Parcial,"Probado: serializa code/message y request_id; omite details (incluido detalle sensible), falta contrato externo de respuesta."
 cacao_accounting/query_tools/handlers/__init__.py,[módulo],Completo,Marcador de paquete y consumidores verificados
 cacao_accounting/query_tools/handlers/accounting.py,[módulo],Pendiente,
 cacao_accounting/query_tools/handlers/accounting.py,list_accounting_periods(),Parcial,Permisos y filtros cotejados; falta contrato de adaptadores
