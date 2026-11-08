@@ -177,7 +177,6 @@ from cacao_accounting.compras.services import (
     _validate_supplier_quotation_origin,
     _supplier_quotation_selected_company,
     _purchase_quotation_selected_company,
-    _supplier_quotation_supplier_choices,
     _supplier_quotation_catalogs,
     _supplier_quotation_transaction_config,
     _supplier_quotation_initial_source_type,
@@ -190,13 +189,11 @@ from cacao_accounting.compras.services import (
     _build_purchase_order_transaction_config,
     _purchase_order_source_type,
     _purchase_order_selected_company,
-    _purchase_order_supplier_choices,
     _purchase_order_catalogs,
     _purchase_order_transaction_config,
     _create_purchase_order_from_request,
     _update_purchase_order_from_request,
     _purchase_quotation_origin_id,
-    _purchase_quotation_supplier_choices,
     _purchase_quotation_catalogs,
     _purchase_quotation_transaction_config,
     _create_purchase_quotation_from_request,
@@ -209,7 +206,6 @@ from cacao_accounting.compras.services import (
     _validate_invoice_quantities_against_receipt,
     _validate_invoice_requires_supplier_link,
     _purchase_invoice_selected_company,
-    _purchase_invoice_supplier_choices,
     _purchase_invoice_source_ids,
     _purchase_invoice_document_type,
     _purchase_invoice_sources,
@@ -735,7 +731,6 @@ def compras_cotizacion_proveedor_nueva():
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = _supplier_quotation_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("supplier_quotation", selected_company)
-    formulario.supplier_id.choices = _supplier_quotation_supplier_choices()
     if request.method == "POST":
         response = _create_supplier_quotation_from_request()
         if response is not None:
@@ -824,7 +819,6 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("supplier_quotation", selected_company)
-    formulario.supplier_id.choices = _supplier_quotation_supplier_choices()
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
 
     if request.method == "POST":
@@ -1897,9 +1891,6 @@ def compras_orden_compra_nuevo():
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
     formulario.naming_series.choices = _series_choices("purchase_order", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
@@ -1984,7 +1975,6 @@ def compras_orden_compra_editar(order_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = _purchase_order_selected_company(registro.company)
     formulario.naming_series.choices = _series_choices("purchase_order", selected_company)
-    formulario.supplier_id.choices = _purchase_order_supplier_choices()
     items_disponibles, uoms_disponibles = _purchase_order_catalogs()
 
     if request.method == "POST":
@@ -2149,7 +2139,6 @@ def compras_solicitud_cotizacion_nueva():
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = _purchase_quotation_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("purchase_quotation", selected_company)
-    formulario.supplier_id.choices = _purchase_quotation_supplier_choices()
     from_request_id = _purchase_quotation_origin_id()
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
     source_currency = effective_currency(solicitud_origen) if solicitud_origen else None
@@ -2229,9 +2218,6 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("purchase_quotation", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
@@ -2606,9 +2592,6 @@ def compras_recepcion_nuevo():
 
     selected_company = _resolve_receipt_selected_company(recepcion_origen, orden_origen, formulario)
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles, uoms_disponibles, bodegas_disponibles = _receipt_catalogs(selected_company)
     is_return = bool(recepcion_origen) or request.args.get("is_return") in {"1", "true", "True"}
     titulo = (_("Nueva Devolución de Recepción") if is_return else _("Nueva Recepción de Compra")) + " - " + APPNAME
@@ -2701,9 +2684,6 @@ def compras_recepcion_editar(receipt_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles = [
         {
             "code": item.code,
@@ -2957,7 +2937,6 @@ def compras_factura_compra_nuevo():
 
     selected_company = _purchase_invoice_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("purchase_invoice", selected_company)
-    formulario.supplier_id.choices = _purchase_invoice_supplier_choices()
     source_ids = _purchase_invoice_source_ids()
     from_order_id = source_ids["from_order_id"]
     from_receipt_id = source_ids["from_receipt_id"]
@@ -3070,9 +3049,6 @@ def compras_factura_compra_editar(invoice_id: str):
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or registro.company
     formulario.naming_series.choices = _series_choices("purchase_invoice", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
     items_disponibles = [
         {
             "code": item.code,

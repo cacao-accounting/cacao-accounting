@@ -479,13 +479,6 @@ def _purchase_quotation_selected_company(choices: list[tuple[str, str]]) -> str 
     return request.values.get("company") or (choices[0][0] if choices else None)
 
 
-def _supplier_quotation_supplier_choices() -> list[tuple[str, str]]:
-    """Construye el listado de proveedores para el formulario."""
-    return [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
-
-
 def _supplier_quotation_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
     """Carga catálogos reutilizados por la cotización de proveedor."""
     items_disponibles = [
@@ -1275,13 +1268,6 @@ def _purchase_order_selected_company(default_company: str | None) -> str | None:
     return request.values.get("company") or default_company
 
 
-def _purchase_order_supplier_choices() -> list[tuple[str, str]]:
-    """Construye el listado de proveedores para órdenes de compra."""
-    return [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
-
-
 def _purchase_order_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
     """Carga catálogos reutilizados por órdenes de compra."""
     items_disponibles = [
@@ -1545,13 +1531,6 @@ def _validate_purchase_flow_header(source: object | None, form_data: Any | None 
 def _purchase_quotation_origin_id() -> str | None:
     """Obtiene el documento origen para una solicitud de cotización."""
     return request.args.get("from_request") or request.form.get("from_request")
-
-
-def _purchase_quotation_supplier_choices() -> list[tuple[str, str]]:
-    """Construye las opciones de proveedores para solicitudes de cotización."""
-    return [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
 
 
 def _purchase_quotation_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
@@ -1961,13 +1940,6 @@ def _validate_invoice_requires_supplier_link(invoice_id: str) -> None:
 def _purchase_invoice_selected_company(choices: list[tuple[str, str]]) -> str | None:
     """Resolve the selected company for the purchase invoice."""
     return request.values.get("company") or (choices[0][0] if choices else None)
-
-
-def _purchase_invoice_supplier_choices() -> list[tuple[str, str]]:
-    """Build the supplier choices list for purchase invoices."""
-    return [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
 
 
 def _purchase_invoice_source_ids() -> dict[str, str | None]:
