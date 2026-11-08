@@ -133,16 +133,6 @@ class FormularioLibro(FlaskForm):
 
 
 # <------------------------------------------------------------------------------------------------------------------------> #
-# Comprobantes Contables
-class ComprobanteContable(FlaskForm):
-    """Comprobante contable manual."""
-
-
-class ComprobanteContableDetalle(FlaskForm):
-    """Detalle de comprobante contable manual."""
-
-
-# <------------------------------------------------------------------------------------------------------------------------> #
 # NamingSeries — Framework robusto de series e identificadores
 
 ENTITY_TYPE_CHOICES = [
@@ -340,16 +330,6 @@ class FormularioAccountingPeriod(FlaskForm):
     habilitado = BooleanField(_l("Habilitado"), default=True)
     inicio = DateField(FECHA_INICIO, validators=[DataRequired()])
     fin = DateField(FECHA_FIN, validators=[DataRequired()])
-
-
-class FormularioSecuencia(FlaskForm):
-    """Formulario para crear y editar secuencias fisicas (Sequence)."""
-
-    nombre = StringField(_l("Nombre"), validators=[DataRequired()])
-    current_value = IntegerField(_l("Valor Actual"), default=0, validators=[NumberRange(min=0)])
-    increment = IntegerField(_l("Incremento"), default=1, validators=[NumberRange(min=1)])
-    padding = IntegerField(PADDING_DIGITOS, default=5, validators=[NumberRange(min=1, max=20)])
-    reset_policy = SelectField(_l("Politica de Reinicio"), choices=RESET_POLICY_CHOICES)
 
 
 class FormularioExternalCounter(FlaskForm):
