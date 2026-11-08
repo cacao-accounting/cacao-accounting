@@ -286,6 +286,15 @@ def _add_company_party(app, party_id: str, company: str) -> None:
         database.session.commit()
 
 
+def _upload_image_via_api(client, data: bytes = PNG):
+    """Sube una imagen de artículo por la ruta real de la API."""
+    return client.post(
+        "/api/inventory/items/ITEM-1/image",
+        data={"file": (BytesIO(data), "producto.png")},
+        content_type="multipart/form-data",
+    )
+
+
 def test_rechaza_extension_no_permitida(attachment_app, party_id):
     """Una extensión fuera de la lista blanca no llega a almacenarse."""
     with attachment_app.app_context(), pytest.raises(AttachmentError):
@@ -739,6 +748,37 @@ def test_adjunto_de_tercero_en_compania_apagada_denegado(attachment_app, users):
     client = _login(attachment_app, users["admin"])
 
     assert client.get(f"/api/attachments/supplier/{party_id}").status_code == 403
+
+
+def test_imagen_global_se_lee_sin_acceso_a_compania(attachment_app, users):
+    """#1301: leer la imagen global solo exige el permiso del módulo Inventario."""
+    with attachment_app.app_context():
+        upload_item_image("ITEM-1", _storage("producto.png", PNG), user_id=users["admin"])
+    client = _login(attachment_app, users["user-no-company"])
+
+    response = client.get("/api/inventory/items/ITEM-1/image")
+    assert response.status_code == 200
+    assert response.mimetype == "image/png"
+    assert response.get_json(silent=True) is None
+
+
+def test_imagen_global_se_edita_sin_acceso_a_compania(attachment_app, users):
+    """#1301: subir y borrar la imagen global solo exige ``inventory/editar``."""
+    client = _login(attachment_app, users["user-no-company"])
+
+    assert _upload_image_via_api(client).status_code == 200
+    assert client.post("/api/inventory/items/ITEM-1/image/delete").status_code == 200
+
+
+def test_imagen_global_exige_permiso_de_inventario(attachment_app, users):
+    """#1301: el acceso a compañía no sustituye el permiso del módulo."""
+    with attachment_app.app_context():
+        upload_item_image("ITEM-1", _storage("producto.png", PNG), user_id=users["admin"])
+    client = _login(attachment_app, users["user-no-perm"])
+
+    assert client.get("/api/inventory/items/ITEM-1/image").status_code == 403
+    assert _upload_image_via_api(client).status_code == 403
+    assert client.post("/api/inventory/items/ITEM-1/image/delete").status_code == 403
 
 
 def test_carga_en_tercero_inactivo_denegada(attachment_app, users):

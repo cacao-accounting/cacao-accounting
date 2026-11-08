@@ -473,9 +473,11 @@ def _require_attachment_file_access(file_id: str, action: str = "consultar") -> 
 def _require_inventory_image_access(action: str = "consultar") -> None:
     """Require inventory permission for product-image access.
 
-    Mutations (upload/delete) require the inventory ``editar`` permission;
-    reads require at least ``consultar``, matching the item detail view that
-    is gated by ``modulo_activo("inventory")``.
+    Las imágenes pertenecen al artículo global y se comparten entre compañías
+    (#1376), por lo que no se exige acceso a una compañía concreta (#1301).
+    Las mutaciones (subir/borrar) requieren el permiso ``editar`` del módulo
+    Inventario; la lectura requiere ``consultar``, igual que la vista de
+    detalle del artículo.
     """
     if getattr(current_user, "classification", None) == "admin":
         return
