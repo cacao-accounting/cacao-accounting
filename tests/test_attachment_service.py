@@ -781,6 +781,17 @@ def test_imagen_global_exige_permiso_de_inventario(attachment_app, users):
     assert client.post("/api/inventory/items/ITEM-1/image/delete").status_code == 403
 
 
+def test_imagen_global_visible_desde_otra_compania(attachment_app, users):
+    """#1376: la imagen del artículo global se comparte entre compañías."""
+    with attachment_app.app_context():
+        upload_item_image("ITEM-1", _storage("producto.png", PNG), user_id=users["admin"])
+    client = _login(attachment_app, users["user-b"])
+
+    response = client.get("/api/inventory/items/ITEM-1/image")
+    assert response.status_code == 200
+    assert response.mimetype == "image/png"
+
+
 def test_carga_en_tercero_inactivo_denegada(attachment_app, users):
     """#1284: la carga aplica la misma política que la lectura para un tercero inactivo."""
     party_id = _party_id(attachment_app, "PROV-INACTIVE")
