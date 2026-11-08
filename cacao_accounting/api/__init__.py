@@ -26,6 +26,9 @@ from cacao_accounting.attachment_service import (
     get_attachment_file,
     get_item_image_file,
     list_attachments,
+    log_attachment_access_denied,
+    log_attachment_downloaded,
+    update_attachment_metadata,
     upload_attachment,
     upload_item_image,
 )
@@ -439,7 +442,7 @@ def _redirect_after_form_post(default_endpoint: str = HOME_ENDPOINT):
     return redirect(url_for(default_endpoint))
 
 
-def _require_attachment_file_access(file_id: str, action: str = "consultar") -> None:
+def _require_attachment_file_access(file_id: str, action: str = "consultar") -> FileAttachment:
     """Authorize at least one reference linked to an attachment file."""
     links = database.session.execute(database.select(FileAttachment).where(FileAttachment.file_id == file_id)).scalars().all()
     if not links:
@@ -447,7 +450,7 @@ def _require_attachment_file_access(file_id: str, action: str = "consultar") -> 
     for link in links:
         try:
             _require_attachment_reference_access(link.reference_type, link.reference_id, action)
-            return
+            return link
         except HTTPException as exc:
             if exc.code != 403:
                 raise
@@ -994,16 +997,23 @@ def api_list_attachments(reference_type: str, reference_id: str):
 @api.route("/attachments/download/<file_id>", methods=["GET"])
 @login_required
 def api_download_attachment(file_id: str):
-    """Download/serve an attached file."""
-    _require_attachment_file_access(file_id)
+    """Download/serve an attached file with an audited delivery."""
+    try:
+        link = _require_attachment_file_access(file_id)
+    except HTTPException:
+        log_attachment_access_denied(file_id, action="download")
+        raise
     try:
         file_rec, path = get_attachment_file(file_id)
-        return send_file(
+        log_attachment_downloaded(file_rec, link.reference_type, link.reference_id)
+        response = send_file(
             path,
             download_name=file_rec.file_name,
             mimetype=file_rec.mime_type or "application/octet-stream",
             as_attachment=True,
         )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
     except AttachmentError as exc:
         abort(exc.status_code)
 
@@ -1015,9 +1025,13 @@ def api_delete_attachment(file_id: str):
     payload = request.get_json(silent=True) or request.form.to_dict()
     ref_type = payload.get("reference_type") or request.args.get("reference_type") or ""
     ref_id = payload.get("reference_id") or request.args.get("reference_id") or ""
-    _require_attachment_reference_access(ref_type, ref_id, "editar")
     try:
-        delete_attachment(file_id, ref_type, ref_id, user_id=str(current_user.id))
+        _require_attachment_reference_access(ref_type, ref_id, "editar")
+    except HTTPException:
+        log_attachment_access_denied(file_id, reference_type=ref_type, reference_id=ref_id, action="delete")
+        raise
+    try:
+        result = delete_attachment(file_id, ref_type, ref_id, user_id=str(current_user.id))
     except AttachmentError as exc:
         if _wants_form_redirect():
             flash(str(exc), "danger")
@@ -1026,9 +1040,33 @@ def api_delete_attachment(file_id: str):
 
     if _wants_form_redirect():
         flash(_("Adjunto eliminado."), "info")
+        if not result["file_removed"]:
+            flash(_("El archivo físico quedó pendiente de limpieza."), "warning")
         return _redirect_after_form_post()
 
-    return jsonify({"success": True})
+    return jsonify({"success": result["deleted"], **result})
+
+
+@api.route("/api/attachments/<file_id>/metadata", methods=["PATCH", "POST"])
+@login_required
+def api_update_attachment_metadata(file_id: str):
+    """Update editable attachment metadata with an audited change."""
+    try:
+        _require_attachment_file_access(file_id, "editar")
+    except HTTPException:
+        log_attachment_access_denied(file_id, action="update")
+        raise
+    payload = request.get_json(silent=True) or request.form.to_dict()
+    try:
+        result = update_attachment_metadata(
+            file_id,
+            remarks=payload.get("remarks"),
+            file_name=payload.get("file_name"),
+            user_id=str(current_user.id),
+        )
+    except AttachmentError as exc:
+        return jsonify({"error": str(exc)}), exc.status_code
+    return jsonify(result)
 
 
 @api.route("/api/inventory/items/<item_id>/image", methods=["POST"])
@@ -1057,7 +1095,10 @@ def api_upload_item_image(item_id: str):
 def api_get_item_image(item_id: str):
     """Serve product image of an inventory item."""
     _require_inventory_image_access("consultar")
-    file_rec, path = get_item_image_file(item_id)
+    try:
+        file_rec, path = get_item_image_file(item_id)
+    except AttachmentError as exc:
+        abort(exc.status_code)
     if not path or not file_rec:
         abort(404)
     mime_type = (file_rec.mime_type or "image/png").lower()

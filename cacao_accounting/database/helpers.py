@@ -128,6 +128,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_stock_valuation_layer_batch_column()
             _ensure_purchase_line_version_columns()
             _ensure_audit_trail_hash_version_column()
+            _ensure_file_sha256_column()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -681,6 +682,36 @@ def _ensure_purchase_line_version_columns() -> None:
     except Exception as exc:
         database.session.rollback()
         log.warning("Could not ensure purchase line version columns during initialization: {}", exc)
+
+
+def _ensure_file_sha256_column() -> None:
+    """Suple idempotentemente ``file.sha256`` en esquemas existentes.
+
+    La integridad de los adjuntos se verifica contra el hash persistido en
+    ``File``. ``create_all`` crea la columna en esquemas nuevos y esta rutina
+    la agrega, junto con su índice, en bases existentes sin migración formal.
+    Las filas históricas quedan con ``NULL`` y se aceptan como tales hasta un
+    backfill controlado.
+    """
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        from cacao_accounting.database import File
+
+        inspector = sa_inspect(database.engine)
+        if not inspector.has_table(File.__tablename__):
+            return
+        columns = {column["name"] for column in inspector.get_columns(File.__tablename__)}
+        if "sha256" not in columns:
+            database.session.execute(database.text("ALTER TABLE file ADD COLUMN sha256 VARCHAR(64)"))
+            log.info("Columna sha256 agregada a file.")
+        database.session.execute(database.text("CREATE INDEX IF NOT EXISTS ix_file_sha256 ON file (sha256)"))
+        database.session.commit()
+    except (OperationalError, ProgrammingError, InterfaceError):
+        database.session.rollback()
+    except Exception as exc:
+        database.session.rollback()
+        log.warning("Could not ensure file.sha256 during initialization: {}", exc)
 
 
 def _ensure_audit_trail_hash_version_column() -> None:

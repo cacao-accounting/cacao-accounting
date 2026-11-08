@@ -420,6 +420,31 @@ def _transaction_form_i18n_labels() -> dict[str, str]:
     }
 
 
+def _align_attachment_request_limit(app: Flask) -> None:
+    """Normaliza el límite de adjuntos y eleva el tope global de la petición.
+
+    Un adjunto de 25 MB no cabe en el ``MAX_CONTENT_LENGTH`` histórico de
+    16 MB. El límite por archivo sigue siendo configurable; el tope global se
+    ajusta para no rechazar la petición antes de que el servicio valide el
+    tamaño real del archivo.
+    """
+    raw_limit = app.config.get("ATTACHMENT_MAX_FILE_SIZE")
+    attachment_limit = 25 * 1024 * 1024
+    if raw_limit is not None:
+        try:
+            attachment_limit = int(raw_limit)
+        except (TypeError, ValueError):
+            attachment_limit = 25 * 1024 * 1024
+    if attachment_limit <= 0:
+        attachment_limit = 25 * 1024 * 1024
+    app.config["ATTACHMENT_MAX_FILE_SIZE"] = attachment_limit
+    try:
+        request_limit = int(app.config.get("MAX_CONTENT_LENGTH") or 0)
+    except (TypeError, ValueError):
+        request_limit = 0
+    app.config["MAX_CONTENT_LENGTH"] = max(request_limit, attachment_limit)
+
+
 def create_app(ajustes: dict | None = None) -> Flask:
     """Aplication factory."""
     cacao_app = Flask(
@@ -430,6 +455,7 @@ def create_app(ajustes: dict | None = None) -> Flask:
 
     # Configurar límites por defecto
     cacao_app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+    cacao_app.config["ATTACHMENT_MAX_FILE_SIZE"] = 25 * 1024 * 1024
 
     # Configurar cookies de sesión
     cacao_app.config["SESSION_COOKIE_SECURE"] = _session_cookie_secure_default()
@@ -442,6 +468,8 @@ def create_app(ajustes: dict | None = None) -> Flask:
     if ajustes:
         cacao_app.config.from_mapping(ajustes)
 
+    _align_attachment_request_limit(cacao_app)
+
     _configure_app_secret_key(cacao_app)
     _register_app_hooks(cacao_app)
 
@@ -452,6 +480,9 @@ def create_app(ajustes: dict | None = None) -> Flask:
 
     with cacao_app.app_context():
         try:
+            from cacao_accounting.database.helpers import _ensure_file_sha256_column
+
+            _ensure_file_sha256_column()
             recover_crashed_batches()
         except SQLAlchemyError as e:
             log.error("Error al recuperar lotes de importación: {}", e)

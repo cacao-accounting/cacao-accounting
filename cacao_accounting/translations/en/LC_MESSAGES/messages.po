@@ -400,9 +400,49 @@ msgstr "Item not found."
 msgid "No se seleccionó una imagen."
 msgstr "No image selected."
 
-#: cacao_accounting/attachment_service.py:347
-msgid "Formato de imagen no permitido. Use PNG, JPG, WEBP o GIF."
-msgstr "Image format not allowed. Use PNG, JPG, WEBP or GIF."
+#: cacao_accounting/attachment_service.py
+msgid "Formato de imagen no permitido. Use PNG, JPG o WEBP."
+msgstr "Image format not allowed. Use PNG, JPG or WEBP."
+
+#: cacao_accounting/attachment_service.py
+msgid "Tipo de archivo no permitido."
+msgstr "File type not allowed."
+
+#: cacao_accounting/attachment_service.py
+msgid "El contenido del archivo no corresponde a su extensión."
+msgstr "File content does not match its extension."
+
+#: cacao_accounting/attachment_service.py
+msgid "El archivo supera el tamaño máximo permitido."
+msgstr "The file exceeds the maximum allowed size."
+
+#: cacao_accounting/attachment_service.py
+msgid "El archivo está dañado o no es válido."
+msgstr "The file is corrupt or invalid."
+
+#: cacao_accounting/attachment_service.py
+msgid "Los archivos comprimidos no se permiten como adjuntos."
+msgstr "Compressed archives are not allowed as attachments."
+
+#: cacao_accounting/attachment_service.py
+msgid "El archivo no supera la verificación de integridad."
+msgstr "The file failed the integrity check."
+
+#: cacao_accounting/attachment_service.py
+msgid "No se pudo almacenar el archivo."
+msgstr "The file could not be stored."
+
+#: cacao_accounting/attachment_service.py
+msgid "La evidencia adjunta no puede modificarse en el estado actual del documento."
+msgstr "Attachment evidence cannot be modified in the document's current state."
+
+#: cacao_accounting/api/__init__.py
+msgid "El archivo físico quedó pendiente de limpieza."
+msgstr "The physical file is pending cleanup."
+
+#: cacao_accounting/database/__init__.py
+msgid "El hash SHA-256 de un archivo almacenado es inmutable."
+msgstr "The SHA-256 hash of a stored file is immutable."
 
 #: cacao_accounting/attachment_service.py:353
 msgid "El contenido no corresponde a una imagen válida."

@@ -5419,6 +5419,9 @@ class File(database.Model, BaseTabla):  # type: ignore[name-defined]
     blob_reference = database.Column(database.String(500), nullable=True)
     file_size = database.Column(database.Integer(), nullable=True)
     mime_type = database.Column(database.String(100), nullable=True)
+    # Hash SHA-256 del contenido real, calculado al almacenar el archivo.
+    # Es inmutable una vez persistido; queda NULL solo en archivos históricos.
+    sha256 = database.Column(database.String(64), nullable=True, index=True)
     uploaded_by = database.Column(
         database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
@@ -6172,3 +6175,16 @@ event.listens_for(DocumentTransition, "before_update")(_reject_ledger_mutation)
 event.listens_for(DocumentTransition, "before_delete")(_reject_ledger_delete)
 event.listens_for(AuditLog, "before_update")(_reject_ledger_mutation)
 event.listens_for(AuditLog, "before_delete")(_reject_ledger_delete)
+
+
+@event.listens_for(File, "before_update")
+def _reject_file_hash_mutation(mapper, connection, target) -> None:  # noqa: ARG001
+    """Impide reescribir el SHA-256 una vez persistido un archivo.
+
+    El hash es la evidencia de integridad del contenido almacenado. Un archivo
+    histórico puede pasar de ``NULL`` a un valor calculado por un backfill
+    controlado, pero un hash ya persistido no cambia ni se borra.
+    """
+    history = inspect(target).attrs["sha256"].history
+    if history.has_changes() and history.deleted and history.deleted[0] is not None:
+        raise ValueError(_("El hash SHA-256 de un archivo almacenado es inmutable."))

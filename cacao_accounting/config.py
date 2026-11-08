@@ -111,7 +111,7 @@ def valida_direccion_base_datos(uri: str) -> bool:
             return False
 
 
-configuracion: dict[str, bool | str | dict[str, dict[str, ssl.SSLContext]]] = {}
+configuracion: dict[str, bool | str | int | dict[str, dict[str, ssl.SSLContext]]] = {}
 
 DATABASE_URL_NORMALIZADA, DATABASE_ENGINE_OPTIONS = normaliza_direccion_base_datos(DATABASE_URL)
 
@@ -129,6 +129,10 @@ configuracion["EXTERNAL_DOCUMENT_VALIDATION_ENABLED"] = (
 configuracion["EXTERNAL_DOCUMENT_VALIDATION_BASE_URL"] = environ.get(
     "EXTERNAL_DOCUMENT_VALIDATION_BASE_URL", "https://cacaocontent.com"
 )
+
+# Límite por archivo para adjuntos. Se puede ajustar desde el backend; el
+# límite global de la petición se eleva para cubrirlo en ``create_app``.
+configuracion["ATTACHMENT_MAX_FILE_SIZE"] = int(environ.get("CACAO_ATTACHMENT_MAX_FILE_SIZE", str(25 * 1024 * 1024)))
 
 if environ.get("CACAO_TEST"):
     configuracion["DEGUG"] = "True"
