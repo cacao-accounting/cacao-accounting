@@ -19,7 +19,7 @@ Cacao Accounting soporta dos modos de uso:
   especificas.
 
 Modo desktop se considera la base operativa del sistema, el sistema debe ser completamente funcional en
-modo desktop, el modo cloud es una capa de funcionalidad adicional que agrega funciones utiles para 
+modo desktop, el modo cloud es una capa de funcionalidad adicional que agrega funciones utiles para
 entornos en la nube como: correo electronico, multi usuario, multi moneda.
 
 El Issue (https://github.com/cacao-accounting/cacao-accounting/issues/757) tiene más análisis sobre el
@@ -66,7 +66,7 @@ El sistema es:
 - Tier 2: MySQL. Se prueba en CI pero no bloquea lanzamiento.
 - Tier 3: MariaDB, MS SQL Server. No sé prueban en CI.
 
-# Uso de cache 
+# Uso de cache
 
 El archivo Docker Compose incluye Redis como cache, el sistema no puede ni debe depender del servicio de cache activo
 para funcionar, esto es debido a que en modo desktop no hay caché disponible, modo desktop asume que el unico servicio
@@ -156,7 +156,7 @@ hacer commits gigantes incomprensibles e inauditables, los commits debe tener ca
 - Commit semantico (fix, feature, docs, refactor, release, chore).
 - Linea de titulo de 50 caracteres.
 - Separa el titulo del cuertpo con una linea en blanco.
-- Usar lenguaje directo en el titulo: implementa, corrige, agrega, mejora, extiende, documenta 
+- Usar lenguaje directo en el titulo: implementa, corrige, agrega, mejora, extiende, documenta
 - Cuerpo del issue maximo 72 characteres
 - El cuerpo de commit descrique como y porque (el diff define claramente el que), el cuerpo del commit debe aportar
   contexto y servir de documentación al cambio.
@@ -263,3 +263,7 @@ No es necesario forzar esta regla con pruebas unitarias, solo con codigo product
 ## Defensive Development & Edge-Case Validation:
 
 Every implementation must be designed beyond the happy path. Before considering any feature or fix complete, agents must analyze and validate boundary conditions, invalid inputs, state transitions, concurrent operations, transaction atomicity, idempotency, reversals, historical consistency, multi-company isolation, and multi-ledger/multi-currency behavior wherever applicable. Tests must exercise realistic failure scenarios and verify business invariants, not merely confirm successful execution. A feature is not complete simply because its primary workflow works.
+
+## Ejecución de pruebas en paralelo
+
+Es importante que la suite de pruebas unitarias puede ejecutarse en paralelo usando `pytest -n auto`.
