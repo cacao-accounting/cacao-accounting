@@ -46,7 +46,7 @@ jobs:
           LOGURU_LEVEL: "WARNING"
           SECRET_KEY: "ASD123kljaAddS"
         run: |
-          python -m pytest --full -qq --tb=line --cov=cacao_accounting
+          python -m pytest -n auto --full -qq --tb=line --cov=cacao_accounting
       - name: Test with pytest in Desktop Mode
         if: matrix.mode == 'desktop'
         env:
@@ -55,7 +55,7 @@ jobs:
           SECRET_KEY: "ASD123kljaAddS"
           CACAO_ACCOUNTING_DESKTOP: "True"
         run: |
-          python -m pytest --full -qq --tb=line
+          python -m pytest -n auto --full -qq --tb=line
       - name: Coveralls
         if: matrix.mode == 'full'
         continue-on-error: true
