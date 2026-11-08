@@ -175,17 +175,6 @@ def obtener_id_rol_por_monbre(rol: str) -> str:
     return ROL.id
 
 
-def obtener_id_usuario_por_nombre(usuario: str | None) -> str | None:
-    """Devuelve el UUID de un usuario en base a su id."""
-    if usuario:
-        from cacao_accounting.database import User
-
-        USUARIO = User.query.filter_by(user=usuario).first()
-        return USUARIO.id
-    else:
-        return None
-
-
 def db_version():  # pragma: no cover
     """Return database version as text."""
     from flask import current_app

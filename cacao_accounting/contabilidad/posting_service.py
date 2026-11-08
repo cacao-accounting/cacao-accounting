@@ -72,7 +72,7 @@ from cacao_accounting.contabilidad.cancellation_service import (
     resolve_cancellation,
 )
 
-from cacao_accounting.document_identifiers import IdentifierConfigurationError, validate_accounting_period
+from cacao_accounting.document_identifiers import validate_accounting_period
 
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 
@@ -242,21 +242,6 @@ def _find_period_ids(company: str, posting_date: Any) -> tuple[str | None, str |
     if not period:
         return None, None
     return period.id, period.fiscal_year_id
-
-
-def _normalize_ledger_codes(ledger_code: str | Sequence[str] | None) -> list[str] | None:
-    if ledger_code is None:
-        return None
-    if isinstance(ledger_code, str):
-        normalized = ledger_code.strip()
-        return [normalized] if normalized else None
-
-    codes: list[str] = []
-    for item in ledger_code:
-        normalized = str(item).strip()
-        if normalized and normalized not in codes:
-            codes.append(normalized)
-    return codes or None
 
 
 def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) -> list[Book]:
@@ -3219,26 +3204,6 @@ def _delivery_return_source(document: DeliveryNote) -> DeliveryNote:
     return source
 
 
-def _delivery_outgoing_totals(
-    document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, source: DeliveryNote
-) -> tuple[Any, Any]:
-    """Return quantity and value originally issued for a return line."""
-    totals = database.session.execute(
-        select(
-            func.coalesce(func.sum(-StockLedgerEntry.qty_change), 0),
-            func.coalesce(func.sum(-StockLedgerEntry.stock_value_difference), 0),
-        ).where(
-            StockLedgerEntry.company == document.company,
-            StockLedgerEntry.voucher_type == "delivery_note",
-            StockLedgerEntry.voucher_id == source.id,
-            StockLedgerEntry.item_code == line.item_code,
-            StockLedgerEntry.warehouse == warehouse,
-            StockLedgerEntry.qty_change < 0,
-        )
-    ).one()
-    return totals[0], totals[1]
-
-
 def _delivery_already_returned_qty(
     document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, source: DeliveryNote
 ) -> Any:
@@ -3849,20 +3814,6 @@ def _create_stock_ledger_for_document_type(
         movements.extend(line_movements)
     database.session.add_all(movements)
     return movements
-
-
-def _receipt_total(document: PurchaseReceipt) -> Decimal:
-    items = _document_items(document)
-    total = sum(
-        (
-            _decimal_value(getattr(item, "amount", None)) or (_line_qty_generic(item) * _line_rate_generic(item))
-            for item in items
-        ),
-        Decimal("0"),
-    )
-    if total <= 0:
-        raise PostingError(_("La recepción de compra no tiene monto conciliable."))
-    return total
 
 
 def _should_reconcile_purchase_receipt(document: PurchaseInvoice) -> bool:
@@ -4951,20 +4902,6 @@ def _record_cancellation_transition(document: Any, context: CancellationContext)
             requested_at=context.requested_at,
         )
     )
-
-
-def _validate_cancel_accounting_period(document: Any, company: str) -> None:
-    """Valida el periodo contable para cancelacion."""
-    try:
-        allow_closing = bool(getattr(document, "is_closing", False))
-        validate_accounting_period(
-            company,
-            _posting_date_for(document),
-            allow_closing=allow_closing,
-            allow_fiscal_year_closing=bool(getattr(document, "is_fiscal_year_closing", False)),
-        )
-    except IdentifierConfigurationError as exc:
-        raise PostingError(str(exc)) from exc
 
 
 def _get_original_gl_entries(company: str, voucher_type: str, voucher_id: str, document: Any) -> list[GLEntry]:

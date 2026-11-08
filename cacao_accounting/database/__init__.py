@@ -12,7 +12,6 @@ import hashlib
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from cuid2 import Cuid
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import (
@@ -150,15 +149,6 @@ def obtiene_texto_unico() -> str:
     # Genera un id unico de 26 caracteres
     # Es ID son URL SAFE y se utilizan en los registros principales
     return str(ULID())
-
-
-def obtiene_texto_unico_cuid2() -> str:
-    """Genera un texto unico en base a CUID2."""
-    # Genera un id unico de 10 caractes
-    # Se utiliza para los registros detalle, principalmente las entradas del mayor general
-    GENERATOR: Cuid = Cuid(length=10)
-
-    return str(GENERATOR.generate())
 
 
 # <---------------------------------------------------------------------------------------------> #

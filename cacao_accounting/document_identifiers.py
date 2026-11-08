@@ -688,26 +688,6 @@ def _validate_and_register_external_number(
 # -------------------------------------------------------------------------------------
 
 
-def suggest_next_external_number(external_counter_id: str) -> str:
-    """Devuelve el siguiente numero externo sugerido para un contador externo.
-
-    Args:
-        external_counter_id: ID del ExternalCounter
-
-    Returns:
-        Cadena con el numero sugerido (prefijo + numero formateado con padding)
-
-    Raises:
-        IdentifierConfigurationError: Si el contador no existe o esta inactivo
-    """
-    counter = database.session.get(ExternalCounter, external_counter_id)
-    if not counter:
-        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
-    if not counter.is_active:
-        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
-    return counter.next_suggested_formatted
-
-
 def record_external_number_used(
     *,
     external_counter_id: str,

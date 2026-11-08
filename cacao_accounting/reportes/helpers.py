@@ -429,21 +429,6 @@ def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str
     return filters
 
 
-def _safe_page_size(raw: object, default: int) -> int:
-    try:
-        if raw is None or isinstance(raw, str):
-            value = default
-        else:
-            value = int(raw)  # type: ignore[call-overload]
-        return max(value, 1)
-    except (TypeError, ValueError):
-        return max(default, 1)
-
-
-def _str_or_none(value: object) -> str | None:
-    return str(value or "") or None
-
-
 def _handle_saved_view_action(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str]:
     view_key = (request.args.get("saved_view") or "default").strip() or "default"
     return filters, view_key

@@ -379,28 +379,6 @@ def accessible_recurring_template_ids(user_id: str) -> list[str]:
     return accessible
 
 
-def _canonical_book_reference(company: str, value: Any) -> str | None:
-    """Convierte id o código de libro a su código canónico."""
-    if not value:
-        return None
-    book = database.session.execute(
-        database.select(Book).where(Book.entity == company).where((Book.id == str(value)) | (Book.code == str(value)))
-    ).scalar_one_or_none()
-    return book.code if book else str(value)
-
-
-def _normalize_ledger_id_for_validation(company: str, ledger_id: Any) -> list[str]:
-    """Convierte ledger_id (UUID o código legacy) a una lista canónica de referencias."""
-    if not ledger_id:
-        return []
-    # Resolve the book regardless of whether ledger_id is UUID or code
-    book = _book_for_reference(company, ledger_id)
-    if book:
-        return [book.code, book.id]  # Include both code and UUID for matching
-    # If book not found, return the value as-is for error reporting
-    return [str(ledger_id)]
-
-
 def _book_for_reference(company: str, value: Any) -> Book | None:
     """Resolve a book by UUID or code within the template company."""
     if not value:

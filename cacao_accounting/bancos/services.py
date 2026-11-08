@@ -394,14 +394,6 @@ def petty_cash_pending_replenishment_total(petty_cash: PettyCashAccount, as_of_d
     return Decimal(str(result or 0))
 
 
-def petty_cash_account_choices(company: str) -> list[tuple[str, str]]:
-    """Cuentas contables de tipo ``petty_cash`` disponibles para asignar a una caja."""
-    rows = database.session.execute(
-        database.select(Accounts).filter_by(entity=company, account_type="petty_cash", group=False).order_by(Accounts.code)
-    ).scalars()
-    return [(str(account.id), f"{account.code} - {account.name}") for account in rows]
-
-
 def _validate_petty_cash_account(company: str, account_id: str | None) -> Accounts | None:
     """Valida que la cuenta contable exista, pertenezca a la compania y sea de tipo petty_cash."""
     if not account_id:
@@ -694,30 +686,6 @@ def create_petty_cash_voucher(
     except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
         pass
     voucher.voucher_no = voucher.document_no or None
-    database.session.commit()
-    return voucher
-
-
-def update_petty_cash_voucher(
-    voucher: PettyCashVoucher,
-    *,
-    concept: str | None = None,
-    amount: Decimal | None = None,
-    delivered_to: str | None = None,
-) -> PettyCashVoucher:
-    """Actualiza un vale de caja chica en estado borrador."""
-    if voucher.voucher_status != "borrador":
-        raise ValueError(_("Solo se pueden editar vales en estado borrador."))
-    if concept is not None:
-        if not concept.strip():
-            raise ValueError(_("El concepto del vale es obligatorio."))
-        voucher.concept = concept.strip()
-    if amount is not None:
-        if amount <= 0:
-            raise ValueError(_("El importe del vale debe ser mayor a cero."))
-        voucher.amount = amount
-    if delivered_to is not None:
-        voucher.delivered_to = delivered_to or None
     database.session.commit()
     return voucher
 
