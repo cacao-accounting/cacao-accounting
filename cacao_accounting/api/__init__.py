@@ -314,18 +314,29 @@ def _require_document_send_access(document_type: str, document_id: str) -> Any:
 
 
 def _require_attachment_master_access(normalized_type: str, reference_id: str, action: str) -> bool:
-    """Authorize access to master entities (e.g. supplier, customer)."""
+    """Authorize access to master entities (e.g. supplier, customer).
+
+    Refleja la política de #1284: el adjunto es visible para las compañías en
+    las que el tercero está activo, respetando los permisos del usuario. Un
+    tercero inactivo, sin activación en una compañía habilitada o sin vínculo
+    con ella no expone adjuntos, ni siquiera para un administrador.
+    """
     master_module = ATTACHMENT_MASTER_MODULES.get(normalized_type)
     if not master_module:
         return False
-    if not database.session.get(Party, reference_id):
+    party = database.session.get(Party, reference_id)
+    if party is None:
         abort(404)
-    if getattr(current_user, "classification", None) == "admin":
-        return True
+    if not party.is_active:
+        abort(403)
     companies = (
         database.session.execute(
-            database.select(CompanyParty.company).where(
-                CompanyParty.party_id == reference_id, CompanyParty.is_active.is_(True)
+            database.select(CompanyParty.company)
+            .join(Entity, Entity.code == CompanyParty.company)
+            .where(
+                CompanyParty.party_id == reference_id,
+                CompanyParty.is_active.is_(True),
+                Entity.enabled.is_(True),
             )
         )
         .scalars()
@@ -333,6 +344,8 @@ def _require_attachment_master_access(normalized_type: str, reference_id: str, a
     )
     if not companies:
         abort(403)
+    if getattr(current_user, "classification", None) == "admin":
+        return True
     for company in companies:
         try:
             exige_acceso_compania(master_module, company, action)

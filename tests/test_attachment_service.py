@@ -41,8 +41,12 @@ from cacao_accounting.database import (
     Item,
     Modules,
     Party,
+    Roles,
+    RolesAccess,
+    RolesUser,
     UOM,
     User,
+    UserCompanyAccess,
     database,
 )
 
@@ -71,6 +75,23 @@ def _xlsx_entries() -> dict[str, bytes]:
         "[Content_Types].xml": b"<Types/>",
         "xl/workbook.xml": b"<workbook/>",
     }
+
+
+def _grant_role(user_name: str, module_name: str, *, view: bool = False, edit: bool = False) -> None:
+    """Asigna a un usuario un rol con permisos reales sobre un módulo."""
+    user = database.session.execute(database.select(User).filter_by(user=user_name)).scalar_one()
+    module = database.session.execute(database.select(Modules).filter_by(module=module_name)).scalar_one()
+    role = Roles(name=f"{module_name}-{user_name}", note=f"Permisos de {module_name}")
+    database.session.add(role)
+    database.session.flush()
+    database.session.add(RolesAccess(rol_id=role.id, module_id=module.id, view=view, edit=edit))
+    database.session.add(RolesUser(user_id=user.id, role_id=role.id, active=True))
+
+
+def _grant_company(user_name: str, company: str) -> None:
+    """Asigna a un usuario acceso explícito a una compañía."""
+    user = database.session.execute(database.select(User).filter_by(user=user_name)).scalar_one()
+    database.session.add(UserCompanyAccess(user_id=user.id, company_code=company))
 
 
 @pytest.fixture
@@ -106,9 +127,34 @@ def attachment_app(tmp_path: Path):
                     enabled=True,
                     status="default",
                 ),
+                Entity(
+                    code="company-b",
+                    name="Compañía B",
+                    company_name="Compañía B SA",
+                    tax_id="J0002",
+                    currency="NIO",
+                    enabled=True,
+                ),
+                Entity(
+                    code="comp-off",
+                    name="Compañía Apagada",
+                    company_name="Compañía Apagada SA",
+                    tax_id="J0003",
+                    currency="NIO",
+                    enabled=False,
+                ),
                 Modules(module="purchases", default=False, enabled=True),
                 Modules(module="inventory", default=False, enabled=True),
                 Party(code="PROV-1", name="Proveedor Uno", is_supplier=True, is_customer=False),
+                Party(code="PROV-NONE", name="Proveedor sin activación", is_supplier=True, is_customer=False),
+                Party(code="PROV-OFF", name="Proveedor en compañía apagada", is_supplier=True, is_customer=False),
+                Party(
+                    code="PROV-INACTIVE",
+                    name="Proveedor inactivo",
+                    is_supplier=True,
+                    is_customer=False,
+                    is_active=False,
+                ),
                 UOM(code="UND", name="Unidad", is_active=True),
                 User(
                     user="admin",
@@ -126,11 +172,56 @@ def attachment_app(tmp_path: Path):
                     active=True,
                     company="cacao",
                 ),
+                User(
+                    user="user-a",
+                    name="Usuario A",
+                    password=b"x",
+                    classification="user",
+                    active=True,
+                    company="cacao",
+                ),
+                User(
+                    user="user-b",
+                    name="Usuario B",
+                    password=b"x",
+                    classification="user",
+                    active=True,
+                    company="company-b",
+                ),
+                User(
+                    user="user-no-company",
+                    name="Usuario sin compañía",
+                    password=b"x",
+                    classification="user",
+                    active=True,
+                    company=None,
+                ),
+                User(
+                    user="user-no-perm",
+                    name="Usuario sin permiso",
+                    password=b"x",
+                    classification="user",
+                    active=True,
+                    company="company-b",
+                ),
             ]
         )
         database.session.flush()
-        party = database.session.execute(database.select(Party).filter_by(code="PROV-1")).scalar_one()
-        database.session.add(CompanyParty(company="cacao", party_id=party.id, is_active=True))
+        parties = {party.code: party for party in database.session.execute(database.select(Party)).scalars().all()}
+        database.session.add_all(
+            [
+                CompanyParty(company="cacao", party_id=parties["PROV-1"].id, is_active=True),
+                CompanyParty(company="comp-off", party_id=parties["PROV-OFF"].id, is_active=True),
+                CompanyParty(company="cacao", party_id=parties["PROV-INACTIVE"].id, is_active=True),
+            ]
+        )
+        _grant_role("user-a", "purchases", view=True, edit=True)
+        _grant_company("user-a", "cacao")
+        _grant_role("user-b", "purchases", view=True)
+        _grant_role("user-b", "inventory", view=True)
+        _grant_company("user-b", "company-b")
+        _grant_role("user-no-company", "inventory", view=True, edit=True)
+        _grant_company("user-no-perm", "company-b")
         database.session.add(
             Item(
                 code="ITEM-1",
@@ -180,6 +271,19 @@ def _upload(app, party_id: str, filename: str, data: bytes, user_id: str | None 
             user_id=user_id,
             remarks="evidencia",
         )
+
+
+def _party_id(app, code: str) -> str:
+    """Devuelve el ID de un tercero sembrado por código."""
+    with app.app_context():
+        return str(database.session.execute(database.select(Party).filter_by(code=code)).scalar_one().id)
+
+
+def _add_company_party(app, party_id: str, company: str) -> None:
+    """Activa un tercero existente en una compañía adicional."""
+    with app.app_context():
+        database.session.add(CompanyParty(company=company, party_id=party_id, is_active=True))
+        database.session.commit()
 
 
 def test_rechaza_extension_no_permitida(attachment_app, party_id):
@@ -582,3 +686,86 @@ def test_metadatos_sin_cambios_no_duplican_auditoria(attachment_app, party_id):
             .all()
         )
         assert events == []
+
+
+def test_adjunto_de_tercero_visible_desde_otra_compania_activa(attachment_app, party_id, users):
+    """#1284: la visibilidad es compartida entre compañías donde el tercero está activo."""
+    _add_company_party(attachment_app, party_id, "company-b")
+    result = _upload(attachment_app, party_id, "factura.pdf", PDF, users["user-a"])
+    client = _login(attachment_app, users["user-b"])
+
+    assert client.get(f"/api/attachments/supplier/{party_id}").status_code == 200
+    assert client.get(f"/attachments/download/{result['file_id']}").status_code == 200
+
+
+def test_adjunto_de_tercero_exige_permiso_de_modulo(attachment_app, party_id, users):
+    """#1284: tener acceso a la compañía no sustituye el permiso del módulo."""
+    _add_company_party(attachment_app, party_id, "company-b")
+    result = _upload(attachment_app, party_id, "factura.pdf", PDF, users["admin"])
+    client = _login(attachment_app, users["user-no-perm"])
+
+    assert client.get(f"/api/attachments/supplier/{party_id}").status_code == 403
+    assert client.get(f"/attachments/download/{result['file_id']}").status_code == 403
+
+
+def test_adjunto_de_tercero_fuera_de_compania_denegado(attachment_app, party_id, users):
+    """#1284: un tercero activo solo en A no expone adjuntos a un usuario de B."""
+    result = _upload(attachment_app, party_id, "factura.pdf", PDF, users["admin"])
+    client = _login(attachment_app, users["user-b"])
+
+    assert client.get(f"/api/attachments/supplier/{party_id}").status_code == 403
+    assert client.get(f"/attachments/download/{result['file_id']}").status_code == 403
+
+
+def test_adjunto_de_tercero_inactivo_denegado(attachment_app, users):
+    """#1284: un tercero inactivo no expone adjuntos ni a un administrador."""
+    party_id = _party_id(attachment_app, "PROV-INACTIVE")
+    client = _login(attachment_app, users["admin"])
+
+    assert client.get(f"/api/attachments/supplier/{party_id}").status_code == 403
+
+
+def test_adjunto_de_tercero_sin_compania_denegado(attachment_app, users):
+    """#1284: un tercero sin activación en ninguna compañía no expone adjuntos."""
+    party_id = _party_id(attachment_app, "PROV-NONE")
+    client = _login(attachment_app, users["admin"])
+
+    assert client.get(f"/api/attachments/supplier/{party_id}").status_code == 403
+
+
+def test_adjunto_de_tercero_en_compania_apagada_denegado(attachment_app, users):
+    """#1284: una activación en una entidad deshabilitada no habilita el acceso."""
+    party_id = _party_id(attachment_app, "PROV-OFF")
+    client = _login(attachment_app, users["admin"])
+
+    assert client.get(f"/api/attachments/supplier/{party_id}").status_code == 403
+
+
+def test_carga_en_tercero_inactivo_denegada(attachment_app, users):
+    """#1284: la carga aplica la misma política que la lectura para un tercero inactivo."""
+    party_id = _party_id(attachment_app, "PROV-INACTIVE")
+    client = _login(attachment_app, users["admin"])
+
+    response = client.post(
+        f"/api/attachments/supplier/{party_id}/upload",
+        data={"file": (BytesIO(PDF), "factura.pdf")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 403
+    with attachment_app.app_context():
+        assert database.session.execute(database.select(File)).scalars().all() == []
+
+
+def test_carga_en_tercero_sin_compania_denegada(attachment_app, users):
+    """#1284: la carga aplica la misma política que la lectura sin activación."""
+    party_id = _party_id(attachment_app, "PROV-NONE")
+    client = _login(attachment_app, users["admin"])
+
+    response = client.post(
+        f"/api/attachments/supplier/{party_id}/upload",
+        data={"file": (BytesIO(PDF), "factura.pdf")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 403
+    with attachment_app.app_context():
+        assert database.session.execute(database.select(File)).scalars().all() == []
