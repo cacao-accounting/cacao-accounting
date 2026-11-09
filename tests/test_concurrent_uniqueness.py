@@ -599,6 +599,49 @@ def test_ajuste_de_conciliacion_unico(caja_app):
         assert database.session.get(PettyCashReconciliation, conciliacion.id).adjustment_journal_id == diario.id
 
 
+def test_ajuste_revierte_si_submit_falla(caja_app, monkeypatch):
+    """Un fallo tras el flush no deja diario, GL ni puntero del ajuste."""
+    _gasto_posteado(caja_app, COMPANY, MONTO, date(2026, 10, 5))
+    fondo_id = _fondo_id(caja_app, COMPANY)
+    from cacao_accounting.bancos.services import reconcile_petty_cash
+    from cacao_accounting.contabilidad import journal_service
+    from cacao_accounting.database import ComprobanteContable, GLEntry, PettyCashReconciliation
+
+    with caja_app.app_context():
+        create_petty_cash_reconciliation(
+            company=COMPANY,
+            petty_cash_id=fondo_id,
+            reconciliation_date=date(2026, 10, 31),
+            counted_cash=Decimal("900"),
+            explanation="Faltante de efectivo menor a dos.",
+        )
+        conciliacion = database.session.execute(
+            database.select(PettyCashReconciliation).filter_by(company=COMPANY)
+        ).scalar_one()
+        conciliacion = reconcile_petty_cash(conciliacion, actor_id="admin")
+        diarios_base = database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one()
+        gl_base = database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one()
+
+        def _fallo(*args, **kwargs):
+            raise RuntimeError("fallo simulado tras el flush")
+
+        monkeypatch.setattr(journal_service, "submit_journal", _fallo)
+        with pytest.raises(RuntimeError, match="fallo simulado"):
+            post_petty_cash_reconciliation_adjustment(
+                conciliacion,
+                adjustment_account_code="5.01.01.001",
+                cost_center_code="MAIN",
+                actor_id="admin",
+            )
+
+        assert (
+            database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one() == diarios_base
+        )
+        assert database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one() == gl_base
+        conciliacion = database.session.get(PettyCashReconciliation, conciliacion.id)
+        assert conciliacion.adjustment_journal_id is None
+
+
 # ------------------------------------------------------------ revaluación (SQLite)
 
 
