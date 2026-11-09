@@ -89,6 +89,7 @@ from cacao_accounting.compras.purchase_sourcing_service import (
 
 from cacao_accounting.admin.navigation import CONFIGURATION_SECTIONS
 from cacao_accounting.admin.services import (
+    LAST_ADMIN_REQUIRED_MESSAGE,
     _apply_user_edit,
     _can_create_user,
     _crear_usuario_desde_form,
@@ -110,6 +111,7 @@ from cacao_accounting.admin.services import (
     _send_email_test,
     _validar_creacion_usuario,
     _validate_portal_fields,
+    _would_leave_no_admin,
 )
 
 from cacao_accounting.admin.session_security_service import (
@@ -1230,7 +1232,11 @@ def lista_usuarios():
             return redirect(url_for(LISTA_USUARIOS))
 
         if action == "toggle":
-            usuario.active = not bool(usuario.active)
+            nuevo_estado = not bool(usuario.active)
+            if _would_leave_no_admin(usuario, active=nuevo_estado, classification=usuario.classification):
+                flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+                return redirect(url_for(LISTA_USUARIOS))
+            usuario.active = nuevo_estado
             if not usuario.active:
                 # La desactivación revoca el token persistido: un JWT en
                 # vigencia con credenciales válidas dejaría de autorizar.
@@ -1334,7 +1340,15 @@ def usuario_roles(user_id: str):
         form.roles.data = [rol.id for rol in _obtener_roles_por_usuario(usuario.id)]
 
     if form.validate_on_submit():
-        seleccionado = [rol_id for rol_id in form.roles.data if rol_id]
+        seleccionado = [rol_id for rol_id in (form.roles.data or []) if rol_id]
+        if _would_leave_no_admin(
+            usuario,
+            active=bool(usuario.active),
+            classification=usuario.classification,
+            role_ids=set(seleccionado),
+        ):
+            flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
         for assignment in database.session.execute(
             database.select(RolesUser).where(RolesUser.user_id == usuario.id)
         ).scalars():

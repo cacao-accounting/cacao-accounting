@@ -55,6 +55,8 @@ ADMIN_LISTA_GRUPOS_TERCEROS = "admin.lista_grupos_terceros"
 
 DESKTOP_SINGLE_ADMIN_MESSAGE = _l("En modo escritorio solo se permite un usuario administrador.")
 
+LAST_ADMIN_REQUIRED_MESSAGE = _l("El sistema debe conservar al menos un administrador activo.")
+
 LISTA_VALUACION_INVENTARIO = "admin.configuracion_valuacion_inventario"
 
 BUDGET_CONTROL_VALID_ACTIONS = ("do_nothing", "notify", "block")
@@ -83,6 +85,71 @@ def _require_system_admin() -> None:
     ):
         return
     abort(403)
+
+
+def _active_admin_role_id() -> str | None:
+    """Devuelve el id del rol administrativo, si existe."""
+    admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
+    return admin_role.id if admin_role else None
+
+
+def _user_role_ids(usuario: User) -> set[str]:
+    """Devuelve los roles vigentes del usuario."""
+    return {
+        assignment.role_id
+        for assignment in database.session.execute(
+            database.select(RolesUser).filter_by(user_id=usuario.id).where(RolesUser.active.is_not(False))
+        ).scalars()
+    }
+
+
+def _is_admin_state(usuario: User, *, active: bool, classification: str | None, role_ids: set[str] | None) -> bool:
+    """Evalúa si el usuario sería administrador con el estado propuesto."""
+    if not active:
+        return False
+    if classification == "admin":
+        return True
+    admin_role_id = _active_admin_role_id()
+    if not admin_role_id:
+        return False
+    vigentes = _user_role_ids(usuario) if role_ids is None else role_ids
+    return admin_role_id in vigentes
+
+
+def _active_admin_count(exclude_user_id: str | None = None) -> int:
+    """Cuenta los administradores activos, opcionalmente excluyendo uno."""
+    admin_role_id = _active_admin_role_id()
+    condiciones = [User.classification == "admin"]
+    if admin_role_id:
+        condiciones.append(
+            User.id.in_(
+                database.select(RolesUser.user_id).where(
+                    RolesUser.role_id == admin_role_id,
+                    RolesUser.active.is_not(False),
+                )
+            )
+        )
+    consulta = database.select(database.func.count(User.id)).where(
+        User.active.is_(True),
+        database.or_(*condiciones),
+    )
+    if exclude_user_id:
+        consulta = consulta.where(User.id != exclude_user_id)
+    return int(database.session.execute(consulta).scalar() or 0)
+
+
+def _would_leave_no_admin(
+    usuario: User,
+    *,
+    active: bool,
+    classification: str | None,
+    role_ids: set[str] | None = None,
+) -> bool:
+    """Detecta si el cambio propuesto dejaría el sistema sin administradores."""
+    if _is_admin_state(usuario, active=active, classification=classification, role_ids=role_ids):
+        return False
+    otros = _active_admin_count(exclude_user_id=usuario.id)
+    return otros == 0 and _active_admin_count() > 0
 
 
 def _decimal_form(name: str, default: str = "0") -> Decimal:
@@ -304,6 +371,9 @@ def _apply_user_edit(form, usuario) -> bool:
         and database.session.execute(database.select(RolesUser).filter_by(user_id=usuario.id)).first()
     ):
         form.classification.errors.append("Retire los roles antes de convertir el usuario en portal.")
+        return False
+    if _would_leave_no_admin(usuario, active=bool(form.active.data), classification=new_classification):
+        form.classification.errors.append(str(LAST_ADMIN_REQUIRED_MESSAGE))
         return False
     usuario.classification = new_classification
     usuario.party_id = form.party_id.data or None
