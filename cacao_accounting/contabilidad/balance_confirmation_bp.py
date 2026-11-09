@@ -563,6 +563,10 @@ def public_confirm_balance_verify(token: str):
     if not invitation:
         return render_template(TEMPLATE_NOT_FOUND), 404
 
+    if invitation.status in ("cancelled", "responded", "expired"):
+        flash(_("La invitación no se encuentra disponible."), "danger")
+        return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
+
     confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
     if not confirmation or confirmation.status in ("confirmed", "disputed", "cancelled"):
         flash(_("La confirmación no se encuentra disponible."), "danger")

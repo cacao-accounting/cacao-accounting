@@ -13706,6 +13706,10 @@ msgstr ""
 msgid "La confirmación no se encuentra disponible."
 msgstr "The confirmation is not available."
 
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py
+msgid "La invitación no se encuentra disponible."
+msgstr "The invitation is not available."
+
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:554
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:657
 msgid "Esta solicitud de confirmación de saldo ha expirado."
