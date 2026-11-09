@@ -30,6 +30,8 @@ import pytest
         ("cacao_accounting.auth.roles", "RegistroRol"),
         ("cacao_accounting.auth.roles", "RegistroRolUsuario"),
         ("cacao_accounting.auth.permisos", "RegistroPermisosRol"),
+        ("cacao_accounting.printing.service", "TemplateValidationResult"),
+        ("cacao_accounting.printing.exceptions", "PrintableDocumentNotRegisteredError"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):

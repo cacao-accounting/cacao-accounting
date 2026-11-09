@@ -17,9 +17,5 @@ class PrintPermissionError(PrintingError):
     """Raised when a user or company cannot access a print resource."""
 
 
-class PrintableDocumentNotRegisteredError(PrintingError):
-    """Raised when a document type is not registered."""
-
-
 class TemplateValidationError(PrintingError):
     """Raised when template validation fails."""

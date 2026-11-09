@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from html import escape
 from typing import Any
@@ -35,14 +34,6 @@ from cacao_accounting.printing.validators import validate_css_safety, validate_t
 
 
 from cacao_accounting.i18n import _
-
-
-@dataclass(frozen=True)
-class TemplateValidationResult:
-    """Result returned by template validation."""
-
-    valid: bool
-    message: str = ""
 
 
 class PrintService:
