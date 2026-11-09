@@ -24,7 +24,7 @@
   {{ macros.list_filters(show_status=True, extra_params=consulta.period_extra_params) }}
   {{ macros.period_list_filters(consulta) }}
   <table class="ca-table">
-    <caption style="display: none;">{{ _('Listado de notas de crédito de venta.') }}</caption>
+    <caption style="display: none;">{{ page_caption or _('Listado de notas de crédito de venta.') }}</caption>
     <thead>
       <tr>
         <th scope="col">{{ _('Número') }}</th>
@@ -39,7 +39,7 @@
       <tr>
         <td><a href="{{ url_for('ventas.ventas_factura_venta', invoice_id=item.id) }}">{{ item.document_no or item.id }}</a></td>
         <td>{{ item.customer_name or "" }}</td>
-        <td>{{ macros.document_status_for("sales_invoice", item) }}</td>
+        <td>{{ macros.document_status_for(item.document_type or document_type or "sales_credit_note", item) }}</td>
         <td>{{ item.posting_date or "" }}</td>
         <td>{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
       </tr>
@@ -52,7 +52,7 @@
       {%- endfor %}
     </tbody>
   </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="ventas.ventas_factura_venta_devolucion_lista", extra_params=consulta.period_extra_params) }}</div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista=list_endpoint or "ventas.ventas_factura_venta_devolucion_lista", extra_params=consulta.period_extra_params) }}</div>
 </div>
 
 {% endblock %}

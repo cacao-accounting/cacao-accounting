@@ -778,6 +778,8 @@ def ventas_factura_venta_nota_debito_lista():
         new_button_label=_("Nueva Nota de Débito"),
         page_caption=_("Listado de notas de débito de venta."),
         new_document_type="sales_debit_note",
+        document_type="sales_debit_note",
+        list_endpoint="ventas.ventas_factura_venta_nota_debito_lista",
     )
 
 
@@ -800,6 +802,8 @@ def ventas_factura_venta_devolucion_lista():
         new_button_label=_("Nueva Devolución"),
         page_caption=_("Listado de devoluciones y notas de crédito de venta."),
         new_document_type="sales_return",
+        document_type="sales_credit_note",
+        list_endpoint="ventas.ventas_factura_venta_devolucion_lista",
     )
 
 
