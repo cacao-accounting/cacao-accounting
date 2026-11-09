@@ -126,6 +126,7 @@ class ExchangeRevaluationService:
             drafts = self._calculate_lines(candidates, ledgers, period.end)
             affected = [draft for draft in drafts if draft.exchange_difference != 0]
             if not affected:
+                run.docstatus = 1
                 database.session.commit()
                 return run
 
@@ -137,6 +138,9 @@ class ExchangeRevaluationService:
             run.journal_entry_id = journal.id
             run.affected_documents_count = len(affected)
             self._compute_run_totals(run, entries, summary_ledger, defaults, period.end)
+            # La corrida se marca posteada al final: el guard de controles
+            # internos solo admite mutaciones sobre borradores.
+            run.docstatus = 1
             log_submit(run)
             database.session.commit()
             return run
@@ -220,7 +224,7 @@ class ExchangeRevaluationService:
             year=year,
             month=month,
             status=EXCHANGE_REVALUATION_STATUS_NO_CHANGES,
-            docstatus=1,
+            docstatus=0,
             created_by=user_id,
             processed_documents_count=len(candidates),
             affected_documents_count=0,
