@@ -896,9 +896,9 @@ def lista_precios():
             currency=currency,
             company=company,
             is_buying=bool(request.form.get("is_buying")),
-            is_selling=bool(request.form.get("is_selling", "1")),
+            is_selling=request.form.get("is_selling") is not None,
             is_default=bool(request.form.get("is_default")),
-            is_active=bool(request.form.get("is_active", "1")),
+            is_active=request.form.get("is_active") is not None,
         )
         _require_price_list_company_access(price_list)
         database.session.add(price_list)
