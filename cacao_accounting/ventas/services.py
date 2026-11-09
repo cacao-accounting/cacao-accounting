@@ -155,6 +155,16 @@ def _require_positive_qty(item_code: str, qty: Decimal) -> None:
         raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
 
 
+def _require_sale_item(item_code: str) -> Item:
+    """Devuelve el artículo y exige que esté activo y habilitado para venta."""
+    item = _item_by_code(item_code)
+    if not item:
+        raise ValueError(_("El item %(item_code)s no existe.") % {"item_code": item_code})
+    if not item.is_active or not item.is_sale_item:
+        raise ValueError(_("El item %(item_code)s no está habilitado para venta.") % {"item_code": item_code})
+    return item
+
+
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
 VENTAS_CLIENTE_NUEVO_TEMPLATE = "ventas/cliente_nuevo.html"
@@ -1050,11 +1060,7 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
-            item_obj = _item_by_code(item_code)
-            if not item_obj:
-                raise ValueError(_("El item %(item_code)s no existe.") % {"item_code": item_code})
-            if not item_obj.is_active or not item_obj.is_sale_item:
-                raise ValueError(_("El item %(item_code)s no está habilitado para venta.") % {"item_code": item_code})
+            item_obj = _require_sale_item(item_code)
             _validate_sales_catalog_rate(order, i, item_code, qty, uom, rate)
             qty_in_base_uom = convert_item_qty(item_code, qty, uom or item_obj.default_uom, item_obj.default_uom)
             warehouse = (
@@ -1107,14 +1113,10 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             _require_positive_qty(item_code, qty)
+            _require_sale_item(item_code)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
-            item_obj = _item_by_code(item_code)
-            if not item_obj:
-                raise ValueError(_("El item %(item_code)s no existe.") % {"item_code": item_code})
-            if not item_obj.is_active or not item_obj.is_sale_item:
-                raise ValueError(_("El item %(item_code)s no está habilitado para venta.") % {"item_code": item_code})
             _validate_sales_catalog_rate(sales_request, i, item_code, qty, uom, rate)
             linea = SalesRequestItem(
                 sales_request_id=request_id,
@@ -1158,6 +1160,7 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             _require_positive_qty(item_code, qty)
+            _require_sale_item(item_code)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
@@ -1204,6 +1207,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             _require_positive_qty(item_code, qty)
+            _require_sale_item(item_code)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
@@ -1263,6 +1267,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             _require_positive_qty(item_code, qty)
+            _require_sale_item(item_code)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
