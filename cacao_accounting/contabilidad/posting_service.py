@@ -4352,9 +4352,9 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
     if purpose == "material_transfer":
         _validate_material_transfer_accounts(document, company)
 
-    movements = _create_stock_ledger(document)
-
     _validate_stock_reconciliation_dimensions(document, company)
+
+    movements = _create_stock_ledger(document)
 
     # In Material Transfer, we only generate GL if source and target warehouses
     # use different GL accounts. Otherwise, it's just a stock movement.
