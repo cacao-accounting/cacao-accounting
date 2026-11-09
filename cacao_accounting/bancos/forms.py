@@ -78,38 +78,3 @@ class FormularioPettyCashExpense(FlaskForm):
     unit_code = SelectField(_l("Unidad de negocio"), choices=[], validators=[Optional()])
     project_code = SelectField(_l("Proyecto"), choices=[], validators=[Optional()])
     remarks = TextAreaField(_l("Observaciones"), validators=[Optional()])
-
-
-class FormularioPago(FlaskForm):
-    """Formulario para crear una entrada de pago."""
-
-    payment_type = SelectField(
-        _l("Tipo de Pago"),
-        choices=[
-            ("receive", _l("Cobro")),
-            ("pay", _l("Pago")),
-            ("internal_transfer", _l("Transferencia Interna")),
-        ],
-    )
-    company = SelectField(_LABEL_COMPANY, choices=[])
-    naming_series = SelectField(_l("Serie"), choices=[])
-    posting_date = StringField(_l("Fecha"))
-    bank_account_id = SelectField(_l("Cuenta Bancaria"), choices=[])
-    party_type = SelectField(
-        _l("Tipo de Tercero"),
-        choices=[("customer", _l("Cliente")), ("supplier", _l("Proveedor"))],
-    )
-    party_id = SelectField(_l("Tercero"), choices=[])
-    paid_amount = StringField(_l("Monto Pagado"))
-    remarks = TextAreaField(_l("Observaciones"))
-    # Contador externo — opcional. Si se selecciona, se asigna el numero externo al pago.
-    external_counter_id = SelectField(
-        _l("Contador Externo (Cheque / Número Fiscal)"),
-        choices=[],
-        validators=[Optional()],
-    )
-    # Numero externo: si se deja vacio, el sistema usa el siguiente sugerido por el contador.
-    external_number = StringField(
-        _l("Número Externo"),
-        validators=[Optional()],
-    )

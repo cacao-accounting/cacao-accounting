@@ -33,6 +33,8 @@ import pytest
         ("cacao_accounting.printing.service", "TemplateValidationResult"),
         ("cacao_accounting.printing.exceptions", "PrintableDocumentNotRegisteredError"),
         ("cacao_accounting.exceptions", "TransactionError"),
+        ("cacao_accounting.setup.forms", "SetupConfirmationForm"),
+        ("cacao_accounting.bancos.forms", "FormularioPago"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):

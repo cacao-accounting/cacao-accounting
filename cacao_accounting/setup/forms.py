@@ -95,9 +95,3 @@ class SetupCompanyForm(FlaskForm):
         self.catalogo_origen.choices = [("", texts["select_catalog"])] + available_catalog_files()
         if self.catalogo.data == "en_cero":
             self.catalogo_origen.data = ""
-
-
-class SetupConfirmationForm(FlaskForm):
-    """Formulario final de confirmación del proceso de configuración."""
-
-    step = HiddenField(default="4")
