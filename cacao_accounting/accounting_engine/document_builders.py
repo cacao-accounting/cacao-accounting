@@ -1077,10 +1077,18 @@ def _tax_rules_from_template(
         .scalars()
         .all()
     )
+    items_by_tax: dict[str, list[TaxTemplateItem]] = {}
+    for template_item in template_items:
+        items_by_tax.setdefault(str(template_item.tax_id), []).append(template_item)
+    used_by_tax: dict[str, int] = {}
     rules: list[TaxRuleContext] = []
     for index, tax_line in enumerate(tax_result.lines, start=1):
-        template_item = template_items[index - 1] if index - 1 < len(template_items) else None
-        if rule := _tax_rule_from_template_line(tax_line, template_item, index, event_type):
+        tax_key = str(tax_line.tax_id)
+        candidates = items_by_tax.get(tax_key, [])
+        offset = used_by_tax.get(tax_key, 0)
+        matched_item = candidates[offset] if offset < len(candidates) else None
+        used_by_tax[tax_key] = offset + 1
+        if rule := _tax_rule_from_template_line(tax_line, matched_item, index, event_type):
             rules.append(rule)
     return rules
 
