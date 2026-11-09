@@ -50,6 +50,7 @@ from cacao_accounting.database import (
     Tax,
     TaxTemplate,
     TaxTemplateItem,
+    UOM,
     User,
     UserCompanyAccess,
     database,
@@ -933,6 +934,23 @@ def lista_precios():
     return render_template("admin/price_lists.html", price_lists=price_lists, titulo=_("Listas de Precios"))
 
 
+def _validated_item_price_references(item_code: str, uom: str | None) -> str | None:
+    """Devuelve un mensaje si el artículo o la unidad de medida no están disponibles."""
+    item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    if item is None:
+        return _("El artículo seleccionado no existe.")
+    if not item.is_active:
+        return _("El artículo seleccionado no está activo.")
+    if not uom:
+        return None
+    unidad = database.session.execute(database.select(UOM).filter_by(code=uom)).scalar_one_or_none()
+    if unidad is None:
+        return _("La unidad de medida seleccionada no existe.")
+    if not unidad.is_active:
+        return _("La unidad de medida seleccionada no está activa.")
+    return None
+
+
 @admin.route("/settings/item-prices", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -948,17 +966,28 @@ def precios_item():
         if not price_value.is_finite():
             flash(_("El precio debe ser finito."), "danger")
             return redirect(url_for("admin.precios_item"))
+        item_code = request.form.get("item_code") or ""
+        uom = request.form.get("uom") or None
+        reference_error = _validated_item_price_references(item_code, uom)
+        if reference_error:
+            flash(reference_error, "danger")
+            return redirect(url_for("admin.precios_item"))
         item_price = ItemPrice(
-            item_code=request.form.get("item_code") or "",
+            item_code=item_code,
             price_list_id=request.form.get("price_list_id") or "",
-            uom=request.form.get("uom") or None,
+            uom=uom,
             price=price_value,
             min_qty=_decimal_form("min_qty", "0"),
             valid_from=_date_form("valid_from"),
             valid_upto=_date_form("valid_upto"),
         )
         database.session.add(item_price)
-        database.session.commit()
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("El artículo o la unidad de medida ya no está disponible."), "danger")
+            return redirect(url_for("admin.precios_item"))
         flash(_("Precio de item creado correctamente."), "success")
         return redirect(url_for("admin.precios_item"))
     price_lists = [
@@ -994,6 +1023,10 @@ def actualizar_precio_item(item_price_id: str):
     if not price_list:
         abort(404)
     _require_price_list_company_access(price_list)
+    reference_error = _validated_item_price_references(item_price.item_code, item_price.uom)
+    if reference_error:
+        flash(reference_error, "danger")
+        return redirect(url_for("admin.precios_item"))
     price_value = _decimal_form("price")
     if not price_value.is_finite():
         flash(_("El precio debe ser finito."), "danger")
@@ -1002,7 +1035,12 @@ def actualizar_precio_item(item_price_id: str):
     item_price.min_qty = _decimal_form("min_qty", "0")
     item_price.valid_from = _date_form("valid_from")
     item_price.valid_upto = _date_form("valid_upto")
-    database.session.commit()
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("El artículo o la unidad de medida ya no está disponible."), "danger")
+        return redirect(url_for("admin.precios_item"))
     flash(_("Precio de item actualizado correctamente."), "success")
     return redirect(url_for("admin.precios_item"))
 

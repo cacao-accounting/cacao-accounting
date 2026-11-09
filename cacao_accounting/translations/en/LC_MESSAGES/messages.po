@@ -25113,3 +25113,27 @@ msgstr "The supplier tax rule must be recognized on payment."
 #: cacao_accounting/party_management.py
 msgid "Ya existe un tercero con ese identificador fiscal."
 msgstr "A party with that tax identifier already exists."
+
+#: cacao_accounting/admin/routes.py
+msgid "El artículo seleccionado no existe."
+msgstr "The selected item does not exist."
+
+#: cacao_accounting/admin/routes.py
+msgid "El artículo seleccionado no está activo."
+msgstr "The selected item is not active."
+
+#: cacao_accounting/admin/routes.py
+msgid "La unidad de medida seleccionada no existe."
+msgstr "The selected unit of measure does not exist."
+
+#: cacao_accounting/admin/routes.py
+msgid "La unidad de medida seleccionada no está activa."
+msgstr "The selected unit of measure is not active."
+
+#: cacao_accounting/admin/routes.py
+msgid "El artículo o la unidad de medida ya no está disponible."
+msgstr "The item or unit of measure is no longer available."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "Ya existe una tasa de cambio para ese par de monedas y fecha."
+msgstr "An exchange rate already exists for that currency pair and date."

@@ -17,6 +17,7 @@ from flask.helpers import url_for
 from flask_login import current_user, login_required
 
 from sqlalchemy import false, or_
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.contabilidad.services import (
     _company_label,
@@ -2382,6 +2383,25 @@ def tipo_cambio(rate_id):
     )
 
 
+def _exchange_rate_conflicts(origin: str, destination: str, rate_date: object, exclude_id: str) -> bool:
+    """Indica si otro registro ya ocupa el mismo par de monedas y fecha."""
+    from cacao_accounting.database import ExchangeRate
+
+    return (
+        database.session.execute(
+            database.select(ExchangeRate.id)
+            .where(
+                ExchangeRate.origin == origin,
+                ExchangeRate.destination == destination,
+                ExchangeRate.date == rate_date,
+                ExchangeRate.id != exclude_id,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
 @contabilidad.route("/exchange/<rate_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -2439,13 +2459,25 @@ def editar_tasa_cambio(rate_id):
                     ),
                     "danger",
                 )
+            elif _exchange_rate_conflicts(
+                formulario.origin.data,
+                formulario.destination.data,
+                formulario.date.data,
+                registro.id,
+            ):
+                flash(_("Ya existe una tasa de cambio para ese par de monedas y fecha."), "danger")
             else:
                 registro.origin = formulario.origin.data
                 registro.destination = formulario.destination.data
                 registro.rate = rate
                 registro.date = formulario.date.data
-                database.session.commit()
-                return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro.id))
+                try:
+                    database.session.commit()
+                except IntegrityError:
+                    database.session.rollback()
+                    flash(_("Ya existe una tasa de cambio para ese par de monedas y fecha."), "danger")
+                else:
+                    return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro.id))
 
     return render_template(
         _TPL_TC_CREAR,
