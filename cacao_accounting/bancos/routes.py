@@ -7,6 +7,8 @@ from datetime import date
 
 from decimal import Decimal, InvalidOperation
 
+from types import SimpleNamespace
+
 import json
 
 
@@ -1238,7 +1240,13 @@ def caja_chica_vale_nuevo():
         petty_cash_id = request.form.get("petty_cash_id")
         if not company or not petty_cash_id:
             flash(_("Seleccione la compañía y la caja chica."), "danger")
-            return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
+            return render_template(
+                BANCOS_CAJA_CHICA_VALE_NUEVO_HTML,
+                form=formulario,
+                fondos=fondos,
+                titulo=titulo,
+                vale=_voucher_form_state(fondos),
+            )
         exige_acceso_compania("cash", company, "crear")
         try:
             create_petty_cash_voucher(
@@ -1255,12 +1263,35 @@ def caja_chica_vale_nuevo():
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
-            return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
+            return render_template(
+                BANCOS_CAJA_CHICA_VALE_NUEVO_HTML,
+                form=formulario,
+                fondos=fondos,
+                titulo=titulo,
+                vale=_voucher_form_state(fondos),
+            )
         flash(_("Vale de caja chica creado."), "success")
         return redirect(url_for("bancos.caja_chica_vale_lista"))
 
     # Prellenar dimensiones segun la compania seleccionada (requiere JS/alpine del cliente)
     return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
+
+
+def _voucher_form_state(fondos: list) -> SimpleNamespace:
+    """Rehidrata los selectores del vale con los valores del POST rechazado."""
+    petty_cash_id = request.form.get("petty_cash_id") or ""
+    fondo = next((registro for registro in fondos if registro.id == petty_cash_id), None)
+    return SimpleNamespace(
+        company=request.form.get("company") or "",
+        naming_series_id=request.form.get("naming_series") or "",
+        petty_cash_id=petty_cash_id,
+        transaction_currency=fondo.currency if fondo else "",
+        posting_date=None,
+        amount=None,
+        cost_center_code=request.form.get("cost_center_code") or "",
+        unit_code=request.form.get("unit_code") or "",
+        project_code=request.form.get("project_code") or "",
+    )
 
 
 @bancos.route("/petty-cash-voucher/<v_id>/status", methods=["POST"])
