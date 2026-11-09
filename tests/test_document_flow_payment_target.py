@@ -162,3 +162,57 @@ def test_pago_destino_rechaza_una_factura_ajena(pagos_cloud):
     assert response.status_code in {403, 409}
     with application.app_context():
         assert database.session.execute(database.select(PaymentEntry)).scalars().all() == []
+
+
+@pytest.mark.parametrize(
+    "line_changes, expected_status",
+    [
+        ({"source_document_type": "sales_invoice"}, 400),
+        ({"source_document_id": ""}, 400),
+        ({"source_document_type": "sales_order"}, 400),
+        ({"source_document_id": "missing-invoice"}, 404),
+    ],
+)
+def test_pago_destino_rechaza_referencias_incompletas_o_invalidas(pagos_cloud, line_changes, expected_status):
+    """Una referencia que el servicio no puede resolver no debe saltar el ACL."""
+    application, factura_id = pagos_cloud
+    client = application.test_client()
+    _iniciar(client)
+    payload = _payload(factura_id)
+    payload["lines"][0].update(line_changes)
+
+    response = client.post("/api/document-flow/create-target", json=payload)
+
+    assert response.status_code == expected_status
+    with application.app_context():
+        assert database.session.execute(database.select(PaymentEntry)).scalars().all() == []
+
+
+def test_pago_destino_rechaza_factura_ajena_bajo_compania_autorizada(pagos_cloud):
+    """El acceso al destino no concede acceso a una factura de otra compañía."""
+    application, _ = pagos_cloud
+    with application.app_context():
+        factura_ajena = SalesInvoice(
+            company="otra",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="INV-AJENA-CAMUFLADA",
+            customer_name="Cliente Ajeno",
+            transaction_currency="NIO",
+            grand_total=Decimal("500"),
+            total=Decimal("500"),
+        )
+        database.session.add(factura_ajena)
+        database.session.commit()
+        ajena_id = factura_ajena.id
+
+    client = application.test_client()
+    _iniciar(client)
+    payload = _payload(ajena_id)
+    payload["company"] = "cacao"
+
+    response = client.post("/api/document-flow/create-target", json=payload)
+
+    assert response.status_code == 403
+    with application.app_context():
+        assert database.session.execute(database.select(PaymentEntry)).scalars().all() == []

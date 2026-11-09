@@ -209,6 +209,16 @@ def _require_flow_source_lines_access(payload: dict[str, Any], action: str = "cr
     payload, y cada línea puede referenciar un documento distinto: se valida
     la pertenencia a compañía del documento padre real de la línea física.
     """
+    payment_reference_types = {
+        "purchase_invoice",
+        "purchase_credit_note",
+        "purchase_debit_note",
+        "sales_invoice",
+        "sales_credit_note",
+        "sales_debit_note",
+        "sales_return",
+    }
+    target_type = normalize_doctype(str(payload.get("target_document_type") or payload.get("target_type") or ""))
     for selected in payload.get("lines") or []:
         source_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
         item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
@@ -216,21 +226,32 @@ def _require_flow_source_lines_access(payload: dict[str, Any], action: str = "cr
         if not item_id:
             # Las líneas de pago referencian la factura completa, sin fila de
             # origen: se autoriza la compañía del documento referenciado.
-            if source_type and document_id:
-                module = _module_for_document_type(source_type)
-                if module:
-                    exige_acceso_compania(module, get_document_company(source_type, document_id), action)
+            if target_type != "payment_entry":
+                continue
+            if source_type not in payment_reference_types or not document_id:
+                abort(400)
+            company = get_document_company(source_type, document_id)
+            if not company:
+                abort(404)
+            module = _module_for_document_type(source_type)
+            if module:
+                exige_acceso_compania(module, company, action)
             continue
+        if not source_type:
+            abort(400)
         source_item = get_document_item(source_type, item_id)
         if not source_item:
-            continue
+            abort(404)
         source_spec = get_document_type(source_type)
         parent_id = str(getattr(source_item, source_spec.parent_field))
         if document_id and document_id != parent_id:
             abort(400)
+        company = get_document_company(source_type, parent_id)
+        if not company:
+            abort(404)
         module = _module_for_document_type(source_type)
         if module:
-            exige_acceso_compania(module, get_document_company(source_type, parent_id), action)
+            exige_acceso_compania(module, company, action)
 
 
 _FISCAL_PREVIEW_MODULES = {
