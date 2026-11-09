@@ -859,6 +859,42 @@ class TestConcurrenciaPostgreSQL:
             conciliacion = database.session.get(PettyCashReconciliation, conciliacion_id)
             assert conciliacion.adjustment_journal_id == ganador
 
+    def test_doble_corrida_concurrente_una_sola_activa(self, pg_app_reval):
+        """Dos corridas simultáneas del mismo periodo: una sola queda activa."""
+        application = pg_app_reval
+        from cacao_accounting.database import ExchangeRevaluation, GLEntry
+
+        def _correr():
+            with application.app_context():
+                corrida = ExchangeRevaluationService().run(company=COMPANY, year=2026, month=10, user_id="admin")
+                return corrida.id
+
+        resultados = _ejecutar_en_dos_hilos([_correr, _correr])
+        exitos, errores = _exitos_y_errores(resultados)
+        assert exitos == 2, f"las corridas se serializan, no se rechazan: {resultados}"
+        assert errores == 0
+        with application.app_context():
+            corridas = list(database.session.execute(database.select(ExchangeRevaluation)).scalars().all())
+            assert len(corridas) == 2
+            estados = [corrida.status for corrida in corridas]
+            assert estados.count("posted") == 1
+            assert estados.count("voided") == 1
+            anulada = next(corrida for corrida in corridas if corrida.status == "voided")
+            originales = list(
+                database.session.execute(
+                    database.select(GLEntry).where(
+                        GLEntry.voucher_type == "exchange_revaluation",
+                        GLEntry.voucher_id == str(anulada.id),
+                        GLEntry.is_reversal.is_(False),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert len(originales) == 2
+            assert all(entrada.is_cancelled for entrada in originales)
+        assert len(_entradas_revaluacion_activas(application, COMPANY)) == 4
+
     def test_anulacion_concurrente_un_solo_reverso(self, pg_app_reval):
         """void() concurrente: exactamente un conjunto de reversos y lápida permanente."""
         application = pg_app_reval
