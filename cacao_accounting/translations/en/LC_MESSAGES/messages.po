@@ -24947,3 +24947,7 @@ msgstr "The tax rule currency does not exist."
 #: cacao_accounting/admin/routes.py
 msgid "No se puede eliminar una regla fiscal en uso."
 msgstr "A tax rule that is in use cannot be deleted."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html
+msgid "Var"
+msgstr "Var"

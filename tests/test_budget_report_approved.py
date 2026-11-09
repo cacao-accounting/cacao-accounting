@@ -16,6 +16,7 @@ from decimal import Decimal
 import pytest
 
 from cacao_accounting import create_app
+from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.budget_report_service import BudgetReportService
 from cacao_accounting.database import (
@@ -28,10 +29,14 @@ from cacao_accounting.database import (
     Currency,
     Entity,
     FiscalYear,
+    Modules,
+    User,
+    UserCompanyAccess,
     database,
 )
 
 FECHA = date(2026, 1, 1)
+CONTRASENA = "reporte-presupuesto-2026"
 
 
 @pytest.fixture
@@ -44,13 +49,14 @@ def presupuestos_reporte():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
-            "MODO_ESCRITORIO": True,
+            "MODO_ESCRITORIO": False,
         }
     )
     with application.app_context():
         database.create_all()
         database.session.add_all(
             [
+                Modules(module="accounting", default=False, enabled=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Entity(
                     code="cacao",
@@ -61,6 +67,15 @@ def presupuestos_reporte():
                     enabled=True,
                     status="default",
                 ),
+                User(
+                    id="admin",
+                    user="admin",
+                    name="Administrador",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                    classification="admin",
+                ),
+                UserCompanyAccess(user_id="admin", company_code="cacao"),
             ]
         )
         database.session.flush()
@@ -177,3 +192,24 @@ def test_reporte_incluye_presupuesto_aprobado(presupuestos_reporte):
 
     assert reporte.rows
     assert reporte.totals
+
+
+def test_reporte_renderiza_la_etiqueta_de_variacion(presupuestos_reporte):
+    """La etiqueta «Var %» no se interpreta como formato gettext."""
+    application, ids = presupuestos_reporte
+    client = application.test_client()
+    response = client.post("/login", data={"usuario": "admin", "acceso": CONTRASENA}, follow_redirects=True)
+    assert response.status_code == 200
+
+    response = client.get(
+        "/accounting/presupuestos/report/real-vs-budget",
+        query_string={
+            "company": "cacao",
+            "ledger_id": ids["libro"],
+            "fiscal_year_id": ids["anio"],
+            "budget_id": ids["approved"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Var %" in response.get_data(as_text=True)
