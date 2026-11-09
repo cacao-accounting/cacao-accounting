@@ -223,6 +223,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
             app.jinja_env.globals.update(document_currency_code=document_currency_code)
             app.jinja_env.globals.update(format_money_with_currency=format_money_with_currency)
+            app.jinja_env.filters.update(format_currency=format_money_with_currency)
             app.jinja_env.globals.update(format_quantity=format_quantity)
             app.jinja_env.globals.update(module_badge=module_badge)
             app.jinja_env.globals.update(collaboration_active_users=collaboration_active_users)

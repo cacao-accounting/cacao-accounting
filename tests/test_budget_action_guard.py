@@ -39,7 +39,6 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-from cacao_accounting.contabilidad.presupuesto import enforce_budget_company_access
 
 CONTRASENA = "presupuesto-acciones-2026"
 FECHA = date(2026, 1, 1)
@@ -253,15 +252,15 @@ def test_cerrar_exige_cerrar_no_crear(presupuesto_acciones):
 
 
 def test_importar_exige_importar_no_crear(presupuesto_acciones):
-    """Importar usa el permiso importar y no exige crear."""
+    """Importar usa el permiso importar y alcanza su validación de archivo."""
     application, ids = presupuesto_acciones
+    client = application.test_client()
+    _iniciar(client, "operador")
 
-    with application.test_request_context(f"/accounting/presupuestos/{ids['presupuesto']}/import", method="POST"):
-        from flask_login import login_user
+    response = client.post(f"/accounting/presupuestos/{ids['presupuesto']}/import")
 
-        usuario = database.session.execute(database.select(User).filter_by(user="operador")).scalar_one()
-        login_user(usuario)
-        enforce_budget_company_access()
+    assert response.status_code == 200
+    assert "Por favor suba un archivo válido." in response.get_data(as_text=True)
 
 
 def test_eliminar_linea_exige_eliminar_no_crear(presupuesto_acciones):
