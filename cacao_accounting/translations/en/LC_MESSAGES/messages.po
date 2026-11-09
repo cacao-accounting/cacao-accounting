@@ -24917,3 +24917,8 @@ msgstr "The classification must be submitted in full to avoid accidental deletio
 #: cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html
 msgid "No se encontraron documentos para los filtros seleccionados."
 msgstr "No documents were found for the selected filters."
+
+#: cacao_accounting/bancos/services.py
+#, python-format
+msgid "La dimensión %(label)s no pertenece a la compañía del documento."
+msgstr "The %(label)s dimension does not belong to the document company."

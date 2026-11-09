@@ -34,6 +34,7 @@ from cacao_accounting.database import (
     BankAccountNumberingConfig,
     BankTransaction,
     ComprobanteContable,
+    CostCenter,
     Currency,
     DocumentRelation,
     Entity,
@@ -47,6 +48,7 @@ from cacao_accounting.database import (
     PettyCashReconciliation,
     PettyCashReplenishment,
     PettyCashVoucher,
+    Project,
     PurchaseInvoice,
     PurchaseOrder,
     PurchaseReconciliation,
@@ -55,6 +57,7 @@ from cacao_accounting.database import (
     SalesOrder,
     SalesInvoice,
     SeriesExternalCounterMap,
+    Unit,
     User,
     database,
 )
@@ -637,6 +640,30 @@ def _validate_petty_cash_fund(petty_cash_id: str, company: str | None = None) ->
     return fund
 
 
+def _validate_petty_cash_dimensions(
+    company: str,
+    cost_center_code: str | None,
+    unit_code: str | None,
+    project_code: str | None,
+) -> None:
+    """Exige que las dimensiones analíticas pertenezcan a la compañía."""
+    checks = (
+        (CostCenter, cost_center_code, _("centro de costo")),
+        (Unit, unit_code, _("unidad de negocio")),
+        (Project, project_code, _("proyecto")),
+    )
+    for model, code, label in checks:
+        if not code:
+            continue
+        exists = database.session.execute(
+            database.select(model.id).filter_by(code=code, entity=company)
+        ).scalar_one_or_none()
+        if exists is None:
+            raise ValueError(
+                _("La dimensión %(label)s no pertenece a la compañía del documento.") % {"label": label}
+            )
+
+
 def create_petty_cash_voucher(
     *,
     company: str,
@@ -657,6 +684,7 @@ def create_petty_cash_voucher(
         raise ValueError(_("El concepto del vale es obligatorio."))
     if amount is None or amount <= 0:
         raise ValueError(_("El importe del vale debe ser mayor a cero."))
+    _validate_petty_cash_dimensions(company, cost_center_code, unit_code, project_code)
 
     voucher = PettyCashVoucher(
         company=company,
@@ -861,6 +889,7 @@ def create_petty_cash_expense(
         raise ValueError(_("El importe del gasto debe ser mayor a cero."))
     if not cost_center_code:
         raise ValueError(_("El gasto de caja chica requiere un centro de costo."))
+    _validate_petty_cash_dimensions(company, cost_center_code, unit_code, project_code)
 
     if voucher_id:
         voucher = database.session.get(PettyCashVoucher, voucher_id)
