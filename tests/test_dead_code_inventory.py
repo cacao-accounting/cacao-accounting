@@ -35,6 +35,9 @@ import pytest
         ("cacao_accounting.exceptions", "TransactionError"),
         ("cacao_accounting.setup.forms", "SetupConfirmationForm"),
         ("cacao_accounting.bancos.forms", "FormularioPago"),
+        ("cacao_accounting.config", "probar_modo_escritorio"),
+        ("cacao_accounting.setup.repository", "get_default_entity"),
+        ("cacao_accounting.modulos", "lista_tipos_documentos"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):

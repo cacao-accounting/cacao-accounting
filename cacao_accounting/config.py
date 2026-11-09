@@ -148,11 +148,6 @@ if environ.get("RATELIMIT_STORAGE_URI"):
     configuracion["RATELIMIT_STORAGE_URI"] = environ.get("RATELIMIT_STORAGE_URI") or ""
 
 
-def probar_modo_escritorio() -> bool:
-    """Compatibility wrapper for the centralized runtime mode detector."""
-    return detect_desktop_mode()
-
-
 MODO_ESCRITORIO = detect_desktop_mode()
 
 TESTING_MODE = environ.get("CACAO_TEST", False) or environ.get("CI", False) or environ.get("PYTEST_VERSION") is not None
