@@ -135,8 +135,8 @@ configuracion["EXTERNAL_DOCUMENT_VALIDATION_BASE_URL"] = environ.get(
 configuracion["ATTACHMENT_MAX_FILE_SIZE"] = int(environ.get("CACAO_ATTACHMENT_MAX_FILE_SIZE", str(25 * 1024 * 1024)))
 
 if environ.get("CACAO_TEST"):
-    configuracion["DEGUG"] = "True"
-    configuracion["TEMPLATES_AUTO_RELOAD"] = "True"
+    configuracion["DEBUG"] = True
+    configuracion["TEMPLATES_AUTO_RELOAD"] = True
 
 if environ.get("CACHE_REDIS_URL"):
     configuracion["CACHE_TYPE"] = "RedisCache"
