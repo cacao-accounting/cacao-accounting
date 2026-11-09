@@ -16,12 +16,20 @@ from decimal import Decimal
 import pytest
 
 from cacao_accounting import create_app
-from cacao_accounting.compras.services import _validate_purchase_order_award
+from cacao_accounting.compras import services as compras_services
+from cacao_accounting.compras.services import (
+    _create_purchase_order_from_request,
+    _update_purchase_order_from_request,
+    _validate_purchase_order_award,
+)
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Entity,
     Item,
+    Modules,
     Party,
+    PurchaseOrder,
+    PurchaseOrderItem,
     PurchaseQuotation,
     PurchaseQuotationAward,
     PurchaseQuotationAwardItem,
@@ -29,6 +37,7 @@ from cacao_accounting.database import (
     SupplierQuotation,
     SupplierQuotationItem,
     UOM,
+    User,
     database,
 )
 
@@ -50,16 +59,27 @@ def adjudicaciones():
     )
     with application.app_context():
         database.create_all()
-        database.session.add(
-            Entity(
-                code="cacao",
-                name="Cacao",
-                company_name="Cacao SA",
-                tax_id="J0001",
-                currency="NIO",
-                enabled=True,
-                status="default",
-            )
+        database.session.add_all(
+            [
+                Entity(
+                    code="cacao",
+                    name="Cacao",
+                    company_name="Cacao SA",
+                    tax_id="J0001",
+                    currency="NIO",
+                    enabled=True,
+                    status="default",
+                ),
+                Modules(module="purchases", default=False, enabled=True),
+                User(
+                    id="admin",
+                    user="admin",
+                    name="Administrador",
+                    password=b"x",
+                    active=True,
+                    classification="admin",
+                ),
+            ]
         )
         database.session.flush()
         proveedor_a = Party(code="PROV-A", name="Proveedor A", is_supplier=True)
@@ -67,8 +87,20 @@ def adjudicaciones():
         item = Item(code="ART-1", name="Artículo", item_type="goods", is_stock_item=True, default_uom="UND")
         database.session.add_all([proveedor_a, proveedor_b, item, UOM(code="UND", name="Unidad")])
         database.session.flush()
-        q1 = PurchaseQuotation(company="cacao", posting_date=FECHA, docstatus=1, document_no="RFQ-1")
-        q2 = PurchaseQuotation(company="cacao", posting_date=FECHA, docstatus=1, document_no="RFQ-2")
+        q1 = PurchaseQuotation(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="RFQ-1",
+            transaction_currency="NIO",
+        )
+        q2 = PurchaseQuotation(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="RFQ-2",
+            transaction_currency="NIO",
+        )
         database.session.add_all([q1, q2])
         database.session.flush()
         sq_a = SupplierQuotation(
@@ -78,6 +110,7 @@ def adjudicaciones():
             document_no="SQ-A",
             supplier_id=proveedor_a.id,
             purchase_quotation_id=q1.id,
+            transaction_currency="NIO",
         )
         sq_b = SupplierQuotation(
             company="cacao",
@@ -86,6 +119,7 @@ def adjudicaciones():
             document_no="SQ-B",
             supplier_id=proveedor_b.id,
             purchase_quotation_id=q2.id,
+            transaction_currency="NIO",
         )
         database.session.add_all([sq_a, sq_b])
         database.session.flush()
@@ -94,12 +128,14 @@ def adjudicaciones():
             item_code="ART-1",
             qty=Decimal("5"),
             uom="UND",
+            qty_in_base_uom=Decimal("5"),
         )
         sq_item = SupplierQuotationItem(
             supplier_quotation_id=sq_a.id,
             item_code="ART-1",
             qty=Decimal("5"),
             uom="UND",
+            qty_in_base_uom=Decimal("5"),
             rate=Decimal("10"),
         )
         database.session.add_all([pq_item, sq_item])
@@ -214,3 +250,140 @@ def test_adjudicacion_rechaza_linea_no_adjudicada(adjudicaciones):
             form=_form(ids, item_code_0="OTRO"),
         )
         assert valido is False
+
+
+def test_adjudicacion_rechaza_orden_sin_origen(adjudicaciones):
+    """Una orden que acredita una adjudicación debe declarar su origen."""
+    application, ids = adjudicaciones
+    with application.app_context():
+        _, valido = _validar(
+            application,
+            ids["award"],
+            "cacao",
+            source=None,
+            supplier_id=ids["proveedor_a"],
+            form=_form(ids),
+        )
+        assert valido is False
+
+
+def test_adjudicacion_rechaza_cantidades_repetidas_sobre_el_total(adjudicaciones):
+    """Dos líneas del mismo ítem no pueden superar el total adjudicado."""
+    application, ids = adjudicaciones
+    with application.app_context():
+        form = _form(ids, qty_0="4")
+        form.update({"item_code_1": "ART-1", "qty_1": "4", "source_item_id_1": ids["sq_item"]})
+        _, valido = _validar(
+            application,
+            ids["award"],
+            "cacao",
+            source=database.session.get(SupplierQuotation, ids["sq_a"]),
+            supplier_id=ids["proveedor_a"],
+            form=form,
+        )
+        assert valido is False
+
+
+def _form_orden(ids, **overrides):
+    form = {
+        "company": "cacao",
+        "supplier_id": ids["proveedor_a"],
+        "posting_date": FECHA.isoformat(),
+        "transaction_currency": "NIO",
+        "purchase_award_id": ids["award"],
+        "from_supplier_quotation": ids["sq_a"],
+        "item_code_0": "ART-1",
+        "qty_0": "1",
+        "rate_0": "10",
+        "uom_0": "UND",
+        "source_type_0": "supplier_quotation",
+        "source_id_0": ids["sq_a"],
+        "source_item_id_0": ids["sq_item"],
+    }
+    form.update(overrides)
+    return form
+
+
+def _crear_orden(application, ids, monkeypatch, **overrides):
+    form = _form_orden(ids, **overrides)
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    from flask_login import login_user
+
+    with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
+        login_user(database.session.get(User, "admin"))
+        return _create_purchase_order_from_request(form)
+
+
+def test_creacion_guarda_orden_con_adjudicacion_valida(adjudicaciones, monkeypatch):
+    """El alta real persiste una orden vinculada a su adjudicación."""
+    application, ids = adjudicaciones
+
+    _crear_orden(application, ids, monkeypatch)
+
+    with application.app_context():
+        ordenes = database.session.execute(database.select(PurchaseOrder)).scalars().all()
+        assert len(ordenes) == 1
+        assert ordenes[0].purchase_award_id == ids["award"]
+        assert ordenes[0].supplier_id == ids["proveedor_a"]
+
+
+def test_creacion_rechaza_adjudicacion_sin_origen(adjudicaciones, monkeypatch):
+    """El POST sin documento origen no crea la orden."""
+    application, ids = adjudicaciones
+    form = _form_orden(ids)
+    form.pop("from_supplier_quotation")
+    form.pop("source_type_0")
+    form.pop("source_id_0")
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    from flask_login import login_user
+
+    with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
+        login_user(database.session.get(User, "admin"))
+        _create_purchase_order_from_request(form)
+
+    with application.app_context():
+        assert database.session.execute(database.select(PurchaseOrder)).scalars().all() == []
+
+
+def test_edicion_rechaza_cambio_de_proveedor_con_adjudicacion(adjudicaciones, monkeypatch):
+    """La edición no puede sustituir el proveedor adjudicado."""
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch)
+    with application.app_context():
+        orden_id = database.session.execute(database.select(PurchaseOrder)).scalar_one().id
+
+    form = _form_orden(ids, supplier_id=ids["proveedor_b"])
+    from flask_login import login_user
+
+    with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
+        login_user(database.session.get(User, "admin"))
+        orden = database.session.get(PurchaseOrder, orden_id)
+        _update_purchase_order_from_request(orden)
+
+    with application.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        assert orden.supplier_id == ids["proveedor_a"]
+        assert (
+            database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=orden_id)).scalars().all()
+        )
+
+
+def test_edicion_conserva_orden_con_linea_adjudicada(adjudicaciones, monkeypatch):
+    """Una edición válida conserva la adjudicación y las líneas."""
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch)
+    with application.app_context():
+        orden_id = database.session.execute(database.select(PurchaseOrder)).scalar_one().id
+
+    form = _form_orden(ids, remarks="Actualizada")
+    from flask_login import login_user
+
+    with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
+        login_user(database.session.get(User, "admin"))
+        orden = database.session.get(PurchaseOrder, orden_id)
+        _update_purchase_order_from_request(orden)
+
+    with application.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        assert orden.purchase_award_id == ids["award"]
+        assert orden.remarks == "Actualizada"

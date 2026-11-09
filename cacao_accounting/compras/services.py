@@ -1351,6 +1351,31 @@ def _purchase_order_source(form: dict) -> Any:
     return None
 
 
+def _purchase_order_edit_source(registro: PurchaseOrder) -> Any:
+    """Resolve the active source of an existing order for award validation."""
+    source = _purchase_order_source(request.form)
+    if source is not None:
+        return source
+    relation = database.session.execute(
+        database.select(DocumentRelation)
+        .where(
+            DocumentRelation.target_type == "purchase_order",
+            DocumentRelation.target_id == registro.id,
+            DocumentRelation.status == "active",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if relation is None:
+        return None
+    source_models = {
+        "purchase_request": PurchaseRequest,
+        "purchase_quotation": PurchaseQuotation,
+        "supplier_quotation": SupplierQuotation,
+    }
+    model = source_models.get(relation.source_type)
+    return database.session.get(model, relation.source_id) if model else None
+
+
 def _validate_purchase_order_sourcing(
     sourcing_config: Any, source: Any, award_id: str | None, exception_reason: str | None
 ) -> bool:
@@ -1385,7 +1410,7 @@ def _validate_purchase_order_award(
         return None, False
     if award is None:
         return None, True
-    if source is not None and not _award_matches_source(award, source):
+    if not _award_matches_source(award, source):
         flash_error(PurchaseSourcingError("La adjudicación no corresponde al origen seleccionado."))
         return None, False
     if not _award_matches_supplier_and_lines(award, supplier_id, form):
@@ -1418,10 +1443,13 @@ def _award_matches_supplier_and_lines(award: PurchaseQuotationAward, supplier_id
         return False
     if form is None:
         return True
-    lines = _order_form_lines(form)
-    if not lines:
+    requested = _order_requested_quantities(form)
+    if not requested:
         return False
-    return all(_order_line_is_awarded(item_code, qty, source_item_id, award_items) for item_code, qty, source_item_id in lines)
+    return all(
+        _award_covers_request(item_code, source_item_id, qty, award_items)
+        for (item_code, source_item_id), qty in requested.items()
+    )
 
 
 def _award_items(award: PurchaseQuotationAward) -> list[PurchaseQuotationAwardItem]:
@@ -1456,13 +1484,22 @@ def _order_form_lines(form: Any) -> list[tuple[str, Decimal, str]]:
     return lines
 
 
-def _order_line_is_awarded(
+def _order_requested_quantities(form: Any) -> dict[tuple[str, str], Decimal]:
+    """Accumulate requested quantities per item and source row."""
+    requested: dict[tuple[str, str], Decimal] = {}
+    for item_code, qty, source_item_id in _order_form_lines(form):
+        key = (item_code, source_item_id)
+        requested[key] = requested.get(key, Decimal("0")) + qty
+    return requested
+
+
+def _award_covers_request(
     item_code: str,
-    qty: Decimal,
     source_item_id: str,
+    qty: Decimal,
     award_items: list[PurchaseQuotationAwardItem],
 ) -> bool:
-    """Return whether an order line is covered by the awarded quantities."""
+    """Return whether the awarded lines cover the accumulated requested quantity."""
     candidates = [item for item in award_items if item.item_code == item_code]
     if source_item_id:
         candidates = [
@@ -1470,7 +1507,8 @@ def _order_line_is_awarded(
         ]
     if not candidates:
         return False
-    return qty <= sum(_award_decimal(item.qty) for item in candidates)
+    awarded = sum((_award_decimal(item.qty) for item in candidates), Decimal("0"))
+    return qty <= awarded
 
 
 def _purchase_order_comparison_open(source: Any) -> bool:
@@ -1495,7 +1533,7 @@ def _purchase_order_context(form: dict):
     source = _purchase_order_source(form)
     if not _validate_purchase_order_sourcing(sourcing_config, source, award_id, exception_reason):
         return None
-    _, valid_award = _validate_purchase_order_award(
+    award, valid_award = _validate_purchase_order_award(
         award_id,
         form.get("company") or None,
         source=source,
@@ -1601,9 +1639,11 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     )
     before_state = _capture_purchase_state(registro)
     if registro.purchase_award_id:
-        _, valid_award = _validate_purchase_order_award(
+        source = _purchase_order_edit_source(registro)
+        award, valid_award = _validate_purchase_order_award(
             registro.purchase_award_id,
             registro.company,
+            source=source,
             supplier_id=request.form.get("supplier_id") or None,
             form=request.form,
         )
