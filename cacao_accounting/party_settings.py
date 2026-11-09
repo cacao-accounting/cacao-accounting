@@ -15,6 +15,7 @@ from cacao_accounting.database import (
     Accounts,
     CompanyDefaultAccount,
     CompanyParty,
+    Party,
     PartyAccount,
     PriceList,
     TaxRule,
@@ -444,6 +445,16 @@ def upsert_party_company_settings_rows(party_id: str, role: str, values: Mapping
         if company in seen:
             raise ValueError(_("No se puede repetir la misma compañía en la configuración."))
         seen.add(company)
+        existing = _party_company_record(party_id, company)
+        if role == "supplier":
+            allow_without_order = _truthy_row_value(fields["allow_purchase_invoice_without_order"], index)
+            allow_without_receipt = _truthy_row_value(fields["allow_purchase_invoice_without_receipt"], index)
+        else:
+            # Las preferencias de factura de compra pertenecen al rol
+            # proveedor; el formulario de cliente no las envía y no debe
+            # reiniciarlas.
+            allow_without_order = bool(existing.allow_purchase_invoice_without_order) if existing else False
+            allow_without_receipt = bool(existing.allow_purchase_invoice_without_receipt) if existing else False
         params = PartyCompanySettingsParams(
             is_active=_truthy_row_value(fields["company_is_active"], index, default=True),
             receivable_account_id=_row_value(fields["receivable_account_id"], index) or None,
@@ -451,15 +462,24 @@ def upsert_party_company_settings_rows(party_id: str, role: str, values: Mapping
             tax_template_id=_row_value(fields["tax_template_id"], index) or None,
             default_tax_rule_id=_row_value(fields["default_tax_rule_id"], index) or None,
             default_price_list_id=_row_value(fields["default_price_list_id"], index) or None,
-            allow_purchase_invoice_without_order=_truthy_row_value(fields["allow_purchase_invoice_without_order"], index),
-            allow_purchase_invoice_without_receipt=_truthy_row_value(fields["allow_purchase_invoice_without_receipt"], index),
+            allow_purchase_invoice_without_order=allow_without_order,
+            allow_purchase_invoice_without_receipt=allow_without_receipt,
         )
         upsert_party_company_settings(party_id, role, company, params)
-    _delete_removed_company_settings(party_id, seen)
+    _delete_removed_company_settings(party_id, role, seen)
 
 
-def _delete_removed_company_settings(party_id: str, submitted_companies: set[str]) -> None:
-    """Elimina configuraciones por compania removidas de la tabla editable."""
+def _delete_removed_company_settings(party_id: str, role: str, submitted_companies: set[str]) -> None:
+    """Elimina configuraciones por compania removidas de la tabla editable.
+
+    ``CompanyParty`` y ``PartyAccount`` son compartidos por los roles cliente y
+    proveedor. Si el tercero conserva el otro rol, quitar la fila de un rol no
+    debe desvincularlo ni borrar las cuentas del otro.
+    """
+    party = database.session.get(Party, party_id)
+    keeps_other_role = bool(party and (party.is_supplier if role == "customer" else party.is_customer))
+    if keeps_other_role:
+        return
     existing = database.session.execute(select(CompanyParty).filter_by(party_id=party_id)).scalars().all()
     for company_party in existing:
         if company_party.company in submitted_companies:
@@ -540,13 +560,16 @@ def upsert_party_company_settings(
     """Crea o actualiza la configuracion de activacion del tercero por compania."""
     receivable_account_id = params.receivable_account_id
     payable_account_id = params.payable_account_id
+    existing_account = _party_account_record(party_id, company)
 
     if role == "customer":
         _validate_account(company, receivable_account_id, "receivable")
-        payable_account_id = None
+        # La cuenta por pagar pertenece al rol proveedor del mismo tercero.
+        payable_account_id = existing_account.payable_account_id if existing_account else None
     else:
         _validate_account(company, payable_account_id, "payable")
-        receivable_account_id = None
+        # La cuenta por cobrar pertenece al rol cliente del mismo tercero.
+        receivable_account_id = existing_account.receivable_account_id if existing_account else None
 
     _validate_tax_template(company, params.tax_template_id)
     _validate_tax_rule(company, params.default_tax_rule_id, role)
