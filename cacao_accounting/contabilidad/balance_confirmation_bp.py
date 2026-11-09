@@ -243,9 +243,17 @@ def ver_confirmacion(confirmation_id: str):
     party = database.session.get(Party, confirmation.party_id)
     company = database.session.execute(select(Entity).where(Entity.code == confirmation.company)).scalar_one_or_none()
 
-    snapshot = {}
+    snapshot: dict = {}
     if confirmation.snapshot_json:
-        snapshot = json.loads(confirmation.snapshot_json)
+        try:
+            loaded = json.loads(confirmation.snapshot_json)
+        except (TypeError, ValueError):
+            loaded = {}
+        snapshot = loaded if isinstance(loaded, dict) else {}
+    if not isinstance(snapshot.get("items"), list):
+        snapshot["items"] = []
+    if not isinstance(snapshot.get("totals"), dict):
+        snapshot["totals"] = {}
 
     invitations = (
         database.session.execute(
