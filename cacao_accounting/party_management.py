@@ -12,14 +12,11 @@ from typing import Mapping
 from sqlalchemy import select
 from typing import Any, Iterable
 
-from cacao_accounting.contabilidad.default_accounts import account_label
 from cacao_accounting.database import (
     Address,
-    Accounts,
     CompanyParty,
     Contact,
     Party,
-    PartyAccount,
     PartyAddress,
     PartyContact,
     PartyGroup,
@@ -398,16 +395,6 @@ def deactivate_party_address(party_id: str, link_id: str) -> None:
         address.is_active = False
 
 
-def party_account_labels(party_id: str, company: str) -> tuple[str, str]:
-    """Devuelve las etiquetas de cuentas AR/AP configuradas para un tercero."""
-    record = database.session.execute(select(PartyAccount).filter_by(party_id=party_id, company=company)).scalar_one_or_none()
-    if not record:
-        return "", ""
-    receivable = database.session.get(Accounts, record.receivable_account_id) if record.receivable_account_id else None
-    payable = database.session.get(Accounts, record.payable_account_id) if record.payable_account_id else None
-    return account_label(receivable), account_label(payable)
-
-
 def _party_contact_link(party_id: str, link_id: str) -> PartyContact:
     link = database.session.get(PartyContact, link_id)
     if not link or link.party_id != party_id:
@@ -427,11 +414,6 @@ def generate_party_code(party_id: str, company: str | None, role: str) -> str:
     from cacao_accounting.document_identifiers import generate_entity_code
 
     return generate_entity_code(entity_type=role, entity_id=party_id, company=company)
-
-
-def build_party_code(party_id: str, company: str | None, role: str) -> str:
-    """Obtiene o genera el codigo para un tercero."""
-    return generate_party_code(party_id, company, role)
 
 
 class PartyRoleToggleError(ValueError):

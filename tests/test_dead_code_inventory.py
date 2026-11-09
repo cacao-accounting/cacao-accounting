@@ -38,6 +38,8 @@ import pytest
         ("cacao_accounting.config", "probar_modo_escritorio"),
         ("cacao_accounting.setup.repository", "get_default_entity"),
         ("cacao_accounting.modulos", "lista_tipos_documentos"),
+        ("cacao_accounting.party_management", "party_account_labels"),
+        ("cacao_accounting.party_management", "build_party_code"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):
