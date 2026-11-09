@@ -60,12 +60,12 @@
         url_for('bancos.bancos_pago_lista'),
         url_for('bancos.bancos_pago_nuevo')) }}
   {% if registro.mode_of_payment == 'check' %}
-    {{ macros.document_print_button("check", registro.id) }}
+    {{ macros.document_print_button("check", registro.id, company=registro.company) }}
   {% else %}
-    {{ macros.document_print_button(registro.document_type or "payment_entry", registro.id) }}
+    {{ macros.document_print_button(registro.document_type or "payment_entry", registro.id, company=registro.company) }}
   {% endif %}
   {% if withholding_certificate and withholding_certificate.status == "issued" %}
-    {{ macros.document_print_button("withholding_certificate", withholding_certificate.id) }}
+    {{ macros.document_print_button("withholding_certificate", withholding_certificate.id, company=withholding_certificate.company) }}
   {% endif %}
 {% endset %}
 
