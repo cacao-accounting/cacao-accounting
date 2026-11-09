@@ -761,8 +761,13 @@ def eliminar_regla_fiscal(rule_id: str):
         abort(404)
     assert rule is not None
     delete_tax_rule(rule)
-    database.session.commit()
-    flash(_("Regla fiscal eliminada correctamente."), "success")
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("No se puede eliminar una regla fiscal en uso."), "danger")
+    else:
+        flash(_("Regla fiscal eliminada correctamente."), "success")
     return redirect(url_for("admin.lista_reglas_fiscales"))
 
 

@@ -11,11 +11,27 @@ fiscal rechace.
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
+from sqlalchemy import text
 
 from cacao_accounting import create_app
+from cacao_accounting.accounting_engine.document_builders import PaymentBuildSpec, _payment_tax_rules
+from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Accounts, Currency, Entity, TaxRule, database
+from cacao_accounting.database import (
+    Accounts,
+    CompanyParty,
+    Currency,
+    Entity,
+    Modules,
+    Party,
+    PaymentEntry,
+    TaxRule,
+    User,
+    database,
+)
 from cacao_accounting.tax_rule_service import TaxRuleServiceError, create_tax_rule
 
 BASE = {
@@ -26,6 +42,7 @@ BASE = {
     "company": "cacao",
     "currency": "NIO",
 }
+CONTRASENA = "tax-rule-2026"
 
 
 @pytest.fixture
@@ -46,6 +63,15 @@ def reglas_fiscales():
         database.session.add_all(
             [
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Modules(module="admin", default=False, enabled=True),
+                User(
+                    id="admin",
+                    user="admin",
+                    name="Administrador",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                    classification="admin",
+                ),
                 Entity(
                     code="cacao",
                     name="Cacao",
@@ -130,3 +156,89 @@ def test_regla_valida_se_persiste(reglas_fiscales):
         assert regla.company == "cacao"
         assert regla.currency == "NIO"
         assert regla.account_id == ids["cuenta_cacao"]
+
+
+def test_pago_no_usa_regla_predeterminada_de_otra_compania(reglas_fiscales):
+    """La regla configurada en el tercero debe ser de la compañía del pago."""
+    application, _ = reglas_fiscales
+    with application.app_context():
+        regla_ajena = TaxRule(
+            company="alpha",
+            name="Retención Alpha",
+            concept="retention",
+            applies_to="both",
+            tax_type="withholding",
+            recognition_event="payment_confirmed",
+            currency="NIO",
+            is_active=True,
+            sequence=10,
+        )
+        proveedor = Party(code="PROV-1", name="Proveedor", is_supplier=True)
+        database.session.add_all([regla_ajena, proveedor])
+        database.session.flush()
+        pago = PaymentEntry(
+            company="cacao",
+            payment_type="pay",
+            posting_date=date(2026, 10, 20),
+            party_type="supplier",
+            party_id=proveedor.id,
+            docstatus=0,
+        )
+        database.session.add(pago)
+        database.session.add(
+            CompanyParty(
+                company="cacao",
+                party_id=proveedor.id,
+                is_active=True,
+                default_tax_rule_id=regla_ajena.id,
+            )
+        )
+        database.session.commit()
+
+        spec = PaymentBuildSpec(
+            payment_type="pay",
+            direction="purchase",
+            event_type="payment_confirmed",
+            amount_field="paid_amount",
+            base_amount_field="base_paid_amount",
+            party_type="supplier",
+        )
+        reglas = _payment_tax_rules(
+            document=pago,
+            spec=spec,
+            company="cacao",
+            transaction_currency="NIO",
+        )
+
+        assert all(regla.rule_id != regla_ajena.id for regla in reglas)
+
+
+def test_no_elimina_una_regla_en_uso(reglas_fiscales):
+    """El borrado controla la referencia restringida sin perder la regla."""
+    application, ids = reglas_fiscales
+    with application.app_context():
+        database.session.execute(text("PRAGMA foreign_keys=ON"))
+        regla = create_tax_rule({**BASE, "account_id": ids["cuenta_cacao"]})
+        proveedor = Party(code="PROV-2", name="Proveedor Dos", is_supplier=True)
+        database.session.add(proveedor)
+        database.session.flush()
+        database.session.add(
+            CompanyParty(
+                company="cacao",
+                party_id=proveedor.id,
+                is_active=True,
+                default_tax_rule_id=regla.id,
+            )
+        )
+        database.session.commit()
+        regla_id = regla.id
+
+    client = application.test_client()
+    response = client.post("/login", data={"usuario": "admin", "acceso": CONTRASENA}, follow_redirects=True)
+    assert response.status_code == 200
+
+    response = client.post(f"/settings/tax-rules/{regla_id}/delete")
+
+    assert response.status_code == 302
+    with application.app_context():
+        assert database.session.get(TaxRule, regla_id) is not None

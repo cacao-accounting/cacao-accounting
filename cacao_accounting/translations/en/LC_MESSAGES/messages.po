@@ -24943,3 +24943,7 @@ msgstr "The account does not belong to the tax rule company."
 #: cacao_accounting/tax_rule_service.py
 msgid "La moneda de la regla fiscal no existe."
 msgstr "The tax rule currency does not exist."
+
+#: cacao_accounting/admin/routes.py
+msgid "No se puede eliminar una regla fiscal en uso."
+msgstr "A tax rule that is in use cannot be deleted."

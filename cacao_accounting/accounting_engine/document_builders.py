@@ -53,7 +53,11 @@ from cacao_accounting.document_flow.service import compute_payment_unallocated_a
 from cacao_accounting.warehouse_accounting import inventory_account_id_for_document_line
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 from cacao_accounting.fiscal_persistence_service import build_tax_rule_contexts_from_snapshot
-from cacao_accounting.tax_rule_service import build_tax_rule_context, build_tax_rule_contexts
+from cacao_accounting.tax_rule_service import (
+    build_tax_rule_context,
+    build_tax_rule_contexts,
+    get_tax_rule,
+)
 
 from cacao_accounting.i18n import _
 
@@ -938,7 +942,10 @@ def _payment_tax_rules(
             select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
         ).scalar_one_or_none()
         configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
-        configured_rule = build_tax_rule_context(configured_rule_id) if configured_rule_id else None
+        configured_rule_row = get_tax_rule(configured_rule_id) if configured_rule_id else None
+        configured_rule = None
+        if configured_rule_row is not None and configured_rule_row.company in (None, company):
+            configured_rule = build_tax_rule_context(str(configured_rule_id))
         if configured_rule and configured_rule.tax_type == "withholding":
             if configured_rule.recognition_event in {"payment_confirmed", "payment"}:
                 rules = [rule for rule in rules if rule.tax_type != "withholding"]
