@@ -44,6 +44,7 @@ def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):
     [
         "cacao_accounting.compras.purchase_invoice_draft_service",
         "cacao_accounting.reportes.semantic",
+        "cacao_accounting.accounting_engine.fiscal.resolver",
     ],
 )
 def test_modulo_sin_consumidores_esta_retirado(module_name: str):
