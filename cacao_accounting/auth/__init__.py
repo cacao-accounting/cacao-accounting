@@ -190,7 +190,7 @@ def verify_otp():  # pragma: no cover
             session.pop("otp_user_agent", None)
             database.session.commit()
 
-            response = redirect(helpers.redireccion_despues_de_login())
+            response = helpers.redireccion_despues_de_login()
             cookie_name = "__Secure-device-id" if request.is_secure else "device-id"
             response.set_cookie(
                 cookie_name,
