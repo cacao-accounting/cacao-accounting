@@ -737,7 +737,9 @@ def predeterminar_entidad(id_entidad):
     """Establece una entidad como predeterminada."""
     from cacao_accounting.database import Entity
 
-    entidades = database.session.execute(database.select(Entity)).scalars().all()
+    # Serializa la transición entre escritores concurrentes en PostgreSQL;
+    # SQLite la ignora y conserva el modo desktop de un solo usuario.
+    entidades = database.session.execute(database.select(Entity).with_for_update()).scalars().all()
     objetivo = next((entidad for entidad in entidades if entidad.id == id_entidad), None)
     if objetivo is None:
         abort(404)
