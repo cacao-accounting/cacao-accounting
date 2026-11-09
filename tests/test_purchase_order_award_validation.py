@@ -24,6 +24,7 @@ from cacao_accounting.compras.services import (
 )
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    CompanyParty,
     Entity,
     Item,
     Modules,
@@ -86,6 +87,13 @@ def adjudicaciones():
         proveedor_b = Party(code="PROV-B", name="Proveedor B", is_supplier=True)
         item = Item(code="ART-1", name="Artículo", item_type="goods", is_stock_item=True, default_uom="UND")
         database.session.add_all([proveedor_a, proveedor_b, item, UOM(code="UND", name="Unidad")])
+        database.session.flush()
+        database.session.add_all(
+            [
+                CompanyParty(company="cacao", party_id=proveedor_a.id, is_active=True),
+                CompanyParty(company="cacao", party_id=proveedor_b.id, is_active=True),
+            ]
+        )
         database.session.flush()
         q1 = PurchaseQuotation(
             company="cacao",
