@@ -33,6 +33,7 @@ from cacao_accounting.database import (
     ApprovalRequest,
     Book,
     CompanyDefaultAccount,
+    Currency,
     DimensionType,
     DimensionValue,
     Entity,
@@ -152,6 +153,21 @@ def _require_price_list_editor() -> None:
     """Allow catalog maintenance only to system admins and sales managers."""
     if not current_user.is_authenticated or not is_sales_price_editor(str(current_user.id)):
         abort(403)
+
+
+def _price_list_reference_error(company: str | None, currency: str | None) -> str | None:
+    """Valida que compañía y moneda existan antes de crear una lista."""
+    if company:
+        company_id = database.session.execute(database.select(Entity.id).filter_by(code=company)).scalar_one_or_none()
+        if company_id is None:
+            return _("La compañía seleccionada no existe.")
+    if currency:
+        currency_id = database.session.execute(
+            database.select(Currency.id).filter_by(code=currency, active=True)
+        ).scalar_one_or_none()
+        if currency_id is None:
+            return _("La moneda seleccionada no existe o no está activa.")
+    return None
 
 
 def _can_manage_price_list(price_list: PriceList) -> bool:
@@ -870,10 +886,15 @@ def lista_precios():
     """Administra listas de precios."""
     _require_price_list_editor()
     if request.method == "POST":
+        company = request.form.get("company") or None
+        currency = request.form.get("currency") or None
+        if error := _price_list_reference_error(company, currency):
+            flash(error, "danger")
+            return redirect(url_for("admin.lista_precios"))
         price_list = PriceList(
             name=request.form.get("name") or "",
-            currency=request.form.get("currency") or None,
-            company=request.form.get("company") or None,
+            currency=currency,
+            company=company,
             is_buying=bool(request.form.get("is_buying")),
             is_selling=bool(request.form.get("is_selling", "1")),
             is_default=bool(request.form.get("is_default")),
