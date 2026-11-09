@@ -25,6 +25,7 @@ import pytest
         ("cacao_accounting.bancos.services", "_bank_account_for_note"),
         ("cacao_accounting.bancos.services", "_payment_identifier_inputs"),
         ("cacao_accounting.document_identifiers", "record_external_number_used"),
+        ("cacao_accounting.bancos.statement_service", "import_bank_statement"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):
