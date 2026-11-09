@@ -32,9 +32,21 @@ class FormularioCuentaBancaria(FlaskForm):
 
     bank_id = SelectField(_l("Banco"), choices=[], validators=[DataRequired()])
     company = SelectField(_LABEL_COMPANY, choices=[], validators=[DataRequired()])
-    account_name = StringField(_l("Nombre de Cuenta"), validators=[DataRequired()])
-    account_no = StringField(_l("Número de Cuenta"))
-    iban = StringField(_l("IBAN"))
+    account_name = StringField(
+        _l("Nombre de Cuenta"),
+        validators=[
+            DataRequired(message=_l("Este campo es obligatorio.")),
+            Length(max=150, message=_l("El nombre de la cuenta no puede superar los 150 caracteres.")),
+        ],
+    )
+    account_no = StringField(
+        _l("Número de Cuenta"),
+        validators=[Optional(), Length(max=50, message=_l("El número de cuenta no puede superar los 50 caracteres."))],
+    )
+    iban = StringField(
+        _l("IBAN"),
+        validators=[Optional(), Length(max=50, message=_l("El IBAN no puede superar los 50 caracteres."))],
+    )
     currency = SelectField(_l("Moneda"), choices=[])
     gl_account_id = SelectField(_l("Cuenta contable bancaria"), choices=[], validators=[Optional()])
     default_naming_series_id = SelectField(_l("Serie interna para pagos"), choices=[], validators=[Optional()])

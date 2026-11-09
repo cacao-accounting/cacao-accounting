@@ -25061,3 +25061,27 @@ msgstr "The selected numbering series is not active."
 #: cacao_accounting/bancos/services.py
 msgid "La chequera seleccionada no está activa."
 msgstr "The selected checkbook is not active."
+
+#: cacao_accounting/bancos/forms.py
+msgid "El nombre de la cuenta no puede superar los 150 caracteres."
+msgstr "The account name cannot exceed 150 characters."
+
+#: cacao_accounting/bancos/forms.py
+msgid "El número de cuenta no puede superar los 50 caracteres."
+msgstr "The account number cannot exceed 50 characters."
+
+#: cacao_accounting/bancos/forms.py
+msgid "El IBAN no puede superar los 50 caracteres."
+msgstr "The IBAN cannot exceed 50 characters."
+
+#: cacao_accounting/bancos/routes.py
+msgid "Ya existe una cuenta bancaria con ese número para la compañía indicada."
+msgstr "A bank account with that number already exists for the indicated company."
+
+#: cacao_accounting/bancos/services.py
+msgid "La serie de numeración no corresponde al tipo de pago."
+msgstr "The numbering series does not match the payment type."
+
+#: cacao_accounting/bancos/services.py
+msgid "La cuenta GL del pago debe estar activa, habilitada y ser una cuenta hoja."
+msgstr "The payment GL account must be active, enabled, and a leaf account."

@@ -59,6 +59,8 @@ from cacao_accounting.database import (
 
 from cacao_accounting.auth.permisos import Permisos
 
+from sqlalchemy.exc import IntegrityError
+
 from cacao_accounting.database.helpers import get_active_naming_series
 
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
@@ -908,10 +910,15 @@ def bancos_cuenta_bancaria_nuevo():
             default_external_counter_id=default_external_counter_id,
         )
         database.session.add(cuenta)
-        database.session.flush()
-        _ensure_bank_account_counter_mapping(cuenta)
-        _ensure_bank_account_numbering_config(cuenta)
-        database.session.commit()
+        try:
+            database.session.flush()
+            _ensure_bank_account_counter_mapping(cuenta)
+            _ensure_bank_account_numbering_config(cuenta)
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("Ya existe una cuenta bancaria con ese número para la compañía indicada."), "danger")
+            return render_template(BANCOS_BANCO_CUENTA_NUEVO_HTML, form=formulario, titulo=titulo)
         return redirect("/cash_management/bank-account/list")
     return render_template(BANCOS_BANCO_CUENTA_NUEVO_HTML, form=formulario, titulo=titulo)
 
@@ -985,15 +992,21 @@ def bancos_cuenta_bancaria(account_id):
             )
 
     company = registro.company
-    naming_series_options = []
-    for et in set(ENTITY_MAP.values()):
-        series_list = get_active_naming_series(entity_type=et, company=company)
-        for s in series_list:
-            naming_series_options.append({"value": s.id, "label": f"{s.name} ({s.prefix_template})"})
+    naming_series_options: dict[str, list[dict[str, str]]] = {}
+    for payment_type in PAYMENT_TYPES:
+        et = ENTITY_MAP.get(payment_type, "payment_entry")
+        naming_series_options[payment_type] = [
+            {"value": s.id, "label": f"{s.name} ({s.prefix_template})"}
+            for s in get_active_naming_series(entity_type=et, company=company)
+        ]
 
     external_counter_options = []
     counters = (
-        database.session.execute(database.select(ExternalCounter).filter_by(company=company, is_active=True)).scalars().all()
+        database.session.execute(
+            database.select(ExternalCounter).filter_by(company=company, is_active=True, counter_type="checkbook")
+        )
+        .scalars()
+        .all()
     )
     for c in counters:
         external_counter_options.append({"value": c.id, "label": f"{c.name} ({c.next_suggested_formatted})"})

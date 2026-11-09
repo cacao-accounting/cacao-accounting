@@ -77,7 +77,7 @@
             <template x-if="editing">
               <select class="form-select form-select-sm" x-model="configs['{{ cfg.payment_type }}'].naming_series_id">
                 <option value="">{{ _('(predeterminado del sistema)') }}</option>
-                {% for opt in naming_series_options %}
+                {% for opt in naming_series_options[cfg.payment_type] %}
                 <option value="{{ opt.value }}">{{ opt.label }}</option>
                 {% endfor %}
               </select>

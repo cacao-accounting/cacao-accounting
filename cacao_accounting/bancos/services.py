@@ -1731,6 +1731,32 @@ def _post_bank_difference_adjustment(
     transaction.is_reconciled = True
 
 
+def _validate_numbering_config_series(bank_account: BankAccount, payment_type: str, naming_series_id: str | None) -> None:
+    """Valida que la serie exista, esté vigente y corresponda al tipo de pago."""
+    if not naming_series_id:
+        return
+    series = database.session.get(NamingSeries, naming_series_id)
+    if not series or series.company not in (None, bank_account.company):
+        raise IdentifierConfigurationError(_("La serie de numeración no pertenece a la compañía de la cuenta bancaria."))
+    if not series.is_active:
+        raise IdentifierConfigurationError(_("La serie de numeración seleccionada no está activa."))
+    if series.entity_type != PAYMENT_TYPE_TO_ENTITY_TYPE.get(payment_type, "payment_entry"):
+        raise IdentifierConfigurationError(_("La serie de numeración no corresponde al tipo de pago."))
+
+
+def _validate_numbering_config_counter(bank_account: BankAccount, external_counter_id: str | None) -> None:
+    """Valida que el contador externo sea una chequera vigente de la compañía."""
+    if not external_counter_id:
+        return
+    counter = database.session.get(ExternalCounter, external_counter_id)
+    if not counter or counter.company != bank_account.company:
+        raise IdentifierConfigurationError(_("La chequera no pertenece a la compañía de la cuenta bancaria."))
+    if not counter.is_active:
+        raise IdentifierConfigurationError(_("La chequera seleccionada no está activa."))
+    if counter.counter_type != "checkbook":
+        raise IdentifierConfigurationError(_("El contador externo seleccionado debe ser una chequera."))
+
+
 def _validate_numbering_config_entry(
     bank_account: BankAccount, entry: Any
 ) -> tuple[dict[str, Any], str | None, str | None] | None:
@@ -1742,18 +1768,9 @@ def _validate_numbering_config_entry(
         return None
     naming_series_id = entry.get("naming_series_id") or None
     external_counter_id = entry.get("external_counter_id") or None
-    if naming_series_id:
-        series = database.session.get(NamingSeries, naming_series_id)
-        if not series or series.company not in (None, bank_account.company):
-            raise IdentifierConfigurationError(_("La serie de numeración no pertenece a la compañía de la cuenta bancaria."))
-        if not series.is_active:
-            raise IdentifierConfigurationError(_("La serie de numeración seleccionada no está activa."))
-    if entry.get("use_external_counter") and external_counter_id:
-        counter = database.session.get(ExternalCounter, external_counter_id)
-        if not counter or counter.company != bank_account.company:
-            raise IdentifierConfigurationError(_("La chequera no pertenece a la compañía de la cuenta bancaria."))
-        if not counter.is_active:
-            raise IdentifierConfigurationError(_("La chequera seleccionada no está activa."))
+    _validate_numbering_config_series(bank_account, payment_type, naming_series_id)
+    if entry.get("use_external_counter"):
+        _validate_numbering_config_counter(bank_account, external_counter_id)
     return entry, naming_series_id, external_counter_id
 
 
@@ -2901,6 +2918,8 @@ def _validate_payment_gl_accounts(
         account = database.session.get(Accounts, account_id)
         if account is None or account.entity != company:
             raise ValueError(_("La cuenta GL del pago debe pertenecer a la compañía del documento."))
+        if not account.active or not account.enabled or account.group:
+            raise ValueError(_("La cuenta GL del pago debe estar activa, habilitada y ser una cuenta hoja."))
 
     if payment_type != "internal_transfer":
         return
