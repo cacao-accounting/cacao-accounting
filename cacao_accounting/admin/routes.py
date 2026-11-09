@@ -1127,6 +1127,12 @@ def config_conciliacion_ventas():
     _require_system_admin()
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    selected_company = request.args.get("company") or ""
+    selected_config = None
+    if selected_company:
+        selected_config = database.session.execute(
+            database.select(SalesMatchingConfig).filter_by(company=selected_company)
+        ).scalar_one_or_none()
 
     if request.method == "POST":
         company = request.form.get("company") or ""
@@ -1161,7 +1167,7 @@ def config_conciliacion_ventas():
             )
         else:
             flash(_("Configuración de conciliación de ventas guardada correctamente."), "success")
-        return redirect(url_for("admin.config_conciliacion_ventas"))
+        return redirect(url_for("admin.config_conciliacion_ventas", company=company))
 
     configs = (
         database.session.execute(database.select(SalesMatchingConfig).order_by(SalesMatchingConfig.company)).scalars().all()
@@ -1171,6 +1177,8 @@ def config_conciliacion_ventas():
         "admin/sales_matching_config.html",
         configs=configs,
         companies=companies,
+        selected_company=selected_company,
+        selected_config=selected_config,
         titulo=_("Configuración de Conciliación de Ventas"),
     )
 
