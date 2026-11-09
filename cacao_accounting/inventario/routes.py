@@ -141,6 +141,7 @@ def inventario_articulo_lista():
 @inventario.route("/uom/list")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_uom_lista():
     """Listado de unidades de medida."""
     consulta = database.paginate(
@@ -532,6 +533,7 @@ def inventario_uom_nuevo():
 @inventario.route("/uom/<uom_id>")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_uom(uom_id):
     """Detalle de unidad de medida."""
     from flask import abort
