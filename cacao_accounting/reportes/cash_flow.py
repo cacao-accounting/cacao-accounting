@@ -197,17 +197,19 @@ def save_cash_flow_mappings(company: str, overrides: dict[str, str | None]) -> N
     configuraciones inválidas desde la vista dedicada.
     """
     clean: dict[str, str] = {}
+    # Validar todas las cuentas recibidas, incluso las que llegan sin sección,
+    # para impedir que un origen parcial o manipulado borre mappings ajenos.
     for account_id, raw_section in overrides.items():
-        section = (raw_section or "").strip().lower()
-        if not section:
-            continue
-        if section not in VALID_SECTIONS:
-            raise ValueError(_("Sección de flujo inválida: %(section)s") % {"section": section})
         account = database.session.execute(
             select(Accounts).where(Accounts.id == account_id, Accounts.entity == company)
         ).scalar_one_or_none()
         if account is None:
             raise ValueError(_("La cuenta indicada no pertenece a la compañía."))
+        section = (raw_section or "").strip().lower()
+        if not section:
+            continue
+        if section not in VALID_SECTIONS:
+            raise ValueError(_("Sección de flujo inválida: %(section)s") % {"section": section})
         clean[account_id] = section
 
     existing = {
@@ -216,7 +218,11 @@ def save_cash_flow_mappings(company: str, overrides: dict[str, str | None]) -> N
             select(CashFlowAccountMapping.account_id, CashFlowAccountMapping).where(CashFlowAccountMapping.company == company)
         ).all()
     }
+    # Solo se tocan los mapeos de las cuentas presentes en ``overrides``; los
+    # omitidos se conservan para que un POST parcial no los elimine.
     for account_id, mapping in existing.items():
+        if account_id not in overrides:
+            continue
         target = clean.get(account_id)
         if target is None:
             database.session.delete(mapping)
