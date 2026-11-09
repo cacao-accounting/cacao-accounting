@@ -34,6 +34,7 @@ from cacao_accounting.database import (
     SalesInvoice,
     SalesOrder,
     SalesOrderItem,
+    SalesQuotation,
     SalesRequest,
     SalesRequestItem,
     UOM,
@@ -103,6 +104,23 @@ def _sembrar_escenario() -> dict[str, str]:
                 customer_name="Cliente Confidencial Cafe",
             ),
             SalesOrder(company="cafe", posting_date=FECHA, docstatus=1, document_no="SO-CAFE-1", customer_name="Cliente Cafe"),
+            SalesQuotation(
+                company="cafe",
+                posting_date=FECHA,
+                docstatus=1,
+                document_no="SQ-CAFE-1",
+                customer_name="Cliente Confidencial Cafe",
+            ),
+            SalesInvoice(
+                company="cafe",
+                posting_date=FECHA,
+                docstatus=1,
+                document_no="INV-CAFE-1",
+                customer_name="Cliente Confidencial Cafe",
+                transaction_currency="NIO",
+                grand_total=Decimal("250"),
+                total=Decimal("250"),
+            ),
             DeliveryNote(
                 company="cacao",
                 posting_date=FECHA,
@@ -132,6 +150,8 @@ def _sembrar_escenario() -> dict[str, str]:
     pedido_propio = database.session.execute(database.select(SalesRequest).filter_by(company="cacao")).scalar_one()
     solicitud_ajena = database.session.execute(database.select(SalesRequest).filter_by(company="cafe")).scalar_one()
     orden_ajena = database.session.execute(database.select(SalesOrder)).scalar_one()
+    cotizacion_ajena = database.session.execute(database.select(SalesQuotation)).scalar_one()
+    factura_ajena = database.session.execute(database.select(SalesInvoice)).scalar_one()
     entrega_propia = database.session.execute(database.select(DeliveryNote).filter_by(company="cacao")).scalar_one()
     entrega_ajena = database.session.execute(database.select(DeliveryNote).filter_by(company="cafe")).scalar_one()
     linea_propia = SalesRequestItem(
@@ -161,6 +181,8 @@ def _sembrar_escenario() -> dict[str, str]:
         "linea_propia": linea_propia.id,
         "orden_ajena": orden_ajena.id,
         "linea_ajena": linea_ajena.id,
+        "cotizacion_ajena": cotizacion_ajena.id,
+        "factura_ajena": factura_ajena.id,
         "solicitud_ajena": solicitud_ajena.id,
         "entrega_propia": entrega_propia.id,
         "entrega_ajena": entrega_ajena.id,
@@ -425,6 +447,108 @@ def test_factura_venta_precarga_una_entrega_propia(escenario_multicompania):
 
     assert response.status_code == 200
     assert "Cliente Cacao" in response.get_data(as_text=True)
+
+
+def test_orden_venta_no_precarga_una_cotizacion_ajena(escenario_multicompania):
+    """El alta de orden no serializa una cotización de otra compañía."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "operador")
+
+    response = client.get(f"/sales/sales-order/new?from_quotation={ids['cotizacion_ajena']}")
+
+    assert response.status_code == 403
+    assert "Cliente Confidencial Cafe" not in response.get_data(as_text=True)
+
+
+def test_orden_venta_precarga_una_orden_propia(escenario_multicompania):
+    """Control positivo: una orden de la compañía autorizada se precarga."""
+    application, client, _ = escenario_multicompania
+    with application.app_context():
+        orden = SalesOrder(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="SO-CACAO-FORM",
+            customer_name="Cliente Cacao",
+        )
+        database.session.add(orden)
+        database.session.commit()
+        orden_id = orden.id
+
+    _iniciar_sesion(client, "operador")
+    response = client.get(f"/sales/sales-order/new?from_order={orden_id}")
+
+    assert response.status_code == 200
+
+
+def test_orden_venta_rechaza_post_con_origen_ajeno(escenario_multicompania):
+    """El POST no crea una orden desde una solicitud de otra compañía."""
+    application, client, ids = escenario_multicompania
+    _iniciar_sesion(client, "operador")
+
+    response = client.post("/sales/sales-order/new", data={"from_request": ids["solicitud_ajena"]})
+
+    assert response.status_code == 403
+    with application.app_context():
+        assert database.session.execute(database.select(SalesOrder).filter_by(company="cacao")).scalars().all() == []
+
+
+def test_factura_venta_no_precarga_una_orden_ajena(escenario_multicompania):
+    """El alta de factura no usa una orden de otra compañía."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "operador")
+
+    response = client.get(f"/sales/sales-invoice/new?from_order={ids['orden_ajena']}")
+
+    assert response.status_code == 403
+    assert "Cliente Cafe" not in response.get_data(as_text=True)
+
+
+def test_factura_venta_no_precarga_una_factura_ajena(escenario_multicompania):
+    """El alta de nota no usa una factura de otra compañía."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "operador")
+
+    response = client.get(f"/sales/sales-invoice/new?from_invoice={ids['factura_ajena']}")
+
+    assert response.status_code == 403
+    assert "Cliente Confidencial Cafe" not in response.get_data(as_text=True)
+
+
+def test_factura_venta_precarga_una_factura_propia(escenario_multicompania):
+    """Control positivo: una factura de la compañía autorizada se precarga."""
+    application, client, _ = escenario_multicompania
+    with application.app_context():
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="INV-CACAO-FORM",
+            customer_name="Cliente Cacao",
+            transaction_currency="NIO",
+            grand_total=Decimal("100"),
+            total=Decimal("100"),
+        )
+        database.session.add(factura)
+        database.session.commit()
+        factura_id = factura.id
+
+    _iniciar_sesion(client, "operador")
+    response = client.get(f"/sales/sales-invoice/new?from_invoice={factura_id}")
+
+    assert response.status_code == 200
+
+
+def test_factura_venta_rechaza_post_con_origen_ajeno(escenario_multicompania):
+    """El POST no crea una nota desde una entrega de otra compañía."""
+    application, client, ids = escenario_multicompania
+    _iniciar_sesion(client, "operador")
+
+    response = client.post("/sales/sales-invoice/new", data={"from_note": ids["entrega_ajena"]})
+
+    assert response.status_code == 403
+    with application.app_context():
+        assert database.session.execute(database.select(SalesInvoice).filter_by(company="cacao")).scalars().all() == []
 
 
 def test_remision_no_precarga_una_entrega_de_otra_compania(escenario_multicompania):

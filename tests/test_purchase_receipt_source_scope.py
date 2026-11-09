@@ -25,8 +25,10 @@ from cacao_accounting.database import (
     Modules,
     PurchaseInvoice,
     PurchaseOrder,
+    PurchaseQuotation,
     PurchaseReceipt,
     PurchaseRequest,
+    SupplierQuotation,
     User,
     UserCompanyAccess,
     database,
@@ -145,6 +147,34 @@ def recepciones_cloud():
                     document_no="PRQ-BETA",
                     remarks="Solicitud Confidencial Beta",
                 ),
+                PurchaseQuotation(
+                    company="alpha",
+                    posting_date=FECHA,
+                    docstatus=1,
+                    document_no="RFQ-ALPHA",
+                    supplier_name="Proveedor Alpha",
+                ),
+                PurchaseQuotation(
+                    company="beta",
+                    posting_date=FECHA,
+                    docstatus=1,
+                    document_no="RFQ-BETA",
+                    supplier_name="Proveedor Confidencial Beta",
+                ),
+                SupplierQuotation(
+                    company="alpha",
+                    posting_date=FECHA,
+                    docstatus=1,
+                    document_no="SQ-ALPHA",
+                    supplier_name="Proveedor Alpha",
+                ),
+                SupplierQuotation(
+                    company="beta",
+                    posting_date=FECHA,
+                    docstatus=1,
+                    document_no="SQ-BETA",
+                    supplier_name="Proveedor Confidencial Beta",
+                ),
             ]
         )
         database.session.commit()
@@ -169,6 +199,16 @@ def recepciones_cloud():
             .scalar_one()
             .id,
             "solicitud_beta": database.session.execute(database.select(PurchaseRequest).filter_by(company="beta"))
+            .scalar_one()
+            .id,
+            "rfq_alpha": database.session.execute(database.select(PurchaseQuotation).filter_by(company="alpha"))
+            .scalar_one()
+            .id,
+            "rfq_beta": database.session.execute(database.select(PurchaseQuotation).filter_by(company="beta")).scalar_one().id,
+            "cotizacion_alpha": database.session.execute(database.select(SupplierQuotation).filter_by(company="alpha"))
+            .scalar_one()
+            .id,
+            "cotizacion_beta": database.session.execute(database.select(SupplierQuotation).filter_by(company="beta"))
             .scalar_one()
             .id,
         }
@@ -266,6 +306,82 @@ def test_factura_compra_precarga_orden_propia(recepciones_cloud):
 
     assert response.status_code == 200
     assert "Proveedor Alpha" in response.get_data(as_text=True)
+
+
+def test_orden_compra_no_precarga_un_rfq_ajeno(recepciones_cloud):
+    """El alta de orden tampoco acepta un RFQ de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/purchase-order/new?from_rfq={ids['rfq_beta']}")
+
+    assert response.status_code == 403
+    assert "Proveedor Confidencial Beta" not in response.get_data(as_text=True)
+
+
+def test_orden_compra_no_precarga_una_cotizacion_ajena(recepciones_cloud):
+    """El alta de orden tampoco acepta una cotización de proveedor ajena."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/purchase-order/new?from_supplier_quotation={ids['cotizacion_beta']}")
+
+    assert response.status_code == 403
+    assert "Proveedor Confidencial Beta" not in response.get_data(as_text=True)
+
+
+def test_orden_compra_rechaza_post_con_origen_ajeno(recepciones_cloud):
+    """El POST no debe crear una orden desde una solicitud de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.post("/buying/purchase-order/new", data={"from_request": ids["solicitud_beta"]})
+
+    assert response.status_code == 403
+    with application.app_context():
+        ordenes = database.session.execute(database.select(PurchaseOrder)).scalars().all()
+        assert len(ordenes) == 2
+
+
+def test_factura_compra_no_precarga_recepcion_ajena(recepciones_cloud):
+    """El alta de factura no usa una recepción de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/purchase-invoice/new?from_receipt={ids['recepcion_beta']}")
+
+    assert response.status_code == 403
+    assert "Proveedor Confidencial Beta" not in response.get_data(as_text=True)
+
+
+def test_factura_compra_no_precarga_factura_ajena(recepciones_cloud):
+    """El alta de nota no usa una factura de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/purchase-invoice/new?from_invoice={ids['factura_beta']}")
+
+    assert response.status_code == 403
+    assert "Proveedor Confidencial Beta" not in response.get_data(as_text=True)
+
+
+def test_factura_compra_rechaza_post_con_origen_ajeno(recepciones_cloud):
+    """El POST no debe crear una factura desde una orden de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.post("/buying/purchase-invoice/new", data={"from_order": ids["orden_beta"]})
+
+    assert response.status_code == 403
+    with application.app_context():
+        facturas = database.session.execute(database.select(PurchaseInvoice)).scalars().all()
+        assert len(facturas) == 2
 
 
 def test_costo_importado_no_expone_factura_ajena(recepciones_cloud):
