@@ -1483,6 +1483,11 @@ def caja_chica_reposicion_nueva():
     """Crea una solicitud de reposicion con gastos aun no repuestos."""
     fondos = _obtener_fondos_compania()
     selected_fund = request.form.get("petty_cash_id") or request.args.get("petty_cash_id")
+    # El POST valida la compañía, pero el GET consulta los gastos antes de
+    # cualquier autorización. Un fondo fuera del alcance no debe revelar sus
+    # gastos ni siquiera con un petty_cash_id conocido.
+    if selected_fund and selected_fund not in {fondo.id for fondo in fondos}:
+        abort(403)
     gastos = petty_cash_expenses_available_for_replenishment(selected_fund) if selected_fund else []
     if request.method == "POST":
         company = request.form.get("company") or ""
