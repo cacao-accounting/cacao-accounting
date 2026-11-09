@@ -270,10 +270,17 @@ def _obtener_roles_disponibles() -> list[Roles]:
 
 
 def _obtener_roles_por_usuario(usuario_id: str) -> list[Roles]:
-    """Devuelve los roles asignados a un usuario."""
+    """Devuelve los roles vigentes asignados a un usuario.
+
+    Las asignaciones con ``RolesUser.active=False`` están revocadas y no
+    conceden acceso; tampoco deben presentarse como asignadas.
+    """
     return list(
         database.session.execute(
-            database.select(Roles).join(RolesUser, Roles.id == RolesUser.role_id).filter(RolesUser.user_id == usuario_id)
+            database.select(Roles)
+            .join(RolesUser, Roles.id == RolesUser.role_id)
+            .filter(RolesUser.user_id == usuario_id)
+            .where(RolesUser.active.is_not(False))
         )
         .scalars()
         .all()

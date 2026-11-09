@@ -128,7 +128,9 @@ def informacion_para_desarrolladores():
         if (
             admin_role
             and database.session.execute(
-                database.select(RolesUser).filter_by(user_id=current_user.id, role_id=admin_role.id)
+                database.select(RolesUser)
+                .filter_by(user_id=current_user.id, role_id=admin_role.id)
+                .where(RolesUser.active.is_not(False))
             ).scalar_one_or_none()
         ):
             is_admin = True
