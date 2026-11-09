@@ -31,3 +31,16 @@ def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):
     module = importlib.import_module(module_name)
 
     assert not hasattr(module, symbol)
+
+
+@pytest.mark.parametrize(
+    "module_name",
+    [
+        "cacao_accounting.compras.purchase_invoice_draft_service",
+        "cacao_accounting.reportes.semantic",
+    ],
+)
+def test_modulo_sin_consumidores_esta_retirado(module_name: str):
+    """El módulo completo no debe volver sin un punto de entrada real."""
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(module_name)
