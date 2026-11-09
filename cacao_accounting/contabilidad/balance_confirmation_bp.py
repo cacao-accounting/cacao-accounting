@@ -16,6 +16,7 @@ from cacao_accounting.database import (
     database,
     BalanceConfirmation,
     BalanceConfirmationInvitation,
+    CompanyParty,
     Entity,
     Party,
     Contact,
@@ -119,6 +120,23 @@ def _confirmation_companies() -> list[tuple[str, str]]:
     return companies
 
 
+def _party_allowed_companies(party_id: str, companies: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Filtra las compañías del usuario donde el tercero está activo."""
+    codes = [code for code, _ in companies]
+    if not codes:
+        return []
+    active_codes = set(
+        database.session.execute(
+            select(CompanyParty.company).where(
+                CompanyParty.party_id == party_id,
+                CompanyParty.company.in_(codes),
+                CompanyParty.is_active.is_(True),
+            )
+        ).scalars()
+    )
+    return [(code, name) for code, name in companies if code in active_codes]
+
+
 def _party_suggested_emails(party_id: str, party: Party) -> list[str]:
     """Load active contact emails and prioritize the party primary address."""
     contact_stmt = (
@@ -192,6 +210,9 @@ def crear_confirmacion_form():
             return redirect(url_for("compras.compras_proveedor_lista"))
 
     companies = _confirmation_companies()
+    companies = _party_allowed_companies(party_id, companies)
+    if not companies:
+        abort(403)
     suggested_emails = _party_suggested_emails(party_id, party)
 
     if request.method == "POST":
