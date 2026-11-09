@@ -83,6 +83,14 @@ import pytest
         ("cacao_accounting.bancos.cash_forecast_service", "_query_gl_sum"),
         ("cacao_accounting.api.dashboard", "_sum_query"),
         ("cacao_accounting.bancos.reconciliation_service", "backfill_reconciliation_item_context"),
+        ("cacao_accounting.compras.purchase_order_comparison_service", "comparable_purchase_orders"),
+        ("cacao_accounting.compras.purchase_request_comparison_service", "purchase_request_comparison_is_closed"),
+        ("cacao_accounting.compras.purchase_request_comparison_service", "supplier_quotation_comparison_rows"),
+        ("cacao_accounting.contabilidad.recurring_journal_service", "get_applicable_templates"),
+        ("cacao_accounting.contabilidad.journal_repository", "list_journals"),
+        ("cacao_accounting.document_flow.repository", "recompute_states_for_source"),
+        ("cacao_accounting.inventario.service", "rebuild_stock_bins"),
+        ("cacao_accounting.contabilidad.arap_gl_reconciliation", "reconcile_companies_arap_to_gl"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):

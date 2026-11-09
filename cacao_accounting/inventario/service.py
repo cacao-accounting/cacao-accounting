@@ -452,53 +452,6 @@ def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> 
     serial.warehouse = None if outgoing else warehouse
 
 
-def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: str | None = None) -> StockRebuildResult:
-    """Reconstruye StockBin desde el ledger físico completo.
-
-    El cálculo suma tanto los movimientos originales como sus contramovimientos
-    de cancelación para obtener el neto algebraico real del inventario.
-    """
-    query = select(StockLedgerEntry.company, StockLedgerEntry.item_code, StockLedgerEntry.warehouse).filter_by(company=company)
-    if item_code:
-        query = query.filter_by(item_code=item_code)
-    if warehouse:
-        query = query.filter_by(warehouse=warehouse)
-    groups = database.session.execute(query.distinct()).all()
-    rebuilt = 0
-    inconsistencies: list[str] = []
-    for group_company, group_item, group_warehouse in groups:
-        totals = database.session.execute(
-            select(
-                func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
-                func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
-            ).filter_by(company=group_company, item_code=group_item, warehouse=group_warehouse)
-        ).one()
-        qty = _decimal_value(totals[0])
-        value = _decimal_value(totals[1])
-        valuation_rate = value / qty if qty else Decimal("0")
-        bin_row = database.session.execute(
-            select(StockBin).filter_by(company=group_company, item_code=group_item, warehouse=group_warehouse)
-        ).scalar_one_or_none()
-        reserved_qty = Decimal("0")
-        if not bin_row:
-            bin_row = StockBin(company=group_company, item_code=group_item, warehouse=group_warehouse)
-            database.session.add(bin_row)
-        else:
-            reserved_qty = _decimal_value(bin_row.reserved_qty)
-        old_qty = _decimal_value(bin_row.actual_qty)
-        if old_qty != qty:
-            inconsistencies.append(f"{group_item}/{group_warehouse}: {old_qty} -> {qty}")
-        bin_row.actual_qty = qty
-        bin_row.reserved_qty = reserved_qty
-        bin_row.stock_value = value
-        bin_row.valuation_rate = valuation_rate
-        rebuilt += 1
-    layers_result = rebuild_stock_valuation_layers(company=company, item_code=item_code, warehouse=warehouse)
-    return StockRebuildResult(
-        rebuilt_bins=rebuilt, rebuilt_layers=layers_result.rebuilt_layers, inconsistencies=inconsistencies
-    )
-
-
 def _valuation_group_key(layer: Any) -> tuple[str, str, str, str]:
     """Clave de agrupacion de capas por comprobante, item y bodega."""
     return (

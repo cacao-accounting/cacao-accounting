@@ -114,29 +114,6 @@ def _purchase_order_item_at_occurrence(
     return matching_items[occurrence] if occurrence < len(matching_items) else None
 
 
-def comparable_purchase_orders(base_order: PurchaseOrder) -> list[PurchaseOrder]:
-    """Return submitted purchase orders sharing an origin with the base order."""
-    source_ids = purchase_request_ids_for_order(base_order.id)
-    if not source_ids:
-        return [base_order] if base_order.docstatus == 1 else []
-    order_ids = database.select(DocumentRelation.target_id).where(
-        DocumentRelation.source_type == "purchase_request",
-        DocumentRelation.source_id.in_(source_ids),
-        DocumentRelation.target_type == "purchase_order",
-        DocumentRelation.status == "active",
-    )
-    statement = database.select(PurchaseOrder).where(
-        PurchaseOrder.id.in_(order_ids),
-        PurchaseOrder.company == base_order.company,
-        PurchaseOrder.docstatus == 1,
-    )
-    return list(
-        database.session.execute(statement.order_by(PurchaseOrder.supplier_name, PurchaseOrder.document_no, PurchaseOrder.id))
-        .scalars()
-        .all()
-    )
-
-
 def purchase_orders_for_request(purchase_request: PurchaseRequest) -> list[PurchaseOrder]:
     """Return submitted purchase orders created from a purchase request."""
     order_ids = database.select(DocumentRelation.target_id).where(
