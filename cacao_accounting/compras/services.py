@@ -33,6 +33,7 @@ from cacao_accounting.compras.purchase_sourcing_service import (
 from cacao_accounting.database import (
     CompanyParty,
     DocumentRelation,
+    Entity,
     ImportLandedCost,
     ImportLandedCostCharge,
     ImportLandedCostItem,
@@ -57,6 +58,7 @@ from cacao_accounting.database import (
     SupplierQuotationItem,
     TaxTemplate,
     UOM,
+    UserCompanyAccess,
     PaymentReference,
     WithholdingCertificate,
     database,
@@ -72,7 +74,7 @@ from cacao_accounting.contabilidad.posting import PostingError
 from cacao_accounting.database.helpers import get_active_naming_series
 
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-
+from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.auth.permisos import Permisos
 
 from cacao_accounting.decorators import (  # noqa: F401
@@ -276,14 +278,30 @@ def _party_or_404(party_id: str) -> Party:
     return party
 
 
+def _explicit_company_grants() -> set[str]:
+    """Compañías asignadas explícitamente al usuario, sin bypass admin."""
+    rows = database.session.execute(
+        database.select(UserCompanyAccess.company_code)
+        .join(Entity, Entity.code == UserCompanyAccess.company_code)
+        .where(UserCompanyAccess.user_id == current_user.id, Entity.enabled.is_(True))
+    ).scalars()
+    return {str(code) for code in rows}
+
+
 def _authorized_companies(access_modules: tuple[str, ...]) -> set[str]:
     """Return companies the current user may consult in the given modules."""
     companies: set[str] = set()
     for module in access_modules:
         module_id = obtener_id_modulo_por_nombre(module)
         permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        if permissions.consultar:
+        if not permissions.consultar:
+            continue
+        if is_desktop_mode():
             companies.update(permissions.obtener_companias_autorizadas())
+        else:
+            # En Cloud la clasificación admin no reemplaza las asignaciones
+            # explícitas de compañía (#1828).
+            companies.update(_explicit_company_grants())
     return companies
 
 
@@ -295,7 +313,7 @@ def _apply_company_scope(base_query: Any, model: Any, access_modules: tuple[str,
     if company:
         exige_acceso_compania_cualquiera(access_modules, company, "consultar")
         return base_query.filter(model.company == company)
-    if getattr(current_user, "classification", None) == "admin":
+    if is_desktop_mode() and getattr(current_user, "classification", None) == "admin":
         return base_query
     companies = _authorized_companies(access_modules)
     return base_query.where(model.company.in_(companies)) if companies else base_query.where(database.false())
