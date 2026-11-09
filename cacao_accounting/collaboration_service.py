@@ -148,6 +148,24 @@ def list_document_tasks(document_type: str, document_id: str) -> list[DocumentTa
     )
 
 
+def _task_company_scope() -> tuple[list[str], Any]:
+    """Return the authorized companies and the SQL scope for assigned tasks.
+
+    A task belongs to a company; when the user loses access to that company the
+    task must disappear from both the inbox and the navigation badge, while
+    tasks without a company stay visible.
+    """
+    from sqlalchemy import or_
+
+    from cacao_accounting.company_context import authorized_company_codes
+
+    authorized = authorized_company_codes()
+    conditions = [DocumentTask.company.is_(None)]
+    if authorized:
+        conditions.append(DocumentTask.company.in_(authorized))
+    return authorized, or_(*conditions)
+
+
 def list_user_tasks(
     user_id: str,
     status: str | None = None,
@@ -166,17 +184,9 @@ def list_user_tasks(
     """
     query = database.select(DocumentTask).where(DocumentTask.assigned_to == user_id)
     if restrict_by_access:
-        from cacao_accounting.company_context import authorized_company_codes
-
-        authorized = authorized_company_codes()
-        allow = company in authorized
-        conditions = [DocumentTask.company.is_(None)]
-        if authorized:
-            conditions.append(DocumentTask.company.in_(authorized))
-        from sqlalchemy import or_
-
-        query = query.where(or_(*conditions))
-        if company and not allow:
+        authorized, scope = _task_company_scope()
+        query = query.where(scope)
+        if company and company not in authorized:
             return []
     if status:
         query = query.where(DocumentTask.status == _validate_status(status))
@@ -209,15 +219,15 @@ def active_users(companies: Sequence[str] | None = None) -> list[User]:
 
 
 def open_task_count(user_id: str) -> int:
-    """Return the count of not-completed tasks assigned to a user."""
-    return int(
-        database.session.execute(
-            database.select(database.func.count(DocumentTask.id))
-            .where(DocumentTask.assigned_to == user_id)
-            .where(DocumentTask.status.in_(("open", "in_progress")))
-        ).scalar()
-        or 0
+    """Return the count of not-completed tasks visible in the user's scope."""
+    _, scope = _task_company_scope()
+    query = (
+        database.select(database.func.count(DocumentTask.id))
+        .where(DocumentTask.assigned_to == user_id)
+        .where(DocumentTask.status.in_(("open", "in_progress")))
+        .where(scope)
     )
+    return int(database.session.execute(query).scalar() or 0)
 
 
 def document_url(task: DocumentTask) -> str | None:

@@ -233,6 +233,34 @@ def test_bandeja_respeta_el_alcance_vigente(dashboard_cloud):
     assert "Tarea de compañia secreta" not in response.get_data(as_text=True)
 
 
+def test_contador_de_tareas_respeta_el_alcance_vigente(dashboard_cloud):
+    """El badge de navegación no cuenta tareas de compañías fuera del alcance."""
+    application = dashboard_cloud
+    from flask_login import login_user
+
+    from cacao_accounting import current_user_open_task_count
+    from cacao_accounting.database import User, database
+
+    with application.test_request_context("/app"):
+        user = database.session.execute(database.select(User).filter_by(user="asignador")).scalar_one()
+        login_user(user)
+        assert current_user_open_task_count() == 1
+
+    with application.app_context():
+        from cacao_accounting.database import UserCompanyAccess
+
+        acceso = database.session.execute(
+            database.select(UserCompanyAccess).filter_by(user_id="asignador", company_code="cacao")
+        ).scalar_one()
+        database.session.delete(acceso)
+        database.session.commit()
+
+    with application.test_request_context("/app"):
+        user = database.session.execute(database.select(User).filter_by(user="asignador")).scalar_one()
+        login_user(user)
+        assert current_user_open_task_count() == 0
+
+
 def test_selector_de_asignaciones_no_revela_directorio_global(dashboard_cloud):
     """#1598: el selector expone solo usuarios del alcance de compañía."""
     application = dashboard_cloud
