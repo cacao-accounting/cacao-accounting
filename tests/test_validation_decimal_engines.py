@@ -96,6 +96,12 @@ def test_persistir_y_releer_conserva_la_huella(motor_real):
         )
 
         database.session.delete(recargada)
+        database.session.flush()
         database.session.delete(entidad)
+        database.session.commit()
+
+        # La moneda referenciada por la entidad debe borrarse en un segundo
+        # commit: con FK RESTRICT el motor real no garantiza el orden si
+        # ambos DELETE viajan en el mismo flush.
         database.session.delete(moneda)
         database.session.commit()
