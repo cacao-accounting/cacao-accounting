@@ -19,10 +19,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Elimina ``gl_entry_dimension`` si existe."""
+    """Elimina ``gl_entry_dimension`` si existe y no contiene evidencia."""
     inspector = sa.inspect(op.get_bind())
-    if inspector.has_table("gl_entry_dimension"):
-        op.drop_table("gl_entry_dimension")
+    if not inspector.has_table("gl_entry_dimension"):
+        return
+    count = op.get_bind().execute(sa.text("SELECT COUNT(*) FROM gl_entry_dimension")).scalar_one()
+    if count:
+        raise RuntimeError("gl_entry_dimension contiene filas; exporte o decida su tratamiento antes de eliminarla.")
+    op.drop_table("gl_entry_dimension")
 
 
 def downgrade() -> None:
