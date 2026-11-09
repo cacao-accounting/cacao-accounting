@@ -26,6 +26,7 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predete
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     AccountingPeriod,
+    DeliveryNote,
     DocumentRelation,
     Entity,
     Item,
@@ -50,6 +51,7 @@ def _sembrar_escenario() -> dict[str, str]:
     database.session.add_all(
         [
             Modules(module="sales", default=False, enabled=True),
+            Modules(module="inventory", default=False, enabled=True),
             Entity(
                 code="cacao",
                 name="Cacao Accounting",
@@ -86,8 +88,12 @@ def _sembrar_escenario() -> dict[str, str]:
             ),
             User(id="vendedor", user="vendedor", name="Vendedor Local", password=proteger_passwd(CONTRASENA), active=True),
             User(id="tesorero", user="tesorero", name="Tesorero", password=proteger_passwd(CONTRASENA), active=True),
+            User(id="bodeguero", user="bodeguero", name="Bodeguero", password=proteger_passwd(CONTRASENA), active=True),
+            User(id="operador", user="operador", name="Operador O2C", password=proteger_passwd(CONTRASENA), active=True),
             UserCompanyAccess(user_id="vendedor", company_code="cacao"),
             UserCompanyAccess(user_id="tesorero", company_code="cacao"),
+            UserCompanyAccess(user_id="bodeguero", company_code="cacao"),
+            UserCompanyAccess(user_id="operador", company_code="cacao"),
             SalesRequest(company="cacao", posting_date=FECHA, docstatus=1, customer_name="Cliente Cacao"),
             SalesRequest(
                 company="cafe",
@@ -97,6 +103,20 @@ def _sembrar_escenario() -> dict[str, str]:
                 customer_name="Cliente Confidencial Cafe",
             ),
             SalesOrder(company="cafe", posting_date=FECHA, docstatus=1, document_no="SO-CAFE-1", customer_name="Cliente Cafe"),
+            DeliveryNote(
+                company="cacao",
+                posting_date=FECHA,
+                docstatus=1,
+                document_no="DN-CACAO-1",
+                customer_name="Cliente Cacao",
+            ),
+            DeliveryNote(
+                company="cafe",
+                posting_date=FECHA,
+                docstatus=1,
+                document_no="DN-CAFE-1",
+                customer_name="Cliente Confidencial Cafe",
+            ),
         ]
     )
     database.session.commit()
@@ -104,11 +124,16 @@ def _sembrar_escenario() -> dict[str, str]:
     cargar_permisos_predeterminados()
     asigna_rol_a_usuario("vendedor", "sales_auxiliar")
     asigna_rol_a_usuario("tesorero", "user_of_treasury")
+    asigna_rol_a_usuario("bodeguero", "inventory_auxiliar")
+    asigna_rol_a_usuario("operador", "sales_auxiliar")
+    asigna_rol_a_usuario("operador", "inventory_auxiliar")
     database.session.flush()
 
     pedido_propio = database.session.execute(database.select(SalesRequest).filter_by(company="cacao")).scalar_one()
     solicitud_ajena = database.session.execute(database.select(SalesRequest).filter_by(company="cafe")).scalar_one()
     orden_ajena = database.session.execute(database.select(SalesOrder)).scalar_one()
+    entrega_propia = database.session.execute(database.select(DeliveryNote).filter_by(company="cacao")).scalar_one()
+    entrega_ajena = database.session.execute(database.select(DeliveryNote).filter_by(company="cafe")).scalar_one()
     linea_propia = SalesRequestItem(
         sales_request_id=pedido_propio.id,
         item_code="CACAO-ABARROTES-EXPO",
@@ -137,6 +162,8 @@ def _sembrar_escenario() -> dict[str, str]:
         "orden_ajena": orden_ajena.id,
         "linea_ajena": linea_ajena.id,
         "solicitud_ajena": solicitud_ajena.id,
+        "entrega_propia": entrega_propia.id,
+        "entrega_ajena": entrega_ajena.id,
     }
 
 
@@ -351,6 +378,39 @@ def test_cotizacion_precarga_una_solicitud_propia(escenario_multicompania):
     _iniciar_sesion(client)
 
     response = client.get(f"/sales/quotation/new?from_request={ids['pedido_propio']}")
+
+    assert response.status_code == 200
+    assert "Cliente Cacao" in response.get_data(as_text=True)
+
+
+def test_remision_no_precarga_una_entrega_de_otra_compania(escenario_multicompania):
+    """El alta de remisión no serializa el origen ajeno antes de autorizarlo."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "bodeguero")
+
+    response = client.get(f"/sales/delivery-note/new?from_note={ids['entrega_ajena']}")
+
+    assert response.status_code == 403
+    assert "Cliente Confidencial Cafe" not in response.get_data(as_text=True)
+
+
+def test_remision_exige_lectura_del_modulo_de_ventas(escenario_multicompania):
+    """Inventory create no autoriza por sí solo leer el origen de ventas."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "bodeguero")
+
+    response = client.get(f"/sales/delivery-note/new?from_note={ids['entrega_propia']}")
+
+    assert response.status_code == 403
+    assert "Cliente Cacao" not in response.get_data(as_text=True)
+
+
+def test_remision_precarga_una_entrega_propia(escenario_multicompania):
+    """Control positivo: con lectura de ventas, la entrega propia se precarga."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "operador")
+
+    response = client.get(f"/sales/delivery-note/new?from_note={ids['entrega_propia']}")
 
     assert response.status_code == 200
     assert "Cliente Cacao" in response.get_data(as_text=True)

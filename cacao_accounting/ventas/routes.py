@@ -200,9 +200,16 @@ class _DeliveryNoteNewContext:
 
 
 def _load_delivery_note_sources(from_order_id: str | None, from_note_id: str | None) -> tuple[Any, Any]:
-    """Load optional sales-order and delivery-note sources for the new form."""
+    """Load optional sales-order and delivery-note sources for the new form.
+
+    El origen aporta compañía, cliente y logística al formulario; se autoriza
+    antes de exponer esos metadatos, no solo al confirmar el POST.
+    """
     order_source = database.session.get(SalesOrder, from_order_id) if from_order_id else None
     delivery_source = database.session.get(DeliveryNote, from_note_id) if from_note_id else None
+    for source in (order_source, delivery_source):
+        if source is not None:
+            _require_sales_document_access(source, "consultar")
     return order_source, delivery_source
 
 
