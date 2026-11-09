@@ -91,3 +91,6 @@ def test_usuario_con_permiso_lee_el_catalogo(uom_cloud):
 
     assert response.status_code == 200
     assert "UND" in response.get_data(as_text=True)
+    detalle = client.get("/inventory/uom/UND")
+    assert detalle.status_code == 200
+    assert "Unidad" in detalle.get_data(as_text=True)
