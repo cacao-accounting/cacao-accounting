@@ -737,15 +737,16 @@ def predeterminar_entidad(id_entidad):
     """Establece una entidad como predeterminada."""
     from cacao_accounting.database import Entity
 
-    # Establece cualquier entidad establecida como predeterminada a falso
-    ENTIDAD_PREDETERMINADA = database.session.execute(database.select(Entity).filter_by(default=True)).all()
-
-    if ENTIDAD_PREDETERMINADA:
-        for e in ENTIDAD_PREDETERMINADA:
-            e[0].default = False
-
-    ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
-    ENTIDAD[0].default = True
+    entidades = database.session.execute(database.select(Entity)).scalars().all()
+    objetivo = next((entidad for entidad in entidades if entidad.id == id_entidad), None)
+    if objetivo is None:
+        abort(404)
+    for entidad in entidades:
+        entidad.default = entidad.id == id_entidad
+        if entidad.id == id_entidad:
+            entidad.status = "default"
+        elif entidad.status == "default":
+            entidad.status = "activo"
     database.session.commit()
     invalidate_cache("companies")
     invalidate_cache("smart-select-master-data")
