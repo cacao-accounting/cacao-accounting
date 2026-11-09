@@ -535,6 +535,9 @@ def update_petty_cash_account(
     account = database.session.get(Accounts, petty_cash.account_id)
     if account_id:
         account = _validate_petty_cash_account(petty_cash.company, account_id)
+        assert account is not None
+        if currency is None:
+            _validate_petty_cash_currency(petty_cash.company, petty_cash.currency or None, account)
         petty_cash.account_id = account_id
     if float_amount is not None:
         if float_amount < 0:

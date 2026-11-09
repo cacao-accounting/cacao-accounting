@@ -27,6 +27,7 @@ from cacao_accounting.ledger_queries import primary_ledger_id
 from cacao_accounting.i18n import _
 
 _EPOCH_DATE = date(1900, 1, 1)
+CASH_FORECAST_PERIODICITIES = frozenset({"weekly", "monthly"})
 
 
 class CashForecastConversionError(ValueError):
@@ -79,6 +80,8 @@ def _generate_weekly_periods(start: date, end: date) -> list[dict]:
 
 def generate_periods(fiscal_year, periodicity):
     """Divide un año fiscal en períodos semanales o mensuales."""
+    if periodicity not in CASH_FORECAST_PERIODICITIES:
+        raise ValueError(_("La periodicidad debe ser semanal o mensual."))
     start = fiscal_year.year_start_date
     end = fiscal_year.year_end_date
     if periodicity == "monthly":

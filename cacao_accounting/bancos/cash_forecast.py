@@ -144,6 +144,12 @@ def _handle_cash_forecast_new_post(company: str):
         flash(_("Todos los campos obligatorios deben ser completados."), "danger")
         return None
 
+    from cacao_accounting.bancos.cash_forecast_service import CASH_FORECAST_PERIODICITIES
+
+    if periodicity not in CASH_FORECAST_PERIODICITIES:
+        flash(_("La periodicidad debe ser semanal o mensual."), "danger")
+        return None
+
     fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
     if not fiscal_year or fiscal_year.entity != company:
         flash(_("El año fiscal seleccionado no pertenece a la compañía indicada."), "danger")

@@ -25211,3 +25211,11 @@ msgstr "The SMTP port must be an integer between 1 and 65535."
 #: cacao_accounting/admin/services.py
 msgid "El correo remitente SMTP no es válido."
 msgstr "The SMTP sender email address is not valid."
+
+#: cacao_accounting/bancos/cash_forecast.py
+msgid "La periodicidad debe ser semanal o mensual."
+msgstr "The periodicity must be weekly or monthly."
+
+#: cacao_accounting/bancos/services.py
+msgid "La moneda de la caja chica debe coincidir con la moneda de su cuenta contable."
+msgstr "The petty cash currency must match the currency of its ledger account."
