@@ -94,8 +94,8 @@ def test_el_boton_de_borrado_tiene_nombre_accesible():
 
         assert respuesta.status_code == 200
         html = respuesta.get_data(as_text=True)
-        assert 'aria-label="Eliminar regla de aprobación"' in html
-        assert 'title="Eliminar regla de aprobación"' in html
+        assert 'aria-label="Deshabilitar regla de aprobación"' in html
+        assert 'title="Deshabilitar regla de aprobación"' in html
     finally:
         with application.app_context():
             database.session.remove()
