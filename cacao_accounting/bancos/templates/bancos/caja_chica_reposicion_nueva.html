@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 <div class="ca-card">
   <div class="ca-card-header"><h5 class="ca-card-title">{{ _('Nueva reposición de Caja Chica') }}</h5></div>
   <form method="post" class="row g-3 p-3">

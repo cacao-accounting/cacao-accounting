@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html"></div>

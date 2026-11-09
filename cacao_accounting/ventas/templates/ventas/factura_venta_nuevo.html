@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div
