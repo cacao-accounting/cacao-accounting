@@ -25137,3 +25137,15 @@ msgstr "The item or unit of measure is no longer available."
 #: cacao_accounting/contabilidad/routes.py
 msgid "Ya existe una tasa de cambio para ese par de monedas y fecha."
 msgstr "An exchange rate already exists for that currency pair and date."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "La identificación fiscal y la razón social son obligatorias."
+msgstr "The tax identifier and legal name are required."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "Ya existe otra entidad con esa identificación fiscal o razón social."
+msgstr "Another entity already uses that tax identifier or legal name."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "La eliminación de entidades no está disponible en modo Cloud; utilice Inactivar."
+msgstr "Entity deletion is not available in Cloud mode; use Deactivate instead."

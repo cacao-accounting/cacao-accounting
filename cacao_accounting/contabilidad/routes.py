@@ -581,6 +581,23 @@ def nueva_entidad():
     )
 
 
+def _entity_identity_error(entity: object, tax_id: str, company_name: str) -> str | None:
+    """Valida identidad mínima y unicidad de la entidad antes de persistir."""
+    from cacao_accounting.database import Entity
+
+    if not tax_id or not company_name:
+        return _("La identificación fiscal y la razón social son obligatorias.")
+    conflict = database.session.execute(
+        database.select(Entity.code).where(
+            database.or_(Entity.tax_id == tax_id, Entity.company_name == company_name),
+            Entity.code != getattr(entity, "code"),
+        )
+    ).scalar_one_or_none()
+    if conflict is not None:
+        return _("Ya existe otra entidad con esa identificación fiscal o razón social.")
+    return None
+
+
 @contabilidad.route("/entity/edit/<id_entidad>", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -590,12 +607,24 @@ def editar_entidad(id_entidad):
     from cacao_accounting.contabilidad.forms import FormularioEntidad
     from cacao_accounting.database import Entity
 
-    ENTIDAD = database.session.execute(database.select(Entity).filter_by(code=id_entidad)).first()
-    ENTIDAD = ENTIDAD[0]
+    ENTIDAD = database.session.execute(database.select(Entity).filter_by(code=id_entidad)).scalar_one_or_none()
+    if ENTIDAD is None:
+        abort(404)
     formulario = FormularioEntidad()
     formulario.moneda.choices = obtener_lista_monedas()
 
     if request.method == "POST":
+        tax_id = (request.form.get("id_fiscal") or "").strip()
+        company_name = (request.form.get("razon_social") or "").strip()
+        identity_error = _entity_identity_error(ENTIDAD, tax_id, company_name)
+        if identity_error:
+            flash(identity_error, "danger")
+            return render_template(
+                "contabilidad/entidad_editar.html",
+                entidad=ENTIDAD,
+                form=formulario,
+                titulo=_("Contabilidad | Editar Entidad") + f" {ENTIDAD.code} - " + APPNAME,
+            )
         habilitado = bool(request.form.get("habilitado"))
         if ENTIDAD.enabled and not habilitado:
             try:
@@ -603,9 +632,9 @@ def editar_entidad(id_entidad):
             except ValueError as error:
                 flash_error(error, "warning")
                 return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=ENTIDAD.code))
-        ENTIDAD.tax_id = request.form.get("id_fiscal", None)
+        ENTIDAD.tax_id = tax_id
         ENTIDAD.name = request.form.get("nombre_comercial", None)
-        ENTIDAD.company_name = request.form.get("razon_social", None)
+        ENTIDAD.company_name = company_name
         ENTIDAD.phone1 = request.form.get("telefono1", None)
         ENTIDAD.phone2 = request.form.get("telefono2", None)
         ENTIDAD.e_mail = request.form.get("correo_electronico", None)
@@ -613,7 +642,17 @@ def editar_entidad(id_entidad):
         ENTIDAD.web = request.form.get("web", None)
         ENTIDAD.enabled = habilitado
         database.session.add(ENTIDAD)
-        database.session.commit()
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("Ya existe otra entidad con esa identificación fiscal o razón social."), "danger")
+            return render_template(
+                "contabilidad/entidad_editar.html",
+                entidad=ENTIDAD,
+                form=formulario,
+                titulo=_("Contabilidad | Editar Entidad") + f" {ENTIDAD.code} - " + APPNAME,
+            )
         invalidate_cache("companies")
         invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=ENTIDAD.code))
@@ -684,7 +723,15 @@ def eliminar_entidad(id_entidad):
     ):
         return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=company))
     database.session.delete(ENTIDAD[0])
-    database.session.commit()
+    try:
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        flash(
+            _("La eliminación de entidades no está disponible en modo Cloud; utilice Inactivar."),
+            "danger",
+        )
+        return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=company))
     invalidate_cache("companies")
     invalidate_cache("smart-select-master-data")
 
