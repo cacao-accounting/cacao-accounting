@@ -230,8 +230,12 @@ def forgot_password():  # pragma: no cover
 
         if user and user.active and usuario_tiene_email(user):
             token = generar_token_recuperacion(user.id)
-            enviar_token_recuperacion_email(user, token)
-            database.session.commit()
+            if enviar_token_recuperacion_email(user, token):
+                database.session.commit()
+            else:
+                # La entrega falló: no se consume el enlace previo ni queda
+                # activo un token que la persona nunca recibió.
+                database.session.rollback()
 
         flash(_("Si el correo electrónico está registrado, recibirá un enlace de recuperación."))
         return redirect(url_for("login.forgot_password"))

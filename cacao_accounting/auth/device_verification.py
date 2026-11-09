@@ -241,20 +241,20 @@ def enviar_otp_por_email(user: User, code: str) -> None:
         log.error("Error sending OTP to %s: %s", user.e_mail, exc)
 
 
-def enviar_token_recuperacion_email(user: User, token: str) -> None:
-    """Envía un correo con el enlace de recuperación de contraseña."""
+def enviar_token_recuperacion_email(user: User, token: str) -> bool:
+    """Envía el enlace de recuperación y retorna si la entrega fue aceptada."""
     from flask import url_for
 
     from cacao_accounting.messaging.email import EmailError, send_email
 
     if not user.e_mail:
         log.warning("User %s has no email configured", user.user)
-        return
+        return False
     try:
         reset_url = url_for("login.reset_password", token=token, _external=True)
     except RuntimeError:
         log.error("Cannot generate external URL without application context")
-        return
+        return False
 
     body = (
         f"{_('Hola')} {user.name or user.user},\n\n"
@@ -273,6 +273,8 @@ def enviar_token_recuperacion_email(user: User, token: str) -> None:
         )
     except EmailError as exc:
         log.error("Error sending password reset to %s: %s", user.e_mail, exc)
+        return False
+    return True
 
 
 def usuario_tiene_email(user: User) -> bool:
