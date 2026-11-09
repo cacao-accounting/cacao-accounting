@@ -478,7 +478,7 @@ def lista_impuestos():
             account_id=request.form.get("account_id") or None,
             is_charge=bool(request.form.get("is_charge")),
             is_capitalizable=bool(request.form.get("is_capitalizable")),
-            is_active=bool(request.form.get("is_active", "1")),
+            is_active=request.form.get("is_active") is not None,
         )
         database.session.add(tax)
         database.session.commit()
@@ -500,7 +500,7 @@ def lista_plantillas_impuesto():
             company=request.form.get("company") or None,
             template_type=request.form.get("template_type") or "selling",
             currency=request.form.get("currency") or None,
-            is_active=bool(request.form.get("is_active", "1")),
+            is_active=request.form.get("is_active") is not None,
         )
         database.session.add(template)
         database.session.commit()

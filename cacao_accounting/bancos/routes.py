@@ -694,7 +694,7 @@ def bancos_reglas_matching():
             amount_tolerance=Decimal(request.form.get("amount_tolerance") or "0"),
             reference_contains=request.form.get("reference_contains") or None,
             priority=int(request.form.get("priority") or 100),
-            is_active=bool(request.form.get("is_active", "1")),
+            is_active=request.form.get("is_active") is not None,
             auto_reconcile=bool(request.form.get("auto_reconcile")),
         )
         database.session.add(rule)
@@ -1102,7 +1102,7 @@ def caja_chica_nuevo():
                 custodian_id=request.form.get("custodian_id") or None,
                 float_amount=_form_decimal("float_amount", "0"),
                 is_default=request.form.get("is_default") == "1",
-                is_active=request.form.get("is_active", "1") != "0",
+                is_active=request.form.get("is_active") is not None,
                 notes=request.form.get("notes") or None,
             )
         except ValueError as exc:
