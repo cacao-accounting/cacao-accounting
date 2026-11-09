@@ -27,10 +27,12 @@
     <div class="col-md-8">
       <label class="form-label" for="name">{{ _('Nombre') }} <span class="text-danger">*</span></label>
       {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
+      {% for error in form.name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
     </div>
     <div class="col-md-4">
       <label class="form-label" for="swift_code">{{ _('Código SWIFT') }}</label>
-      {{ form.swift_code(class="form-control form-control-sm", id="swift_code") }}
+      {{ form.swift_code(class="form-control form-control-sm", id="swift_code", maxlength="20") }}
+      {% for error in form.swift_code.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
     </div>
   </form>
 </div>

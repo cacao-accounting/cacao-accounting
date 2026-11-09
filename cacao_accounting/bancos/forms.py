@@ -6,7 +6,7 @@
 from cacao_accounting.i18n import _l
 from flask_wtf import FlaskForm
 from wtforms import BooleanField, SelectField, StringField, TextAreaField
-from wtforms.validators import DataRequired, Optional
+from wtforms.validators import DataRequired, Length, Optional
 
 _LABEL_COMPANY = _l("Compañía")
 
@@ -15,7 +15,13 @@ class FormularioBanco(FlaskForm):
     """Formulario para crear o editar un banco."""
 
     name = StringField(_l("Nombre"), validators=[DataRequired()])
-    swift_code = StringField(_l("Código SWIFT"))
+    swift_code = StringField(
+        _l("Código SWIFT"),
+        validators=[
+            Optional(),
+            Length(max=20, message=_l("El código SWIFT no puede superar los 20 caracteres.")),
+        ],
+    )
 
 
 class FormularioCuentaBancaria(FlaskForm):
