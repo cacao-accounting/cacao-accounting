@@ -1003,8 +1003,10 @@ def _line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, D
     return _source_line_discount(index, gross_amount) or _form_line_discount(index, gross_amount)
 
 
-def validate_sales_quotation_expiry(quotation: SalesQuotation, conversion_date: date) -> None:
+def validate_sales_quotation_expiry(quotation: SalesQuotation, conversion_date: date | None) -> None:
     """Reject conversion after a quotation's inclusive validity date."""
+    if conversion_date is None:
+        raise ValueError(_("La fecha de conversión es obligatoria."))
     if quotation.valid_until and conversion_date > quotation.valid_until:
         raise ValueError(_("No se puede convertir una cotización vencida."))
 

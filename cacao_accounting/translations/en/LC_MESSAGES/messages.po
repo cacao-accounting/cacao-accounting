@@ -8285,6 +8285,10 @@ msgstr "Bank account is mandatory."
 msgid "La fecha del pago es obligatoria."
 msgstr "The payment date is mandatory."
 
+#: cacao_accounting/ventas/services.py:1008
+msgid "La fecha de conversión es obligatoria."
+msgstr "The conversion date is required."
+
 #: cacao_accounting/bancos/services.py:2341
 msgid "La cuenta bancaria no pertenece a la misma compañía del pago."
 msgstr "The bank account does not belong to the same payment company."
