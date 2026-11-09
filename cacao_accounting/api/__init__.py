@@ -858,6 +858,10 @@ def _send_document_emails(
         )
         database.session.add(queue_item)
         database.session.flush()
+        # La fila queda durable antes de invocar SMTP: si el commit posterior
+        # falla tras la aceptación del correo, se conserva evidencia para
+        # reconciliar y no se reenvía a ciegas.
+        database.session.commit()
         try:
             send_email(to_email=to_email, subject=subject, body=body, is_html=False)
             queue_item.status = "sent"
@@ -867,6 +871,7 @@ def _send_document_emails(
             queue_item.status = "failed"
             queue_item.error_message = str(exc)
             errors.append(f"{to_email}: {exc}")
+        database.session.commit()
     return sent_recipients, errors
 
 
