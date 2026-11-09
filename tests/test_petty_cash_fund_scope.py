@@ -29,6 +29,7 @@ from cacao_accounting.database import (
     Modules,
     PettyCashAccount,
     PettyCashExpense,
+    PettyCashVoucher,
     User,
     UserCompanyAccess,
     database,
@@ -146,12 +147,42 @@ def caja_multicompania():
                 ),
             ]
         )
+        vales = {
+            "alpha": PettyCashVoucher(
+                company="alpha",
+                petty_cash_id=fondos["alpha"].id,
+                voucher_no="VALE-ALPHA",
+                voucher_status="entregado",
+                delivered_to="Ana Alpha",
+                concept="Cafe alpha voucher",
+                amount=Decimal("10"),
+                posting_date=FECHA,
+                docstatus=1,
+            ),
+            "beta": PettyCashVoucher(
+                company="beta",
+                petty_cash_id=fondos["beta"].id,
+                voucher_no="VALE-BETA",
+                voucher_status="entregado",
+                delivered_to="Bob",
+                concept="Foreign expense",
+                amount=Decimal("99"),
+                posting_date=FECHA,
+                docstatus=1,
+            ),
+        }
+        database.session.add_all(vales.values())
         database.session.commit()
         crea_roles_predeterminados()
         cargar_permisos_predeterminados()
         asigna_rol_a_usuario("tesorera", "head_of_treasury")
         database.session.commit()
-        ids = {"alpha": fondos["alpha"].id, "beta": fondos["beta"].id}
+        ids = {
+            "alpha": fondos["alpha"].id,
+            "beta": fondos["beta"].id,
+            "vale_alpha": vales["alpha"].id,
+            "vale_beta": vales["beta"].id,
+        }
     yield application, ids
     with application.app_context():
         database.session.remove()
@@ -186,3 +217,31 @@ def test_reposicion_muestra_gastos_del_fondo_propio(caja_multicompania):
 
     assert response.status_code == 200
     assert "Cafe alpha" in response.get_data(as_text=True)
+
+
+def test_gasto_no_precarga_un_vale_de_otra_compania(caja_multicompania):
+    """El formulario rechaza el vale ajeno antes de copiar sus datos."""
+    application, ids = caja_multicompania
+    client = application.test_client()
+    _iniciar(client)
+
+    response = client.get(f"/cash_management/petty-cash-expense/new?voucher_id={ids['vale_beta']}")
+
+    assert response.status_code == 403
+    cuerpo = response.get_data(as_text=True)
+    assert "Bob" not in cuerpo
+    assert "Foreign expense" not in cuerpo
+
+
+def test_gasto_precarga_el_vale_propio(caja_multicompania):
+    """Control positivo: el vale de la compañía autorizada sí se precarga."""
+    application, ids = caja_multicompania
+    client = application.test_client()
+    _iniciar(client)
+
+    response = client.get(f"/cash_management/petty-cash-expense/new?voucher_id={ids['vale_alpha']}")
+
+    assert response.status_code == 200
+    cuerpo = response.get_data(as_text=True)
+    assert "Ana Alpha" in cuerpo
+    assert "Cafe alpha voucher" in cuerpo

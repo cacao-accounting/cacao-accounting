@@ -1290,6 +1290,12 @@ def caja_chica_gasto_nuevo():
     formulario.petty_cash_id.choices = [(f.id, f"{f.company} - {f.name}") for f in fondos]
     voucher_id = request.args.get("voucher_id") or request.form.get("voucher_id") or ""
     voucher = database.session.get(PettyCashVoucher, voucher_id) if voucher_id else None
+    if voucher:
+        # El vale precargado aporta datos del beneficiario y del importe; su
+        # compañía y fondo deben pertenecer al alcance antes de copiarlos.
+        exige_acceso_compania("cash", voucher.company or "", "crear")
+        if voucher.petty_cash_id not in {fondo.id for fondo in fondos}:
+            abort(403)
     if voucher and request.method == "GET":
         formulario.company.data = voucher.company
         formulario.petty_cash_id.data = voucher.petty_cash_id
