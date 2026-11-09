@@ -815,6 +815,50 @@ class TestConcurrenciaPostgreSQL:
             reposiciones = list(database.session.execute(database.select(PettyCashReplenishment)).scalars().all())
             assert len(reposiciones) == 1
 
+    def test_ajuste_concurrente_un_solo_diario(self, pg_app_caja):
+        """Dos ajustes simultáneos de la misma conciliación: un solo diario."""
+        application = pg_app_caja
+        from cacao_accounting.database import ComprobanteContable, PettyCashReconciliation
+
+        _gasto_posteado(application, COMPANY, MONTO, date(2026, 10, 5))
+        with application.app_context():
+            create_petty_cash_reconciliation(
+                company=COMPANY,
+                petty_cash_id=_fondo_id(application, COMPANY),
+                reconciliation_date=date(2026, 10, 31),
+                counted_cash=Decimal("900"),
+                explanation="Faltante de efectivo menor a dos.",
+            )
+            from cacao_accounting.bancos.services import reconcile_petty_cash
+
+            conciliacion = database.session.execute(
+                database.select(PettyCashReconciliation).filter_by(company=COMPANY)
+            ).scalar_one()
+            reconcile_petty_cash(conciliacion, actor_id="admin")
+            conciliacion_id = conciliacion.id
+
+        def _ajustar():
+            with application.app_context():
+                conciliacion = database.session.get(PettyCashReconciliation, conciliacion_id)
+                diario = post_petty_cash_reconciliation_adjustment(
+                    conciliacion,
+                    adjustment_account_code="5.01.01.001",
+                    cost_center_code="MAIN",
+                    actor_id="admin",
+                )
+                return diario.id
+
+        resultados = _ejecutar_en_dos_hilos([_ajustar, _ajustar])
+        exitos, errores = _exitos_y_errores(resultados)
+        assert exitos == 1, f"un solo ajuste debe triunfar: {resultados}"
+        assert errores == 1
+        with application.app_context():
+            ganador = min(valor for valor in resultados.values() if not isinstance(valor, Exception))
+            diarios = list(database.session.execute(database.select(ComprobanteContable)).scalars().all())
+            assert len(diarios) == 1
+            conciliacion = database.session.get(PettyCashReconciliation, conciliacion_id)
+            assert conciliacion.adjustment_journal_id == ganador
+
     def test_anulacion_concurrente_un_solo_reverso(self, pg_app_reval):
         """void() concurrente: exactamente un conjunto de reversos y lápida permanente."""
         application = pg_app_reval
