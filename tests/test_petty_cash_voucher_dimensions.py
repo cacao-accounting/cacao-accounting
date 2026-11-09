@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
     Book,
+    ComprobanteContable,
     CostCenter,
     Currency,
     Entity,
@@ -318,6 +319,8 @@ def test_liquidacion_rechaza_unidad_ajena_sin_mutar_el_vale(caja_dimensiones):
         assert vale.voucher_status == "entregado"
         assert vale.expense_id is None
         assert database.session.execute(database.select(PettyCashExpense)).scalars().all() == []
+        assert database.session.execute(database.select(ComprobanteContable)).scalars().all() == []
+        assert database.session.execute(database.select(GLEntry)).scalars().all() == []
 
 
 def test_liquidacion_acepta_dimensiones_propias(caja_dimensiones):
