@@ -43,7 +43,7 @@
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
-        <a href="{{ url_for('ventas.ventas_cliente_lista') }}#contactos-direcciones">{{ _('Contactos y Direcciones de Clientes') }}</a>
+        <a href="{{ url_for('ventas.ventas_cliente_lista') }}">{{ _('Contactos y Direcciones de Clientes') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       {% else %}

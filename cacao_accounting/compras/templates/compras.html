@@ -43,7 +43,7 @@
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
-        <a href="{{ url_for('compras.compras_proveedor_lista') }}#contactos-direcciones">{{ _('Contactos y Direcciones de Proveedores') }}</a>
+        <a href="{{ url_for('compras.compras_proveedor_lista') }}">{{ _('Contactos y Direcciones de Proveedores') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       {% else %}
