@@ -773,11 +773,6 @@ def _sum_document_field(
     return total
 
 
-def _sum_query(query: Any, expression: Any) -> str:
-    """Suma una expresión sobre un query existente."""
-    return _numeric(query.with_entities(func.sum(expression)).scalar())
-
-
 def _signed_document_expression(model: Any, base_field: str | None = None, fallback_field: str | None = None) -> Any:
     """Return a base-currency document amount with returns as negative values."""
     if base_field is None:

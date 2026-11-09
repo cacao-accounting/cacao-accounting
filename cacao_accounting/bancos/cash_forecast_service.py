@@ -6,7 +6,7 @@
 import calendar
 from datetime import date, timedelta
 from decimal import Decimal
-from sqlalchemy import func, or_, tuple_
+from sqlalchemy import func, tuple_
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from cacao_accounting.database import (
     database,
@@ -138,36 +138,6 @@ def _compute_initial_balance(company: str, account_ids: list[str], first_start: 
         init_val = init_val.filter(GLEntry.ledger_id == ledger_id)
     init_val = init_val.scalar()
     return Decimal(str(init_val)) if init_val is not None else Decimal("0")
-
-
-def _query_gl_sum(
-    company: str,
-    account_ids: list[str],
-    start_date: date,
-    limit_end: date,
-    party_type_filter: str | None = None,
-    exclude_party_types: bool = False,
-    use_debit_credit: bool = True,
-) -> Decimal:
-    """Consulta la suma de GLEntry para un filtro de party_type dado."""
-    base_filters = [
-        GLEntry.company == company,
-        GLEntry.account_id.in_(account_ids),
-        GLEntry.posting_date >= start_date,
-        GLEntry.posting_date <= limit_end,
-        GLEntry.is_cancelled.is_(False),
-        GLEntry.is_reversal.is_(False),
-    ]
-    ledger_id = primary_ledger_id(company)
-    if ledger_id:
-        base_filters.append(GLEntry.ledger_id == ledger_id)
-    if party_type_filter:
-        base_filters.append(GLEntry.party_type == party_type_filter)
-    elif exclude_party_types:
-        base_filters.append(or_(GLEntry.party_type.is_(None), ~GLEntry.party_type.in_(["customer", "supplier"])))
-    expr = func.sum(GLEntry.debit - GLEntry.credit) if use_debit_credit else func.sum(GLEntry.credit - GLEntry.debit)
-    val = database.session.query(expr).filter(*base_filters).scalar()
-    return Decimal(str(val)) if val else Decimal("0")
 
 
 def _compute_real_movements(

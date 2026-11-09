@@ -684,14 +684,6 @@ def _comparison_item_key(item: PurchaseOrderItem) -> tuple[str | None, ...]:
     )
 
 
-def _comparison_item_at_occurrence(
-    items: list[PurchaseOrderItem], base_item: PurchaseOrderItem, occurrence: int
-) -> PurchaseOrderItem | None:
-    """Return the matching line by commercial identity and occurrence."""
-    matching_items = [item for item in items if _comparison_item_key(item) == _comparison_item_key(base_item)]
-    return matching_items[occurrence] if occurrence < len(matching_items) else None
-
-
 def _award_lines_by_supplier(award_id: str) -> dict[str, list[PurchaseQuotationAwardItem]]:
     """Group awarded lines by supplier quotation."""
     award_lines = (

@@ -75,6 +75,14 @@ import pytest
         ("cacao_accounting.audit_trail_service", "log_reverse"),
         ("cacao_accounting.audit_trail_service", "log_delete_attempt"),
         ("cacao_accounting.contabilidad.forms", "FormularioSecuencia"),
+        ("cacao_accounting.contabilidad.services", "_build_project_from_form"),
+        ("cacao_accounting.compras.services", "_comparison_item_at_occurrence"),
+        ("cacao_accounting.compras.purchase_reconciliation_service", "_find_order_item_for_invoice_line"),
+        ("cacao_accounting.compras.purchase_reconciliation_service", "_find_receipt_item_for_invoice_line"),
+        ("cacao_accounting.compras.purchase_reconciliation_service", "_group_lines_by_item_and_uom"),
+        ("cacao_accounting.bancos.cash_forecast_service", "_query_gl_sum"),
+        ("cacao_accounting.api.dashboard", "_sum_query"),
+        ("cacao_accounting.bancos.reconciliation_service", "backfill_reconciliation_item_context"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):

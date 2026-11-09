@@ -441,25 +441,6 @@ def _validate_project_creation_form(formulario: Any) -> tuple[str | None, str | 
     return parent_id, capitalization_account_id, capitalizable
 
 
-def _build_project_from_form(formulario: Any, budget_currency: str | None) -> Project:
-    """Construye un objeto Project desde los datos del formulario."""
-    budget_amount = formulario.presupuesto.data
-    return Project(
-        code=request.form.get("id", None),
-        name=request.form.get("nombre", None),
-        entity=request.form.get("entidad", None),
-        start=formulario.inicio.data,
-        end=formulario.fin.data,
-        budget=Decimal(str(budget_amount or 0)),
-        budget_currency_code=budget_currency,
-        enabled=bool(formulario.habilitado.data),
-        status=formulario.status.data or "open",
-        parent_id=request.form.get("parent_id") or None,
-        capitalizable=bool(formulario.capitalizable.data),
-        capitalization_account_id=request.form.get("capitalization_account_id") or None,
-    )
-
-
 def _populate_project_edit_form(formulario: Any, proyecto: Any) -> None:
     """Puebla los campos del formulario con los datos actuales del proyecto."""
     formulario.nombre.data = proyecto.name
