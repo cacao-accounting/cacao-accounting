@@ -2249,14 +2249,45 @@ def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_
     return exchange_rate
 
 
+PURCHASE_AUDIT_FIELDS = (
+    "supplier_id",
+    "company",
+    "posting_date",
+    "total",
+    "remarks",
+    "supplier_invoice_no",
+    "tax_template_id",
+    "transaction_currency",
+    "exchange_rate",
+    "base_total",
+    "incoterm_code",
+    "incoterm_version",
+    "delivery_date",
+    "delivery_place",
+    "purchase_terms",
+    "purchase_request_id",
+    "purchase_quotation_id",
+    "supplier_quotation_id",
+    "purchase_award_id",
+    "purchase_request_comparison_id",
+    "purchase_order_id",
+    "purchase_receipt_id",
+)
+
+
+def _purchase_snapshot_value(value: Any) -> Any:
+    """Serializa valores de cabecera para comparar snapshots de auditoría."""
+    if isinstance(value, (date, Decimal)):
+        return str(value)
+    return value
+
+
 def _capture_purchase_state(registro: Any) -> dict[str, Any]:
     """CROSS-01: Captura estado de documento de compras para auditoría."""
     state = {
-        "supplier_id": getattr(registro, "supplier_id", None),
-        "company": getattr(registro, "company", None),
-        "posting_date": str(getattr(registro, "posting_date", "")),
-        "total": str(getattr(registro, "total", "")),
-        "remarks": getattr(registro, "remarks", None),
+        field: _purchase_snapshot_value(getattr(registro, field))
+        for field in PURCHASE_AUDIT_FIELDS
+        if hasattr(registro, field)
     }
 
     from cacao_accounting.database import (
