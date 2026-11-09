@@ -109,6 +109,26 @@ def _validate_tax_rule_references(company: str | None, account_id: str | None, c
             raise TaxRuleServiceError(_("La moneda de la regla fiscal no existe."))
 
 
+TAX_RULE_ENUMS: dict[str, tuple[set[str], str]] = {
+    "applies_to": ({"both", "purchase", "sales"}, "both"),
+    "level": ({"item", "party", "transaction", "company"}, "transaction"),
+    "tax_type": ({"tax", "withholding", "charge", "deduction"}, "tax"),
+    "calculation_method": ({"percentage", "fixed", "manual", "quantity"}, "percentage"),
+    "base_mode": ({"goods", "accumulated"}, "goods"),
+}
+
+
+def _validated_enum(values: Mapping[str, str | None], field: str) -> str:
+    """Valida un campo enumerado y aplica su default cuando llega vacío."""
+    allowed, default = TAX_RULE_ENUMS[field]
+    raw = _clean_text(values.get(field))
+    if not raw:
+        return default
+    if raw not in allowed:
+        raise TaxRuleServiceError(_("El valor de %(field)s no es válido para la regla fiscal.") % {"field": field})
+    return raw
+
+
 def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> None:
     """Aplica datos validados a una regla fiscal ORM."""
     name = (values.get("name") or "").strip()
@@ -119,16 +139,21 @@ def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> N
         raise TaxRuleServiceError(_("El concepto fiscal es obligatorio."))
     company = _clean_text(values.get("company"))
     _validate_tax_rule_references(company, values.get("account_id"), values.get("currency"))
+    applies_to = _validated_enum(values, "applies_to")
+    level = _validated_enum(values, "level")
+    tax_type = _validated_enum(values, "tax_type")
+    calculation_method = _validated_enum(values, "calculation_method")
+    base_mode = _validated_enum(values, "base_mode")
     rule.company = company
     rule.name = name
-    rule.applies_to = _clean_text(values.get("applies_to")) or "both"
-    rule.level = _clean_text(values.get("level")) or "transaction"
+    rule.applies_to = applies_to
+    rule.level = level
     rule.concept = concept
-    rule.tax_type = _clean_text(values.get("tax_type")) or "tax"
-    rule.calculation_method = _clean_text(values.get("calculation_method")) or "percentage"
+    rule.tax_type = tax_type
+    rule.calculation_method = calculation_method
     rule.rate = _decimal_value(values.get("rate"), default="0")
     rule.amount = _decimal_value(values.get("amount"), default="0")
-    rule.base_mode = _clean_text(values.get("base_mode")) or "goods"
+    rule.base_mode = base_mode
     rule.include_concepts = _normalized_csv(values.get("include_concepts"))
     rule.exclude_concepts = _normalized_csv(values.get("exclude_concepts"))
     rule.sequence = _int_value(values.get("sequence"), default=10)
