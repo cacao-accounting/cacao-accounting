@@ -7,7 +7,9 @@ Escenario de negocio (issue #1019): una empresa comercial opera dos compañías
 (``cacao`` y ``cafe``); un vendedor de la primera no debe poder crear
 documentos en la segunda ni copiar líneas de sus documentos, ni siquiera
 presentando una cabecera propia en el ``payload`` del endpoint
-``POST /api/document-flow/create-target``.
+``POST /api/document-flow/create-target``. El endpoint de líneas pendientes
+autoriza cada documento origen de forma individual y exige el permiso del
+módulo fuente, no solo acceso a la compañía.
 """
 
 from __future__ import annotations
@@ -83,7 +85,9 @@ def _sembrar_escenario() -> dict[str, str]:
                 default_uom="Unidad",
             ),
             User(id="vendedor", user="vendedor", name="Vendedor Local", password=proteger_passwd(CONTRASENA), active=True),
+            User(id="tesorero", user="tesorero", name="Tesorero", password=proteger_passwd(CONTRASENA), active=True),
             UserCompanyAccess(user_id="vendedor", company_code="cacao"),
+            UserCompanyAccess(user_id="tesorero", company_code="cacao"),
             SalesRequest(company="cacao", posting_date=FECHA, docstatus=1, customer_name="Cliente Cacao"),
             SalesOrder(company="cafe", posting_date=FECHA, docstatus=1, document_no="SO-CAFE-1", customer_name="Cliente Cafe"),
         ]
@@ -92,6 +96,7 @@ def _sembrar_escenario() -> dict[str, str]:
     crea_roles_predeterminados()
     cargar_permisos_predeterminados()
     asigna_rol_a_usuario("vendedor", "sales_auxiliar")
+    asigna_rol_a_usuario("tesorero", "user_of_treasury")
     database.session.flush()
 
     pedido_propio = database.session.execute(database.select(SalesRequest)).scalar_one()
@@ -148,9 +153,9 @@ def escenario_multicompania():
         database.engine.dispose()
 
 
-def _iniciar_sesion(client) -> None:
-    """Autentica al vendedor de la compañía 'cacao'."""
-    response = client.post("/login", data={"usuario": "vendedor", "acceso": CONTRASENA}, follow_redirects=True)
+def _iniciar_sesion(client, usuario: str = "vendedor") -> None:
+    """Autentica al usuario indicado (por defecto, el vendedor de 'cacao')."""
+    response = client.post("/login", data={"usuario": usuario, "acceso": CONTRASENA}, follow_redirects=True)
     assert response.status_code == 200
 
 
@@ -337,6 +342,42 @@ def test_items_del_flujo_rechaza_la_mezcla_de_origenes_ajenos(escenario_multicom
     )
     assert response.status_code == 403
     assert response.get_json() is None
+
+
+def test_items_del_flujo_exige_permiso_del_modulo_fuente(escenario_multicompania):
+    """Tener acceso a la compañía no basta; la fuente de ventas exige ventas/consultar."""
+    application, client, _ = escenario_multicompania
+    with application.app_context():
+        orden = SalesOrder(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="SO-CACAO-SECRETO",
+            customer_name="Cliente Cacao",
+        )
+        database.session.add(orden)
+        database.session.flush()
+        linea = SalesOrderItem(
+            sales_order_id=orden.id,
+            item_code="ITEM-SECRETO",
+            item_name="Item solo ventas",
+            qty=Decimal("7"),
+            qty_in_base_uom=Decimal("7"),
+            uom="Unidad",
+            rate=Decimal("250"),
+            amount=Decimal("1750"),
+        )
+        database.session.add(linea)
+        database.session.commit()
+        orden_id = orden.id
+
+    _iniciar_sesion(client, "tesorero")
+    response = client.get(f"/api/document-flow/items?target_type=sales_invoice&source=sales_order:{orden_id}")
+
+    assert response.status_code == 403
+    cuerpo = response.get_data(as_text=True)
+    assert "ITEM-SECRETO" not in cuerpo
+    assert "1750" not in cuerpo
 
 
 def test_items_del_flujo_devuelve_las_lineas_de_sus_propias_fuentes(escenario_multicompania):
