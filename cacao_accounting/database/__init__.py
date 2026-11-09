@@ -5273,26 +5273,6 @@ class Comment(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_deleted = database.Column(database.Boolean(), default=False, nullable=False)
 
 
-class Assignment(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Asignacion de un registro a un usuario."""
-
-    __tablename__ = "assignment"
-    reference_type = database.Column(database.String(50), nullable=False, index=True)
-    reference_id = database.Column(database.String(26), nullable=False, index=True)
-    assigned_to = database.Column(
-        database.String(26),
-        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    assigned_by = database.Column(
-        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
-    )
-    # open, in_progress, completed, cancelled
-    assignment_status = database.Column(database.String(20), nullable=False, default="open")
-    due_date = database.Column(database.Date(), nullable=True)
-
-
 class Workflow(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Definicion de flujo de trabajo."""
 

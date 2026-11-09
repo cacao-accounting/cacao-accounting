@@ -52,6 +52,7 @@ import pytest
         ("cacao_accounting.admin.session_security_service", "listar_dispositivos_usuario"),
         ("cacao_accounting.database", "BaseTercero"),
         ("cacao_accounting.database", "CommentMention"),
+        ("cacao_accounting.database", "Assignment"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):
