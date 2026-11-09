@@ -29,10 +29,6 @@ from cacao_accounting.logs import log
 MODULOS: list = ["accounting", "cash", "purchases", "inventory", "sales", "imports"]
 
 
-class RegistroPermisosRol:
-    """Administracion de Permisos por rol."""
-
-
 class Permisos:
     """
     Administración de Permisos.

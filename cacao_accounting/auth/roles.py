@@ -19,15 +19,6 @@ from cacao_accounting.logs import log
 
 from cacao_accounting.i18n import _
 
-
-class RegistroRol:
-    """Adminisración de Roles de Usuario."""
-
-
-class RegistroRolUsuario:
-    """Administración de roles de usuario."""
-
-
 ADMINISTRADOR = {
     "name": "admin",
     "detalle": "Administrador del Sistema",
