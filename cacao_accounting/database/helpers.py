@@ -534,6 +534,8 @@ def check_hierarchy_cycle(node_class, node_id, proposed_parent_id) -> None:
         return
     if proposed_parent_id == node_id:
         raise ValueError(_("Un registro no puede ser padre de sí mismo."))
+    if database.session.get(node_class, proposed_parent_id) is None:
+        raise ValueError(_("El registro padre seleccionado no existe."))
 
     curr_id = proposed_parent_id
     visited = {node_id} if node_id else set()

@@ -910,10 +910,10 @@ def nueva_unidad():
         for u in database.session.execute(database.select(Unit).order_by(Unit.code)).scalars().all()
     ]
     TITULO = _("Contabilidad | Nueva Unidad de Negocio") + " - " + APPNAME
-    if formulario.validate_on_submit() or request.method == "POST":
+    if formulario.validate_on_submit():
         try:
-            _validate_active_entity_submission(request.form.get("entidad", ""))
-            parent_id = request.form.get("parent_id") or None
+            _validate_active_entity_submission(formulario.entidad.data or "")
+            parent_id = formulario.parent_id.data or None
             if parent_id:
                 check_hierarchy_cycle(Unit, None, parent_id)
         except ValueError as error:
@@ -924,9 +924,9 @@ def nueva_unidad():
                 form=formulario,
             )
         DATA = Unit(
-            code=request.form.get("id", None),
-            name=request.form.get("nombre", None),
-            entity=request.form.get("entidad", None),
+            code=formulario.id.data,
+            name=formulario.nombre.data,
+            entity=formulario.entidad.data,
             status="activo",
             enabled=bool(formulario.habilitado.data),
             parent_id=parent_id,
@@ -978,7 +978,7 @@ def editar_unidad(id_unidad):
     if formulario.validate_on_submit():
         try:
             _validate_active_entity_submission(formulario.entidad.data)
-            parent_id = request.form.get("parent_id") or None
+            parent_id = formulario.parent_id.data or None
             if parent_id:
                 check_hierarchy_cycle(Unit, registro.id, parent_id)
         except ValueError as error:
@@ -1488,6 +1488,18 @@ def editar_cuenta(entity, id_cta):
         )
     except ValueError as error:
         flash_error(error)
+        return render_template(
+            _TPL_CUENTA_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+    from cacao_accounting.contabilidad.services import _account_descendant_codes
+
+    if registro.group and not bool(formulario.grupo.data) and _account_descendant_codes(registro.entity, registro.code):
+        flash_error(_("No se puede quitar la condición de grupo porque la cuenta tiene cuentas hijas."))
         return render_template(
             _TPL_CUENTA_CREAR,
             titulo=TITULO,
