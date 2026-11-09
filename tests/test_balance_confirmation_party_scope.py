@@ -21,9 +21,11 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predete
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     CompanyParty,
+    Contact,
     Entity,
     Modules,
     Party,
+    PartyContact,
     User,
     UserCompanyAccess,
     database,
@@ -75,6 +77,13 @@ def confirmaciones_cloud():
                     password=proteger_passwd(CONTRASENA),
                     active=True,
                 ),
+                User(
+                    id="sinacceso",
+                    user="sinacceso",
+                    name="Sin Acceso",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                ),
                 UserCompanyAccess(user_id="auxiliar", company_code="alpha"),
             ]
         )
@@ -93,6 +102,14 @@ def confirmaciones_cloud():
         )
         database.session.add_all([cliente_propio, cliente_sin_vinculo])
         database.session.flush()
+        contacto_ajeno = Contact(
+            first_name="Contacto Secreto",
+            email="contacto-secreto@example.test",
+            is_active=True,
+        )
+        database.session.add(contacto_ajeno)
+        database.session.flush()
+        database.session.add(PartyContact(party_id=cliente_sin_vinculo.id, contact_id=contacto_ajeno.id))
         database.session.add(CompanyParty(company="alpha", party_id=cliente_propio.id, is_active=True))
         database.session.commit()
         crea_roles_predeterminados()
@@ -106,8 +123,8 @@ def confirmaciones_cloud():
         database.engine.dispose()
 
 
-def _iniciar(client) -> None:
-    response = client.post("/login", data={"usuario": "auxiliar", "acceso": CONTRASENA}, follow_redirects=True)
+def _iniciar(client, usuario: str = "auxiliar") -> None:
+    response = client.post("/login", data={"usuario": usuario, "acceso": CONTRASENA}, follow_redirects=True)
     assert response.status_code == 200
 
 
@@ -122,6 +139,22 @@ def test_confirmacion_no_expone_tercero_sin_vinculo(confirmaciones_cloud):
     assert response.status_code == 403
     cuerpo = response.get_data(as_text=True)
     assert "private-audit@example.test" not in cuerpo
+    assert "contacto-secreto@example.test" not in cuerpo
+    assert "Cliente Sin Compañía" not in cuerpo
+
+
+def test_usuario_sin_acceso_no_ve_contactos_del_tercero(confirmaciones_cloud):
+    """Sin rol contable ni compañías, el formulario rechaza y no filtra datos."""
+    application, ids = confirmaciones_cloud
+    client = application.test_client()
+    _iniciar(client, "sinacceso")
+
+    response = client.get(f"/accounting/balance-confirmations/new?party_id={ids['ajeno']}")
+
+    assert response.status_code == 403
+    cuerpo = response.get_data(as_text=True)
+    assert "private-audit@example.test" not in cuerpo
+    assert "contacto-secreto@example.test" not in cuerpo
     assert "Cliente Sin Compañía" not in cuerpo
 
 
