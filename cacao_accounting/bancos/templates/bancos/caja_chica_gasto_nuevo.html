@@ -30,6 +30,7 @@
   </div>
   <form method="post" id="form-main" class="row g-3 p-3">
     {{ form.csrf_token }}
+      <input type="hidden" name="voucher_id" value="{{ form.voucher_id.data or request.args.get('voucher_id', '') }}">
     <div class="col-md-4">
       <label class="form-label" for="company">{{ _('Compañía') }} <span class="text-danger">*</span></label>
       {{ tf_macros.smart_select(

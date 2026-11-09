@@ -1568,10 +1568,27 @@ def caja_chica_reposicion_lista():
         query = query.where(PettyCashReplenishment.company.in_(scope))
     registros = list(database.session.execute(query).scalars())
     fondos = _petty_cash_fund_labels({registro.petty_cash_id for registro in registros})
+    bank_accounts: dict[str, list[tuple[str, str]]] = {}
+    company_codes = {registro.company for registro in registros if registro.company}
+    if company_codes:
+        cuentas = (
+            database.session.execute(
+                database.select(BankAccount)
+                .where(BankAccount.company.in_(company_codes), BankAccount.is_active.is_(True))
+                .order_by(BankAccount.account_name)
+            )
+            .scalars()
+            .all()
+        )
+        for cuenta in cuentas:
+            bank_accounts.setdefault(cuenta.company, []).append(
+                (cuenta.id, f"{cuenta.account_name} - {cuenta.account_no or ''}".strip())
+            )
     return render_template(
         "bancos/caja_chica_reposicion_lista.html",
         registros=registros,
         fondos=fondos,
+        bank_accounts=bank_accounts,
         titulo=_("Reposiciones de Caja Chica") + " - " + APPNAME,
     )
 

@@ -25385,3 +25385,7 @@ msgstr "The %(field)s field must be a valid number."
 #, python-format
 msgid "El campo %(field)s debe ser un número finito."
 msgstr "The %(field)s field must be a finite number."
+
+#: cacao_accounting/bancos/templates/bancos/caja_chica_reposicion_lista.html
+msgid "Seleccione una cuenta bancaria"
+msgstr "Select a bank account"

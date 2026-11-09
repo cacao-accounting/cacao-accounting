@@ -47,8 +47,8 @@
 {% set status = document_status_info('payment_entry', registro) %}
 {% set status_value = status.label %}
 {% set status_badge = status.badge_class %}
-{% set payment_amount = registro.received_amount if registro.payment_type == 'receive' else registro.paid_amount %}
-{% set payment_label = _('Recibir') if registro.payment_type == 'receive' else _('Pagar') %}
+{% set payment_amount = registro.received_amount if registro.payment_type in ['receive', 'credit_note'] else registro.paid_amount %}
+{% set payment_label = {'pay': _('Pagar'), 'receive': _('Recibir'), 'credit_note': _('Nota de crédito'), 'debit_note': _('Nota de débito'), 'internal_transfer': _('Transferencia interna')}.get(registro.payment_type, registro.payment_type) %}
 {% set payment_actions %}
   {{ macros.workflow_buttons(
         registro.docstatus,
@@ -133,7 +133,7 @@
         </div>
         <div class="ca-kv-item">
           <label>{{ _('Monto') }}</label>
-          <p class="fw-semibold">{{ registro.currency or '' }} {{ "{:,.2f}".format(payment_amount or 0) }}</p>
+          <p class="fw-semibold">{{ registro.transaction_currency or registro.currency or '' }} {{ "{:,.2f}".format(payment_amount or 0) }}</p>
         </div>
         <div class="ca-kv-item">
           <label>{{ _('Tipo de cambio') }}</label>
