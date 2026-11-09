@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Callable
 from cacao_accounting.i18n import LazyText, _, _l
@@ -68,8 +69,8 @@ def query_tool(
             required_module=required_module,
             read_only=True,
             handler=handler,
-            parameters_schema=parameters_schema or {},
-            response_schema=response_schema or _DEFAULT_RESPONSE_SCHEMA,
+            parameters_schema=deepcopy(parameters_schema) if parameters_schema is not None else {},
+            response_schema=(deepcopy(response_schema) if response_schema is not None else deepcopy(_DEFAULT_RESPONSE_SCHEMA)),
             max_date_range_months=max_date_range_months,
             needs_company=needs_company,
         )
