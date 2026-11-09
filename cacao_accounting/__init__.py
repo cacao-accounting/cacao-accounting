@@ -237,17 +237,21 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(transaction_form_i18n=_transaction_form_i18n_labels)
 
             def get_balance_confirmations_history(party_id: str, party_type: str, company: str | None = None):
+                from cacao_accounting.company_context import authorized_company_codes
                 from cacao_accounting.database import BalanceConfirmation, database
                 from sqlalchemy import select
 
-                if not company:
+                authorized = set(authorized_company_codes())
+                if company:
+                    authorized &= {company}
+                if not authorized:
                     return []
                 stmt = (
                     select(BalanceConfirmation)
                     .where(
                         BalanceConfirmation.party_id == party_id,
                         BalanceConfirmation.party_type == party_type,
-                        BalanceConfirmation.company == company,
+                        BalanceConfirmation.company.in_(authorized),
                     )
                     .order_by(BalanceConfirmation.created.desc())
                 )
