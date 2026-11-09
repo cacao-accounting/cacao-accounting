@@ -13,9 +13,21 @@
   <div class="ca-card-header">
     <h5 class="ca-card-title">{{ _("Conciliación Bancaria") }}</h5>
   </div>
+  {% if companies|length > 1 %}
+  <form method="get" action="{{ url_for('bancos.bancos_conciliacion_bancaria') }}" class="p-3 pb-0">
+    <label class="form-label small fw-bold" for="reconciliation_company">{{ _("Compañía") }}</label>
+    <select name="company" id="reconciliation_company" class="form-select form-select-sm" onchange="this.form.submit()">
+      <option value="" disabled {% if not company %}selected{% endif %}>{{ _("Seleccione una compañía") }}</option>
+      {% for code, name in companies %}
+      <option value="{{ code }}" {% if code == company %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
   <form method="post" action="{{ url_for('bancos.bancos_conciliacion_bancaria_aplicar') }}" class="p-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="company" value="{{ company or '' }}">
+    {% if company %}
     <div class="mb-3 row">
       <label for="reconciliation_date" class="col-sm-2 col-form-label">{{ _("Fecha de conciliación") }}</label>
       <div class="col-sm-4">
@@ -65,6 +77,9 @@
       </tbody>
     </table>
     <button class="btn btn-primary mt-3" type="submit">{{ _("Conciliar seleccionados") }}</button>
+    {% else %}
+    <p class="text-muted mb-0">{{ _("Seleccione una compañía para conciliar transacciones.") }}</p>
+    {% endif %}
   </form>
 </div>
 

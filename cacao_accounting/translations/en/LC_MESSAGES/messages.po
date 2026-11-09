@@ -6196,6 +6196,10 @@ msgstr "Consolidated view of operations and finances"
 msgid "Seleccione una compañía"
 msgstr "Select company"
 
+#: cacao_accounting/bancos/templates/bancos/conciliacion_bancaria.html:49
+msgid "Seleccione una compañía para conciliar transacciones."
+msgstr "Select a company to reconcile transactions."
+
 #: cacao_accounting/app/templates/app.html:22
 #: cacao_accounting/reportes/templates/reportes/financial_report.html:32
 #: cacao_accounting/reportes/templates/reportes/operational_report.html:27

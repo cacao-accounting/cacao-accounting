@@ -471,25 +471,23 @@ def bancos_transaccion_reconciliar():
 @modulo_activo("cash")
 @login_required
 def bancos_conciliacion_bancaria():
-    """Panel de conciliacion bancaria con transacciones pendientes."""
+    """Panel de conciliacion bancaria limitado a una compañía explícita."""
+    companies = _reconciliation_companies()
     company = request.args.get("company") or None
-    query = database.select(BankTransaction).filter_by(is_reconciled=False)
     if company:
         exige_acceso_compania("cash", company, "consultar")
-        query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
-            BankAccount.company == company
+    elif len(companies) == 1:
+        company = companies[0][0]
+
+    transactions = []
+    if company:
+        query = (
+            database.select(BankTransaction)
+            .filter_by(is_reconciled=False)
+            .join(BankAccount, BankAccount.id == BankTransaction.bank_account_id)
+            .filter(BankAccount.company == company)
         )
-    elif not getattr(current_user, "classification", None) == "admin":
-        module_id = obtener_id_modulo_por_nombre("cash")
-        permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
-        if not companies:
-            query = query.where(database.false())
-        else:
-            query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
-                BankAccount.company.in_(companies)
-            )
-    transactions = database.session.execute(query.order_by(BankTransaction.posting_date)).scalars().all()
+        transactions = database.session.execute(query.order_by(BankTransaction.posting_date)).scalars().all()
     suggestions = {transaction.id: _safe_bank_reconciliation_candidates(transaction) for transaction in transactions}
     return render_template(
         "bancos/conciliacion_bancaria.html",
@@ -497,8 +495,18 @@ def bancos_conciliacion_bancaria():
         transactions=transactions,
         suggestions=suggestions,
         company=company,
+        companies=companies,
         reconciliation_date=date.today().isoformat(),
     )
+
+
+def _reconciliation_companies() -> list[tuple[str, str]]:
+    """Devuelve las compañías habilitadas visibles para conciliación."""
+    scope = _cash_accessible_companies()
+    query = database.select(Entity.code, Entity.name).where(Entity.enabled.is_(True)).order_by(Entity.code)
+    if scope is not None:
+        query = query.where(Entity.code.in_(scope))
+    return [(fila[0], fila[1] or fila[0]) for fila in database.session.execute(query).all()]
 
 
 @bancos.route("/bank-reconciliation/<bank_account_id>")
