@@ -299,11 +299,8 @@ class ExchangeRevaluationService:
         return total_gain, total_loss
 
     def _converted_amount(self, amount: Decimal, origin: str, destination: str, period_end: date) -> Decimal:
-        """Convierte un monto ignorando los que no tienen tasa de cierre disponible."""
-        try:
-            rate = self._closing_rate(origin, destination, period_end)
-        except ExchangeRevaluationError:
-            return Decimal("0")
+        """Convierte un monto y bloquea la corrida si falta la tasa de cierre."""
+        rate = self._closing_rate(origin, destination, period_end)
         return (amount * rate).quantize(Decimal("0.0001"))
 
     def void(
