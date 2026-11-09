@@ -279,3 +279,80 @@ def test_normaliza_el_dominio_del_correo():
         with application.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+@pytest.mark.parametrize("url", ["/sales/customer/new", "/buying/supplier/new"])
+def test_rechaza_identificacion_fiscal_duplicada(url):
+    """#2130: el alta manual no reutiliza el tax_id de otro tercero."""
+    application, _ids = _crear_app()
+    try:
+        client = _cliente(application)
+        datos = {"name": "Primero", "company": "cacao", "tax_id": "J-DUP"}
+        primera = client.post(url, data=datos)
+        segunda = client.post(url, data={**datos, "name": "Segundo"})
+
+        assert primera.status_code == 302
+        assert segunda.status_code == 200
+        assert "Ya existe un tercero con ese identificador fiscal." in segunda.get_data(as_text=True)
+        with application.app_context():
+            mismos = database.session.execute(database.select(Party).where(Party.tax_id == "J-DUP")).scalars().all()
+            assert len(mismos) == 1 and mismos[0].name == "Primero"
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_la_edicion_permite_conservar_su_propia_identificacion():
+    """#2130: la exclusión por id evita falsos positivos al editar."""
+    application, ids = _crear_app()
+    try:
+        client = _cliente(application)
+        creacion = client.post(
+            "/sales/customer/new",
+            data={"name": "Con RUC", "company": "cacao", "tax_id": "J-SELF"},
+        )
+        assert creacion.status_code == 302
+
+        with application.app_context():
+            party_id = database.session.execute(database.select(Party).filter_by(name="Con RUC")).scalar_one().id
+
+        respuesta = client.post(
+            f"/sales/customer/{party_id}/edit",
+            data={"name": "Con RUC", "company": "cacao", "tax_id": "J-SELF"},
+        )
+
+        assert respuesta.status_code == 302
+        with application.app_context():
+            party = database.session.get(Party, party_id)
+            assert party is not None and party.tax_id == "J-SELF"
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_la_edicion_rechaza_la_identificacion_de_otro():
+    """#2130: cambiar a un tax_id ajeno se rechaza sin persistir."""
+    application, ids = _crear_app()
+    try:
+        client = _cliente(application)
+        client.post(
+            "/sales/customer/new",
+            data={"name": "Con RUC", "company": "cacao", "tax_id": "J-OTRO"},
+        )
+
+        respuesta = client.post(
+            f"/sales/customer/{ids['cliente']}/edit",
+            data={"name": "Cliente", "company": "cacao", "tax_id": "J-OTRO"},
+        )
+
+        assert respuesta.status_code == 200
+        assert "Ya existe un tercero con ese identificador fiscal." in respuesta.get_data(as_text=True)
+        with application.app_context():
+            cliente = database.session.get(Party, ids["cliente"])
+            assert cliente is not None and cliente.tax_id is None
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()

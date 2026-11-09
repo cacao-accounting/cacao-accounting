@@ -503,7 +503,8 @@ def _validate_account(company: str, account_id: str | None, expected_type: str) 
         )
 
 
-def _validate_tax_template(company: str, tax_template_id: str | None) -> None:
+def _validate_tax_template(company: str, tax_template_id: str | None, role: str) -> None:
+    """Valida existencia, compañía, vigencia y tipo de la plantilla fiscal."""
     if not tax_template_id:
         return
     template = _tax_template_by_id(tax_template_id)
@@ -511,6 +512,11 @@ def _validate_tax_template(company: str, tax_template_id: str | None) -> None:
         raise ValueError(_("La plantilla de impuestos seleccionada no existe."))
     if template.company not in (None, company):
         raise ValueError(_("La plantilla de impuestos debe pertenecer a la misma compañía."))
+    if not template.is_active:
+        raise ValueError(_("La plantilla de impuestos seleccionada no esta activa."))
+    expected_type = "selling" if role == "customer" else "buying"
+    if template.template_type != expected_type:
+        raise ValueError(_("La plantilla de impuestos no corresponde al tipo de tercero seleccionado."))
 
 
 def _validate_tax_rule(company: str, rule_id: str | None, role: str) -> None:
@@ -526,6 +532,13 @@ def _validate_tax_rule(company: str, rule_id: str | None, role: str) -> None:
         raise ValueError(_("La regla fiscal no corresponde al tipo de tercero seleccionado."))
     if not rule.is_active:
         raise ValueError(_("La regla fiscal seleccionada no esta activa."))
+    if role == "supplier":
+        # El consumidor solo aplica retenciones reconocidas al pagar; aceptar
+        # otra regla deja una configuración que nunca se ejecuta.
+        if rule.tax_type != "withholding":
+            raise ValueError(_("La regla fiscal de proveedor debe ser una retención."))
+        if rule.recognition_event not in ("payment", "payment_confirmed"):
+            raise ValueError(_("La regla fiscal de proveedor debe reconocerse al pagar."))
 
 
 def _price_list_for_company(company: str, price_list_id: str | None) -> PriceList | None:
@@ -556,8 +569,16 @@ def upsert_party_company_settings(
     role: str,
     company: str,
     params: PartyCompanySettingsParams,
+    *,
+    update_extended: bool = False,
 ) -> None:
-    """Crea o actualiza la configuracion de activacion del tercero por compania."""
+    """Crea o actualiza la configuracion de activacion del tercero por compania.
+
+    Los campos extendidos (moneda, cuentas operativas, centro de costo, datos
+    bancarios y bloqueo por mora) no forman parte del formulario básico; se
+    conservan al actualizar salvo que el llamador pida explícitamente
+    ``update_extended=True``.
+    """
     receivable_account_id = params.receivable_account_id
     payable_account_id = params.payable_account_id
     existing_account = _party_account_record(party_id, company)
@@ -571,7 +592,7 @@ def upsert_party_company_settings(
         # La cuenta por cobrar pertenece al rol cliente del mismo tercero.
         receivable_account_id = existing_account.receivable_account_id if existing_account else None
 
-    _validate_tax_template(company, params.tax_template_id)
+    _validate_tax_template(company, params.tax_template_id, role)
     _validate_tax_rule(company, params.default_tax_rule_id, role)
     _validate_price_list(company, params.default_price_list_id, role)
 
@@ -579,6 +600,9 @@ def upsert_party_company_settings(
     if company_party is None:
         company_party = CompanyParty(company=company, party_id=party_id)
         database.session.add(company_party)
+        is_new = True
+    else:
+        is_new = False
 
     company_party.is_active = params.is_active
     company_party.tax_template_id = params.tax_template_id
@@ -586,17 +610,18 @@ def upsert_party_company_settings(
     company_party.default_price_list_id = params.default_price_list_id
     company_party.allow_purchase_invoice_without_order = params.allow_purchase_invoice_without_order
     company_party.allow_purchase_invoice_without_receipt = params.allow_purchase_invoice_without_receipt
-    company_party.default_currency = params.default_currency
-    company_party.default_income_account_id = params.default_income_account_id
-    company_party.default_expense_account_id = params.default_expense_account_id
-    company_party.default_purchase_account_id = params.default_purchase_account_id
-    company_party.default_advance_account_id = params.default_advance_account_id
-    company_party.default_cost_center = params.default_cost_center
-    company_party.default_business_unit = params.default_business_unit
-    company_party.default_bank_name = params.default_bank_name
-    company_party.default_bank_account_no = params.default_bank_account_no
-    company_party.default_bank_iban = params.default_bank_iban
-    company_party.block_overdue = params.block_overdue
+    if is_new or update_extended:
+        company_party.default_currency = params.default_currency
+        company_party.default_income_account_id = params.default_income_account_id
+        company_party.default_expense_account_id = params.default_expense_account_id
+        company_party.default_purchase_account_id = params.default_purchase_account_id
+        company_party.default_advance_account_id = params.default_advance_account_id
+        company_party.default_cost_center = params.default_cost_center
+        company_party.default_business_unit = params.default_business_unit
+        company_party.default_bank_name = params.default_bank_name
+        company_party.default_bank_account_no = params.default_bank_account_no
+        company_party.default_bank_iban = params.default_bank_iban
+        company_party.block_overdue = params.block_overdue
 
     party_account = _party_account_record(party_id, company)
     if party_account is None:

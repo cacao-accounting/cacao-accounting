@@ -43,17 +43,28 @@ def filtrar_parties_por_companias(query: Any, companies: Iterable[str]) -> Any:
     autorizadas = [str(company) for company in companies if str(company).strip()]
     if not autorizadas:
         return query.where(database.false())
-    return query.where(Party.id.in_(database.select(CompanyParty.party_id).where(CompanyParty.company.in_(autorizadas))))
+    return query.where(
+        Party.id.in_(
+            database.select(CompanyParty.party_id).where(
+                CompanyParty.company.in_(autorizadas),
+                CompanyParty.is_active.is_(True),
+            )
+        )
+    )
 
 
 def tercero_tiene_vinculo_autorizado(party_id: str, companies: Iterable[str]) -> bool:
-    """Indica si un tercero tiene un vínculo en alguna de las compañías autorizadas."""
+    """Indica si un tercero tiene un vínculo activo en alguna compañía autorizada."""
     autorizadas = [str(company) for company in companies]
     if not autorizadas:
         return False
     return (
         database.session.execute(
-            database.select(CompanyParty.id).where(CompanyParty.party_id == party_id, CompanyParty.company.in_(autorizadas))
+            database.select(CompanyParty.id).where(
+                CompanyParty.party_id == party_id,
+                CompanyParty.company.in_(autorizadas),
+                CompanyParty.is_active.is_(True),
+            )
         ).first()
         is not None
     )
@@ -315,6 +326,19 @@ def validated_party_name(values: Mapping[str, str | None]) -> str:
     if not name:
         raise ValueError(_("El nombre del tercero es obligatorio."))
     return name
+
+
+def validated_party_tax_id(values: Mapping[str, str | None], *, exclude_party_id: str | None = None) -> str | None:
+    """Devuelve la identificación fiscal o falla si ya pertenece a otro tercero."""
+    tax_id = (values.get("tax_id") or "").strip()
+    if not tax_id:
+        return None
+    query = database.select(Party.id).where(Party.tax_id == tax_id)
+    if exclude_party_id:
+        query = query.where(Party.id != exclude_party_id)
+    if database.session.execute(query).first() is not None:
+        raise ValueError(_("Ya existe un tercero con ese identificador fiscal."))
+    return tax_id
 
 
 def create_party_contact(party_id: str, values: Mapping[str, str | None]) -> Contact:

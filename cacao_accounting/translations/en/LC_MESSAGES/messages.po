@@ -25093,3 +25093,23 @@ msgstr "The party name is required."
 #: cacao_accounting/party_management.py
 msgid "El correo electrónico del contacto no es válido."
 msgstr "The contact email address is not valid."
+
+#: cacao_accounting/party_settings.py
+msgid "La plantilla de impuestos seleccionada no esta activa."
+msgstr "The selected tax template is not active."
+
+#: cacao_accounting/party_settings.py
+msgid "La plantilla de impuestos no corresponde al tipo de tercero seleccionado."
+msgstr "The tax template does not match the selected party type."
+
+#: cacao_accounting/party_settings.py
+msgid "La regla fiscal de proveedor debe ser una retención."
+msgstr "The supplier tax rule must be a withholding."
+
+#: cacao_accounting/party_settings.py
+msgid "La regla fiscal de proveedor debe reconocerse al pagar."
+msgstr "The supplier tax rule must be recognized on payment."
+
+#: cacao_accounting/party_management.py
+msgid "Ya existe un tercero con ese identificador fiscal."
+msgstr "A party with that tax identifier already exists."

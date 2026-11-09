@@ -108,6 +108,7 @@ from cacao_accounting.party_management import (  # noqa: F401
     toggle_party_customer_role as toggle_party_customer_role,  # noqa: F401
     toggle_party_supplier_role,
     validated_party_name,
+    validated_party_tax_id,
     PartyRoleToggleError,
     update_party_address,
     update_party_contact,
@@ -771,7 +772,7 @@ def _handle_cliente_create(
             is_customer=True,
             name=validated_party_name(form),
             comercial_name=form.get("comercial_name"),
-            tax_id=form.get("tax_id"),
+            tax_id=validated_party_tax_id(form),
             fiscal_name=form.get("fiscal_name"),
             is_active=form.get("is_active") is not None,
         )
@@ -811,7 +812,7 @@ def _handle_cliente_update(
     try:
         cliente.name = validated_party_name(form)
         cliente.comercial_name = form.get("comercial_name") or None
-        cliente.tax_id = form.get("tax_id") or None
+        cliente.tax_id = validated_party_tax_id(form, exclude_party_id=cliente.id)
         cliente.fiscal_name = form.get("fiscal_name")
         cliente.is_active = form.get("is_active") is not None
         apply_party_group(cliente, form.get("party_group_id") or None, role="customer")
