@@ -104,11 +104,13 @@
     <tr>
       <td>{{ listed_rule.name }}</td>
       <td>{{ listed_rule.concept }}</td>
-      <td>{{ listed_rule.applies_to }}</td>
-      <td>{{ listed_rule.level }}</td>
+      {% set applies_labels = {'both': _('Compra y venta'), 'purchase': _('Compra'), 'sales': _('Venta')} %}
+      {% set level_labels = {'item': _('Ítem'), 'party': _('Tercero'), 'transaction': _('Transacción'), 'company': _('Compañía')} %}
+      <td>{{ applies_labels.get(listed_rule.applies_to, listed_rule.applies_to) }}</td>
+      <td>{{ level_labels.get(listed_rule.level, listed_rule.level) }}</td>
       <td>{{ listed_rule.accounting_treatment }}</td>
       <td>{{ listed_rule.currency or '' }}</td>
-      <td>{{ listed_rule.is_active }}</td>
+      <td>{{ _('Sí') if listed_rule.is_active else _('No') }}</td>
       <td class="d-flex gap-2">
         <a href="{{ url_for('admin.editar_regla_fiscal', rule_id=listed_rule.id) }}">{{ _("Editar") }}</a>
         <form method="post" action="{{ url_for('admin.eliminar_regla_fiscal', rule_id=listed_rule.id) }}">

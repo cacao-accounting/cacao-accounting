@@ -40,7 +40,12 @@ def list_templates():
         .all()
     )
     bank_labels = {account["id"]: account["label"] for account in _bank_account_options()}
-    return render_template("admin/print_template_list.html", templates=templates, bank_labels=bank_labels)
+    return render_template(
+        "admin/print_template_list.html",
+        templates=templates,
+        bank_labels=bank_labels,
+        document_labels=dict(list_printable_documents()),
+    )
 
 
 @printing_admin.route("/admin/print-templates/settings", methods=["GET", "POST"])
@@ -120,7 +125,7 @@ def duplicate_template(template_id: int):
         document_type=source.document_type,
         bank_account_id=source.bank_account_id,
         code=_copy_code(source.code, source.company_code, source.document_type),
-        name=f"Copia de {source.name}",
+        name=f"{_('Copia de')} {source.name}",
         description=source.description,
         template_body=source.template_body,
         stylesheet_body=source.stylesheet_body,
@@ -222,7 +227,7 @@ def preview_template(template_id: int):
             sample=True,
         )
     except PrintingError as exc:
-        return f"Error rendering preview: {exc}", 500
+        return _("Error al generar la vista previa: %(error)s") % {"error": exc}, 500
 
 
 @printing_admin.route("/admin/print-templates/<int:template_id>/versions")

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block content %}
+{% block contenido %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
         <h1 class="h2">{{ _("Formatos de impresión") }}</h1>
@@ -34,13 +34,13 @@
             <tbody>
                 {% for template in templates %}
                 <tr>
-                    <td>{{ template.document_type }}</td>
+                    <td>{{ document_labels.get(template.document_type, template.document_type) }}</td>
                     <td>{{ template.code }}</td>
                     <td>{{ template.name }}</td>
                     <td>{{ (bank_labels | default({})).get(template.bank_account_id, '—') }}</td>
                     <td>
                         <span class="badge {% if template.status == 'published' %}bg-success{% elif template.status == 'archived' %}bg-secondary{% else %}bg-warning{% endif %}">
-                            {{ template.status }}
+                            {{ {'draft': _('Borrador'), 'published': _('Publicada'), 'archived': _('Archivada')}.get(template.status, template.status) }}
                         </span>
                     </td>
                     <td>{{ _("Sí") if template.is_system else _("No") }}</td>

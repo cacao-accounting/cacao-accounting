@@ -25,16 +25,16 @@ printing_public = Blueprint("printing_public", __name__)
 def validate_document(token: str):
     """Validate a public document token without authentication."""
     if not external_validation_enabled():
-        return "Validation unavailable", 403
+        return _("Validación no disponible"), 403
 
     service = ValidationService()
     result = service.validate_token(token)
     if result["status"] == "unavailable":
-        return "Document not found or validation unavailable", 404
+        return _("Documento no encontrado o validación no disponible"), 404
 
     view = service.build_public_view(result)
     if view is None:
-        return "Document not found or validation unavailable", 404
+        return _("Documento no encontrado o validación no disponible"), 404
     return render_template("public/validation_result.html", validation=view)
 
 

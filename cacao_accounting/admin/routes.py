@@ -554,7 +554,13 @@ def items_plantilla_impuesto(template_id: str):
         .all()
     )
     taxes = database.session.execute(database.select(Tax).filter_by(is_active=True).order_by(Tax.name)).scalars().all()
-    return render_template("admin/tax_template_items.html", template=template, items=items, taxes=taxes)
+    return render_template(
+        "admin/tax_template_items.html",
+        template=template,
+        items=items,
+        taxes=taxes,
+        tax_labels={tax.id: tax.name for tax in taxes},
+    )
 
 
 def _tax_rule_form_state(rule: Any, form: Any) -> SimpleNamespace:

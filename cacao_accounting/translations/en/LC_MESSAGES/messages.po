@@ -25389,3 +25389,28 @@ msgstr "The %(field)s field must be a finite number."
 #: cacao_accounting/bancos/templates/bancos/caja_chica_reposicion_lista.html
 msgid "Seleccione una cuenta bancaria"
 msgstr "Select a bank account"
+
+#: cacao_accounting/printing/admin_routes.py
+msgid "Copia de"
+msgstr "Copy of"
+
+#: cacao_accounting/printing/admin_routes.py
+#, python-format
+msgid "Error al generar la vista previa: %(error)s"
+msgstr "Error rendering preview: %(error)s"
+
+#: cacao_accounting/printing/routes.py
+msgid "Validación no disponible"
+msgstr "Validation unavailable"
+
+#: cacao_accounting/printing/routes.py
+msgid "Documento no encontrado o validación no disponible"
+msgstr "Document not found or validation unavailable"
+
+#: cacao_accounting/printing/templates/admin/print_template_list.html
+msgid "Publicada"
+msgstr "Published"
+
+#: cacao_accounting/printing/templates/admin/print_template_list.html
+msgid "Archivada"
+msgstr "Archived"
