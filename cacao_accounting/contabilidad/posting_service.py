@@ -4354,8 +4354,7 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
 
     movements = _create_stock_ledger(document)
 
-    if purpose == "stock_reconciliation":
-        _validate_stock_reconciliation_dimensions(document, company)
+    _validate_stock_reconciliation_dimensions(document, company)
 
     # In Material Transfer, we only generate GL if source and target warehouses
     # use different GL accounts. Otherwise, it's just a stock movement.
@@ -4546,7 +4545,7 @@ def _get_offset_account_for_line(document: StockEntry, line: StockEntryItem, com
 
 
 def _validate_stock_reconciliation_dimensions(document: StockEntry, company: str) -> None:
-    """Valida que las dimensiones de una conciliación pertenezcan a la compañía."""
+    """Valida que las dimensiones del documento pertenezcan a la compañía."""
     dimensions = (
         (CostCenter, getattr(document, "cost_center_code", None), "centro de costo"),
         (Unit, getattr(document, "unit_code", None), "unidad"),
@@ -4559,9 +4558,7 @@ def _validate_stock_reconciliation_dimensions(document: StockEntry, company: str
             select(model.id).where(model.entity == company, model.code == code)
         ).scalar_one_or_none()
         if exists is None:
-            raise PostingError(
-                _("El %(label)s de la conciliación no pertenece a la compañía del documento.") % {"label": label}
-            )
+            raise PostingError(_("El %(label)s del documento no pertenece a la compañía.") % {"label": label})
 
 
 def _get_dimension_kwargs(document: StockEntry) -> dict[str, Any]:

@@ -24922,3 +24922,8 @@ msgstr "No documents were found for the selected filters."
 #, python-format
 msgid "La dimensión %(label)s no pertenece a la compañía del documento."
 msgstr "The %(label)s dimension does not belong to the document company."
+
+#: cacao_accounting/contabilidad/posting_service.py
+#, python-format
+msgid "El %(label)s del documento no pertenece a la compañía."
+msgstr "The document %(label)s does not belong to the company."

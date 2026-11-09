@@ -24,10 +24,12 @@ from cacao_accounting.database import (
     Entity,
     Item,
     ItemCategory,
+    Project,
     StockBin,
     StockEntry,
     StockEntryItem,
     UOM,
+    Unit,
     Warehouse,
     WarehouseCompanyAccount,
     database,
@@ -707,6 +709,26 @@ def _stock_entry_title(purpose: str | None) -> str:
     return labels.get(purpose or "", "Nueva Entrada de Almacén") + " - " + APPNAME
 
 
+def _validate_stock_entry_dimensions(
+    company: str | None,
+    cost_center_code: str | None,
+    unit_code: str | None,
+    project_code: str | None,
+) -> None:
+    """Exige que las dimensiones analíticas pertenezcan a la compañía."""
+    checks = (
+        (CostCenter, cost_center_code, _("centro de costo")),
+        (Unit, unit_code, _("unidad de negocio")),
+        (Project, project_code, _("proyecto")),
+    )
+    for model, code, label in checks:
+        if not code:
+            continue
+        exists = database.session.execute(database.select(model.id).filter_by(code=code, entity=company)).scalar_one_or_none()
+        if exists is None:
+            raise ValueError(_("La dimensión %(label)s no pertenece a la compañía del documento.") % {"label": label})
+
+
 def _validate_stock_entry_warehouses(entry: StockEntry, *line_warehouses: str | None) -> None:
     """Validate draft warehouses against the entry company and active state.
 
@@ -760,6 +782,12 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
         posting_date = _validate_stock_entry_posting_date(form_data)
         posted_purpose = _validate_stock_entry_purpose(form_data.get("purpose") or "material_receipt")
         company = _validate_stock_entry_company(form_data.get("company"), "crear")
+        _validate_stock_entry_dimensions(
+            company,
+            form_data.get("cost_center_code") or None,
+            form_data.get("unit_code") or None,
+            form_data.get("project_code") or None,
+        )
         from cacao_accounting.document_flow.currency_resolver import company_functional_currency
 
         base_currency_value = company_functional_currency(company)
@@ -858,6 +886,12 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
         raise ValueError(_("No se puede cambiar el propósito de una entrada de almacén existente."))
     if company != registro.company:
         raise ValueError(_("No se puede cambiar la compañía de una entrada de almacén existente."))
+    _validate_stock_entry_dimensions(
+        company,
+        request.form.get("cost_center_code") or None,
+        request.form.get("unit_code") or None,
+        request.form.get("project_code") or None,
+    )
     registro.purpose = purpose
     registro.company = company
     registro.posting_date = _validate_stock_entry_posting_date(request.form)
