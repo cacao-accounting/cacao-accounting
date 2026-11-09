@@ -169,6 +169,43 @@ def _add_book_entry(
     database.session.add(row)
 
 
+def _add_synthetic_opening_books(movement: ARAPLedgerEntry, party_id: str | None) -> None:
+    """Valora una apertura sintética en cada libro activo de la compañía."""
+    entries = (
+        database.session.execute(
+            select(GLEntry).where(
+                GLEntry.company == movement.company,
+                GLEntry.voucher_type == movement.voucher_type,
+                GLEntry.voucher_id == movement.voucher_id,
+                GLEntry.is_cancelled.is_(False),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    party_entries = _party_gl_entries(entries, party_id)
+    document_amount = _decimal(movement.document_amount)
+    for book in _active_books(movement.company):
+        candidates = _book_entries_for(str(book.id), party_entries)
+        if candidates:
+            amount = sum((_book_value_from_gl(row, movement.ledger_type) for row in candidates), Decimal("0"))
+            _add_book_entry(movement, book=book, amount=amount, gl_entry=candidates[0])
+            continue
+        rate = _book_exchange_rate(
+            movement.company,
+            movement.currency,
+            str(book.currency or movement.currency),
+            movement.posting_date,
+            Decimal("1"),
+        )
+        _add_book_entry(
+            movement,
+            book=book,
+            amount=(document_amount * rate).quantize(Decimal("0.0001")),
+            gl_entry=None,
+        )
+
+
 @dataclass(frozen=True)
 class MovementOptions:
     """Metadatos opcionales de enrutamiento de un movimiento documental."""
@@ -812,6 +849,7 @@ def _resolve_application_target_item(
                 voucher_id=str(document.id),
             ),
         )
+        _add_synthetic_opening_books(target_opening, party_id)
         new_movements.append(target_opening)
     if target_cache is None:
         target_cache = _cache_for_movement(target_opening)
@@ -889,6 +927,7 @@ def _resolve_application_payment_item(
                 voucher_id=payment_id,
             ),
         )
+        _add_synthetic_opening_books(payment_opening, party_id)
         new_movements.append(payment_opening)
     if payment_cache is None:
         payment_cache = _cache_for_movement(payment_opening)
