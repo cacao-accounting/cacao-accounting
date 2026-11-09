@@ -3078,9 +3078,6 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
 @verifica_acceso("accounting")
 def revalorizaciones_cambiarias():
     """Listado de revalorizaciones cambiarias."""
-    from cacao_accounting.database import Entity
-
-    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     query = database.select(ExchangeRevaluation).order_by(
         ExchangeRevaluation.run_date.desc(), ExchangeRevaluation.created.desc(), ExchangeRevaluation.id.desc()
     )
@@ -3104,7 +3101,6 @@ def revalorizaciones_cambiarias():
             max_per_page=10,
             count=True,
         ),
-        companies=companies,
     )
 
 
@@ -3114,18 +3110,14 @@ def revalorizaciones_cambiarias():
 @verifica_acceso("accounting")
 def nueva_revalorizacion_cambiaria():
     """Formulario minimo para ejecutar una revalorizacion cambiaria."""
-    from cacao_accounting.database import Entity
-
     if request.method == "POST":
         result = _handle_exchange_revaluation_post()
         if result:
             return result
 
-    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     return render_template(
         "contabilidad/exchange_revaluation_nueva.html",
         titulo=_("Nueva revalorizacion cambiaria") + " - " + APPNAME,
-        companies=companies,
     )
 
 

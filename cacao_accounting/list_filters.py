@@ -32,8 +32,8 @@ def apply_list_filters(
         query = query.filter(or_(*(field.ilike(pattern) for field in search_fields)))
 
     status = (request.args.get("status") or "").strip()
-    if include_status and status in DOCSTATUS_FILTERS:
-        if hasattr(model, "docstatus"):
+    if include_status and status:
+        if hasattr(model, "docstatus") and status in DOCSTATUS_FILTERS:
             query = query.filter(model.docstatus == DOCSTATUS_FILTERS[status])
         elif hasattr(model, "status"):
             query = query.filter(model.status == status)

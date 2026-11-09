@@ -2780,7 +2780,7 @@ msgstr ""
 #: cacao_accounting/ventas/forms.py:11
 #: cacao_accounting/ventas/templates/ventas/cliente.html:73
 msgid "Compañía"
-msgstr "Companies"
+msgstr "Company"
 
 #: cacao_accounting/admin/templates/admin/approval_matrix.html:43
 #: cacao_accounting/admin/templates/admin/approval_matrix.html:84
@@ -9160,6 +9160,11 @@ msgstr "Posted"
 #: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year_closing_lista.html:67
 msgid "Anulado"
 msgstr "Voided"
+
+#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:2
+#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html:2
+msgid "Sin cambios"
+msgstr "No changes"
 
 #: cacao_accounting/bancos/templates/bancos/caja_chica_gasto_lista.html:55
 #: cacao_accounting/bancos/templates/bancos/caja_chica_vale_lista.html:55
@@ -17089,7 +17094,7 @@ msgstr "Accounting Period"
 #: cacao_accounting/reportes/templates/reportes/financial_report.html:84
 #: cacao_accounting/reportes/templates/reportes/financial_report.html:113
 msgid "Periodo"
-msgstr "Permission"
+msgstr "Period"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:45
 msgid "Documentos procesados"

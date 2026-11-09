@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% import "macros.html" as macros %}
 {% block contenido %}
+{% set status_labels = {"posted": _("Contabilizado"), "voided": _("Anulado"), "completed_no_changes": _("Sin cambios")} %}
 
 <nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
@@ -16,7 +17,7 @@
     <div>
       <h5 class="ca-card-title mb-0">
         <i class="bi bi-currency-exchange"></i> {{ run.document_no or run.id }}
-        <span class="badge text-bg-secondary ms-2">{{ run.status }}</span>
+        <span class="badge text-bg-secondary ms-2">{{ status_labels.get(run.status, run.status) }}</span>
       </h5>
       <small class="text-muted">{{ _('Revalorización cambiaria') }}</small>
     </div>
@@ -44,8 +45,8 @@
     <div><strong>{{ _('Fecha') }}:</strong> {{ run.run_date or run.posting_date }}</div>
     <div><strong>{{ _('Documentos procesados') }}:</strong> {{ run.processed_documents_count or 0 }}</div>
     <div><strong>{{ _('Documentos afectados') }}:</strong> {{ run.affected_documents_count or 0 }}</div>
-    <div><strong>{{ _('Ganancia') }}:</strong> {{ "{:,.2f}".format(run.total_gain or 0) }}</div>
-    <div><strong>{{ _('Pérdida') }}:</strong> {{ "{:,.2f}".format(run.total_loss or 0) }}</div>
+    <div><strong>{{ _('Ganancia') }}:</strong> {{ format_money_with_currency(run.total_gain, run.currency) }}</div>
+    <div><strong>{{ _('Pérdida') }}:</strong> {{ format_money_with_currency(run.total_loss, run.currency) }}</div>
   </div>
 </section>
 

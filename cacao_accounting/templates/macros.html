@@ -206,7 +206,7 @@
 {%- endmacro %}
 
 
-{% macro list_filters(show_status=False, placeholder=None, extra_params=None) %}
+{% macro list_filters(show_status=False, placeholder=None, extra_params=None, status_choices=None) %}
 <div class="p-3 border-bottom">
   <form method="get" action="{{ url_for(request.endpoint) }}" class="row g-2 align-items-end">
     <div class="{% if show_status %}col-md-5{% else %}col-md-8{% endif %}">
@@ -223,11 +223,12 @@
     {% if show_status %}
     <div class="col-md-3">
       <label class="form-label small text-muted mb-1" for="list-status">{{ _('Estado') }}</label>
+      {% set opciones_estado = status_choices or [("draft", _("Borrador")), ("submitted", _("Contabilizado")), ("cancelled", _("Cancelado"))] %}
       <select id="list-status" name="status" class="form-select form-select-sm">
         <option value="">{{ _('Todos') }}</option>
-        <option value="draft" {% if request.args.get('status') == 'draft' %}selected{% endif %}>{{ _('Borrador') }}</option>
-        <option value="submitted" {% if request.args.get('status') == 'submitted' %}selected{% endif %}>{{ _('Contabilizado') }}</option>
-        <option value="cancelled" {% if request.args.get('status') == 'cancelled' %}selected{% endif %}>{{ _('Cancelado') }}</option>
+        {% for estado, etiqueta in opciones_estado %}
+        <option value="{{ estado }}" {% if request.args.get('status') == estado %}selected{% endif %}>{{ etiqueta }}</option>
+        {% endfor %}
       </select>
     </div>
     {% endif %}

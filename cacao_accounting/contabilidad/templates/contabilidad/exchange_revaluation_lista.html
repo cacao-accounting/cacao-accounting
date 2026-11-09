@@ -2,6 +2,7 @@
 {% import "macros.html" as macros %}
 {% extends "base.html" %}
 {% block contenido %}
+{% set status_labels = {"posted": _("Contabilizado"), "voided": _("Anulado"), "completed_no_changes": _("Sin cambios")} %}
 
 <nav aria-label="{{ _('breadcrumb') }}">
   <ol class="breadcrumb lh-sm">
@@ -20,7 +21,11 @@
     </a>
     {% endif %}
   </div>
-  {{ macros.list_filters(show_status=True, placeholder=_("Buscar por número, compañía o moneda...")) }}
+  {{ macros.list_filters(
+      show_status=True,
+      placeholder=_("Buscar por número, compañía o moneda..."),
+      status_choices=[("posted", _("Contabilizado")), ("voided", _("Anulado")), ("completed_no_changes", _("Sin cambios"))]
+  ) }}
   <div class="table-responsive">
     <table class="ca-table">
       <caption>{{ _('Historial de revalorizaciones cambiarias') }}</caption>
@@ -46,9 +51,9 @@
           <td>{{ run.month }}</td>
           <td>{{ run.year }}</td>
           <td>{{ run.run_date or run.posting_date }}</td>
-          <td><span class="badge text-bg-secondary">{{ run.status }}</span></td>
-          <td class="text-end">{{ "{:,.2f}".format(run.total_gain or 0) }}</td>
-          <td class="text-end">{{ "{:,.2f}".format(run.total_loss or 0) }}</td>
+          <td><span class="badge text-bg-secondary">{{ status_labels.get(run.status, run.status) }}</span></td>
+          <td class="text-end">{{ format_money_with_currency(run.total_gain, run.currency) }}</td>
+          <td class="text-end">{{ format_money_with_currency(run.total_loss, run.currency) }}</td>
           <td class="text-end">{{ run.processed_documents_count or 0 }}</td>
           <td class="text-end">{{ run.affected_documents_count or 0 }}</td>
         </tr>
