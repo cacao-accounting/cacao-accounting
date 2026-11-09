@@ -848,6 +848,9 @@ class TestConcurrenciaPostgreSQL:
                 )
                 return diario.id
 
+        with application.app_context():
+            base_diarios = database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one()
+
         resultados = _ejecutar_en_dos_hilos([_ajustar, _ajustar])
         exitos, errores = _exitos_y_errores(resultados)
         assert exitos == 1, f"un solo ajuste debe triunfar: {resultados}"
@@ -855,7 +858,7 @@ class TestConcurrenciaPostgreSQL:
         with application.app_context():
             ganador = min(valor for valor in resultados.values() if not isinstance(valor, Exception))
             diarios = list(database.session.execute(database.select(ComprobanteContable)).scalars().all())
-            assert len(diarios) == 1
+            assert len(diarios) == base_diarios + 1
             conciliacion = database.session.get(PettyCashReconciliation, conciliacion_id)
             assert conciliacion.adjustment_journal_id == ganador
 
