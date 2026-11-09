@@ -1422,6 +1422,8 @@ def ventas_cotizacion_nueva():
 @login_required
 def ventas_cotizacion(quotation_id: str):
     """Detalle de cotización de venta."""
+    from cacao_accounting.document_flow.status import calculate_document_status
+
     registro = database.session.get(SalesQuotation, quotation_id)
     if not registro:
         abort(404)
@@ -1430,7 +1432,12 @@ def ventas_cotizacion(quotation_id: str):
     titulo = (registro.document_no or quotation_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("sales_quotation", registro.id)
     return render_template(
-        "ventas/cotizacion.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+        "ventas/cotizacion.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        audit_timeline=audit_timeline,
+        document_status=calculate_document_status("sales_quotation", registro),
     )
 
 
