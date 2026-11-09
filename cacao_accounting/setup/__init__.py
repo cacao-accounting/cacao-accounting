@@ -12,6 +12,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import login_required
 
+from cacao_accounting.database import database
 from cacao_accounting.setup.forms import (
     SetupCompanyForm,
     SetupLanguageForm,
@@ -142,13 +143,18 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
         flash(texts["catalog_required"], "danger")
         return None
 
-    finalize_setup(
-        company_data,
-        catalogo_tipo,
-        setup_data.get("pais", "NI"),
-        setup_data.get("idioma", "es"),
-        catalogo_archivo,
-    )
+    try:
+        finalize_setup(
+            company_data,
+            catalogo_tipo,
+            setup_data.get("pais", "NI"),
+            setup_data.get("idioma", "es"),
+            catalogo_archivo,
+        )
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc) or texts["invalid_company"], "danger")
+        return None
     session.pop("setup_step", None)
     flash(texts["setup_complete"], "success")
     return redirect(url_for("cacao_app.pagina_inicio"))
