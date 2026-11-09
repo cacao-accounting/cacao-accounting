@@ -25037,3 +25037,23 @@ msgstr "The bank amount cannot be negative."
 #, python-format
 msgid "El proyecto %(project)s no pertenece a la compañía de la plantilla."
 msgstr "The project %(project)s does not belong to the template company."
+
+#: cacao_accounting/bancos/services.py
+msgid "Seleccione un banco activo."
+msgstr "Select an active bank."
+
+#: cacao_accounting/bancos/services.py
+msgid "La moneda seleccionada no está activa."
+msgstr "The selected currency is not active."
+
+#: cacao_accounting/bancos/services.py
+msgid "Seleccione una cuenta contable de tipo banco, activa y habilitada, para la compañía indicada."
+msgstr "Select an active and enabled bank-type ledger account for the indicated company."
+
+#: cacao_accounting/bancos/services.py
+msgid "La serie de numeración seleccionada no está activa."
+msgstr "The selected numbering series is not active."
+
+#: cacao_accounting/bancos/services.py
+msgid "La chequera seleccionada no está activa."
+msgstr "The selected checkbook is not active."

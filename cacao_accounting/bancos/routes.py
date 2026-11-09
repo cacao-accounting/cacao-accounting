@@ -87,6 +87,7 @@ from cacao_accounting.audit_trail_service import format_document_timeline, log_c
 from cacao_accounting.bancos.services import (
     _safe_bank_reconciliation_candidates,
     _validate_bank_account_numbering_defaults,
+    _validate_bank_account_references,
     _ensure_bank_account_counter_mapping,
     _lookup_series_name,
     _lookup_counter_name,
@@ -835,10 +836,15 @@ def bancos_banco(bank_id):
 def bancos_cuenta_bancaria_nuevo():
     """Formulario para crear una nueva cuenta bancaria."""
     from cacao_accounting.bancos.forms import FormularioCuentaBancaria
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial, obtener_lista_monedas
+    from cacao_accounting.contabilidad.auxiliares import (
+        obtener_lista_entidades_por_id_razonsocial,
+        obtener_lista_monedas_activas,
+    )
 
     formulario = FormularioCuentaBancaria()
-    formulario.bank_id.choices = [(b[0].id, b[0].name) for b in database.session.execute(database.select(Bank)).all()]
+    formulario.bank_id.choices = [
+        (b[0].id, b[0].name) for b in database.session.execute(database.select(Bank).filter_by(is_active=True)).all()
+    ]
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     submitted_company = request.values.get("company")
     if submitted_company and not any(value == submitted_company for value, _label in formulario.company.choices):
@@ -849,11 +855,13 @@ def bancos_cuenta_bancaria_nuevo():
             # The smart-select route enforces authorization separately; keep
             # valid direct submissions visible to WTForms as well.
             formulario.company.choices.append((submitted_company, company_record.name or submitted_company))
-    formulario.currency.choices = [("", "")] + obtener_lista_monedas()
+    formulario.currency.choices = [("", "")] + obtener_lista_monedas_activas()
     selected_company = request.values.get("company") or None
     formulario.gl_account_id.choices = [("", "")] + [
         (str(account.id), f"{account.code} - {account.name}")
-        for account in database.session.execute(database.select(Accounts).filter_by(account_type="bank")).scalars()
+        for account in database.session.execute(
+            database.select(Accounts).filter_by(account_type="bank", active=True, enabled=True, group=False)
+        ).scalars()
     ]
     formulario.default_naming_series_id.choices = [("", "")] + [
         (str(series.id), series.name) for series in get_active_naming_series("payment_entry", selected_company)
@@ -873,12 +881,13 @@ def bancos_cuenta_bancaria_nuevo():
         default_naming_series_id = request.form.get("default_naming_series_id") or None
         default_external_counter_id = request.form.get("default_external_counter_id") or None
         exige_acceso_compania("cash", company, "crear")
-        if gl_account_id:
-            gl_account = database.session.get(Accounts, gl_account_id)
-            if not gl_account or gl_account.entity != company or gl_account.account_type != "bank":
-                flash(_("Seleccione una cuenta contable de tipo banco para la compañía indicada."), "danger")
-                return render_template(BANCOS_BANCO_CUENTA_NUEVO_HTML, form=formulario, titulo=titulo)
         try:
+            _validate_bank_account_references(
+                company=company,
+                bank_id=request.form.get("bank_id"),
+                currency=request.form.get("currency") or None,
+                gl_account_id=gl_account_id,
+            )
             default_naming_series_id, default_external_counter_id = _validate_bank_account_numbering_defaults(
                 company=company,
                 naming_series_id=default_naming_series_id,

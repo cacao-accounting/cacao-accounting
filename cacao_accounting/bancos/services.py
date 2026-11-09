@@ -31,6 +31,7 @@ from cacao_accounting.bancos.statement_service import (
 from cacao_accounting.database import (
     BankAccount,
     Accounts,
+    Bank,
     BankAccountNumberingConfig,
     BankTransaction,
     ComprobanteContable,
@@ -237,6 +238,40 @@ def _validate_bank_account_numbering_defaults(
         external_counter_id = _validate_checkbook_default(company=company, external_counter_id=external_counter_id)
 
     return naming_series_id, external_counter_id
+
+
+def _validate_bank_account_references(
+    *,
+    company: str | None,
+    bank_id: str | None,
+    currency: str | None,
+    gl_account_id: str | None,
+) -> None:
+    """Verifica que las referencias de una cuenta bancaria estén vigentes.
+
+    Las choices del formulario solo ofrecen registros activos; esta guardia
+    cubre además la desactivación concurrente entre el GET y el POST.
+    """
+    bank = database.session.get(Bank, bank_id) if bank_id else None
+    if not bank or not bank.is_active:
+        raise IdentifierConfigurationError(_("Seleccione un banco activo."))
+    if currency:
+        moneda = database.session.execute(database.select(Currency).filter_by(code=currency)).scalar_one_or_none()
+        if not moneda or not moneda.active:
+            raise IdentifierConfigurationError(_("La moneda seleccionada no está activa."))
+    if gl_account_id:
+        account = database.session.get(Accounts, gl_account_id)
+        if (
+            not account
+            or account.entity != company
+            or account.account_type != "bank"
+            or not account.active
+            or not account.enabled
+            or account.group
+        ):
+            raise IdentifierConfigurationError(
+                _("Seleccione una cuenta contable de tipo banco, activa y habilitada, para la compañía indicada.")
+            )
 
 
 def _ensure_bank_account_counter_mapping(bank_account: BankAccount) -> None:
@@ -1711,10 +1746,14 @@ def _validate_numbering_config_entry(
         series = database.session.get(NamingSeries, naming_series_id)
         if not series or series.company not in (None, bank_account.company):
             raise IdentifierConfigurationError(_("La serie de numeración no pertenece a la compañía de la cuenta bancaria."))
+        if not series.is_active:
+            raise IdentifierConfigurationError(_("La serie de numeración seleccionada no está activa."))
     if entry.get("use_external_counter") and external_counter_id:
         counter = database.session.get(ExternalCounter, external_counter_id)
         if not counter or counter.company != bank_account.company:
             raise IdentifierConfigurationError(_("La chequera no pertenece a la compañía de la cuenta bancaria."))
+        if not counter.is_active:
+            raise IdentifierConfigurationError(_("La chequera seleccionada no está activa."))
     return entry, naming_series_id, external_counter_id
 
 
