@@ -18,7 +18,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Bank, BankAccount, Entity, Modules, User, database
+from cacao_accounting.database import Bank, BankAccount, BankAccountNumberingConfig, Entity, Modules, User, database
 
 CONTRASENA = "numeracion-csrf-2026"
 
@@ -111,13 +111,18 @@ def test_guardado_de_numeracion_envia_csrf(numeracion_csrf):
 
     response = client.post(
         f"/cash_management/bank-account/{cuenta_id}/numbering-config",
-        data=json.dumps({"configs": [{"payment_type": "payment", "use_external_counter": False}]}),
+        data=json.dumps({"configs": [{"payment_type": "pay", "use_external_counter": False}]}),
         content_type="application/json",
         headers={"X-CSRFToken": token},
     )
 
     assert response.status_code == 200
     assert response.get_json()["status"] == "ok"
+    with application.app_context():
+        config = database.session.execute(
+            database.select(BankAccountNumberingConfig).filter_by(bank_account_id=cuenta_id, payment_type="pay")
+        ).scalar_one()
+        assert config.use_external_counter is False
 
 
 def test_guardado_sin_csrf_es_rechazado(numeracion_csrf):
