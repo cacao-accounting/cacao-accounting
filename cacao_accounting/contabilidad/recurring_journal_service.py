@@ -6,8 +6,8 @@
 from datetime import date
 from decimal import Decimal
 import json
-from typing import Any, Dict, List, Sequence
-from sqlalchemy import or_, select
+from typing import Any, Dict, List
+from sqlalchemy import select
 from cacao_accounting.audit_trail_service import log_create, log_submit
 from cacao_accounting.database import (
     Accounts,
@@ -133,27 +133,6 @@ def cancel_recurring_template(template_id: str, reason: str, user_id: str):
     template.cancelled_at = database.func.now()
     template.cancel_reason = reason
     database.session.commit()
-
-
-def get_applicable_templates(company: str, ledger_id: str, period_date: date) -> Sequence[RecurringJournalTemplate]:
-    """Obtiene las plantillas aplicables para un periodo."""
-    # Filtros: compañía, ledger, rango de fechas, estado aprobado, no completado
-    book = _book_for_reference(company, ledger_id)
-    if book is None:
-        return []
-    stmt = select(RecurringJournalTemplate).where(
-        RecurringJournalTemplate.company == company,
-        or_(
-            RecurringJournalTemplate.ledger_id == book.id,
-            RecurringJournalTemplate.ledger_id == book.code,  # Backward compatibility with legacy code values
-            RecurringJournalTemplate.book_codes.contains(f'"{book.code}"'),
-        ),
-        RecurringJournalTemplate.start_date <= period_date,
-        RecurringJournalTemplate.end_date >= period_date,
-        RecurringJournalTemplate.status == "approved",
-        RecurringJournalTemplate.is_completed.is_(False),
-    )
-    return database.session.execute(stmt).scalars().all()
 
 
 def apply_recurring_template(
