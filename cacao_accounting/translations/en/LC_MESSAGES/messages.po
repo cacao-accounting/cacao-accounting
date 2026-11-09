@@ -25219,3 +25219,7 @@ msgstr "The periodicity must be weekly or monthly."
 #: cacao_accounting/bancos/services.py
 msgid "La moneda de la caja chica debe coincidir con la moneda de su cuenta contable."
 msgstr "The petty cash currency must match the currency of its ledger account."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_nuevo.html
+msgid "Guardar plantilla"
+msgstr "Save template"

@@ -1492,6 +1492,7 @@ def _render_operational_report(report_name: str, report, modulo: str = "accounti
         period_to=period_picker["period_to"],
         period_from_label=period_picker["period_from_label"],
         period_to_label=period_picker["period_to_label"],
+        company=company,
     )
 
 
