@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     UserCompanyAccess,
     database,
 )
+from cacao_accounting.reportes.cash_flow import save_cash_flow_mappings
 
 CONTRASENA = "efe-mapeo-2026"
 
@@ -187,3 +188,41 @@ def test_post_sin_cuentas_no_borra_la_clasificacion(efe_cloud):
 
     assert response.status_code == 302
     assert _seccion(application, ids["cuenta"]) == "operating"
+
+
+def test_servicio_conserva_mapeos_omitidos(efe_cloud):
+    """El servicio solo toca las cuentas presentes en el subconjunto."""
+    application, ids = efe_cloud
+    with application.app_context():
+        database.session.add(CashFlowAccountMapping(company="alpha", account_id=ids["segunda"], flow_section="operating"))
+        database.session.commit()
+
+        save_cash_flow_mappings("alpha", {ids["cuenta"]: "investing"})
+        database.session.commit()
+
+    assert _seccion(application, ids["cuenta"]) == "investing"
+    assert _seccion(application, ids["segunda"]) == "operating"
+
+
+def test_servicio_rechaza_cuenta_de_otra_compania(efe_cloud):
+    """Una cuenta ajena no puede entrar al mapeo ni borrar los existentes."""
+    application, ids = efe_cloud
+    with application.app_context():
+        ajena = Accounts(
+            code="9.99.99.001",
+            name="Cuenta Ajena",
+            entity="otra",
+            group=False,
+            active=True,
+            enabled=True,
+        )
+        database.session.add(ajena)
+        database.session.commit()
+        ajena_id = ajena.id
+
+        with pytest.raises(ValueError):
+            save_cash_flow_mappings("alpha", {ajena_id: "operating"})
+        database.session.rollback()
+
+    assert _seccion(application, ids["cuenta"]) == "operating"
+    assert _seccion(application, ids["segunda"]) is None
