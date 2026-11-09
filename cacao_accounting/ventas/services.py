@@ -699,8 +699,6 @@ def _can_manage_delivery_notes() -> bool:
     inventory = Permisos(modulo=module_id, usuario=current_user.id)
     sales_module_id = obtener_id_modulo_por_nombre("sales")
     sales = Permisos(modulo=sales_module_id, usuario=current_user.id)
-    if inventory.administrador or sales.administrador:
-        return True
     return bool(sales.crear and inventory.crear)
 
 
