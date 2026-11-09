@@ -1598,7 +1598,11 @@ def is_sales_price_editor(user_id: str | None) -> bool:
     role_ids = database.select(Roles.id).where((Roles.name == "sales_manager") | (Roles.note == "Gerente de Ventas"))
     return (
         database.session.execute(
-            database.select(RolesUser).where(RolesUser.user_id == user_id, RolesUser.role_id.in_(role_ids))
+            database.select(RolesUser).where(
+                RolesUser.user_id == user_id,
+                RolesUser.role_id.in_(role_ids),
+                RolesUser.active.is_not(False),
+            )
         ).scalar_one_or_none()
         is not None
     )
