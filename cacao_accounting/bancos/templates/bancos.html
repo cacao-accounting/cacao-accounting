@@ -183,7 +183,7 @@
     <h5><i class="bi bi-bar-chart-fill"></i> {{ _("Reportes") }}</h5>
     <ul class="ca-module-links">
 
-      {% if acceso.autorizado %}
+      {% if acceso.reportes %}
       <li>
         <a href="{{ url_for('reportes.bank_balance_summary', company=company) }}">{{ _('Resumen de Saldos Bancarios') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
