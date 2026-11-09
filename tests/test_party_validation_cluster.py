@@ -259,3 +259,23 @@ def test_rechaza_desactivar_una_direccion_ajena(url, campo, enlace_ajeno, direcc
         with application.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_normaliza_el_dominio_del_correo():
+    """#2202: email-validator normaliza el dominio antes de persistir."""
+    application, ids = _crear_app()
+    try:
+        client = _cliente(application)
+        respuesta = client.post(
+            f"/sales/customer/{ids['cliente']}/contacts",
+            data={"first_name": "Ana", "email": "Ana@Example.COM"},
+        )
+
+        assert respuesta.status_code == 302
+        with application.app_context():
+            contacto = database.session.execute(database.select(Contact).where(Contact.first_name == "Ana")).scalar_one()
+            assert contacto.email == "Ana@example.com"
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()

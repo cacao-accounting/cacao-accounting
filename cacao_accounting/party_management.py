@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from datetime import date
 from dataclasses import dataclass
-import re
 from typing import Mapping
 
+from email_validator import EmailNotValidError, validate_email
 from sqlalchemy import select
 from typing import Any, Iterable
 
@@ -298,15 +298,15 @@ def list_party_addresses(party_id: str) -> list[AddressRow]:
     ]
 
 
-_CONTACT_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-
 def _validated_contact_email(raw_email: str | None) -> str | None:
-    """Devuelve el correo normalizado o falla si no tiene formato válido."""
-    email = (raw_email or "").strip() or None
-    if email and not _CONTACT_EMAIL_PATTERN.fullmatch(email):
-        raise ValueError(_("El correo electrónico del contacto no es válido."))
-    return email
+    """Normaliza el correo o falla si no es válido según email-validator."""
+    email = (raw_email or "").strip()
+    if not email:
+        return None
+    try:
+        return validate_email(email, check_deliverability=False).normalized
+    except EmailNotValidError as exc:
+        raise ValueError(_("El correo electrónico del contacto no es válido.")) from exc
 
 
 def validated_party_name(values: Mapping[str, str | None]) -> str:
