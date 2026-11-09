@@ -97,19 +97,19 @@
             <strong>{{ row.period }}</strong>
             <span class="badge bg-light text-dark small ms-1">{{ zone_labels.get(row.zone, row.zone) }}</span>
           </td>
-          <td class="text-end text-primary">{{ format_money_with_currency(row.base_projected) }}</td>
-          <td class="text-end text-success">{{ format_money_with_currency(row.compare_projected) }}</td>
+          <td class="text-end text-primary">{{ format_money_with_currency(row.base_projected, currency) }}</td>
+          <td class="text-end text-success">{{ format_money_with_currency(row.compare_projected, currency) }}</td>
           <td class="text-end fw-bold {% if row.variance > 0 %}text-success{% elif row.variance < 0 %}text-danger{% endif %}">
-            {{ format_money_with_currency(row.variance) }}
+            {{ format_money_with_currency(row.variance, currency) }}
           </td>
           <td class="text-end text-muted small">
             {% if row.variance_manual_inflow != 0 %}
-            {{ "+" if row.variance_manual_inflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_inflow) }}
+            {{ "+" if row.variance_manual_inflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_inflow, currency) }}
             {% else %}-{% endif %}
           </td>
           <td class="text-end text-muted small">
             {% if row.variance_manual_outflow != 0 %}
-            {{ "+" if row.variance_manual_outflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_outflow) }}
+            {{ "+" if row.variance_manual_outflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_outflow, currency) }}
             {% else %}-{% endif %}
           </td>
         </tr>
