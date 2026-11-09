@@ -1539,7 +1539,7 @@ def api_document_flow_create_target():
         result = create_target_document(payload)
     except DocumentFlowError as exc:
         abort(exc.status_code)
-    except KeyError:
+    except (KeyError, ValueError):
         abort(400)
     return jsonify(result), 201
 

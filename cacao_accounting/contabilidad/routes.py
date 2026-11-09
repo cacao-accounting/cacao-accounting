@@ -799,6 +799,8 @@ def unidad(id_unidad):
     from cacao_accounting.database import Unit
 
     REGISTRO = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).first()
+    if REGISTRO is None:
+        abort(404)
     return render_template(
         "contabilidad/unidad.html",
         registro=REGISTRO[0],
