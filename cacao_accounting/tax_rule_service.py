@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -109,12 +109,38 @@ def _validate_tax_rule_references(company: str | None, account_id: str | None, c
             raise TaxRuleServiceError(_("La moneda de la regla fiscal no existe."))
 
 
-TAX_RULE_ENUMS: dict[str, tuple[set[str], str]] = {
+RECOGNITION_EVENTS: frozenset[str] = frozenset(
+    {
+        "invoice",
+        "payment",
+        "payment_confirmed",
+        "collection",
+        "collection_confirmed",
+        "refund_confirmed",
+        "settlement",
+        "reversal",
+        "purchase_request_confirmed",
+        "purchase_order_confirmed",
+        "purchase_receipt_confirmed",
+        "purchase_invoice_confirmed",
+        "import_landed_cost_confirmed",
+        "sales_request_confirmed",
+        "sales_order_confirmed",
+        "delivery_note_confirmed",
+        "sales_invoice_confirmed",
+        "stock_entry_confirmed",
+        "bank_transfer_confirmed",
+    }
+)
+
+TAX_RULE_ENUMS: dict[str, tuple[Set[str], str]] = {
     "applies_to": ({"both", "purchase", "sales"}, "both"),
     "level": ({"item", "party", "transaction", "company"}, "transaction"),
     "tax_type": ({"tax", "withholding", "charge", "deduction"}, "tax"),
     "calculation_method": ({"percentage", "fixed", "manual", "quantity"}, "percentage"),
     "base_mode": ({"goods", "accumulated"}, "goods"),
+    "accounting_treatment": ({"separate_tax_account", "capitalizable_inventory_cost"}, "separate_tax_account"),
+    "recognition_event": (RECOGNITION_EVENTS, "invoice"),
 }
 
 
@@ -144,6 +170,8 @@ def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> N
     tax_type = _validated_enum(values, "tax_type")
     calculation_method = _validated_enum(values, "calculation_method")
     base_mode = _validated_enum(values, "base_mode")
+    accounting_treatment = _validated_enum(values, "accounting_treatment")
+    recognition_event = _validated_enum(values, "recognition_event")
     rule.company = company
     rule.name = name
     rule.applies_to = applies_to
@@ -157,8 +185,8 @@ def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> N
     rule.include_concepts = _normalized_csv(values.get("include_concepts"))
     rule.exclude_concepts = _normalized_csv(values.get("exclude_concepts"))
     rule.sequence = _int_value(values.get("sequence"), default=10)
-    rule.accounting_treatment = _clean_text(values.get("accounting_treatment")) or "separate_tax_account"
-    rule.recognition_event = _clean_text(values.get("recognition_event")) or "invoice"
+    rule.accounting_treatment = accounting_treatment
+    rule.recognition_event = recognition_event
     rule.account_id = _clean_text(values.get("account_id"))
     rule.affects_inventory = values.get("affects_inventory") is not None
     rule.affects_cost = values.get("affects_cost") is not None

@@ -4,8 +4,9 @@
 """Las reglas fiscales validan sus campos enumerados.
 
 Escenario de negocio (issue #2005): un POST alterado podía persistir
-applies_to/level/tax_type/calculation_method/base_mode fuera de catálogo; el
-builder excluía la regla o el motor calculaba cero en silencio.
+applies_to/level/tax_type/calculation_method/base_mode/accounting_treatment/
+recognition_event fuera de catálogo; el builder excluía la regla o el motor
+calculaba cero en silencio.
 """
 
 from __future__ import annotations
@@ -109,6 +110,8 @@ def _formulario(**overrides) -> dict[str, str]:
         ("tax_type", "mystery"),
         ("calculation_method", "mystery"),
         ("base_mode", "other"),
+        ("accounting_treatment", "whatever"),
+        ("recognition_event", "whenever"),
     ],
 )
 def test_rechaza_enums_fuera_de_catalogo(campo, valor):
@@ -141,6 +144,8 @@ def test_acepta_los_valores_del_catalogo():
                 tax_type="withholding",
                 calculation_method="fixed",
                 base_mode="accumulated",
+                accounting_treatment="capitalizable_inventory_cost",
+                recognition_event="purchase_invoice_confirmed",
             ),
         )
 
@@ -152,6 +157,8 @@ def test_acepta_los_valores_del_catalogo():
             assert regla.tax_type == "withholding"
             assert regla.calculation_method == "fixed"
             assert regla.base_mode == "accumulated"
+            assert regla.accounting_treatment == "capitalizable_inventory_cost"
+            assert regla.recognition_event == "purchase_invoice_confirmed"
     finally:
         with application.app_context():
             database.session.remove()
