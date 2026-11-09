@@ -312,7 +312,7 @@ def account_movement():
     """Report account movement detail."""
     filters, selected_view, saved_views = _resolve_view_context("account-movement", _financial_filters())
     report = get_account_movement_detail(filters) if _should_run_financial_report() else _empty_financial_report()
-    if request.args.get("export") in {"csv", "xlsx"}:
+    if request.args.get("export") in {"csv", "xlsx", "pdf"}:
         export_report = get_account_movement_detail(cast(FinancialReportFilters, replace(filters, export_all=True, page=1)))
         return _render_financial_report(
             "account-movement",
