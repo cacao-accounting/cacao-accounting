@@ -6,7 +6,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/admin/templates/admin/email_log.html"></div>
 {% endif %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ _("Bitácora de Correos Electrónicos") }}</li>

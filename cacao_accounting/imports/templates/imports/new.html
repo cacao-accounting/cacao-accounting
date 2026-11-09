@@ -5,7 +5,7 @@
     {%- if TESTING -%}
     <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/imports/templates/imports/new.html"></div>
     {%- endif -%}
-    <nav aria-label="breadcrumb">
+    <nav aria-label="{{ _('Ruta de navegación') }}">
         <ol class="breadcrumb lh-sm">
             <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
             <li class="breadcrumb-item"><a href="{{ url_for('imports.index') }}" class="link-dark">{{ _("Importaciones") }}</a></li>
