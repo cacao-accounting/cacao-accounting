@@ -744,6 +744,35 @@ class TestConcurrenciaPostgreSQL:
             database.engine.dispose()
         _soltar_base(url_aislada)
 
+    @pytest.fixture
+    def pg_app_entidades(self):
+        url_aislada = _base_aislada_concurrencia()
+        application = create_app(
+            {**_configuracion_base(), "SQLALCHEMY_DATABASE_URI": url_aislada.render_as_string(hide_password=False)}
+        )
+        with application.app_context():
+            database.create_all()
+            _seed_empresa(application, COMPANY)
+            from cacao_accounting.database import Entity
+
+            database.session.add(
+                Entity(
+                    code="alpha",
+                    name="Alpha",
+                    company_name="Alpha SA",
+                    tax_id="J0002",
+                    currency="NIO",
+                    enabled=True,
+                    status="activo",
+                )
+            )
+            database.session.commit()
+        yield application
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+        _soltar_base(url_aislada)
+
     def test_reembolso_concurrente_un_solo_pago(self, pg_app_caja):
         """Dos reembolsos simultáneos en sesiones independientes: un solo efecto."""
         application = pg_app_caja
@@ -861,6 +890,40 @@ class TestConcurrenciaPostgreSQL:
             assert len(diarios) == base_diarios + 1
             conciliacion = database.session.get(PettyCashReconciliation, conciliacion_id)
             assert conciliacion.adjustment_journal_id == ganador
+
+    def test_predeterminar_entidad_concurrente_una_sola_default(self, pg_app_entidades):
+        """Dos cambios simultáneos de entidad default dejan una sola coherente."""
+        application = pg_app_entidades
+        from flask_login import login_user
+
+        from cacao_accounting.contabilidad.routes import predeterminar_entidad
+        from cacao_accounting.database import Entity, User
+
+        with application.app_context():
+            entidades = database.session.execute(database.select(Entity)).scalars().all()
+            ids = {entidad.code: entidad.id for entidad in entidades}
+
+        def _predeterminar(entity_id):
+            with application.test_request_context(f"/accounting/entity/set_default/{entity_id}"):
+                login_user(database.session.get(User, "admin"))
+                return predeterminar_entidad(entity_id).status_code
+
+        resultados = _ejecutar_en_dos_hilos(
+            [
+                lambda: _predeterminar(ids["cacao"]),
+                lambda: _predeterminar(ids["alpha"]),
+            ]
+        )
+        exitos, errores = _exitos_y_errores(resultados)
+        assert exitos == 2, f"ambos cambios deben serializarse: {resultados}"
+        assert errores == 0
+        with application.app_context():
+            entidades = database.session.execute(database.select(Entity)).scalars().all()
+            defaults = [entidad for entidad in entidades if entidad.default]
+            status_defaults = [entidad for entidad in entidades if entidad.status == "default"]
+            assert len(defaults) == 1
+            assert len(status_defaults) == 1
+            assert defaults[0].id == status_defaults[0].id
 
     def test_doble_corrida_concurrente_una_sola_activa(self, pg_app_reval):
         """Dos corridas simultáneas del mismo periodo: una sola queda activa."""
