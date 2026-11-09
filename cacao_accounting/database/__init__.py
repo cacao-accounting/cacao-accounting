@@ -5273,24 +5273,6 @@ class Comment(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_deleted = database.Column(database.Boolean(), default=False, nullable=False)
 
 
-class CommentMention(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Mencion de usuario en un comentario."""
-
-    __tablename__ = "comment_mention"
-    comment_id = database.Column(
-        database.String(26),
-        database.ForeignKey("comment.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    user_id = database.Column(
-        database.String(26),
-        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-
-
 class Assignment(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Asignacion de un registro a un usuario."""
 
