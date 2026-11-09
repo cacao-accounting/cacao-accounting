@@ -37,6 +37,12 @@
         <td>{{ item.name }}</td>
         <td>{{ item.company }}</td>
       </tr>
+      {% else %}
+      <tr>
+        <td colspan="3" class="text-center text-muted py-4" role="status">
+          {{ _('No hay bodegas para los filtros o el alcance de compañía actual.') }}
+        </td>
+      </tr>
       {%- endfor %}
     </tbody>
   </table>

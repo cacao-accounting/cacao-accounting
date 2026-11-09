@@ -39,6 +39,12 @@
         <td>{{ item.expiry_date or "—" }}</td>
         <td>{{ _("Sí") if item.is_active else _("No") }}</td>
       </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" class="text-center text-muted py-4" role="status">
+          {{ _('No se encontraron lotes para los filtros seleccionados.') }}
+        </td>
+      </tr>
       {%- endfor %}
     </tbody>
   </table>

@@ -40,6 +40,12 @@
         <td>{{ item.comercial_name or "-" }}</td>
         <td>{{ item.tax_id or "-" }}</td>
       </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" class="text-center text-muted py-4" role="status">
+          {{ _('No se encontraron clientes para los filtros seleccionados.') }}
+        </td>
+      </tr>
       {%- endfor %}
     </tbody>
   </table>

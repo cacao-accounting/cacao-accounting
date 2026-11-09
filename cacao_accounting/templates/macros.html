@@ -268,6 +268,7 @@
 
 {% macro rendizar_paginacion(consulta=None, vista=None, extra_params=None) %}
 <p class="ca-pagination">{{ consulta.total }} {{ _('items encontrados') }}.
+  {% if consulta.total %}
   <br>
   {% if consulta.has_prev %}
   <a href="{{ url_for(vista, page=consulta.prev_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}"><i class="bi bi-arrow-left-short"></i> {{ _('Anterior') }}</a>
@@ -275,6 +276,7 @@
   {{ _('Página') }} {{ consulta.page }} {{ _('de') }} {{ consulta.pages }}
   {% if consulta.has_next %}
   <a href="{{ url_for(vista, page=consulta.next_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}">{{ _('Siguiente') }} <i class="bi bi-arrow-right-short"></i></a>
+  {% endif %}
   {% endif %}
 </p>
 {% endmacro %}

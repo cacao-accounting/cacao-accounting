@@ -24922,6 +24922,18 @@ msgstr "The classification must be submitted in full to avoid accidental deletio
 msgid "No se encontraron documentos para los filtros seleccionados."
 msgstr "No documents were found for the selected filters."
 
+#: cacao_accounting/ventas/templates/ventas/cliente_lista.html:46
+msgid "No se encontraron clientes para los filtros seleccionados."
+msgstr "No customers were found for the selected filters."
+
+#: cacao_accounting/inventario/templates/inventario/lote_lista.html:45
+msgid "No se encontraron lotes para los filtros seleccionados."
+msgstr "No batches were found for the selected filters."
+
+#: cacao_accounting/inventario/templates/inventario/bodega_lista.html:43
+msgid "No hay bodegas para los filtros o el alcance de compañía actual."
+msgstr "There are no warehouses for the current filters or company scope."
+
 #: cacao_accounting/bancos/services.py
 #, python-format
 msgid "La dimensión %(label)s no pertenece a la compañía del documento."
