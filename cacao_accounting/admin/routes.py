@@ -3,6 +3,7 @@
 
 """Modulo administrativo."""
 
+from types import SimpleNamespace
 from typing import Any
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -526,6 +527,40 @@ def items_plantilla_impuesto(template_id: str):
     return render_template("admin/tax_template_items.html", template=template, items=items, taxes=taxes)
 
 
+def _tax_rule_form_state(rule: Any, form: Any) -> SimpleNamespace:
+    """Reconstruye una regla fiscal con los valores enviados para el re-render."""
+    return SimpleNamespace(
+        id=getattr(rule, "id", None),
+        name=form.get("name") or "",
+        company=form.get("company") or "",
+        concept=form.get("concept") or "",
+        applies_to=form.get("applies_to") or "both",
+        level=form.get("level") or "transaction",
+        tax_type=form.get("tax_type") or "tax",
+        calculation_method=form.get("calculation_method") or "percentage",
+        rate=form.get("rate") or "0",
+        amount=form.get("amount") or "0",
+        base_mode=form.get("base_mode") or "goods",
+        include_concepts=form.get("include_concepts") or "",
+        exclude_concepts=form.get("exclude_concepts") or "",
+        sequence=form.get("sequence") or "10",
+        accounting_treatment=form.get("accounting_treatment") or "separate_tax_account",
+        recognition_event=form.get("recognition_event") or "invoice",
+        account_id=form.get("account_id") or "",
+        currency=form.get("currency") or "",
+        country=form.get("country") or "",
+        valid_from=form.get("valid_from") or None,
+        valid_to=form.get("valid_to") or None,
+        allocation_method=form.get("allocation_method") or "",
+        affects_inventory=form.get("affects_inventory") is not None,
+        affects_cost=form.get("affects_cost") is not None,
+        affects_document_total=form.get("affects_document_total") is not None,
+        affects_settlement=form.get("affects_settlement") is not None,
+        participates_in_next_base=form.get("participates_in_next_base") is not None,
+        is_active=form.get("is_active") is not None,
+    )
+
+
 @admin.route("/settings/tax-rules", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -541,6 +576,7 @@ def lista_reglas_fiscales():
         except TaxRuleServiceError as exc:
             database.session.rollback()
             flash(_(str(exc)), "danger")
+            editing_rule = _tax_rule_form_state(editing_rule, request.form)
         else:
             flash(_("Regla fiscal creada correctamente."), "success")
             return redirect(url_for("admin.lista_reglas_fiscales", edit=rule.id))
@@ -739,6 +775,7 @@ def editar_regla_fiscal(rule_id: str):
     if rule is None:
         abort(404)
     assert rule is not None
+    form_state = None
     if request.method == "POST":
         try:
             update_tax_rule(rule, request.form)
@@ -746,11 +783,12 @@ def editar_regla_fiscal(rule_id: str):
         except TaxRuleServiceError as exc:
             database.session.rollback()
             flash(_(str(exc)), "danger")
+            form_state = _tax_rule_form_state(rule, request.form)
         else:
             flash(_("Regla fiscal actualizada correctamente."), "success")
             return redirect(url_for("admin.editar_regla_fiscal", rule_id=rule.id))
     rules = list_tax_rules()
-    return render_template("admin/tax_rules.html", rules=rules, editing_rule=rule)
+    return render_template("admin/tax_rules.html", rules=rules, editing_rule=form_state or rule)
 
 
 @admin.route("/settings/tax-rules/<rule_id>/delete", methods=["POST"])

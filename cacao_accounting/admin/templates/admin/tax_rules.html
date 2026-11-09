@@ -7,7 +7,7 @@
 
 <form
   method="post"
-  action="{{ url_for('admin.editar_regla_fiscal', rule_id=rule.id) if rule else url_for('admin.lista_reglas_fiscales') }}"
+  action="{{ url_for('admin.editar_regla_fiscal', rule_id=rule.id) if rule and rule.id else url_for('admin.lista_reglas_fiscales') }}"
   class="mb-4"
 >
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -67,8 +67,8 @@
     <div class="col-md-2"><input class="form-control" name="account_id" placeholder="{{ _('Cuenta contable') }}" value="{{ rule.account_id if rule else '' }}"></div>
     <div class="col-md-2"><input class="form-control" name="currency" placeholder="{{ _('Moneda') }}" value="{{ rule.currency if rule else '' }}"></div>
     <div class="col-md-2"><input class="form-control" name="country" placeholder="{{ _('País') }}" value="{{ rule.country if rule else '' }}"></div>
-    <div class="col-md-2"><input class="form-control" type="date" name="valid_from" value="{{ rule.valid_from.isoformat() if rule and rule.valid_from else '' }}"></div>
-    <div class="col-md-2"><input class="form-control" type="date" name="valid_to" value="{{ rule.valid_to.isoformat() if rule and rule.valid_to else '' }}"></div>
+    <div class="col-md-2"><input class="form-control" type="date" name="valid_from" value="{{ rule.valid_from.isoformat() if rule and rule.valid_from and rule.valid_from.isoformat is defined else (rule.valid_from or '' if rule else '') }}"></div>
+    <div class="col-md-2"><input class="form-control" type="date" name="valid_to" value="{{ rule.valid_to.isoformat() if rule and rule.valid_to and rule.valid_to.isoformat is defined else (rule.valid_to or '' if rule else '') }}"></div>
     <div class="col-md-2"><input class="form-control" name="allocation_method" placeholder="{{ _('Método de prorrateo') }}" value="{{ rule.allocation_method if rule else '' }}"></div>
     <div class="col-md-2 form-check ms-2"><input class="form-check-input" type="checkbox" name="affects_inventory" id="affects_inventory" {% if not rule or rule.affects_inventory %}checked{% endif %}><label class="form-check-label" for="affects_inventory">{{ _("Afecta inventario") }}</label></div>
     <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="affects_cost" id="affects_cost" {% if rule and rule.affects_cost %}checked{% endif %}><label class="form-check-label" for="affects_cost">{{ _("Afecta costo") }}</label></div>
@@ -78,7 +78,7 @@
     <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="is_active" id="is_active" {% if not rule or rule.is_active %}checked{% endif %}><label class="form-check-label" for="is_active">{{ _("Activo") }}</label></div>
     <div class="col-md-3">
       <button class="btn btn-primary" type="submit">{{ _("Guardar") }}</button>
-      {% if rule %}
+      {% if rule and rule.id %}
       <a class="btn btn-outline-secondary" href="{{ url_for('admin.lista_reglas_fiscales') }}">{{ _("Nueva regla") }}</a>
       {% endif %}
     </div>
