@@ -7178,6 +7178,22 @@ msgstr "The value of %(field)s is not valid for the tax rule."
 msgid "Eliminar regla de aprobación"
 msgstr "Delete approval rule"
 
+#: cacao_accounting/admin/templates/admin/approval_matrix.html:204
+msgid "Deshabilitar regla de aprobación"
+msgstr "Disable approval rule"
+
+#: cacao_accounting/admin/templates/admin/approval_matrix.html:204
+msgid "Habilitar regla de aprobación"
+msgstr "Enable approval rule"
+
+#: cacao_accounting/admin/services.py:413
+msgid "Regla de aprobación habilitada."
+msgstr "Approval rule enabled."
+
+#: cacao_accounting/admin/services.py:413
+msgid "Regla de aprobación deshabilitada."
+msgstr "Approval rule disabled."
+
 #: cacao_accounting/bancos/forms.py:24
 #: cacao_accounting/bancos/templates/bancos/banco_cuenta_nuevo.html:28
 #: cacao_accounting/contabilidad/forms.py:41

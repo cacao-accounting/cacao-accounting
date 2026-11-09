@@ -409,9 +409,22 @@ def _handle_approval_matrix_post(set_setup_value, selected_company: str):
             rule.enabled = False
             database.session.commit()
             flash(_("Regla de aprobación eliminada."), "success")
+    elif action == "toggle_rule":
+        _toggle_approval_rule(request.form.get("rule_id"))
     else:
         return None
     return redirect(url_for(ADMIN_APPROVAL_MATRIX_ENDPOINT, company=company))
+
+
+def _toggle_approval_rule(rule_id: str | None) -> None:
+    """Alterna la vigencia de una regla de aprobación sin borrarla."""
+    rule = database.session.get(ApprovalMatrix, rule_id)
+    if not rule:
+        return
+    rule.enabled = not bool(rule.enabled)
+    database.session.commit()
+    mensaje = _("Regla de aprobación habilitada.") if rule.enabled else _("Regla de aprobación deshabilitada.")
+    flash(mensaje, "success")
 
 
 def _approval_rule_from_form(company: str) -> ApprovalMatrix:
