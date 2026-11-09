@@ -1364,6 +1364,8 @@ def ventas_cotizacion_nueva():
     ]
     from_request_id = request.args.get("from_request") or request.form.get("from_request")
     solicitud_origen = database.session.get(SalesRequest, from_request_id) if from_request_id else None
+    if solicitud_origen:
+        _require_sales_document_access(solicitud_origen, "consultar")
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()

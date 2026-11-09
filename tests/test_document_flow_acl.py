@@ -89,6 +89,13 @@ def _sembrar_escenario() -> dict[str, str]:
             UserCompanyAccess(user_id="vendedor", company_code="cacao"),
             UserCompanyAccess(user_id="tesorero", company_code="cacao"),
             SalesRequest(company="cacao", posting_date=FECHA, docstatus=1, customer_name="Cliente Cacao"),
+            SalesRequest(
+                company="cafe",
+                posting_date=FECHA,
+                docstatus=1,
+                document_no="SR-CAFE-1",
+                customer_name="Cliente Confidencial Cafe",
+            ),
             SalesOrder(company="cafe", posting_date=FECHA, docstatus=1, document_no="SO-CAFE-1", customer_name="Cliente Cafe"),
         ]
     )
@@ -99,7 +106,8 @@ def _sembrar_escenario() -> dict[str, str]:
     asigna_rol_a_usuario("tesorero", "user_of_treasury")
     database.session.flush()
 
-    pedido_propio = database.session.execute(database.select(SalesRequest)).scalar_one()
+    pedido_propio = database.session.execute(database.select(SalesRequest).filter_by(company="cacao")).scalar_one()
+    solicitud_ajena = database.session.execute(database.select(SalesRequest).filter_by(company="cafe")).scalar_one()
     orden_ajena = database.session.execute(database.select(SalesOrder)).scalar_one()
     linea_propia = SalesRequestItem(
         sales_request_id=pedido_propio.id,
@@ -128,6 +136,7 @@ def _sembrar_escenario() -> dict[str, str]:
         "linea_propia": linea_propia.id,
         "orden_ajena": orden_ajena.id,
         "linea_ajena": linea_ajena.id,
+        "solicitud_ajena": solicitud_ajena.id,
     }
 
 
@@ -322,6 +331,29 @@ def test_el_vendedor_puede_cerrar_saldo_de_su_propia_linea(escenario_multicompan
     state = response.get_json()["state"]
     assert Decimal(str(state["closed_qty"])) == Decimal("50")
     assert Decimal(str(state["pending_qty"])) == Decimal("0")
+
+
+def test_cotizacion_no_precarga_una_solicitud_de_otra_compania(escenario_multicompania):
+    """El formulario de cotización no serializa datos del origen ajeno."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client)
+
+    response = client.get(f"/sales/quotation/new?from_request={ids['solicitud_ajena']}")
+
+    assert response.status_code == 403
+    cuerpo = response.get_data(as_text=True)
+    assert "Cliente Confidencial Cafe" not in cuerpo
+
+
+def test_cotizacion_precarga_una_solicitud_propia(escenario_multicompania):
+    """Control positivo: el origen autorizado se sigue precargando."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client)
+
+    response = client.get(f"/sales/quotation/new?from_request={ids['pedido_propio']}")
+
+    assert response.status_code == 200
+    assert "Cliente Cacao" in response.get_data(as_text=True)
 
 
 def test_items_del_flujo_rechazan_fuentes_de_otra_compania(escenario_multicompania):
