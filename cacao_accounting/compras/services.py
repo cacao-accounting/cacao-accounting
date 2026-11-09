@@ -1410,6 +1410,9 @@ def _validate_purchase_order_award(
         return None, False
     if award is None:
         return None, True
+    if not supplier_id:
+        flash_error(PurchaseSourcingError("La adjudicación requiere un proveedor seleccionado."))
+        return None, False
     if not _award_matches_source(award, source):
         flash_error(PurchaseSourcingError("La adjudicación no corresponde al origen seleccionado."))
         return None, False

@@ -267,6 +267,21 @@ def test_adjudicacion_rechaza_orden_sin_origen(adjudicaciones):
         assert valido is False
 
 
+def test_adjudicacion_rechaza_orden_sin_proveedor(adjudicaciones):
+    """Una orden que acredita una adjudicación debe declarar proveedor."""
+    application, ids = adjudicaciones
+    with application.app_context():
+        _, valido = _validar(
+            application,
+            ids["award"],
+            "cacao",
+            source=database.session.get(SupplierQuotation, ids["sq_a"]),
+            supplier_id=None,
+            form=_form(ids, supplier_id=None),
+        )
+        assert valido is False
+
+
 def test_adjudicacion_rechaza_cantidades_repetidas_sobre_el_total(adjudicaciones):
     """Dos líneas del mismo ítem no pueden superar el total adjudicado."""
     application, ids = adjudicaciones
@@ -345,6 +360,21 @@ def test_creacion_rechaza_adjudicacion_sin_origen(adjudicaciones, monkeypatch):
         assert database.session.execute(database.select(PurchaseOrder)).scalars().all() == []
 
 
+def test_creacion_rechaza_adjudicacion_sin_proveedor(adjudicaciones, monkeypatch):
+    """El POST que omite el proveedor no crea la orden."""
+    application, ids = adjudicaciones
+    form = _form_orden(ids, supplier_id="")
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    from flask_login import login_user
+
+    with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
+        login_user(database.session.get(User, "admin"))
+        _create_purchase_order_from_request(form)
+
+    with application.app_context():
+        assert database.session.execute(database.select(PurchaseOrder)).scalars().all() == []
+
+
 def test_edicion_rechaza_cambio_de_proveedor_con_adjudicacion(adjudicaciones, monkeypatch):
     """La edición no puede sustituir el proveedor adjudicado."""
     application, ids = adjudicaciones
@@ -366,6 +396,26 @@ def test_edicion_rechaza_cambio_de_proveedor_con_adjudicacion(adjudicaciones, mo
         assert (
             database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=orden_id)).scalars().all()
         )
+
+
+def test_edicion_rechaza_quitar_proveedor_con_adjudicacion(adjudicaciones, monkeypatch):
+    """La edición no puede dejar sin proveedor una orden adjudicada."""
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch)
+    with application.app_context():
+        orden_id = database.session.execute(database.select(PurchaseOrder)).scalar_one().id
+
+    form = _form_orden(ids, supplier_id="")
+    from flask_login import login_user
+
+    with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
+        login_user(database.session.get(User, "admin"))
+        orden = database.session.get(PurchaseOrder, orden_id)
+        _update_purchase_order_from_request(orden)
+
+    with application.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        assert orden.supplier_id == ids["proveedor_a"]
 
 
 def test_edicion_conserva_orden_con_linea_adjudicada(adjudicaciones, monkeypatch):
