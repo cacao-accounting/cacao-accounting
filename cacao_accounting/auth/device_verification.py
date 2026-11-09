@@ -152,15 +152,6 @@ def revocar_dispositivo(device_id: str) -> None:
         log.debug("Device %s revoked", device_id)
 
 
-def listar_dispositivos(user_id: str) -> list[RecognizedDevice]:
-    """Lista todos los dispositivos reconocidos de un usuario."""
-    return list(
-        database.session.scalars(
-            select(RecognizedDevice).filter_by(user_id=user_id).order_by(RecognizedDevice.created.desc())
-        ).all()
-    )
-
-
 def generar_token_recuperacion(user_id: str) -> str:
     """Genera un token de recuperación de contraseña y lo retorna."""
     previos = database.session.scalars(select(PasswordResetToken).filter_by(user_id=user_id, consumed=False)).all()

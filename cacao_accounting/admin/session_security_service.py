@@ -37,15 +37,6 @@ def set_session_security_enabled(enabled: bool) -> None:
     database.session.flush()
 
 
-def listar_dispositivos_usuario(user_id: str) -> list[RecognizedDevice]:
-    """Lista dispositivos reconocidos de un usuario específico."""
-    return list(
-        database.session.scalars(
-            select(RecognizedDevice).filter_by(user_id=user_id).order_by(RecognizedDevice.created.desc())
-        ).all()
-    )
-
-
 def listar_todos_dispositivos() -> list[tuple[RecognizedDevice, str]]:
     """Lista todos los dispositivos reconocidos con el nombre del usuario."""
     rows = database.session.execute(
