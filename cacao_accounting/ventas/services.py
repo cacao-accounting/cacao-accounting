@@ -860,7 +860,12 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
     registro.remarks = form.get("remarks")
     for item in database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars():
         database.session.delete(item)
-    _total_qty, total = _save_sales_request_items(registro.id)
+    try:
+        _total_qty, total = _save_sales_request_items(registro.id)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, request_id=request_id))
     _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
@@ -887,7 +892,12 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
     registro.remarks = form.get("remarks")
     for item in database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars():
         database.session.delete(item)
-    _total_qty, total = _save_sales_order_items(registro.id)
+    try:
+        _total_qty, total = _save_sales_order_items(registro.id)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, order_id=order_id))
     _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
@@ -2011,7 +2021,12 @@ def _handle_sales_quotation_edit_post(registro):
         database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id)
     ).scalars():
         database.session.delete(item)
-    _total_qty, total = _save_sales_quotation_items(registro.id)
+    try:
+        _total_qty, total = _save_sales_quotation_items(registro.id)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
     _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
@@ -2037,7 +2052,12 @@ def _handle_delivery_note_edit_post(registro):
     registro.remarks = request.form.get("remarks")
     for item in database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars():
         database.session.delete(item)
-    _total_qty, total = _save_delivery_note_items(registro.id)
+    try:
+        _total_qty, total = _save_delivery_note_items(registro.id)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
     _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
