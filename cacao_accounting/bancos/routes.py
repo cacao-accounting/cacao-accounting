@@ -1502,11 +1502,25 @@ def caja_chica_reposicion_lista():
     if scope is not None:
         query = query.where(PettyCashReplenishment.company.in_(scope))
     registros = list(database.session.execute(query).scalars())
+    fondos = _petty_cash_fund_labels({registro.petty_cash_id for registro in registros})
     return render_template(
         "bancos/caja_chica_reposicion_lista.html",
         registros=registros,
+        fondos=fondos,
         titulo=_("Reposiciones de Caja Chica") + " - " + APPNAME,
     )
+
+
+def _petty_cash_fund_labels(fund_ids: set[str]) -> dict[str, tuple[str, str]]:
+    """Resuelve nombre y compañía de los fondos usados por la lista."""
+    if not fund_ids:
+        return {}
+    filas = database.session.execute(
+        database.select(PettyCashAccount.id, PettyCashAccount.name, PettyCashAccount.company).where(
+            PettyCashAccount.id.in_(fund_ids)
+        )
+    ).all()
+    return {fila[0]: (fila[1], fila[2]) for fila in filas}
 
 
 @bancos.route("/petty-cash-replenishment/new", methods=["GET", "POST"])
