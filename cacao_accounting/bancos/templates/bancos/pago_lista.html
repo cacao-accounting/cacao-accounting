@@ -49,10 +49,16 @@
         <td>{{ item.party_name or "" }}</td>
         <td>{{ item.paid_amount or "" }}</td>
       </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="text-center text-muted py-4" role="status">
+          {{ _('No se encontraron documentos para los filtros seleccionados.') }}
+        </td>
+      </tr>
       {%- endfor %}
     </tbody>
   </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="bancos.bancos_pago_lista", extra_params=consulta.period_extra_params) }}</div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista=list_endpoint or 'bancos.bancos_pago_lista', extra_params=consulta.period_extra_params) }}</div>
 </div>
 
 {% endblock %}

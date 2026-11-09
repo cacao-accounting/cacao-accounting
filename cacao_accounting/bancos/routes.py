@@ -329,7 +329,13 @@ def bancos_transferencia_lista():
         database.select(PaymentEntry).filter_by(payment_type="internal_transfer"),
     )
     titulo = _("Listado de Transferencias Internas") + " - " + APPNAME
-    return render_template(BANCOS_PAGO_LISTA_HTML, consulta=consulta, titulo=titulo, is_transfer_list=True)
+    return render_template(
+        BANCOS_PAGO_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        is_transfer_list=True,
+        list_endpoint="bancos.bancos_transferencia_lista",
+    )
 
 
 @bancos.route("/payment/debit-note/list")
@@ -349,6 +355,7 @@ def bancos_nota_debito_lista():
         titulo=titulo,
         page_heading=_("Listado de Notas de Débito Bancario"),
         new_url=url_for("bancos.bancos_nota_debito_nueva"),
+        list_endpoint="bancos.bancos_nota_debito_lista",
     )
 
 
@@ -369,6 +376,7 @@ def bancos_nota_credito_lista():
         titulo=titulo,
         page_heading=_("Listado de Notas de Crédito Bancario"),
         new_url=url_for("bancos.bancos_nota_credito_nueva"),
+        list_endpoint="bancos.bancos_nota_credito_lista",
     )
 
 
