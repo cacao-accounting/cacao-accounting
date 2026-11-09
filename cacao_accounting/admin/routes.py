@@ -996,6 +996,15 @@ def config_conciliacion_compras():
     from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    selected_company = request.args.get("company") or ""
+    selected_config = None
+    selected_advances = False
+    if selected_company:
+        selected_config = database.session.execute(
+            database.select(PurchaseMatchingConfig).filter_by(company=selected_company)
+        ).scalar_one_or_none()
+        cuenta_default = get_company_default_accounts(selected_company)
+        selected_advances = bool(cuenta_default.apply_advances_automatically) if cuenta_default else False
 
     if request.method == "POST":
         company = request.form.get("company") or ""
@@ -1040,7 +1049,7 @@ def config_conciliacion_compras():
             )
         else:
             flash(_("Configuración de conciliación de compras guardada correctamente."), "success")
-        return redirect(url_for("admin.config_conciliacion_compras"))
+        return redirect(url_for("admin.config_conciliacion_compras", company=company))
 
     configs = (
         database.session.execute(database.select(PurchaseMatchingConfig).order_by(PurchaseMatchingConfig.company))
@@ -1059,6 +1068,9 @@ def config_conciliacion_compras():
         configs=configs,
         companies=companies,
         advance_settings=advance_settings,
+        selected_company=selected_company,
+        selected_config=selected_config,
+        selected_advances=selected_advances,
         titulo=_("Configuración de Conciliación de Compras"),
     )
 
