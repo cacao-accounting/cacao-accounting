@@ -64,6 +64,14 @@ def usuario_actual_ip() -> str:
     return "unknown"
 
 
+def lockout_minutes_remaining(seconds: int | None) -> int:
+    """Redondea hacia arriba los segundos de lockout, con mínimo 1 si sigue activo."""
+    value = int(seconds or 0)
+    if value <= 0:
+        return 0
+    return (value + 59) // 60
+
+
 def listar_cuentas_bloqueadas() -> list[tuple[User, int]]:
     """Retorna usuarios bloqueados con sus segundos restantes de lockout."""
     from cacao_accounting.auth.account_throttling import listar_cuentas_bloqueadas as _listar

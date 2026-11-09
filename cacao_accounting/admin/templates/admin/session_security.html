@@ -105,12 +105,12 @@
             </tr>
           </thead>
           <tbody>
-            {% for usuario, segundos in cuentas_bloqueadas %}
+            {% for usuario, segundos, minutos in cuentas_bloqueadas %}
             <tr>
               <td>{{ usuario.user }}</td>
               <td>{{ usuario.failed_login_count }}</td>
               <td>{{ usuario.last_failed_login.strftime("%Y-%m-%d %H:%M") if usuario.last_failed_login else "—" }}</td>
-              <td>{{ (segundos // 60) + 1 }} {{ _("min(s)") }}</td>
+              <td>{{ minutos }} {{ _("min(s)") }}</td>
               <td>
                 <form method="post" class="d-inline">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

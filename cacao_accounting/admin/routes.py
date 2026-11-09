@@ -118,6 +118,7 @@ from cacao_accounting.admin.session_security_service import (
     desbloquear_cuenta_usuario,
     is_session_security_enabled,
     listar_cuentas_bloqueadas,
+    lockout_minutes_remaining,
     listar_todos_dispositivos,
     revocar_dispositivo,
     set_session_security_enabled,
@@ -1714,7 +1715,9 @@ def session_security_settings():
     enabled = is_session_security_enabled()
     smtp_ok = smtp_is_configured()
     dispositivos = listar_todos_dispositivos()
-    cuentas_bloqueadas = listar_cuentas_bloqueadas()
+    cuentas_bloqueadas = [
+        (usuario, segundos, lockout_minutes_remaining(segundos)) for usuario, segundos in listar_cuentas_bloqueadas()
+    ]
 
     return render_template(
         "admin/session_security.html",
