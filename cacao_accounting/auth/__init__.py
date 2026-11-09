@@ -39,7 +39,7 @@ PROFILE_HTML = "profile.html"
 def cargar_sesion(identidad):  # pragma: no cover
     """Devuelve la entrada correspondiente al usuario que inicio sesión."""
     if identidad is not None:
-        QUERY = database.session.execute(database.select(User).filter_by(id=identidad)).first()
+        QUERY = database.session.execute(database.select(User).filter_by(id=identidad, active=True)).first()
         try:
             return QUERY[0]
         except TypeError:
