@@ -261,15 +261,6 @@ def validate_gl_account_usage(account_id: str, voucher_type: str | None) -> None
         )
 
 
-def accounts_for_company(company: str) -> list[Accounts]:
-    """Lista cuentas activas de detalle para seleccion de defaults."""
-    return list(
-        database.session.execute(
-            select(Accounts).filter_by(entity=company).where(Accounts.group.is_(False)).order_by(Accounts.code)
-        ).scalars()
-    )
-
-
 def default_account_rows(config: CompanyDefaultAccount | None) -> list[dict[str, Any]]:
     """Construye filas de presentacion para la UI de cuentas predeterminadas."""
     rows: list[dict[str, Any]] = []

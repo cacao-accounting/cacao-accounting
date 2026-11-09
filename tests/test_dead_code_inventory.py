@@ -44,6 +44,9 @@ import pytest
         ("cacao_accounting.tax_pricing_service", "validate_price_tolerance"),
         ("cacao_accounting.tax_pricing_service", "PriceToleranceResult"),
         ("cacao_accounting.tax_pricing_service", "PriceSuggestion"),
+        ("cacao_accounting.contabilidad.arap_allocation", "resolve_open_item"),
+        ("cacao_accounting.contabilidad.default_accounts", "accounts_for_company"),
+        ("cacao_accounting.datos.dev", "series_predeterminadas"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):

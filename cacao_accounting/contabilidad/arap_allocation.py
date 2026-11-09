@@ -336,27 +336,6 @@ def list_cached_open_items(
     return tuple(ARAPOpenItem.from_model(model) for model in db_session.execute(query).scalars())
 
 
-def resolve_open_item(
-    document_id: str,
-    *,
-    document_type: str | None = None,
-    currency: str | None = None,
-    company: str | None = None,
-    as_of_date: Any = None,
-    session: Any = None,
-) -> ARAPOpenItem:
-    """Resuelve un documento desde el ledger y exige saldo positivo único."""
-    items = list_open_items(company=company, currency=currency, as_of_date=as_of_date, session=session)
-    matches = [
-        item
-        for item in items
-        if item.document_id == document_id and (document_type is None or item.document_type == document_type)
-    ]
-    if len(matches) != 1:
-        raise AllocationError(_("No existe un open item único para %(document_id)s.") % {"document_id": document_id})
-    return matches[0]
-
-
 class AllocationPlanner:
     """Valida monedas, saldos e importes antes de ejecutar."""
 
