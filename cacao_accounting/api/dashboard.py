@@ -143,7 +143,13 @@ def _dashboard_sections(
             company_code,
             _("Contabilidad"),
             _("Resumen financiero del periodo seleccionado."),
-            lambda: get_accounting_data(company_code, currency, start_date, end_date),
+            lambda: get_accounting_data(
+                company_code,
+                currency,
+                start_date,
+                end_date,
+                include_pending_vouchers=_has_module_access(MODULE_BANKS, company_code),
+            ),
         ),
         "banks": _section_or_hidden(
             MODULE_BANKS,
@@ -225,24 +231,27 @@ def get_accounting_data(
     currency: str,
     start_date: date | None,
     end_date: date | None,
+    *,
+    include_pending_vouchers: bool = True,
 ) -> dict[str, Any]:
     """Obtiene métricas contables desde el GL."""
     balances = _income_expense_balances(company, start_date, end_date)
     income = balances["income"]
     expenses = balances["expenses"]
     profit = income - expenses
-    pending_vouchers = _count_model(PaymentEntry, company, docstatus=0)
     journal_entries = (
         _gl_query(company, start_date, end_date).with_entities(GLEntry.voucher_type, GLEntry.voucher_id).distinct().count()
     )
+    kpis: dict[str, Any] = {
+        "income": _money_kpi(_("Ingresos"), income, currency),
+        "expenses": _money_kpi(_("Gastos"), expenses, currency),
+        "profit": _money_kpi(_("Utilidad"), profit, currency),
+    }
+    if include_pending_vouchers:
+        kpis["pending_vouchers"] = _count_kpi(_("Pendientes"), _count_model(PaymentEntry, company, docstatus=0))
 
     return {
-        "kpis": {
-            "income": _money_kpi(_("Ingresos"), income, currency),
-            "expenses": _money_kpi(_("Gastos"), expenses, currency),
-            "profit": _money_kpi(_("Utilidad"), profit, currency),
-            "pending_vouchers": _count_kpi(_("Pendientes"), pending_vouchers),
-        },
+        "kpis": kpis,
         "charts": {"monthly_result": _accounting_monthly_result(company, start_date, end_date)},
         "tables": {
             "summary": [
