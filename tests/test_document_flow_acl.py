@@ -551,6 +551,44 @@ def test_factura_venta_rechaza_post_con_origen_ajeno(escenario_multicompania):
         assert database.session.execute(database.select(SalesInvoice).filter_by(company="cacao")).scalars().all() == []
 
 
+def test_remision_oculta_nuevo_a_inventario_sin_ventas(escenario_multicompania):
+    """El CTA Nuevo no se muestra a un perfil solo de Inventario."""
+    client = escenario_multicompania[1]
+    _iniciar_sesion(client, "bodeguero")
+
+    response = client.get("/sales/delivery-note/list")
+
+    assert response.status_code == 200
+    assert "/sales/delivery-note/new" not in response.get_data(as_text=True)
+
+
+def test_remision_muestra_nuevo_a_usuario_con_ventas(escenario_multicompania):
+    """Control positivo: Ventas + Inventario conserva el CTA."""
+    client = escenario_multicompania[1]
+    _iniciar_sesion(client, "operador")
+
+    response = client.get("/sales/delivery-note/list")
+
+    assert response.status_code == 200
+    assert "/sales/delivery-note/new" in response.get_data(as_text=True)
+
+
+def test_remision_get_exige_crear_ventas(escenario_multicompania):
+    """El formulario no se abre para un perfil solo de Inventario."""
+    client = escenario_multicompania[1]
+    _iniciar_sesion(client, "bodeguero")
+
+    assert client.get("/sales/delivery-note/new").status_code == 403
+
+
+def test_remision_post_exige_crear_ventas(escenario_multicompania):
+    """El POST mantiene el 403 para un perfil solo de Inventario."""
+    client = escenario_multicompania[1]
+    _iniciar_sesion(client, "bodeguero")
+
+    assert client.post("/sales/delivery-note/new", data={"company": "cacao"}).status_code == 403
+
+
 def test_remision_no_precarga_una_entrega_de_otra_compania(escenario_multicompania):
     """El alta de remisión no serializa el origen ajeno antes de autorizarlo."""
     client, ids = escenario_multicompania[1], escenario_multicompania[2]

@@ -1786,6 +1786,7 @@ def ventas_orden_venta_close(order_id: str):
 @modulo_activo("inventory")
 @login_required
 @verifica_permiso("inventory", "crear")
+@verifica_permiso("sales", "crear")
 def ventas_entrega_nuevo():
     """Formulario para crear una nota de entrega."""
     context = _build_delivery_note_new_context()

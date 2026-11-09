@@ -694,10 +694,14 @@ def _require_delivery_note_access(document: DeliveryNote, action: str = "consult
 
 
 def _can_manage_delivery_notes() -> bool:
-    """Return whether the current user has Inventory write permission."""
+    """Return whether the user can create delivery notes in Sales and Inventory."""
     module_id = obtener_id_modulo_por_nombre("inventory")
-    permissions = Permisos(modulo=module_id, usuario=current_user.id)
-    return bool(permissions.administrador or permissions.crear)
+    inventory = Permisos(modulo=module_id, usuario=current_user.id)
+    sales_module_id = obtener_id_modulo_por_nombre("sales")
+    sales = Permisos(modulo=sales_module_id, usuario=current_user.id)
+    if inventory.administrador or sales.administrador:
+        return True
+    return bool(sales.crear and inventory.crear)
 
 
 def _require_sales_document_access(document: Any, action: str = "consultar") -> None:
