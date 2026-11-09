@@ -13,8 +13,8 @@
           label=_("Compañía"),
           preload=True,
           required=True,
-          initial_value='',
-          initial_label='',
+          initial_value=selected_company,
+          initial_label=company_label,
           locked_expr="false",
           on_select="function(opt){ document.dispatchEvent(new CustomEvent('company-selected', {detail: opt})); }"
       ) }}
@@ -45,17 +45,17 @@
           filter_sources=["#company"],
           required_filters=["company"],
           required=True,
-          initial_value='',
-          initial_label='',
+          initial_value=selected_fund,
+          initial_label=selected_fund_label,
           locked_expr="false",
           on_select="function(opt){ var el = document.getElementById('pc_currency'); if (el) el.value = opt.currency || ''; var company = document.getElementById('company'); var c = company ? company.value : ''; if (opt.value) { window.location = '{{ url_for('bancos.caja_chica_reposicion_nueva') }}?petty_cash_id=' + encodeURIComponent(opt.value) + (c ? '&company=' + encodeURIComponent(c) : ''); } }"
       ) }}
     </div>
     <div class="col-md-4">
       <label class="form-label">{{ _('Moneda') }}</label>
-      <input class="form-control" type="text" id="pc_currency" readonly value="">
+      <input class="form-control" type="text" id="pc_currency" readonly value="{{ selected_currency }}">
     </div>
-    <div class="col-md-3"><label class="form-label">{{ _('Fecha') }}</label><input class="form-control" type="date" name="request_date" value="" required></div>
+    <div class="col-md-3"><label class="form-label">{{ _('Fecha') }}</label><input class="form-control" type="date" name="request_date" value="{{ request.args.get('request_date', '') }}" required></div>
     <div class="col-12"><label class="form-label">{{ _('Gastos pendientes') }}</label>{% for expense in gastos %}<div class="form-check"><input class="form-check-input" type="checkbox" name="expense_ids" value="{{ expense.id }}" id="expense-{{ expense.id }}"><label class="form-check-label" for="expense-{{ expense.id }}">{{ expense.document_no or expense.id }} — {{ expense.concept }} — {{ expense.amount }}</label></div>{% else %}<p class="text-muted">{{ _('No hay gastos pendientes para esta caja.') }}</p>{% endfor %}</div>
     <div class="col-12"><label class="form-label">{{ _('Notas') }}</label><textarea class="form-control" name="notes" rows="3"></textarea></div>
     <div class="col-12"><button class="btn btn-primary" type="submit">{{ _('Guardar solicitud') }}</button> <a class="btn btn-outline-secondary" href="{{ url_for('bancos.caja_chica_reposicion_lista') }}">{{ _('Cancelar') }}</a></div>

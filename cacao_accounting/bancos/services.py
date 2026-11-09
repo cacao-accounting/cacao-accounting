@@ -1049,6 +1049,7 @@ def cancel_petty_cash_expense(
                 str(journal.id),
                 user_id=actor_id,
                 reason=reason or "Anulacion de gasto de caja chica",
+                commit=False,
             )
     expense.docstatus = 2
     expense.cancel_reason = reason or None
