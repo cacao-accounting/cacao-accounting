@@ -24955,3 +24955,8 @@ msgstr "Var"
 #: cacao_accounting/imports/adapters/bank_statement.py
 msgid "El monto bancario no puede ser negativo."
 msgstr "The bank amount cannot be negative."
+
+#: cacao_accounting/contabilidad/recurring_journal_service.py
+#, python-format
+msgid "El proyecto %(project)s no pertenece a la compañía de la plantilla."
+msgstr "The project %(project)s does not belong to the template company."

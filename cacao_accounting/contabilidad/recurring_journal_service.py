@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     ComprobanteContable,
     ComprobanteContableDetalle,
     Entity,
+    Project,
 )
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
@@ -40,6 +41,7 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
     """Crea una nueva plantilla de comprobante recurrente."""
     validate_template_balance(items)
     company = data["company"]
+    _validate_template_projects(company, items)
     books = _authorized_template_books(company, data.get("books"), user_id, "crear")
     primary_book = _book_for_reference(company, books[0]) if books else None
 
@@ -264,6 +266,21 @@ def apply_recurring_template(
     # La aplicación queda pendiente hasta que el comprobante pase al GL.
     database.session.commit()
     return application
+
+
+def _validate_template_projects(company: str, items: List[Dict[str, Any]]) -> None:
+    """Rechaza proyectos que no pertenecen a la compañía de la plantilla."""
+    for item in items:
+        project_code = str(item.get("project") or "").strip()
+        if not project_code:
+            continue
+        exists = database.session.execute(
+            database.select(Project.id).filter_by(entity=company, code=project_code)
+        ).scalar_one_or_none()
+        if exists is None:
+            raise RecurringJournalError(
+                _("El proyecto %(project)s no pertenece a la compañía de la plantilla.") % {"project": project_code}
+            )
 
 
 def _normalize_account_code(company: str, account_value: Any) -> str:
