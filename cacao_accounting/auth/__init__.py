@@ -202,6 +202,7 @@ def verify_otp():  # pragma: no cover
             )
             return response
 
+        database.session.commit()
         flash(_("Código de verificación incorrecto o expirado."))
 
     return render_template(

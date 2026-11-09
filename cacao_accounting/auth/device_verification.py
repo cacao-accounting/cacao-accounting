@@ -102,6 +102,8 @@ def validar_otp(user_id: str, code: str, purpose: str = "device_verification") -
     registro.attempts += 1
 
     if not secrets.compare_digest(registro.code, code):
+        if registro.attempts >= OTP_MAX_ATTEMPTS:
+            registro.consumed = True
         database.session.flush()
         return False
 
