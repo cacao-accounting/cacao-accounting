@@ -126,8 +126,14 @@ def create_journal_draft(
     *,
     allow_closing: bool = False,
     allow_fiscal_year_closing: bool = False,
+    commit: bool = True,
 ) -> ComprobanteContable:
-    """Crea un comprobante contable manual en borrador."""
+    """Crea un comprobante contable manual en borrador.
+
+    ``commit=False`` permite componer el borrador dentro de una transacción
+    mayor, de modo que quien lo invoca controle el límite transaccional y sus
+    bloqueos. El comportamiento predeterminado sigue confirmando el borrador.
+    """
     data = _normalize_journal_payload(payload)
     if data.is_closing and not allow_closing:
         raise JournalValidationError(_("El comprobante de cierre solo puede crearse desde un flujo autorizado."))
@@ -162,11 +168,14 @@ def create_journal_draft(
         fiscal_year_id=data.fiscal_year_id,
     )
     lines = [_line_model(data.company, data.posting_date, data.transaction_currency, line) for line in data.lines]
-    journal = add_journal(journal, lines)
+    journal = add_journal(journal, lines, commit=commit)
     if assign_identifier:
         _assign_identifier_if_needed(journal, data.naming_series_id)
     log_create(journal)
-    database.session.commit()
+    if commit:
+        database.session.commit()
+    else:
+        database.session.flush()
     return journal
 
 

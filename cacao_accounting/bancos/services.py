@@ -1234,13 +1234,17 @@ def post_petty_cash_reconciliation_adjustment(
         ],
     }
     try:
-        journal = create_journal_draft(payload, user_id=actor_id or "")
-        submit_journal(journal.id, user_id=actor_id or "")
+        journal = create_journal_draft(payload, user_id=actor_id or "", commit=False)
+        submit_journal(journal.id, commit=False, user_id=actor_id or "")
+        reconciliation.adjustment_account_id = account.id
+        reconciliation.adjustment_journal_id = str(journal.id)
+        database.session.commit()
     except JournalValidationError as exc:
+        database.session.rollback()
         raise ValueError(str(exc)) from exc
-    reconciliation.adjustment_account_id = account.id
-    reconciliation.adjustment_journal_id = str(journal.id)
-    database.session.commit()
+    except Exception:
+        database.session.rollback()
+        raise
     return journal
 
 
