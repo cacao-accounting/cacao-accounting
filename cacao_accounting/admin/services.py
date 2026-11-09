@@ -3,7 +3,7 @@
 
 """Modulo administrativo."""
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from datetime import date
 
@@ -153,14 +153,24 @@ def _would_leave_no_admin(
 
 
 def _decimal_form(name: str, default: str = "0") -> Decimal:
+    """Convierte un campo decimal o lanza un error de validación legible."""
     value = request.form.get(name)
     decimal_text = value if value not in (None, "") else default
-    return Decimal(str(decimal_text))
+    try:
+        return Decimal(str(decimal_text))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(_("El campo %(field)s debe ser un número válido.") % {"field": name}) from exc
 
 
 def _date_form(name: str) -> date | None:
+    """Convierte una fecha ISO o lanza un error de validación legible."""
     value = request.form.get(name)
-    return date.fromisoformat(value) if value else None
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(_("El campo %(field)s debe ser una fecha válida.") % {"field": name}) from exc
 
 
 def _send_email_test():
@@ -407,9 +417,14 @@ def _handle_approval_matrix_post(set_setup_value, selected_company: str):
         database.session.commit()
         flash(_("Configuración global de aprobación guardada correctamente."), "success")
     elif action == "add_rule":
-        database.session.add(_approval_rule_from_form(company))
-        database.session.commit()
-        flash(_("Regla de aprobación creada correctamente."), "success")
+        try:
+            database.session.add(_approval_rule_from_form(company))
+            database.session.commit()
+        except (ValueError, ArithmeticError) as exc:
+            database.session.rollback()
+            flash_error(exc)
+        else:
+            flash(_("Regla de aprobación creada correctamente."), "success")
     elif action == "delete_rule":
         rule = database.session.get(ApprovalMatrix, request.form.get("rule_id"))
         if rule:
@@ -435,13 +450,21 @@ def _toggle_approval_rule(rule_id: str | None) -> None:
 
 
 def _approval_rule_from_form(company: str) -> ApprovalMatrix:
-    """Construye una regla de aprobación desde el formulario administrativo."""
+    """Construye una regla validando que el receptor exista."""
     max_amount = request.form.get("max_amount")
+    role_id = request.form.get("role_id") or None
+    user_id = request.form.get("user_id") or None
+    if role_id and database.session.get(Roles, role_id) is None:
+        raise ValueError(_("El rol seleccionado no existe."))
+    if user_id and database.session.get(User, user_id) is None:
+        raise ValueError(_("El usuario seleccionado no existe."))
+    if not role_id and not user_id:
+        raise ValueError(_("Seleccione un rol o un usuario para la regla de aprobación."))
     return ApprovalMatrix(
         company_id=company,
         document_type=request.form.get("document_type") or "",
-        role_id=request.form.get("role_id") or None,
-        user_id=request.form.get("user_id") or None,
+        role_id=role_id,
+        user_id=user_id,
         min_amount=Decimal(request.form.get("min_amount") or "0"),
         max_amount=Decimal(max_amount) if max_amount and max_amount.strip() else None,
         approval_level=int(request.form.get("approval_level") or "1"),

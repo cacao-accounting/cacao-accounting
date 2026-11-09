@@ -319,6 +319,15 @@ class FormularioFiscalYear(FlaskForm):
     fin = DateField(FECHA_FIN, validators=[DataRequired()])
     cerrado = BooleanField(_l("Cerrado"), default=False)
 
+    def validate(self, extra_validators=None):
+        """Rechaza un rango fiscal invertido antes de persistir."""
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        if self.inicio.data and self.fin.data and self.inicio.data > self.fin.data:
+            self.fin.errors.append(_l("La fecha final no puede ser anterior a la fecha de inicio."))
+            return False
+        return True
+
 
 class FormularioAccountingPeriod(FlaskForm):
     """Formulario para crear y editar periodos contables."""

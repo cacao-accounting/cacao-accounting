@@ -467,7 +467,11 @@ def lista_impuestos():
     """Administra impuestos y cargos de compra/venta."""
     _require_system_admin()
     if request.method == "POST":
-        rate = _decimal_form("rate")
+        try:
+            rate = _decimal_form("rate")
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+            return redirect(url_for("admin.lista_impuestos"))
         if not rate.is_finite():
             flash(_("La tasa debe ser finita."), "danger")
             return redirect(url_for("admin.lista_impuestos"))
@@ -962,7 +966,14 @@ def precios_item():
         if not price_list:
             abort(404)
         _require_price_list_company_access(price_list)
-        price_value = _decimal_form("price")
+        try:
+            price_value = _decimal_form("price")
+            min_qty = _decimal_form("min_qty", "0")
+            valid_from = _date_form("valid_from")
+            valid_upto = _date_form("valid_upto")
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+            return redirect(url_for("admin.precios_item"))
         if not price_value.is_finite():
             flash(_("El precio debe ser finito."), "danger")
             return redirect(url_for("admin.precios_item"))
@@ -977,9 +988,9 @@ def precios_item():
             price_list_id=request.form.get("price_list_id") or "",
             uom=uom,
             price=price_value,
-            min_qty=_decimal_form("min_qty", "0"),
-            valid_from=_date_form("valid_from"),
-            valid_upto=_date_form("valid_upto"),
+            min_qty=min_qty,
+            valid_from=valid_from,
+            valid_upto=valid_upto,
         )
         database.session.add(item_price)
         try:
@@ -1027,14 +1038,21 @@ def actualizar_precio_item(item_price_id: str):
     if reference_error:
         flash(reference_error, "danger")
         return redirect(url_for("admin.precios_item"))
-    price_value = _decimal_form("price")
+    try:
+        price_value = _decimal_form("price")
+        min_qty = _decimal_form("min_qty", "0")
+        valid_from = _date_form("valid_from")
+        valid_upto = _date_form("valid_upto")
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+        return redirect(url_for("admin.precios_item"))
     if not price_value.is_finite():
         flash(_("El precio debe ser finito."), "danger")
         return redirect(url_for("admin.precios_item"))
     item_price.price = price_value
-    item_price.min_qty = _decimal_form("min_qty", "0")
-    item_price.valid_from = _date_form("valid_from")
-    item_price.valid_upto = _date_form("valid_upto")
+    item_price.min_qty = min_qty
+    item_price.valid_from = valid_from
+    item_price.valid_upto = valid_upto
     try:
         database.session.commit()
     except IntegrityError:
@@ -1045,6 +1063,32 @@ def actualizar_precio_item(item_price_id: str):
     return redirect(url_for("admin.precios_item"))
 
 
+def _save_purchase_matching_config(company: str):
+    """Crea o actualiza la configuración de matching de compras desde el formulario."""
+    from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
+    from cacao_accounting.matching_config_service import update_matching_config
+
+    config = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company=company)).scalar_one_or_none()
+    if config is None:
+        seed_matching_config_for_company(company)
+        database.session.flush()
+    return update_matching_config(
+        "purchase",
+        company,
+        {
+            "matching_type": request.form.get("matching_type") or "3-way",
+            "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
+            "price_tolerance_value": _decimal_form("price_tolerance_value"),
+            "qty_tolerance_type": request.form.get("qty_tolerance_type") or "percentage",
+            "qty_tolerance_value": _decimal_form("qty_tolerance_value"),
+            "require_purchase_order": bool(request.form.get("require_purchase_order")),
+            "bridge_account_required": bool(request.form.get("bridge_account_required")),
+            "auto_reconcile": bool(request.form.get("auto_reconcile")),
+            "allow_price_difference": bool(request.form.get("allow_price_difference")),
+        },
+    )
+
+
 @admin.route("/settings/purchase-reconciliation", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -1052,7 +1096,6 @@ def config_conciliacion_compras():
     """Administra la configuracion de conciliacion de compras por compania."""
     _require_system_admin()
     from cacao_accounting.database import Entity
-    from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
 
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     selected_company = request.args.get("company") or ""
@@ -1071,30 +1114,12 @@ def config_conciliacion_compras():
             flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for("admin.config_conciliacion_compras"))
 
-        config = database.session.execute(
-            database.select(PurchaseMatchingConfig).filter_by(company=company)
-        ).scalar_one_or_none()
-        if config is None:
-            config = seed_matching_config_for_company(company)
-            database.session.flush()
-
-        from cacao_accounting.matching_config_service import update_matching_config
-
-        pending = update_matching_config(
-            "purchase",
-            company,
-            {
-                "matching_type": request.form.get("matching_type") or "3-way",
-                "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
-                "price_tolerance_value": _decimal_form("price_tolerance_value"),
-                "qty_tolerance_type": request.form.get("qty_tolerance_type") or "percentage",
-                "qty_tolerance_value": _decimal_form("qty_tolerance_value"),
-                "require_purchase_order": bool(request.form.get("require_purchase_order")),
-                "bridge_account_required": bool(request.form.get("bridge_account_required")),
-                "auto_reconcile": bool(request.form.get("auto_reconcile")),
-                "allow_price_difference": bool(request.form.get("allow_price_difference")),
-            },
-        )
+        try:
+            pending = _save_purchase_matching_config(company)
+        except ValueError as exc:
+            database.session.rollback()
+            flash(_(str(exc)), "danger")
+            return redirect(url_for("admin.config_conciliacion_compras", company=company))
         default_accounts = get_company_default_accounts(company)
         if default_accounts is None:
             default_accounts = CompanyDefaultAccount(company=company)
@@ -1186,17 +1211,22 @@ def config_conciliacion_ventas():
 
         from cacao_accounting.matching_config_service import update_matching_config
 
-        pending = update_matching_config(
-            "sales",
-            company,
-            {
-                "matching_type": request.form.get("matching_type") or "3-way",
-                "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
-                "price_tolerance_value": _decimal_form("price_tolerance_value"),
-                "require_sales_order": bool(request.form.get("require_sales_order")),
-                "allow_price_difference": bool(request.form.get("allow_price_difference")),
-            },
-        )
+        try:
+            pending = update_matching_config(
+                "sales",
+                company,
+                {
+                    "matching_type": request.form.get("matching_type") or "3-way",
+                    "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
+                    "price_tolerance_value": _decimal_form("price_tolerance_value"),
+                    "require_sales_order": bool(request.form.get("require_sales_order")),
+                    "allow_price_difference": bool(request.form.get("allow_price_difference")),
+                },
+            )
+        except ValueError as exc:
+            database.session.rollback()
+            flash(_(str(exc)), "danger")
+            return redirect(url_for("admin.config_conciliacion_ventas", company=company))
         database.session.commit()
         if isinstance(pending, ApprovalRequest):
             flash(
