@@ -9449,6 +9449,10 @@ msgstr "Approved"
 msgid "Cerrado"
 msgstr "Closed"
 
+#: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html:2
+msgid "Archivado"
+msgstr "Archived"
+
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:77
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_entradas.html:72
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_lista.html:50
