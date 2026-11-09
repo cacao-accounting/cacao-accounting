@@ -340,12 +340,19 @@ def nueva_moneda():
             code=formulario.code.data,
             name=formulario.name.data,
             decimals=formulario.decimals.data,
-            active=bool(formulario.active.data),
-            default=bool(formulario.default.data),
         )
-        database.session.add(DATA)
-        database.session.commit()
-        return redirect(url_for(CONTABILIDAD_MONEDAS))
+        try:
+            CurrencyGuard().apply_currency_create(
+                DATA,
+                active=bool(formulario.active.data),
+                default=bool(formulario.default.data),
+            )
+        except CurrencyGuardError as error:
+            flash_error(error)
+        else:
+            database.session.add(DATA)
+            database.session.commit()
+            return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     return render_template(
         CONTABILIDAD_MONEDA_CREAR_TEMPLATE,

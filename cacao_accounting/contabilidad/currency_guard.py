@@ -59,6 +59,23 @@ class CurrencyGuard:
         if active_book is not None:
             raise CurrencyGuardError(_("No se puede deshabilitar la moneda porque esta en uso por un libro contable activo."))
 
+    def _clear_other_defaults(self, code: str) -> None:
+        """Retira el indicador predeterminado de las demás monedas."""
+        current_defaults = database.session.execute(
+            database.select(Currency).filter(Currency.code != code, Currency.default.is_(True))
+        ).scalars()
+        for current_default in current_defaults:
+            current_default.default = False
+
+    def apply_currency_create(self, currency: Currency, *, active: bool, default: bool) -> None:
+        """Aplica reglas de alta y garantiza una única moneda predeterminada."""
+        if default and not active:
+            raise CurrencyGuardError(_("La moneda predeterminada del sistema debe permanecer activa."))
+        if default:
+            self._clear_other_defaults(currency.code)
+        currency.active = active
+        currency.default = default
+
     def apply_currency_edit(self, currency: Currency, *, active: bool, default: bool) -> None:
         """Aplica cambios de una moneda preservando reglas de negocio."""
         if default and not active:
@@ -66,11 +83,7 @@ class CurrencyGuard:
         if not active:
             self.assert_can_deactivate(currency)
         if default:
-            current_defaults = database.session.execute(
-                database.select(Currency).filter(Currency.code != currency.code, Currency.default.is_(True))
-            ).scalars()
-            for current_default in current_defaults:
-                current_default.default = False
+            self._clear_other_defaults(currency.code)
         currency.active = active
         currency.default = default
 
