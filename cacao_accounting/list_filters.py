@@ -203,18 +203,39 @@ def pick_company_period(company: str | None, companies: list[str]) -> str | None
     return company or (companies[0] if len(companies) == 1 else None)
 
 
-def attach_period_picker(paginated: Any, model: type[Any], module: str, *, current_user: Any) -> None:
+def company_choices_for_modules(modules: tuple[str, ...], *, current_user: Any) -> list[tuple[str, str]]:
+    """Devuelve la unión de compañías autorizadas para varios módulos."""
+    from flask_babel import gettext as _babel_gettext
+
+    choices: dict[str, str] = {}
+    for module in modules:
+        for code, name in company_choices_for_module(module, current_user=current_user):
+            if code:
+                choices.setdefault(code, name)
+    if not choices:
+        return [("", "")]
+    ordered = sorted(choices.items(), key=lambda item: item[1])
+    return [("", _babel_gettext("Todas"))] + ordered
+
+
+def attach_period_picker(
+    paginated: Any,
+    model: type[Any],
+    module: str | tuple[str, ...],
+    *,
+    current_user: Any,
+) -> None:
     """Adjunta al objeto de paginación el contexto del selector de período.
 
-    Solo se aplica a modelos con ``posting_date`` (documentos transaccionales).
-    Expone ``company_choices``, ``selected_company``, ``periods``,
-    ``period_from``, ``period_to`` y ``period_extra_params`` para que las
-    plantillas de listado rendericen el selector sin duplicar lógica por ruta.
+    ``module`` puede ser una tupla para listados que autorizan varias fuentes
+    (por ejemplo Compras + Inventario); en ese caso el selector muestra la
+    unión de compañías autorizadas.
     """
     if not hasattr(model, "posting_date"):
         paginated.period_extra_params = {}
         return
-    choices = company_choices_for_module(module, current_user=current_user)
+    modules = (module,) if isinstance(module, str) else tuple(module)
+    choices = company_choices_for_modules(modules, current_user=current_user)
     selected = request.args.get("company") or (choices[1][0] if len(choices) > 1 else None)
     period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
     period_to = request.args.get("accounting_period_to") or request.args.get("period_to")

@@ -320,18 +320,15 @@ def _apply_company_scope(base_query: Any, model: Any, access_modules: tuple[str,
 
 
 def _period_company_for_query(access_modules: tuple[str, ...]) -> str | None:
-    """Resolve the sole authorized company used by period filters."""
+    """Resolve the sole authorized company across every access module."""
+    from cacao_accounting.list_filters import period_company_from_request
+
     period_company = request.args.get("company")
-    if period_company or getattr(current_user, "classification", None) == "admin":
+    if period_company:
         return period_company
-    for module in access_modules:
-        module_id = obtener_id_modulo_por_nombre(module)
-        permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        if permissions.consultar:
-            authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
-            if len(authorized_companies) == 1:
-                return authorized_companies[0]
-    return period_company
+    if getattr(current_user, "classification", None) == "admin":
+        return None
+    return period_company_from_request(access_modules, current_user=current_user)
 
 
 def _apply_period_scope(base_query: Any, model: Any, access_modules: tuple[str, ...]) -> Any:
@@ -369,7 +366,7 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
         max_per_page=10,
         count=True,
     )
-    attach_period_picker(paginated, model, access_modules[0], current_user=current_user)
+    attach_period_picker(paginated, model, access_modules, current_user=current_user)
     return paginated
 
 
