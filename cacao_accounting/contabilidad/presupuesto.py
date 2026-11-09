@@ -70,7 +70,19 @@ def enforce_budget_company_access():
     if budget is not None:
         action = "consultar"
         if request.method == "POST":
-            action = "editar" if "/edit" in request.path else "crear"
+            path = request.path.rstrip("/")
+            if path.endswith("/approve"):
+                action = "autorizar"
+            elif path.endswith("/close"):
+                action = "cerrar"
+            elif path.endswith("/import"):
+                action = "importar"
+            elif path.endswith("/delete"):
+                action = "eliminar"
+            elif "/edit" in path:
+                action = "editar"
+            else:
+                action = "crear"
         _enforce_budget_company_access(budget.company, action)
 
 
