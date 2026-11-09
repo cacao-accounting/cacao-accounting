@@ -935,22 +935,40 @@ def _payment_tax_rules(
         at_date=document.posting_date,
         recognition_event=spec.event_type,
     )
-    # A supplier's configured rule is authoritative for withholding at payment
-    # time. Generic company withholding rules do not override that choice.
-    if spec.party_type == "supplier" and spec.event_type == "payment_confirmed" and document.party_id:
-        company_party = database.session.execute(
-            select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
-        ).scalar_one_or_none()
-        configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
-        configured_rule_row = get_tax_rule(configured_rule_id) if configured_rule_id else None
-        configured_rule = None
-        if configured_rule_row is not None and configured_rule_row.company in (None, company):
-            configured_rule = build_tax_rule_context(str(configured_rule_id))
-        if configured_rule and configured_rule.tax_type == "withholding":
-            if configured_rule.recognition_event in {"payment_confirmed", "payment"}:
-                rules = [rule for rule in rules if rule.tax_type != "withholding"]
-                rules.append(configured_rule)
+    configured_rule = _configured_payment_withholding_rule(document, spec, company)
+    if configured_rule is not None:
+        rules = [rule for rule in rules if rule.tax_type != "withholding"]
+        rules.append(configured_rule)
     return sorted(rules, key=lambda rule: rule.order)
+
+
+def _configured_payment_withholding_rule(
+    document: PaymentEntry,
+    spec: PaymentBuildSpec,
+    company: str,
+) -> TaxRuleContext | None:
+    """Return the supplier's configured rule when it applies to this payment.
+
+    A supplier's configured rule is authoritative for withholding at payment
+    time. Generic company withholding rules do not override that choice.
+    """
+    if spec.party_type != "supplier" or spec.event_type != "payment_confirmed" or not document.party_id:
+        return None
+    company_party = database.session.execute(
+        select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
+    ).scalar_one_or_none()
+    configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
+    if not configured_rule_id:
+        return None
+    configured_rule_row = get_tax_rule(configured_rule_id)
+    if configured_rule_row is None or configured_rule_row.company not in (None, company):
+        return None
+    configured_rule = build_tax_rule_context(str(configured_rule_id))
+    if configured_rule is None or configured_rule.tax_type != "withholding":
+        return None
+    if configured_rule.recognition_event not in {"payment_confirmed", "payment"}:
+        return None
+    return configured_rule
 
 
 def _payment_item_context(document: PaymentEntry, document_total: Decimal) -> ItemContext:
