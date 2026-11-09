@@ -595,6 +595,13 @@ def editar_entidad(id_entidad):
     formulario.moneda.choices = obtener_lista_monedas()
 
     if request.method == "POST":
+        habilitado = bool(request.form.get("habilitado"))
+        if ENTIDAD.enabled and not habilitado:
+            try:
+                _validate_entity_can_be_deactivated(ENTIDAD.code)
+            except ValueError as error:
+                flash_error(error, "warning")
+                return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=ENTIDAD.code))
         ENTIDAD.tax_id = request.form.get("id_fiscal", None)
         ENTIDAD.name = request.form.get("nombre_comercial", None)
         ENTIDAD.company_name = request.form.get("razon_social", None)
@@ -603,7 +610,7 @@ def editar_entidad(id_entidad):
         ENTIDAD.e_mail = request.form.get("correo_electronico", None)
         ENTIDAD.fax = request.form.get("fax", None)
         ENTIDAD.web = request.form.get("web", None)
-        ENTIDAD.enabled = bool(request.form.get("habilitado"))
+        ENTIDAD.enabled = habilitado
         database.session.add(ENTIDAD)
         database.session.commit()
         invalidate_cache("companies")
