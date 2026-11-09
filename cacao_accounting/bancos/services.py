@@ -1190,6 +1190,8 @@ def post_petty_cash_reconciliation_adjustment(
 ) -> ComprobanteContable:
     """Registra explicitamente el sobrante o faltante de una conciliacion."""
     reconciliation = cast(PettyCashReconciliation, _lock_row_for_transition(PettyCashReconciliation, reconciliation.id))
+    # Refresca la fila comprometida para que la guardia vea el estado vivo del otro escritor.
+    database.session.refresh(reconciliation)
     if reconciliation.status != "conciliado":
         raise ValueError(_("La conciliación debe estar conciliada antes de registrar el ajuste."))
     if not reconciliation.difference:
@@ -1236,12 +1238,26 @@ def post_petty_cash_reconciliation_adjustment(
     try:
         journal = create_journal_draft(payload, user_id=actor_id or "", commit=False)
         submit_journal(journal.id, commit=False, user_id=actor_id or "")
-        reconciliation.adjustment_account_id = account.id
-        reconciliation.adjustment_journal_id = str(journal.id)
+        # Reserva condicional: solo el primer escritor publica el ajuste.
+        resultado = database.session.execute(
+            database.update(PettyCashReconciliation)
+            .where(
+                PettyCashReconciliation.id == reconciliation.id,
+                PettyCashReconciliation.adjustment_journal_id.is_(None),
+            )
+            .values(adjustment_account_id=account.id, adjustment_journal_id=str(journal.id))
+        )
+        actualizado = int(getattr(resultado, "rowcount", 0) or 0)
+        if actualizado != 1:
+            database.session.rollback()
+            raise ValueError(_("La diferencia de esta conciliación ya fue ajustada."))
         database.session.commit()
     except JournalValidationError as exc:
         database.session.rollback()
         raise ValueError(str(exc)) from exc
+    except ValueError:
+        database.session.rollback()
+        raise
     except Exception:
         database.session.rollback()
         raise
