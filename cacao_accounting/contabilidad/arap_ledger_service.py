@@ -1554,19 +1554,25 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
 
 def _cancellation_originals(document: Any, source_types: set[str], source_ids: set[str]) -> list[ARAPLedgerEntry]:
     """Obtiene movimientos originales que deben tener una contrapartida."""
+    already_reversed = select(ARAPLedgerEntry.reversal_of).where(
+        ARAPLedgerEntry.is_reversal.is_(True),
+        ARAPLedgerEntry.reversal_of.is_not(None),
+    )
+    include_reversal_movements = isinstance(document, ComprobanteContable)
     if isinstance(document, PaymentEntry):
         source_filter = (ARAPLedgerEntry.document_type == "payment_entry") & (
             ARAPLedgerEntry.document_id == str(document.id)
         ) | (ARAPLedgerEntry.reference_type == "payment_entry") & (ARAPLedgerEntry.reference_id == str(document.id))
     else:
-        source_filter = (ARAPLedgerEntry.document_type.in_(source_types)) & (ARAPLedgerEntry.document_id.in_(source_ids)) | (
-            ARAPLedgerEntry.reference_type == "journal_entry"
-        ) & (ARAPLedgerEntry.reference_id == str(document.id))
-    return list(
-        database.session.execute(select(ARAPLedgerEntry).where(ARAPLedgerEntry.is_reversal.is_(False), source_filter))
-        .scalars()
-        .all()
-    )
+        source_filter = (
+            (ARAPLedgerEntry.document_type.in_(source_types)) & (ARAPLedgerEntry.document_id.in_(source_ids))
+            | (ARAPLedgerEntry.reference_type == "journal_entry") & (ARAPLedgerEntry.reference_id == str(document.id))
+            | (ARAPLedgerEntry.voucher_type == "journal_entry") & (ARAPLedgerEntry.voucher_id == str(document.id))
+        )
+    query = select(ARAPLedgerEntry).where(source_filter, ~ARAPLedgerEntry.id.in_(already_reversed))
+    if not include_reversal_movements:
+        query = query.where(ARAPLedgerEntry.is_reversal.is_(False))
+    return list(database.session.execute(query).scalars().all())
 
 
 def _reverse_arap_movement(
