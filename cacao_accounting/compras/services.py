@@ -1547,17 +1547,22 @@ def _purchase_order_context(form: dict):
     if not valid_award:
         return None
     supplier_id = form.get("supplier_id") or None
-    supplier = database.session.get(Party, supplier_id) if supplier_id else None
     posting_date = _parse_date(form.get("posting_date"))
     comparison_open = _purchase_order_comparison_open(source)
     company, transaction_currency = _validate_purchase_flow_header(source, form)
     transaction_currency = transaction_currency or form.get("transaction_currency") or form.get("currency") or None
+    supplier = _validated_purchase_supplier(supplier_id, company)
     return award_id, supplier_id, supplier, posting_date, company, transaction_currency, comparison_open
 
 
 def _create_purchase_order_from_request(form: dict):
     """Crea una orden de compra desde el formulario enviado."""
-    context = _purchase_order_context(form)
+    try:
+        context = _purchase_order_context(form)
+    except ValueError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return None
     if context is None:
         return None
     award_id, supplier_id, supplier, posting_date, company, transaction_currency, comparison_open = context
@@ -1656,9 +1661,6 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     revert_relations_for_target("purchase_order", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("purchase_order", registro.id)
     supplier_id = request.form.get("supplier_id") or None
-    supplier = database.session.get(Party, supplier_id) if supplier_id else None
-    registro.supplier_id = supplier_id
-    registro.supplier_name = supplier.name if supplier else None
     requested_company = request.form.get("company") or registro.company
     requested_currency = (
         request.form.get("transaction_currency") or request.form.get("currency") or registro.transaction_currency
@@ -1667,6 +1669,14 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
         database.session.rollback()
         flash(_("La compañía y moneda de una orden derivada no pueden cambiarse."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
+    try:
+        supplier = _validated_purchase_supplier(supplier_id, requested_company)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
+    registro.supplier_id = supplier_id
+    registro.supplier_name = supplier.name if supplier else None
     registro.company = requested_company
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
@@ -2355,6 +2365,19 @@ def _validate_supplier_invoice_flags(
         matching_config = get_matching_config(company)
         if matching_config.require_purchase_order:
             raise ValueError(_("La configuración de la compañía requiere una orden de compra para las facturas de compra."))
+
+
+def _validated_purchase_supplier(supplier_id: str | None, company: str | None) -> Party | None:
+    """Valida proveedor existente, activo, con rol y membresía de compañía."""
+    if not supplier_id:
+        return None
+    supplier = database.session.get(Party, supplier_id)
+    if supplier is None:
+        raise ValueError(_("El tercero no existe."))
+    if not supplier.is_active or not supplier.is_supplier:
+        raise ValueError(_("El tercero seleccionado no está habilitado como proveedor."))
+    _validate_supplier_company_membership(supplier_id, company)
+    return supplier
 
 
 def _validate_supplier_company_membership(supplier_id: str | None, company: str | None) -> None:
