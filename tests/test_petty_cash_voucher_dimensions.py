@@ -259,6 +259,28 @@ def test_gasto_rechaza_unidad_ajena_con_centro_propio(caja_dimensiones):
         assert database.session.execute(database.select(PettyCashExpense)).scalars().all() == []
 
 
+def test_gasto_rechaza_proyecto_ajeno_con_dimensiones_propias(caja_dimensiones):
+    """El proyecto ajeno se rechaza aunque centro y unidad sean propios."""
+    application, ids = caja_dimensiones
+    propias = ids["dimensiones"]["cacao"]
+    ajenas = ids["dimensiones"]["alpha"]
+
+    with application.app_context():
+        with pytest.raises(ValueError, match="proyecto"):
+            create_petty_cash_expense(
+                company="cacao",
+                petty_cash_id=ids["fondo"],
+                expense_account_code=ids["cuenta_gasto"],
+                concept="Gasto con proyecto ajeno",
+                amount=Decimal("10"),
+                cost_center_code=propias["centro"],
+                unit_code=propias["unidad"],
+                project_code=ajenas["proyecto"],
+                posted_date=FECHA,
+            )
+        assert database.session.execute(database.select(PettyCashExpense)).scalars().all() == []
+
+
 def test_liquidacion_rechaza_unidad_ajena_sin_mutar_el_vale(caja_dimensiones):
     """Un vale heredado con unidad ajena no se liquida ni postea."""
     application, ids = caja_dimensiones
