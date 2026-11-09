@@ -1104,7 +1104,9 @@ class ApprovalEngine:
         company_id = (
             getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
         )
-        if not company_id or not cls.is_enabled(company_id):
+        if not company_id:
+            return
+        if not cls.is_enabled(company_id) and cls._pending_request(document) is None:
             return
 
         doctype = cls._resolve_doctype(document)
