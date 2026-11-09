@@ -11,6 +11,7 @@ respuesta debe ser de autorización y no un 200 con otro formulario.
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
 import pytest
@@ -19,8 +20,11 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
+from cacao_accounting.bancos import services as bancos_services
+from cacao_accounting.bancos.services import _create_payment_from_request
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    Accounts,
     Bank,
     BankAccount,
     Entity,
@@ -83,15 +87,50 @@ def transferencias_cloud():
         banco = Bank(name="Banco de Prueba", swift_code="TESTNI2N", is_active=True)
         database.session.add(banco)
         database.session.flush()
-        cuenta = BankAccount(company="cacao", bank_id=banco.id, account_name="Cuenta Cacao", account_no="CA-1")
-        database.session.add(cuenta)
+        gl_origen = Accounts(
+            code="1.01.02.001",
+            name="Banco origen",
+            entity="cacao",
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="bank",
+        )
+        gl_destino = Accounts(
+            code="1.01.02.002",
+            name="Banco destino",
+            entity="cacao",
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="bank",
+        )
+        database.session.add_all([gl_origen, gl_destino])
+        database.session.flush()
+        origen = BankAccount(
+            company="cacao",
+            bank_id=banco.id,
+            account_name="Cuenta Cacao",
+            account_no="CA-1",
+            currency="NIO",
+            gl_account_id=gl_origen.id,
+        )
+        destino = BankAccount(
+            company="cacao",
+            bank_id=banco.id,
+            account_name="Cuenta Destino",
+            account_no="CA-2",
+            currency="NIO",
+            gl_account_id=gl_destino.id,
+        )
+        database.session.add_all([origen, destino])
         database.session.commit()
         crea_roles_predeterminados()
         cargar_permisos_predeterminados()
         asigna_rol_a_usuario("tesorero", "head_of_treasury")
         database.session.commit()
-        cuenta_id = cuenta.id
-    yield application, cuenta_id
+        ids = {"origen": origen.id, "destino": destino.id}
+    yield application, ids
     with application.app_context():
         database.session.remove()
         database.engine.dispose()
@@ -120,7 +159,7 @@ def test_datos_invalidos_vuelven_al_formulario_de_transferencia(transferencias_c
 
 def test_sin_permiso_de_creacion_responde_403(transferencias_cloud):
     """El rechazo de ACL no se convierte en un 200 con otro formulario."""
-    application, cuenta_id = transferencias_cloud
+    application, ids = transferencias_cloud
     client = application.test_client()
     _iniciar(client, "viewer")
 
@@ -129,11 +168,46 @@ def test_sin_permiso_de_creacion_responde_403(transferencias_cloud):
         data={
             "payment_payload": (
                 '{"payment_type": "internal_transfer", "company": "cacao", '
-                f'"bank_account_id": "{cuenta_id}", "posting_date": "{FECHA.isoformat()}", "paid_amount": "10"}}'
+                f'"bank_account_id": "{ids["origen"]}", "posting_date": "{FECHA.isoformat()}", "paid_amount": "10"}}'
             )
         },
     )
 
     assert response.status_code == 403
+    with application.app_context():
+        assert database.session.execute(database.select(PaymentEntry)).scalars().all() == []
+
+
+def test_fallo_inesperado_propaga_y_hace_rollback(transferencias_cloud, monkeypatch):
+    """Un fallo tras el flush no deja el pago huérfano ni oculta el error."""
+    application, ids = transferencias_cloud
+
+    def _fallo(*args, **kwargs):
+        raise RuntimeError("fallo inesperado después del flush")
+
+    monkeypatch.setattr(bancos_services, "assign_document_identifier", _fallo)
+    payload = {
+        "payment_type": "internal_transfer",
+        "company": "cacao",
+        "bank_account_id": ids["origen"],
+        "target_bank_account_id": ids["destino"],
+        "posting_date": FECHA.isoformat(),
+        "paid_amount": "10",
+    }
+
+    with application.test_request_context(
+        "/cash_management/payment/transfer/new",
+        method="POST",
+        data={"payment_payload": json.dumps(payload)},
+    ):
+        from flask_login import login_user
+
+        from cacao_accounting.database import User
+
+        usuario = database.session.execute(database.select(User).filter_by(user="tesorero")).scalar_one()
+        login_user(usuario)
+        with pytest.raises(RuntimeError, match="fallo inesperado"):
+            _create_payment_from_request()
+
     with application.app_context():
         assert database.session.execute(database.select(PaymentEntry)).scalars().all() == []
