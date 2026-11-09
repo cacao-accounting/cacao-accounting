@@ -171,6 +171,19 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
 - **mypy con PYTHONPATH inyectado**: puede requerir `env -u PYTHONPATH` para evitar un `pathspec` externo que
   sombrea el del `.venv`.
 
+## Contexto de issues (caché local)
+
+- **Fuente de contexto**: el trabajo de estabilización usa una caché local de issues en `.local/github/issues.db`
+  (SQLite) en lugar de consultas en vivo a la API de GitHub. Se evita así el rate limit de GitHub y se trabaja sobre
+  un conjunto congelado de issues, de modo que el análisis y los commits son reproducibles aunque el tablero cambie.
+- **Contenido de la instantánea** (2026-11-09): 1.245 issues abiertos, 4.055 comentarios, 2.740 vínculos
+  issue-etiqueta, 29 etiquetas, 578 sub-issues y 59 umbrellas `root` repartidos en 8 fases. Incluye búsqueda FTS5
+  insensible a acentos y las vistas `v_issues`, `v_phases` y `v_umbrellas`.
+- **Sincronización**: `python scripts/sync_github_issues.py` (stdlib + `gh`). La caché es una foto, no una fuente
+  autoritativa: antes de citar un issue se confirma contra el código. `.local/` está fuera de Git.
+- **Límites**: la caché no sustituye la verificación en el repositorio ni las pruebas; solo aporta el enunciado y la
+  discusión histórica de cada issue.
+
 ## Decisiones abiertas
 
 - **#1653**: unique parcial con clave de idempotencia frente a lock más transición condicional. Se eligió el lock;
