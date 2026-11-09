@@ -131,3 +131,24 @@ def test_extracto_rechaza_filas_sin_lados_y_con_doble_lado(extracto_bancario):
     assert any("depósito o un retiro" in error for error in sin_lados)
     doble = _validar(application, _fila(application, deposito="10", retiro="10"))
     assert any("simultáneamente" in error for error in doble)
+
+
+def test_extracto_rechaza_importes_negativos_en_ambas_columnas(extracto_bancario):
+    """Un depósito o retiro negativo no se descarta en silencio."""
+    application = extracto_bancario
+    for fila in (_fila(application, deposito="-10"), _fila(application, retiro="-10")):
+        errores = _validar(application, fila)
+        assert any("no puede ser negativo" in error for error in errores)
+
+
+def test_documento_bancario_rechaza_negativos_sin_validacion_previa(extracto_bancario):
+    """La construcción directa del documento tampoco admite importes negativos."""
+    application = extracto_bancario
+    with application.app_context():
+        from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
+
+        adapter = BankStatementAdapter()
+        with pytest.raises(ValueError, match="negativo"):
+            adapter.build_document([_fila(application, deposito="-10")], context={})
+        with pytest.raises(ValueError, match="negativo"):
+            adapter.build_document([_fila(application, retiro="-10")], context={})

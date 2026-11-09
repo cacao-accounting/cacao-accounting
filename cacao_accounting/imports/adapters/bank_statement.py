@@ -131,6 +131,10 @@ class BankStatementAdapter(BaseImportAdapter):
                     posting_date = date.fromisoformat(posting_date)
                 except ValueError as exc:
                     raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
+            deposit = self._optional_amount(row.get("deposit"))
+            withdrawal = self._optional_amount(row.get("withdrawal"))
+            if (deposit is not None and deposit < 0) or (withdrawal is not None and withdrawal < 0):
+                raise ValueError(_("El monto bancario no puede ser negativo."))
             transactions.append(
                 {
                     "bank_account_id": str(row.get("bank_account_id", "")),
@@ -138,11 +142,11 @@ class BankStatementAdapter(BaseImportAdapter):
                     "posting_date": posting_date,
                     "reference_number": str(row.get("reference_number", "")),
                     "description": str(row.get("description", "")),
-                    "deposit": self._optional_amount(row.get("deposit")),
-                    "withdrawal": self._optional_amount(row.get("withdrawal")),
+                    "deposit": deposit,
+                    "withdrawal": withdrawal,
                 }
             )
-            if transactions[-1]["deposit"] is not None and transactions[-1]["withdrawal"] is not None:
+            if deposit is not None and withdrawal is not None:
                 raise ValueError(_("Una fila bancaria no puede contener depósito y retiro simultáneamente."))
         return transactions
 
