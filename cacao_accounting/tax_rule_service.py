@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import or_, select
 
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
-from cacao_accounting.database import TaxRule, database
+from cacao_accounting.database import Accounts, Currency, Entity, TaxRule, database
 
 
 from cacao_accounting.i18n import _
@@ -89,6 +89,26 @@ def build_tax_rule_context(rule_id: str) -> TaxRuleContext | None:
     return _to_context(rule)
 
 
+def _validate_tax_rule_references(company: str | None, account_id: str | None, currency: str | None) -> None:
+    """Valida compañía, moneda y cuenta antes de persistir la regla."""
+    if company:
+        exists = database.session.execute(select(Entity.id).filter_by(code=company)).scalar_one_or_none()
+        if exists is None:
+            raise TaxRuleServiceError(_("La compañía de la regla fiscal no existe."))
+    account_code = _clean_text(account_id)
+    if account_code:
+        account = database.session.get(Accounts, account_code)
+        if account is None:
+            raise TaxRuleServiceError(_("La cuenta contable de la regla fiscal no existe."))
+        if company and account.entity != company:
+            raise TaxRuleServiceError(_("La cuenta contable no pertenece a la compañía de la regla fiscal."))
+    currency_code = _clean_text(currency)
+    if currency_code:
+        exists = database.session.execute(select(Currency.code).filter_by(code=currency_code)).scalar_one_or_none()
+        if exists is None:
+            raise TaxRuleServiceError(_("La moneda de la regla fiscal no existe."))
+
+
 def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> None:
     """Aplica datos validados a una regla fiscal ORM."""
     name = (values.get("name") or "").strip()
@@ -97,7 +117,9 @@ def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> N
         raise TaxRuleServiceError(_("El nombre de la regla fiscal es obligatorio."))
     if not concept:
         raise TaxRuleServiceError(_("El concepto fiscal es obligatorio."))
-    rule.company = _clean_text(values.get("company"))
+    company = _clean_text(values.get("company"))
+    _validate_tax_rule_references(company, values.get("account_id"), values.get("currency"))
+    rule.company = company
     rule.name = name
     rule.applies_to = _clean_text(values.get("applies_to")) or "both"
     rule.level = _clean_text(values.get("level")) or "transaction"

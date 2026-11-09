@@ -24927,3 +24927,19 @@ msgstr "The %(label)s dimension does not belong to the document company."
 #, python-format
 msgid "El %(label)s del documento no pertenece a la compañía."
 msgstr "The document %(label)s does not belong to the company."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La compañía de la regla fiscal no existe."
+msgstr "The tax rule company does not exist."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La cuenta contable de la regla fiscal no existe."
+msgstr "The tax rule account does not exist."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La cuenta contable no pertenece a la compañía de la regla fiscal."
+msgstr "The account does not belong to the tax rule company."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La moneda de la regla fiscal no existe."
+msgstr "The tax rule currency does not exist."
