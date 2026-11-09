@@ -23,6 +23,7 @@
     </div>
 
     <form method="POST" action="{{ url_for('contabilidad.fiscal_year_closing_new') }}" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="col-md-6">
         <label for="company" class="form-label">{{ _("Compañía") }}</label>
         <select name="company" id="company" class="form-select" required>

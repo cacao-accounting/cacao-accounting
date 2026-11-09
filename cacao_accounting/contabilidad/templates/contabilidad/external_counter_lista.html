@@ -85,6 +85,7 @@
             </a>
             <form method="post" action="{{ url_for('contabilidad.external_counter_toggle_active', counter_id=item.id) }}"
                   class="d-inline" onsubmit="return confirm('{{ _("Cambiar estado del contador?") }}')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-xs {% if item.is_active %}btn-outline-secondary{% else %}btn-outline-success{% endif %}"
                       title="{% if item.is_active %}{{ _("Desactivar") }}{% else %}{{ _("Activar") }}{% endif %}">
                 <i class="bi {% if item.is_active %}bi-pause{% else %}bi-play{% endif %}"></i>

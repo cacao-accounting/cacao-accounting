@@ -21,6 +21,7 @@
     </div>
     <div class="p-3" x-show="!collapsed">
       <form method="post" class="d-grid gap-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {{ smart_select_field(_("Compañía"), "company", "company", filters.company or '', "report-company") }}
         {{ smart_select_field(_("Año Fiscal"), "fiscal_year_id", "fiscal_year", filters.fiscal_year_id or '', "report-fiscal-year", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {{ smart_select_field(_("Libro Contable"), "ledger_id", "book", filters.ledger_id or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
