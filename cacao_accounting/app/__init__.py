@@ -130,7 +130,7 @@ def informacion_para_desarrolladores():
             and database.session.execute(
                 database.select(RolesUser)
                 .filter_by(user_id=current_user.id, role_id=admin_role.id)
-                .where(RolesUser.active.is_not(False))
+                .where(RolesUser.active.is_(True))
             ).scalar_one_or_none()
         ):
             is_admin = True

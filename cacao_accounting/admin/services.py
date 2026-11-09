@@ -80,7 +80,7 @@ def _require_system_admin() -> None:
         and database.session.execute(
             database.select(RolesUser)
             .filter_by(user_id=current_user.id, role_id=admin_role.id)
-            .where(RolesUser.active.is_not(False))
+            .where(RolesUser.active.is_(True))
         ).scalar_one_or_none()
     ):
         return
@@ -98,7 +98,7 @@ def _user_role_ids(usuario: User) -> set[str]:
     return {
         assignment.role_id
         for assignment in database.session.execute(
-            database.select(RolesUser).filter_by(user_id=usuario.id).where(RolesUser.active.is_not(False))
+            database.select(RolesUser).filter_by(user_id=usuario.id).where(RolesUser.active.is_(True))
         ).scalars()
     }
 
@@ -125,7 +125,7 @@ def _active_admin_count(exclude_user_id: str | None = None) -> int:
             User.id.in_(
                 database.select(RolesUser.user_id).where(
                     RolesUser.role_id == admin_role_id,
-                    RolesUser.active.is_not(False),
+                    RolesUser.active.is_(True),
                 )
             )
         )
@@ -280,7 +280,7 @@ def _obtener_roles_por_usuario(usuario_id: str) -> list[Roles]:
             database.select(Roles)
             .join(RolesUser, Roles.id == RolesUser.role_id)
             .filter(RolesUser.user_id == usuario_id)
-            .where(RolesUser.active.is_not(False))
+            .where(RolesUser.active.is_(True))
         )
         .scalars()
         .all()

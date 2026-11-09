@@ -1601,7 +1601,7 @@ def is_sales_price_editor(user_id: str | None) -> bool:
             database.select(RolesUser).where(
                 RolesUser.user_id == user_id,
                 RolesUser.role_id.in_(role_ids),
-                RolesUser.active.is_not(False),
+                RolesUser.active.is_(True),
             )
         ).scalar_one_or_none()
         is not None

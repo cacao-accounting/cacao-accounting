@@ -142,10 +142,10 @@ def test_el_formulario_no_marca_el_rol_revocado():
 
 @pytest.mark.parametrize(
     ("user_id", "esperado"),
-    [("revocado", 403), ("vigente", 200), ("legacy", 200)],
+    [("revocado", 403), ("vigente", 200), ("legacy", 403)],
 )
 def test_la_pagina_de_desarrollo_exige_asignacion_vigente(user_id, esperado):
-    """#2075: el rol revocado no autoriza; activo y NULL histórico sí."""
+    """#2075: solo una asignación activa autoriza; NULL no es soporte legacy."""
     application, _roles = _crear_app()
     try:
         client = _cliente(application, user_id)

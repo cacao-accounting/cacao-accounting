@@ -154,7 +154,7 @@ class Permisos:
 
     def obtener_roles_de_usuario(self) -> list[str]:
         """Devuelve una lista con los roles del usuario."""
-        return [rol.role_id for rol in RolesUser.query.filter_by(user_id=self.usuario).filter(RolesUser.active.is_not(False))]
+        return [rol.role_id for rol in RolesUser.query.filter_by(user_id=self.usuario).filter(RolesUser.active.is_(True))]
 
     def obtener_id_rol_administrador(self) -> str | None:
         """Devuelve el UUID asignado al rol administrador."""
@@ -170,9 +170,7 @@ class Permisos:
         if not admin_role_id or not self.usuario:
             return False
         return (
-            RolesUser.query.filter_by(role_id=admin_role_id, user_id=self.usuario)
-            .filter(RolesUser.active.is_not(False))
-            .first()
+            RolesUser.query.filter_by(role_id=admin_role_id, user_id=self.usuario).filter(RolesUser.active.is_(True)).first()
             is not None
         )
 
