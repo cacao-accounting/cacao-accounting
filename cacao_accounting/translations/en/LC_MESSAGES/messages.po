@@ -24908,3 +24908,12 @@ msgstr "No accounts were received to update the classification."
 #: cacao_accounting/contabilidad/routes.py
 msgid "La clasificación debe enviarse completa para evitar borrados accidentales."
 msgstr "The classification must be submitted in full to avoid accidental deletions."
+
+#: cacao_accounting/ventas/templates/ventas/cotizacion_lista.html
+#: cacao_accounting/ventas/templates/ventas/entrega_lista.html
+#: cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html
+#: cacao_accounting/ventas/templates/ventas/factura_venta_lista.html
+#: cacao_accounting/ventas/templates/ventas/orden_venta_lista.html
+#: cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html
+msgid "No se encontraron documentos para los filtros seleccionados."
+msgstr "No documents were found for the selected filters."
