@@ -479,7 +479,7 @@
 {# ─── Document / Master Record Attachments Panel ───────────────── #}
 {% macro document_attachments_panel(reference_type, reference_id, can_modify=None) %}
 {% set attachments = get_document_attachments(reference_type, reference_id) %}
-{% if can_modify is none %}{% set can_modify = attachments_editable(reference_type, reference_id) %}{% endif %}
+{% if can_modify is none %}{% set can_modify = attachments_editable(reference_type, reference_id) %}{% else %}{% set can_modify = can_modify and attachments_editable(reference_type, reference_id) %}{% endif %}
 <div class="ca-card mt-3" x-data="{ open: false }">
   <div class="ca-card-header" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open">
     <div class="d-flex align-items-center gap-2">

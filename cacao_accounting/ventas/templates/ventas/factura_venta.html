@@ -14,13 +14,13 @@
   </ol>
 </nav>
 {% set buttons %}
-{% if registro.docstatus == 0 %}
+{% if can_edit and registro.docstatus == 0 %}
 <a class="btn btn-sm btn-outline-secondary"
   href="{{ url_for('ventas.ventas_factura_venta_editar', invoice_id=registro.id) }}">
   <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
 </a>
 {% endif %}
-{% if registro.docstatus in [0, 1] %}
+{% if can_create and registro.docstatus in [0, 1] %}
 <form method="post" action="{{ url_for('ventas.ventas_factura_venta_duplicar', invoice_id=registro.id) }}"
   class="d-inline">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -29,12 +29,14 @@
   </button>
 </form>
 {% endif %}
+{% if (registro.docstatus == 0 and can_approve) or (registro.docstatus == 1 and can_cancel) %}
 {{ macros.workflow_buttons(
             registro.docstatus,
             url_for('ventas.ventas_factura_venta_submit', invoice_id=registro.id),
             url_for('ventas.ventas_factura_venta_cancel', invoice_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
+{% endif %}
 {{ macros.detail_nav_buttons(
             url_for('ventas.ventas_factura_venta_lista'),
             url_for('ventas.ventas_factura_venta_nuevo')) }}
@@ -61,6 +63,6 @@
 ) }}
 {{ macros.lineas_tabla_lectura(items, currency_code) }}
 {{ macros.document_flow_tree(registro.document_type or "sales_invoice", registro) }}
-{{ macros.document_attachments_panel(registro.document_type or "sales_invoice", registro.id) }}
+{{ macros.document_attachments_panel(registro.document_type or "sales_invoice", registro.id, can_modify=can_edit) }}
 {{ macros.audit_timeline(audit_timeline) }}
 {% endblock %}

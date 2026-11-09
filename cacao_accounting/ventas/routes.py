@@ -1108,6 +1108,21 @@ def ventas_orden_venta_nuevo():
     )
 
 
+def _sales_detail_permissions() -> dict[str, bool]:
+    """Devuelve las acciones de venta que el usuario puede ejecutar."""
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("sales"), usuario=current_user.id)
+    return {
+        "editar": bool(permisos.editar),
+        "crear": bool(permisos.crear),
+        "autorizar": bool(permisos.autorizar),
+        "anular": bool(permisos.anular),
+        "cerrar": bool(permisos.cerrar),
+    }
+
+
 @ventas.route("/sales-order/<order_id>")
 @modulo_activo("sales")
 @login_required
@@ -1120,14 +1135,19 @@ def ventas_orden_venta(order_id):
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=order_id)).all()
     titulo = (registro.document_no or order_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("sales_order", registro.id)
-    can_close = registro.docstatus == 1 and registro.status != "closed" and sales_order_is_ready_to_close(registro)
+    puede_cerrar = registro.docstatus == 1 and registro.status != "closed" and sales_order_is_ready_to_close(registro)
+    permisos = _sales_detail_permissions()
     return render_template(
         "ventas/orden_venta.html",
         registro=registro,
         items=items,
         titulo=titulo,
         audit_timeline=audit_timeline,
-        can_close=can_close,
+        can_close=puede_cerrar and permisos["cerrar"],
+        can_edit=permisos["editar"],
+        can_create=permisos["crear"],
+        can_approve=permisos["autorizar"],
+        can_cancel=permisos["anular"],
     )
 
 
@@ -2192,8 +2212,17 @@ def ventas_factura_venta(invoice_id):
     items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice_id)).all()
     titulo = (registro.document_no or invoice_id) + " - " + APPNAME
     audit_timeline = format_document_timeline(registro.document_type or "sales_invoice", registro.id)
+    permisos = _sales_detail_permissions()
     return render_template(
-        "ventas/factura_venta.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+        "ventas/factura_venta.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        audit_timeline=audit_timeline,
+        can_edit=permisos["editar"],
+        can_create=permisos["crear"],
+        can_approve=permisos["autorizar"],
+        can_cancel=permisos["anular"],
     )
 
 
