@@ -384,6 +384,44 @@ def test_factura_compra_rechaza_post_con_origen_ajeno(recepciones_cloud):
         assert len(facturas) == 2
 
 
+def test_solicitud_cotizacion_no_precarga_solicitud_ajena(recepciones_cloud):
+    """El alta de solicitud de cotización no usa una solicitud de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/request-for-quotation/new?from_request={ids['solicitud_beta']}")
+
+    assert response.status_code == 403
+    assert "Solicitud Confidencial Beta" not in response.get_data(as_text=True)
+
+
+def test_solicitud_cotizacion_rechaza_post_con_origen_ajeno(recepciones_cloud):
+    """El POST no debe crear una solicitud desde un origen de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.post("/buying/request-for-quotation/new", data={"from_request": ids["solicitud_beta"]})
+
+    assert response.status_code == 403
+    with application.app_context():
+        assert len(database.session.execute(database.select(PurchaseQuotation)).scalars().all()) == 2
+        assert len(database.session.execute(database.select(SupplierQuotation)).scalars().all()) == 2
+
+
+def test_solicitud_cotizacion_precarga_solicitud_propia(recepciones_cloud):
+    """Control positivo: la solicitud autorizada se sigue precargando."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/request-for-quotation/new?from_request={ids['solicitud_alpha']}")
+
+    assert response.status_code == 200
+    assert f'value="{ids["solicitud_alpha"]}"' in response.get_data(as_text=True)
+
+
 def test_costo_importado_no_expone_factura_ajena(recepciones_cloud):
     """El alta de costo importado no precarga una factura de otra compañía."""
     application, ids = recepciones_cloud

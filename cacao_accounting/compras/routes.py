@@ -2144,6 +2144,8 @@ def compras_solicitud_cotizacion_nueva():
     formulario.naming_series.choices = _series_choices("purchase_quotation", selected_company)
     from_request_id = _purchase_quotation_origin_id()
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
+    if solicitud_origen is not None:
+        _require_purchase_document_access(solicitud_origen, "consultar")
     source_currency = effective_currency(solicitud_origen) if solicitud_origen else None
     items_disponibles, uoms_disponibles = _purchase_quotation_catalogs()
     titulo = _("Nueva Solicitud de Cotización") + " - " + APPNAME
