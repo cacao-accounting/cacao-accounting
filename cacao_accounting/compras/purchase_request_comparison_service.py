@@ -81,6 +81,41 @@ def supplier_quotations_for_request(purchase_request: PurchaseRequest) -> list[S
     )
 
 
+def supplier_quotation_comparison_rows(
+    offers: Sequence[SupplierQuotation],
+    offer_items: Mapping[str, Sequence[SupplierQuotationItem]],
+) -> list[dict[str, object]]:
+    """Build comparison rows from the union of all participating offer lines."""
+    rows: list[dict[str, object]] = []
+    seen_keys: set[tuple[tuple[str | None, ...], int]] = set()
+    occurrences_by_offer: dict[str, dict[tuple[str | None, ...], int]] = {}
+
+    for offer in offers:
+        occurrences = occurrences_by_offer.setdefault(offer.id, {})
+        for item in offer_items.get(offer.id, []):
+            key = _supplier_quotation_item_key(item)
+            occurrence = occurrences.get(key, 0)
+            occurrences[key] = occurrence + 1
+            row_key = (key, occurrence)
+            if row_key not in seen_keys:
+                seen_keys.add(row_key)
+                rows.append(
+                    {
+                        "item": item,
+                        "item_key": key,
+                        "occurrence": occurrence,
+                        "offers": {
+                            participant.id: _supplier_quotation_item_at_occurrence(
+                                offer_items.get(participant.id, ()), key, occurrence
+                            )
+                            for participant in offers
+                        },
+                    }
+                )
+
+    return rows
+
+
 def _supplier_quotation_item_key(item: SupplierQuotationItem) -> tuple[str | None, ...]:
     """Return the stable commercial identity for a supplier quotation line."""
     return _request_item_key(item)
@@ -433,6 +468,25 @@ def purchase_request_comparison_covered_item_ids(purchase_request: PurchaseReque
         .scalars()
         .all()
     )
+
+
+def purchase_request_comparison_is_closed(purchase_request: PurchaseRequest) -> bool:
+    """Return whether closed comparisons cover every request line.
+
+    This gate only measures comparison coverage; lines ordered by direct
+    assignment are recognized by :func:`purchase_request_is_ready_to_close`,
+    the actual precondition to close a purchase request.
+    """
+    request_item_ids = set(
+        database.session.execute(
+            database.select(PurchaseRequestItem.id).where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
+        )
+        .scalars()
+        .all()
+    )
+    if not request_item_ids:
+        return False
+    return request_item_ids.issubset(purchase_request_comparison_covered_item_ids(purchase_request))
 
 
 def purchase_request_direct_order_item_ids(purchase_request: PurchaseRequest) -> set[str]:

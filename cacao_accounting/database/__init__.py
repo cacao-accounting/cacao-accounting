@@ -5235,6 +5235,16 @@ class PeriodCloseCheck(database.Model, BaseTabla):  # type: ignore[name-defined]
 # <---------------------------------------------------------------------------------------------> #
 # Collaboration — Comentarios, Asignaciones y Workflows.
 # <---------------------------------------------------------------------------------------------> #
+class Comment(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Comentario en cualquier registro del sistema."""
+
+    __tablename__ = "comment"
+    reference_type = database.Column(database.String(50), nullable=False, index=True)
+    reference_id = database.Column(database.String(26), nullable=False, index=True)
+    content = database.Column(database.Text(), nullable=False)
+    is_deleted = database.Column(database.Boolean(), default=False, nullable=False)
+
+
 # <---------------------------------------------------------------------------------------------> #
 # File Attachments — Archivos adjuntos.
 # <---------------------------------------------------------------------------------------------> #

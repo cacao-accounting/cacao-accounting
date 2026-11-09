@@ -41,6 +41,19 @@ def get_journal(journal_id: str) -> ComprobanteContable | None:
     return database.session.get(ComprobanteContable, journal_id)
 
 
+def list_journals() -> list[ComprobanteContable]:
+    """Lista comprobantes manuales recientes."""
+    return list(
+        database.session.execute(
+            select(ComprobanteContable)
+            .where(ComprobanteContable.is_fiscal_year_closing.is_(False))
+            .order_by(ComprobanteContable.date.desc(), ComprobanteContable.created.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+
 def list_journal_lines(journal_id: str) -> list[ComprobanteContableDetalle]:
     """Lista lineas del comprobante en orden de captura."""
     return list(

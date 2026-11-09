@@ -303,3 +303,31 @@ def has_active_source_relations(source_type: str, source_id: str) -> bool:
         if target and getattr(target, "docstatus", 0) == 1:
             return True
     return False
+
+
+def recompute_states_for_source(
+    source_type: str,
+    source_id: str,
+    target_type: str | None = None,
+) -> list[DocumentLineFlowState]:
+    """Recalcula estados de todas las lineas de un documento fuente."""
+    source_key = normalize_doctype(source_type)
+    target_keys = [normalize_doctype(target_type)] if target_type else []
+    if not target_keys:
+        target_keys = sorted(
+            {
+                row[0]
+                for row in database.session.execute(
+                    database.select(DocumentRelation.target_type).filter_by(
+                        source_type=source_key,
+                        source_id=source_id,
+                    )
+                )
+            }
+        )
+    states: list[DocumentLineFlowState] = []
+    company = get_document_company(source_key, source_id)
+    for item in get_document_items(source_key, source_id):
+        for target_key in target_keys:
+            states.append(recompute_line_flow_state(source_key, source_id, item.id, target_key, company))
+    return states
