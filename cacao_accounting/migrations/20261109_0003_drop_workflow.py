@@ -54,6 +54,7 @@ def downgrade() -> None:
         sa.UniqueConstraint("entity_type", "name", name="uq_workflow_type_name"),
     )
     op.create_index("ix_workflow_entity_type", "workflow", ["entity_type"])
+    op.create_index("ix_workflow_id", "workflow", ["id"])
     op.create_table(
         "workflow_state",
         sa.Column("id", sa.String(26), primary_key=True),
@@ -70,6 +71,7 @@ def downgrade() -> None:
         sa.UniqueConstraint("workflow_id", "name", name="uq_workflow_state_name"),
     )
     op.create_index("ix_workflow_state_workflow_id", "workflow_state", ["workflow_id"])
+    op.create_index("ix_workflow_state_id", "workflow_state", ["id"])
     op.create_table(
         "workflow_transition",
         sa.Column("id", sa.String(26), primary_key=True),
@@ -88,6 +90,7 @@ def downgrade() -> None:
     )
     op.create_index("ix_workflow_transition_from_state_id", "workflow_transition", ["from_state_id"])
     op.create_index("ix_workflow_transition_to_state_id", "workflow_transition", ["to_state_id"])
+    op.create_index("ix_workflow_transition_id", "workflow_transition", ["id"])
     op.create_table(
         "workflow_instance",
         sa.Column("id", sa.String(26), primary_key=True),
@@ -106,6 +109,7 @@ def downgrade() -> None:
     op.create_index("ix_workflow_instance_workflow_id", "workflow_instance", ["workflow_id"])
     op.create_index("ix_workflow_instance_reference_type", "workflow_instance", ["reference_type"])
     op.create_index("ix_workflow_instance_reference_id", "workflow_instance", ["reference_id"])
+    op.create_index("ix_workflow_instance_id", "workflow_instance", ["id"])
     op.create_table(
         "workflow_action_log",
         sa.Column("id", sa.String(26), primary_key=True),
@@ -125,3 +129,4 @@ def downgrade() -> None:
         sa.ForeignKeyConstraint(["performed_by"], ["user.id"], ondelete="RESTRICT", onupdate="CASCADE"),
     )
     op.create_index("ix_workflow_action_log_workflow_instance_id", "workflow_action_log", ["workflow_instance_id"])
+    op.create_index("ix_workflow_action_log_id", "workflow_action_log", ["id"])
