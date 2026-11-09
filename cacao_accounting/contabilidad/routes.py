@@ -99,8 +99,6 @@ from cacao_accounting.setup.service import (
 )
 
 
-from cacao_accounting.contabilidad.gl import gl
-
 from cacao_accounting.audit_trail_service import format_document_timeline
 
 from cacao_accounting.database import (
@@ -205,8 +203,6 @@ contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 # homónimo de ``services`` no se registra, por lo que adjuntarlo allí deja las
 # rutas de cierre, recurrentes y revalorización sin aislamiento por compañía.
 contabilidad.before_request(enforce_close_and_recurring_company_access)
-
-contabilidad.register_blueprint(gl, url_prefix="/gl")
 
 contabilidad.register_blueprint(presupuestos, url_prefix="/presupuestos")
 

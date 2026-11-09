@@ -49,8 +49,6 @@ from cacao_accounting.contabilidad.currency_guard import CurrencyGuard
 
 from cacao_accounting.runtime_mode import force_single_entity
 
-from cacao_accounting.contabilidad.gl import gl
-
 
 from cacao_accounting.database import (
     Accounts,
@@ -71,8 +69,6 @@ from cacao_accounting.decorators import exige_acceso_compania
 from cacao_accounting.i18n import _, _l
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
-
-contabilidad.register_blueprint(gl, url_prefix="/gl")
 
 contabilidad.register_blueprint(presupuestos, url_prefix="/presupuestos")
 
