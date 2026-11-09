@@ -1262,10 +1262,22 @@
                 data-label-show="{{ _('Ver') }} {{ older | length }} {{ _('eventos anteriores') }} ▸"
                 data-label-hide="{{ _('Ocultar eventos anteriores') }} ▴"
                 aria-expanded="false"
-                aria-controls="{{ collapse_id }}"
-                onclick="var b=this; b.textContent = b.getAttribute('aria-expanded')==='true' ? b.dataset.labelHide : b.dataset.labelShow;">
+                aria-controls="{{ collapse_id }}">
             {{ _('Ver') }} {{ older | length }} {{ _('eventos anteriores') }} ▸
         </button>
+        <script>
+          (function () {
+            var panel = document.getElementById("{{ collapse_id }}");
+            var toggle = document.querySelector('[data-bs-target="#{{ collapse_id }}"]');
+            if (!panel || !toggle) return;
+            panel.addEventListener('shown.bs.collapse', function () {
+              toggle.textContent = toggle.dataset.labelHide;
+            });
+            panel.addEventListener('hidden.bs.collapse', function () {
+              toggle.textContent = toggle.dataset.labelShow;
+            });
+          })();
+        </script>
         {% endif %}
         <ul class="list-group list-group-flush">
             {% for row in recent %}
