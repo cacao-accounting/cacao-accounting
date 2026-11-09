@@ -44,15 +44,9 @@
   </ol>
 </nav>
 
-{% set status_value = _('Borrador') %}
-{% set status_badge = 'bg-secondary' %}
-{% if registro.docstatus == 1 %}
-  {% set status_value = _('Aprobado') %}
-  {% set status_badge = 'bg-success' %}
-{% elif registro.docstatus == 2 %}
-  {% set status_value = _('Anulado') %}
-  {% set status_badge = 'bg-dark' %}
-{% endif %}
+{% set status = document_status_info('payment_entry', registro) %}
+{% set status_value = status.label %}
+{% set status_badge = status.badge_class %}
 {% set payment_amount = registro.received_amount if registro.payment_type == 'receive' else registro.paid_amount %}
 {% set payment_label = _('Recibir') if registro.payment_type == 'receive' else _('Pagar') %}
 {% set payment_actions %}

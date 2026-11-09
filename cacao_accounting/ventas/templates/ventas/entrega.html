@@ -43,7 +43,7 @@
 {{ dv_macros.detail_header(
     registro.document_no or registro.id,
     _('Remisión de Mercadería Vendida'),
-    registro.docstatus,
+    document_status_info('delivery_note', registro),
     buttons,
     [
       (_('Número'), registro.document_no),

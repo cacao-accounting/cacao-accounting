@@ -45,7 +45,7 @@
 {{ dv_macros.detail_header(
     registro.document_no or registro.id,
     _('Factura de Venta'),
-    registro.docstatus,
+    document_status_info(registro.document_type or 'sales_invoice', registro),
     buttons,
     [
       (_('Número'), registro.document_no),
