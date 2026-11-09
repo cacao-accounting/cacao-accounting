@@ -2644,16 +2644,22 @@ def compras_recepcion(receipt_id):
     """Detalle de recepción de compra."""
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
-        registro = database.session.execute(
-            database.select(PurchaseReceipt).filter_by(document_no=receipt_id)
-        ).scalar_one_or_none()
+        # El número documental no es único entre compañías; resolver dentro
+        # del alcance autorizado evita 500 y fugas entre compañías.
+        authorized = _authorized_companies(("purchases", "inventory"))
+        query = database.select(PurchaseReceipt).filter_by(document_no=receipt_id)
+        query = query.where(PurchaseReceipt.company.in_(authorized)) if authorized else query.where(database.false())
+        candidatos = database.session.execute(query).scalars().all()
+        if len(candidatos) > 1:
+            abort(409)
+        registro = candidatos[0] if candidatos else None
     if not registro:
         abort(404)
     _require_purchase_document_access(registro)
     items = database.session.execute(
         database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id, is_superseded=False)
     ).all()
-    create_actions = get_create_actions("purchase_receipt", receipt_id)
+    create_actions = get_create_actions("purchase_receipt", registro.id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or registro.id) + " - " + APPNAME
     return render_template(
