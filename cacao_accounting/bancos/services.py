@@ -5,7 +5,7 @@
 
 from datetime import date, timedelta
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import json
 
@@ -1858,9 +1858,16 @@ def _build_single_config_entry(
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
-    """Convierte un valor de formulario a Decimal."""
+    """Convierte un valor finito de formulario a Decimal o falla de forma controlada."""
     value = request.form.get(field_name)
-    return Decimal(str(value if value not in (None, "") else default))
+    raw = value if value not in (None, "") else default
+    try:
+        number = Decimal(str(raw))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(_("El campo %(field)s debe ser un número válido.") % {"field": field_name}) from exc
+    if not number.is_finite():
+        raise ValueError(_("El campo %(field)s debe ser un número finito.") % {"field": field_name})
+    return number
 
 
 def _invoice_outstanding(invoice) -> Decimal:

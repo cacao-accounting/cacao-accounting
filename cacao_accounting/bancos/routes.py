@@ -572,8 +572,11 @@ def _parse_reconciliation_item_from_form(
 ) -> tuple[BankReconciliationMatch | None, tuple[str, Decimal] | None, str | None]:
     """Parsea una fila de conciliacion bancaria desde el formulario."""
     target = request.form.get(f"target_{transaction_id}") or ""
-    amount = _form_decimal(f"amount_{transaction_id}")
-    difference = _form_decimal(f"difference_{transaction_id}")
+    try:
+        amount = _form_decimal(f"amount_{transaction_id}")
+        difference = _form_decimal(f"difference_{transaction_id}")
+    except ValueError as exc:
+        return None, None, str(exc)
     if not target or amount <= 0:
         if difference > 0:
             return None, None, _("Una diferencia bancaria requiere un candidato y un monto conciliado.")

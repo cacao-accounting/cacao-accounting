@@ -25375,3 +25375,13 @@ msgstr "Value change"
 #: cacao_accounting/reportes/helpers.py
 msgid "Último movimiento"
 msgstr "Last movement"
+
+#: cacao_accounting/bancos/services.py
+#, python-format
+msgid "El campo %(field)s debe ser un número válido."
+msgstr "The %(field)s field must be a valid number."
+
+#: cacao_accounting/bancos/services.py
+#, python-format
+msgid "El campo %(field)s debe ser un número finito."
+msgstr "The %(field)s field must be a finite number."
