@@ -17,17 +17,28 @@ from decimal import Decimal
 import pytest
 
 from cacao_accounting import create_app
-from cacao_accounting.bancos.services import create_petty_cash_expense, create_petty_cash_voucher
+from cacao_accounting.bancos.services import (
+    create_petty_cash_expense,
+    create_petty_cash_expense_from_voucher,
+    create_petty_cash_voucher,
+    set_petty_cash_voucher_status,
+)
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AccountingPeriod,
     Accounts,
+    Book,
     CostCenter,
+    Currency,
     Entity,
+    Modules,
     PettyCashAccount,
     PettyCashExpense,
     PettyCashVoucher,
     Project,
     Unit,
+    GLEntry,
+    User,
     database,
 )
 
@@ -44,13 +55,25 @@ def caja_dimensiones():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
-            "MODO_ESCRITORIO": True,
+            "MODO_ESCRITORIO": False,
         }
     )
     with application.app_context():
         database.create_all()
         database.session.add_all(
             [
+                Modules(module="cash", default=False, enabled=True),
+                Modules(module="accounting", default=False, enabled=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                User(
+                    id="admin",
+                    user="admin",
+                    name="Administrador",
+                    password=b"x",
+                    classification="admin",
+                    active=True,
+                    company="cacao",
+                ),
                 Entity(
                     code="cacao",
                     name="Cacao",
@@ -68,6 +91,28 @@ def caja_dimensiones():
                     currency="NIO",
                     enabled=True,
                     status="activo",
+                ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                Book(
+                    entity="cacao",
+                    code="LOCAL",
+                    name="Principal",
+                    status="activo",
+                    currency="NIO",
+                    default=True,
+                    is_primary=True,
+                ),
+                AccountingPeriod(
+                    entity="cacao",
+                    name="PERIODO-CACAO",
+                    start=date(2026, 10, 1),
+                    end=date(2026, 10, 31),
+                    enabled=True,
+                    is_closed=False,
                 ),
             ]
         )
@@ -212,3 +257,66 @@ def test_gasto_rechaza_unidad_ajena_con_centro_propio(caja_dimensiones):
                 posted_date=FECHA,
             )
         assert database.session.execute(database.select(PettyCashExpense)).scalars().all() == []
+
+
+def test_liquidacion_rechaza_unidad_ajena_sin_mutar_el_vale(caja_dimensiones):
+    """Un vale heredado con unidad ajena no se liquida ni postea."""
+    application, ids = caja_dimensiones
+    propias = ids["dimensiones"]["cacao"]
+    ajenas = ids["dimensiones"]["alpha"]
+
+    with application.app_context():
+        vale = PettyCashVoucher(
+            company="cacao",
+            petty_cash_id=ids["fondo"],
+            posting_date=FECHA,
+            delivered_to="Cajero",
+            concept="Vale heredado",
+            amount=Decimal("25"),
+            cost_center_code=propias["centro"],
+            unit_code=ajenas["unidad"],
+            project_code=ajenas["proyecto"],
+            voucher_status="entregado",
+            docstatus=1,
+        )
+        database.session.add(vale)
+        database.session.commit()
+        vale_id = vale.id
+
+        with pytest.raises(ValueError, match="unidad de negocio"):
+            create_petty_cash_expense_from_voucher(
+                vale,
+                expense_account_code=ids["cuenta_gasto"],
+                cost_center_code=propias["centro"],
+                posted_date=FECHA,
+            )
+        database.session.rollback()
+
+        vale = database.session.get(PettyCashVoucher, vale_id)
+        assert vale.voucher_status == "entregado"
+        assert vale.expense_id is None
+        assert database.session.execute(database.select(PettyCashExpense)).scalars().all() == []
+
+
+def test_liquidacion_acepta_dimensiones_propias(caja_dimensiones):
+    """Control positivo: la liquidación con dimensiones de cacao postea."""
+    application, ids = caja_dimensiones
+    propias = ids["dimensiones"]["cacao"]
+
+    with application.app_context():
+        vale = _crear_vale(ids, propias)
+        vale = set_petty_cash_voucher_status(vale, "entregado")
+        gasto = create_petty_cash_expense_from_voucher(
+            vale,
+            expense_account_code=ids["cuenta_gasto"],
+            cost_center_code=propias["centro"],
+            posted_date=FECHA,
+            actor_id="admin",
+        )
+        database.session.commit()
+
+        assert gasto.id is not None
+        assert vale.voucher_status == "liquidado"
+        assert vale.expense_id == gasto.id
+        asientos = database.session.execute(database.select(GLEntry).filter_by(voucher_id=gasto.journal_id)).scalars().all()
+        assert asientos
