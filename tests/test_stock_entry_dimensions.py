@@ -11,6 +11,7 @@ expone esos campos, por lo que el servidor debe rechazar un POST manipulado.
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from werkzeug.datastructures import MultiDict
@@ -29,10 +30,12 @@ from cacao_accounting.database import (
     Modules,
     Project,
     StockEntry,
+    StockEntryItem,
     StockLedgerEntry,
     Unit,
     UOM,
     User,
+    Warehouse,
     database,
 )
 from cacao_accounting.contabilidad.posting_service import PostingError, post_stock_entry
@@ -126,6 +129,12 @@ def inventario_dimensiones():
                     is_stock_item=True,
                     default_uom="UND",
                 ),
+                Warehouse(
+                    code="WH-CACAO",
+                    name="Bodega Cacao",
+                    company="cacao",
+                    is_active=True,
+                ),
             ]
         )
         for company in ("cacao", "alpha"):
@@ -185,6 +194,38 @@ def test_entrada_rechaza_dimensiones_de_otra_compania(inventario_dimensiones):
         assert database.session.execute(database.select(StockEntry)).scalars().all() == []
 
 
+def test_entrada_rechaza_centro_ajeno_con_dimensiones_propias(inventario_dimensiones):
+    """El centro de costo ajeno se rechaza con unidad y proyecto propios."""
+    application, dimensiones = inventario_dimensiones
+    propias = dimensiones["cacao"]
+    ajenas = dimensiones["alpha"]
+
+    with application.app_context():
+        formulario = MultiDict(
+            [
+                ("purpose", "material_receipt"),
+                ("company", "cacao"),
+                ("posting_date", FECHA.isoformat()),
+                ("transaction_currency", "NIO"),
+                ("cost_center_code", ajenas["centro"]),
+                ("unit_code", propias["unidad"]),
+                ("project_code", propias["proyecto"]),
+                ("item_code_0", "ART-1"),
+                ("qty_0", "1"),
+                ("rate_0", "10"),
+                ("uom_0", "UND"),
+            ]
+        )
+        with application.test_request_context("/inventory/stock-entry/new", method="POST", data=formulario):
+            from flask_login import login_user
+
+            usuario = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+            login_user(usuario)
+            _handle_stock_entry_new_post(formulario)
+
+        assert database.session.execute(database.select(StockEntry)).scalars().all() == []
+
+
 def test_entrada_rechaza_proyecto_ajeno_con_dimensiones_propias(inventario_dimensiones):
     """El proyecto ajeno se rechaza con centro y unidad propios."""
     application, dimensiones = inventario_dimensiones
@@ -228,6 +269,7 @@ def test_posting_rechaza_entrada_heredada_con_dimension_ajena(inventario_dimensi
             purpose="material_receipt",
             company="cacao",
             posting_date=FECHA,
+            to_warehouse="WH-CACAO",
             cost_center_code=propias["centro"],
             unit_code=ajenas["unidad"],
             project_code=propias["proyecto"],
@@ -236,6 +278,19 @@ def test_posting_rechaza_entrada_heredada_con_dimension_ajena(inventario_dimensi
             docstatus=1,
         )
         database.session.add(entrada)
+        database.session.flush()
+        database.session.add(
+            StockEntryItem(
+                stock_entry_id=entrada.id,
+                item_code="ART-1",
+                target_warehouse="WH-CACAO",
+                qty=Decimal("1"),
+                uom="UND",
+                qty_in_base_uom=Decimal("1"),
+                basic_rate=Decimal("10"),
+                amount=Decimal("10"),
+            )
+        )
         database.session.commit()
 
         with application.test_request_context(f"/inventory/stock-entry/{entrada.id}"):
