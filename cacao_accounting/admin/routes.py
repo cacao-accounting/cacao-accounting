@@ -1412,20 +1412,24 @@ def usuario_roles(user_id: str):
         form.roles.data = [rol.id for rol in _obtener_roles_por_usuario(usuario.id)]
 
     if form.validate_on_submit():
-        seleccionado = [rol_id for rol_id in (form.roles.data or []) if rol_id]
+        seleccionado = {rol_id for rol_id in (form.roles.data or []) if rol_id}
         if _would_leave_no_admin(
             usuario,
             active=bool(usuario.active),
             classification=usuario.classification,
-            role_ids=set(seleccionado),
+            role_ids=seleccionado,
         ):
             flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
             return redirect(url_for(LISTA_USUARIOS))
-        for assignment in database.session.execute(
-            database.select(RolesUser).where(RolesUser.user_id == usuario.id)
-        ).scalars():
-            database.session.delete(assignment)
-        for rol_id in seleccionado:
+        existentes = {
+            assignment.role_id: assignment
+            for assignment in database.session.execute(
+                database.select(RolesUser).where(RolesUser.user_id == usuario.id)
+            ).scalars()
+        }
+        for rol_id, assignment in existentes.items():
+            assignment.active = rol_id in seleccionado
+        for rol_id in seleccionado.difference(existentes):
             database.session.add(RolesUser(user_id=usuario.id, role_id=rol_id, active=True))
         database.session.commit()
         flash(_("Roles actualizados correctamente."), "success")
