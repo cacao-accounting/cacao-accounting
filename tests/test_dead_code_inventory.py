@@ -58,6 +58,7 @@ import pytest
         ("cacao_accounting.database", "WorkflowTransition"),
         ("cacao_accounting.database", "WorkflowInstance"),
         ("cacao_accounting.database", "WorkflowActionLog"),
+        ("cacao_accounting.database", "GLEntryDimension"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):

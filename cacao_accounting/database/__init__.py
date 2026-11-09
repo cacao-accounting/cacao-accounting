@@ -4326,30 +4326,6 @@ event.listens_for(GLEntry, "before_update")(_reject_ledger_mutation)
 event.listens_for(GLEntry, "before_delete")(_reject_ledger_delete)
 
 
-class GLEntryDimension(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Dimension analitica adicional de una entrada GL (0..N por entrada)."""
-
-    __tablename__ = "gl_entry_dimension"
-    gl_entry_id = database.Column(
-        database.String(26),
-        database.ForeignKey(GL_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    dimension_type_id = database.Column(
-        database.String(26),
-        database.ForeignKey("dimension_type.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    dimension_value_id = database.Column(
-        database.String(26),
-        database.ForeignKey("dimension_value.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-
-
 # <---------------------------------------------------------------------------------------------> #
 # Account Mapping — Asignacion jerarquica de cuentas contables.
 # Orden de resolucion: item_account > party_account > company_default_account
