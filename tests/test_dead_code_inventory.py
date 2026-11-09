@@ -59,6 +59,7 @@ import pytest
         ("cacao_accounting.database", "WorkflowInstance"),
         ("cacao_accounting.database", "WorkflowActionLog"),
         ("cacao_accounting.database", "GLEntryDimension"),
+        ("cacao_accounting.database", "Comment"),
         ("cacao_accounting.cancellation_scope", "audit_gl_scope"),
         ("cacao_accounting.cancellation_scope", "append_only_gl_scope"),
         ("cacao_accounting.bancos.services", "petty_cash_account_choices"),
