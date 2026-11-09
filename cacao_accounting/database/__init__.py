@@ -209,18 +209,6 @@ class BaseTransaccion(BaseTabla):
     serie = database.Column(database.String(100), nullable=True)
 
 
-class BaseTercero(BaseTabla):
-    """Base para crear terceros en la entidad."""
-
-    name = database.Column(database.String(150), nullable=False)
-    comercial_name = database.Column(database.String(150), nullable=False)
-    classification = database.Column(database.String(50), nullable=False)
-    group = database.Column(database.String(50), nullable=False)
-    enabled = database.Column(database.Boolean(), nullable=True)
-    id_ = database.Column(database.String(30), nullable=True)
-    tax_id = database.Column(database.String(30), nullable=True)
-
-
 # <---------------------------------------------------------------------------------------------> #
 # Base for transactional documents with full accounting lifecycle.
 # <---------------------------------------------------------------------------------------------> #
