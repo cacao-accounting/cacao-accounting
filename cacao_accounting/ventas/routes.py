@@ -124,6 +124,7 @@ from cacao_accounting.ventas.services import (
     _validate_sales_invoice_line_amounts,
     _validate_sales_source_link,
     _validate_sales_order_requirement,
+    _validated_customer,
     _sales_order_initial_source_type,
     _build_sales_order_transaction_config,
     _handle_sales_order_new_post,
@@ -458,7 +459,7 @@ def ventas_pedido_venta_nuevo():
     if request.method == "POST":
         try:
             customer_id = request.form.get("customer_id") or None
-            customer = database.session.get(Party, customer_id) if customer_id else None
+            customer = _validated_customer(customer_id)
             posting_date = _parse_date(request.form.get("posting_date"))
             company, transaction_currency = validate_immutable_header(
                 None,

@@ -137,6 +137,18 @@ def _msg_cantidad_item(item_code: str) -> str:
     return _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}
 
 
+def _validated_customer(customer_id: str | None) -> Party | None:
+    """Carga el cliente y exige el rol cuando se informa un tercero."""
+    if not customer_id:
+        return None
+    customer = database.session.get(Party, customer_id)
+    if customer is None:
+        raise ValueError(_("El tercero no existe."))
+    if not customer.is_customer:
+        raise ValueError(_("El tercero seleccionado no está habilitado como cliente."))
+    return customer
+
+
 def _require_positive_qty(item_code: str, qty: Decimal) -> None:
     """Rechaza cantidades no positivas antes de persistir una línea de venta."""
     if qty <= 0:
@@ -821,7 +833,12 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
     revert_relations_for_target("sales_request", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("sales_request", registro.id)
     customer_id = form.get("customer_id") or None
-    customer = database.session.get(Party, customer_id) if customer_id else None
+    try:
+        customer = _validated_customer(customer_id)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, request_id=request_id))
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
     requested_company = form.get("company") or registro.company
