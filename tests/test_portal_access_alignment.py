@@ -196,3 +196,15 @@ def test_desktop_no_redirige_al_portal():
         database.session.commit()
 
         assert usuario.is_portal_customer is False
+        client = application.test_client()
+        response = client.post(
+            "/login",
+            data={"usuario": "desktop_portal", "acceso": CONTRASENA},
+            follow_redirects=False,
+        )
+        assert response.status_code == 302
+        assert "/portal" not in response.headers["Location"]
+        portal_response = client.get("/portal/customer")
+        assert portal_response.status_code != 200
+        if portal_response.status_code == 302:
+            assert "/portal/customer" not in portal_response.headers["Location"]
