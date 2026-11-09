@@ -25227,3 +25227,151 @@ msgstr "Save template"
 #: cacao_accounting/printing/admin_routes.py
 msgid "No se pudo duplicar la plantilla porque el código ya existe."
 msgstr "The template could not be duplicated because the code already exists."
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Aprobado por"
+msgstr "Approved by"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Base imponible"
+msgstr "Tax base"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Cantidad de saldo"
+msgstr "Balance quantity"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Cantidad entrante"
+msgstr "Incoming quantity"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Cantidad saliente"
+msgstr "Outgoing quantity"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Certificado"
+msgstr "Certificate"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Cobros"
+msgstr "Receipts"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Concepto de retención"
+msgstr "Withholding concept"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Ejecución de anulación"
+msgstr "Cancellation executed at"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Es reversa"
+msgstr "Is reversal"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Fecha de anulación"
+msgstr "Cancellation date"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Fecha de aprobación"
+msgstr "Approval date"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Fecha de creación"
+msgstr "Creation date"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Fecha de modificación"
+msgstr "Modification date"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Identificación fiscal del proveedor"
+msgstr "Supplier tax ID"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe entrante"
+msgstr "Incoming amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe original"
+msgstr "Original amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe pagado"
+msgstr "Paid amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe retenido"
+msgstr "Withheld amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe saliente"
+msgstr "Outgoing amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Modificado por"
+msgstr "Modified by"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Motivo de anulación"
+msgstr "Cancellation reason"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Nombre de la cuenta"
+msgstr "Account name"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Nombre del artículo"
+msgstr "Item name"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Pagos"
+msgstr "Payments"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Primer movimiento"
+msgstr "First movement"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Responsable de anulación"
+msgstr "Cancellation actor"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Reversa de"
+msgstr "Reversal of"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Saldo final"
+msgstr "Final balance"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Saldo inicial"
+msgstr "Opening balance"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Sección"
+msgstr "Section"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Solicitud de anulación"
+msgstr "Cancellation requested at"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Tipo de cuenta"
+msgstr "Account type"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Tramo"
+msgstr "Bucket"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Unidad"
+msgstr "Unit"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Variación de valor"
+msgstr "Value change"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Último movimiento"
+msgstr "Last movement"
