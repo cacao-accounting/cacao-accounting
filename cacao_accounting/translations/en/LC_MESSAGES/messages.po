@@ -7174,6 +7174,10 @@ msgstr "This field is required."
 msgid "El valor de %(field)s no es válido para la regla fiscal."
 msgstr "The value of %(field)s is not valid for the tax rule."
 
+#: cacao_accounting/admin/templates/admin/approval_matrix.html:204
+msgid "Eliminar regla de aprobación"
+msgstr "Delete approval rule"
+
 #: cacao_accounting/bancos/forms.py:24
 #: cacao_accounting/bancos/templates/bancos/banco_cuenta_nuevo.html:28
 #: cacao_accounting/contabilidad/forms.py:41

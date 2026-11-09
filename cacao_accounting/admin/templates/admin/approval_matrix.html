@@ -201,8 +201,10 @@
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="action" value="delete_rule">
                   <input type="hidden" name="rule_id" value="{{ r.id }}">
-                  <button type="submit" class="btn btn-sm btn-danger p-1 py-0">
-                    <i class="bi bi-trash"></i>
+                  <button type="submit" class="btn btn-sm btn-danger p-1 py-0"
+                          aria-label="{{ _('Eliminar regla de aprobación') }}"
+                          title="{{ _('Eliminar regla de aprobación') }}">
+                    <i class="bi bi-trash" aria-hidden="true"></i>
                   </button>
                 </form>
               </td>
