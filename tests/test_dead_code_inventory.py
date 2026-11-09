@@ -40,6 +40,9 @@ import pytest
         ("cacao_accounting.modulos", "lista_tipos_documentos"),
         ("cacao_accounting.party_management", "party_account_labels"),
         ("cacao_accounting.party_management", "build_party_code"),
+        ("cacao_accounting.tax_pricing_service", "get_item_price"),
+        ("cacao_accounting.tax_pricing_service", "validate_price_tolerance"),
+        ("cacao_accounting.tax_pricing_service", "PriceToleranceResult"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):
