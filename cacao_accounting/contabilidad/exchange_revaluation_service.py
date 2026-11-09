@@ -868,7 +868,7 @@ class ExchangeRevaluationService:
         return balance
 
     def _active_revaluation_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal:
-        rows = database.session.execute(
+        query = (
             select(ExchangeRevaluationItem, GLEntry)
             .join(ExchangeRevaluation, ExchangeRevaluation.id == ExchangeRevaluationItem.revaluation_id)
             .join(GLEntry, GLEntry.id == ExchangeRevaluationItem.journal_line_id)
@@ -878,7 +878,12 @@ class ExchangeRevaluationService:
             .filter(ExchangeRevaluationItem.account_id == candidate.account_id)
             .filter(ExchangeRevaluationItem.ledger_id == ledger.id)
             .filter(GLEntry.is_cancelled.is_(False))
-        ).all()
+        )
+        if candidate.as_of_date is not None:
+            query = query.filter(
+                database.func.coalesce(ExchangeRevaluation.run_date, ExchangeRevaluation.posting_date) <= candidate.as_of_date
+            )
+        rows = database.session.execute(query).all()
         balance = Decimal("0")
         for item, entry in rows:
             item_balance = self._normal_balance([entry], candidate.normal_balance)
