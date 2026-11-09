@@ -50,8 +50,19 @@ PORT = environ.get("CACAO_PORT") or environ.get("PORT") or 8080
 # En entornos de web y de contenedores es un patron recomendado utlizar variables del entorno para
 # configurar la aplicacion.
 
+_TRUE_VALUES = frozenset({"1", "true", "yes", "y", "on"})
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    """Interpreta una variable de entorno booleana sin usar truthiness de strings."""
+    value = environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in _TRUE_VALUES
+
+
 # Force tests to run by default on an in-memory database, except those designed for a specific database.
-is_testing = environ.get("CACAO_TEST") or environ.get("CI") or (environ.get("PYTEST_VERSION") is not None)
+is_testing = env_bool("CACAO_TEST") or env_bool("CI") or (environ.get("PYTEST_VERSION") is not None)
 
 if is_testing:
     env_db = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or environ.get("DATABASE_URL")
@@ -120,12 +131,10 @@ if valida_direccion_base_datos(DATABASE_URL_NORMALIZADA):
     if DATABASE_ENGINE_OPTIONS:
         configuracion["SQLALCHEMY_ENGINE_OPTIONS"] = DATABASE_ENGINE_OPTIONS
 configuracion["SECRET_KEY"] = SECRET_KEY or ""
-configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = "False"
+configuracion["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Printing and validation settings
-configuracion["EXTERNAL_DOCUMENT_VALIDATION_ENABLED"] = (
-    environ.get("EXTERNAL_DOCUMENT_VALIDATION_ENABLED", "True").lower() == "true"
-)
+configuracion["EXTERNAL_DOCUMENT_VALIDATION_ENABLED"] = env_bool("EXTERNAL_DOCUMENT_VALIDATION_ENABLED", True)
 configuracion["EXTERNAL_DOCUMENT_VALIDATION_BASE_URL"] = environ.get(
     "EXTERNAL_DOCUMENT_VALIDATION_BASE_URL", "https://cacaocontent.com"
 )
@@ -134,7 +143,7 @@ configuracion["EXTERNAL_DOCUMENT_VALIDATION_BASE_URL"] = environ.get(
 # límite global de la petición se eleva para cubrirlo en ``create_app``.
 configuracion["ATTACHMENT_MAX_FILE_SIZE"] = int(environ.get("CACAO_ATTACHMENT_MAX_FILE_SIZE", str(25 * 1024 * 1024)))
 
-if environ.get("CACAO_TEST"):
+if env_bool("CACAO_TEST"):
     configuracion["DEBUG"] = True
     configuracion["TEMPLATES_AUTO_RELOAD"] = True
 
@@ -150,4 +159,4 @@ if environ.get("RATELIMIT_STORAGE_URI"):
 
 MODO_ESCRITORIO = detect_desktop_mode()
 
-TESTING_MODE = environ.get("CACAO_TEST", False) or environ.get("CI", False) or environ.get("PYTEST_VERSION") is not None
+TESTING_MODE = env_bool("CACAO_TEST") or env_bool("CI") or environ.get("PYTEST_VERSION") is not None

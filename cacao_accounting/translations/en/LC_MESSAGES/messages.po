@@ -25414,3 +25414,7 @@ msgstr "Published"
 #: cacao_accounting/printing/templates/admin/print_template_list.html
 msgid "Archivada"
 msgstr "Archived"
+
+#: cacao_accounting/admin/routes.py
+msgid "El mínimo de ofertas debe ser un número entero."
+msgstr "The minimum number of offers must be an integer."

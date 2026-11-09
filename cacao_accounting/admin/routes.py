@@ -1183,6 +1183,10 @@ def config_abastecimiento_compras():
     if request.method == "POST":
         try:
             minimum = int(request.form.get("minimum_offers") or "2")
+        except (TypeError, ValueError):
+            flash(_("El mínimo de ofertas debe ser un número entero."), "danger")
+            return redirect(url_for("admin.config_abastecimiento_compras"))
+        try:
             set_purchase_sourcing_config(bool(request.form.get("require_comparison")), minimum)
             database.session.commit()
             flash(_("Configuración de abastecimiento guardada correctamente."), "success")
