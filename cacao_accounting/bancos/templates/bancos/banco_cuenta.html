@@ -149,7 +149,7 @@ function numberingConfig() {
         const payload = Object.values(this.configs);
         const response = await fetch('{{ url_for("bancos.bancos_cuenta_bancaria_numbering_config", account_id=registro.id) }}', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
           body: JSON.stringify({ configs: payload })
         });
         if (!response.ok) throw new Error('Error al guardar');
