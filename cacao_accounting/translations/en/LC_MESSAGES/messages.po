@@ -25223,3 +25223,7 @@ msgstr "The petty cash currency must match the currency of its ledger account."
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_nuevo.html
 msgid "Guardar plantilla"
 msgstr "Save template"
+
+#: cacao_accounting/printing/admin_routes.py
+msgid "No se pudo duplicar la plantilla porque el código ya existe."
+msgstr "The template could not be duplicated because the code already exists."

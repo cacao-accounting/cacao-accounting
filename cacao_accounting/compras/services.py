@@ -1800,46 +1800,44 @@ def _create_purchase_quotation_from_request():
 
 def _handle_purchase_quotation_edit_post(registro):
     before_state = _capture_purchase_state(registro)
-    revert_relations_for_target("purchase_quotation", registro.id, reason="draft_edited")
-    refresh_source_caches_for_target("purchase_quotation", registro.id)
-    supplier_id = request.form.get("supplier_id") or None
     try:
+        revert_relations_for_target("purchase_quotation", registro.id, reason="draft_edited")
+        refresh_source_caches_for_target("purchase_quotation", registro.id)
+        supplier_id = request.form.get("supplier_id") or None
         supplier = _validated_supplier(supplier_id)
-    except ValueError as error:
+        registro.supplier_id = supplier_id
+        registro.supplier_name = supplier.name if supplier else None
+        requested_company = request.form.get("company") or registro.company
+        source_relation = database.session.execute(
+            database.select(DocumentRelation)
+            .where(
+                DocumentRelation.target_type == "purchase_quotation",
+                DocumentRelation.target_id == registro.id,
+                DocumentRelation.source_type == "purchase_request",
+                DocumentRelation.status == "active",
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        source = database.session.get(PurchaseRequest, source_relation.source_id) if source_relation else None
+        if requested_company != registro.company or (source and source.company != requested_company):
+            raise DocumentFlowError(_("La compañía debe permanecer alineada con el documento origen."), 400)
+        registro.company = requested_company
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.remarks = request.form.get("remarks")
+        _copy_logistics(registro, form=request.form)
+        for item in database.session.execute(
+            database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        _qty, total = _save_purchase_quotation_items(registro.id)
+        _set_purchase_document_totals(registro, total)
+        after_state = _capture_purchase_state(registro)
+        log_update(registro, before=before_state, after=after_state)
+        database.session.commit()
+    except ValueError as exc:
         database.session.rollback()
-        flash_error(error)
+        flash_error(exc)
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
-    registro.supplier_id = supplier_id
-    registro.supplier_name = supplier.name if supplier else None
-    requested_company = request.form.get("company") or registro.company
-    source_relation = database.session.execute(
-        database.select(DocumentRelation)
-        .where(
-            DocumentRelation.target_type == "purchase_quotation",
-            DocumentRelation.target_id == registro.id,
-            DocumentRelation.source_type == "purchase_request",
-            DocumentRelation.status == "active",
-        )
-        .limit(1)
-    ).scalar_one_or_none()
-    source = database.session.get(PurchaseRequest, source_relation.source_id) if source_relation else None
-    if requested_company != registro.company or (source and source.company != requested_company):
-        database.session.rollback()
-        flash(_("La compañía debe permanecer alineada con el documento origen."), "danger")
-        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
-    registro.company = requested_company
-    registro.posting_date = _parse_date(request.form.get("posting_date"))
-    registro.remarks = request.form.get("remarks")
-    _copy_logistics(registro, form=request.form)
-    for item in database.session.execute(
-        database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
-    ).scalars():
-        database.session.delete(item)
-    _qty, total = _save_purchase_quotation_items(registro.id)
-    _set_purchase_document_totals(registro, total)
-    after_state = _capture_purchase_state(registro)
-    log_update(registro, before=before_state, after=after_state)
-    database.session.commit()
     flash(_("Solicitud de cotizacion actualizada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
 

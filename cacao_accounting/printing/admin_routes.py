@@ -7,7 +7,7 @@ from __future__ import annotations
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from cacao_accounting.database import Bank, BankAccount, Entity, Roles, RolesUser, database
 from cacao_accounting.decorators import resolve_required_company, _single_authorized_company
@@ -119,7 +119,7 @@ def duplicate_template(template_id: int):
         company_code=source.company_code,
         document_type=source.document_type,
         bank_account_id=source.bank_account_id,
-        code=_copy_code(source.code),
+        code=_copy_code(source.code, source.company_code, source.document_type),
         name=f"Copia de {source.name}",
         description=source.description,
         template_body=source.template_body,
@@ -132,7 +132,12 @@ def duplicate_template(template_id: int):
         created_by=_current_user_id(),
     )
     database.session.add(copy)
-    database.session.commit()
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("No se pudo duplicar la plantilla porque el código ya existe."), "danger")
+        return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
     flash(_("Plantilla duplicada exitosamente."), "success")
     return redirect(url_for("printing_admin.edit_template", template_id=copy.id))
 
@@ -335,8 +340,21 @@ def _clear_default(template: PrintTemplate) -> None:
     )
 
 
-def _copy_code(code: str) -> str:
-    return f"{code}_copy"
+def _copy_code(code: str, company_code: str | None, document_type: str | None) -> str:
+    """Genera un código de copia único dentro de compañía y tipo documental."""
+    base = f"{code}_copy"
+    candidate = base
+    suffix = 2
+    while database.session.execute(
+        select(PrintTemplate.id).filter_by(
+            company_code=company_code,
+            document_type=document_type,
+            code=candidate,
+        )
+    ).first():
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    return candidate
 
 
 def _current_user_id() -> str:
