@@ -19,6 +19,7 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AccountingPeriod,
     ApprovalMatrix,
     Currency,
     Entity,
@@ -293,6 +294,44 @@ def test_matriz_acepta_rol_existente():
             regla = database.session.execute(database.select(ApprovalMatrix)).scalar_one()
             assert regla.role_id == ids["role"]
             assert regla.user_id is None
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_periodo_contable_no_persiste_rango_invertido():
+    """#1941: el alta de período rechaza inicio posterior al fin."""
+    application, _ids = _crear_app()
+    try:
+        with application.app_context():
+            anio = FiscalYear(
+                entity="cacao",
+                name="FY-1",
+                year_start_date=date(2026, 1, 1),
+                year_end_date=date(2026, 12, 31),
+            )
+            database.session.add(anio)
+            database.session.commit()
+            anio_id = anio.id
+
+        client = _cliente(application)
+        respuesta = client.post(
+            "/accounting/accounting_period/new",
+            data={
+                "id": "P-REVERSED",
+                "entidad": "cacao",
+                "fiscal_year": anio_id,
+                "nombre": "Período invertido",
+                "inicio": "2026-12-31",
+                "fin": "2026-01-01",
+            },
+        )
+
+        assert respuesta.status_code == 200
+        assert "La fecha final no puede ser anterior a la fecha de inicio." in respuesta.get_data(as_text=True)
+        with application.app_context():
+            assert database.session.execute(database.select(AccountingPeriod)).scalars().all() == []
     finally:
         with application.app_context():
             database.session.remove()

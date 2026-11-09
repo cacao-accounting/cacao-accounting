@@ -341,6 +341,15 @@ class FormularioAccountingPeriod(FlaskForm):
     inicio = DateField(FECHA_INICIO, validators=[DataRequired()])
     fin = DateField(FECHA_FIN, validators=[DataRequired()])
 
+    def validate(self, extra_validators=None):
+        """Rechaza un período contable invertido antes de persistir."""
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        if self.inicio.data and self.fin.data and self.inicio.data > self.fin.data:
+            self.fin.errors.append(_l("La fecha final no puede ser anterior a la fecha de inicio."))
+            return False
+        return True
+
 
 class FormularioExternalCounter(FlaskForm):
     """Formulario para crear y editar contadores externos."""
