@@ -53,6 +53,7 @@ from cacao_accounting.contabilidad.services import (
     _update_series_sequence,
     _update_counter_from_form,
     _sync_counter_naming_series_map,
+    enforce_close_and_recurring_company_access,
 )
 
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
@@ -199,6 +200,11 @@ def _journal_list_period_values(
 
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
+
+# El guard debe colgar del blueprint que la aplicación registra. El blueprint
+# homónimo de ``services`` no se registra, por lo que adjuntarlo allí deja las
+# rutas de cierre, recurrentes y revalorización sin aislamiento por compañía.
+contabilidad.before_request(enforce_close_and_recurring_company_access)
 
 contabilidad.register_blueprint(gl, url_prefix="/gl")
 
