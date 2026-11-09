@@ -122,6 +122,7 @@ from cacao_accounting.party_management import (  # noqa: F401
     party_group_label,
     toggle_party_customer_role,
     toggle_party_supplier_role as toggle_party_supplier_role,  # noqa: F401
+    validated_party_name,
     PartyRoleToggleError,
     update_party_address,
     update_party_contact,
@@ -599,15 +600,15 @@ def _handle_supplier_create(
     titulo: str,
 ):
     """Maneja la creacion de un nuevo proveedor desde el formulario POST."""
-    proveedor = Party(
-        code=str(ULID()),
-        is_supplier=True,
-        name=form.get("name") or "",
-        comercial_name=form.get("comercial_name"),
-        tax_id=form.get("tax_id"),
-        is_active=form.get("is_active", "on") is not None,
-    )
     try:
+        proveedor = Party(
+            code=str(ULID()),
+            is_supplier=True,
+            name=validated_party_name(form),
+            comercial_name=form.get("comercial_name"),
+            tax_id=form.get("tax_id"),
+            is_active=form.get("is_active", "on") is not None,
+        )
         database.session.add(proveedor)
         apply_party_group(proveedor, form.get("party_group_id") or None, role="supplier")
         apply_party_profile(proveedor, form)
@@ -642,7 +643,7 @@ def _handle_supplier_update(
 ):
     """Maneja la actualizacion de un proveedor existente desde el formulario POST."""
     try:
-        proveedor.name = form.get("name") or ""
+        proveedor.name = validated_party_name(form)
         proveedor.comercial_name = form.get("comercial_name") or None
         proveedor.tax_id = form.get("tax_id") or None
         proveedor.is_active = form.get("is_active") is not None

@@ -55,7 +55,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="col-md-2"><input class="form-control form-control-sm" name="first_name" placeholder="{{ _('Nombre') }}" required></div>
       <div class="col-md-2"><input class="form-control form-control-sm" name="last_name" placeholder="{{ _('Apellido') }}"></div>
-      <div class="col-md-2"><input class="form-control form-control-sm" name="email" placeholder="{{ _('Correo') }}"></div>
+      <div class="col-md-2"><input class="form-control form-control-sm" type="email" name="email" placeholder="{{ _('Correo') }}"></div>
       <div class="col-md-2"><input class="form-control form-control-sm" name="phone" placeholder="{{ _('Telefono') }}"></div>
       <div class="col-md-2"><input class="form-control form-control-sm" name="mobile" placeholder="{{ _('Movil') }}"></div>
       <div class="col-md-1"><input class="form-control form-control-sm" name="role" placeholder="{{ _('Rol') }}"></div>
@@ -85,7 +85,7 @@
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <div class="col-md-2"><input class="form-control form-control-sm" name="first_name" value="{{ row.contact.first_name }}" required></div>
               <div class="col-md-2"><input class="form-control form-control-sm" name="last_name" value="{{ row.contact.last_name or '' }}"></div>
-              <div class="col-md-2"><input class="form-control form-control-sm" name="email" value="{{ row.contact.email or '' }}"></div>
+              <div class="col-md-2"><input class="form-control form-control-sm" type="email" name="email" value="{{ row.contact.email or '' }}"></div>
               <div class="col-md-2"><input class="form-control form-control-sm" name="phone" value="{{ row.contact.phone or '' }}"></div>
               <div class="col-md-2"><input class="form-control form-control-sm" name="mobile" value="{{ row.contact.mobile or '' }}"></div>
               <div class="col-md-1"><input class="form-control form-control-sm" name="role" value="{{ row.role }}"></div>

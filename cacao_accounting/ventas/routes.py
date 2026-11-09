@@ -994,8 +994,12 @@ def ventas_cliente_contacto_editar(customer_id: str, link_id: str):
 def ventas_cliente_contacto_desactivar(customer_id: str, link_id: str):
     """Desactiva un contacto de cliente."""
     _party_or_404(customer_id, "customer")
-    deactivate_party_contact(customer_id, link_id)
-    database.session.commit()
+    try:
+        deactivate_party_contact(customer_id, link_id)
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        abort(404)
     flash(_("Contacto desactivado correctamente."), "success")
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
@@ -1040,8 +1044,12 @@ def ventas_cliente_direccion_editar(customer_id: str, link_id: str):
 def ventas_cliente_direccion_desactivar(customer_id: str, link_id: str):
     """Desactiva una direccion de cliente."""
     _party_or_404(customer_id, "customer")
-    deactivate_party_address(customer_id, link_id)
-    database.session.commit()
+    try:
+        deactivate_party_address(customer_id, link_id)
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        abort(404)
     flash(_("Dirección desactivada correctamente."), "success")
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 

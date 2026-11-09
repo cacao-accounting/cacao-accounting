@@ -107,6 +107,7 @@ from cacao_accounting.party_management import (  # noqa: F401
     party_group_label,
     toggle_party_customer_role as toggle_party_customer_role,  # noqa: F401
     toggle_party_supplier_role,
+    validated_party_name,
     PartyRoleToggleError,
     update_party_address,
     update_party_contact,
@@ -764,16 +765,16 @@ def _handle_cliente_create(
     titulo: str,
 ):
     """Maneja la creacion de un nuevo cliente desde el formulario POST."""
-    cliente = Party(
-        code=str(ULID()),
-        is_customer=True,
-        name=form.get("name") or "",
-        comercial_name=form.get("comercial_name"),
-        tax_id=form.get("tax_id"),
-        fiscal_name=form.get("fiscal_name"),
-        is_active=form.get("is_active") is not None,
-    )
     try:
+        cliente = Party(
+            code=str(ULID()),
+            is_customer=True,
+            name=validated_party_name(form),
+            comercial_name=form.get("comercial_name"),
+            tax_id=form.get("tax_id"),
+            fiscal_name=form.get("fiscal_name"),
+            is_active=form.get("is_active") is not None,
+        )
         database.session.add(cliente)
         apply_party_group(cliente, form.get("party_group_id") or None, role="customer")
         apply_party_profile(cliente, form)
@@ -808,7 +809,7 @@ def _handle_cliente_update(
 ):
     """Maneja la actualizacion de un cliente existente desde el formulario POST."""
     try:
-        cliente.name = form.get("name") or ""
+        cliente.name = validated_party_name(form)
         cliente.comercial_name = form.get("comercial_name") or None
         cliente.tax_id = form.get("tax_id") or None
         cliente.fiscal_name = form.get("fiscal_name")

@@ -25085,3 +25085,11 @@ msgstr "The numbering series does not match the payment type."
 #: cacao_accounting/bancos/services.py
 msgid "La cuenta GL del pago debe estar activa, habilitada y ser una cuenta hoja."
 msgstr "The payment GL account must be active, enabled, and a leaf account."
+
+#: cacao_accounting/party_management.py
+msgid "El nombre del tercero es obligatorio."
+msgstr "The party name is required."
+
+#: cacao_accounting/party_management.py
+msgid "El correo electrónico del contacto no es válido."
+msgstr "The contact email address is not valid."

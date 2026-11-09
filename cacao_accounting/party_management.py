@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from dataclasses import dataclass
+import re
 from typing import Mapping
 
 from sqlalchemy import select
@@ -297,12 +298,31 @@ def list_party_addresses(party_id: str) -> list[AddressRow]:
     ]
 
 
+_CONTACT_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validated_contact_email(raw_email: str | None) -> str | None:
+    """Devuelve el correo normalizado o falla si no tiene formato válido."""
+    email = (raw_email or "").strip() or None
+    if email and not _CONTACT_EMAIL_PATTERN.fullmatch(email):
+        raise ValueError(_("El correo electrónico del contacto no es válido."))
+    return email
+
+
+def validated_party_name(values: Mapping[str, str | None]) -> str:
+    """Devuelve el nombre del tercero o falla si viene vacío."""
+    name = (values.get("name") or "").strip()
+    if not name:
+        raise ValueError(_("El nombre del tercero es obligatorio."))
+    return name
+
+
 def create_party_contact(party_id: str, values: Mapping[str, str | None]) -> Contact:
     """Crea un contacto y lo vincula al tercero."""
     contact = Contact(
         first_name=(values.get("first_name") or "").strip(),
         last_name=(values.get("last_name") or "").strip() or None,
-        email=(values.get("email") or "").strip() or None,
+        email=_validated_contact_email(values.get("email")),
         phone=(values.get("phone") or "").strip() or None,
         mobile=(values.get("mobile") or "").strip() or None,
         is_active=True,
@@ -326,7 +346,7 @@ def update_party_contact(party_id: str, link_id: str, values: Mapping[str, str |
         raise ValueError(_("El nombre del contacto es obligatorio."))
     contact.first_name = first_name
     contact.last_name = (values.get("last_name") or "").strip() or None
-    contact.email = (values.get("email") or "").strip() or None
+    contact.email = _validated_contact_email(values.get("email"))
     contact.phone = (values.get("phone") or "").strip() or None
     contact.mobile = (values.get("mobile") or "").strip() or None
     link.role = (values.get("role") or "").strip() or None

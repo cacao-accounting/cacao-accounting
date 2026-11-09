@@ -1821,8 +1821,12 @@ def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
 def compras_proveedor_contacto_desactivar(supplier_id: str, link_id: str):
     """Desactiva un contacto de proveedor."""
     _party_or_404(supplier_id)
-    deactivate_party_contact(supplier_id, link_id)
-    database.session.commit()
+    try:
+        deactivate_party_contact(supplier_id, link_id)
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        abort(404)
     flash(_("Contacto desactivado correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
@@ -1871,8 +1875,12 @@ def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
 def compras_proveedor_direccion_desactivar(supplier_id: str, link_id: str):
     """Desactiva una direccion de proveedor."""
     _party_or_404(supplier_id)
-    deactivate_party_address(supplier_id, link_id)
-    database.session.commit()
+    try:
+        deactivate_party_address(supplier_id, link_id)
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        abort(404)
     flash(_("Dirección desactivada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
