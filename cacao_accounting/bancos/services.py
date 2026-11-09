@@ -13,7 +13,7 @@ from typing import Any, TypedDict, cast
 
 from cacao_accounting.exceptions import flash_error
 
-from flask import Blueprint, abort, flash, redirect, request, url_for
+from flask import Blueprint, flash, redirect, request, url_for
 
 
 from flask_login import current_user
@@ -296,11 +296,6 @@ def _lookup_counter_name(external_counter_id: str | None) -> str | None:
 def _payment_type_to_entity_type(payment_type: str) -> str:
     """Retorna el entity_type de NamingSeries para un tipo de transaccion bancaria."""
     return PAYMENT_TYPE_TO_ENTITY_TYPE.get(payment_type, "payment_entry")
-
-
-def _get_default_entity_type_for_payment_type() -> dict[str, str]:
-    """Retorna el mapeo de payment_type a entity_type."""
-    return dict(PAYMENT_TYPE_TO_ENTITY_TYPE)
 
 
 def _ensure_bank_account_numbering_config(bank_account: BankAccount) -> None:
@@ -655,13 +650,9 @@ def _validate_petty_cash_dimensions(
     for model, code, label in checks:
         if not code:
             continue
-        exists = database.session.execute(
-            database.select(model.id).filter_by(code=code, entity=company)
-        ).scalar_one_or_none()
+        exists = database.session.execute(database.select(model.id).filter_by(code=code, entity=company)).scalar_one_or_none()
         if exists is None:
-            raise ValueError(
-                _("La dimensión %(label)s no pertenece a la compañía del documento.") % {"label": label}
-            )
+            raise ValueError(_("La dimensión %(label)s no pertenece a la compañía del documento.") % {"label": label})
 
 
 def create_petty_cash_voucher(
@@ -1566,19 +1557,6 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
     )
     attach_period_picker(paginated, model, "cash", current_user=current_user)
     return paginated
-
-
-def _bank_account_for_note(bank_account_id: str, company: str | None, amount: Decimal) -> BankAccount:
-    """Obtiene la cuenta bancaria de una nota y valida su pertenencia."""
-    if amount <= 0:
-        abort(409)
-
-    bank_account = database.session.get(BankAccount, bank_account_id)
-    if not bank_account:
-        abort(400)
-    if company and bank_account.company != company:
-        abort(409)
-    return bank_account
 
 
 def _bank_reconciliation_allocated_amount(transaction: BankTransaction) -> Decimal | None:
@@ -2965,21 +2943,6 @@ def _update_payment_amounts(payment: PaymentEntry, payment_type: str, amount: De
     if payment_type in ("receive", "credit_note", "internal_transfer"):
         payment.received_amount = amount
         payment.base_received_amount = (amount * rate).quantize(Decimal("0.0001"))
-
-
-def _payment_identifier_inputs(
-    *,
-    payload: dict[str, object | None],
-    mode_of_payment: str,
-    default_series_id: str | None,
-    default_counter_id: str | None,
-) -> tuple[str | None, str | None]:
-    """Resolve numbering inputs for the payment identifier."""
-    naming_series_id = cast(str | None, payload.get("naming_series_id") or default_series_id)
-    external_counter_id = None
-    if mode_of_payment == "check":
-        external_counter_id = cast(str | None, payload.get("external_counter_id") or default_counter_id)
-    return naming_series_id, external_counter_id
 
 
 def _payment_identifier_context(payment: PaymentEntry, mode_of_payment: str) -> dict[str, str]:

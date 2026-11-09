@@ -405,28 +405,8 @@ def _build_unclassified_warning(count: int) -> str | None:
         return message
 
 
-def _report_form_key(report_code: str) -> str:
-    return f"reports.financial.{report_code}"
-
-
 def _load_report_view_options(report_code: str) -> list[str]:
     return ["default"]
-
-
-def _extract_filter_payload() -> dict[str, str]:
-    payload: dict[str, str] = {}
-    for key in _FINANCIAL_FILTER_FIELDS:
-        value = request.args.get(key)
-        if value:
-            payload[key] = value
-    visible_columns = request.args.getlist("visible_columns")
-    if visible_columns:
-        payload["visible_columns"] = ",".join(visible_columns)
-    return payload
-
-
-def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str, view_key: str) -> FinancialReportFilters:
-    return filters
 
 
 def _handle_saved_view_action(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str]:
