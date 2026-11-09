@@ -5566,6 +5566,10 @@ msgstr "Manages system users, assigns roles and controls their access status."
 msgid "Nuevo Usuario"
 msgstr "New User"
 
+#: cacao_accounting/admin/routes.py:1315
+msgid "Actualizar Usuario"
+msgstr "Update User"
+
 #: cacao_accounting/admin/templates/admin/usuarios.html:44
 msgid "Administración de Usuarios del Sistema"
 msgstr "System User Administration"

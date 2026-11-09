@@ -1285,7 +1285,7 @@ def crear_usuario():
         "admin/usuario_form.html",
         form=form,
         titulo=_("Crear Usuario"),
-        accion="Nuevo Usuario",
+        accion=_("Nuevo Usuario"),
         tiene_clave=True,
     )
 
@@ -1312,7 +1312,7 @@ def editar_usuario(user_id: str):
         "admin/usuario_form.html",
         form=form,
         titulo=_("Editar Usuario"),
-        accion="Actualizar Usuario",
+        accion=_("Actualizar Usuario"),
         usuario=usuario,
         tiene_clave=False,
     )
