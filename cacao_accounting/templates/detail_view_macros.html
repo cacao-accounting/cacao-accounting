@@ -128,7 +128,7 @@
             data-source-type="{{ item.source_type|default('', true) }}"
             data-source-id="{{ item.source_id|default('', true) }}"
             data-source-item-id="{{ item.source_item_id|default('', true) }}"
-            data-batch-no="{{ item.batch_no|default('', true) or item.batch_id|default('', true) }}"
+            data-batch-no="{{ item.batch_no|default('', true) or batch_number(item.batch_id) }}"
             data-serial-no="{{ item.serial_no|default('', true) }}"
             data-remarks="{{ item.remarks|default('', true) }}">
           <td>{{ loop.index }}</td>

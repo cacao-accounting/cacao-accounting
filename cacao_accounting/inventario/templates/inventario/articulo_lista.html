@@ -40,7 +40,7 @@
       <tr>
         <td><a class="fw-bold" href="{{ url_for('inventario.inventario_articulo', item_id=item.code) }}">{{ item.code }}</a></td>
         <td>{{ item.name }}</td>
-        <td>-</td>
+        <td>{{ categorias.get(item.item_category_id, '-') }}</td>
         <td>{{ item.item_type }}</td>
         <td>{{ _('Si') if item.is_purchase_item else _('No') }}</td>
         <td>{{ _('Si') if item.is_sale_item else _('No') }}</td>

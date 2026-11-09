@@ -134,8 +134,16 @@ def inventario_articulo_lista():
         max_per_page=10,
         count=True,
     )
+    categorias = {
+        categoria.id: categoria.name for categoria in database.session.execute(database.select(ItemCategory)).scalars().all()
+    }
     titulo = _("Listado de Artículos") + " - " + APPNAME
-    return render_template("inventario/articulo_lista.html", consulta=consulta, titulo=titulo)
+    return render_template(
+        "inventario/articulo_lista.html",
+        consulta=consulta,
+        categorias=categorias,
+        titulo=titulo,
+    )
 
 
 @inventario.route("/uom/list")

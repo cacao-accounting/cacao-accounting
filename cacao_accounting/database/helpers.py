@@ -12,7 +12,7 @@ from typing import Optional
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Flask
+from flask import Flask, g, has_request_context
 from sqlalchemy.exc import InternalError, InterfaceError, OperationalError, ProgrammingError, SQLAlchemyError
 
 # ---------------------------------------------------------------------------------------
@@ -526,6 +526,25 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
         contrasena = contrasena or "cacao"
 
     return usuario, contrasena
+
+
+def batch_number(batch_id: str | None) -> str:
+    """Resuelve el número público del lote, con caché por request."""
+    if not batch_id:
+        return ""
+    from cacao_accounting.database import Batch
+
+    if not has_request_context():
+        batch = database.session.get(Batch, batch_id)
+        return batch.batch_no if batch else ""
+    cache = getattr(g, "_batch_number_cache", None)
+    if cache is None:
+        cache = {}
+        g._batch_number_cache = cache
+    if batch_id not in cache:
+        batch = database.session.get(Batch, batch_id)
+        cache[batch_id] = batch.batch_no if batch else ""
+    return cache[batch_id]
 
 
 def check_hierarchy_cycle(node_class, node_id, proposed_parent_id) -> None:

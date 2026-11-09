@@ -43,6 +43,7 @@ from cacao_accounting.config import (
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import database
 from cacao_accounting.database.helpers import (
+    batch_number,
     entidades_creadas,
     obtener_id_modulo_por_nombre,
 )
@@ -206,6 +207,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(is_cloud_mode=is_cloud_mode)
             app.jinja_env.globals.update(can_send_transaction_emails=can_send_transaction_emails)
             app.jinja_env.globals.update(force_single_entity=force_single_entity)
+            app.jinja_env.globals.update(batch_number=batch_number)
             app.jinja_env.globals.update(TESTING=TESTING_MODE)
             # En las plantillas no se utiliza el termino permiso para evitar un conflicto de nombre
             # se utiliza "acceso", para ello al inicio de cada plantilla se debe establecer el
