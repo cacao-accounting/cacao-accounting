@@ -27,7 +27,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Recrea ``assignment`` si no existe."""
+    """Recrea ``assignment`` con sus FKs, índices y defaults originales."""
     inspector = sa.inspect(op.get_bind())
     if inspector.has_table("assignment"):
         return
@@ -35,14 +35,19 @@ def downgrade() -> None:
         "assignment",
         sa.Column("id", sa.String(26), primary_key=True),
         sa.Column("status", sa.String(50), nullable=True),
-        sa.Column("reference_type", sa.String(50), nullable=False, index=True),
-        sa.Column("reference_id", sa.String(26), nullable=False, index=True),
-        sa.Column("assigned_to", sa.String(26), nullable=False, index=True),
+        sa.Column("reference_type", sa.String(50), nullable=False),
+        sa.Column("reference_id", sa.String(26), nullable=False),
+        sa.Column("assigned_to", sa.String(26), nullable=False),
         sa.Column("assigned_by", sa.String(26), nullable=True),
-        sa.Column("assignment_status", sa.String(20), nullable=False, server_default="open"),
+        sa.Column("assignment_status", sa.String(20), server_default="open", nullable=False),
         sa.Column("due_date", sa.Date(), nullable=True),
-        sa.Column("created", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.Column("created_by", sa.String(26), nullable=True),
         sa.Column("modified", sa.DateTime(timezone=True), nullable=True),
         sa.Column("modified_by", sa.String(26), nullable=True),
+        sa.ForeignKeyConstraint(["assigned_to"], ["user.id"], ondelete="RESTRICT", onupdate="CASCADE"),
+        sa.ForeignKeyConstraint(["assigned_by"], ["user.id"], ondelete="RESTRICT", onupdate="CASCADE"),
     )
+    op.create_index("ix_assignment_reference_type", "assignment", ["reference_type"])
+    op.create_index("ix_assignment_reference_id", "assignment", ["reference_id"])
+    op.create_index("ix_assignment_assigned_to", "assignment", ["assigned_to"])

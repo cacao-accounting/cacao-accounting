@@ -27,17 +27,22 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Recrea ``comment_mention`` si no existe."""
+    """Recrea ``comment_mention`` con sus FKs e índices originales."""
     inspector = sa.inspect(op.get_bind())
     if inspector.has_table("comment_mention"):
         return
     op.create_table(
         "comment_mention",
         sa.Column("id", sa.String(26), primary_key=True),
-        sa.Column("comment_id", sa.String(26), nullable=False, index=True),
-        sa.Column("user_id", sa.String(26), nullable=False, index=True),
-        sa.Column("created", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("modified", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("status", sa.String(50), nullable=True),
+        sa.Column("comment_id", sa.String(26), nullable=False),
+        sa.Column("user_id", sa.String(26), nullable=False),
+        sa.Column("created", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.Column("created_by", sa.String(26), nullable=True),
+        sa.Column("modified", sa.DateTime(timezone=True), nullable=True),
         sa.Column("modified_by", sa.String(26), nullable=True),
+        sa.ForeignKeyConstraint(["comment_id"], ["comment.id"], ondelete="CASCADE", onupdate="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="RESTRICT", onupdate="CASCADE"),
     )
+    op.create_index("ix_comment_mention_comment_id", "comment_mention", ["comment_id"])
+    op.create_index("ix_comment_mention_user_id", "comment_mention", ["user_id"])
