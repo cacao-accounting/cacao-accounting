@@ -743,8 +743,13 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
         raise JournalValidationError(_("Cada linea del comprobante debe ser un objeto."))
     debit = _decimal(raw_line.get("debit"))
     credit = _decimal(raw_line.get("credit"))
+    raw_order = raw_line.get("order")
+    try:
+        order = int(raw_order) if raw_order not in (None, "") else fallback_order
+    except (TypeError, ValueError) as exc:
+        raise JournalValidationError(_("El orden de la línea debe ser un número entero.")) from exc
     return JournalLineInput(
-        order=int(raw_line.get("order") or fallback_order),
+        order=order,
         book=_optional_text(raw_line.get("book")),
         account=_optional_text(raw_line.get("account")) or "",
         cost_center=_optional_text(raw_line.get("cost_center")),

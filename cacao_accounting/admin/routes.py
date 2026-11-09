@@ -343,8 +343,12 @@ def email_settings():
         if request.form.get("action") == "test_email":
             _send_email_test()
             return redirect(url_for("admin.email_settings"))
-        _save_email_settings()
-        flash(_("Configuración de correo electrónico guardada correctamente."), "success")
+        try:
+            _save_email_settings()
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+        else:
+            flash(_("Configuración de correo electrónico guardada correctamente."), "success")
         return redirect(url_for("admin.email_settings"))
 
     settings = _email_settings_values()
@@ -525,10 +529,15 @@ def items_plantilla_impuesto(template_id: str):
     if not template:
         abort(404)
     if request.method == "POST":
+        try:
+            sequence = int(request.form.get("sequence") or 10)
+        except (TypeError, ValueError):
+            flash(_("La secuencia debe ser un número entero."), "danger")
+            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
         item = TaxTemplateItem(
             tax_template_id=template.id,
             tax_id=request.form.get("tax_id") or "",
-            sequence=int(request.form.get("sequence") or 10),
+            sequence=sequence,
             calculation_base=request.form.get("calculation_base") or "net_document",
             behavior=request.form.get("behavior") or "additive",
             is_inclusive=bool(request.form.get("is_inclusive")),

@@ -194,15 +194,33 @@ def _send_email_test():
 
 
 def _save_email_settings() -> None:
-    """Persist the SMTP settings submitted by the administrator."""
+    """Persist the SMTP settings after validating server-side values."""
+    from email_validator import EmailNotValidError, validate_email
+
     from cacao_accounting.messaging.email import set_smtp_setting
 
+    server = (request.form.get("smtp_server") or "").strip()
+    if not server:
+        raise ValueError(_("El servidor SMTP es obligatorio."))
+    port_text = (request.form.get("smtp_port") or "587").strip()
+    try:
+        port = int(port_text)
+    except ValueError as exc:
+        raise ValueError(_("El puerto SMTP debe ser un número entero entre 1 y 65535.")) from exc
+    if not 1 <= port <= 65535:
+        raise ValueError(_("El puerto SMTP debe ser un número entero entre 1 y 65535."))
+    from_email = (request.form.get("smtp_from_email") or "").strip()
+    if from_email:
+        try:
+            from_email = validate_email(from_email, check_deliverability=False).normalized
+        except EmailNotValidError as exc:
+            raise ValueError(_("El correo remitente SMTP no es válido.")) from exc
     settings = {
-        "smtp_server": (request.form.get("smtp_server") or "").strip(),
-        "smtp_port": (request.form.get("smtp_port") or "587").strip(),
+        "smtp_server": server,
+        "smtp_port": str(port),
         "smtp_user": (request.form.get("smtp_user") or "").strip(),
         "smtp_use_tls": "true" if request.form.get("smtp_use_tls") == "on" else "false",
-        "smtp_from_email": (request.form.get("smtp_from_email") or "").strip(),
+        "smtp_from_email": from_email,
         "disable_transaction_emails": "true" if request.form.get("disable_transaction_emails") == "on" else "false",
     }
     for key, value in settings.items():

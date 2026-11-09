@@ -25191,3 +25191,23 @@ msgstr "The inventory account must be active, enabled, and a leaf account."
 #: cacao_accounting/inventario/service.py
 msgid "El número de serie ya está registrado para otro artículo."
 msgstr "The serial number is already registered for another item."
+
+#: cacao_accounting/admin/routes.py
+msgid "La secuencia debe ser un número entero."
+msgstr "The sequence must be an integer."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "El orden de la línea debe ser un número entero."
+msgstr "The line order must be an integer."
+
+#: cacao_accounting/admin/services.py
+msgid "El servidor SMTP es obligatorio."
+msgstr "The SMTP server is required."
+
+#: cacao_accounting/admin/services.py
+msgid "El puerto SMTP debe ser un número entero entre 1 y 65535."
+msgstr "The SMTP port must be an integer between 1 and 65535."
+
+#: cacao_accounting/admin/services.py
+msgid "El correo remitente SMTP no es válido."
+msgstr "The SMTP sender email address is not valid."
