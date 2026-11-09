@@ -684,7 +684,7 @@ def _create_dimension_type_from_request() -> Any:
     if not name:
         flash(_("El nombre del tipo de dimensión es obligatorio."), "danger")
         return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
-    dimension_type = DimensionType(name=name, is_active=bool(request.form.get("is_active", "1")))
+    dimension_type = DimensionType(name=name, is_active=request.form.get("is_active") is not None)
     database.session.add(dimension_type)
     try:
         database.session.commit()
