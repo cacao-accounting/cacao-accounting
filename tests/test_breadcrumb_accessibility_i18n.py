@@ -18,9 +18,7 @@ RAIZ = Path("cacao_accounting")
 def test_no_quedan_nombres_literales_sin_gettext():
     """Ninguna plantilla conserva el literal inglés."""
     ofensores = [
-        str(archivo)
-        for archivo in RAIZ.rglob("*.html")
-        if 'aria-label="breadcrumb"' in archivo.read_text(encoding="utf-8")
+        str(archivo) for archivo in RAIZ.rglob("*.html") if 'aria-label="breadcrumb"' in archivo.read_text(encoding="utf-8")
     ]
 
     assert ofensores == []
@@ -28,10 +26,6 @@ def test_no_quedan_nombres_literales_sin_gettext():
 
 def test_las_plantillas_usan_la_cadena_traducible():
     """El reemplazo llegó a los templates que tienen navegación."""
-    con_cadena = [
-        archivo
-        for archivo in RAIZ.rglob("*.html")
-        if "Ruta de navegación" in archivo.read_text(encoding="utf-8")
-    ]
+    con_cadena = [archivo for archivo in RAIZ.rglob("*.html") if "Ruta de navegación" in archivo.read_text(encoding="utf-8")]
 
     assert len(con_cadena) >= 150
