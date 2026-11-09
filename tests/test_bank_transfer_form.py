@@ -25,6 +25,7 @@ from cacao_accounting.database import (
     BankAccount,
     Entity,
     Modules,
+    PaymentEntry,
     User,
     UserCompanyAccess,
     database,
@@ -110,7 +111,11 @@ def test_datos_invalidos_vuelven_al_formulario_de_transferencia(transferencias_c
     response = client.post("/cash_management/payment/transfer/new", data={})
 
     assert response.status_code == 200
-    assert "bankTransferForm" in response.get_data(as_text=True)
+    cuerpo = response.get_data(as_text=True)
+    assert "bankTransferForm" in cuerpo
+    assert "La compañía es obligatoria." in cuerpo
+    with application.app_context():
+        assert database.session.execute(database.select(PaymentEntry)).scalars().all() == []
 
 
 def test_sin_permiso_de_creacion_responde_403(transferencias_cloud):
@@ -130,3 +135,5 @@ def test_sin_permiso_de_creacion_responde_403(transferencias_cloud):
     )
 
     assert response.status_code == 403
+    with application.app_context():
+        assert database.session.execute(database.select(PaymentEntry)).scalars().all() == []

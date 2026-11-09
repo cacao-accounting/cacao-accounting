@@ -2653,9 +2653,9 @@ def _create_payment_from_request():
     except (ValueError, ArithmeticError) as exc:
         database.session.rollback()
         flash_error(exc)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:
         database.session.rollback()
-        flash(exc.description or str(exc), "danger")
+        raise
     return None
 
 
