@@ -167,7 +167,7 @@ def test_pago_destino_rechaza_una_factura_ajena(pagos_cloud):
 @pytest.mark.parametrize(
     "line_changes, expected_status",
     [
-        ({"source_document_type": "sales_invoice"}, 400),
+        ({"source_document_type": ""}, 400),
         ({"source_document_id": ""}, 400),
         ({"source_document_type": "sales_order"}, 400),
         ({"source_document_id": "missing-invoice"}, 404),
