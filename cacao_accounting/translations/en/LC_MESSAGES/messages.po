@@ -2046,6 +2046,10 @@ msgstr "User not found."
 msgid "En modo escritorio solo se permite un usuario administrador."
 msgstr "Desktop mode allows only one administrator user."
 
+#: cacao_accounting/admin/services.py:58
+msgid "El sistema debe conservar al menos un administrador activo."
+msgstr "The system must keep at least one active administrator."
+
 #: cacao_accounting/admin/routes.py:225
 msgid "Módulo no encontrado."
 msgstr "Module not found."
