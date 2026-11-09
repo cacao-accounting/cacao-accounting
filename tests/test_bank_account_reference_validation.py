@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     ExternalCounter,
     Modules,
     NamingSeries,
+    PaymentEntry,
     User,
     database,
 )
@@ -484,6 +485,35 @@ def test_la_cuenta_gl_del_pago_debe_ser_hoja_vigente(clave_cuenta, aceptada):
                         paid_from_account_id=None,
                         paid_to_account_id=ids[clave_cuenta],
                     )
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_submit_revalida_la_cuenta_gl_del_pago():
+    """#2180: contabilizar un borrador rechaza una cuenta ya desactivada."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            pago = PaymentEntry(
+                company="cacao",
+                payment_type="debit_note",
+                paid_from_account_id=ids["gl_active"],
+                paid_to_account_id=ids["gl_inactive"],
+                docstatus=0,
+            )
+            database.session.add(pago)
+            database.session.commit()
+            payment_id = pago.id
+
+        client = _cliente(application)
+        respuesta = client.post(f"/cash_management/payment/{payment_id}/submit")
+
+        assert respuesta.status_code == 302
+        with application.app_context():
+            pago = database.session.get(PaymentEntry, payment_id)
+            assert pago is not None and pago.docstatus == 0
     finally:
         with application.app_context():
             database.session.remove()

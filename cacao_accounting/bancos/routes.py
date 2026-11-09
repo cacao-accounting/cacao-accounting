@@ -90,6 +90,7 @@ from cacao_accounting.bancos.services import (
     _safe_bank_reconciliation_candidates,
     _validate_bank_account_numbering_defaults,
     _validate_bank_account_references,
+    _validate_payment_gl_accounts,
     _ensure_bank_account_counter_mapping,
     _lookup_series_name,
     _lookup_counter_name,
@@ -1829,10 +1830,20 @@ def bancos_pago_submit(payment_id: str):
         if ApprovalEngine.handle_submission(registro, current_user, "Pago"):
             return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
 
+        # Revalida al contabilizar: una cuenta pudo desactivarse o convertirse
+        # en agrupadora después de guardar el borrador.
+        _validate_payment_gl_accounts(
+            company=registro.company,
+            payment_type=registro.payment_type,
+            bank_account_id=registro.bank_account_id,
+            target_bank_account_id=registro.target_bank_account_id,
+            paid_from_account_id=registro.paid_from_account_id,
+            paid_to_account_id=registro.paid_to_account_id,
+        )
         submit_document(registro)  # type: ignore[misc]
         log_submit(registro)
         database.session.commit()
-    except PostingError as exc:  # type: ignore[misc]
+    except (PostingError, ValueError) as exc:  # type: ignore[misc]
         database.session.rollback()
         flash(_(str(exc)), "danger")
         return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
