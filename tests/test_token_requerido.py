@@ -87,7 +87,7 @@ def _iniciar_sesion(client, usuario: str) -> None:
 
 def _cerrar_sesion(client) -> None:
     """Cierra la sesión para poder autenticar a otro usuario en el mismo cliente."""
-    client.get("/logout")
+    client.post("/logout")
 
 
 def _token_persistido(application, usuario: str):

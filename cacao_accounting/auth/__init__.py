@@ -287,11 +287,11 @@ def reset_password(token: str):  # pragma: no cover
     )
 
 
-@login.route("/exit")
-@login.route("/logout")
-@login.route("/salir")
+@login.route("/exit", methods=["POST"])
+@login.route("/logout", methods=["POST"])
+@login.route("/salir", methods=["POST"])
 def cerrar_sesion():  # pragma: no cover
-    """Finaliza la sesion actual."""
+    """Finaliza la sesion actual con una solicitud protegida por CSRF."""
     if current_user and current_user.is_authenticated:
         current_user.token = None
     logout_user()

@@ -90,9 +90,12 @@
     <a class="ca-nav-btn" href="{{ url_for('login.profile') }}" title="{{ _('Mi perfil') }}">
       <i class="bi bi-person-circle"></i>
     </a>
-    <a class="ca-nav-btn" href="{{ url_for('login.cerrar_sesion') }}" title="{{ _('Cerrar sesión') }}">
-      <i class="bi bi-box-arrow-right"></i>
-    </a>
+    <form method="post" action="{{ url_for('login.cerrar_sesion') }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="ca-nav-btn border-0 bg-transparent" type="submit" title="{{ _('Cerrar sesión') }}">
+        <i class="bi bi-box-arrow-right"></i>
+      </button>
+    </form>
   </div>
 </header>
 <script>
@@ -191,9 +194,12 @@
     </li>
     {%- endif %}
     <li class="nav-item d-md-none">
-      <a href="{{ url_for('login.cerrar_sesion') }}" class="nav-link">
-        <i class="bi bi-box-arrow-right"></i> {{ _('Cerrar Sesión') }}
-      </a>
+      <form method="post" action="{{ url_for('login.cerrar_sesion') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="nav-link btn btn-link">
+          <i class="bi bi-box-arrow-right"></i> {{ _('Cerrar Sesión') }}
+        </button>
+      </form>
     </li>
   </ul>
 </nav>

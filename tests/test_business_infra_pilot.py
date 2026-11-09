@@ -244,7 +244,7 @@ def test_login_real_logout_and_session_reset(app):
     with client.session_transaction() as session:
         assert session.get("_user_id") is not None
 
-    logout_response = client.get("/logout", follow_redirects=True)
+    logout_response = client.post("/logout", follow_redirects=True)
     assert logout_response.status_code == 200
     with client.session_transaction() as session:
         assert session.get("_user_id") is None
