@@ -73,6 +73,24 @@ def portal_usuarios():
                     party_id=cliente.id,
                     company="cacao",
                 ),
+                User(
+                    id="portal_sin_party",
+                    user="portal_sin_party",
+                    name="Portal Sin Cliente",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                    classification="customer",
+                ),
+                User(
+                    id="portal_supplier",
+                    user="portal_supplier",
+                    name="Portal Supplier",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                    classification="supplier",
+                    party_id=cliente.id,
+                    company="cacao",
+                ),
             ]
         )
         database.session.commit()
@@ -112,3 +130,69 @@ def test_clasificacion_customer_si_va_al_portal(portal_usuarios):
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/portal/customer")
+
+
+def test_customer_sin_asociaciones_no_va_al_portal(portal_usuarios):
+    """Falta party_id/company: el login no redirige a una pantalla 403."""
+    client = portal_usuarios.test_client()
+
+    response = _login(client, "portal_sin_party")
+
+    assert response.status_code == 302
+    assert "/portal/customer" not in response.headers["Location"]
+    assert client.get("/portal/customer").status_code == 403
+
+
+def test_supplier_con_asociaciones_va_al_portal(portal_usuarios):
+    """Control de proveedor: classification=supplier conserva su portal."""
+    client = portal_usuarios.test_client()
+
+    response = _login(client, "portal_supplier")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/portal/supplier")
+
+
+def test_desktop_no_redirige_al_portal():
+    """En Desktop el portal no está disponible y el predicado es falso."""
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": True,
+        }
+    )
+    with application.app_context():
+        database.create_all()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
+        cliente = Party(code="CLI-2", name="Cliente", is_customer=True)
+        database.session.add(cliente)
+        database.session.flush()
+        usuario = User(
+            id="desktop_portal",
+            user="desktop_portal",
+            name="Portal Desktop",
+            password=proteger_passwd(CONTRASENA),
+            active=True,
+            classification="customer",
+            party_id=cliente.id,
+            company="cacao",
+        )
+        database.session.add(usuario)
+        database.session.commit()
+
+        assert usuario.is_portal_customer is False

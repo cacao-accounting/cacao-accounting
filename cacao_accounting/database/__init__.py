@@ -321,13 +321,21 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @property
     def is_portal_customer(self) -> bool:
-        """Retorna verdadero si el usuario es de tipo cliente."""
-        return self.classification == "customer"
+        """Retorna verdadero si el usuario puede entrar al portal de clientes."""
+        from cacao_accounting.runtime_mode import is_desktop_mode
+
+        if is_desktop_mode():
+            return False
+        return self.classification == "customer" and bool(self.party_id and self.company)
 
     @property
     def is_portal_supplier(self) -> bool:
-        """Retorna verdadero si el usuario es de tipo proveedor."""
-        return self.classification == "supplier"
+        """Retorna verdadero si el usuario puede entrar al portal de proveedores."""
+        from cacao_accounting.runtime_mode import is_desktop_mode
+
+        if is_desktop_mode():
+            return False
+        return self.classification == "supplier" and bool(self.party_id and self.company)
 
     @property
     def token(self) -> str | None:
