@@ -88,6 +88,17 @@ def efe_cloud():
         )
         database.session.add(cuenta)
         database.session.flush()
+        segunda = Accounts(
+            code="1.01.02.001",
+            name="Banco",
+            entity="alpha",
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="bank",
+        )
+        database.session.add(segunda)
+        database.session.flush()
         database.session.add(CashFlowAccountMapping(company="alpha", account_id=cuenta.id, flow_section="operating"))
         database.session.commit()
         crea_roles_predeterminados()
@@ -95,7 +106,7 @@ def efe_cloud():
         asigna_rol_a_usuario("lector", "accounting_user")
         asigna_rol_a_usuario("editor", "accounting_auxiliar")
         database.session.commit()
-        ids = {"cuenta": cuenta.id}
+        ids = {"cuenta": cuenta.id, "segunda": segunda.id}
     yield application, ids
     with application.app_context():
         database.session.remove()
@@ -123,7 +134,10 @@ def test_lector_no_puede_mutar_el_mapeo(efe_cloud):
 
     response = client.post(
         "/accounting/cash-flow-config/alpha",
-        data={"account_ids": ids["cuenta"], f"section_{ids['cuenta']}": "investing"},
+        data={
+            "account_ids": [ids["cuenta"], ids["segunda"]],
+            f"section_{ids['cuenta']}": "investing",
+        },
     )
 
     assert response.status_code == 403
@@ -138,11 +152,29 @@ def test_editor_guarda_el_mapeo(efe_cloud):
 
     response = client.post(
         "/accounting/cash-flow-config/alpha",
-        data={"account_ids": ids["cuenta"], f"section_{ids['cuenta']}": "investing"},
+        data={
+            "account_ids": [ids["cuenta"], ids["segunda"]],
+            f"section_{ids['cuenta']}": "investing",
+        },
     )
 
     assert response.status_code == 302
     assert _seccion(application, ids["cuenta"]) == "investing"
+
+
+def test_post_parcial_no_borra_mapeos_omitidos(efe_cloud):
+    """Un POST que no representa el conjunto completo no elimina mapeos."""
+    application, ids = efe_cloud
+    client = application.test_client()
+    _iniciar(client, "editor")
+
+    response = client.post(
+        "/accounting/cash-flow-config/alpha",
+        data={"account_ids": [ids["cuenta"]], f"section_{ids['cuenta']}": "investing"},
+    )
+
+    assert response.status_code == 302
+    assert _seccion(application, ids["cuenta"]) == "operating"
 
 
 def test_post_sin_cuentas_no_borra_la_clasificacion(efe_cloud):

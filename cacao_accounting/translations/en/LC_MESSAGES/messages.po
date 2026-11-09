@@ -24900,3 +24900,11 @@ msgstr "The base UOM quantity must be finite."
 #, python-format
 msgid "La relación %(relation_id)s no tiene cantidad en la UOM base."
 msgstr "Relation %(relation_id)s has no quantity in the base UOM."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "No se recibieron cuentas para actualizar la clasificación."
+msgstr "No accounts were received to update the classification."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "La clasificación debe enviarse completa para evitar borrados accidentales."
+msgstr "The classification must be submitted in full to avoid accidental deletions."

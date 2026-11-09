@@ -4161,6 +4161,10 @@ def cash_flow_config(company):
         if not account_ids:
             flash(_("No se recibieron cuentas para actualizar la clasificación."), "danger")
             return redirect(url_for("contabilidad.cash_flow_config", company=selected_company))
+        expected_ids = {str(row["id"]) for row in get_cash_flow_config_overview(selected_company)["rows"]}
+        if set(account_ids) != expected_ids:
+            flash(_("La clasificación debe enviarse completa para evitar borrados accidentales."), "danger")
+            return redirect(url_for("contabilidad.cash_flow_config", company=selected_company))
         overrides = {account_id: request.form.get(f"section_{account_id}") for account_id in account_ids}
         try:
             save_cash_flow_mappings(selected_company, overrides)
