@@ -206,6 +206,17 @@ def _cash_accessible_companies():
     return database.select(Book.entity).where(Book.entity.in_(companies))
 
 
+def _cash_can_edit(company: str | None) -> bool:
+    """Return whether the current user can mutate cash records for a company."""
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("cash"),
+        usuario=current_user.id,
+    )
+    if permissions.administrador:
+        return True
+    return bool(permissions.editar and permissions.tiene_acceso_compania(company))
+
+
 from cacao_accounting.bancos import cash_forecast as _cf  # noqa: F401, E402
 
 
@@ -1084,6 +1095,7 @@ def caja_chica(pc_id):
         saldo=saldo,
         vales_abiertos=vales_abiertos,
         pendiente_reposicion=pendiente_reposicion,
+        can_edit_cash=_cash_can_edit(registro.company),
         titulo=titulo,
     )
 
