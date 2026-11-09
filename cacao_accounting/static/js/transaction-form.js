@@ -866,7 +866,10 @@
             const data = await response.json();
             if (requestId !== taxPreviewRequestId) return;
             if (!response.ok) {
-              this.taxCharges.error = data?.message || i18n.errorTaxPreview || 'No se pudo calcular.';
+              const detail = Array.isArray(data?.errors) && data.errors.length
+                ? data.errors.join(' ')
+                : (data?.message || i18n.errorTaxPreview || 'No se pudo calcular.');
+              this.taxCharges.error = detail;
               this.taxCharges.loading = false;
               return;
             }
@@ -904,6 +907,13 @@
         },
 
         applyTaxPreviewData(data) {
+          const errors = Array.isArray(data.errors) ? data.errors.filter(Boolean) : [];
+          if (errors.length) {
+            this.taxCharges.error = errors.join(' ');
+            this.taxCharges.loading = false;
+            return;
+          }
+          this.taxCharges.error = '';
           this.taxCharges.profile = data.profile || null;
           this.taxCharges.summary = data.summary || this.taxCharges.summary;
           this.taxCharges.lines = Array.isArray(data.tax_lines) ? data.tax_lines : [];

@@ -499,7 +499,12 @@ def _default_period_for_company(company_code: str, target_date: date | None = No
 
 
 def _build_drill_down_url(
-    values: dict[str, object], company: str, ledger: str | None, period: str | None = None
+    values: dict[str, object],
+    company: str,
+    ledger: str | None,
+    period: str | None = None,
+    period_from: str | None = None,
+    period_to: str | None = None,
 ) -> str | None:
     account_code = values.get("account_code")
     if account_code in (None, "", _EMPTY_CELL_VALUE):
@@ -509,6 +514,10 @@ def _build_drill_down_url(
         kwargs["ledger"] = ledger
     if period:
         kwargs["accounting_period"] = period
+    if period_from:
+        kwargs["accounting_period_from"] = period_from
+    if period_to:
+        kwargs["accounting_period_to"] = period_to
     return url_for("reportes.account_movement", company=company, account_code=str(account_code), **kwargs)
 
 
@@ -1223,7 +1232,12 @@ def _build_row_metadata(
                 "has_children": bool(child_counts.get(account_code)),
                 "level": _resolve_row_level(row, account_code),
                 "drilldown_url": _build_drill_down_url(
-                    row, report_filters.company, report_filters.ledger, report_filters.accounting_period
+                    row,
+                    report_filters.company,
+                    report_filters.ledger,
+                    report_filters.accounting_period,
+                    report_filters.period_from,
+                    report_filters.period_to,
                 ),
                 "voucher_url": _build_voucher_url(row),
                 "is_group": bool(row.get("is_group")),

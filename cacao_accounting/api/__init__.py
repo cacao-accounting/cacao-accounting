@@ -790,6 +790,8 @@ def api_fiscal_preview():
     except ValueError as exc:
         current_app.logger.warning("Fiscal preview validation error: %s", str(exc))
         return jsonify({"error": _("No se pudo calcular el preview fiscal."), "message": _("Revise los datos enviados.")}), 400
+    if result.get("errors"):
+        return jsonify(result), 422
     return jsonify(result)
 
 
