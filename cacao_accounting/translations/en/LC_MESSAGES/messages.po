@@ -7162,6 +7162,10 @@ msgstr "Code SWIFT"
 msgid "El código SWIFT no puede superar los 20 caracteres."
 msgstr "The SWIFT code cannot exceed 20 characters."
 
+#: cacao_accounting/bancos/forms.py:17
+msgid "Este campo es obligatorio."
+msgstr "This field is required."
+
 #: cacao_accounting/bancos/forms.py:24
 #: cacao_accounting/bancos/templates/bancos/banco_cuenta_nuevo.html:28
 #: cacao_accounting/contabilidad/forms.py:41

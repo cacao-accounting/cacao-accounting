@@ -14,7 +14,10 @@ _LABEL_COMPANY = _l("Compañía")
 class FormularioBanco(FlaskForm):
     """Formulario para crear o editar un banco."""
 
-    name = StringField(_l("Nombre"), validators=[DataRequired()])
+    name = StringField(
+        _l("Nombre"),
+        validators=[DataRequired(message=_l("Este campo es obligatorio."))],
+    )
     swift_code = StringField(
         _l("Código SWIFT"),
         validators=[
