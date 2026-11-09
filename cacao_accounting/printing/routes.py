@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from flask import Blueprint, Response, abort, current_app, render_template, request, url_for
 from flask_login import current_user, login_required
 
@@ -120,6 +122,15 @@ def _current_company() -> str:
 
 def _safe_return_url(value: str | None) -> str:
     """Return an internal destination for the preview's back button."""
-    if value and value.startswith("/") and not value.startswith("//"):
-        return value
-    return url_for("cacao_app.pagina_inicio")
+    if not value:
+        return url_for("cacao_app.pagina_inicio")
+    if not value.startswith("/") or value.startswith("//"):
+        return url_for("cacao_app.pagina_inicio")
+    if "\\" in value or "%5c" in value.lower():
+        return url_for("cacao_app.pagina_inicio")
+    if any(ord(character) < 32 for character in value):
+        return url_for("cacao_app.pagina_inicio")
+    parsed = urlsplit(value)
+    if parsed.scheme or parsed.netloc:
+        return url_for("cacao_app.pagina_inicio")
+    return value
