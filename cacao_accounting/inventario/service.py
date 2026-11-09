@@ -1086,11 +1086,11 @@ def _validate_item_account(company: str, account_id: str | None, expected_type: 
         raise InventoryServiceError(_("La cuenta de %(label)s no pertenece a la compañia seleccionada.") % {"label": label})
     account_type = (account.account_type or "").strip().lower()
     expected_aliases = {
-        "expense": {"expense", "cogs"},
+        "expense": {"expense", "cogs", "cost_of_goods_sold"},
         "income": {"income"},
-        "cogs": {"cogs", "expense"},
+        "cogs": {"cogs", "cost_of_goods_sold", "expense"},
         "inventory": {"inventory", "current_asset"},
-        "stock_adjustment": {"expense", "income"},
+        "stock_adjustment": {"expense", "income", "inventory_adjustment"},
     }[expected_type]
     if account_type not in expected_aliases:
         raise InventoryServiceError(

@@ -461,6 +461,8 @@ def _validate_warehouse_company_rows(rows: list[dict[str, str]]) -> None:
             raise ValueError(_("La cuenta de inventario debe pertenecer a la compañía seleccionada."))
         if (account.account_type or "").strip().lower() != "inventory":
             raise ValueError(_("La cuenta seleccionada debe ser de tipo inventario."))
+        if not account.active or not account.enabled or account.group:
+            raise ValueError(_("La cuenta de inventario debe estar activa, habilitada y ser una cuenta hoja."))
 
 
 def _save_warehouse_company_rows(warehouse_code: str, rows: list[dict[str, str]]) -> None:

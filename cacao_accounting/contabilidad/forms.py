@@ -58,6 +58,7 @@ ACCOUNT_TYPE_CHOICES = [
     ("deferred_expense", _l("Gasto diferido")),
     ("payment_discount", _l("Descuento de pago")),
     ("period_profit_loss", _l("Resultado del período")),
+    ("purchase_settlement_variance", _l("Variación de liquidación de compras")),
     ("retained_earnings", _l("Utilidades retenidas")),
 ]
 

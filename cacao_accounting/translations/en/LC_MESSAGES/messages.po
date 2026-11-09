@@ -25183,3 +25183,7 @@ msgstr "Select a role or user for the approval rule."
 #: cacao_accounting/contabilidad/forms.py
 msgid "La fecha final no puede ser anterior a la fecha de inicio."
 msgstr "The end date cannot be earlier than the start date."
+
+#: cacao_accounting/inventario/services.py
+msgid "La cuenta de inventario debe estar activa, habilitada y ser una cuenta hoja."
+msgstr "The inventory account must be active, enabled, and a leaf account."
