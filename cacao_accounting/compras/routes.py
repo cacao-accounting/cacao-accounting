@@ -2589,6 +2589,9 @@ def compras_recepcion_nuevo():
     from_receipt_id = request.args.get("from_receipt") or request.form.get("from_receipt")
     orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
     recepcion_origen = database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None
+    for origen in (orden_origen, recepcion_origen):
+        if origen is not None:
+            _require_purchase_document_access(origen, "consultar")
 
     selected_company = _resolve_receipt_selected_company(recepcion_origen, orden_origen, formulario)
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
