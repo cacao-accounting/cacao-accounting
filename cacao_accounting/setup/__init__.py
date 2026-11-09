@@ -169,6 +169,7 @@ def _build_company_data(form: SetupCompanyForm, setup_data: dict[str, str]) -> d
         "id_fiscal": form.id_fiscal.data,
         "tipo_entidad": form.tipo_entidad.data,
         "moneda": setup_data.get("moneda"),
+        "pais": setup_data.get("pais"),
         "inicio_anio_fiscal": form.inicio_anio_fiscal.data,
         "fin_anio_fiscal": form.fin_anio_fiscal.data,
     }
