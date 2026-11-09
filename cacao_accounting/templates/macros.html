@@ -248,6 +248,8 @@
 {% set endpoint = url_for(request.endpoint) %}
 {% if consulta.periods %}
 <form method="get" action="{{ endpoint }}" class="p-3 border-bottom d-flex flex-wrap gap-2 align-items-end">
+  <input type="hidden" name="search" value="{{ request.args.get('search', '') }}">
+  <input type="hidden" name="status" value="{{ request.args.get('status', '') }}">
   <div>
     <label class="form-label small text-muted mb-1">{{ _('Compañía') }}</label>
     {{ smart_select_field(_("Compañía"), "company", "company", consulta.selected_company or '', "list-company", 1, None, [], []) }}
