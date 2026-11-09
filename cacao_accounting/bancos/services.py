@@ -2663,7 +2663,12 @@ def _payment_payload_from_request() -> PaymentPayload:
     """Return the payment payload from the request body or form fields."""
     payload_raw = request.form.get("payment_payload")
     if payload_raw:
-        return cast(PaymentPayload, json.loads(payload_raw))
+        payload = cast(PaymentPayload, json.loads(payload_raw))
+        if not payload.get("reference_no") and payload.get("external_number"):
+            # Compatibilidad con el nombre anterior del campo: la referencia
+            # informativa siempre se persiste en ``reference_no``.
+            payload["reference_no"] = payload["external_number"]
+        return payload
     return {
         "payment_type": request.form.get("payment_type"),
         "company": request.form.get("company"),
@@ -2674,7 +2679,7 @@ def _payment_payload_from_request() -> PaymentPayload:
         "party_type": request.form.get("party_type"),
         "naming_series_id": request.form.get("naming_series"),
         "external_counter_id": request.form.get("external_counter_id"),
-        "external_number": request.form.get("external_number"),
+        "reference_no": request.form.get("reference_no") or request.form.get("external_number"),
         "target_bank_account_id": request.form.get("target_bank_account_id"),
         "mode_of_payment": request.form.get("mode_of_payment"),
         "cost_center_code": request.form.get("cost_center_code"),
