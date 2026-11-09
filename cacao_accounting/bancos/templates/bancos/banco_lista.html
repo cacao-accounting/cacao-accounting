@@ -38,6 +38,12 @@
         <td>{{ item.swift_code or "" }}</td>
         <td>{{ _('Sí') if item.is_active else _('No') }}</td>
       </tr>
+      {% else %}
+      <tr>
+        <td colspan="3" class="text-center text-muted py-4" role="status">
+          {{ _('No se encontraron bancos para los filtros seleccionados.') }}
+        </td>
+      </tr>
       {%- endfor %}
     </tbody>
   </table>

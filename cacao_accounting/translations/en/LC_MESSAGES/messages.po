@@ -8635,6 +8635,10 @@ msgstr "breadcrumb"
 msgid "Ruta de navegación"
 msgstr "Breadcrumb"
 
+#: cacao_accounting/bancos/templates/bancos/banco_lista.html:48
+msgid "No se encontraron bancos para los filtros seleccionados."
+msgstr "No banks were found for the selected filters."
+
 #: cacao_accounting/bancos/templates/bancos/banco.html:24
 #: cacao_accounting/bancos/templates/bancos/banco_cuenta.html:24
 #: cacao_accounting/bancos/templates/bancos/caja_chica.html:38
