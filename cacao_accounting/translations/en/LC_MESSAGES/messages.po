@@ -8627,6 +8627,10 @@ msgstr "Bank Movement Detail"
 msgid "breadcrumb"
 msgstr "breadcrumb"
 
+#: cacao_accounting/bancos/templates/bancos/banco_lista.html:9
+msgid "Ruta de navegación"
+msgstr "Breadcrumb"
+
 #: cacao_accounting/bancos/templates/bancos/banco.html:24
 #: cacao_accounting/bancos/templates/bancos/banco_cuenta.html:24
 #: cacao_accounting/bancos/templates/bancos/caja_chica.html:38
