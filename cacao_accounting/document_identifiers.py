@@ -688,34 +688,6 @@ def _validate_and_register_external_number(
 # -------------------------------------------------------------------------------------
 
 
-def record_external_number_used(
-    *,
-    external_counter_id: str,
-    number_used: int,
-    changed_by: str | None = None,
-) -> None:
-    """Registra el uso de un numero externo incrementando last_used si corresponde.
-
-    Actualiza last_used solo si number_used es mayor al valor actual.
-
-    Args:
-        external_counter_id: ID del ExternalCounter
-        number_used: Numero externo utilizado en el documento
-        changed_by: ID del usuario que realiza el registro
-    """
-    counter = database.session.get(ExternalCounter, external_counter_id)
-    if not counter:
-        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
-    if not counter.is_active:
-        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
-    if number_used < 0:
-        raise IdentifierConfigurationError(_("El número externo usado no puede ser negativo."))
-
-    if number_used > (counter.last_used or 0):
-        counter.last_used = number_used
-        database.session.flush()
-
-
 def adjust_external_counter(
     *,
     external_counter_id: str,
