@@ -7,6 +7,9 @@ Escenario de negocio (issue #2005): un POST alterado podía persistir
 applies_to/level/tax_type/calculation_method/base_mode/accounting_treatment/
 recognition_event fuera de catálogo; el builder excluía la regla o el motor
 calculaba cero en silencio.
+
+El caso ``calculation_method=percentagge`` de #1744 queda cubierto por la
+misma allowlist: el motor ya no puede recibir el método inválido.
 """
 
 from __future__ import annotations
@@ -109,6 +112,7 @@ def _formulario(**overrides) -> dict[str, str]:
         ("level", "unknown"),
         ("tax_type", "mystery"),
         ("calculation_method", "mystery"),
+        ("calculation_method", "percentagge"),
         ("base_mode", "other"),
         ("accounting_treatment", "whatever"),
         ("recognition_event", "whenever"),
