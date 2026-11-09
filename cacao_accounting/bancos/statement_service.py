@@ -251,17 +251,6 @@ def _parse_date(value: str) -> date:
     raise BankStatementError(_("La fecha del extracto no tiene un formato soportado."))
 
 
-def suggest_bank_matches(bank_transaction_id: str, **kwargs: Any) -> list[BankCandidate]:
-    """Alias publico para sugerencias de conciliacion bancaria.
-
-    Acepta los mismos parámetros de tolerancia que
-    ``find_bank_reconciliation_candidates`` (``days_tolerance``,
-    ``amount_tolerance``) para que las sugerencias respeten la
-    configuración de tolerancias cuando se solicita explícitamente.
-    """
-    return find_bank_reconciliation_candidates(bank_transaction_id, **kwargs)
-
-
 def apply_bank_matching_rule(rule_id: str, bank_account_id: str, date_range: tuple[date, date]) -> BankMatchingRun:
     """Ejecuta una regla y devuelve candidatos por transaccion."""
     rule = database.session.get(BankMatchingRule, rule_id)
