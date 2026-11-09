@@ -3388,6 +3388,8 @@ def compras_import_landed_cost_nuevo():
     invoice_origen = None
     if from_invoice_id:
         invoice_origen = database.session.get(PurchaseInvoice, from_invoice_id)
+        if invoice_origen is not None:
+            _require_purchase_document_access(invoice_origen, "consultar")
 
     titulo = _("Nuevo Costo de Importacion") + " - " + APPNAME
     items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()

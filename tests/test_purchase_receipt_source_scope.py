@@ -23,6 +23,7 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Entity,
     Modules,
+    PurchaseInvoice,
     PurchaseOrder,
     PurchaseReceipt,
     User,
@@ -78,7 +79,15 @@ def recepciones_cloud():
                     password=proteger_passwd(CONTRASENA),
                     active=True,
                 ),
+                User(
+                    id="comprador",
+                    user="comprador",
+                    name="Comprador Alpha",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                ),
                 UserCompanyAccess(user_id="bodeguero", company_code="alpha"),
+                UserCompanyAccess(user_id="comprador", company_code="alpha"),
                 PurchaseOrder(
                     company="alpha",
                     posting_date=FECHA,
@@ -107,17 +116,38 @@ def recepciones_cloud():
                     document_no="PR-BETA",
                     supplier_name="Proveedor Confidencial Beta",
                 ),
+                PurchaseInvoice(
+                    company="alpha",
+                    posting_date=FECHA,
+                    docstatus=1,
+                    document_no="PI-ALPHA",
+                    supplier_name="Proveedor Alpha",
+                ),
+                PurchaseInvoice(
+                    company="beta",
+                    posting_date=FECHA,
+                    docstatus=1,
+                    document_no="PI-BETA",
+                    supplier_name="Proveedor Confidencial Beta",
+                ),
             ]
         )
         database.session.commit()
         crea_roles_predeterminados()
         cargar_permisos_predeterminados()
         asigna_rol_a_usuario("bodeguero", "inventory_auxiliar")
+        asigna_rol_a_usuario("comprador", "purchasing_auxiliar")
         database.session.commit()
         ids = {
             "orden_alpha": database.session.execute(database.select(PurchaseOrder).filter_by(company="alpha")).scalar_one().id,
             "orden_beta": database.session.execute(database.select(PurchaseOrder).filter_by(company="beta")).scalar_one().id,
             "recepcion_beta": database.session.execute(database.select(PurchaseReceipt).filter_by(company="beta"))
+            .scalar_one()
+            .id,
+            "factura_alpha": database.session.execute(database.select(PurchaseInvoice).filter_by(company="alpha"))
+            .scalar_one()
+            .id,
+            "factura_beta": database.session.execute(database.select(PurchaseInvoice).filter_by(company="beta"))
             .scalar_one()
             .id,
         }
@@ -127,8 +157,8 @@ def recepciones_cloud():
         database.engine.dispose()
 
 
-def _iniciar(client) -> None:
-    response = client.post("/login", data={"usuario": "bodeguero", "acceso": CONTRASENA}, follow_redirects=True)
+def _iniciar(client, usuario: str = "bodeguero") -> None:
+    response = client.post("/login", data={"usuario": usuario, "acceso": CONTRASENA}, follow_redirects=True)
     assert response.status_code == 200
 
 
@@ -167,3 +197,29 @@ def test_recepcion_precarga_orden_propia(recepciones_cloud):
 
     assert response.status_code == 200
     assert "Proveedor Alpha" in response.get_data(as_text=True)
+
+
+def test_costo_importado_no_expone_factura_ajena(recepciones_cloud):
+    """El alta de costo importado no precarga una factura de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/import-landed-cost/new?from_invoice={ids['factura_beta']}")
+
+    assert response.status_code == 403
+    cuerpo = response.get_data(as_text=True)
+    assert "PI-BETA" not in cuerpo
+    assert "Proveedor Confidencial Beta" not in cuerpo
+
+
+def test_costo_importado_precarga_factura_propia(recepciones_cloud):
+    """Control positivo: la factura de la compañía autorizada se precarga."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/import-landed-cost/new?from_invoice={ids['factura_alpha']}")
+
+    assert response.status_code == 200
+    assert "PI-ALPHA" in response.get_data(as_text=True)
