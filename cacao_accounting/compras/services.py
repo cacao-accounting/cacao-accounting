@@ -1367,8 +1367,15 @@ def _validate_purchase_order_sourcing(
     return True
 
 
-def _validate_purchase_order_award(award_id: str | None, company: str | None) -> Any:
-    """Load a finalized award and verify it belongs to the selected company."""
+def _validate_purchase_order_award(
+    award_id: str | None,
+    company: str | None,
+    *,
+    source: Any = None,
+    supplier_id: str | None = None,
+    form: Any = None,
+) -> Any:
+    """Load a finalized award and verify company, source, supplier and lines."""
     award = database.session.get(PurchaseQuotationAward, award_id) if award_id else None
     if award_id and (not award or award.status != "finalized"):
         flash_error(PurchaseSourcingError("La adjudicación seleccionada no es válida."))
@@ -1376,7 +1383,94 @@ def _validate_purchase_order_award(award_id: str | None, company: str | None) ->
     if award and award.company != company:
         flash_error(PurchaseSourcingError("La adjudicación no pertenece a la compañía seleccionada."))
         return None, False
+    if award is None:
+        return None, True
+    if source is not None and not _award_matches_source(award, source):
+        flash_error(PurchaseSourcingError("La adjudicación no corresponde al origen seleccionado."))
+        return None, False
+    if not _award_matches_supplier_and_lines(award, supplier_id, form):
+        flash_error(PurchaseSourcingError("La adjudicación no corresponde al proveedor o líneas de la orden."))
+        return None, False
     return award, True
+
+
+def _award_matches_source(award: PurchaseQuotationAward, source: Any) -> bool:
+    """Return whether the award belongs to the purchase-flow source."""
+    if isinstance(source, PurchaseQuotation):
+        return award.purchase_quotation_id == source.id
+    if isinstance(source, SupplierQuotation):
+        return bool(source.purchase_quotation_id) and award.purchase_quotation_id == source.purchase_quotation_id
+    return False
+
+
+def _award_decimal(value: Any) -> Decimal:
+    """Convierte un valor de formulario o modelo a Decimal seguro."""
+    try:
+        return Decimal(str(value or "0"))
+    except (ArithmeticError, ValueError):
+        return Decimal("0")
+
+
+def _award_matches_supplier_and_lines(award: PurchaseQuotationAward, supplier_id: str | None, form: Any) -> bool:
+    """Return whether award items cover the selected supplier and submitted lines."""
+    award_items = _award_items(award)
+    if not award_items or not _award_matches_supplier(award_items, supplier_id):
+        return False
+    if form is None:
+        return True
+    lines = _order_form_lines(form)
+    if not lines:
+        return False
+    return all(_order_line_is_awarded(item_code, qty, source_item_id, award_items) for item_code, qty, source_item_id in lines)
+
+
+def _award_items(award: PurchaseQuotationAward) -> list[PurchaseQuotationAwardItem]:
+    """Return the persisted lines of an award."""
+    return list(database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalars())
+
+
+def _award_matches_supplier(award_items: list[PurchaseQuotationAwardItem], supplier_id: str | None) -> bool:
+    """Return whether every awarded line belongs to the selected supplier."""
+    for supplier_quotation_id in {item.supplier_quotation_id for item in award_items}:
+        quotation = database.session.get(SupplierQuotation, supplier_quotation_id)
+        if quotation is None or (supplier_id and quotation.supplier_id != supplier_id):
+            return False
+    return True
+
+
+def _order_form_lines(form: Any) -> list[tuple[str, Decimal, str]]:
+    """Return the item, quantity and optional source row submitted for an order."""
+    lines: list[tuple[str, Decimal, str]] = []
+    index = 0
+    while form.get(f"item_code_{index}"):
+        item_code = str(form.get(f"item_code_{index}") or "").strip()
+        if item_code:
+            lines.append(
+                (
+                    item_code,
+                    _award_decimal(form.get(f"qty_{index}")),
+                    str(form.get(f"source_item_id_{index}") or ""),
+                )
+            )
+        index += 1
+    return lines
+
+
+def _order_line_is_awarded(
+    item_code: str,
+    qty: Decimal,
+    source_item_id: str,
+    award_items: list[PurchaseQuotationAwardItem],
+) -> bool:
+    """Return whether an order line is covered by the awarded quantities."""
+    candidates = [item for item in award_items if item.item_code == item_code]
+    if source_item_id:
+        candidates = [
+            item for item in candidates if source_item_id in {item.supplier_quotation_item_id, item.purchase_quotation_item_id}
+        ]
+    if not candidates:
+        return False
+    return qty <= sum(_award_decimal(item.qty) for item in candidates)
 
 
 def _purchase_order_comparison_open(source: Any) -> bool:
@@ -1401,7 +1495,13 @@ def _purchase_order_context(form: dict):
     source = _purchase_order_source(form)
     if not _validate_purchase_order_sourcing(sourcing_config, source, award_id, exception_reason):
         return None
-    _, valid_award = _validate_purchase_order_award(award_id, form.get("company") or None)
+    _, valid_award = _validate_purchase_order_award(
+        award_id,
+        form.get("company") or None,
+        source=source,
+        supplier_id=form.get("supplier_id") or None,
+        form=form,
+    )
     if not valid_award:
         return None
     supplier_id = form.get("supplier_id") or None
@@ -1500,6 +1600,15 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
         ).scalar_one_or_none()
     )
     before_state = _capture_purchase_state(registro)
+    if registro.purchase_award_id:
+        _, valid_award = _validate_purchase_order_award(
+            registro.purchase_award_id,
+            registro.company,
+            supplier_id=request.form.get("supplier_id") or None,
+            form=request.form,
+        )
+        if not valid_award:
+            return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
     revert_relations_for_target("purchase_order", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("purchase_order", registro.id)
     supplier_id = request.form.get("supplier_id") or None
