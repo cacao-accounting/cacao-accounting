@@ -132,6 +132,17 @@ def _msg_item_repetido(item_code: str) -> str:
     return _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}
 
 
+def _msg_cantidad_item(item_code: str) -> str:
+    """Mensaje para cantidad de item no positiva."""
+    return _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}
+
+
+def _require_positive_qty(item_code: str, qty: Decimal) -> None:
+    """Rechaza cantidades no positivas antes de persistir una línea de venta."""
+    if qty <= 0:
+        raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
+
+
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
 VENTAS_CLIENTE_NUEVO_TEMPLATE = "ventas/cliente_nuevo.html"
@@ -1018,6 +1029,7 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
@@ -1077,6 +1089,7 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
@@ -1127,6 +1140,7 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
@@ -1172,6 +1186,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
@@ -1230,6 +1245,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
