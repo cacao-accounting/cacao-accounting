@@ -18,10 +18,6 @@ class IntegrityError(CacaoAccountingException):
     """Clase para generar errores de Integridad."""
 
 
-class TransactionError(CacaoAccountingException):
-    """Clase para generar errores en transacciones."""
-
-
 class OperationalError(CacaoAccountingException):
     """Clase para generar errores operativos."""
 
