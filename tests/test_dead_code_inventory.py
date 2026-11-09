@@ -47,6 +47,7 @@ import pytest
         ("cacao_accounting.contabilidad.arap_allocation", "resolve_open_item"),
         ("cacao_accounting.contabilidad.default_accounts", "accounts_for_company"),
         ("cacao_accounting.datos.dev", "series_predeterminadas"),
+        ("cacao_accounting.datos.dev.data", "_make_series"),
     ],
 )
 def test_helper_sin_consumidores_esta_retirado(module_name: str, symbol: str):

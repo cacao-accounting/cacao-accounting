@@ -172,11 +172,6 @@ def _make_entidades() -> tuple:
     )
 
 
-def _make_series() -> tuple:
-    """Crea instancias frescas de Series."""
-    return ()
-
-
 def _make_cuentas() -> tuple:
     """Crea instancias frescas de Cuentas contables de prueba."""
     return (
