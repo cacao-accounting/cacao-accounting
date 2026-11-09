@@ -166,7 +166,8 @@ def test_permite_retirar_el_rol_admin_si_queda_otro_administrador():
                 .scalars()
                 .all()
             )
-            assert asignaciones == []
+            assert len(asignaciones) == 1
+            assert asignaciones[0].active is False
     finally:
         with application.app_context():
             database.session.remove()
