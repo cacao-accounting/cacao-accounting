@@ -950,8 +950,10 @@ def _report_to_matrix(report) -> tuple[list[str], list[list[object]]]:
 
 def _spreadsheet_value(value: object) -> object:
     """Export user-controlled text literally rather than as a spreadsheet formula."""
-    if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
-        return "'" + value
+    if isinstance(value, str):
+        candidate = value.lstrip("\x00\t\n\r\v\f \u00a0\ufeff")
+        if candidate.startswith(("=", "+", "-", "@")):
+            return "'" + value
     return value
 
 
