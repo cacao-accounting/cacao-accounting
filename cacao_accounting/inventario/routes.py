@@ -352,6 +352,8 @@ def inventario_articulo_nuevo():
 
     formulario = FormularioArticulo()
     formulario.default_uom.choices = _uom_choices()
+    formulario.purchase_uom.choices = _uom_choices()
+    formulario.sale_uom.choices = _uom_choices()
     formulario.item_category_id.choices = _item_category_choices()
     formulario.currency.choices = _currency_choices()
     titulo = _("Nuevo Artículo") + " - " + APPNAME
@@ -408,6 +410,8 @@ def inventario_articulo_editar(item_id):
 
     formulario = FormularioArticulo(obj=item)
     formulario.default_uom.choices = _uom_choices()
+    formulario.purchase_uom.choices = _uom_choices()
+    formulario.sale_uom.choices = _uom_choices()
     formulario.item_category_id.choices = _item_category_choices()
     formulario.currency.choices = _currency_choices()
     titulo = _("Editar") + f" {item.name} - " + APPNAME
@@ -519,10 +523,10 @@ def inventario_uom_nuevo():
 
     formulario = FormularioUOM()
     titulo = _("Nueva Unidad de Medida") + " - " + APPNAME
-    if formulario.validate_on_submit() or request.method == "POST":
+    if formulario.validate_on_submit():
         uom = UOM(
-            code=request.form.get("code"),
-            name=request.form.get("name"),
+            code=formulario.code.data,
+            name=formulario.name.data,
         )
         database.session.add(uom)
         database.session.commit()
@@ -556,7 +560,7 @@ def inventario_bodega_nuevo():
     formulario = FormularioBodega()
     titulo = _("Nueva Bodega") + " - " + APPNAME
     warehouse_company_rows = [{"company": "", "company_label": "", "inventory_account_id": "", "inventory_account_label": ""}]
-    if formulario.validate_on_submit() or request.method == "POST":
+    if formulario.validate_on_submit():
         warehouse_company_rows = _warehouse_company_rows_for_template(request.form)
         company_rows = [row for row in warehouse_company_rows if row["company"]]
         try:

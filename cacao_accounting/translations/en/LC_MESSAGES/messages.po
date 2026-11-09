@@ -25187,3 +25187,7 @@ msgstr "The end date cannot be earlier than the start date."
 #: cacao_accounting/inventario/services.py
 msgid "La cuenta de inventario debe estar activa, habilitada y ser una cuenta hoja."
 msgstr "The inventory account must be active, enabled, and a leaf account."
+
+#: cacao_accounting/inventario/service.py
+msgid "El número de serie ya está registrado para otro artículo."
+msgstr "The serial number is already registered for another item."

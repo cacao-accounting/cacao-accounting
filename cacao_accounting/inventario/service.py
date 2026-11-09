@@ -374,9 +374,9 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False,
     quantity = _decimal_value(raw_quantity) if raw_quantity is not None else Decimal("1")
     if quantity != Decimal("1"):
         raise InventoryServiceError(_("Cada linea de un item serializado debe mover exactamente una unidad."))
-    serial = database.session.execute(
-        select(SerialNumber).filter_by(item_code=item.code, serial_no=serial_no)
-    ).scalar_one_or_none()
+    serial = database.session.execute(select(SerialNumber).filter_by(serial_no=serial_no)).scalar_one_or_none()
+    if serial is not None and serial.item_code != item.code:
+        raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
     if outgoing:
         _validate_outgoing_serial(serial, warehouse)
     else:
@@ -437,12 +437,13 @@ def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> 
     serial_no = getattr(line, "serial_no", None)
     if not serial_no:
         return
-    serial = database.session.execute(
-        select(SerialNumber).filter_by(item_code=getattr(line, "item_code", None), serial_no=serial_no)
-    ).scalar_one_or_none()
+    item_code = getattr(line, "item_code", None)
+    serial = database.session.execute(select(SerialNumber).filter_by(serial_no=serial_no)).scalar_one_or_none()
+    if serial is not None and serial.item_code != item_code:
+        raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
     if not serial:
         serial = SerialNumber(
-            item_code=getattr(line, "item_code", None),
+            item_code=item_code,
             serial_no=serial_no,
             serial_status="available",
             warehouse=warehouse,
