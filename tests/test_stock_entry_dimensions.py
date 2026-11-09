@@ -300,6 +300,8 @@ def test_posting_rechaza_entrada_heredada_con_dimension_ajena(inventario_dimensi
             login_user(usuario)
             with pytest.raises(PostingError, match="unidad"):
                 post_stock_entry(entrada)
+            assert database.session.execute(database.select(StockLedgerEntry)).scalars().all() == []
+            assert database.session.execute(database.select(GLEntry)).scalars().all() == []
         database.session.rollback()
 
         assert database.session.execute(database.select(StockLedgerEntry)).scalars().all() == []
