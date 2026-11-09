@@ -2629,6 +2629,8 @@ def _finalize_and_commit_payment(
 
 def _create_payment_from_request():
     """Create a payment from the submitted request payload."""
+    from werkzeug.exceptions import HTTPException
+
     try:
         payload = _payment_payload_from_request()
         payment, amount, mode_of_payment = _build_payment_from_payload(payload)
@@ -2645,17 +2647,15 @@ def _create_payment_from_request():
             external_context=_payment_identifier_context(payment, mode_of_payment),
         )
         return _finalize_and_commit_payment(payment, payload, amount)
+    except HTTPException:
+        database.session.rollback()
+        raise
     except (ValueError, ArithmeticError) as exc:
         database.session.rollback()
         flash_error(exc)
     except Exception as exc:  # noqa: BLE001
-        from werkzeug.exceptions import HTTPException
-
         database.session.rollback()
-        if isinstance(exc, HTTPException):
-            flash(exc.description or str(exc), "danger")
-        else:
-            raise
+        flash(exc.description or str(exc), "danger")
     return None
 
 

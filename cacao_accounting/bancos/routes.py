@@ -747,7 +747,15 @@ def bancos_transferencia_nueva():
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     if request.method == "POST":
-        return bancos_pago_nuevo()
+        response = _create_payment_from_request()
+        if response is not None:
+            return response
+        return render_template(
+            "bancos/transferencia_nueva.html",
+            titulo=_("Nueva Transferencia Bancaria") + " - " + APPNAME,
+            payment_type="internal_transfer",
+            companies=obtener_lista_entidades_por_id_razonsocial(),
+        )
 
     return render_template(
         "bancos/transferencia_nueva.html",
