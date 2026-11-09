@@ -18,7 +18,8 @@ from cacao_accounting.bancos.services import create_default_petty_cash
 from cacao_accounting.contabilidad.ctas import (
     CatalogoCtas,
     DIRECTORIO_CTAS,
-    base as catalogo_base,
+    base_en,
+    base_es,
     cargar_catalogos,
 )
 from cacao_accounting.database import Entity, database
@@ -72,15 +73,17 @@ def available_catalog_files() -> list[tuple[str, str]]:
 
 def choose_catalog_file(country: str, idioma: str, catalog_name: str | None = None) -> Any | None:
     """Selecciona el catálogo contable adecuado según país, idioma y nombre de archivo."""
+    idioma_normalizado = normalize_language(idioma).upper()
     if catalog_name:
         catalog_file = join(DIRECTORIO_CTAS, catalog_name)
         if isfile(catalog_file) and catalog_has_default_mapping(catalog_file):
-            return CatalogoCtas(file=catalog_file, pais=country, idioma=idioma)
+            return CatalogoCtas(file=catalog_file, pais=country, idioma=idioma_normalizado)
         return None
 
-    if catalogo_base.pais == country and catalogo_base.idioma == idioma:
-        return catalogo_base
-    return catalogo_base
+    candidato = base_en if idioma_normalizado == "EN" else base_es
+    if not isfile(candidato.file) or not catalog_has_default_mapping(candidato.file):
+        return None
+    return CatalogoCtas(file=candidato.file, pais=country, idioma=idioma_normalizado)
 
 
 def create_company(
