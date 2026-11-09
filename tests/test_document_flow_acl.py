@@ -383,6 +383,50 @@ def test_cotizacion_precarga_una_solicitud_propia(escenario_multicompania):
     assert "Cliente Cacao" in response.get_data(as_text=True)
 
 
+def test_orden_venta_no_precarga_una_solicitud_ajena(escenario_multicompania):
+    """El alta de orden no serializa el origen de otra compañía."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "operador")
+
+    response = client.get(f"/sales/sales-order/new?from_request={ids['solicitud_ajena']}")
+
+    assert response.status_code == 403
+    assert "Cliente Confidencial Cafe" not in response.get_data(as_text=True)
+
+
+def test_orden_venta_precarga_una_solicitud_propia(escenario_multicompania):
+    """Control positivo: la solicitud autorizada se sigue precargando."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "operador")
+
+    response = client.get(f"/sales/sales-order/new?from_request={ids['pedido_propio']}")
+
+    assert response.status_code == 200
+    assert "Cliente Cacao" in response.get_data(as_text=True)
+
+
+def test_factura_venta_no_precarga_una_entrega_ajena(escenario_multicompania):
+    """El alta de factura no serializa la entrega de otra compañía."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "operador")
+
+    response = client.get(f"/sales/sales-invoice/new?from_note={ids['entrega_ajena']}")
+
+    assert response.status_code == 403
+    assert "Cliente Confidencial Cafe" not in response.get_data(as_text=True)
+
+
+def test_factura_venta_precarga_una_entrega_propia(escenario_multicompania):
+    """Control positivo: la entrega autorizada se sigue precargando."""
+    client, ids = escenario_multicompania[1], escenario_multicompania[2]
+    _iniciar_sesion(client, "operador")
+
+    response = client.get(f"/sales/sales-invoice/new?from_note={ids['entrega_propia']}")
+
+    assert response.status_code == 200
+    assert "Cliente Cacao" in response.get_data(as_text=True)
+
+
 def test_remision_no_precarga_una_entrega_de_otra_compania(escenario_multicompania):
     """El alta de remisión no serializa el origen ajeno antes de autorizarlo."""
     client, ids = escenario_multicompania[1], escenario_multicompania[2]

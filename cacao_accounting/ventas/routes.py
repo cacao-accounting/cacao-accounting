@@ -1066,6 +1066,9 @@ def ventas_orden_venta_nuevo():
     orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
     solicitud_origen = database.session.get(SalesRequest, from_request_id) if from_request_id else None
     cotizacion_origen = database.session.get(SalesQuotation, from_quotation_id) if from_quotation_id else None
+    for origen in (orden_origen, solicitud_origen, cotizacion_origen):
+        if origen is not None:
+            _require_sales_document_access(origen, "consultar")
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()

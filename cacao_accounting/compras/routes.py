@@ -1904,6 +1904,9 @@ def compras_orden_compra_nuevo():
     supplier_quotation_origen = (
         database.session.get(SupplierQuotation, from_supplier_quotation_id) if from_supplier_quotation_id else None
     )
+    for origen in (solicitud_origen, rfq_origen, supplier_quotation_origen):
+        if origen is not None:
+            _require_purchase_document_access(origen, "consultar")
     titulo = _("Nueva Orden de Compra") + " - " + APPNAME
     if request.method == "POST":
         response = _create_purchase_order_from_request(request.form)

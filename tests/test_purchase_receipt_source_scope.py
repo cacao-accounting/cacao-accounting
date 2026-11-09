@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     PurchaseOrder,
     PurchaseReceipt,
+    PurchaseRequest,
     User,
     UserCompanyAccess,
     database,
@@ -130,6 +131,20 @@ def recepciones_cloud():
                     document_no="PI-BETA",
                     supplier_name="Proveedor Confidencial Beta",
                 ),
+                PurchaseRequest(
+                    company="alpha",
+                    posting_date=FECHA,
+                    docstatus=1,
+                    document_no="PRQ-ALPHA",
+                    remarks="Solicitud Alpha",
+                ),
+                PurchaseRequest(
+                    company="beta",
+                    posting_date=FECHA,
+                    docstatus=1,
+                    document_no="PRQ-BETA",
+                    remarks="Solicitud Confidencial Beta",
+                ),
             ]
         )
         database.session.commit()
@@ -148,6 +163,12 @@ def recepciones_cloud():
             .scalar_one()
             .id,
             "factura_beta": database.session.execute(database.select(PurchaseInvoice).filter_by(company="beta"))
+            .scalar_one()
+            .id,
+            "solicitud_alpha": database.session.execute(database.select(PurchaseRequest).filter_by(company="alpha"))
+            .scalar_one()
+            .id,
+            "solicitud_beta": database.session.execute(database.select(PurchaseRequest).filter_by(company="beta"))
             .scalar_one()
             .id,
         }
@@ -194,6 +215,54 @@ def test_recepcion_precarga_orden_propia(recepciones_cloud):
     _iniciar(client)
 
     response = client.get(f"/buying/purchase-receipt/new?from_order={ids['orden_alpha']}")
+
+    assert response.status_code == 200
+    assert "Proveedor Alpha" in response.get_data(as_text=True)
+
+
+def test_orden_compra_no_precarga_solicitud_ajena(recepciones_cloud):
+    """El alta de orden de compra no usa una solicitud de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/purchase-order/new?from_request={ids['solicitud_beta']}")
+
+    assert response.status_code == 403
+    assert "Solicitud Confidencial Beta" not in response.get_data(as_text=True)
+
+
+def test_orden_compra_precarga_solicitud_propia(recepciones_cloud):
+    """Control positivo: la solicitud autorizada se sigue precargando."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/purchase-order/new?from_request={ids['solicitud_alpha']}")
+
+    assert response.status_code == 200
+    assert f'name="from_request" value="{ids["solicitud_alpha"]}"' in response.get_data(as_text=True)
+
+
+def test_factura_compra_no_precarga_orden_ajena(recepciones_cloud):
+    """El alta de factura de compra no usa una orden de otra compañía."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/purchase-invoice/new?from_order={ids['orden_beta']}")
+
+    assert response.status_code == 403
+    assert "Proveedor Confidencial Beta" not in response.get_data(as_text=True)
+
+
+def test_factura_compra_precarga_orden_propia(recepciones_cloud):
+    """Control positivo: la orden autorizada se sigue precargando."""
+    application, ids = recepciones_cloud
+    client = application.test_client()
+    _iniciar(client, "comprador")
+
+    response = client.get(f"/buying/purchase-invoice/new?from_order={ids['orden_alpha']}")
 
     assert response.status_code == 200
     assert "Proveedor Alpha" in response.get_data(as_text=True)

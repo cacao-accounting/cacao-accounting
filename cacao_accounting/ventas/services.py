@@ -2037,15 +2037,21 @@ def _sales_invoice_sources_and_type(formulario) -> dict[str, Any]:
         or ("sales_invoice" if not f_invoice_id else "sales_credit_note")
     )
     formulario.is_return.data = doc_type in ("sales_credit_note", "sales_return")
+    orden_origen = database.session.get(SalesOrder, f_order) if f_order else None
+    entrega_origen = database.session.get(DeliveryNote, f_note) if f_note else None
+    factura_origen = database.session.get(SalesInvoice, f_invoice_id) if f_invoice_id else None
+    for origen in (orden_origen, entrega_origen, factura_origen):
+        if origen is not None:
+            _require_sales_document_access(origen, "consultar")
     return {
         "from_order_id": f_order,
         "from_note_id": f_note,
         "from_invoice_id": f_invoice_id,
         "from_return_id": f_return,
         "document_type": doc_type,
-        "orden_origen": database.session.get(SalesOrder, f_order) if f_order else None,
-        "entrega_origen": database.session.get(DeliveryNote, f_note) if f_note else None,
-        "factura_origen": database.session.get(SalesInvoice, f_invoice_id) if f_invoice_id else None,
+        "orden_origen": orden_origen,
+        "entrega_origen": entrega_origen,
+        "factura_origen": factura_origen,
     }
 
 

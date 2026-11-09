@@ -1990,6 +1990,9 @@ def _purchase_invoice_sources(
     factura_origen = (
         database.session.get(PurchaseInvoice, source_ids["from_invoice_id"]) if source_ids["from_invoice_id"] else None
     )
+    for origen in (orden_origen, recepcion_origen, factura_origen):
+        if origen is not None:
+            _require_purchase_document_access(origen, "consultar")
     return orden_origen, recepcion_origen, factura_origen
 
 
