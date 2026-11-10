@@ -74,7 +74,7 @@ asuntos pertinentes y siempre debe ser condicional; el sistema no debe fallar po
 No tomes decisiones de negocio ni modifiques el core. Si hay dudas sobre el mejor camino a seguir, detente y consulta,
 no implementes sin un entendimiento del asunto o objetivo solicitado, el core de negocio esta formado son los flujos
 end to end de O2C, S2P, R2R, I2F y CTM. Estos flujos de negocios se consideran estandares a nivel de procesos empresariales
-y el sistema implementar estos flujos de negocios de forma robusta, precedible, comprensible y auditable.
+y el sistema implementa estos flujos de negocios de forma robusta, predecible, comprensible y auditable.
 
 ## Coordinación del trabajo asociado a un ticket (issue)
 
@@ -118,7 +118,7 @@ desarrollo por etapas, evitar planear todo desde cero y mantener el contexto com
      crear, modificar o ampliar las pruebas unitarias necesarias. Si existen `feedback.md` y/o `review.md`, debe atender
      sus observaciones como parte de la tarea. Antes de realizar un commit, debe ejecutar las pruebas relevantes y los
      linters exigidos por el proyecto. Normalmente los issues que este agente debe atender estan etiquetados con el tag
-     `needs-work`, el tag `needs-review` indica que el trabajo aun requiere análisis adicioanal antes de implementar la
+     `needs-work`, el tag `needs-review` indica que el trabajo aun requiere análisis adicional antes de implementar la
      solución requerida. Los issues asociados, debe referenciarlos en el commit utilizando `Refs: ###`.
   3. **Primer agente de QA (QA1):** Realiza una revisión estática, rigurosa e independiente del código y de la solución
      implementada. No modifica código, no ejecuta pruebas ni linters, pues estos controles corresponden al implementador.
@@ -128,14 +128,14 @@ desarrollo por etapas, evitar planear todo desde cero y mantener el contexto com
      preserva los invariantes del sistema y no presenta defectos relevantes ni riesgos sin resolver. Si aprueba, mueve el
      issue a `fix-proposed`. Si rechaza, lo mueve a `needs-work`, comenta los hallazgos en GitHub y documenta los asuntos
      pendientes en `feedback.md`, con evidencia y recomendaciones concretas.
-  5. **Segundo agente de QA (QA2):** Ejecuta una segunda revisión estática, rigurosa e independiente, sin modificar código
+  4. **Segundo agente de QA (QA2):** Ejecuta una segunda revisión estática, rigurosa e independiente, sin modificar código
      ni repetir pruebas o linters. No debe limitarse a aceptar las conclusiones de QA1: debe evaluar por cuenta propia la
      implementación, los requisitos, la lógica de negocio en marco de los flujos negocios O2C, S2P, R2R, I2F y CTM estandares,
      los casos límite, la cobertura funcional y los riesgos de regresión. Criterio de aprobación: únicamente puede mover el issue
      a `fix-confirmed` si confirma que la solución es correcta, completa, robusta y coherente con las reglas del proyecto, sin
      defectos bloqueantes ni observaciones pendientes. En caso contrario, debe devolverlo a `needs-work`. En ambos casos debe
      comentar su decisión y justificación en GitHub y registrar su revisión local en `review.md`.
-  6. **Regla de aceptación y retroalimentación:** QA1 y QA2 deben emitir evaluaciones independientes, fundamentadas en evidencia
+  5. **Regla de aceptación y retroalimentación:** QA1 y QA2 deben emitir evaluaciones independientes, fundamentadas en evidencia
      y criterios técnicos verificables. Ninguna aprobación puede basarse únicamente en que las pruebas pasaron o en la conformidad
      del agente anterior. Todo rechazo debe identificar el problema, su impacto y el comportamiento esperado. Cualquier retorno
      a `needs-work` obliga al implementador a corregir los hallazgos y reiniciar el ciclo de revisión QA1 → QA2. Ningún agente debe
@@ -157,9 +157,9 @@ El backend es Flask
 El frontend usa Alpine.js.
 El gestor de dependencias es pip.
 
-## Linters estáticos
+## Controles de calidad necesarios antes de incorporar un commit al proyecto
 
-Siempre considera los siguientes controles de calidad:
+Siempre considera los siguientes controles de calidad antes de hacer un commit:
 
 - Formato con black
 - Chequeo de tipos con mypy
@@ -173,13 +173,7 @@ Dado que los tests toman mucho tiempo en ejecutarse durante el desarrollo, es ac
 los tests relativos a la tarea que se está abordando. Los linters (black, ruff, flake8, mypy, pylint y
 pydocstyle) toman un tiempo razonable y deben ejecutarse siempre antes de hacer un commit.
 
-Los cambios deben mantenerse en local; solo la persona a cargo de la tarea puede hacer push o indicar que se haga push.
-
-La suite completa de pruebas debe ejecutarse antes de hacer push al repositorio principal.
-
-Respetar la identidad de Git configurada y hacer commits semánticos con sign-off. Los commits deben ser pequeños y
-acotados; no hacer commits gigantes, incomprensibles e inauditables. Los commits deben tener calidad y seguir el
-siguiente formato:
+Los commits deben tener calidad y seguir el siguiente formato:
 
 - Commit semántico (fix, feature, docs, refactor, release, chore).
 - Línea de título de 50 caracteres.
@@ -190,9 +184,7 @@ siguiente formato:
   como documentación del cambio.
 - Cerrar siempre el commit con el sign-off apropiado.
 
-Solo se consideran válidos los cambios que hayan sido validados por dos agentes: un implementador y un agente de QA,
-además de recibir feedback del desarrollador a cargo de la tarea o una tercera ronda de validación de un agente
-independiente con un contexto limpio.
+ Los commits deben ser pequeños y acotados. No hacer commits gigantes, incomprensibles e inauditables. 
 
 Usa siempre .venv o venv para ejecutar las pruebas de calidad.
 
@@ -234,6 +226,8 @@ Preferir dependencias con licencia aprobada por OSI y sin copyleft.
 Al hacer commits, respeta el autor y el correo configurados en Git local; no agregues líneas de coautoría.
 Los commits deben ser revisados y firmados por una persona antes de incorporarse al repositorio, sin mezclar
 la autoría de agentes de asistencia.
+
+Respetar la identidad de Git configurada y hacer commits semánticos con sign-off sin agregar info de coautoría.
 
 ## Regla de calidad de pruebas
 
@@ -312,6 +306,9 @@ reversiones, consistencia histórica, aislamiento entre empresas y comportamient
 Las pruebas deben contemplar escenarios de fallo realistas y verificar los invariantes y las reglas de negocio, en lugar de
 limitarse a confirmar que la ejecución es exitosa.
 
+Una funcionalidad o corrección no se considera completa simplemente porque su flujo principal funcione correctamente
+
 ## Ejecución de pruebas en paralelo
 
-Es importante que la suite de pruebas unitarias pueda ejecutarse en paralelo usando `pytest -n auto`.
+Es importante que la suite de pruebas unitarias pueda ejecutarse en paralelo usando `pytest -n auto` para ahorrar tiempo de
+desarrollo.
