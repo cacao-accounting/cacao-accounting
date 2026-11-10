@@ -71,9 +71,12 @@ asuntos pertinentes y siempre debe ser condicional; el sistema no debe fallar po
 
 # Instrucciones
 
-No tomes decisiones de negocio ni modifiques el core. Si hay dudas sobre el mejor camino a seguir, detente y consulta.
+No tomes decisiones de negocio ni modifiques el core. Si hay dudas sobre el mejor camino a seguir, detente y consulta,
+no implementes sin un entendimiento del asunto o objetivo solicitado, el core de negocio esta formado son los flujos
+end to end de O2C, S2P, R2R, I2F y CTM. Estos flujos de negocios se consideran estandares a nivel de procesos empresariales
+y el sistema implementar estos flujos de negocios de forma robusta, precedible, comprensible y auditable.
 
-## Coordinación de trabajos asociados a un ticket (issue)
+## Coordinación del trabajo asociado a un ticket (issue)
 
 Si la tarea en la que se está trabajando tiene un issue asociado en GitHub, se debe utilizar ese issue como bitácora
 de desarrollo:
@@ -107,6 +110,44 @@ futuro.
 Si no hay un issue asociado a la tarea, se puede usar un archivo SESSIONS.md como bitácora de desarrollo. Analiza
 SESSIONS.md como fuente de contexto y de las decisiones de diseño que se han tomado. Úsalo para dar continuidad al
 desarrollo por etapas, evitar planear todo desde cero y mantener el contexto completo de la evolución del proyecto.
+
+**Flujo de trabajo obligatorio de agentes:**
+  1. **Agente implementador:** Debe comprender íntegramente la tarea, realizar las consultas necesarias y recopilar
+     el contexto relevante antes de intervenir. Su responsabilidad es implementar la solución mínima, robusta, correcta
+     y coherente con la lógica de negocio, evitando cambios innecesarios y resolviendo la causa raíz del problema. Debe
+     crear, modificar o ampliar las pruebas unitarias necesarias. Si existen `feedback.md` y/o `review.md`, debe atender
+     sus observaciones como parte de la tarea. Antes de realizar un commit, debe ejecutar las pruebas relevantes y los
+     linters exigidos por el proyecto. Normalmente los issues que este agente debe atender estan etiquetados con el tag
+     `needs-work`, el tag `needs-review` indica que el trabajo aun requiere análisis adicioanal antes de implementar la
+     solución requerida. Los issues asociados, debe referenciarlos en el commit utilizando `Refs: ###`.
+  3. **Primer agente de QA (QA1):** Realiza una revisión estática, rigurosa e independiente del código y de la solución
+     implementada. No modifica código, no ejecuta pruebas ni linters, pues estos controles corresponden al implementador.
+     Debe verificar la corrección funcional, lógica de negocio en marco de los flujos de negocio O2C, S2P, R2R, I2F y CTM
+     estandares, robustez, mantenibilidad, consistencia arquitectónica, casos límite, posibles regresiones y suficiencia de
+     las pruebas implementadas. **Criterio de aprobación:** solo puede aprobar si la solución satisface los requisitos,
+     preserva los invariantes del sistema y no presenta defectos relevantes ni riesgos sin resolver. Si aprueba, mueve el
+     issue a `fix-proposed`. Si rechaza, lo mueve a `needs-work`, comenta los hallazgos en GitHub y documenta los asuntos
+     pendientes en `feedback.md`, con evidencia y recomendaciones concretas.
+  5. **Segundo agente de QA (QA2):** Ejecuta una segunda revisión estática, rigurosa e independiente, sin modificar código
+     ni repetir pruebas o linters. No debe limitarse a aceptar las conclusiones de QA1: debe evaluar por cuenta propia la
+     implementación, los requisitos, la lógica de negocio en marco de los flujos negocios O2C, S2P, R2R, I2F y CTM estandares,
+     los casos límite, la cobertura funcional y los riesgos de regresión. Criterio de aprobación: únicamente puede mover el issue
+     a `fix-confirmed` si confirma que la solución es correcta, completa, robusta y coherente con las reglas del proyecto, sin
+     defectos bloqueantes ni observaciones pendientes. En caso contrario, debe devolverlo a `needs-work`. En ambos casos debe
+     comentar su decisión y justificación en GitHub y registrar su revisión local en `review.md`.
+  6. **Regla de aceptación y retroalimentación:** QA1 y QA2 deben emitir evaluaciones independientes, fundamentadas en evidencia
+     y criterios técnicos verificables. Ninguna aprobación puede basarse únicamente en que las pruebas pasaron o en la conformidad
+     del agente anterior. Todo rechazo debe identificar el problema, su impacto y el comportamiento esperado. Cualquier retorno
+     a `needs-work` obliga al implementador a corregir los hallazgos y reiniciar el ciclo de revisión QA1 → QA2. Ningún agente debe
+     cerrar issues ni realizar push sin autorización expresa, el objetivo de los agentes es asegurar que el sistema ofrezca completa,
+     robusta, predecible, auditable de los flujos de negocio O2C, S2P, R2R, I2F y CTM estandares manejados por la industria.
+  8. **Cierre definitivo y cuarta revisión:** El estado `fix-confirmed` no constituye una aceptación definitiva. Un issue en este
+     estado puede regresar a `needs-work` si se identifican defectos, regresiones, inconsistencias o incumplimientos de los requisitos,
+     siempre que la decisión esté técnicamente fundamentada y documentada mediante un comentario en GitHub. Únicamente un cuarto agente
+     expresamente autorizado (QA3) o el administrador del repositorio puede mover un issue a `fixed`, después de verificar que la
+     solución cumple los criterios de aceptación y que las revisiones anteriores fueron satisfactorias. Los agentes Implementador,
+     QA1 y QA2 no están autorizados a establecer el estado `fixed`. Ningún cambio de estado o cambio de etiqueta debe realizarse sin
+     justificación y trazabilidad.
 
 ## Contexto
 
@@ -261,9 +302,15 @@ Al refactorizar código que supera el límite de complejidad, se deben seguir es
 
 No es necesario forzar esta regla con pruebas unitarias; aplica solo al código productivo.
 
-## Defensive Development & Edge-Case Validation:
+## Desarrollo defensivo y validación de casos límite
 
-Every implementation must be designed beyond the happy path. Before considering any feature or fix complete, agents must analyze and validate boundary conditions, invalid inputs, state transitions, concurrent operations, transaction atomicity, idempotency, reversals, historical consistency, multi-company isolation, and multi-ledger/multi-currency behavior wherever applicable. Tests must exercise realistic failure scenarios and verify business invariants, not merely confirm successful execution. A feature is not complete simply because its primary workflow works.
+Toda implementación debe diseñarse considerando escenarios más allá del flujo exitoso (*happy path*). Antes de considerar
+completa una funcionalidad o corrección, los agentes deben analizar y validar, según corresponda, las condiciones límite,
+entradas inválidas, transiciones de estado, operaciones concurrentes, atomicidad de las transacciones, idempotencia,
+reversiones, consistencia histórica, aislamiento entre empresas y comportamiento multilibro y multimoneda.
+
+Las pruebas deben contemplar escenarios de fallo realistas y verificar los invariantes y las reglas de negocio, en lugar de
+limitarse a confirmar que la ejecución es exitosa.
 
 ## Ejecución de pruebas en paralelo
 
