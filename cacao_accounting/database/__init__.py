@@ -8,6 +8,7 @@
 from decimal import Decimal
 from dataclasses import dataclass
 import hashlib
+import logging
 from typing import Any
 
 # ---------------------------------------------------------------------------------------
@@ -49,6 +50,7 @@ _PURCHASE_INVOICE_ITEM_ID_FK = "purchase_invoice_item.id"
 # Definición principal de la clase del ORM.
 # < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
+LOGGER = logging.getLogger(__name__)
 
 
 @event.listens_for(Engine, "connect")
@@ -323,6 +325,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     password = database.Column(database.LargeBinary(), nullable=False)
     classification = database.Column(database.String(15))
     active = database.Column(database.Boolean())
+    auth_version = database.Column(database.Integer(), nullable=False, default=0, server_default="0")
     genre = database.Column(database.String(10))
     birthday = database.Column(database.Date())
     phone = database.Column(database.String(50))
@@ -365,8 +368,9 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
                 cached_token = cache.get(f"jwt_token:{self.id}")
                 if cached_token:
                     return str(cached_token)
-            except (ImportError, AttributeError, OSError):
-                pass
+            except Exception as exc:
+                # The optional cache must not prevent authentication checks from using their fallback.
+                LOGGER.warning("JWT token cache read failed (%s)", type(exc).__name__)
         return getattr(self, "_token_volatile", None)
 
     @token.setter
@@ -381,8 +385,9 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
                     cache.delete(f"jwt_token:{self.id}")
                 else:
                     cache.set(f"jwt_token:{self.id}", value, timeout=8 * 3600)
-            except (ImportError, AttributeError, OSError):
-                pass
+            except Exception as exc:
+                # Credential-version checks revoke stale JWTs even when cache cleanup is unavailable.
+                LOGGER.warning("JWT token cache update failed (%s)", type(exc).__name__)
 
 
 class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]

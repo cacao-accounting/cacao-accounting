@@ -575,7 +575,13 @@ def token_requerido(f):  # pragma: no cover
             from cacao_accounting.database import User, database
 
             identidad = database.session.get(User, user_id)
-            if not identidad or identidad.token != token or not identidad.active:
+            token_auth_version = data.get("auth_version", 0)
+            if (
+                not identidad
+                or identidad.token != token
+                or not identidad.active
+                or token_auth_version != identidad.auth_version
+            ):
                 return {
                     "message": "Invalid or expired Authentication token!",
                     "data": None,

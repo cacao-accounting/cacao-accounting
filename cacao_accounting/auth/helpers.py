@@ -83,6 +83,7 @@ def asignar_token_para_usuario(identidad: User) -> None:
         ahora = datetime.now(timezone.utc)
         payload = {
             "user_id": identidad.id,
+            "auth_version": identidad.auth_version,
             "iat": ahora,
             "nbf": ahora,
             "exp": ahora + timedelta(hours=8),

@@ -11,9 +11,9 @@ from typing import Any
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from argon2 import PasswordHasher
-from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, has_request_context, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
-from flask_login import LoginManager, current_user, login_required, login_user, logout_user
+from flask_login import LoginManager, current_user, login_required, login_user, logout_user, user_logged_in
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -35,17 +35,25 @@ INICIO_SESION = redirect("/login")
 PROFILE_HTML = "profile.html"
 
 
+def _store_session_auth_version(sender: Any, user: User, **extra: Any) -> None:
+    """Bind a Flask session to the user's credential version at login."""
+    session["_auth_version"] = user.auth_version
+
+
+user_logged_in.connect(_store_session_auth_version, weak=False)
+
+
 @administrador_sesion.user_loader
 def cargar_sesion(identidad):  # pragma: no cover
     """Devuelve la entrada correspondiente al usuario que inicio sesión."""
-    if identidad is not None:
-        QUERY = database.session.execute(database.select(User).filter_by(id=identidad, active=True)).first()
-        try:
-            return QUERY[0]
-        except TypeError:
-            return None
-    else:
+    if identidad is None:
         return None
+    user = database.session.execute(database.select(User).filter_by(id=identidad, active=True)).scalar_one_or_none()
+    if user is None:
+        return None
+    if has_request_context() and session.get("_auth_version", 0) != user.auth_version:
+        return None
+    return user
 
 
 @administrador_sesion.unauthorized_handler
@@ -316,7 +324,9 @@ def reset_password(token: str):  # pragma: no cover
             return redirect(url_for("login.forgot_password"))
 
         user.password = _proteger_passwd(form.new_password.data)
+        user.auth_version = User.auth_version + 1
         database.session.commit()
+        user.token = None
         flash(_("Contraseña actualizada correctamente. Puede iniciar sesión."))
         return redirect(url_for("login.inicio_sesion"))
 
