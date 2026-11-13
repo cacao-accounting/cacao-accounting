@@ -77,10 +77,26 @@ def test_pdf_fetcher_rechaza_hosts_esquemas_y_rutas_ajenos(app):
         fetcher = _PrintPDFURLFetcher("http://localhost/", app.static_folder)
 
         for url in (
-            "https://evil.example/secret",
+            "http://evil.example/static/media/brand.svg",
+            "https://localhost/static/media/brand.svg",
+            "https://evil.example/static/media/brand.svg",
+            "http://localhost:443/static/media/brand.svg",
             "file:///etc/passwd",
             "http://localhost/admin/users",
             "http://localhost/static/../../etc/passwd",
         ):
             with pytest.raises(ValueError, match="outside the application static assets"):
                 fetcher(url)
+
+
+def test_pdf_fetcher_rechaza_symlink_que_escapa_de_static(tmp_path):
+    """A symlink inside static cannot expose a file outside the asset tree."""
+    static_root = tmp_path / "static"
+    static_root.mkdir()
+    outside_file = tmp_path / "private.txt"
+    outside_file.write_text("secret", encoding="utf-8")
+    (static_root / "escape.txt").symlink_to(outside_file)
+    fetcher = _PrintPDFURLFetcher("http://localhost/", str(static_root))
+
+    with pytest.raises(ValueError, match="outside the application static assets"):
+        fetcher("http://localhost/static/escape.txt")
