@@ -8,6 +8,7 @@
 from decimal import Decimal
 from dataclasses import dataclass
 import hashlib
+from typing import Any
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -25,8 +26,9 @@ from sqlalchemy import (
     select,
     text,
 )
-from ulid import ULID
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import synonym
+from ulid import ULID
 
 from cacao_accounting.i18n import _, _l
 
@@ -48,7 +50,23 @@ _PURCHASE_INVOICE_ITEM_ID_FK = "purchase_invoice_item.id"
 # < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
 
-# SQLite Foreign Key pragma listener is handled explicitly per session in tests if needed
+
+@event.listens_for(Engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection: Any, connection_record: Any) -> None:
+    """Enable declared foreign keys on every new SQLite connection."""
+    del connection_record
+    if dbapi_connection.__class__.__module__ != "sqlite3":
+        return
+
+    previous_autocommit = dbapi_connection.autocommit
+    dbapi_connection.autocommit = True
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    finally:
+        dbapi_connection.autocommit = previous_autocommit
+
 
 ENTITY_CODE = "entity.code"
 CURRENCY_CODE = "currency.code"

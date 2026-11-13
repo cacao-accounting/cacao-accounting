@@ -166,6 +166,9 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
   multiusuario, multiempresa y servicios opcionales; el sistema no debe fallar por falta de caché.
 - **Esquema**: las bases de desarrollo se consideran descartables. Los cambios recientes usan `create_all` o
   suplencia idempotente; cuando existe migración incremental (p. ej. hash v2), es idempotente.
+- **SQLite/FK (#1630)**: antes de Alpha no hay instalaciones que preservar; las bases locales previas a activar
+  `PRAGMA foreign_keys` se consideran descartables y deben recrearse si contienen referencias inválidas. No se
+  migran ni reparan automáticamente bases antiguas en este ciclo.
 - **Calidad**: black a 127 caracteres, ruff, flake8, mypy, pydocstyle, complexipy ≤ 20 en código nuevo y pytest. El
   runner descubre `test_*.py` de forma recursiva; los utilitarios no son tests.
 - **mypy con PYTHONPATH inyectado**: puede requerir `env -u PYTHONPATH` para evitar un `pathspec` externo que

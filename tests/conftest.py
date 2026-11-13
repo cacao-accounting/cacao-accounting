@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from argon2 import PasswordHasher
 from flask import Flask
-from sqlalchemy import event, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -134,14 +134,6 @@ def app():
     application: Flask = create_app(settings)
 
     with application.app_context():
-        engine = database.engine
-
-        @event.listens_for(engine, "connect")
-        def _enable_foreign_keys(dbapi_connection, _connection_record):
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
-
         _seed_worker_base_data(application)
 
     yield application
