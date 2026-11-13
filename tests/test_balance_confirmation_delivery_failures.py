@@ -18,6 +18,7 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AuditTrail,
     BalanceConfirmation,
     BalanceConfirmationInvitation,
     Currency,
@@ -187,7 +188,138 @@ def test_falla_individual_conserva_credenciales_previas(confirmation_status, res
             assert hashlib.sha256(code_match.group(1).encode("ascii")).hexdigest() == successful.verification_code_hash
 
         assert client.get(f"/confirm-balance/{old_tokens['failed@example.test']}").status_code == 200
+        assert client.get(f"/confirm-balance/{old_tokens['ok@example.test']}").status_code == 404
         assert client.get(f"/confirm-balance/{new_token}").status_code == 200
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("confirmation_status", "resend", "action"),
+    [("draft", False, "send"), ("sent", True, "resend")],
+)
+def test_bloquea_envio_de_confirmacion_expirada(confirmation_status, resend, action, monkeypatch):
+    """Initial sends and resends must not deliver links after their deadline."""
+    application, confirmation_id, invitation_ids, old_tokens, _, _ = _crear_app(confirmation_status, resend)
+    try:
+        expired_at = datetime.now(timezone.utc) - timedelta(days=1)
+        with application.app_context():
+            confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+            assert confirmation is not None
+            confirmation.expires_at = expired_at
+            database.session.commit()
+
+        route_module = import_module("cacao_accounting.contabilidad.balance_confirmation_bp")
+
+        def unexpected_delivery(**_kwargs):
+            pytest.fail("No debe enviarse una invitación expirada")
+
+        monkeypatch.setattr(route_module, "send_email", unexpected_delivery)
+        client = application.test_client()
+        login = client.post(
+            "/login",
+            data={"usuario": "admin", "acceso": CONTRASENA},
+            follow_redirects=True,
+        )
+        assert login.status_code == 200
+        response = client.post(f"/accounting/balance-confirmations/{confirmation_id}/{action}")
+        assert response.status_code == 302
+
+        with application.app_context():
+            confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+            invitations = (
+                database.session.execute(
+                    database.select(BalanceConfirmationInvitation).where(
+                        BalanceConfirmationInvitation.id.in_(list(invitation_ids.values()))
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert confirmation is not None and confirmation.status == "expired"
+            assert all(invitation.status == "expired" for invitation in invitations)
+            assert {invitation.token_hash for invitation in invitations} == {
+                hashlib.sha256(token.encode("utf-8")).hexdigest() for token in old_tokens.values()
+            }
+            expiry_events = (
+                database.session.execute(
+                    database.select(AuditTrail).where(
+                        AuditTrail.document_type == "balance_confirmation",
+                        AuditTrail.document_id == confirmation_id,
+                        AuditTrail.action == "balance_confirmation_expired",
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert len(expiry_events) == 1
+
+        token = next(iter(old_tokens.values()))
+        assert client.get(f"/confirm-balance/{token}").status_code == 200
+        with application.app_context():
+            expiry_events = (
+                database.session.execute(
+                    database.select(AuditTrail).where(
+                        AuditTrail.document_type == "balance_confirmation",
+                        AuditTrail.document_id == confirmation_id,
+                        AuditTrail.action == "balance_confirmation_expired",
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert len(expiry_events) == 1
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+@pytest.mark.parametrize("terminal_status", ["confirmed", "disputed", "cancelled"])
+def test_expiracion_no_reemplaza_respuesta_terminal(terminal_status):
+    """A later GET preserves the response recorded before the deadline elapsed."""
+    application, confirmation_id, invitation_ids, old_tokens, _, _ = _crear_app("sent", resend=True)
+    token = next(iter(old_tokens.values()))
+    try:
+        with application.app_context():
+            confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+            assert confirmation is not None
+            confirmation.status = terminal_status
+            confirmation.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+            confirmation.responded_at = datetime.now(timezone.utc) - timedelta(days=2)
+            confirmation.response_type = terminal_status if terminal_status != "cancelled" else None
+            confirmation.respondent_first_name = "Ana"
+            confirmation.respondent_last_name = "Pérez"
+            confirmation.respondent_email = "cliente@example.test"
+            for invitation_id in invitation_ids.values():
+                invitation = database.session.get(BalanceConfirmationInvitation, invitation_id)
+                assert invitation is not None
+                invitation.status = "cancelled" if terminal_status == "cancelled" else "responded"
+            database.session.commit()
+
+        response = application.test_client().get(f"/confirm-balance/{token}")
+        assert response.status_code == 200
+
+        with application.app_context():
+            confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+            assert confirmation is not None
+            assert confirmation.status == terminal_status
+            expected_response = terminal_status if terminal_status != "cancelled" else None
+            assert confirmation.response_type == expected_response
+            expiry_events = (
+                database.session.execute(
+                    database.select(AuditTrail).where(
+                        AuditTrail.document_type == "balance_confirmation",
+                        AuditTrail.document_id == confirmation_id,
+                        AuditTrail.action == "balance_confirmation_expired",
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert expiry_events == []
     finally:
         with application.app_context():
             database.session.remove()
