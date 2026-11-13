@@ -512,9 +512,8 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
     Raises:
         ValueError: Si faltan las credenciales y no es entorno de desarrollo.
     """
-    flask_env = (environ.get("FLASK_ENV") or "").lower()
-    env_var = (environ.get("ENV") or "").lower()
-    is_dev = flask_env in ("dev", "development") or env_var in ("dev", "development")
+    environments = {value.strip().lower() for value in (environ.get("FLASK_ENV"), environ.get("ENV")) if value}
+    is_dev = bool(environments) and environments.issubset({"dev", "development"})
 
     usuario = environ.get("CACAO_USER") or environ.get("ADMIN_USER")
     contrasena = environ.get("CACAO_PSWD") or environ.get("CACAO_PASSWORD") or environ.get("ADMIN_PASSWORD")
@@ -524,6 +523,9 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
             raise ValueError(_("CACAO_USER and CACAO_PSWD must be set in environment"))
         usuario = usuario or "cacao"
         contrasena = contrasena or "cacao"
+
+    if not is_dev and usuario.casefold() == "cacao" and contrasena == "cacao":
+        raise ValueError(_("Las credenciales predeterminadas CACAO no se permiten fuera de desarrollo."))
 
     return usuario, contrasena
 

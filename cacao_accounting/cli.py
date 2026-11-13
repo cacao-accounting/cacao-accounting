@@ -215,21 +215,22 @@ def db_init(force: bool, seed: bool) -> None:
         resolver_credenciales_iniciales,
     )
 
-    try:
-        usuario, contrasena = resolver_credenciales_iniciales()
-    except ValueError as exc:
-        _mensaje_error(str(exc))
-        raise click.exceptions.Exit(1)
-
     app = _obtener_aplicacion()
     with app.app_context():
         base_lista = usuarios_creados()
+        if base_lista and not force:
+            _mensaje_info(_("La base de datos ya existe, nada que hacer."))
+            raise click.exceptions.Exit(0)
+
+        try:
+            usuario, contrasena = resolver_credenciales_iniciales()
+        except ValueError as exc:
+            _mensaje_error(str(exc))
+            raise click.exceptions.Exit(1)
+
         if force and base_lista:
             _mensaje_advertencia(_("La base de datos existente será reemplazada."))
             database.drop_all()
-        elif base_lista and not force:
-            _mensaje_info(_("La base de datos ya existe, nada que hacer."))
-            raise click.exceptions.Exit(0)
 
         if usuario == "cacao" and contrasena == "cacao":
             _mensaje_advertencia(_("Se están usando usuario y contraseña predeterminados para el setup inicial."))

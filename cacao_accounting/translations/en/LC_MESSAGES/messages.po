@@ -19107,6 +19107,9 @@ msgstr "Sequence with ID '%(sequence)s' not found."
 msgid "CACAO_USER and CACAO_PSWD must be set in environment"
 msgstr "CACAO_USER and CACAO_PSWD must be set in environment"
 
+msgid "Las credenciales predeterminadas CACAO no se permiten fuera de desarrollo."
+msgstr "Default CACAO credentials are not allowed outside development."
+
 #: cacao_accounting/database/helpers.py:545
 msgid "Un registro no puede ser padre de sí mismo."
 msgstr "A record cannot be its own parent."

@@ -4,10 +4,6 @@
 """Utilidad para iniciar el servidor local WSGI usando Waitress."""
 
 # ---------------------------------------------------------------------------------------
-# Libreria estandar
-# ---------------------------------------------------------------------------------------
-from os import environ
-
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
@@ -31,6 +27,7 @@ def server() -> None:
     """Ejecuta la aplicacion con Waitress como servidor WSGI."""
     from cacao_accounting.database.helpers import (
         inicia_base_de_datos,
+        resolver_credenciales_iniciales,
         verifica_coneccion_db,
     )
 
@@ -43,14 +40,15 @@ def server() -> None:
         log.warning("No se logro conectar a la base de datos.")
         log.info("Intentando inicializar base de datos.")
         try:
+            user, passwd = resolver_credenciales_iniciales()
+            if user == "cacao" and passwd == "cacao":
+                log.warning("Se están usando usuario y contraseña predeterminados para el setup inicial.")
             with app.app_context():
-                inicia_base_de_datos(
-                    app,
-                    user=environ.get("CACAO_USER") or "cacao",
-                    passwd=environ.get("CACAO_PSWD") or "cacao",
-                    with_examples=False,
-                )
+                inicia_base_de_datos(app, user=user, passwd=passwd, with_examples=False)
             DATABASE = True
+        except ValueError as exc:
+            log.critical(str(exc))
+            raise SystemExit(1) from exc
         except OperationalError:
             log.error("No se pudo inicilizar la base de datos.")
             DATABASE = False
