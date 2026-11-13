@@ -24,12 +24,14 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Entity,
     Modules,
+    Currency,
     PaymentEntry,
     SalesInvoice,
     User,
     UserCompanyAccess,
     database,
 )
+from cacao_accounting.document_flow.service import create_target_document
 
 CONTRASENA = "pago-destino-2026"
 FECHA = date(2026, 10, 20)
@@ -50,6 +52,8 @@ def pagos_cloud():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", active=True, default=True))
+        database.session.commit()
         database.session.add_all(
             [
                 Modules(module="sales", default=False, enabled=True),
@@ -59,6 +63,15 @@ def pagos_cloud():
                     name="Cacao",
                     company_name="Cacao SA",
                     tax_id="J0001",
+                    currency="NIO",
+                    enabled=True,
+                    status="default",
+                ),
+                Entity(
+                    code="otra",
+                    name="Otra compañía",
+                    company_name="Otra SA",
+                    tax_id="J0002",
                     currency="NIO",
                     enabled=True,
                     status="default",
@@ -134,6 +147,19 @@ def test_pago_destino_usa_la_factura_de_la_linea(pagos_cloud):
         pago = database.session.get(PaymentEntry, datos["target_id"])
         assert pago is not None
         assert Decimal(str(pago.received_amount)) == Decimal("40")
+
+
+def test_pago_destino_respeta_commit_diferido_y_rollback(pagos_cloud):
+    """El servicio llamador debe poder revertir el pago antes de confirmarlo."""
+    application, factura_id = pagos_cloud
+
+    with application.app_context():
+        result = create_target_document(_payload(factura_id), commit=False)
+        payment_id = result["target_id"]
+
+        database.session.rollback()
+
+        assert database.session.get(PaymentEntry, payment_id) is None
 
 
 def test_pago_destino_rechaza_una_factura_ajena(pagos_cloud):

@@ -1853,7 +1853,7 @@ def _create_advance_settlement_lines(
         )
 
 
-def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
+def _create_payment_target(payload: dict[str, Any], *, commit: bool = True) -> dict[str, Any]:
     """Crea un pago generico desde facturas fuente."""
     company = payload.get("company") or payload.get("company_id")
     from cacao_accounting.decorators import exige_acceso_compania
@@ -1871,7 +1871,8 @@ def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
     assign_payment_identifier(payment, bank_account, posting_date, payload)
     total = _apply_payment_target_lines(payment, company, payload)
     _update_payment_target_amounts(payment, total)
-    database.session.commit()
+    if commit:
+        database.session.commit()
     return _payment_target_result(payment)
 
 

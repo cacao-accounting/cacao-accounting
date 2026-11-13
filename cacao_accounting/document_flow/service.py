@@ -982,7 +982,7 @@ def create_target_document(payload: dict[str, Any], *, commit: bool = True) -> d
     if target_type == "payment_entry":
         from cacao_accounting.document_flow.payment import _create_payment_target
 
-        return _create_payment_target(payload)
+        return _create_payment_target(payload, commit=commit)
 
     target_spec = get_document_type(target_type)
     target = _create_target_header(target_spec, target_type, company, posting_date, payload)
