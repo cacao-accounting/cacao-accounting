@@ -47,7 +47,6 @@
         <option value="percentage" {% if calculation_method == 'percentage' %}selected{% endif %}>{{ _("Porcentaje") }}</option>
         <option value="fixed" {% if calculation_method == 'fixed' %}selected{% endif %}>{{ _("Monto fijo") }}</option>
         <option value="manual" {% if calculation_method == 'manual' %}selected{% endif %}>{{ _("Monto manual") }}</option>
-        <option value="quantity" {% if calculation_method == 'quantity' %}selected{% endif %}>{{ _("Por cantidad") }}</option>
       </select>
     </div>
     <div class="col-md-1"><input class="form-control" name="rate" placeholder="{{ _('Tasa') }}" value="{{ rule.rate if rule and rule.rate is not none else '0' }}"></div>

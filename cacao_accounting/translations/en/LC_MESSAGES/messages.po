@@ -5253,6 +5253,9 @@ msgstr "Amount fijo"
 msgid "Monto manual"
 msgstr "Amount manual"
 
+msgid "El método de cálculo fiscal no está soportado: %(method)s."
+msgstr "The tax calculation method is not supported: %(method)s."
+
 #: cacao_accounting/admin/templates/admin/tax_rules.html:50
 #: cacao_accounting/bancos/templates/bancos/pago_nuevo.html:1143
 #: cacao_accounting/templates/transaction_form_macros.html:881

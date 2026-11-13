@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import or_, select
 
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
+from cacao_accounting.accounting_engine.common.fiscal import SUPPORTED_TAX_CALCULATION_METHODS
 from cacao_accounting.database import Accounts, Currency, Entity, TaxRule, database
 
 
@@ -123,11 +124,13 @@ RECOGNITION_EVENTS: frozenset[str] = frozenset(
         "purchase_order_confirmed",
         "purchase_receipt_confirmed",
         "purchase_invoice_confirmed",
+        "purchase_credit_note_confirmed",
         "import_landed_cost_confirmed",
         "sales_request_confirmed",
         "sales_order_confirmed",
         "delivery_note_confirmed",
         "sales_invoice_confirmed",
+        "sales_credit_note_confirmed",
         "stock_entry_confirmed",
         "bank_transfer_confirmed",
     }
@@ -137,7 +140,7 @@ TAX_RULE_ENUMS: dict[str, tuple[Set[str], str]] = {
     "applies_to": ({"both", "purchase", "sales"}, "both"),
     "level": ({"item", "party", "transaction", "company"}, "transaction"),
     "tax_type": ({"tax", "withholding", "charge", "deduction"}, "tax"),
-    "calculation_method": ({"percentage", "fixed", "manual", "quantity"}, "percentage"),
+    "calculation_method": (SUPPORTED_TAX_CALCULATION_METHODS, "percentage"),
     "base_mode": ({"goods", "accumulated"}, "goods"),
     "accounting_treatment": ({"separate_tax_account", "capitalizable_inventory_cost"}, "separate_tax_account"),
     "recognition_event": (RECOGNITION_EVENTS, "invoice"),

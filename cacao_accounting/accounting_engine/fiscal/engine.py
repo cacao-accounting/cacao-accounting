@@ -17,6 +17,7 @@ from cacao_accounting.accounting_engine.common.context import (
 )
 from cacao_accounting.accounting_engine.common.rounding import RoundingManager
 from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
+from cacao_accounting.i18n import _
 
 
 class FiscalEngine:
@@ -242,7 +243,7 @@ class FiscalEngine:
             return rule.amount
         if rule.calculation_method == "manual":
             return rule.amount
-        return Decimal("0")
+        raise ValueError(_("El método de cálculo fiscal no está soportado: %(method)s.") % {"method": rule.calculation_method})
 
     @staticmethod
     def _included_rules_with_same_base(rule: TaxRuleContext, rules: list[TaxRuleContext]) -> list[TaxRuleContext]:
