@@ -841,7 +841,28 @@ class NamingSeries(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __tablename__ = "naming_series"
-    __table_args__ = (database.UniqueConstraint("entity_type", "company", "name", name="uq_naming_series_name"),)
+    __table_args__ = (
+        database.UniqueConstraint("entity_type", "company", "name", name="uq_naming_series_name"),
+        Index(
+            "uq_naming_series_default_company",
+            "entity_type",
+            "company",
+            unique=True,
+            sqlite_where=text("is_default = 1 AND company IS NOT NULL"),
+            postgresql_where=text("is_default IS TRUE AND company IS NOT NULL"),
+        ).ddl_if(
+            dialect=("sqlite", "postgresql")  # type: ignore[arg-type]
+        ),  # type: ignore[arg-type]
+        Index(
+            "uq_naming_series_default_global",
+            "entity_type",
+            unique=True,
+            sqlite_where=text("is_default = 1 AND company IS NULL"),
+            postgresql_where=text("is_default IS TRUE AND company IS NULL"),
+        ).ddl_if(
+            dialect=("sqlite", "postgresql")  # type: ignore[arg-type]
+        ),  # type: ignore[arg-type]
+    )
     name = database.Column(database.String(100), nullable=False)
     # Tipo de entidad: sales_invoice, payment_entry, journal_entry, etc.
     entity_type = database.Column(database.String(50), nullable=False, index=True)
@@ -852,6 +873,13 @@ class NamingSeries(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
     # Solo una serie activa puede ser predeterminada por entity_type + company.
     is_default = database.Column(database.Boolean(), default=False, nullable=False, index=True)
+
+
+class DefaultScopeLock(database.Model):  # type: ignore[name-defined]
+    """Fila estable para serializar cambios en valores predeterminados."""
+
+    __tablename__ = "default_scope_lock"
+    scope_key = database.Column(database.String(64), primary_key=True, nullable=False)
 
 
 class Sequence(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -3068,7 +3096,18 @@ class PettyCashAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __tablename__ = "petty_cash_account"
-    __table_args__ = (database.UniqueConstraint("company", "name", name="uq_petty_cash_account"),)
+    __table_args__ = (
+        database.UniqueConstraint("company", "name", name="uq_petty_cash_account"),
+        Index(
+            "uq_petty_cash_account_default_company",
+            "company",
+            unique=True,
+            sqlite_where=text("is_default = 1"),
+            postgresql_where=text("is_default IS TRUE"),
+        ).ddl_if(
+            dialect=("sqlite", "postgresql")  # type: ignore[arg-type]
+        ),  # type: ignore[arg-type]
+    )
     company = database.Column(
         database.String(10),
         database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),

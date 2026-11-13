@@ -22,6 +22,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import generate_identifier, get_active_naming_series
+from cacao_accounting.default_scope import lock_default_scope
 
 
 from cacao_accounting.i18n import _
@@ -124,6 +125,7 @@ def enforce_single_default_series(entity_type: str, company: str | None, exclude
         company: Codigo de compania o None para series globales
         exclude_id: ID de la serie que se quiere mantener como predeterminada (se excluye del reset)
     """
+    lock_default_scope("naming_series", entity_type, company)
     query = database.select(NamingSeries).filter(
         NamingSeries.entity_type == entity_type,
         NamingSeries.is_default.is_(True),
@@ -134,6 +136,7 @@ def enforce_single_default_series(entity_type: str, company: str | None, exclude
     else:
         query = query.filter(NamingSeries.company.is_(None))
 
+    query = query.with_for_update().execution_options(populate_existing=True)
     existing_defaults = database.session.execute(query).scalars().all()
     for series in existing_defaults:
         if series.id != exclude_id:
@@ -231,8 +234,12 @@ def ensure_global_naming_series(entity_types: list[str] | None = None) -> None:
     if entity_types is None:
         entity_types = ["customer", "supplier", "item"]
     for entity_type in entity_types:
+        lock_default_scope("naming_series", entity_type, None)
         existing = database.session.execute(
-            database.select(NamingSeries).filter_by(entity_type=entity_type, company=None, is_default=True)
+            database.select(NamingSeries)
+            .filter_by(entity_type=entity_type, company=None, is_default=True)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         ).scalar_one_or_none()
         if existing:
             continue
@@ -344,6 +351,18 @@ def _create_default_series(entity_type: str, company: str | None) -> NamingSerie
     La serie creada automaticamente se marca como predeterminada (is_default=True)
     ya que es la primera y unica para esta combinacion.
     """
+    lock_default_scope("naming_series", entity_type, company)
+    existing = database.session.execute(
+        database.select(NamingSeries)
+        .filter_by(entity_type=entity_type, company=company, is_default=True)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if existing:
+        if existing.is_active:
+            return existing
+        raise IdentifierConfigurationError(_("La serie seleccionada no existe o está inactiva."))
+
     code = _default_entity_code(entity_type)
     prefix_template = f"*COMP*-{code}-*YYYY*-*MM*-"
     sequence = Sequence(

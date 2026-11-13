@@ -12,6 +12,7 @@ import json
 from typing import Any, TypedDict, cast
 
 from cacao_accounting.exceptions import flash_error
+from cacao_accounting.default_scope import lock_default_scope
 
 from flask import Blueprint, flash, redirect, request, url_for
 
@@ -558,6 +559,7 @@ def update_petty_cash_account(
 
 def set_petty_cash_default(petty_cash: PettyCashAccount) -> None:
     """Marca una caja chica como predeterminada (unica por compania)."""
+    lock_default_scope("petty_cash_account", petty_cash.company)
     _clear_default_petty_cash(petty_cash.company)
     petty_cash.is_default = True
     database.session.commit()
@@ -565,11 +567,16 @@ def set_petty_cash_default(petty_cash: PettyCashAccount) -> None:
 
 def _clear_default_petty_cash(company: str) -> None:
     """Quita la marca de predeterminada a las demas cajas de la compania."""
+    lock_default_scope("petty_cash_account", company)
     defaults = database.session.execute(
-        database.select(PettyCashAccount).filter_by(company=company, is_default=True)
+        database.select(PettyCashAccount)
+        .filter_by(company=company, is_default=True)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalars()
     for registro in defaults:
         registro.is_default = False
+    database.session.flush()
 
 
 def toggle_petty_cash_active(petty_cash: PettyCashAccount) -> None:
@@ -586,8 +593,12 @@ def create_default_petty_cash(company: str, custodian_id: str | None = None) -> 
     administrador). Es idempotente: si la compania ya tiene una caja chica
     predeterminada, no crea otra.
     """
+    lock_default_scope("petty_cash_account", company)
     existing = database.session.execute(
-        database.select(PettyCashAccount).filter_by(company=company, is_default=True)
+        database.select(PettyCashAccount)
+        .filter_by(company=company, is_default=True)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalar_one_or_none()
     if existing:
         return existing

@@ -3847,6 +3847,7 @@ def naming_series_edit(series_id: str):
     from cacao_accounting.contabilidad.forms import FormularioNamingSeries
     from cacao_accounting.database import Entity, NamingSeries, Sequence, SeriesSequenceMap
     from cacao_accounting.document_identifiers import enforce_single_default_series
+    from cacao_accounting.default_scope import lock_default_scopes
 
     serie = database.session.get(NamingSeries, series_id)
     if serie is None:
@@ -3875,6 +3876,10 @@ def naming_series_edit(series_id: str):
 
     company = form.company.data or None
     if form.is_default.data:
+        lock_default_scopes(
+            "naming_series",
+            [(serie.entity_type, serie.company), (form.entity_type.data, company)],
+        )
         enforce_single_default_series(
             entity_type=form.entity_type.data,
             company=company,

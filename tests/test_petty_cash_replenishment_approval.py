@@ -21,9 +21,18 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.bancos.services import (
     cancel_petty_cash_expense,
+    create_default_petty_cash,
     create_petty_cash_replenishment,
     replenish_petty_cash,
+    set_petty_cash_default,
     set_petty_cash_replenishment_status,
+)
+from cacao_accounting.document_identifiers import (
+    IdentifierConfigurationError,
+    enforce_single_default_series,
+    ensure_default_naming_series_for_company,
+    ensure_global_naming_series,
+    generate_entity_code,
 )
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
@@ -32,6 +41,7 @@ from cacao_accounting.database import (
     Currency,
     Entity,
     Modules,
+    NamingSeries,
     PaymentEntry,
     PettyCashAccount,
     PettyCashExpense,
@@ -252,6 +262,243 @@ def test_replenishment_approval_requires_authority_and_different_actor(replenish
         )
         assert approved.status == "aprobado"
         assert approved.approved_by == ids["approver_user"]
+
+
+def test_concurrent_default_selection_keeps_one_fund(replenishment_app):
+    """Concurrent operators leave one selected default for the company."""
+    application, ids = replenishment_app
+    with application.app_context():
+        company = ids["company"]
+        fund = database.session.execute(database.select(PettyCashAccount).filter_by(company=company)).scalar_one()
+        alternatives = [
+            PettyCashAccount(
+                company=company,
+                account_id=fund.account_id,
+                name=f"Fondo concurrente {number} {company}",
+                currency=fund.currency,
+                float_amount=Decimal("100"),
+                is_default=False,
+                is_active=True,
+            )
+            for number in (1, 2)
+        ]
+        database.session.add_all(alternatives)
+        database.session.commit()
+        default_ids = [row.id for row in alternatives]
+
+    from threading import Barrier
+
+    start = Barrier(2)
+
+    def select_default(fund_id: str) -> None:
+        """Run one real default-selection transaction in its own session."""
+        with application.app_context():
+            try:
+                target = database.session.get(PettyCashAccount, fund_id)
+                assert target is not None
+                start.wait(timeout=5)
+                set_petty_cash_default(target)
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(select_default, fund_id) for fund_id in default_ids]
+        for future in futures:
+            future.result(timeout=15)
+
+    with application.app_context():
+        defaults = (
+            database.session.execute(database.select(PettyCashAccount).filter_by(company=ids["company"], is_default=True))
+            .scalars()
+            .all()
+        )
+        assert len(defaults) == 1
+        assert defaults[0].id in default_ids
+
+
+def test_concurrent_naming_series_activation_keeps_one_default(replenishment_app):
+    """Concurrent series activation leaves one default in its company scope."""
+    application, ids = replenishment_app
+    with application.app_context():
+        company = ids["company"]
+        alternatives = [
+            NamingSeries(
+                name=f"Concurrente {number} {company}",
+                entity_type="sales_invoice",
+                company=company,
+                prefix_template=f"S{number}-",
+                is_active=True,
+                is_default=False,
+            )
+            for number in (1, 2)
+        ]
+        database.session.add_all(alternatives)
+        database.session.commit()
+        series_ids = [row.id for row in alternatives]
+
+    from threading import Barrier
+
+    start = Barrier(2)
+
+    def activate_default(series_id: str) -> None:
+        """Run one series activation in its own transaction and session."""
+        with application.app_context():
+            try:
+                series = database.session.get(NamingSeries, series_id)
+                assert series is not None
+                start.wait(timeout=5)
+                enforce_single_default_series(series.entity_type, series.company, exclude_id=series.id)
+                series.is_default = True
+                database.session.commit()
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(activate_default, series_id) for series_id in series_ids]
+        for future in futures:
+            future.result(timeout=15)
+
+    with application.app_context():
+        defaults = (
+            database.session.execute(
+                database.select(NamingSeries).filter_by(entity_type="sales_invoice", company=ids["company"], is_default=True)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(defaults) == 1
+        assert defaults[0].id in series_ids
+
+
+def test_inactive_default_blocks_automatic_duplicate_series(replenishment_app):
+    """Document numbering fails closed instead of duplicating an inactive default."""
+    application, ids = replenishment_app
+    with application.app_context():
+        inactive_default = NamingSeries(
+            name=f"Inactiva {ids['company']}",
+            entity_type="sales_invoice",
+            company=ids["company"],
+            prefix_template="SI-",
+            is_active=False,
+            is_default=True,
+        )
+        database.session.add(inactive_default)
+        database.session.commit()
+
+        with pytest.raises(IdentifierConfigurationError, match="serie seleccionada.*inactiva"):
+            generate_entity_code("sales_invoice", "invoice-test", company=ids["company"])
+
+        defaults = (
+            database.session.execute(
+                database.select(NamingSeries).filter_by(entity_type="sales_invoice", company=ids["company"], is_default=True)
+            )
+            .scalars()
+            .all()
+        )
+        assert [row.id for row in defaults] == [inactive_default.id]
+
+
+def test_concurrent_automatic_series_bootstrap_creates_one_default(replenishment_app):
+    """Concurrent document setup creates one usable default series."""
+    application, ids = replenishment_app
+    from threading import Barrier
+
+    start = Barrier(2)
+
+    def ensure_series() -> None:
+        """Run automatic series setup in an independent session."""
+        with application.app_context():
+            try:
+                start.wait(timeout=5)
+                ensure_default_naming_series_for_company(ids["company"], ["concurrent_invoice"])
+                database.session.commit()
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(ensure_series) for _ in range(2)]
+        for future in futures:
+            future.result(timeout=15)
+
+    with application.app_context():
+        defaults = (
+            database.session.execute(
+                database.select(NamingSeries).filter_by(
+                    entity_type="concurrent_invoice", company=ids["company"], is_default=True, is_active=True
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(defaults) == 1
+
+
+def test_concurrent_global_series_bootstrap_creates_one_default(replenishment_app):
+    """Concurrent global setup creates one default for company-less entities."""
+    application, _ids = replenishment_app
+    from threading import Barrier
+
+    start = Barrier(2)
+
+    def ensure_global_series() -> None:
+        """Run global series setup in an independent session."""
+        with application.app_context():
+            try:
+                start.wait(timeout=5)
+                ensure_global_naming_series(["concurrent_global"])
+                database.session.commit()
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(ensure_global_series) for _ in range(2)]
+        for future in futures:
+            future.result(timeout=15)
+
+    with application.app_context():
+        defaults = (
+            database.session.execute(
+                database.select(NamingSeries).filter_by(entity_type="concurrent_global", company=None, is_default=True)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(defaults) == 1
+
+
+def test_concurrent_petty_cash_setup_creates_one_default(replenishment_app):
+    """Concurrent company setup returns one petty cash default."""
+    application, ids = replenishment_app
+    with application.app_context():
+        fund = database.session.execute(database.select(PettyCashAccount).filter_by(company=ids["company"])).scalar_one()
+        fund.is_default = False
+        database.session.commit()
+
+    from threading import Barrier
+
+    start = Barrier(2)
+
+    def ensure_petty_cash():
+        """Run company setup in an independent session."""
+        with application.app_context():
+            try:
+                start.wait(timeout=5)
+                return create_default_petty_cash(ids["company"])
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(ensure_petty_cash) for _ in range(2)]
+        for future in futures:
+            assert future.result(timeout=15) is not None
+
+    with application.app_context():
+        defaults = (
+            database.session.execute(database.select(PettyCashAccount).filter_by(company=ids["company"], is_default=True))
+            .scalars()
+            .all()
+        )
+        assert len(defaults) == 1
 
 
 def test_replenishment_cannot_skip_payment_to_reimbursed_status(replenishment_app):
