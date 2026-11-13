@@ -136,6 +136,9 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
   `DISTINCT`.
 - **Jerarquías**: las APIs exigen permiso `accounting/consultar` sobre la entidad y rechazan árboles con vínculos
   padre/hijo entre compañías.
+- **#1705 — Unit/Project**: cada padre y todos sus descendientes deben permanecer en la misma compañía. La validación
+  también se ejecuta al quitar el padre propuesto para impedir que cambiar la compañía del nodo fracture el árbol;
+  los selectores muestran solo padres de compañías autorizadas y, si se eligió una, de esa misma compañía.
 - **Caché**: Redis es opcional y requiere `CACHE_REDIS_URL` explícita; Desktop no depende de caché. La llave incluye
   usuario y alcance de compañías, se reevalúa en cada solicitud y se invalida después del commit. TTL de datos
   maestros: 300 s. El rate limit usa `RATELIMIT_STORAGE_URI` y no hereda la URL de caché.

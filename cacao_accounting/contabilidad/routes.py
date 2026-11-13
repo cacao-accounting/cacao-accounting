@@ -37,6 +37,8 @@ from cacao_accounting.contabilidad.services import (
     _render_project_edit_form,
     _resolve_project_budget_currency,
     _update_project_from_form,
+    hierarchy_parent_choices,
+    commit_hierarchy_change,
     _get_templates_and_applied_ids,
     _get_period_close_checks,
     _monthly_ledger_source_entries,
@@ -845,6 +847,36 @@ def unidades():
     )
 
 
+@contabilidad.route("/hierarchy/<node_type>/parents")
+@login_required
+@modulo_activo("accounting")
+def hierarchy_parent_options(node_type: str):
+    """Load parent choices only for a company the user can operate in."""
+    from cacao_accounting.database import Unit
+
+    models: dict[str, Any] = {"unit": Unit, "project": Project}
+    model = models.get(node_type)
+    if model is None:
+        abort(404)
+
+    entity = request.args.get("entity")
+    action = request.args.get("action")
+    if not entity or action not in {"crear", "editar"}:
+        abort(400)
+    exige_acceso_compania("accounting", entity, action)
+
+    exclude_ids: set[str] = set()
+    exclude_id = request.args.get("exclude_id")
+    if exclude_id:
+        excluded_node = database.session.get(model, exclude_id)
+        if excluded_node is None or excluded_node.entity != entity:
+            abort(404)
+        exclude_ids = {exclude_id, *get_descendant_ids(model, exclude_id)}
+
+    choices = hierarchy_parent_choices(model, entity, exclude_ids)
+    return jsonify([{"value": value, "label": label} for value, label in choices])
+
+
 @contabilidad.route("/unit/<id_unidad>")
 @login_required
 @modulo_activo("accounting")
@@ -905,17 +937,13 @@ def nueva_unidad():
 
     formulario = FormularioUnidad()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.parent_id.choices = [("", "— Ninguna —")] + [
-        (u.id, f"{u.code} - {u.name}")
-        for u in database.session.execute(database.select(Unit).order_by(Unit.code)).scalars().all()
-    ]
+    formulario.parent_id.choices = [("", "— Ninguna —")] + hierarchy_parent_choices(Unit, formulario.entidad.data)
     TITULO = _("Contabilidad | Nueva Unidad de Negocio") + " - " + APPNAME
     if formulario.validate_on_submit():
         try:
             _validate_active_entity_submission(formulario.entidad.data or "")
             parent_id = formulario.parent_id.data or None
-            if parent_id:
-                check_hierarchy_cycle(Unit, None, parent_id)
+            check_hierarchy_cycle(Unit, None, parent_id, entity=formulario.entidad.data or "")
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -932,9 +960,15 @@ def nueva_unidad():
             parent_id=parent_id,
         )
         database.session.add(DATA)
-        database.session.flush()
-        update_hierarchy_attributes(DATA)
-        database.session.commit()
+        if not commit_hierarchy_change(lambda: update_hierarchy_attributes(DATA)):
+            flash(
+                _(
+                    "No se pudo guardar porque los datos entran en conflicto "
+                    "con otro registro. Revise el código y las referencias."
+                ),
+                "danger",
+            )
+            return render_template(_TPL_UNIDAD_CREAR, titulo=TITULO, form=formulario)
         invalidate_cache("smart-select-master-data")
 
         return redirect(url_for(CONTABILIDAD_UNIDADES))
@@ -961,12 +995,7 @@ def editar_unidad(id_unidad):
     exclude_ids = {registro.id, *get_descendant_ids(Unit, registro.id)}
     formulario = FormularioUnidad(obj=registro)
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.parent_id.choices = [("", "— Ninguna —")] + [
-        (u.id, f"{u.code} - {u.name}")
-        for u in database.session.execute(database.select(Unit).where(Unit.id.notin_(exclude_ids)).order_by(Unit.code))
-        .scalars()
-        .all()
-    ]
+    formulario.parent_id.choices = [("", "— Ninguna —")] + hierarchy_parent_choices(Unit, formulario.entidad.data, exclude_ids)
     formulario.id.data = registro.code
     if request.method != "POST":
         formulario.nombre.data = registro.name
@@ -979,8 +1008,7 @@ def editar_unidad(id_unidad):
         try:
             _validate_active_entity_submission(formulario.entidad.data)
             parent_id = formulario.parent_id.data or None
-            if parent_id:
-                check_hierarchy_cycle(Unit, registro.id, parent_id)
+            check_hierarchy_cycle(Unit, registro.id, parent_id, entity=formulario.entidad.data or "")
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -989,13 +1017,28 @@ def editar_unidad(id_unidad):
                 form=formulario,
                 edit=True,
                 entity_initial_label=entity_initial_label,
+                parent_exclude_id=registro.id,
             )
         registro.name = formulario.nombre.data
         registro.entity = formulario.entidad.data
         registro.enabled = bool(formulario.habilitado.data)
         registro.parent_id = parent_id
-        update_hierarchy_attributes(registro)
-        database.session.commit()
+        if not commit_hierarchy_change(lambda: update_hierarchy_attributes(registro)):
+            flash(
+                _(
+                    "No se pudo guardar porque los datos entran en conflicto "
+                    "con otro registro. Revise el código y las referencias."
+                ),
+                "danger",
+            )
+            return render_template(
+                _TPL_UNIDAD_CREAR,
+                titulo=_("Editar Unidad de Negocio") + " - " + APPNAME,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+                parent_exclude_id=registro.id,
+            )
         invalidate_cache("smart-select-master-data")
         return redirect(url_for("contabilidad.unidad", id_unidad=registro.code))
 
@@ -1005,6 +1048,7 @@ def editar_unidad(id_unidad):
         form=formulario,
         edit=True,
         entity_initial_label=entity_initial_label,
+        parent_exclude_id=registro.id,
     )
 
 
@@ -1772,10 +1816,7 @@ def nuevo_proyecto():
 
     formulario = FormularioProyecto()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.parent_id.choices = [("", "— Ninguno —")] + [
-        (p.id, f"{p.code} - {p.name}")
-        for p in database.session.execute(database.select(Project).order_by(Project.code)).scalars().all()
-    ]
+    formulario.parent_id.choices = [("", "— Ninguno —")] + hierarchy_parent_choices(Project, formulario.entidad.data)
     formulario.capitalization_account_id.choices = [("", "— Seleccionar Cuenta —")] + [
         (a.id, f"{a.code} - {a.name}")
         for a in database.session.execute(database.select(Accounts).order_by(Accounts.code)).scalars().all()
@@ -1821,9 +1862,20 @@ def nuevo_proyecto():
             capitalization_account_id=capitalization_account_id,
         )
         database.session.add(DATA)
-        database.session.flush()
-        update_hierarchy_attributes(DATA)
-        database.session.commit()
+        if not commit_hierarchy_change(lambda: update_hierarchy_attributes(DATA)):
+            flash(
+                _(
+                    "No se pudo guardar porque los datos entran en conflicto "
+                    "con otro registro. Revise el código y las referencias."
+                ),
+                "danger",
+            )
+            return render_template(
+                _TPL_PROYECTO_CREAR,
+                titulo=TITULO,
+                form=formulario,
+                budget_currency_code="",
+            )
         invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
@@ -1888,7 +1940,15 @@ def editar_proyecto(project_id):
             flash_error(error)
             return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
         _update_project_from_form(proyecto, formulario, budget_amount, budget_currency)
-        database.session.commit()
+        if not commit_hierarchy_change(lambda: update_hierarchy_attributes(proyecto)):
+            flash(
+                _(
+                    "No se pudo guardar porque los datos entran en conflicto "
+                    "con otro registro. Revise el código y las referencias."
+                ),
+                "danger",
+            )
+            return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
         invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 

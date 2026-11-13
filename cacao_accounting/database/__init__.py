@@ -487,10 +487,22 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
     permitiendo analizar resultados por sucursal o punto de operacion.
     """
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="unidad_unica"),)
+    __table_args__ = (
+        database.UniqueConstraint("entity", "code", name="unidad_unica"),
+        database.UniqueConstraint("entity", "id", name="uq_unit_entity_id"),
+        database.ForeignKeyConstraint(
+            ["entity", "parent_id"],
+            ["unit.entity", "unit.id"],
+            name="fk_unit_parent_same_entity",
+            ondelete=FK_RESTRICT,
+            onupdate=FK_RESTRICT,
+        ),
+    )
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(50), nullable=False)
-    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
+    entity = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
     enabled = database.Column(database.Boolean(), nullable=True)
     parent_id = database.Column(
         database.String(26), database.ForeignKey("unit.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
@@ -733,9 +745,21 @@ class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Proyecto — dimension analitica con presupuesto y fechas definidas."""
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="py_unico"),)
+    __table_args__ = (
+        database.UniqueConstraint("entity", "code", name="py_unico"),
+        database.UniqueConstraint("entity", "id", name="uq_project_entity_id"),
+        database.ForeignKeyConstraint(
+            ["entity", "parent_id"],
+            ["project.entity", "project.id"],
+            name="fk_project_parent_same_entity",
+            ondelete=FK_RESTRICT,
+            onupdate=FK_RESTRICT,
+        ),
+    )
     enabled = database.Column(database.Boolean(), index=True)
-    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
+    entity = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(100))
     start = database.Column(database.Date())

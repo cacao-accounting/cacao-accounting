@@ -59,7 +59,12 @@
               clear: {{ _("Limpiar")|tojson }}
             }
           })'>
-          <input type="hidden" name="entidad" x-model="selectedValue">
+          <input
+            type="hidden"
+            name="entidad"
+            x-model="selectedValue"
+            @change="$dispatch('hierarchy-company-changed', { company: $event.target.value })"
+          >
           <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="option in options" :key="option.value">
@@ -72,7 +77,15 @@
       </div>
       <div class="col-md-12">
         <label class="form-label" for="parent_id">{{ _('Unidad Padre') }}</label>
-        {{ form.parent_id(class="form-select form-select-sm", id="parent_id") }}
+        <div x-data='hierarchyParentSelect({
+            endpoint: {{ url_for("contabilidad.hierarchy_parent_options", node_type="unit")|tojson }},
+            action: {{ ("editar" if edit else "crear")|tojson }},
+            excludeId: {{ (parent_exclude_id|default(""))|tojson }},
+            placeholder: {{ _("— Ninguna —")|tojson }}
+          })'
+          @hierarchy-company-changed.window="refresh($event.detail.company)">
+          {{ form.parent_id(class="form-select form-select-sm", id="parent_id", **{"x-ref": "parent"}) }}
+        </div>
       </div>
       <div class="col-12 mt-3">
         <div class="form-check">

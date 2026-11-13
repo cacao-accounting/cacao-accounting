@@ -25154,6 +25154,12 @@ msgstr "Entity deletion is not available in Cloud mode; use Deactivate instead."
 msgid "El registro padre seleccionado no existe."
 msgstr "The selected parent record does not exist."
 
+msgid "Los registros de una jerarquía deben pertenecer a la misma compañía."
+msgstr "Records in a hierarchy must belong to the same company."
+
+msgid "No se pudo guardar porque los datos entran en conflicto con otro registro. Revise el código y las referencias."
+msgstr "Could not save because the data conflicts with another record. Review the code and references."
+
 #: cacao_accounting/contabilidad/routes.py
 msgid "No se puede quitar la condición de grupo porque la cuenta tiene cuentas hijas."
 msgstr "The group flag cannot be removed while the account has child accounts."

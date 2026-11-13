@@ -3,7 +3,7 @@
 
 """Modulo de Contabilidad."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from typing import Any
 
@@ -60,7 +60,6 @@ from cacao_accounting.database import (
 from cacao_accounting.database.helpers import (
     check_hierarchy_cycle,
     get_descendant_ids,
-    update_hierarchy_attributes,
 )
 
 from cacao_accounting.decorators import exige_acceso_compania
@@ -427,9 +426,9 @@ def _validate_project_creation_form(formulario: Any) -> tuple[str | None, str | 
     Retorna (parent_id, capitalization_account_id, error_flag).
     """
     _validate_active_entity_submission(request.form.get("entidad", ""))
+    entity = request.form.get("entidad", "")
     parent_id = request.form.get("parent_id") or None
-    if parent_id:
-        check_hierarchy_cycle(Project, None, parent_id)
+    check_hierarchy_cycle(Project, None, parent_id, entity=entity)
 
     capitalizable = bool(formulario.capitalizable.data)
     capitalization_account_id = request.form.get("capitalization_account_id") or None
@@ -455,15 +454,48 @@ def _populate_project_edit_form(formulario: Any, proyecto: Any) -> None:
     formulario.capitalization_account_id.data = proyecto.capitalization_account_id or ""
 
 
+def hierarchy_parent_choices(
+    node_class: Any, entity: str | None = None, exclude_ids: set[str] | None = None
+) -> list[tuple[str, str]]:
+    """Return parent options limited to companies the current accounting user can access."""
+    if not entity:
+        return []
+
+    from cacao_accounting.company_context import authorized_company_codes
+
+    companies = authorized_company_codes("accounting")
+    if entity not in companies:
+        return []
+    query = database.select(node_class).where(node_class.entity.in_(companies))
+    query = query.where(node_class.entity == entity)
+    if exclude_ids:
+        query = query.where(node_class.id.notin_(exclude_ids))
+    nodes = database.session.execute(query.order_by(node_class.code)).scalars().all()
+    return [(node.id, f"{node.code} - {node.name}") for node in nodes]
+
+
+def commit_hierarchy_change(update: Callable[[], None]) -> bool:
+    """Commit a hierarchy change, rolling back a concurrent constraint conflict."""
+    from sqlalchemy.exc import IntegrityError
+
+    try:
+        update()
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        return False
+    return True
+
+
 def _validate_project_edit_form(formulario: Any, proyecto: Any) -> tuple[str | None, str | None]:
     """Valida los campos del formulario de edicion de proyecto.
 
     Retorna (parent_id, capitalization_account_id).
     """
-    _validate_active_entity_submission(request.form.get("entidad", proyecto.entity))
+    entity = request.form.get("entidad", proyecto.entity)
+    _validate_active_entity_submission(entity)
     parent_id = request.form.get("parent_id") or None
-    if parent_id:
-        check_hierarchy_cycle(Project, proyecto.id, parent_id)
+    check_hierarchy_cycle(Project, proyecto.id, parent_id, entity=entity)
 
     capitalizable = bool(formulario.capitalizable.data)
     capitalization_account_id = request.form.get("capitalization_account_id") or None
@@ -480,14 +512,9 @@ def _setup_project_edit_form(formulario: Any, proyecto: Any) -> None:
     exclude_ids = {proyecto.id, *get_descendant_ids(Project, proyecto.id)}
     formulario.id.data = proyecto.code
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.parent_id.choices = [("", "— Ninguno —")] + [
-        (p.id, f"{p.code} - {p.name}")
-        for p in database.session.execute(
-            database.select(Project).where(Project.id.notin_(exclude_ids)).order_by(Project.code)
-        )
-        .scalars()
-        .all()
-    ]
+    formulario.parent_id.choices = [("", "— Ninguno —")] + hierarchy_parent_choices(
+        Project, formulario.entidad.data, exclude_ids
+    )
     formulario.capitalization_account_id.choices = [("", "— Seleccionar Cuenta —")] + [
         (a.id, f"{a.code} - {a.name}")
         for a in database.session.execute(database.select(Accounts).order_by(Accounts.code)).scalars().all()
@@ -503,6 +530,7 @@ def _render_project_edit_form(formulario: Any, titulo: str, proyecto: Any, entit
         edit=True,
         budget_currency_code=proyecto.budget_currency_code or "",
         entity_initial_label=entity_initial_label,
+        parent_exclude_id=proyecto.id,
     )
 
 
@@ -533,8 +561,6 @@ def _update_project_from_form(
     proyecto.capitalization_account_id = request.form.get("capitalization_account_id") or None
     if not proyecto.capitalizable:
         proyecto.capitalization_account_id = None
-
-    update_hierarchy_attributes(proyecto)
 
 
 def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequence[Any], list[str]]:

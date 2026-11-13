@@ -547,14 +547,22 @@ def batch_number(batch_id: str | None) -> str:
     return cache[batch_id]
 
 
-def check_hierarchy_cycle(node_class, node_id, proposed_parent_id) -> None:
-    """Valida que no existan ciclos en la jerarquía (RN-003)."""
+def check_hierarchy_cycle(node_class, node_id, proposed_parent_id, *, entity: str) -> None:
+    """Valida que el padre exista, pertenezca a la compañía y no cree ciclos."""
+    if node_id:
+        for descendant_id in get_descendant_ids(node_class, node_id):
+            descendant = database.session.get(node_class, descendant_id)
+            if descendant is not None and descendant.entity != entity:
+                raise ValueError(_("Los registros de una jerarquía deben pertenecer a la misma compañía."))
     if not proposed_parent_id:
         return
     if proposed_parent_id == node_id:
         raise ValueError(_("Un registro no puede ser padre de sí mismo."))
-    if database.session.get(node_class, proposed_parent_id) is None:
+    parent_node = database.session.get(node_class, proposed_parent_id)
+    if parent_node is None:
         raise ValueError(_("El registro padre seleccionado no existe."))
+    if parent_node.entity != entity:
+        raise ValueError(_("Los registros de una jerarquía deben pertenecer a la misma compañía."))
 
     curr_id = proposed_parent_id
     visited = {node_id} if node_id else set()
