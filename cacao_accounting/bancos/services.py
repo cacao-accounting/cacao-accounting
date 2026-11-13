@@ -1062,6 +1062,9 @@ def cancel_petty_cash_expense(
     if expense.journal_id:
         journal = database.session.get(ComprobanteContable, expense.journal_id)
         if journal is not None:
+            # RELEASE of an outermost SQLite SAVEPOINT commits immediately.
+            # This transaction must also contain the subledger update below.
+            _begin_cancellation_transaction()
             cancel_submitted_journal(
                 str(journal.id),
                 user_id=actor_id,
@@ -1221,6 +1224,12 @@ def _lock_row_for_transition(model: Any, record_id: str) -> Any:
     if locked is None:
         raise ValueError(_("El documento no existe."))
     return locked
+
+
+def _begin_cancellation_transaction() -> None:
+    """Start SQLite's physical transaction before cancellation opens savepoints."""
+    if database.engine.dialect.name == "sqlite":
+        database.session.connection().exec_driver_sql("BEGIN IMMEDIATE")
 
 
 def reconcile_petty_cash(reconciliation: PettyCashReconciliation, *, actor_id: str | None = None):

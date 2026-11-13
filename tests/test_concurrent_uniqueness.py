@@ -937,6 +937,118 @@ def test_liquidacion_revierte_todo_si_falla_en_etapas_posteriores(caja_app, monk
         assert voucher.expense_id == expense.id
 
 
+def test_anulacion_gasto_reversa_y_subledger_se_revierten_juntos(caja_app):
+    """Un fallo al guardar el subledger conserva el journal y GL originales."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+
+    from cacao_accounting.bancos.services import (
+        cancel_petty_cash_expense,
+        create_petty_cash_voucher,
+        set_petty_cash_voucher_status,
+    )
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        ComprobanteContable,
+        DocumentTransition,
+        GLEntry,
+        PettyCashExpense,
+        PettyCashVoucher,
+    )
+
+    with caja_app.app_context():
+        voucher = create_petty_cash_voucher(
+            company=COMPANY,
+            petty_cash_id=_fondo_id(caja_app, COMPANY),
+            posted_date=date(2026, 10, 4),
+            delivered_to="Cajero",
+            concept="Compra que se anulará",
+            amount=MONTO,
+            cost_center_code="MAIN",
+        )
+        voucher = set_petty_cash_voucher_status(voucher, "entregado")
+        expense = create_petty_cash_expense(
+            company=COMPANY,
+            petty_cash_id=voucher.petty_cash_id,
+            expense_account_code="5.01.01.001",
+            concept=voucher.concept,
+            amount=voucher.amount,
+            cost_center_code="MAIN",
+            posted_date=date(2026, 10, 5),
+            voucher_id=voucher.id,
+            actor_id="admin",
+        )
+        period = AccountingPeriod(
+            entity=COMPANY,
+            name="Octubre 2026",
+            status="activo",
+            enabled=True,
+            is_closed=False,
+            start=date(2026, 10, 1),
+            end=date(2026, 10, 31),
+        )
+        database.session.add(period)
+        database.session.commit()
+
+        journal_id = expense.journal_id
+        expense_id = expense.id
+        voucher_id = voucher.id
+        entries_before = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal_id)).scalars().all()
+        assert len(entries_before) == 2
+        transitions_before = database.session.execute(database.select(database.func.count(DocumentTransition.id))).scalar_one()
+        database.session.execute(
+            text(
+                "CREATE TRIGGER fail_petty_cash_expense_cancel "
+                "BEFORE UPDATE ON petty_cash_expense "
+                "WHEN NEW.docstatus = 2 "
+                "BEGIN SELECT RAISE(ABORT, 'injected expense cancellation failure'); END"
+            )
+        )
+        database.session.commit()
+
+        with pytest.raises(IntegrityError, match="injected expense cancellation failure"):
+            cancel_petty_cash_expense(
+                expense,
+                reason="Falla inducida para validar atomicidad",
+                actor_id="admin",
+                cancellation_date=date(2026, 10, 6),
+            )
+        database.session.rollback()
+        database.session.remove()
+
+        expense = database.session.get(PettyCashExpense, expense_id)
+        journal = database.session.get(ComprobanteContable, journal_id)
+        voucher = database.session.get(PettyCashVoucher, voucher_id)
+        entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal_id)).scalars().all()
+        transitions = database.session.execute(database.select(database.func.count(DocumentTransition.id))).scalar_one()
+        assert expense is not None and expense.docstatus == 1
+        assert journal is not None and journal.status == "submitted"
+        assert voucher is not None and voucher.voucher_status == "liquidado" and voucher.expense_id == expense.id
+        assert len(entries) == 2 and all(not entry.is_cancelled for entry in entries)
+        assert transitions == transitions_before
+
+        database.session.execute(text("DROP TRIGGER fail_petty_cash_expense_cancel"))
+        database.session.commit()
+        cancel_petty_cash_expense(
+            expense,
+            reason="Anulación después del reintento",
+            actor_id="admin",
+            cancellation_date=date(2026, 10, 6),
+        )
+
+        expense = database.session.get(PettyCashExpense, expense_id)
+        journal = database.session.get(ComprobanteContable, journal_id)
+        voucher = database.session.get(PettyCashVoucher, voucher_id)
+        entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal_id)).scalars().all()
+        active_entries = [entry for entry in entries if not entry.is_cancelled]
+        assert expense is not None and expense.docstatus == 2
+        assert journal is not None and journal.status == "cancelled"
+        assert voucher is not None and voucher.voucher_status == "entregado" and voucher.expense_id is None
+        assert len(entries) == 4
+        assert len(active_entries) == 2
+        assert sum((entry.debit or Decimal("0")) - (entry.credit or Decimal("0")) for entry in active_entries) == Decimal("0")
+
+
 # ------------------------------------------------------------ revaluación (SQLite)
 
 
@@ -1279,6 +1391,120 @@ class TestConcurrenciaPostgreSQL:
                 database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one()
                 == journal_count + 1
             )
+            assert database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one() == gl_count + 2
+
+    def test_anulacion_gasto_postgres_revierte_gl_y_subledger_juntos(self, pg_app_caja):
+        """Un error al actualizar el subledger revierte también el posting PostgreSQL."""
+        from sqlalchemy import text
+        from sqlalchemy.exc import DBAPIError
+
+        from cacao_accounting.bancos.services import (
+            cancel_petty_cash_expense,
+            create_petty_cash_voucher,
+            set_petty_cash_voucher_status,
+        )
+        from cacao_accounting.database import (
+            AccountingPeriod,
+            ComprobanteContable,
+            GLEntry,
+            PettyCashExpense,
+            PettyCashVoucher,
+        )
+
+        application = pg_app_caja
+        with application.app_context():
+            voucher = create_petty_cash_voucher(
+                company=COMPANY,
+                petty_cash_id=_fondo_id(application, COMPANY),
+                posted_date=date(2026, 10, 4),
+                delivered_to="Cajero",
+                concept="Compra que se anulará",
+                amount=MONTO,
+                cost_center_code="MAIN",
+            )
+            voucher = set_petty_cash_voucher_status(voucher, "entregado")
+            expense = create_petty_cash_expense(
+                company=COMPANY,
+                petty_cash_id=voucher.petty_cash_id,
+                expense_account_code="5.01.01.001",
+                concept=voucher.concept,
+                amount=voucher.amount,
+                cost_center_code="MAIN",
+                posted_date=date(2026, 10, 5),
+                voucher_id=voucher.id,
+                actor_id="admin",
+            )
+            database.session.add(
+                AccountingPeriod(
+                    entity=COMPANY,
+                    name="Octubre 2026",
+                    status="activo",
+                    enabled=True,
+                    is_closed=False,
+                    start=date(2026, 10, 1),
+                    end=date(2026, 10, 31),
+                )
+            )
+            database.session.commit()
+            journal_id = expense.journal_id
+            expense_id = expense.id
+            voucher_id = voucher.id
+            gl_count = database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one()
+            database.session.execute(
+                text(
+                    "CREATE FUNCTION fail_petty_cash_expense_cancel() RETURNS trigger "
+                    "LANGUAGE plpgsql AS $$ BEGIN "
+                    "IF NEW.docstatus = 2 THEN RAISE EXCEPTION 'injected expense cancellation failure'; END IF; "
+                    "RETURN NEW; END $$"
+                )
+            )
+            database.session.execute(
+                text(
+                    "CREATE TRIGGER fail_petty_cash_expense_cancel "
+                    "BEFORE UPDATE ON petty_cash_expense FOR EACH ROW "
+                    "EXECUTE FUNCTION fail_petty_cash_expense_cancel()"
+                )
+            )
+            database.session.commit()
+
+            with pytest.raises(DBAPIError, match="injected expense cancellation failure"):
+                cancel_petty_cash_expense(
+                    expense,
+                    reason="Falla inducida para validar atomicidad",
+                    actor_id="admin",
+                    cancellation_date=date(2026, 10, 6),
+                )
+            database.session.rollback()
+            database.session.remove()
+
+            expense = database.session.get(PettyCashExpense, expense_id)
+            journal = database.session.get(ComprobanteContable, journal_id)
+            voucher = database.session.get(PettyCashVoucher, voucher_id)
+            entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal_id)).scalars().all()
+            assert expense is not None and expense.docstatus == 1
+            assert journal is not None and journal.status == "submitted"
+            assert voucher is not None and voucher.voucher_status == "liquidado" and voucher.expense_id == expense_id
+            assert len(entries) == 2 and all(not entry.is_cancelled for entry in entries)
+            assert database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one() == gl_count
+
+            database.session.execute(text("DROP TRIGGER fail_petty_cash_expense_cancel ON petty_cash_expense"))
+            database.session.execute(text("DROP FUNCTION fail_petty_cash_expense_cancel()"))
+            database.session.commit()
+            cancel_petty_cash_expense(
+                expense,
+                reason="Anulación después del reintento",
+                actor_id="admin",
+                cancellation_date=date(2026, 10, 6),
+            )
+            expense = database.session.get(PettyCashExpense, expense_id)
+            journal = database.session.get(ComprobanteContable, journal_id)
+            voucher = database.session.get(PettyCashVoucher, voucher_id)
+            entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal_id)).scalars().all()
+            active_entries = [entry for entry in entries if not entry.is_cancelled]
+            assert expense is not None and expense.docstatus == 2
+            assert journal is not None and journal.status == "cancelled"
+            assert voucher is not None and voucher.voucher_status == "entregado" and voucher.expense_id is None
+            assert len(entries) == 4 and len(active_entries) == 2
             assert database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one() == gl_count + 2
 
     def test_predeterminar_entidad_concurrente_una_sola_default(self, pg_app_entidades):
