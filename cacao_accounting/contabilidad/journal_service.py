@@ -98,6 +98,7 @@ class JournalLineInput:
     remarks: str | None
     is_advance: bool
     bank_account_id: str | None
+    economic_line_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -127,14 +128,26 @@ def create_journal_draft(
     allow_closing: bool = False,
     allow_fiscal_year_closing: bool = False,
     commit: bool = True,
+    source_economic_line_ids: Sequence[str] | None = None,
 ) -> ComprobanteContable:
     """Crea un comprobante contable manual en borrador.
 
     ``commit=False`` permite componer el borrador dentro de una transacción
     mayor, de modo que quien lo invoca controle el límite transaccional y sus
     bloqueos. El comportamiento predeterminado sigue confirmando el borrador.
+    ``source_economic_line_ids`` solo lo usa el servicio interno de reversión
+    para conservar la relación de cada línea con su origen.
     """
     data = _normalize_journal_payload(payload)
+    if source_economic_line_ids is not None:
+        if len(source_economic_line_ids) != len(data.lines) or any(not line_id for line_id in source_economic_line_ids):
+            raise JournalValidationError(_("La reversión debe conservar la identidad de cada línea de origen."))
+        data = replace(
+            data,
+            lines=[
+                replace(line, economic_line_id=str(line_id)) for line, line_id in zip(data.lines, source_economic_line_ids)
+            ],
+        )
     if data.is_closing and not allow_closing:
         raise JournalValidationError(_("El comprobante de cierre solo puede crearse desde un flujo autorizado."))
     if data.is_fiscal_year_closing and not allow_fiscal_year_closing:
@@ -492,7 +505,8 @@ def duplicate_journal_as_reversal_draft(
         raise JournalValidationError(_("No puede crear una reversión en un periodo contable cerrado o deshabilitado."))
     if source.is_fiscal_year_closing:
         raise JournalValidationError(_("El cierre fiscal debe revertirse desde el flujo de cierre fiscal."))
-    payload = serialize_journal_for_form(source)
+    source_lines = list_journal_lines(source.id)
+    payload = serialize_journal_for_form(source, lines=source_lines)
     payload["posting_date"] = reversal_date.isoformat()
     payload["reference"] = source.document_no or source.id
     payload["memo"] = f"Reversión de {source.document_no or source.id}"
@@ -502,7 +516,12 @@ def duplicate_journal_as_reversal_draft(
     payload["reversal_of"] = source.id
     payload["lines"] = _reversed_payload_lines(payload.get("lines", []))
 
-    reversed_draft = create_journal_draft(payload, user_id=user_id, assign_identifier=False)
+    reversed_draft = create_journal_draft(
+        payload,
+        user_id=user_id,
+        assign_identifier=False,
+        source_economic_line_ids=[str(line.economic_line_id or line.id) for line in source_lines],
+    )
     reversed_draft.status = JOURNAL_STATUS_DRAFT
     reversed_draft.reversal_of = source.id
     _assign_identifier_if_needed(reversed_draft, source.naming_series_id or reversed_draft.naming_series_id)
@@ -539,6 +558,8 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     previous_posting_date = journal.date
     previous_naming_series_id = journal.naming_series_id
     data = _normalize_journal_payload(payload)
+    if journal.reversal_of:
+        data = _preserve_reversal_line_identities(journal, data)
     if data.is_closing != bool(journal.is_closing) or data.is_fiscal_year_closing != bool(journal.is_fiscal_year_closing):
         raise JournalValidationError(_("Los flags de cierre no pueden cambiarse al editar un borrador."))
     data = replace(
@@ -580,9 +601,13 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     return journal
 
 
-def serialize_journal_for_form(journal: ComprobanteContable) -> dict[str, Any]:
+def serialize_journal_for_form(
+    journal: ComprobanteContable,
+    *,
+    lines: Sequence[ComprobanteContableDetalle] | None = None,
+) -> dict[str, Any]:
     """Convierte un comprobante manual a un payload compatible con el formulario."""
-    lines = list_journal_lines(journal.id)
+    lines = list(lines) if lines is not None else list_journal_lines(journal.id)
     selected_books = _selected_books_for_journal(journal)
     account_codes = {line.account for line in lines if line.account}
     cost_center_codes = {line.cost_center for line in lines if line.cost_center}
@@ -1049,8 +1074,28 @@ def _line_model(
         third_code=_party_id_for_line(company, line.party),
         bank_account_id=line.bank_account_id,
         is_advance=line.is_advance,
+        economic_line_id=line.economic_line_id,
         voucher_type=JOURNAL_TRANSACTION_TYPE,
     )
+
+
+def _preserve_reversal_line_identities(journal: ComprobanteContable, data: JournalDraftInput) -> JournalDraftInput:
+    """Carry trusted source-line identities through edits to a reversal draft."""
+    source_ids_by_order: dict[int, str] = {}
+    for source_line in list_journal_lines(journal.id):
+        if source_line.order is None or source_line.order in source_ids_by_order or not source_line.economic_line_id:
+            raise JournalValidationError(_("No se puede editar una reversión sin identidad única por línea."))
+        source_ids_by_order[source_line.order] = str(source_line.economic_line_id)
+    if len(source_ids_by_order) != len(data.lines):
+        raise JournalValidationError(_("No se puede cambiar la cantidad de líneas de una reversión."))
+
+    updated_lines: list[JournalLineInput] = []
+    for line in data.lines:
+        source_id = source_ids_by_order.pop(line.order, None)
+        if source_id is None:
+            raise JournalValidationError(_("No se puede cambiar la identidad de las líneas de una reversión."))
+        updated_lines.append(replace(line, economic_line_id=source_id))
+    return replace(data, lines=updated_lines)
 
 
 def _assign_identifier_if_needed(journal: ComprobanteContable, naming_series_id: str | None) -> None:
@@ -1201,7 +1246,7 @@ def _cost_center_labels_for_company(company: str, cost_center_codes: set[str]) -
 
 def _reversed_payload_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     reversed_lines: list[dict[str, Any]] = []
-    for line in lines:
+    for order, line in enumerate(lines, start=1):
         if not isinstance(line, dict):
             continue
         debit_value = line.get("debit") or ""
@@ -1209,6 +1254,7 @@ def _reversed_payload_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]
         reversed_line = dict(line)
         reversed_line["debit"] = credit_value
         reversed_line["credit"] = debit_value
+        reversed_line["order"] = order
         reversed_lines.append(reversed_line)
     return reversed_lines
 

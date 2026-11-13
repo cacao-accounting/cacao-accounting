@@ -25469,3 +25469,35 @@ msgstr "Two-step verification is enabled, but email is unavailable. Contact the 
 #: cacao_accounting/auth/__init__.py
 msgid "No se pudo enviar el código de verificación. Intente más tarde o contacte al administrador."
 msgstr "The verification code could not be sent. Try again later or contact the administrator."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "La reversión debe conservar la identidad de cada línea de origen."
+msgstr "The reversal must preserve the identity of each source line."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "No se puede editar una reversión sin identidad única por línea."
+msgstr "A reversal cannot be edited without a unique identity for each line."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "No se puede cambiar la cantidad de líneas de una reversión."
+msgstr "The number of lines in a reversal cannot be changed."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "No se puede cambiar la identidad de las líneas de una reversión."
+msgstr "The identity of a reversal's lines cannot be changed."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "La línea de reversión no conserva su identidad contable de origen."
+msgstr "The reversal line does not preserve its source accounting identity."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "No se encontró una línea GL de origen única para la reversión."
+msgstr "A unique source GL line for the reversal could not be found."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "La línea de reversión no coincide con su línea GL de origen."
+msgstr "The reversal line does not match its source GL line."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "La reversión debe incluir cada libro contable de la línea de origen."
+msgstr "The reversal must include every ledger of the source line."

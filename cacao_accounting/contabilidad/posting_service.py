@@ -509,21 +509,21 @@ def _has_active_gl_entries(document: Any) -> bool:
     # anchor for invoices, payments, journals, inventory, and bank entries.
     document_id = getattr(document, "id", None)
     if document_id:
-        database.session.get(type(document), document_id, with_for_update=True)
-    return (
         database.session.execute(
-            select(GLEntry.id)
-            .filter_by(
-                company=_company_for(document),
-                voucher_type=_get_voucher_type(document),
-                voucher_id=_get_voucher_id(document),
-                is_cancelled=False,
-                is_reversal=False,
-            )
-            .limit(1)
+            select(type(document))
+            .where(type(document).id == document_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         ).scalar_one_or_none()
-        is not None
+    query = select(GLEntry.id).filter_by(
+        company=_company_for(document),
+        voucher_type=_get_voucher_type(document),
+        voucher_id=_get_voucher_id(document),
+        is_cancelled=False,
     )
+    if not getattr(document, "reversal_of", None):
+        query = query.where(GLEntry.is_reversal.is_(False))
+    return database.session.execute(query.limit(1)).scalar_one_or_none() is not None
 
 
 def _has_stock_ledger_entries(document: Any) -> bool:
@@ -4271,6 +4271,9 @@ def _comprobante_entry_params(
     company_value: Decimal,
     original_value: Decimal,
     is_fy_closing: bool,
+    *,
+    is_reversal: bool = False,
+    reversal_of: str | None = None,
 ) -> GLEntryParams:
     is_debit = company_value > 0
     return GLEntryParams(
@@ -4294,8 +4297,154 @@ def _comprobante_entry_params(
         unit_code=getattr(line, "unit", None),
         project_code=getattr(line, "project", None),
         entry_remarks=getattr(line, "memo", None) or getattr(line, "line_memo", None),
+        is_reversal=is_reversal,
+        reversal_of=reversal_of,
         is_fiscal_year_closing=is_fy_closing,
     )
+
+
+def _manual_reversal_source_entry(
+    document: ComprobanteContable,
+    line: Any,
+    context: LedgerContext,
+) -> GLEntry | None:
+    """Find the GL row corresponding to one line of a manual journal reversal."""
+    if not document.reversal_of:
+        return None
+    economic_line_id = getattr(line, "economic_line_id", None)
+    if not economic_line_id:
+        raise PostingError(_("La línea de reversión no conserva su identidad contable de origen."))
+    source_entries = (
+        database.session.execute(
+            select(GLEntry).where(
+                GLEntry.voucher_type == JOURNAL_TRANSACTION_TYPE,
+                GLEntry.voucher_id == document.reversal_of,
+                GLEntry.company == document.entity,
+                GLEntry.ledger_id == context.ledger_id,
+                GLEntry.economic_line_id == economic_line_id,
+                GLEntry.is_cancelled.is_(False),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if len(source_entries) != 1:
+        raise PostingError(_("No se encontró una línea GL de origen única para la reversión."))
+    return source_entries[0]
+
+
+def _manual_reversal_matches_source(
+    source_entry: GLEntry,
+    line: Any,
+    context: LedgerContext,
+    account_id: str,
+    original_value: Decimal,
+) -> bool:
+    """Confirm the reversal preserves the source line's accounting effect."""
+    expected_reference_type = getattr(line, "reference_type", None) or getattr(line, "internal_reference", None)
+    expected_reference_name = (
+        getattr(line, "reference_name", None)
+        or getattr(line, "reference_open_item_id", None)
+        or getattr(line, "internal_reference_id", None)
+        or getattr(line, "reference", None)
+    )
+    source_original_value = (source_entry.credit_in_account_currency or Decimal("0")) - (
+        source_entry.debit_in_account_currency or Decimal("0")
+    )
+    return all(
+        (
+            source_entry.account_id == account_id,
+            source_original_value == original_value,
+            source_entry.account_currency == context.transaction_currency,
+            source_entry.company_currency == context.company_currency,
+            source_entry.party_type == getattr(line, "third_type", None),
+            source_entry.party_id == getattr(line, "third_code", None),
+            source_entry.reference_type == expected_reference_type,
+            source_entry.reference_name == expected_reference_name,
+            source_entry.reference_open_item_id == getattr(line, "reference_open_item_id", None),
+            source_entry.bank_account_id == getattr(line, "bank_account_id", None),
+            source_entry.is_advance == bool(getattr(line, "is_advance", False)),
+            source_entry.cost_center_code == getattr(line, "cost_center", None),
+            source_entry.unit_code == getattr(line, "unit", None),
+            source_entry.project_code == getattr(line, "project", None),
+        )
+    )
+
+
+def _validate_manual_reversal_ledgers(
+    document: ComprobanteContable,
+    lines: list[Any],
+    contexts: list[LedgerContext],
+) -> None:
+    """Ensure every source ledger line is represented in the reversal."""
+    if not document.reversal_of:
+        return
+    for line in lines:
+        economic_line_id = getattr(line, "economic_line_id", None)
+        if not economic_line_id:
+            raise PostingError(_("La línea de reversión no conserva su identidad contable de origen."))
+        source_ledgers = set(
+            database.session.execute(
+                select(GLEntry.ledger_id).where(
+                    GLEntry.voucher_type == JOURNAL_TRANSACTION_TYPE,
+                    GLEntry.voucher_id == document.reversal_of,
+                    GLEntry.company == document.entity,
+                    GLEntry.economic_line_id == economic_line_id,
+                    GLEntry.is_cancelled.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        line_book = str(getattr(line, "book", None) or "")
+        reversal_ledgers = {
+            context.ledger_id
+            for context in contexts
+            if not line_book
+            or not (book := database.session.get(Book, context.ledger_id))
+            or line_book in {book.id, book.code}
+        }
+        if source_ledgers and source_ledgers != reversal_ledgers:
+            raise PostingError(_("La reversión debe incluir cada libro contable de la línea de origen."))
+
+
+def _post_comprobante_line(
+    document: ComprobanteContable,
+    line: ComprobanteContableDetalle,
+    context: LedgerContext,
+    company: str,
+    is_fy_closing: bool,
+) -> tuple[GLEntry, Decimal]:
+    """Build one GL row, retaining exact source amounts for a manual reversal."""
+    original_value = _decimal_value(getattr(line, "value", None))
+    if original_value == 0:
+        raise PostingError(_("Las lineas del comprobante contable deben tener un valor distinto de cero."))
+    account_id = _account_id_for_comprobante_line(line, company)
+    line_currency = getattr(line, "currency_id", None) or context.transaction_currency
+    line_context = _ledger_context_with_currency(context, line_currency, getattr(line, "exchange_rate", None))
+    line_context, company_value = _comprobante_line_value(line_context, original_value, document_context=context)
+    source_entry = _manual_reversal_source_entry(document, line, line_context)
+    reversal_entry_id = None
+    if source_entry:
+        if not _manual_reversal_matches_source(source_entry, line, line_context, account_id, original_value):
+            raise PostingError(_("La línea de reversión no coincide con su línea GL de origen."))
+        original_value = (source_entry.credit_in_account_currency or Decimal("0")) - (
+            source_entry.debit_in_account_currency or Decimal("0")
+        )
+        company_value = source_entry.credit - source_entry.debit
+        line_context = line_context.__class__(**{**line_context.__dict__, "exchange_rate": source_entry.exchange_rate})
+        reversal_entry_id = str(source_entry.id)
+    params = _comprobante_entry_params(
+        line_context,
+        line,
+        account_id,
+        company_value,
+        original_value,
+        is_fy_closing,
+        is_reversal=bool(document.reversal_of),
+        reversal_of=reversal_entry_id,
+    )
+    return _create_gl_entry(context=line_context, params=params), company_value
 
 
 def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | Sequence[str] | None = None) -> list[GLEntry]:
@@ -4313,24 +4462,18 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
 
     entries: list[GLEntry] = []
     is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
-    for context in _document_contexts(document, ledger_code=ledger_code):
+    contexts = _document_contexts(document, ledger_code=ledger_code)
+    _validate_manual_reversal_ledgers(document, lines, contexts)
+    for context in contexts:
         context_book = database.session.get(Book, context.ledger_id) if context.ledger_id else None
         total_value = Decimal("0")
         for line in lines:
             line_book = str(getattr(line, "book", None) or "")
             if line_book and context_book and line_book not in {context_book.id, context_book.code}:
                 continue
-            original_value = _decimal_value(getattr(line, "value", None))
-            if original_value == 0:
-                raise PostingError(_("Las lineas del comprobante contable deben tener un valor distinto de cero."))
-
-            account_id = _account_id_for_comprobante_line(line, company)
-            line_currency = getattr(line, "currency_id", None) or context.transaction_currency
-            line_context = _ledger_context_with_currency(context, line_currency, getattr(line, "exchange_rate", None))
-            line_context, company_value = _comprobante_line_value(line_context, original_value, document_context=context)
+            entry, company_value = _post_comprobante_line(document, line, context, company, is_fy_closing)
             total_value += company_value
-            params = _comprobante_entry_params(line_context, line, account_id, company_value, original_value, is_fy_closing)
-            entries.append(_create_gl_entry(context=line_context, params=params))
+            entries.append(entry)
         if total_value != 0:
             raise PostingError(_("El comprobante contable no está balanceado en la moneda del libro."))
 
