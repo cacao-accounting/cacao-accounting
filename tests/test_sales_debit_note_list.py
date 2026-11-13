@@ -19,6 +19,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     ApprovalRequest,
+    Currency,
     Entity,
     Modules,
     SalesInvoice,
@@ -46,6 +47,8 @@ def _crear_app():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="sales", default=False, enabled=True),

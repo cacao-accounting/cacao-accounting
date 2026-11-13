@@ -21,6 +21,7 @@ from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     ApprovalRequest,
+    Currency,
     DeliveryNote,
     Entity,
     Modules,
@@ -52,6 +53,7 @@ def documentos_pendientes():
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="inventory", default=False, enabled=True),
                 Modules(module="cash", default=False, enabled=True),

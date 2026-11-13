@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     AccountingPeriod,
     DeliveryNote,
     DocumentRelation,
+    Currency,
     Entity,
     Item,
     Modules,
@@ -53,6 +54,13 @@ def _sembrar_escenario() -> dict[str, str]:
         [
             Modules(module="sales", default=False, enabled=True),
             Modules(module="inventory", default=False, enabled=True),
+            Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+            UOM(code="Unidad", name="Unidad"),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
             Entity(
                 code="cacao",
                 name="Cacao Accounting",
@@ -63,6 +71,11 @@ def _sembrar_escenario() -> dict[str, str]:
                 status="default",
             ),
             Entity(code="cafe", name="Cafe SA", company_name="Cafe SA", tax_id="J0002", currency="NIO", enabled=True),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
             AccountingPeriod(
                 entity="cacao",
                 name="PERIODO-AUTORIZADO-CACAO",
@@ -79,7 +92,6 @@ def _sembrar_escenario() -> dict[str, str]:
                 enabled=True,
                 is_closed=False,
             ),
-            UOM(code="Unidad", name="Unidad"),
             Item(
                 code="CACAO-ABARROTES-EXPO",
                 name="Cacao en Grano",
@@ -91,6 +103,11 @@ def _sembrar_escenario() -> dict[str, str]:
             User(id="tesorero", user="tesorero", name="Tesorero", password=proteger_passwd(CONTRASENA), active=True),
             User(id="bodeguero", user="bodeguero", name="Bodeguero", password=proteger_passwd(CONTRASENA), active=True),
             User(id="operador", user="operador", name="Operador O2C", password=proteger_passwd(CONTRASENA), active=True),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
             UserCompanyAccess(user_id="vendedor", company_code="cacao"),
             UserCompanyAccess(user_id="tesorero", company_code="cacao"),
             UserCompanyAccess(user_id="bodeguero", company_code="cacao"),
@@ -646,6 +663,16 @@ def test_items_del_flujo_exige_permiso_del_modulo_fuente(escenario_multicompania
     """Tener acceso a la compañía no basta; la fuente de ventas exige ventas/consultar."""
     application, client, _ = escenario_multicompania
     with application.app_context():
+        database.session.add(
+            Item(
+                code="ITEM-SECRETO",
+                name="Item solo ventas",
+                item_type="goods",
+                is_stock_item=False,
+                default_uom="Unidad",
+            )
+        )
+        database.session.flush()
         orden = SalesOrder(
             company="cacao",
             posting_date=FECHA,

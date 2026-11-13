@@ -15,7 +15,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Entity, Modules, User, database
+from cacao_accounting.database import Currency, Entity, Modules, User, database
 
 CONTRASENA = "listas-vacias-2026"
 MENSAJE = "No se encontraron documentos para los filtros seleccionados."
@@ -38,6 +38,7 @@ def ventas_sin_documentos():
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="inventory", default=False, enabled=True),
                 Modules(module="accounting", default=False, enabled=True),

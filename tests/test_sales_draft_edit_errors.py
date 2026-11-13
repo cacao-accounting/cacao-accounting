@@ -18,6 +18,7 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    Currency,
     DeliveryNote,
     DeliveryNoteItem,
     Entity,
@@ -31,6 +32,7 @@ from cacao_accounting.database import (
     SalesRequestItem,
     UOM,
     User,
+    Warehouse,
     database,
 )
 
@@ -54,20 +56,30 @@ def _crear_app():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.add_all(
+            [
+                UOM(code="Unidad", name="Unidad"),
+                Warehouse(code="ALM-1", name="Almacén", company="cacao"),
+            ]
+        )
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="inventory", default=False, enabled=True),
-                Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
-                UOM(code="Unidad", name="Unidad"),
                 Item(
                     code="ART-1",
                     name="Artículo",

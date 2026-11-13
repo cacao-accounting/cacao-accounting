@@ -21,6 +21,7 @@ from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     ApprovalRequest,
+    Currency,
     Entity,
     Modules,
     SalesInvoice,
@@ -48,6 +49,8 @@ def factura_aprobada():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add(
             Entity(
                 code="cacao",
@@ -57,6 +60,17 @@ def factura_aprobada():
                 currency="NIO",
                 enabled=True,
                 status="default",
+            )
+        )
+        database.session.flush()
+        database.session.add(
+            User(
+                id="admin",
+                user="admin",
+                name="Administrador",
+                password=b"x",
+                active=True,
+                classification="admin",
             )
         )
         database.session.flush()
@@ -137,6 +151,7 @@ def cotizacion_pendiente():
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="sales", default=False, enabled=True),
                 Entity(
                     code="cacao",

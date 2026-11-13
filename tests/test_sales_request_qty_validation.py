@@ -74,6 +74,11 @@ def ventas_desktop():
                 ),
                 Modules(module="sales", default=False, enabled=True),
                 UOM(code="Unidad", name="Unidad"),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Item(
                     code="ART-1",
                     name="Artículo vendible",
