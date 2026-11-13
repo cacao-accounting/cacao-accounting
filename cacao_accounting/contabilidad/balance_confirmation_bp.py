@@ -26,7 +26,7 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.decorators import modulo_activo, exige_acceso_compania
 from cacao_accounting.contabilidad.balance_confirmation import (
     create_balance_confirmation,
-    prepare_invitation_token,
+    generate_invitation_credentials,
     verify_snapshot_hash,
 )
 from cacao_accounting.messaging.email import send_email, EmailError
@@ -311,9 +311,8 @@ def enviar_confirmacion(confirmation_id: str):
 
     any_sent = False
     for inv in invitations:
-        # Generar token y código de forma segura durante el envío para no perderlos en redirecciones
-        raw_token, raw_code = prepare_invitation_token(inv)
-        inv.status = "pending"
+        # Keep current credentials until the recipient's email is accepted.
+        raw_token, raw_code, token_hash, code_hash = generate_invitation_credentials()
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
@@ -336,6 +335,9 @@ Atentamente,
                 subject=_("Solicitud de Confirmación de Saldo - %(company)s") % {"company": company_name},
                 body=body,
             )
+            inv.token_hash = token_hash
+            inv.verification_code_hash = code_hash
+            inv.status = "pending"
             inv.sent_at = _utcnow()
             any_sent = True
         except EmailError as exc:
@@ -389,10 +391,8 @@ def reenviar_confirmacion(confirmation_id: str):
 
     any_sent = False
     for inv in invitations:
-        # Generar nuevos tokens y códigos de verificación de forma segura
-        raw_token, raw_code = prepare_invitation_token(inv)
-        inv.failed_attempts = 0
-        inv.status = "pending"
+        # Keep current credentials until the recipient's email is accepted.
+        raw_token, raw_code, token_hash, code_hash = generate_invitation_credentials()
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
@@ -415,6 +415,10 @@ Atentamente,
                 subject=_("Reenvío de Solicitud de Confirmación de Saldo - %(company)s") % {"company": company_name},
                 body=body,
             )
+            inv.token_hash = token_hash
+            inv.verification_code_hash = code_hash
+            inv.failed_attempts = 0
+            inv.status = "pending"
             inv.sent_at = _utcnow()
             any_sent = True
         except EmailError as exc:
