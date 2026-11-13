@@ -2119,6 +2119,18 @@ msgstr "The email delivery could not be completed: %(error)s"
 msgid "Este flujo aún no admite aprobación independiente; no se creó el asiento contable."
 msgstr "This workflow does not yet support independent approval; no journal entry was created."
 
+#: cacao_accounting/bancos/services.py
+msgid "Se requiere autorización de Caja Chica para aprobar la reposición."
+msgstr "Petty cash authorization is required to approve this replenishment."
+
+#: cacao_accounting/bancos/services.py
+msgid "La solicitud no identifica quién la preparó para aplicar la separación de funciones."
+msgstr "The request does not identify its preparer, so separation of duties cannot be enforced."
+
+#: cacao_accounting/bancos/services.py
+msgid "La reposición requiere aprobación de una persona distinta de quien la solicitó."
+msgstr "The replenishment must be approved by someone other than its requester."
+
 #: cacao_accounting/admin/routes.py:424
 msgid "Método de valuacion guardado correctamente."
 msgstr "Valuation method saved successfully."

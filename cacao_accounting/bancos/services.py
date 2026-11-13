@@ -1067,7 +1067,7 @@ def cancel_petty_cash_expense(
         if journal is not None:
             # RELEASE of an outermost SQLite SAVEPOINT commits immediately.
             # This transaction must also contain the subledger update below.
-            _begin_cancellation_transaction()
+            _begin_sqlite_write_transaction()
             cancel_submitted_journal(
                 str(journal.id),
                 user_id=actor_id,
@@ -1229,8 +1229,30 @@ def _lock_row_for_transition(model: Any, record_id: str) -> Any:
     return locked
 
 
-def _begin_cancellation_transaction() -> None:
-    """Start SQLite's physical transaction before cancellation opens savepoints."""
+def _authorize_petty_cash_replenishment(
+    replenishment: PettyCashReplenishment,
+    actor_id: str | None,
+) -> None:
+    """Require company approval authority and configured separation of duties."""
+    from cacao_accounting.approval_engine import ApprovalEngine
+    from cacao_accounting.approval_policy import authorized
+    from cacao_accounting.database import User
+
+    company = replenishment.company or ""
+    actor = database.session.get(User, actor_id) if actor_id else None
+    if not actor or not authorized(actor, company, "cash", action="approve"):
+        raise ValueError(_("Se requiere autorización de Caja Chica para aprobar la reposición."))
+
+    if not ApprovalEngine.requires_different_approver(company):
+        return
+    if not replenishment.requested_by:
+        raise ValueError(_("La solicitud no identifica quién la preparó para aplicar la separación de funciones."))
+    if str(replenishment.requested_by) == str(actor.id):
+        raise ValueError(_("La reposición requiere aprobación de una persona distinta de quien la solicitó."))
+
+
+def _begin_sqlite_write_transaction() -> None:
+    """Reserve SQLite's writer before a serialized cash transition reads state."""
     if database.engine.dialect.name == "sqlite":
         database.session.connection().exec_driver_sql("BEGIN IMMEDIATE")
 
@@ -1420,12 +1442,14 @@ def set_petty_cash_replenishment_status(
     """Avanza una solicitud de reposicion sin contabilizarla prematuramente."""
     replenishment = cast(PettyCashReplenishment, _lock_row_for_transition(PettyCashReplenishment, replenishment.id))
     current = replenishment.status or "borrador"
-    transitions = {"borrador": {"solicitado"}, "solicitado": {"aprobado"}, "aprobado": {"reembolsado"}}
+    transitions = {"borrador": {"solicitado"}, "solicitado": {"aprobado"}}
     if new_status not in transitions.get(current, set()):
         raise ValueError(
             _("Transición de reposición no válida: %(current)s -> %(new_status)s")
             % {"current": current, "new_status": new_status}
         )
+    if new_status == "aprobado":
+        _authorize_petty_cash_replenishment(replenishment, actor_id)
     replenishment.status = new_status
     if new_status == "solicitado":
         replenishment.docstatus = 1
@@ -1442,6 +1466,7 @@ def replenish_petty_cash(
     actor_id: str | None = None,
 ) -> PettyCashReplenishment:
     """Crea la Nota de Debito bancaria que repone el fondo seleccionado."""
+    _begin_sqlite_write_transaction()
     replenishment = cast(PettyCashReplenishment, _lock_row_for_transition(PettyCashReplenishment, replenishment.id))
     if replenishment.status != "aprobado":
         raise ValueError(_("Solo se puede reponer una solicitud aprobada."))

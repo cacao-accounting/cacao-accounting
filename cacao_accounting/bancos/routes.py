@@ -1669,9 +1669,11 @@ def caja_chica_reposicion_estado(r_id):
     reposicion = database.session.get(PettyCashReplenishment, r_id)
     if not reposicion:
         abort(404)
-    exige_acceso_compania("cash", reposicion.company or "", "editar")
+    new_status = request.form.get("status") or ""
+    action = "autorizar" if new_status == "aprobado" else "editar"
+    exige_acceso_compania("cash", reposicion.company or "", action)
     try:
-        set_petty_cash_replenishment_status(reposicion, request.form.get("status") or "", actor_id=str(current_user.id))
+        set_petty_cash_replenishment_status(reposicion, new_status, actor_id=str(current_user.id))
     except ValueError as exc:
         flash(_(str(exc)), "danger")
     else:
