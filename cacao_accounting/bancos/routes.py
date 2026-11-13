@@ -1711,7 +1711,7 @@ def caja_chica_gasto_anular(e_id):
     expense = database.session.get(PettyCashExpense, e_id)
     if not expense:
         abort(404)
-    exige_acceso_compania("cash", expense.company or "", "editar")
+    exige_acceso_compania("cash", expense.company or "", "anular")
     try:
         from cacao_accounting.bancos.services import cancel_petty_cash_expense
 

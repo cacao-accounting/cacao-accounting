@@ -31,6 +31,9 @@ from cacao_accounting.database import (
     PettyCashAccount,
     PettyCashExpense,
     PettyCashVoucher,
+    Roles,
+    RolesAccess,
+    RolesUser,
     User,
     UserCompanyAccess,
     database,
@@ -209,6 +212,28 @@ def _iniciar(client) -> None:
     assert response.status_code == 200
 
 
+def _configurar_permiso_caja(application, *, anular: bool, editar: bool) -> None:
+    """Asigna al usuario una acción de caja precisa para comprobar guards HTTP."""
+    with application.app_context():
+        user_id = "tesorera"
+        database.session.execute(database.delete(RolesUser).where(RolesUser.user_id == user_id))
+        role = Roles(name=f"cash-cancel-{anular}-{editar}", note="Permiso acotado para prueba")
+        database.session.add(role)
+        database.session.flush()
+        cash_module = database.session.execute(database.select(Modules).filter_by(module="cash")).scalar_one()
+        database.session.add(
+            RolesAccess(
+                rol_id=role.id,
+                module_id=cash_module.id,
+                access=True,
+                set_null=anular,
+                edit=editar,
+            )
+        )
+        database.session.add(RolesUser(user_id=user_id, role_id=role.id, active=True))
+        database.session.commit()
+
+
 def test_reposicion_no_expone_gastos_de_un_fondo_ajeno(caja_multicompania):
     """El GET rechaza un fondo de beta antes de consultar sus gastos."""
     application, ids = caja_multicompania
@@ -260,3 +285,70 @@ def test_gasto_precarga_el_vale_propio(caja_multicompania):
     cuerpo = response.get_data(as_text=True)
     assert "Ana Alpha" in cuerpo
     assert "Cafe alpha voucher" in cuerpo
+
+
+def test_anular_gasto_usa_permiso_anular_y_alcance_de_compania(caja_multicompania):
+    """Una persona con permiso anular, sin editar, puede anular en su compañía."""
+    application, _ = caja_multicompania
+    _configurar_permiso_caja(application, anular=True, editar=False)
+    with application.app_context():
+        expense = database.session.execute(
+            database.select(PettyCashExpense).filter_by(company="alpha", concept="Cafe alpha")
+        ).scalar_one()
+        expense_id = expense.id
+
+    client = application.test_client()
+    _iniciar(client)
+    response = client.post(f"/cash_management/petty-cash-expense/{expense_id}/cancel")
+
+    assert response.status_code == 302
+    with application.app_context():
+        expense = database.session.get(PettyCashExpense, expense_id)
+        assert expense is not None and expense.docstatus == 2
+
+
+def test_anular_gasto_exige_acceso_a_la_compania(caja_multicompania):
+    """El permiso anular no permite actuar sobre una compañía fuera de alcance."""
+    application, _ = caja_multicompania
+    _configurar_permiso_caja(application, anular=True, editar=False)
+    with application.app_context():
+        expense = database.session.execute(
+            database.select(PettyCashExpense).filter_by(company="alpha", concept="Cafe alpha")
+        ).scalar_one()
+        expense_id = expense.id
+        database.session.execute(
+            database.delete(UserCompanyAccess).where(
+                UserCompanyAccess.user_id == "tesorera",
+                UserCompanyAccess.company_code == "alpha",
+            )
+        )
+        database.session.commit()
+
+    client = application.test_client()
+    _iniciar(client)
+    response = client.post(f"/cash_management/petty-cash-expense/{expense_id}/cancel")
+
+    assert response.status_code == 403
+    with application.app_context():
+        expense = database.session.get(PettyCashExpense, expense_id)
+        assert expense is not None and expense.docstatus == 1
+
+
+def test_editar_sin_anular_no_permite_cancelar_gasto(caja_multicompania):
+    """El guard de la ruta sigue exigiendo anular, aunque exista permiso editar."""
+    application, _ = caja_multicompania
+    _configurar_permiso_caja(application, anular=False, editar=True)
+    with application.app_context():
+        expense = database.session.execute(
+            database.select(PettyCashExpense).filter_by(company="alpha", concept="Cafe alpha")
+        ).scalar_one()
+        expense_id = expense.id
+
+    client = application.test_client()
+    _iniciar(client)
+    response = client.post(f"/cash_management/petty-cash-expense/{expense_id}/cancel")
+
+    assert response.status_code == 403
+    with application.app_context():
+        expense = database.session.get(PettyCashExpense, expense_id)
+        assert expense is not None and expense.docstatus == 1
