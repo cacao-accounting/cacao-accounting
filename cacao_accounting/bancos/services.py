@@ -846,8 +846,9 @@ def post_petty_cash_expense_journal(
     posted_date,
     actor_id: str | None = None,
     reference: str | None = None,
+    commit: bool = True,
 ) -> "ComprobanteContable":
-    """Genera y postea el asiento contable del gasto (Dr Gasto / Cr Caja Chica)."""
+    """Genera y postea el asiento, permitiendo integrarlo en una transacción mayor."""
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, create_journal_draft, submit_journal
 
     if not _active_book(company):
@@ -883,8 +884,8 @@ def post_petty_cash_expense_journal(
         ],
     }
     try:
-        journal = create_journal_draft(payload, user_id=actor_id or "")
-        submit_journal(journal.id, user_id=actor_id or "")
+        journal = create_journal_draft(payload, user_id=actor_id or "", commit=commit)
+        submit_journal(journal.id, user_id=actor_id or "", commit=commit)
     except JournalValidationError as exc:
         raise ValueError(str(exc)) from exc
     return journal
@@ -920,61 +921,71 @@ def create_petty_cash_expense(
         raise ValueError(_("El gasto de caja chica requiere un centro de costo."))
     _validate_petty_cash_dimensions(company, cost_center_code, unit_code, project_code)
 
-    if voucher_id:
-        voucher = database.session.get(PettyCashVoucher, voucher_id)
-        if not voucher or voucher.company != company or voucher.petty_cash_id != petty_cash_id:
-            raise ValueError(_("El vale origen no pertenece a la caja chica seleccionada."))
-        if voucher.voucher_status != "entregado" or voucher.expense_id:
-            raise ValueError(_("El vale origen no esta disponible para liquidarse."))
-        if amount != voucher.amount:
-            raise ValueError(_("El importe del gasto debe coincidir con el importe del vale."))
     _validate_petty_cash_expense_account(company, expense_account_code)
-
-    journal = post_petty_cash_expense_journal(
-        company=company,
-        petty_cash=fund,
-        expense_account_code=expense_account_code,
-        concept=concept,
-        amount=amount,
-        cost_center_code=cost_center_code,
-        posted_date=posted_date,
-        actor_id=actor_id,
-        reference="",
-    )
-
-    expense = PettyCashExpense(
-        company=company,
-        petty_cash_id=petty_cash_id,
-        voucher_id=voucher_id or None,
-        beneficiary=beneficiary or None,
-        concept=concept.strip(),
-        expense_account_code=expense_account_code,
-        amount=amount,
-        cost_center_code=cost_center_code or None,
-        unit_code=unit_code or None,
-        project_code=project_code or None,
-        remarks=remarks or None,
-        posting_date=posted_date,
-        transaction_currency=fund.currency or _company_currency(company),
-        journal_id=str(journal.id),
-        docstatus=1,
-    )
-    database.session.add(expense)
-    database.session.flush()
-    try:
-        assign_document_identifier(
-            document=expense,
-            entity_type="petty_cash_expense",
-            posting_date_raw=posted_date,
-            naming_series_id=None,
-        )
-    except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
-        pass
+    voucher = None
     if voucher_id:
-        assert voucher is not None  # narrowed by the checks above; mypy can not see the raise
-        voucher.voucher_status = "liquidado"
-        voucher.expense_id = expense.id
-    database.session.commit()
+        try:
+            voucher = cast(PettyCashVoucher, _lock_row_for_transition(PettyCashVoucher, voucher_id))
+            if voucher.company != company or voucher.petty_cash_id != petty_cash_id:
+                raise ValueError(_("El vale origen no pertenece a la caja chica seleccionada."))
+            if voucher.voucher_status != "entregado" or voucher.expense_id:
+                raise ValueError(_("El vale origen no esta disponible para liquidarse."))
+            if amount != voucher.amount:
+                raise ValueError(_("El importe del gasto debe coincidir con el importe del vale."))
+        except Exception:
+            database.session.rollback()
+            raise
+
+    try:
+        journal = post_petty_cash_expense_journal(
+            company=company,
+            petty_cash=fund,
+            expense_account_code=expense_account_code,
+            concept=concept,
+            amount=amount,
+            cost_center_code=cost_center_code,
+            posted_date=posted_date,
+            actor_id=actor_id,
+            reference="",
+            commit=False,
+        )
+
+        expense = PettyCashExpense(
+            company=company,
+            petty_cash_id=petty_cash_id,
+            voucher_id=voucher_id or None,
+            beneficiary=beneficiary or None,
+            concept=concept.strip(),
+            expense_account_code=expense_account_code,
+            amount=amount,
+            cost_center_code=cost_center_code or None,
+            unit_code=unit_code or None,
+            project_code=project_code or None,
+            remarks=remarks or None,
+            posting_date=posted_date,
+            transaction_currency=fund.currency or _company_currency(company),
+            journal_id=str(journal.id),
+            docstatus=1,
+        )
+        database.session.add(expense)
+        database.session.flush()
+        try:
+            assign_document_identifier(
+                document=expense,
+                entity_type="petty_cash_expense",
+                posting_date_raw=posted_date,
+                naming_series_id=None,
+            )
+        except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
+            pass
+        if voucher_id:
+            assert voucher is not None
+            voucher.voucher_status = "liquidado"
+            voucher.expense_id = expense.id
+        database.session.commit()
+    except Exception:
+        database.session.rollback()
+        raise
     return expense
 
 
@@ -988,28 +999,34 @@ def create_petty_cash_expense_from_voucher(
     actor_id: str | None = None,
 ) -> PettyCashExpense:
     """Liquida un vale entregado convirtiendolo en gasto y posteando al GL."""
-    if (voucher.voucher_status or "borrador") != "entregado":
-        raise ValueError(_("Solo se puede liquidar un vale en estado entregado."))
-    if voucher.expense_id:
-        raise ValueError(_("El vale ya fue liquidado."))
-    expense = create_petty_cash_expense(
-        company=voucher.company or "",
-        petty_cash_id=voucher.petty_cash_id,
-        expense_account_code=expense_account_code,
-        concept=voucher.concept or "",
-        amount=voucher.amount,
-        cost_center_code=cost_center_code,
-        beneficiary=voucher.delivered_to or None,
-        unit_code=voucher.unit_code,
-        project_code=voucher.project_code,
-        posted_date=posted_date,
-        voucher_id=voucher.id,
-        remarks=remarks or voucher.comments or None,
-        actor_id=actor_id,
-    )
-    voucher.voucher_status = "liquidado"
-    voucher.expense_id = expense.id
-    database.session.commit()
+    try:
+        voucher = cast(PettyCashVoucher, _lock_row_for_transition(PettyCashVoucher, voucher.id))
+        if (voucher.voucher_status or "borrador") != "entregado":
+            raise ValueError(_("Solo se puede liquidar un vale en estado entregado."))
+        if voucher.expense_id:
+            raise ValueError(_("El vale ya fue liquidado."))
+    except Exception:
+        database.session.rollback()
+        raise
+    try:
+        expense = create_petty_cash_expense(
+            company=voucher.company or "",
+            petty_cash_id=voucher.petty_cash_id,
+            expense_account_code=expense_account_code,
+            concept=voucher.concept or "",
+            amount=voucher.amount,
+            cost_center_code=cost_center_code,
+            beneficiary=voucher.delivered_to or None,
+            unit_code=voucher.unit_code,
+            project_code=voucher.project_code,
+            posted_date=posted_date,
+            voucher_id=voucher.id,
+            remarks=remarks or voucher.comments or None,
+            actor_id=actor_id,
+        )
+    except Exception:
+        database.session.rollback()
+        raise
     return expense
 
 

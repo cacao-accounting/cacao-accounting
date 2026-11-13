@@ -716,6 +716,227 @@ def test_ajuste_revierte_si_submit_falla(caja_app, monkeypatch):
         assert conciliacion.adjustment_account_id is not None
 
 
+@pytest.mark.parametrize("with_voucher", [False, True], ids=["gasto-directo", "vale-entregado"])
+def test_gasto_revierte_diario_si_falla_persistencia_del_subledger(caja_app, with_voucher):
+    """El fallo al insertar el gasto no deja GL huérfano y permite reintentar."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+
+    from cacao_accounting.bancos.services import create_petty_cash_voucher, set_petty_cash_voucher_status
+    from cacao_accounting.database import ComprobanteContable, GLEntry, PettyCashExpense, PettyCashVoucher
+
+    petty_cash_id = _fondo_id(caja_app, COMPANY)
+    voucher_id = None
+    if with_voucher:
+        with caja_app.app_context():
+            voucher = create_petty_cash_voucher(
+                company=COMPANY,
+                petty_cash_id=petty_cash_id,
+                posted_date=date(2026, 10, 4),
+                delivered_to="Cajero",
+                concept="Compra operativa",
+                amount=MONTO,
+                cost_center_code="MAIN",
+            )
+            voucher = set_petty_cash_voucher_status(voucher, "entregado")
+            voucher_id = voucher.id
+
+    with caja_app.app_context():
+        diarios_base = database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one()
+        gl_base = database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one()
+        database.session.execute(
+            text(
+                "CREATE TRIGGER fail_petty_cash_expense_insert "
+                "BEFORE INSERT ON petty_cash_expense "
+                "BEGIN SELECT RAISE(ABORT, 'injected expense insert failure'); END"
+            )
+        )
+        database.session.commit()
+
+        with pytest.raises(IntegrityError, match="injected expense insert failure"):
+            create_petty_cash_expense(
+                company=COMPANY,
+                petty_cash_id=petty_cash_id,
+                expense_account_code="5.01.01.001",
+                concept="Compra operativa",
+                amount=MONTO,
+                cost_center_code="MAIN",
+                posted_date=date(2026, 10, 5),
+                voucher_id=voucher_id,
+                actor_id="admin",
+            )
+
+        assert (
+            database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one() == diarios_base
+        )
+        assert database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one() == gl_base
+        assert database.session.execute(database.select(PettyCashExpense)).scalars().all() == []
+        if voucher_id:
+            voucher = database.session.get(PettyCashVoucher, voucher_id)
+            assert voucher is not None
+            assert voucher.voucher_status == "entregado"
+            assert voucher.expense_id is None
+
+        database.session.execute(text("DROP TRIGGER fail_petty_cash_expense_insert"))
+        database.session.commit()
+
+        expense = create_petty_cash_expense(
+            company=COMPANY,
+            petty_cash_id=petty_cash_id,
+            expense_account_code="5.01.01.001",
+            concept="Compra operativa",
+            amount=MONTO,
+            cost_center_code="MAIN",
+            posted_date=date(2026, 10, 5),
+            voucher_id=voucher_id,
+            actor_id="admin",
+        )
+        assert expense.docstatus == 1
+        assert (
+            database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one()
+            == diarios_base + 1
+        )
+        assert database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one() == gl_base + 2
+        gl_rows = (
+            database.session.execute(
+                database.select(GLEntry).where(GLEntry.voucher_id == expense.journal_id, GLEntry.is_cancelled.is_(False))
+            )
+            .scalars()
+            .all()
+        )
+        assert len(gl_rows) == 2
+        if voucher_id:
+            voucher = database.session.get(PettyCashVoucher, voucher_id)
+            assert voucher is not None
+            assert voucher.voucher_status == "liquidado"
+            assert voucher.expense_id == expense.id
+
+
+@pytest.mark.parametrize("failure_stage", ["submit", "identifier", "voucher_link"])
+def test_liquidacion_revierte_todo_si_falla_en_etapas_posteriores(caja_app, monkeypatch, failure_stage):
+    """Los fallos tras el posting, al numerar o al vincular el vale revierten todo."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+
+    from cacao_accounting.bancos.services import create_petty_cash_voucher, set_petty_cash_voucher_status
+    from cacao_accounting.database import ComprobanteContable, GLEntry, PettyCashExpense, PettyCashVoucher
+    import importlib
+
+    petty_cash_services = importlib.import_module("cacao_accounting.bancos.services")
+
+    petty_cash_id = _fondo_id(caja_app, COMPANY)
+    with caja_app.app_context():
+        voucher = create_petty_cash_voucher(
+            company=COMPANY,
+            petty_cash_id=petty_cash_id,
+            posted_date=date(2026, 10, 4),
+            delivered_to="Cajero",
+            concept="Compra operativa",
+            amount=MONTO,
+            cost_center_code="MAIN",
+        )
+        voucher = set_petty_cash_voucher_status(voucher, "entregado")
+        voucher_id = voucher.id
+        diarios_base = database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one()
+        gl_base = database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one()
+
+        if failure_stage == "submit":
+            from cacao_accounting.contabilidad import journal_service
+
+            submit_real = journal_service.submit_journal
+
+            def _submit_y_fallar(journal_id, *, commit=True, user_id=None):
+                entries = submit_real(journal_id, commit=commit, user_id=user_id)
+                assert commit is False
+                gl_rows = (
+                    database.session.execute(database.select(GLEntry).where(GLEntry.voucher_id == journal_id)).scalars().all()
+                )
+                assert len(gl_rows) == len(entries) == 2
+                raise ValueError("fallo inyectado después del posting")
+
+            monkeypatch.setattr(journal_service, "submit_journal", _submit_y_fallar)
+            error = ValueError
+            error_message = "fallo inyectado después del posting"
+        elif failure_stage == "identifier":
+
+            def _fallar_identificador(*, document, **kwargs):
+                assert database.session.get(PettyCashExpense, document.id) is not None
+                gl_rows = (
+                    database.session.execute(database.select(GLEntry).where(GLEntry.voucher_id == document.journal_id))
+                    .scalars()
+                    .all()
+                )
+                assert len(gl_rows) == 2
+                raise RuntimeError("fallo inyectado al asignar identificador")
+
+            monkeypatch.setattr(petty_cash_services, "assign_document_identifier", _fallar_identificador)
+            error = RuntimeError
+            error_message = "fallo inyectado al asignar identificador"
+        else:
+            database.session.execute(
+                text(
+                    "CREATE TRIGGER fail_petty_cash_voucher_link "
+                    "BEFORE UPDATE OF voucher_status ON petty_cash_voucher "
+                    "WHEN NEW.voucher_status = 'liquidado' "
+                    "BEGIN SELECT RAISE(ABORT, 'injected voucher link failure'); END"
+                )
+            )
+            database.session.commit()
+            error = IntegrityError
+            error_message = "injected voucher link failure"
+
+        with pytest.raises(error, match=error_message):
+            create_petty_cash_expense(
+                company=COMPANY,
+                petty_cash_id=petty_cash_id,
+                expense_account_code="5.01.01.001",
+                concept="Compra operativa",
+                amount=MONTO,
+                cost_center_code="MAIN",
+                posted_date=date(2026, 10, 5),
+                voucher_id=voucher_id,
+                actor_id="admin",
+            )
+
+        assert (
+            database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one() == diarios_base
+        )
+        assert database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one() == gl_base
+        assert database.session.execute(database.select(PettyCashExpense)).scalars().all() == []
+        voucher = database.session.get(PettyCashVoucher, voucher_id)
+        assert voucher is not None
+        assert voucher.voucher_status == "entregado"
+        assert voucher.expense_id is None
+
+        if failure_stage == "voucher_link":
+            database.session.execute(text("DROP TRIGGER fail_petty_cash_voucher_link"))
+            database.session.commit()
+        else:
+            monkeypatch.undo()
+
+        expense = create_petty_cash_expense(
+            company=COMPANY,
+            petty_cash_id=petty_cash_id,
+            expense_account_code="5.01.01.001",
+            concept="Compra operativa",
+            amount=MONTO,
+            cost_center_code="MAIN",
+            posted_date=date(2026, 10, 5),
+            voucher_id=voucher_id,
+            actor_id="admin",
+        )
+        assert expense.docstatus == 1
+        assert (
+            database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one()
+            == diarios_base + 1
+        )
+        assert database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one() == gl_base + 2
+        voucher = database.session.get(PettyCashVoucher, voucher_id)
+        assert voucher is not None
+        assert voucher.voucher_status == "liquidado"
+        assert voucher.expense_id == expense.id
+
+
 # ------------------------------------------------------------ revaluación (SQLite)
 
 
@@ -1007,6 +1228,58 @@ class TestConcurrenciaPostgreSQL:
             assert len(diarios) == base_diarios + 1
             conciliacion = database.session.get(PettyCashReconciliation, conciliacion_id)
             assert conciliacion.adjustment_journal_id == ganador
+
+    def test_liquidacion_concurrente_de_vale_crea_un_solo_gasto(self, pg_app_caja):
+        """Dos liquidaciones del mismo vale serializan en su fila origen."""
+        application = pg_app_caja
+        from cacao_accounting.bancos.services import create_petty_cash_voucher, set_petty_cash_voucher_status
+        from cacao_accounting.database import ComprobanteContable, GLEntry, PettyCashExpense, PettyCashVoucher
+
+        with application.app_context():
+            voucher = create_petty_cash_voucher(
+                company=COMPANY,
+                petty_cash_id=_fondo_id(application, COMPANY),
+                posted_date=date(2026, 10, 4),
+                delivered_to="Cajero",
+                concept="Compra operativa concurrente",
+                amount=MONTO,
+                cost_center_code="MAIN",
+            )
+            voucher = set_petty_cash_voucher_status(voucher, "entregado")
+            voucher_id = voucher.id
+            journal_count = database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one()
+            gl_count = database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one()
+
+        def _liquidar():
+            with application.app_context():
+                return create_petty_cash_expense(
+                    company=COMPANY,
+                    petty_cash_id=_fondo_id(application, COMPANY),
+                    expense_account_code="5.01.01.001",
+                    concept="Compra operativa concurrente",
+                    amount=MONTO,
+                    cost_center_code="MAIN",
+                    posted_date=date(2026, 10, 5),
+                    voucher_id=voucher_id,
+                    actor_id="admin",
+                )
+
+        resultados = _ejecutar_en_dos_hilos([_liquidar, _liquidar])
+        exitos, errores = _exitos_y_errores(resultados)
+        assert exitos == 1, f"un solo gasto debe liquidar el vale: {resultados}"
+        assert errores == 1
+        with application.app_context():
+            expense = database.session.execute(database.select(PettyCashExpense).filter_by(voucher_id=voucher_id)).scalar_one()
+            voucher = database.session.get(PettyCashVoucher, voucher_id)
+            assert voucher is not None
+            assert voucher.voucher_status == "liquidado"
+            assert voucher.expense_id == expense.id
+            assert expense.docstatus == 1
+            assert (
+                database.session.execute(database.select(database.func.count(ComprobanteContable.id))).scalar_one()
+                == journal_count + 1
+            )
+            assert database.session.execute(database.select(database.func.count(GLEntry.id))).scalar_one() == gl_count + 2
 
     def test_predeterminar_entidad_concurrente_una_sola_default(self, pg_app_entidades):
         """Dos cambios simultáneos de entidad default dejan una sola coherente."""
