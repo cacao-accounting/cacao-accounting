@@ -19,6 +19,7 @@ from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     AccountingPeriod,
+    Currency,
     Entity,
     Modules,
     PurchaseOrder,
@@ -54,6 +55,7 @@ def ordenes_por_modulo():
             [
                 Modules(module="purchases", default=False, enabled=True),
                 Modules(module="inventory", default=False, enabled=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Entity(
                     code="alpha",
                     name="Alpha",
@@ -72,15 +74,28 @@ def ordenes_por_modulo():
                     enabled=True,
                     status="activo",
                 ),
-                User(
-                    id="mixto",
-                    user="mixto",
-                    name="Usuario Mixto",
-                    password=proteger_passwd(CONTRASENA),
-                    active=True,
-                ),
+            ]
+        )
+        database.session.flush()
+        database.session.add(
+            User(
+                id="mixto",
+                user="mixto",
+                name="Usuario Mixto",
+                password=proteger_passwd(CONTRASENA),
+                active=True,
+            ),
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 UserCompanyAccess(user_id="mixto", company_code="alpha"),
                 UserCompanyAccess(user_id="mixto", company_code="beta"),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 AccountingPeriod(
                     entity="alpha",
                     name="2026-10",

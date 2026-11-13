@@ -25,6 +25,7 @@ from cacao_accounting.compras.services import (
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     CompanyParty,
+    Currency,
     Entity,
     Item,
     Modules,
@@ -62,31 +63,40 @@ def adjudicaciones():
         database.create_all()
         database.session.add_all(
             [
-                Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
                 Modules(module="purchases", default=False, enabled=True),
-                User(
-                    id="admin",
-                    user="admin",
-                    name="Administrador",
-                    password=b"x",
-                    active=True,
-                    classification="admin",
-                ),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
             ]
+        )
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
+        database.session.add(
+            User(
+                id="admin",
+                user="admin",
+                name="Administrador",
+                password=b"x",
+                active=True,
+                classification="admin",
+            )
         )
         database.session.flush()
         proveedor_a = Party(code="PROV-A", name="Proveedor A", is_supplier=True)
         proveedor_b = Party(code="PROV-B", name="Proveedor B", is_supplier=True)
+        database.session.add(UOM(code="UND", name="Unidad"))
+        database.session.flush()
         item = Item(code="ART-1", name="Artículo", item_type="goods", is_stock_item=True, default_uom="UND")
-        database.session.add_all([proveedor_a, proveedor_b, item, UOM(code="UND", name="Unidad")])
+        database.session.add_all([proveedor_a, proveedor_b, item])
         database.session.flush()
         database.session.add_all(
             [

@@ -19,6 +19,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     CompanyDefaultAccount,
+    Currency,
     Entity,
     Modules,
     PurchaseMatchingConfig,
@@ -44,18 +45,23 @@ def _crear_app():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="CACAO",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="admin", default=False, enabled=True),
-                Entity(
-                    code="CACAO",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
                 User(
                     id="admin",
                     user="admin",

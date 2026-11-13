@@ -20,9 +20,11 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
     Entity,
+    Item,
     Modules,
     PurchaseQuotation,
     PurchaseQuotationItem,
+    UOM,
     User,
     database,
 )
@@ -67,6 +69,20 @@ def _crear_app():
                     classification="admin",
                 ),
             ]
+        )
+        database.session.flush()
+        database.session.add(UOM(code="UND", name="Unidad"))
+        database.session.flush()
+        database.session.add(
+            Item(
+                code="ART-1",
+                name="Artículo",
+                item_type="goods",
+                is_stock_item=False,
+                is_purchase_item=True,
+                default_uom="UND",
+                is_active=True,
+            )
         )
         database.session.flush()
         quotation = PurchaseQuotation(

@@ -21,6 +21,7 @@ from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    Currency,
     Entity,
     Modules,
     PurchaseInvoice,
@@ -57,6 +58,12 @@ def recepciones_cloud():
             [
                 Modules(module="inventory", default=False, enabled=True),
                 Modules(module="purchases", default=False, enabled=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Entity(
                     code="alpha",
                     name="Alpha",
@@ -75,6 +82,11 @@ def recepciones_cloud():
                     enabled=True,
                     status="activo",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 User(
                     id="bodeguero",
                     user="bodeguero",
@@ -89,6 +101,11 @@ def recepciones_cloud():
                     password=proteger_passwd(CONTRASENA),
                     active=True,
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 UserCompanyAccess(user_id="bodeguero", company_code="alpha"),
                 UserCompanyAccess(user_id="comprador", company_code="alpha"),
                 PurchaseOrder(

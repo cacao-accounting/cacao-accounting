@@ -21,6 +21,7 @@ from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     CompanyParty,
+    Currency,
     Entity,
     Modules,
     Party,
@@ -49,6 +50,8 @@ def compras_cloud():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="purchases", default=False, enabled=True),
