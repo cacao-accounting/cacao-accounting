@@ -47,6 +47,7 @@ from cacao_accounting.contabilidad.services import (
     _record_check_result,
     PeriodCloseError,
     COMPLETED_MONTHLY_CLOSE_STATUSES,
+    create_monthly_close_run,
     finalize_monthly_close,
     reopen_accounting_period,
     _handle_exchange_revaluation_post,
@@ -2957,7 +2958,7 @@ def asistente_cierre_mensual():
 @verifica_acceso("accounting")
 def nuevo_cierre_mensual():
     """Crea un registro de cierre mensual para un periodo."""
-    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+    from cacao_accounting.database import AccountingPeriod
 
     period_id = request.form.get("period_id")
     period = database.session.get(AccountingPeriod, period_id)
@@ -2966,15 +2967,17 @@ def nuevo_cierre_mensual():
         return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
     exige_acceso_compania("accounting", period.entity, "autorizar")
 
-    existing = database.session.execute(
-        database.select(PeriodCloseRun).filter_by(company=period.entity, period_id=period.id)
-    ).scalar_one_or_none()
-    if existing:
-        flash(_("Ya existe un cierre mensual para ese periodo."), "warning")
-        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=existing.id))
+    try:
+        close_run, created = create_monthly_close_run(period.entity, period.id)
+    except PeriodCloseError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
 
-    close_run = PeriodCloseRun(company=period.entity, period_id=period.id, run_status="open")
-    database.session.add(close_run)
+    if not created:
+        flash(_("Ya existe un cierre mensual para ese periodo."), "warning")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
     database.session.commit()
     flash(_("Cierre mensual creado."), "success")
     return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))

@@ -8,9 +8,13 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from datetime import date, datetime, timezone
+import sqlite3
 
 
 from decimal import Decimal
+
+from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from cacao_accounting.exceptions import flash_error
 
@@ -780,17 +784,95 @@ def _record_monthly_integrity_checks(close_run: Any, period: Any) -> None:
         )
 
 
+def _reserve_monthly_close_sqlite_writer() -> None:
+    """Reserve SQLite's writer before a monthly-close read-then-write flow."""
+    session = database.session
+    if session.get_bind().dialect.name != "sqlite":
+        return
+
+    connection = session.connection()
+    raw_connection = connection.connection.driver_connection
+    if raw_connection is None or raw_connection.in_transaction:
+        return
+
+    original_timeout = int(connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one())
+    connection.exec_driver_sql("PRAGMA busy_timeout=5000")
+    busy_error: OperationalError | None = None
+    try:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+    except OperationalError as exc:
+        error_code = getattr(exc.orig, "sqlite_errorcode", None)
+        if error_code is None or error_code & 0xFF not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+            raise
+        busy_error = exc
+    finally:
+        connection.exec_driver_sql(f"PRAGMA busy_timeout={original_timeout}")
+    if busy_error is not None:
+        session.rollback()
+        raise PeriodCloseError(_("Otro cierre mensual está en curso para este período. Intente nuevamente.")) from busy_error
+
+
+def _lock_monthly_close_period(company: str, period_id: str) -> Any:
+    """Lock and refresh the period before locking any associated close run."""
+    from cacao_accounting.database import AccountingPeriod
+
+    _reserve_monthly_close_sqlite_writer()
+    period = database.session.execute(
+        select(AccountingPeriod)
+        .where(AccountingPeriod.id == period_id, AccountingPeriod.entity == company)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if period is None:
+        raise PeriodCloseError(_("El período no existe o ya no pertenece a esta compañía."))
+    return period
+
+
+def create_monthly_close_run(company: str, period_id: str) -> tuple[Any, bool]:
+    """Create at most one monthly close run for an accounting period."""
+    from cacao_accounting.database import PeriodCloseRun
+
+    session = database.session
+    period = _lock_monthly_close_period(company, period_id)
+    if period.is_closed:
+        raise PeriodCloseError(_("El periodo ya se encuentra cerrado."))
+
+    existing = (
+        session.execute(
+            select(PeriodCloseRun)
+            .where(PeriodCloseRun.company == company, PeriodCloseRun.period_id == period_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        .scalars()
+        .first()
+    )
+    if existing:
+        return existing, False
+
+    close_run = PeriodCloseRun(company=company, period_id=period_id, run_status="open")
+    session.add(close_run)
+    session.flush()
+    return close_run, True
+
+
 def finalize_monthly_close(close_run_id: str, user_id: str, *, commit: bool = True) -> Any:
     """Valida y finaliza un cierre mensual de forma atómica."""
-    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+    from cacao_accounting.database import PeriodCloseRun
 
     if not user_id:
         raise PeriodCloseError(_("El cierre mensual requiere un usuario responsable."))
-    close_run = database.session.get(PeriodCloseRun, close_run_id, with_for_update=True)
-    if close_run is None:
+    initial_close_run = database.session.get(PeriodCloseRun, close_run_id)
+    if initial_close_run is None:
         raise PeriodCloseError(_("Cierre mensual no encontrado."))
-    period = database.session.get(AccountingPeriod, close_run.period_id, with_for_update=True)
-    if period is None or period.entity != close_run.company:
+    period = _lock_monthly_close_period(initial_close_run.company, initial_close_run.period_id)
+    close_run = database.session.execute(
+        select(PeriodCloseRun)
+        .where(PeriodCloseRun.id == close_run_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if close_run is None or period.entity != close_run.company or period.id != close_run.period_id:
         raise PeriodCloseError(_("El periodo del cierre no existe o no pertenece a la compañía."))
     if period.is_closed or close_run.run_status == "closed":
         raise PeriodCloseError(_("El periodo ya se encuentra cerrado."))

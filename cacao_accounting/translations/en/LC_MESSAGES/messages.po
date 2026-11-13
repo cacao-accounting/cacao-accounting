@@ -16446,6 +16446,14 @@ msgstr "AR/AP and inventory subledgers reconciled against {count} book(s)."
 msgid "El cierre mensual requiere un usuario responsable."
 msgstr "The monthly close requires a responsible user."
 
+#: cacao_accounting/contabilidad/services.py
+msgid "Otro cierre mensual está en curso para este período. Intente nuevamente."
+msgstr "Another monthly close is being created for this period. Please try again."
+
+#: cacao_accounting/contabilidad/services.py
+msgid "El período no existe o ya no pertenece a esta compañía."
+msgstr "The period does not exist or no longer belongs to this company."
+
 #: cacao_accounting/contabilidad/services.py:791
 msgid "El periodo del cierre no existe o no pertenece a la compañía."
 msgstr "The closing period does not exist or does not belong to the company."
