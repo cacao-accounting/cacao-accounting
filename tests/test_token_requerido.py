@@ -11,6 +11,10 @@ semántica del token como por el gesto de revocación al deshabilitar.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+
 import pytest
 
 from cacao_accounting import create_app
@@ -19,6 +23,16 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import Currency, Entity, Modules, User, UserCompanyAccess, database
 
 CONTRASENA = "token-cacao-2026"
+
+
+def _firmar_jwt_payload(secret: str, payload_json: bytes) -> str:
+    """Build a signed JWT with a controlled JSON payload for validation cases."""
+    header = base64.urlsafe_b64encode(b'{"alg":"HS256","typ":"JWT"}').rstrip(b"=")
+    payload = base64.urlsafe_b64encode(payload_json).rstrip(b"=")
+    signing_input = header + b"." + payload
+    signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+    encoded_signature = base64.urlsafe_b64encode(signature).rstrip(b"=")
+    return b".".join((header, payload, encoded_signature)).decode("ascii")
 
 
 def _sembrar_escenario() -> dict[str, str]:
@@ -113,6 +127,29 @@ def test_el_token_del_usuario_activo_autoriza_el_llamado(api_con_usuarios):
     token = _token_persistido(application, "vendedor")
     assert token is not None
     assert _llamar_api_test(client, token) == 200
+
+
+@pytest.mark.parametrize("token_kind", ["malformed", "non-object-payload", "invalid-user-id"])
+def test_jwt_malformado_responde_401_sin_detalles_internos(api_con_usuarios, token_kind):
+    """Malformed or structurally invalid JWTs are rejected without exposing parser details."""
+    application, client = api_con_usuarios
+    if token_kind == "malformed":
+        token = "badtoken"
+    elif token_kind == "non-object-payload":
+        payload = b'["not","claims"]'
+        token = _firmar_jwt_payload(application.config["SECRET_KEY"], payload)
+    else:
+        payload = b'{"user_id":[],"auth_version":0}'
+        token = _firmar_jwt_payload(application.config["SECRET_KEY"], payload)
+
+    response = client.get("/api/test", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert response.get_json() == {
+        "message": "Invalid or expired Authentication token!",
+        "data": None,
+        "error": "Unauthorized",
+    }
 
 
 def test_token_del_usuario_desactivado_no_autoriza_el_llamado(api_con_usuarios):

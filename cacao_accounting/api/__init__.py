@@ -547,6 +547,37 @@ def _require_inventory_image_access(action: str = "consultar") -> None:
         abort(403)
 
 
+def _token_unauthorized_response(message: str) -> tuple[dict[str, str | None], int]:
+    """Return the standard response for a rejected API credential."""
+    return {"message": message, "data": None, "error": "Unauthorized"}, 401
+
+
+def _identity_for_api_token(token: str):
+    """Return the active user whose persisted token and version match the JWT."""
+    try:
+        data = decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
+    except PyJWTError:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    user_id = data.get("user_id")
+    if not isinstance(user_id, str) or not user_id:
+        return None
+
+    from cacao_accounting.database import User, database
+
+    identidad = database.session.get(User, user_id)
+    if (
+        not identidad
+        or identidad.token != token
+        or not identidad.active
+        or data.get("auth_version", 0) != identidad.auth_version
+    ):
+        return None
+    return identidad
+
+
 def token_requerido(f):  # pragma: no cover
     """Decorador para proteger el acceso a la API vía tokens."""
 
@@ -561,51 +592,27 @@ def token_requerido(f):  # pragma: no cover
                 token = parts[1]
 
         if not token:
-            return {
-                "message": "Authentication Token is missing!",
-                "data": None,
-                "error": "Unauthorized",
-            }, 401
+            return _token_unauthorized_response("Authentication Token is missing!")
 
         try:
-            data = decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
-            assert data is not None  # nosec
-            user_id = data.get("user_id")
-
-            from cacao_accounting.database import User, database
-
-            identidad = database.session.get(User, user_id)
-            token_auth_version = data.get("auth_version", 0)
-            if (
-                not identidad
-                or identidad.token != token
-                or not identidad.active
-                or token_auth_version != identidad.auth_version
-            ):
-                return {
-                    "message": "Invalid or expired Authentication token!",
-                    "data": None,
-                    "error": "Unauthorized",
-                }, 401
-
-            from flask_login import login_user
-
-            if not current_user or not current_user.is_authenticated:
-                # El usuario pudo ser deshabilitado entre el login web y la
-                # llamada al API: sin sesión válida la vista no se ejecuta.
-                if not login_user(identidad, remember=False, force=False):
-                    return {
-                        "message": "Invalid or expired Authentication token!",
-                        "data": None,
-                        "error": "Unauthorized",
-                    }, 401
-
-        except (KeyError, PyJWTError) as e:
+            identidad = _identity_for_api_token(token)
+        except KeyError:
+            current_app.logger.exception("API token authentication configuration is incomplete")
             return {
                 "message": "Something went wrong",
                 "data": None,
-                "error": str(e),
+                "error": "Internal Server Error",
             }, 500
+        if identidad is None:
+            return _token_unauthorized_response("Invalid or expired Authentication token!")
+
+        from flask_login import login_user
+
+        if not current_user or not current_user.is_authenticated:
+            # El usuario pudo ser deshabilitado entre el login web y la
+            # llamada al API: sin sesión válida la vista no se ejecuta.
+            if not login_user(identidad, remember=False, force=False):
+                return _token_unauthorized_response("Invalid or expired Authentication token!")
 
         return f(*args, **kwds)
 
