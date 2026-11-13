@@ -114,7 +114,6 @@ def _log_database_version() -> None:
     if not database_uri:
         return
 
-    log.warning(database_uri)
     query, info_message = _consultar_version_database(database_uri)
     log.info(info_message)
 
