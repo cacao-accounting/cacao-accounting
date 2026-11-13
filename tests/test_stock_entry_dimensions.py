@@ -122,13 +122,6 @@ def inventario_dimensiones():
         database.session.add_all(
             [
                 UOM(code="UND", name="Unidad"),
-                Item(
-                    code="ART-1",
-                    name="Artículo de prueba",
-                    item_type="goods",
-                    is_stock_item=True,
-                    default_uom="UND",
-                ),
                 Warehouse(
                     code="WH-CACAO",
                     name="Bodega Cacao",
@@ -136,6 +129,16 @@ def inventario_dimensiones():
                     is_active=True,
                 ),
             ]
+        )
+        database.session.flush()
+        database.session.add(
+            Item(
+                code="ART-1",
+                name="Artículo de prueba",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="UND",
+            )
         )
         for company in ("cacao", "alpha"):
             centro = CostCenter(

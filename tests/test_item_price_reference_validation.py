@@ -70,6 +70,11 @@ def _crear_app():
                 ),
                 UOM(code="UND", name="Unidad", is_active=True),
                 UOM(code="OFF", name="Unidad inactiva", is_active=False),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Item(code="ART-1", name="Artículo", item_type="goods", default_uom="UND", is_active=True),
                 Item(code="ART-OFF", name="Artículo inactivo", item_type="goods", default_uom="UND", is_active=False),
                 PriceList(

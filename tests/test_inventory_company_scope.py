@@ -28,10 +28,11 @@ CONTRASENA = "alcance-inv-2026"
 def _sembrar_cloud(app):
     with app.app_context():
         database.create_all()
-        from cacao_accounting.database import Entity, Modules, User, UserCompanyAccess, Warehouse
+        from cacao_accounting.database import Currency, Entity, Modules, User, UserCompanyAccess, Warehouse
 
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="inventory", default=False, enabled=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Entity(

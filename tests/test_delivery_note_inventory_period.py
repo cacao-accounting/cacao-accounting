@@ -49,20 +49,24 @@ def _crear_app():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="inventory", default=False, enabled=True),
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
                 Book(code="LIBRO", name="Libro principal", entity="cacao", currency="NIO", status="activo"),
                 FiscalYear(
                     entity="cacao",

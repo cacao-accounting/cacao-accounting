@@ -72,6 +72,11 @@ def _crear_app():
                 ),
                 UOM(code="EA", name="Unidad", is_active=True),
                 UOM(code="BOX", name="Caja", is_active=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Item(
                     code="A",
                     name="Artículo A",
@@ -88,8 +93,11 @@ def _crear_app():
                     default_uom="EA",
                     has_serial_no=True,
                 ),
-                SerialNumber(item_code="A", serial_no="SN-1", serial_status="available"),
             ]
+        )
+        database.session.flush()
+        database.session.add(
+            SerialNumber(item_code="A", serial_no="SN-1", serial_status="available"),
         )
         database.session.commit()
     return application

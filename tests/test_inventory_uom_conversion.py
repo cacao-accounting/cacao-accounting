@@ -38,10 +38,11 @@ def almacen_conversiones():
     )
     with application.app_context():
         database.create_all()
-        from cacao_accounting.database import Entity, Item, UOM
+        from cacao_accounting.database import Currency, Entity, Item, UOM
 
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Entity(
                     code="cacao",
                     name="Cacao Accounting",
@@ -53,14 +54,17 @@ def almacen_conversiones():
                 ),
                 UOM(code="UND", name="Unidad", is_active=True),
                 UOM(code=CAJA, name="Caja de 12", is_active=True),
-                Item(
-                    code="CHOCOLATE-100G",
-                    name="Chocolate 100g",
-                    item_type="goods",
-                    is_stock_item=True,
-                    default_uom="UND",
-                ),
             ]
+        )
+        database.session.flush()
+        database.session.add(
+            Item(
+                code="CHOCOLATE-100G",
+                name="Chocolate 100g",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="UND",
+            )
         )
         database.session.commit()
     yield application

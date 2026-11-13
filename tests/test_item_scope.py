@@ -43,6 +43,7 @@ def inventario_articulos():
         from cacao_accounting.database import (
             Accounts,
             CostCenter,
+            Currency,
             Entity,
             Item,
             ItemAccount,
@@ -57,8 +58,13 @@ def inventario_articulos():
             [
                 Modules(module="inventory", default=False, enabled=True),
                 Modules(module="accounting", default=False, enabled=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 UOM(code="Unidad", name="Unidad", is_active=True),
-                CostCenter(code="CC01", name="Centro principal", entity="cacao", active=True, enabled=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Entity(
                     code="cacao",
                     name="Cacao Accounting",
@@ -77,6 +83,12 @@ def inventario_articulos():
                     enabled=True,
                     status="activo",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                CostCenter(code="CC01", name="Centro principal", entity="cacao", active=True, enabled=True),
                 Item(
                     code="CHOCOLATE-100G",
                     name="Chocolate 100g",
@@ -91,7 +103,6 @@ def inventario_articulos():
                     password=proteger_passwd(CONTRASENA),
                     active=True,
                 ),
-                UserCompanyAccess(user_id="editor", company_code="cacao"),
                 Warehouse(
                     code="BODEGA-SECRET",
                     name="Bodega Secreta",
@@ -100,6 +111,8 @@ def inventario_articulos():
                 ),
             ]
         )
+        database.session.flush()
+        database.session.add(UserCompanyAccess(user_id="editor", company_code="cacao"))
         database.session.commit()
         crea_roles_predeterminados()
         cargar_permisos_predeterminados()

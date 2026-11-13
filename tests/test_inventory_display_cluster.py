@@ -69,9 +69,10 @@ def _crear_app():
                     active=True,
                     classification="admin",
                 ),
-                UOM(code="UND", name="Unidad", is_active=True),
             ]
         )
+        database.session.flush()
+        database.session.add(UOM(code="UND", name="Unidad", is_active=True))
         database.session.flush()
         categoria = ItemCategory(name="Materia Prima", is_active=True)
         database.session.add(categoria)
@@ -86,6 +87,7 @@ def _crear_app():
             is_active=True,
         )
         database.session.add(item)
+        database.session.flush()
         batch = Batch(item_code="ART-1", batch_no="LOTE-PUBLICO", is_active=True)
         database.session.add(batch)
         database.session.commit()
