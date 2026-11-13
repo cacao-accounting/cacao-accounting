@@ -386,6 +386,10 @@ def _is_print_admin() -> bool:
     if admin_role is None:
         return False
     return (
-        database.session.execute(select(RolesUser).filter_by(user_id=user_id, role_id=admin_role.id)).scalars().first()
+        database.session.execute(
+            select(RolesUser).filter_by(user_id=user_id, role_id=admin_role.id).where(RolesUser.active.is_(True))
+        )
+        .scalars()
+        .first()
         is not None
     )

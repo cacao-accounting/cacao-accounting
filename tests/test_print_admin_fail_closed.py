@@ -83,3 +83,29 @@ def test_con_rol_admin_las_plantillas_se_permiten(impresion_sin_rol_admin):
     response = client.get("/admin/print-templates")
 
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("get", "/admin/print-templates"),
+        ("post", "/admin/print-templates/settings"),
+        ("post", "/admin/print-templates/1/publish"),
+    ],
+)
+def test_rol_admin_revocado_deniega_gestion_de_plantillas(impresion_sin_rol_admin, method, path):
+    """Una fila admin inactiva no habilita lectura ni cambios en impresión."""
+    application = impresion_sin_rol_admin
+    with application.app_context():
+        rol = Roles(name="admin", note="Administrador")
+        database.session.add(rol)
+        database.session.flush()
+        database.session.add(RolesUser(user_id="ventas", role_id=rol.id, active=False))
+        database.session.commit()
+
+    client = application.test_client()
+    _iniciar(client)
+
+    response = getattr(client, method)(path)
+
+    assert response.status_code == 403
