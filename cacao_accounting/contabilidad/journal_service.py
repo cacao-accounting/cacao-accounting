@@ -273,6 +273,9 @@ def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = N
 
     actor = database.session.get(User, actor_id)
     actor_name = str((actor.name or actor.user) if actor else actor_id)
+    from cacao_accounting.contabilidad.arap_ledger_service import lock_journal_open_item_references
+
+    lock_journal_open_item_references(journal)
     with audit_actor(str(actor_id), actor_name):
         fiscal_year = _validate_fiscal_year_closing(journal)
 

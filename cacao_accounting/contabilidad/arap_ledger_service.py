@@ -16,7 +16,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Iterable, cast
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from cacao_accounting.database import (
     ARAPLedgerBookEntry,
@@ -35,7 +35,7 @@ from cacao_accounting.database import (
     SalesInvoice,
     database,
 )
-from cacao_accounting.document_flow.registry import payment_reference_affects_arap
+from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype, payment_reference_affects_arap
 
 
 from cacao_accounting.i18n import _
@@ -326,18 +326,80 @@ def _upsert_open_item_cache(
     return row
 
 
-def _decrease_open_item_cache(open_item_id: str | None, amount: Decimal) -> None:
-    """Consume una parte de un open item cacheado, sin alterar su historia."""
-    if not open_item_id:
+def _reserve_sqlite_open_item_writer() -> None:
+    """Reserve SQLite's writer before reading shared open-item balances."""
+    if database.engine.dialect.name != "sqlite":
         return
-    row = database.session.get(ARAPOpenItem, open_item_id, with_for_update=True)
-    if row is None:
-        return
-    remaining = max(_decimal(row.unallocated_amount) - abs(_decimal(amount)), Decimal("0"))
+    connection = database.session.connection()
+    raw_connection = connection.connection.driver_connection
+    if raw_connection is not None and not raw_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
+def _lock_open_item_caches(*items: ARAPOpenItem | None) -> dict[str, ARAPOpenItem]:
+    """Lock and refresh open-item caches in deterministic ID order."""
+    _reserve_sqlite_open_item_writer()
+    item_ids = sorted({str(item.id) for item in items if item is not None and item.id})
+    locked: dict[str, ARAPOpenItem] = {}
+    for item_id in item_ids:
+        row = database.session.execute(
+            select(ARAPOpenItem).where(ARAPOpenItem.id == item_id).with_for_update().execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if row is not None:
+            locked[item_id] = row
+    return locked
+
+
+def _lock_open_item_caches_for_movements(movements: Iterable[ARAPLedgerEntry]) -> list[ARAPOpenItem]:
+    """Lock cache rows for movements in ID order using a current database read."""
+    cache_keys = {
+        (movement.document_type, movement.document_id, movement.economic_line_id or movement.document_id)
+        for movement in movements
+    }
+    if not cache_keys:
+        return []
+    _reserve_sqlite_open_item_writer()
+    conditions = [
+        and_(
+            ARAPOpenItem.document_type == document_type,
+            ARAPOpenItem.document_id == document_id,
+            ARAPOpenItem.economic_line_id == economic_line_id,
+        )
+        for document_type, document_id, economic_line_id in cache_keys
+    ]
+    return list(
+        database.session.execute(
+            select(ARAPOpenItem)
+            .where(or_(*conditions))
+            .order_by(ARAPOpenItem.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _consume_open_item_cache(row: ARAPOpenItem, amount: Decimal) -> None:
+    """Consume saldo sobre un open item ya bloqueado por la transacción."""
+    consumed = abs(_decimal(amount))
+    available = _decimal(row.unallocated_amount)
+    if consumed > available:
+        raise ValueError(_("La aplicación excede el saldo pendiente del documento."))
+    remaining = available - consumed
     row.unallocated_amount = remaining
     row.status = "open" if remaining else "closed"
     row.version = int(row.version or 1) + 1
     database.session.add(row)
+
+
+def _decrease_open_item_cache(open_item_id: str | None, amount: Decimal) -> None:
+    """Consume una parte de un open item cacheado, sin alterar su historia."""
+    if not open_item_id:
+        return
+    row = _lock_open_item_caches(database.session.get(ARAPOpenItem, open_item_id)).get(open_item_id)
+    if row is not None:
+        _consume_open_item_cache(row, amount)
 
 
 def _movement_book_exchange_rate(movement: ARAPLedgerEntry, book: Book) -> Decimal | None:
@@ -380,6 +442,9 @@ def _close_open_item_cache_for_movement(movement: ARAPLedgerEntry) -> None:
             ARAPOpenItem.economic_line_id == economic_line_id,
         )
     ).scalar_one_or_none()
+    if row is None:
+        return
+    row = _lock_open_item_caches(row).get(str(row.id))
     if row is None:
         return
     row.unallocated_amount = Decimal("0")
@@ -863,8 +928,6 @@ def _resolve_application_target_item(
                     account_id=account_id,
                     economic_line_id=str(target_opening.economic_line_id or document.id),
                 )
-    if target_cache is not None and amount > _decimal(target_cache.unallocated_amount):
-        raise ValueError(_("La aplicación excede el saldo pendiente del documento."))
     return target_opening, target_cache, new_movements
 
 
@@ -942,8 +1005,6 @@ def _resolve_application_payment_item(
                     economic_line_id=payment_id,
                     unallocated_amount=payment_total,
                 )
-    if payment_cache is not None and consumed > _decimal(payment_cache.unallocated_amount):
-        raise ValueError(_("La aplicación excede el saldo disponible del pago."))
     return payment_opening, payment_cache, new_movements
 
 
@@ -1057,10 +1118,29 @@ def _build_application_movements(context: ApplicationMovementContext) -> list[AR
         _add_book_entry(target_movement, book=book, amount=target_delta * target_rate, gl_entry=None)
         _add_book_entry(payment_movement, book=book, amount=(-payment_sign * context.consumed * payment_rate), gl_entry=None)
     if context.target_cache is not None:
-        _decrease_open_item_cache(context.target_cache.id, context.amount)
+        _consume_open_item_cache(context.target_cache, context.amount)
     if context.payment_cache is not None:
-        _decrease_open_item_cache(context.payment_cache.id, context.consumed)
+        _consume_open_item_cache(context.payment_cache, context.consumed)
     return movements
+
+
+def _lock_and_validate_application_caches(
+    target_cache: ARAPOpenItem | None,
+    payment_cache: ARAPOpenItem | None,
+    amount: Decimal,
+    consumed: Decimal,
+) -> tuple[ARAPOpenItem | None, ARAPOpenItem | None]:
+    """Lock shared balances and reject applications exceeding either balance."""
+    locked_caches = _lock_open_item_caches(target_cache, payment_cache)
+    if target_cache is not None:
+        target_cache = locked_caches.get(str(target_cache.id))
+        if target_cache is None or amount > _decimal(target_cache.unallocated_amount):
+            raise ValueError(_("La aplicación excede el saldo pendiente del documento."))
+    if payment_cache is not None:
+        payment_cache = locked_caches.get(str(payment_cache.id))
+        if payment_cache is None or consumed > _decimal(payment_cache.unallocated_amount):
+            raise ValueError(_("La aplicación excede el saldo disponible del pago."))
+    return target_cache, payment_cache
 
 
 def post_payment_application_ar_ap(
@@ -1073,10 +1153,12 @@ def post_payment_application_ar_ap(
     reference_type: str | None = None,
 ) -> list[ARAPLedgerEntry]:
     """Registra una aplicación posterior de pago en el ledger documental."""
+    _reserve_sqlite_open_item_writer()
     amount = _decimal(document_amount)
     consumed = _decimal(payment_amount)
     if amount <= 0 or consumed <= 0:
         raise ValueError(_("La aplicación AP/AR requiere importes positivos."))
+    _lock_payment_application_headers(payment, document)
     company = str(getattr(payment, "company", None) or getattr(document, "company", None) or "")
     party_type = str(getattr(payment, "party_type", None) or "").lower()
     party_id = str(getattr(payment, "party_id", None) or "")
@@ -1114,6 +1196,7 @@ def post_payment_application_ar_ap(
         allocation_date,
     )
     movements.extend(payment_new_movements)
+    target_cache, payment_cache = _lock_and_validate_application_caches(target_cache, payment_cache, amount, consumed)
     alloc_movements = _build_application_movements(
         ApplicationMovementContext(
             company=company,
@@ -1206,6 +1289,98 @@ def _journal_line_signed_amount(line: ComprobanteContableDetalle, ledger_type: s
     if ledger_type == "AP":
         return -value
     return value
+
+
+def _resolve_journal_open_item_reference(line: ComprobanteContableDetalle, company: str) -> ARAPOpenItem | None:
+    """Resolve one manual AP/AR line to its current open-item cache."""
+    account = _journal_account(line, company, [])
+    account_type = str(getattr(account, "account_type", "") or "").lower()
+    if account_type not in {"receivable", "payable", "customer_advance", "supplier_advance"}:
+        return None
+    raw_party_type = str(getattr(line, "third_type", None) or "").lower()
+    party_type = {"cliente": "customer", "proveedor": "supplier"}.get(raw_party_type, raw_party_type)
+    party_id = str(getattr(line, "third_code", None) or "")
+    reference_name = str(
+        getattr(line, "reference_open_item_id", None)
+        or getattr(line, "reference_name", None)
+        or getattr(line, "internal_reference_id", None)
+        or ""
+    ).strip()
+    if not reference_name or not party_id or party_type not in {"customer", "supplier"}:
+        return None
+    target = database.session.get(ARAPOpenItem, reference_name)
+    raw_reference_type = str(getattr(line, "reference_type", None) or "")
+    if target is None and raw_reference_type:
+        target = _find_target_open_item(
+            company=company,
+            party_type=party_type,
+            party_id=party_id,
+            reference_type=_normalize_journal_reference_type(raw_reference_type, party_type),
+            reference_name=reference_name,
+            account_id=str(account.id),
+        )
+    return target
+
+
+def _resolve_journal_open_item_references(document: ComprobanteContable) -> list[ARAPOpenItem]:
+    """Resolve all open item references and reversal sources for a journal."""
+    company = str(document.entity)
+    targets = [
+        target
+        for line in _journal_party_lines(document)
+        if (target := _resolve_journal_open_item_reference(line, company)) is not None
+    ]
+    if document.reversal_of:
+        targets.extend(
+            database.session.execute(
+                select(ARAPOpenItem).where(
+                    ARAPOpenItem.document_type == "journal_entry",
+                    ARAPOpenItem.document_id == str(document.reversal_of),
+                )
+            )
+            .scalars()
+            .all()
+        )
+    return targets
+
+
+def _lock_source_document_headers(targets: Iterable[ARAPOpenItem], reversal_of: str | None) -> None:
+    """Lock referenced source headers by table and ID before cache rows."""
+    source_headers: dict[type[Any], set[str]] = {}
+    for target in targets:
+        if not target.document_id:
+            continue
+        definition = DOCUMENT_TYPES.get(normalize_doctype(str(target.document_type)))
+        if definition is not None and definition.header_model is not None:
+            source_headers.setdefault(definition.header_model, set()).add(str(target.document_id))
+    if reversal_of:
+        source_headers.setdefault(ComprobanteContable, set()).add(str(reversal_of))
+    for header_model, document_ids in sorted(source_headers.items(), key=lambda item: item[0].__tablename__):
+        database.session.execute(
+            select(header_model)
+            .where(header_model.id.in_(document_ids))
+            .order_by(header_model.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalars().all()
+
+
+def _lock_payment_application_headers(payment: PaymentEntry, document: Any) -> None:
+    """Lock payment then target headers, matching payment-flow lock order."""
+    for source in (payment, document):
+        if not getattr(source, "id", None):
+            continue
+        model = type(source)
+        database.session.execute(
+            select(model).where(model.id == source.id).with_for_update().execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
+
+def lock_journal_open_item_references(document: ComprobanteContable) -> None:
+    """Lock journal reference balances before posting takes other database locks."""
+    targets = _resolve_journal_open_item_references(document)
+    _lock_source_document_headers(targets, str(document.reversal_of) if document.reversal_of else None)
+    _lock_open_item_caches(*targets)
 
 
 def _find_target_open_item(
@@ -1303,6 +1478,7 @@ def _apply_journal_open_item(
     """Registra la aplicación de una línea de diario a un open item."""
     if source_cache.direction == target.direction:
         raise ValueError(_("La referencia AP/AR debe tener sentido contrario al movimiento del diario."))
+    _consume_open_item_cache(target, amount)
     target_delta = -amount if target.direction == "debit" else amount
     target_movement = _new_movement(
         document,
@@ -1350,7 +1526,6 @@ def _apply_journal_open_item(
         _add_book_entry(target_movement, book=book, amount=target_delta * target_rate, gl_entry=None)
         source_value = -source_consumed if source_signed > 0 else source_consumed
         _add_book_entry(source_allocation, book=book, amount=source_value * source_rate, gl_entry=None)
-    _decrease_open_item_cache(target.id, amount)
     _decrease_open_item_cache(source_cache.id, source_consumed)
     return source_allocation
 
@@ -1396,6 +1571,9 @@ def _process_journal_line_reference(
         raise ValueError(_("El documento de referencia AP/AR no tiene saldo abierto."))
     if target.party_type != party_type or str(target.party_id) != party_id:
         raise ValueError(_("El documento de referencia no pertenece al tercero de la línea."))
+    target = _lock_open_item_caches(target).get(str(target.id))
+    if target is None or _decimal(target.unallocated_amount) <= 0:
+        raise ValueError(_("El documento de referencia AP/AR no tiene saldo abierto."))
     source_amount = abs(source_signed)
     if target.currency == currency:
         rate = Decimal("1")
@@ -1569,7 +1747,12 @@ def _cancellation_originals(document: Any, source_types: set[str], source_ids: s
             | (ARAPLedgerEntry.reference_type == "journal_entry") & (ARAPLedgerEntry.reference_id == str(document.id))
             | (ARAPLedgerEntry.voucher_type == "journal_entry") & (ARAPLedgerEntry.voucher_id == str(document.id))
         )
-    query = select(ARAPLedgerEntry).where(source_filter, ~ARAPLedgerEntry.id.in_(already_reversed))
+    query = (
+        select(ARAPLedgerEntry)
+        .where(source_filter, ~ARAPLedgerEntry.id.in_(already_reversed))
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if not include_reversal_movements:
         query = query.where(ARAPLedgerEntry.is_reversal.is_(False))
     return list(database.session.execute(query).scalars().all())
@@ -1616,11 +1799,14 @@ def _reverse_arap_movement(
                 reversal_of=book_row,
             )
     cache = database.session.execute(
-        select(ARAPOpenItem).where(
+        select(ARAPOpenItem)
+        .where(
             ARAPOpenItem.document_type == original.document_type,
             ARAPOpenItem.document_id == original.document_id,
             ARAPOpenItem.economic_line_id == (original.economic_line_id or original.document_id),
         )
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalar_one_or_none()
     if cache is not None:
         if original.event_type == "opening":
@@ -1643,5 +1829,6 @@ def cancel_document_ar_ap(document: Any, *, cancellation_date: date | None = Non
     if isinstance(document, ComprobanteContable):
         source_types.add("journal_entry")
     originals = _cancellation_originals(document, source_types, source_ids)
-    originals = sorted(originals, key=lambda row: 0 if row.event_type == "opening" else 1)
+    originals = sorted(originals, key=lambda row: 0 if row.event_type == "allocation" else 1)
+    _lock_open_item_caches_for_movements(originals)
     return [_reverse_arap_movement(original, document, cancellation_date) for original in originals]

@@ -4901,6 +4901,9 @@ def cancel_document(
     from cacao_accounting.approval_engine import assert_execution_authorized
 
     assert_execution_authorized(document, actor_id=actor_user_id, action="set_null")
+    from cacao_accounting.contabilidad.arap_ledger_service import _reserve_sqlite_open_item_writer
+
+    _reserve_sqlite_open_item_writer()
     document = _lock_document_for_transition(document)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError(_("Solo se puede cancelar un documento aprobado."))
