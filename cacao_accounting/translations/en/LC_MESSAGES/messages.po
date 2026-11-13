@@ -21539,6 +21539,15 @@ msgstr "Attribute '%(event)s' is not allowed."
 msgid "Dynamic CSS expressions are not allowed."
 msgstr "Dynamic CSS expressions are not allowed."
 
+msgid "El CSS no puede cerrar el elemento <style>."
+msgstr "CSS cannot close the <style> element."
+
+msgid "El elemento HTML '%(element)s' no está permitido."
+msgstr "The HTML element '%(element)s' is not allowed."
+
+msgid "No se permiten URLs con esquemas ejecutables."
+msgstr "Executable URL schemes are not allowed."
+
 #: cacao_accounting/printing/templates/admin/print_template_form.html:6
 msgid "formato de impresión"
 msgstr "print format"
@@ -25399,6 +25408,19 @@ msgstr "Select a bank account"
 #: cacao_accounting/printing/admin_routes.py
 msgid "Copia de"
 msgstr "Copy of"
+
+#: cacao_accounting/printing/admin_routes.py
+#, python-format
+msgid "No se pudo duplicar la plantilla: %(error)s"
+msgstr "Could not duplicate the template: %(error)s"
+
+#: cacao_accounting/printing/validators.py
+msgid "Las secciones CDATA no están permitidas en plantillas HTML."
+msgstr "CDATA sections are not allowed in HTML templates."
+
+#: cacao_accounting/printing/validators.py
+msgid "Los delimitadores de comentario HTML ambiguos no están permitidos."
+msgstr "Ambiguous HTML comment delimiters are not allowed."
 
 #: cacao_accounting/printing/admin_routes.py
 #, python-format

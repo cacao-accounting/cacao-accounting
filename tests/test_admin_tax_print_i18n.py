@@ -184,3 +184,30 @@ def test_duplicado_usa_nombre_traducido():
         with application.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_crear_plantilla_rechaza_css_que_cierra_style():
+    """La ruta de creación valida el CSS antes de guardar el borrador."""
+    application, _ids = _crear_app()
+    try:
+        client = _cliente(application)
+        response = client.post(
+            "/admin/print-templates/new",
+            data={
+                "company_code": "cacao",
+                "document_type": "journal_entry",
+                "code": "UNSAFE",
+                "name": "Unsafe",
+                "template_body": "<p>Entry</p>",
+                "stylesheet_body": "</style><script>alert(1)</script>",
+            },
+        )
+
+        assert response.status_code == 200
+        with application.app_context():
+            unsafe = database.session.execute(database.select(PrintTemplate).filter_by(code="UNSAFE")).first()
+            assert unsafe is None
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()

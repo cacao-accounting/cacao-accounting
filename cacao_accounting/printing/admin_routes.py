@@ -75,15 +75,19 @@ def create_template():
     _require_print_admin()
     if request.method == "POST":
         try:
+            document_type = request.form.get("document_type") or ""
+            template_body = request.form.get("template_body") or ""
+            stylesheet_body = request.form.get("stylesheet_body")
+            PrintService().validate_template(template_body, stylesheet_body, document_type)
             template = PrintTemplate(
                 company_code=request.form.get("company_code") or None,
-                document_type=request.form.get("document_type") or "",
+                document_type=document_type,
                 bank_account_id=_form_bank_account_id(),
                 code=request.form.get("code") or "",
                 name=request.form.get("name") or "",
                 description=request.form.get("description"),
-                template_body=request.form.get("template_body") or "",
-                stylesheet_body=request.form.get("stylesheet_body"),
+                template_body=template_body,
+                stylesheet_body=stylesheet_body,
                 paper_size=request.form.get("paper_size") or "letter",
                 orientation=request.form.get("orientation") or "portrait",
                 status="draft",
@@ -120,25 +124,30 @@ def duplicate_template(template_id: int):
     """Duplicate a template as editable draft."""
     _require_print_admin()
     source = _get_template(template_id)
-    copy = PrintTemplate(
-        company_code=source.company_code,
-        document_type=source.document_type,
-        bank_account_id=source.bank_account_id,
-        code=_copy_code(source.code, source.company_code, source.document_type),
-        name=f"{_('Copia de')} {source.name}",
-        description=source.description,
-        template_body=source.template_body,
-        stylesheet_body=source.stylesheet_body,
-        paper_size=source.paper_size,
-        orientation=source.orientation,
-        status="draft",
-        is_system=False,
-        is_default=False,
-        created_by=_current_user_id(),
-    )
-    database.session.add(copy)
     try:
+        PrintService().validate_template(source.template_body, source.stylesheet_body, source.document_type)
+        copy = PrintTemplate(
+            company_code=source.company_code,
+            document_type=source.document_type,
+            bank_account_id=source.bank_account_id,
+            code=_copy_code(source.code, source.company_code, source.document_type),
+            name=f"{_('Copia de')} {source.name}",
+            description=source.description,
+            template_body=source.template_body,
+            stylesheet_body=source.stylesheet_body,
+            paper_size=source.paper_size,
+            orientation=source.orientation,
+            status="draft",
+            is_system=False,
+            is_default=False,
+            created_by=_current_user_id(),
+        )
+        database.session.add(copy)
         database.session.commit()
+    except TemplateValidationError as exc:
+        database.session.rollback()
+        flash(_("No se pudo duplicar la plantilla: %(error)s") % {"error": exc}, "danger")
+        return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
     except IntegrityError:
         database.session.rollback()
         flash(_("No se pudo duplicar la plantilla porque el código ya existe."), "danger")

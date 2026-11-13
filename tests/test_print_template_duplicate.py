@@ -108,3 +108,25 @@ def test_duplicar_dos_veces_no_responde_500():
         with application.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_no_se_duplica_una_plantilla_con_html_activo():
+    """Una plantilla persistida insegura no debe replicarse como nuevo borrador."""
+    application, template_id = _crear_app()
+    try:
+        with application.app_context():
+            source = database.session.get(PrintTemplate, template_id)
+            source.template_body = "<script>alert(1)</script>"
+            database.session.commit()
+
+        response = _cliente(application).post(f"/admin/print-templates/{template_id}/duplicate")
+
+        assert response.status_code == 302
+        with application.app_context():
+            count = database.session.execute(database.select(PrintTemplate)).scalars().all()
+            assert len(count) == 1
+            assert count[0].code == "BASE"
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()

@@ -86,7 +86,7 @@ class PrintService:
                 output_format="html_preview",
             )
             return html
-        except (PrintPermissionError, PrintTemplateNotFoundError, TemplateError, ValueError) as exc:
+        except (PrintPermissionError, PrintTemplateNotFoundError, TemplateValidationError, TemplateError, ValueError) as exc:
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -129,7 +129,7 @@ class PrintService:
                 output_format="pdf",
             )
             return bytes(pdf)
-        except (PrintPermissionError, PrintTemplateNotFoundError, TemplateError, ValueError) as exc:
+        except (PrintPermissionError, PrintTemplateNotFoundError, TemplateValidationError, TemplateError, ValueError) as exc:
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -162,6 +162,7 @@ class PrintService:
             context = doc_def["sample_context_builder"]()
             self._inject_validation_context(context, document_type, "sample", None)
             rendered = self.env.from_string(template_body).render(**context)
+            validate_template_security(rendered)
             if not rendered.strip():
                 raise TemplateValidationError(_("La plantilla renderizada esta vacia."))
             if "validation.qr_data_uri" in template_body:
@@ -260,6 +261,8 @@ class PrintService:
         export_url: str = "/",
     ) -> str:
         """Build the final standalone HTML document with embedded CSS."""
+        validate_template_security(rendered_body)
+        validate_css_safety(stylesheet_body)
         css = stylesheet_body or ""
         safe_return_url = escape(return_url or "/", quote=True)
         safe_export_url = escape(export_url or "/", quote=True)
