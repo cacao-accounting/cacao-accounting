@@ -1464,6 +1464,7 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
         raise PostingError(_("Solo se puede contabilizar un pago aprobado."))
 
     company = _company_for(document)
+    _validate_payment_bank_account_ownership(company, document)
     amount = _decimal_value(document.paid_amount or document.received_amount)
     payment_type = getattr(document, "payment_type", "").lower()
     if amount <= 0:
@@ -1496,6 +1497,16 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
             raise PostingError(_("Tipo de pago no soportado para contabilizacion."))
 
     return _add_entries(entries)
+
+
+def _validate_payment_bank_account_ownership(company: str, document: PaymentEntry) -> None:
+    """Reject payment bank dimensions owned by another company before any GL path."""
+    for bank_account_id in (document.bank_account_id, document.target_bank_account_id):
+        if not bank_account_id:
+            continue
+        bank_account = database.session.get(BankAccount, bank_account_id)
+        if not bank_account or bank_account.company != company:
+            raise PostingError(_("La cuenta bancaria debe pertenecer a la compañía del pago."))
 
 
 def _create_payment_pay_entries(
@@ -4459,6 +4470,7 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
     lines = _comprobante_lines(document)
     if not lines:
         raise PostingError(_("El comprobante contable no contiene lineas."))
+    _validate_manual_journal_dimensions(company, lines)
 
     entries: list[GLEntry] = []
     is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
@@ -4478,6 +4490,43 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
             raise PostingError(_("El comprobante contable no está balanceado en la moneda del libro."))
 
     return _add_entries(entries)
+
+
+def _validate_manual_journal_dimensions(company: str, lines: Sequence[Any]) -> None:
+    """Prevent posting journal lines with dimensions owned by another company."""
+    for line in lines:
+        bank_account_id = getattr(line, "bank_account_id", None)
+        _validate_manual_journal_bank_account(company, bank_account_id)
+        _validate_journal_dimension(
+            company,
+            getattr(line, "unit_code", None) or getattr(line, "unit", None),
+            Unit,
+            _("La unidad no existe o no pertenece a la compañía del comprobante."),
+        )
+        _validate_journal_dimension(
+            company,
+            getattr(line, "project_code", None) or getattr(line, "project", None),
+            Project,
+            _("El proyecto no existe o no pertenece a la compañía del comprobante."),
+        )
+
+
+def _validate_manual_journal_bank_account(company: str, bank_account_id: str | None) -> None:
+    """Reject a bank account that is missing or belongs to another company."""
+    if not bank_account_id:
+        return
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if not bank_account or bank_account.company != company:
+        raise PostingError(_("La cuenta bancaria no existe o no pertenece a la compañía del comprobante."))
+
+
+def _validate_journal_dimension(company: str, code: str | None, model: Any, error_message: str) -> None:
+    """Validate a journal's unit or project against the owning company."""
+    if not code:
+        return
+    dimension = database.session.query(model).filter_by(code=code).first()
+    if not dimension or dimension.entity != company:
+        raise PostingError(error_message)
 
 
 def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> list[GLEntry]:

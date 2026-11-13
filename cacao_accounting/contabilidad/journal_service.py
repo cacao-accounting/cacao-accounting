@@ -32,6 +32,7 @@ from cacao_accounting.audit_trail_service import (
 from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
+    BankAccount,
     Book,
     ComprobanteContable,
     ComprobanteContableDetalle,
@@ -43,8 +44,10 @@ from cacao_accounting.database import (
     FiscalYear,
     NamingSeries,
     Party,
+    Project,
     RecurringJournalApplication,
     RecurringJournalTemplate,
+    Unit,
     User,
     database,
 )
@@ -812,12 +815,29 @@ def _validate_journal_line(company: str, line: JournalLineInput, account_cache: 
         raise JournalValidationError(_("El tipo de cambio de la línea debe ser mayor que cero."))
     if line.reference_exchange_rate is not None and line.reference_exchange_rate <= 0:
         raise JournalValidationError(_("El tipo de cambio de la referencia debe ser mayor que cero."))
+    _validate_journal_line_dimensions(company, line)
     account = account_cache.get(line.account)
     if line.account not in account_cache:
         account = _account_record(company, line.account)
         account_cache[line.account] = account
     if account is not None and account.account_type == "expense" and not line.cost_center:
         raise JournalValidationError(_("Las cuentas de gasto requieren centro de costo."))
+
+
+def _validate_journal_line_dimensions(company: str, line: JournalLineInput) -> None:
+    """Validate the company ownership of dimensions attached to a journal line."""
+    if line.bank_account_id:
+        bank_account = database.session.get(BankAccount, line.bank_account_id)
+        if not bank_account or bank_account.company != company:
+            raise JournalValidationError(_("La cuenta bancaria no existe o no pertenece a la compañía del comprobante."))
+    if line.unit:
+        unit = database.session.query(Unit).filter_by(code=line.unit).first()
+        if not unit or unit.entity != company:
+            raise JournalValidationError(_("La unidad no existe o no pertenece a la compañía del comprobante."))
+    if line.project:
+        project = database.session.query(Project).filter_by(code=line.project).first()
+        if not project or project.entity != company:
+            raise JournalValidationError(_("El proyecto no existe o no pertenece a la compañía del comprobante."))
 
 
 def _validate_balanced_lines(

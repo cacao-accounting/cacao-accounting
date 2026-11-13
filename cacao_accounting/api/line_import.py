@@ -23,6 +23,7 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import (
     ARAPOpenItem,
     Accounts,
+    BankAccount,
     Book,
     CompanyParty,
     CostCenter,
@@ -35,6 +36,7 @@ from cacao_accounting.database import (
     Project,
     SalesInvoice,
     UOM,
+    Unit,
     Warehouse,
     database,
 )
@@ -604,8 +606,10 @@ def _enrich_and_validate_master_data(
     _validate_item_reference(row, validated_row, row_no, errors)
     _validate_uom_reference(row, row_no, errors)
     _validate_account_reference(row, validated_row, row_no, company_id, errors)
+    _validate_bank_account_reference(row, validated_row, row_no, company_id, errors)
     _validate_cost_center_reference(row, row_no, company_id, errors)
     _validate_project_reference(row, row_no, company_id, errors)
+    _validate_unit_reference(row, row_no, company_id, errors)
     _validate_warehouse_reference(row, row_no, company_id, errors)
     if row.get("book"):
         _validate_book_reference(row, validated_row, row_no, company_id, errors)
@@ -613,6 +617,30 @@ def _enrich_and_validate_master_data(
         _validate_currency_reference(row, validated_row, row_no, errors)
     _validate_party_reference(row, validated_row, row_no, company_id, errors)
     _validate_open_item_reference(row, validated_row, row_no, company_id, errors)
+
+
+def _validate_bank_account_reference(
+    row: dict[str, Any],
+    validated_row: dict[str, Any],
+    row_no: int,
+    company_id: str,
+    errors: list[dict[str, Any]],
+) -> None:
+    """Validate and canonicalize a bank account reference for its company."""
+    bank_account_id = str(row.get("bank_account") or "").strip()
+    if not bank_account_id:
+        return
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if bank_account is None or bank_account.company != company_id:
+        errors.append(
+            {
+                "row": row_no,
+                "field": "bank_account",
+                "message": _("La cuenta bancaria no existe o no pertenece a la compañía."),
+            }
+        )
+        return
+    validated_row["bank_account"] = str(bank_account.id)
 
 
 def _validate_item_reference(
@@ -680,6 +708,18 @@ def _validate_project_reference(
     """Validate a project reference scoped by company."""
     if row.get("project") and not database.session.query(Project).filter_by(code=row["project"], entity=company_id).first():
         errors.append({"row": row_no, "field": "project", "message": _("El proyecto no existe.")})
+
+
+def _validate_unit_reference(
+    row: dict[str, Any],
+    row_no: int,
+    company_id: str,
+    errors: list[dict[str, Any]],
+) -> None:
+    """Validate a business unit reference scoped by company."""
+    unit = row.get("unit")
+    if unit and not database.session.query(Unit).filter_by(code=unit, entity=company_id).first():
+        errors.append({"row": row_no, "field": "unit", "message": _("La unidad no existe.")})
 
 
 def _validate_warehouse_reference(

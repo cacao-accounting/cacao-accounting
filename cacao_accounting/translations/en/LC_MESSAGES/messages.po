@@ -6111,6 +6111,10 @@ msgstr "The cost center does not exist."
 msgid "El proyecto no existe."
 msgstr "The project does not exist."
 
+#: cacao_accounting/api/line_import.py
+msgid "La unidad no existe."
+msgstr "The business unit does not exist."
+
 #: cacao_accounting/api/line_import.py:689
 msgid "La bodega no existe."
 msgstr "The warehouse does not exist."
@@ -25533,3 +25537,23 @@ msgstr "The reversal line does not match its source GL line."
 #: cacao_accounting/contabilidad/posting_service.py
 msgid "La reversión debe incluir cada libro contable de la línea de origen."
 msgstr "The reversal must include every ledger of the source line."
+
+#: cacao_accounting/api/line_import.py
+msgid "La cuenta bancaria no existe o no pertenece a la compañía."
+msgstr "The bank account does not exist or does not belong to the company."
+
+#: cacao_accounting/contabilidad/journal_service.py cacao_accounting/contabilidad/posting_service.py
+msgid "La cuenta bancaria no existe o no pertenece a la compañía del comprobante."
+msgstr "The bank account does not exist or does not belong to the journal's company."
+
+#: cacao_accounting/document_flow/payment.py
+msgid "La cuenta bancaria debe pertenecer a la compañía del pago."
+msgstr "The bank account must belong to the payment's company."
+
+#: cacao_accounting/contabilidad/journal_service.py cacao_accounting/contabilidad/posting_service.py
+msgid "La unidad no existe o no pertenece a la compañía del comprobante."
+msgstr "The business unit does not exist or does not belong to the journal's company."
+
+#: cacao_accounting/contabilidad/journal_service.py cacao_accounting/contabilidad/posting_service.py
+msgid "El proyecto no existe o no pertenece a la compañía del comprobante."
+msgstr "The project does not exist or does not belong to the journal's company."
