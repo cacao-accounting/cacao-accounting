@@ -17,9 +17,11 @@ from typing import Any
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import (
+    and_,
     CheckConstraint,
     ForeignKeyConstraint,
     Index,
+    or_,
     UniqueConstraint,
     event,
     func,
@@ -5739,55 +5741,6 @@ class PasswordResetToken(database.Model, BaseTabla):  # type: ignore[name-define
     consumed = database.Column(database.Boolean(), nullable=False, default=False)
 
 
-def _item_has_usage(connection, item_code: str) -> bool:
-    """Detecta si un item ya tiene registros transaccionales o de stock."""
-    usage_tables = (
-        StockLedgerEntry.__table__,
-        StockEntryItem.__table__,
-        PurchaseOrderItem.__table__,
-        PurchaseReceiptItem.__table__,
-        PurchaseInvoiceItem.__table__,
-        SalesOrderItem.__table__,
-        DeliveryNoteItem.__table__,
-        SalesInvoiceItem.__table__,
-    )
-    for table in usage_tables:
-        if "item_code" not in table.c:
-            continue
-        statement = select(1).select_from(table).where(table.c.item_code == item_code).limit(1)
-        if connection.execute(statement).first():
-            return True
-    return False
-
-
-def _warehouse_has_usage(connection, warehouse_code: str) -> bool:
-    """Detecta si un almacén ya tiene registros transaccionales o de stock."""
-    usage_checks = [
-        (StockLedgerEntry.__table__, ["warehouse"]),
-        (StockEntry.__table__, ["from_warehouse", "to_warehouse"]),
-        (StockEntryItem.__table__, ["source_warehouse", "target_warehouse"]),
-        (StockBin.__table__, ["warehouse"]),
-        (StockValuationLayer.__table__, ["warehouse"]),
-        (LandedCostAllocation.__table__, ["warehouse"]),
-        (PurchaseOrderItem.__table__, ["warehouse"]),
-        (PurchaseReceiptItem.__table__, ["warehouse"]),
-        (PurchaseInvoiceItem.__table__, ["warehouse"]),
-        (SalesOrderItem.__table__, ["warehouse"]),
-        (DeliveryNoteItem.__table__, ["warehouse"]),
-        (SalesInvoiceItem.__table__, ["warehouse"]),
-        (SerialNumber.__table__, ["warehouse"]),
-        (PurchaseReconciliationItem.__table__, ["warehouse"]),
-    ]
-    for table, cols in usage_checks:
-        for col in cols:
-            if col not in table.c:
-                continue
-            statement = select(1).select_from(table).where(table.c[col] == warehouse_code).limit(1)
-            if connection.execute(statement).first():
-                return True
-    return False
-
-
 def _get_hierarchy_descendants(node_instance, model_class) -> list:
     """Devuelve la lista plana de descendientes de un nodo jerárquico."""
     if not node_instance.id:
@@ -5816,32 +5769,65 @@ def _get_hierarchy_descendants(node_instance, model_class) -> list:
     return res
 
 
-def _party_has_usage(connection, party_id: str) -> bool:
-    """Detecta si un cliente/proveedor ya tiene registros transaccionales."""
-    usage_checks = [
-        (GLEntry.__table__, ["party_id"]),
-        (PurchaseOrder.__table__, ["supplier_id"]),
-        (PurchaseReceipt.__table__, ["supplier_id"]),
-        (PurchaseInvoice.__table__, ["supplier_id"]),
-        (PurchaseQuotation.__table__, ["supplier_id"]),
-        (SupplierQuotation.__table__, ["supplier_id"]),
-        (SalesOrder.__table__, ["customer_id"]),
-        (SalesRequest.__table__, ["customer_id"]),
-        (SalesQuotation.__table__, ["customer_id"]),
-        (DeliveryNote.__table__, ["customer_id"]),
-        (SalesInvoice.__table__, ["customer_id"]),
-        (PaymentEntry.__table__, ["party_id"]),
-        (PaymentReference.__table__, ["party_id"]),
-        (Reconciliation.__table__, ["party_id"]),
-        (ExchangeRevaluationItem.__table__, ["partner_id"]),
-    ]
-    for table, cols in usage_checks:
-        for col in cols:
-            if col not in table.c:
+def _has_restricting_foreign_key_reference(connection, target_column, value: str) -> bool:
+    """Detect persisted rows behind any declared RESTRICT foreign key."""
+    target_table = target_column.table
+    references = []
+    for table in database.metadata.tables.values():
+        for constraint in table.foreign_key_constraints:
+            if (constraint.ondelete or "RESTRICT").upper().replace("_", " ") not in {"RESTRICT", "NO ACTION"}:
                 continue
-            statement = select(1).select_from(table).where(table.c[col] == party_id).limit(1)
-            if connection.execute(statement).first():
-                return True
+
+            elements = list(constraint.elements)
+            if not any(
+                element.column.table is target_table and element.column.name == target_column.name for element in elements
+            ):
+                continue
+
+            if len(elements) == 1:
+                reference_query = select(1).select_from(table).where(elements[0].parent == value)
+            else:
+                target_alias = target_table.alias()
+                join_condition = and_(*(element.parent == target_alias.c[element.column.name] for element in elements))
+                reference_query = (
+                    select(1)
+                    .select_from(table.join(target_alias, join_condition))
+                    .where(target_alias.c[target_column.name] == value)
+                )
+            references.append(reference_query.exists())
+    if not references:
+        return False
+    return connection.execute(select(1).where(or_(*references)).limit(1)).first() is not None
+
+
+def _item_has_usage(connection, item_code: str) -> bool:
+    """Detecta si un item ya tiene registros transaccionales o de stock."""
+    usage_tables = (
+        StockLedgerEntry.__table__,
+        StockEntryItem.__table__,
+        PurchaseOrderItem.__table__,
+        PurchaseReceiptItem.__table__,
+        PurchaseInvoiceItem.__table__,
+        SalesOrderItem.__table__,
+        DeliveryNoteItem.__table__,
+        SalesInvoiceItem.__table__,
+    )
+    for table in usage_tables:
+        if "item_code" not in table.c:
+            continue
+        statement = select(1).select_from(table).where(table.c.item_code == item_code).limit(1)
+        if connection.execute(statement).first():
+            return True
+    return False
+
+
+def _party_has_unconstrained_usage(connection, party_id: str) -> bool:
+    """Detect persisted business references to a party without declared foreign keys."""
+    reference_tables = (PaymentReference.__table__, RecurringJournalItem.__table__)
+    for table in reference_tables:
+        statement = select(1).select_from(table).where(table.c.party_id == party_id).limit(1)
+        if connection.execute(statement).first():
+            return True
     return False
 
 
@@ -5861,7 +5847,7 @@ def _lock_item_delete_after_usage(_mapper, connection, target) -> None:
     """Impide eliminar físicamente un item si ya tiene uso transaccional."""
     from cacao_accounting.exceptions import IntegrityError
 
-    if target.code and _item_has_usage(connection, str(target.code)):
+    if target.code and _has_restricting_foreign_key_reference(connection, Item.__table__.c.code, str(target.code)):
         raise IntegrityError(
             _(
                 "El artículo cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
@@ -5875,7 +5861,7 @@ def _lock_warehouse_delete_after_usage(_mapper, connection, target) -> None:
     """Impide eliminar físicamente una bodega si ya tiene uso transaccional."""
     from cacao_accounting.exceptions import IntegrityError
 
-    if target.code and _warehouse_has_usage(connection, str(target.code)):
+    if target.code and _has_restricting_foreign_key_reference(connection, Warehouse.__table__.c.code, str(target.code)):
         raise IntegrityError(
             _(
                 "La bodega cuenta con transacciones activas en el sistema y no puede ser eliminada físicamente. "
@@ -5889,7 +5875,10 @@ def _lock_party_delete_after_usage(_mapper, connection, target) -> None:
     """Impide eliminar físicamente un tercero (cliente/proveedor) si ya tiene uso transaccional."""
     from cacao_accounting.exceptions import IntegrityError
 
-    if target.id and _party_has_usage(connection, str(target.id)):
+    if target.id and (
+        _has_restricting_foreign_key_reference(connection, Party.__table__.c.id, str(target.id))
+        or _party_has_unconstrained_usage(connection, str(target.id))
+    ):
         raise IntegrityError(
             _(
                 "El cliente/proveedor cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
