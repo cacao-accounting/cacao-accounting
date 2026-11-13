@@ -315,8 +315,20 @@ def _obtener_roles_por_usuario(usuario_id: str) -> list[Roles]:
     )
 
 
-def _obtener_rol(role_id: str) -> Roles | None:
-    """Devuelve un rol por su identificador."""
+def _obtener_rol(role_id: str, *, for_update: bool = False) -> Roles | None:
+    """Devuelve un rol y, si se solicita, bloquea la matriz para reemplazar permisos."""
+    if for_update:
+        if database.engine.dialect.name == "sqlite":
+            # SQLite no implementa FOR UPDATE. Reservar el turno de escritura
+            # antes de leer RolesAccess evita que dos reemplazos compartan snapshot.
+            database.session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            return database.session.execute(
+                database.select(Roles).where(Roles.id == role_id).execution_options(populate_existing=True)
+            ).scalar_one_or_none()
+        statement = (
+            database.select(Roles).where(Roles.id == role_id).with_for_update().execution_options(populate_existing=True)
+        )
+        return database.session.execute(statement).scalar_one_or_none()
     return database.session.get(Roles, role_id)
 
 

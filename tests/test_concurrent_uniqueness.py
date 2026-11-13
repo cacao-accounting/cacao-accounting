@@ -453,6 +453,52 @@ def _exitos_y_errores(resultados: dict) -> tuple[int, int]:
     return len(exitos), len(errores)
 
 
+def test_bloqueo_de_reemplazo_de_permisos_reserva_escritura_en_sqlite():
+    """Dos reemplazos SQLite esperan la reserva de escritura del primer POST."""
+    import threading
+
+    from cacao_accounting.admin.services import _obtener_rol
+    from cacao_accounting.database import Roles
+
+    application = create_app({**_configuracion_base(), "SQLALCHEMY_DATABASE_URI": f"sqlite:///{_ruta_sqlite_temporal()}"})
+    try:
+        with application.app_context():
+            database.create_all()
+            role = Roles(name="Role permissions sqlite lock", note="SQLite lock regression")
+            database.session.add(role)
+            database.session.commit()
+            role_id = role.id
+
+            _obtener_rol(role_id, for_update=True)
+            segundo_intenta = threading.Event()
+            segundo_adquirio = threading.Event()
+            segundo_error: list[Exception] = []
+
+            def _segundo_reemplazo() -> None:
+                try:
+                    with application.app_context():
+                        segundo_intenta.set()
+                        _obtener_rol(role_id, for_update=True)
+                        segundo_adquirio.set()
+                        database.session.rollback()
+                except Exception as exc:  # noqa: BLE001 - el hilo reporta el fallo a la prueba
+                    segundo_error.append(exc)
+
+            thread = threading.Thread(target=_segundo_reemplazo, name="sqlite-role-permissions")
+            thread.start()
+            assert segundo_intenta.wait(5), "el segundo reemplazo no inició"
+            assert not segundo_adquirio.wait(0.25), "SQLite dejó iniciar ambos reemplazos dentro de la misma escritura"
+            database.session.commit()
+            assert segundo_adquirio.wait(5), "el segundo reemplazo no continuó después del commit"
+            thread.join(5)
+            assert not thread.is_alive()
+            assert not segundo_error
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
 # --------------------------------------------------------- caja chica (SQLite)
 
 
@@ -967,6 +1013,78 @@ class TestConcurrenciaPostgreSQL:
             assert len(defaults) == 1
             assert len(status_defaults) == 1
             assert defaults[0].id == status_defaults[0].id
+
+    def test_reemplazo_concurrente_de_permisos_no_combina_matrices(self, pg_app_entidades):
+        """Dos reemplazos simultáneos dejan exactamente una matriz completa."""
+        from flask_login import login_user
+
+        from cacao_accounting.admin.routes import rol_permisos
+        from cacao_accounting.database import Modules, Roles, RolesAccess, User
+
+        application = pg_app_entidades
+        with application.app_context():
+            role = Roles(name="Role permissions concurrency", note="Concurrency regression")
+            module = Modules(module="admin", default=False, enabled=True)
+            database.session.add_all([role, module])
+            database.session.commit()
+            role_id = role.id
+            module_id = module.id
+
+        def _editar(accion: str) -> int:
+            data = {f"perm_{module_id}_{accion}": "on"}
+            with application.test_request_context(f"/settings/roles/{role_id}/permissions", method="POST", data=data):
+                login_user(database.session.get(User, "admin"))
+                response = rol_permisos(role_id)
+                database.session.remove()
+                return response.status_code
+
+        resultados = _ejecutar_en_dos_hilos([lambda: _editar("access"), lambda: _editar("view")])
+
+        assert resultados == {"hilo0": 302, "hilo1": 302}
+        with application.app_context():
+            permisos = list(database.session.execute(database.select(RolesAccess).filter_by(rol_id=role_id)).scalars().all())
+            assert len(permisos) == 1
+            assert (permisos[0].access, permisos[0].view) in {(True, False), (False, True)}
+            database.session.remove()
+
+    def test_bloqueo_de_rol_espera_la_transaccion_anterior_en_postgresql(self, pg_app_entidades):
+        """La segunda sesión solo continúa después del commit que libera el lock."""
+        from threading import Event, Thread
+
+        from cacao_accounting.admin.services import _obtener_rol
+        from cacao_accounting.database import Roles
+
+        application = pg_app_entidades
+        with application.app_context():
+            role = Roles(name="Role permissions lock", note="PostgreSQL lock regression")
+            database.session.add(role)
+            database.session.commit()
+            role_id = role.id
+            _obtener_rol(role_id, for_update=True)
+
+            segundo_intenta = Event()
+            segundo_adquirio = Event()
+            segundo_error: list[Exception] = []
+
+            def _segundo_lock() -> None:
+                try:
+                    with application.app_context():
+                        segundo_intenta.set()
+                        _obtener_rol(role_id, for_update=True)
+                        segundo_adquirio.set()
+                        database.session.rollback()
+                except Exception as exc:  # noqa: BLE001 - el hilo reporta el fallo a la prueba
+                    segundo_error.append(exc)
+
+            thread = Thread(target=_segundo_lock, name="postgres-role-permissions")
+            thread.start()
+            assert segundo_intenta.wait(5), "la segunda sesión no intentó obtener el lock"
+            assert not segundo_adquirio.wait(0.25), "la segunda sesión ignoró el lock retenido"
+            database.session.commit()
+            assert segundo_adquirio.wait(5), "la segunda sesión no continuó después del commit"
+            thread.join(5)
+            assert not thread.is_alive()
+            assert not segundo_error
 
     def test_doble_corrida_concurrente_una_sola_activa(self, pg_app_reval):
         """Dos corridas simultáneas del mismo periodo: una sola queda activa."""

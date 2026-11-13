@@ -1738,7 +1738,9 @@ def _save_rol_permisos(role_id, modulos, acciones, rangos_existentes) -> bool:
 def rol_permisos(role_id: str):
     """Asigna permisos a un rol por módulo."""
     _require_system_admin()
-    rol = _obtener_rol(role_id)
+    # El bloqueo precede a la lectura de RolesAccess para que cada reemplazo
+    # parta de la matriz confirmada por el reemplazo anterior.
+    rol = _obtener_rol(role_id, for_update=request.method == "POST")
     if rol is None:
         flash(_("Rol no encontrado."), "danger")
         return redirect(url_for(LISTA_ROLES))
