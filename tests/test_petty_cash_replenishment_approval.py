@@ -23,6 +23,7 @@ from cacao_accounting.bancos.services import (
     cancel_petty_cash_expense,
     create_default_petty_cash,
     create_petty_cash_replenishment,
+    post_petty_cash_reconciliation_adjustment,
     replenish_petty_cash,
     set_petty_cash_default,
     set_petty_cash_replenishment_status,
@@ -37,15 +38,20 @@ from cacao_accounting.document_identifiers import (
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Accounts,
+    Book,
     CacaoConfig,
+    ComprobanteContable,
+    CostCenter,
     Currency,
     Entity,
+    GLEntry,
     Modules,
     NamingSeries,
     PaymentEntry,
     PettyCashAccount,
     PettyCashExpense,
     PettyCashReplenishment,
+    PettyCashReconciliation,
     Roles,
     RolesAccess,
     RolesUser,
@@ -499,6 +505,156 @@ def test_concurrent_petty_cash_setup_creates_one_default(replenishment_app):
             .all()
         )
         assert len(defaults) == 1
+
+
+def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_app):
+    """Two independent adjustments publish one journal and retain its pointer."""
+    application, ids = replenishment_app
+    with application.app_context():
+        company = ids["company"]
+        fund = database.session.execute(database.select(PettyCashAccount).filter_by(company=company)).scalar_one()
+        accounting_module = database.session.execute(
+            database.select(Modules).filter_by(module="accounting")
+        ).scalar_one_or_none()
+        if accounting_module is None:
+            accounting_module = Modules(module="accounting", default=False, enabled=True)
+            database.session.add(accounting_module)
+            database.session.flush()
+        approver_role = database.session.execute(
+            database.select(Roles).filter_by(name=f"cash-approver-{company}")
+        ).scalar_one()
+        database.session.add(
+            RolesAccess(
+                rol_id=approver_role.id,
+                module_id=accounting_module.id,
+                access=True,
+                create=True,
+                edit=True,
+                approve=True,
+                validate=True,
+            )
+        )
+        expense_account = Accounts(
+            code=f"ADJ-{company}",
+            name="Ajuste de caja",
+            entity=company,
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="expense",
+        )
+        cost_center = CostCenter(code=f"CC-{company}", name="Caja chica", entity=company, active=True, enabled=True)
+        book = Book(
+            entity=company,
+            code=f"B{company[1:9]}",
+            name="Libro principal",
+            status="activo",
+            currency=fund.currency,
+            is_primary=True,
+        )
+        reconciliation = PettyCashReconciliation(
+            company=company,
+            petty_cash_id=fund.id,
+            reconciliation_date=date(2026, 10, 20),
+            posting_date=date(2026, 10, 20),
+            ledger_balance=Decimal("100"),
+            expected_cash=Decimal("100"),
+            counted_cash=Decimal("90"),
+            explained_amount=Decimal("90"),
+            difference=Decimal("-10"),
+            explanation="Diferencia verificada durante el cierre de caja.",
+            status="conciliado",
+            docstatus=1,
+            transaction_currency=fund.currency,
+        )
+        database.session.add_all([expense_account, cost_center, book, reconciliation])
+        database.session.commit()
+        reconciliation_id = reconciliation.id
+        cash_account_id = fund.account_id
+        adjustment_account_id = expense_account.id
+        if database.engine.dialect.name == "sqlite":
+            database.session.connection().exec_driver_sql(
+                "CREATE TRIGGER fail_reconciliation_adjustment "
+                "BEFORE UPDATE OF adjustment_journal_id ON petty_cash_reconciliation "
+                "WHEN NEW.adjustment_journal_id IS NOT NULL "
+                "BEGIN SELECT RAISE(ABORT, 'forced adjustment persistence failure'); END"
+            )
+
+            with pytest.raises(IntegrityError, match="forced adjustment persistence failure"):
+                post_petty_cash_reconciliation_adjustment(
+                    database.session.get(PettyCashReconciliation, reconciliation_id),
+                    adjustment_account_code=f"ADJ-{company}",
+                    cost_center_code=f"CC-{company}",
+                    actor_id=ids["approver_user"],
+                )
+
+            database.session.connection().exec_driver_sql("DROP TRIGGER fail_reconciliation_adjustment")
+            assert database.session.get(PettyCashReconciliation, reconciliation_id).adjustment_journal_id is None
+            assert (
+                database.session.execute(
+                    database.select(ComprobanteContable.id).filter_by(entity=company, voucher_type="journal_entry")
+                ).first()
+                is None
+            )
+            assert (
+                database.session.execute(
+                    database.select(GLEntry.id).filter_by(company=company, voucher_type="journal_entry")
+                ).first()
+                is None
+            )
+            database.session.commit()
+
+    from threading import Barrier
+
+    start = Barrier(2)
+
+    def post_adjustment() -> str:
+        """Run the complete journal posting flow in an independent session."""
+        with application.app_context():
+            try:
+                reconciliation = database.session.get(PettyCashReconciliation, reconciliation_id)
+                assert reconciliation is not None
+                start.wait(timeout=5)
+                try:
+                    journal = post_petty_cash_reconciliation_adjustment(
+                        reconciliation,
+                        adjustment_account_code=f"ADJ-{ids['company']}",
+                        cost_center_code=f"CC-{ids['company']}",
+                        actor_id=ids["approver_user"],
+                    )
+                    return f"posted:{journal.id}"
+                except ValueError as exc:
+                    return f"rejected:{exc}"
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(post_adjustment) for _ in range(2)]
+        results = [future.result(timeout=30) for future in futures]
+
+    assert sum(result.startswith("posted:") for result in results) == 1, results
+    with application.app_context():
+        reconciliation = database.session.get(PettyCashReconciliation, reconciliation_id)
+        assert reconciliation is not None
+        assert reconciliation.adjustment_journal_id
+        journal = database.session.get(ComprobanteContable, reconciliation.adjustment_journal_id)
+        assert journal is not None
+        assert journal.status == "submitted"
+        gl_entries = (
+            database.session.execute(database.select(GLEntry).filter_by(voucher_type="journal_entry", voucher_id=journal.id))
+            .scalars()
+            .all()
+        )
+        assert len(gl_entries) == 2
+        amounts_by_account = {
+            entry.account_id: (Decimal(str(entry.debit)), Decimal(str(entry.credit))) for entry in gl_entries
+        }
+        assert amounts_by_account == {
+            adjustment_account_id: (Decimal("10"), Decimal("0")),
+            cash_account_id: (Decimal("0"), Decimal("10")),
+        }
+        assert sum((Decimal(str(entry.debit)) for entry in gl_entries), Decimal("0")) == Decimal("10")
+        assert sum((Decimal(str(entry.credit)) for entry in gl_entries), Decimal("0")) == Decimal("10")
 
 
 def test_replenishment_cannot_skip_payment_to_reimbursed_status(replenishment_app):

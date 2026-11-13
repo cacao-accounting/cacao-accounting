@@ -1266,7 +1266,10 @@ def _authorize_petty_cash_replenishment(
 def _begin_sqlite_write_transaction() -> None:
     """Reserve SQLite's writer before a serialized cash transition reads state."""
     if database.engine.dialect.name == "sqlite":
-        database.session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+        connection = database.session.connection()
+        raw_connection = connection.connection.driver_connection
+        if raw_connection is not None and not raw_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
 
 
 def reconcile_petty_cash(reconciliation: PettyCashReconciliation, *, actor_id: str | None = None):
@@ -1291,9 +1294,8 @@ def post_petty_cash_reconciliation_adjustment(
     actor_id: str | None = None,
 ) -> ComprobanteContable:
     """Registra explicitamente el sobrante o faltante de una conciliacion."""
+    _begin_sqlite_write_transaction()
     reconciliation = cast(PettyCashReconciliation, _lock_row_for_transition(PettyCashReconciliation, reconciliation.id))
-    # Refresca la fila comprometida para que la guardia vea el estado vivo del otro escritor.
-    database.session.refresh(reconciliation)
     if reconciliation.status != "conciliado":
         raise ValueError(_("La conciliación debe estar conciliada antes de registrar el ajuste."))
     if not reconciliation.difference:
