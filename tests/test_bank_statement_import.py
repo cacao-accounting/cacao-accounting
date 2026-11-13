@@ -35,7 +35,22 @@ def extracto_bancario():
     )
     with application.app_context():
         database.create_all()
-        from cacao_accounting.database import Bank, BankAccount
+        from cacao_accounting.database import Bank, BankAccount, Currency, Entity
+
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
 
         banco = Bank(name="Banco Nacional de Desarrollo", swift_code="BNDENI2N", is_active=True)
         database.session.add(banco)

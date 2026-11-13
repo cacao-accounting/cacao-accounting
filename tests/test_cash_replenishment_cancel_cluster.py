@@ -22,6 +22,7 @@ from cacao_accounting import create_app
 from cacao_accounting.bancos.services import cancel_petty_cash_expense
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    Accounts,
     Book,
     ComprobanteContable,
     Currency,
@@ -52,19 +53,23 @@ def _crear_app():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="cash", default=False, enabled=True),
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
                 User(
                     id="admin",
                     user="admin",
@@ -77,9 +82,20 @@ def _crear_app():
             ]
         )
         database.session.flush()
+        cuenta = Accounts(
+            code="CTA-CAJA",
+            name="Caja principal",
+            entity="cacao",
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="petty_cash",
+        )
+        database.session.add(cuenta)
+        database.session.flush()
         fondo = PettyCashAccount(
             company="cacao",
-            account_id="CTA-CAJA",
+            account_id=cuenta.id,
             name="Caja principal",
             currency="NIO",
             float_amount=Decimal("100"),

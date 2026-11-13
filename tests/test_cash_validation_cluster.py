@@ -72,6 +72,11 @@ def _crear_app():
                     active=True,
                     classification="admin",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Accounts(
                     entity="cacao",
                     code="110501",

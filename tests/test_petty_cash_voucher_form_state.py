@@ -48,7 +48,11 @@ def _crear_app():
             [
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Currency(code="USD", name="Dólar", decimals=2, active=True),
-                Modules(module="cash", default=False, enabled=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Entity(
                     code="cacao",
                     name="Cacao",
@@ -67,6 +71,12 @@ def _crear_app():
                     enabled=True,
                     status="activo",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                Modules(module="cash", default=False, enabled=True),
                 User(
                     id="admin",
                     user="admin",

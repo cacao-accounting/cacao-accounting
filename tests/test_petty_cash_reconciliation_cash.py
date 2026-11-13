@@ -46,16 +46,24 @@ def caja_operando():
             [
                 Modules(module="accounting", default=False, enabled=True),
                 User(id="admin", user="admin", name="Administrador", password=b"x", classification="admin", active=True),
-                Entity(
-                    code="cacao",
-                    name="Cacao Accounting",
-                    company_name="Cacao Accounting SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao Accounting",
+                company_name="Cacao Accounting SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Book(
                     entity="cacao",
                     code="LOCAL",

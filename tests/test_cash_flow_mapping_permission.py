@@ -21,6 +21,7 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Accounts,
     CashFlowAccountMapping,
+    Currency,
     Entity,
     Modules,
     User,
@@ -49,6 +50,7 @@ def efe_cloud():
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Entity(
                     code="alpha",
@@ -58,6 +60,15 @@ def efe_cloud():
                     currency="NIO",
                     enabled=True,
                     status="default",
+                ),
+                Entity(
+                    code="otra",
+                    name="Otra compañía",
+                    company_name="Otra SA",
+                    tax_id="J0002",
+                    currency="NIO",
+                    enabled=True,
+                    status="activo",
                 ),
                 User(
                     id="lector",

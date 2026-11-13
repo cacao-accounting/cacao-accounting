@@ -77,6 +77,11 @@ def detalle_caja():
                     password=proteger_passwd(CONTRASENA),
                     active=True,
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 UserCompanyAccess(user_id="lector", company_code="cacao"),
                 UserCompanyAccess(user_id="editor", company_code="cacao"),
                 Accounts(

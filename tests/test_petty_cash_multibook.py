@@ -39,19 +39,24 @@ def caja_chica_multilibro():
     )
     with application.app_context():
         database.create_all()
-        from cacao_accounting.database import Accounts, Book, Entity, PettyCashAccount
+        from cacao_accounting.database import Accounts, Book, Currency, Entity, PettyCashAccount
 
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao Accounting",
+                company_name="Cacao Accounting SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
         database.session.add_all(
             [
-                Entity(
-                    code="cacao",
-                    name="Cacao Accounting",
-                    company_name="Cacao Accounting SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
                 Book(
                     entity="cacao",
                     code="LOCAL",

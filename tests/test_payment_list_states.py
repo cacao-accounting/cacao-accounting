@@ -18,7 +18,7 @@ from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Entity, Modules, PaymentEntry, User, database
+from cacao_accounting.database import Currency, Entity, Modules, PaymentEntry, User, database
 
 RUTAS_VACIAS = (
     "/cash_management/payment/list",
@@ -51,6 +51,8 @@ def _crear_app(payment_type: str | None = None, cantidad: int = 0):
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="cash", default=False, enabled=True),

@@ -18,6 +18,7 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    Currency,
     Entity,
     Modules,
     PaymentEntry,
@@ -51,6 +52,7 @@ def dashboard_pagos():
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Modules(module="cash", default=False, enabled=True),
                 Entity(

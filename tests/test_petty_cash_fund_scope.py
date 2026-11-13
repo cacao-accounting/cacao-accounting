@@ -25,6 +25,7 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Accounts,
     Book,
+    Currency,
     Entity,
     Modules,
     PettyCashAccount,
@@ -58,6 +59,7 @@ def caja_multicompania():
             [
                 Modules(module="cash", default=False, enabled=True),
                 Modules(module="accounting", default=False, enabled=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Entity(
                     code="alpha",
                     name="Alpha",
@@ -76,8 +78,18 @@ def caja_multicompania():
                     enabled=True,
                     status="activo",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Book(code="ALPHA", name="Libro Alpha", entity="alpha", currency="NIO", status="activo"),
                 Book(code="BETA", name="Libro Beta", entity="beta", currency="NIO", status="activo"),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 User(
                     id="tesorera",
                     user="tesorera",
@@ -85,8 +97,11 @@ def caja_multicompania():
                     password=proteger_passwd(CONTRASENA),
                     active=True,
                 ),
-                UserCompanyAccess(user_id="tesorera", company_code="alpha"),
             ]
+        )
+        database.session.flush()
+        database.session.add(
+            UserCompanyAccess(user_id="tesorera", company_code="alpha"),
         )
         database.session.flush()
         cuentas = {

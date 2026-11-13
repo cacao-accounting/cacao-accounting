@@ -19,6 +19,7 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    Accounts,
     Bank,
     Book,
     BankAccount,
@@ -73,14 +74,30 @@ def _crear_app():
                     classification="admin",
                 ),
                 Bank(name="Banco Uno", is_active=True),
+            ]
+        )
+        database.session.flush()
+        cuenta_contable = Accounts(
+            entity="cacao",
+            code="CTA-CAJA",
+            name="Caja chica",
+            account_type="petty_cash",
+            currency="NIO",
+            active=True,
+            enabled=True,
+            group=False,
+        )
+        database.session.add_all(
+            [
                 Book(code="LIBRO", name="Libro principal", entity="cacao", currency="NIO", status="activo"),
+                cuenta_contable,
             ]
         )
         database.session.flush()
         banco = database.session.execute(database.select(Bank)).scalar_one()
         fondo = PettyCashAccount(
             company="cacao",
-            account_id="CTA-CAJA",
+            account_id=cuenta_contable.id,
             name="Caja principal",
             currency="NIO",
             float_amount=Decimal("100"),
