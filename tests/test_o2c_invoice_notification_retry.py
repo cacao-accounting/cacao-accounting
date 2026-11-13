@@ -12,11 +12,15 @@ from uuid import uuid4
 
 import pytest
 
+
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.api import _send_document_emails
 from cacao_accounting.database import AuditTrail, Currency, EmailQueue, Entity, Party, SalesInvoice, database
 from cacao_accounting.messaging.email import EmailError, retry_email_queue_item
+
+
+pytestmark = pytest.mark.database
 
 
 @pytest.fixture

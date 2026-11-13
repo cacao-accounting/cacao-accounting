@@ -15,6 +15,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.permisos import Permisos
@@ -61,6 +62,9 @@ from cacao_accounting.database import (
 )
 
 PASSWORD = "cash-approval-test-2026"
+
+
+pytestmark = pytest.mark.database
 
 
 @pytest.fixture
@@ -543,7 +547,8 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
             enabled=True,
             account_type="expense",
         )
-        cost_center = CostCenter(code=f"CC-{company}", name="Caja chica", entity=company, active=True, enabled=True)
+        cost_center_code = f"CC{company[1:]}"
+        cost_center = CostCenter(code=cost_center_code, name="Caja chica", entity=company, active=True, enabled=True)
         book = Book(
             entity=company,
             code=f"B{company[1:9]}",
@@ -584,7 +589,7 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
                 post_petty_cash_reconciliation_adjustment(
                     database.session.get(PettyCashReconciliation, reconciliation_id),
                     adjustment_account_code=f"ADJ-{company}",
-                    cost_center_code=f"CC-{company}",
+                    cost_center_code=cost_center_code,
                     actor_id=ids["approver_user"],
                 )
 
@@ -619,7 +624,7 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
                     journal = post_petty_cash_reconciliation_adjustment(
                         reconciliation,
                         adjustment_account_code=f"ADJ-{ids['company']}",
-                        cost_center_code=f"CC-{ids['company']}",
+                        cost_center_code=f"CC{ids['company'][1:]}",
                         actor_id=ids["approver_user"],
                     )
                     return f"posted:{journal.id}"

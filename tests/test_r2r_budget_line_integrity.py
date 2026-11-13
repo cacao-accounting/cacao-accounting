@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import pytest
 
+
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import budget_import_service as budget_import_module
@@ -31,6 +32,9 @@ from cacao_accounting.database import (
     FiscalYear,
     database,
 )
+
+
+pytestmark = pytest.mark.database
 
 
 @pytest.fixture

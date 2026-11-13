@@ -14,6 +14,7 @@ from uuid import uuid4
 import pytest
 from flask import url_for
 
+
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import routes as accounting_routes
@@ -31,6 +32,9 @@ from cacao_accounting.database import (
     User,
     database,
 )
+
+
+pytestmark = pytest.mark.database
 
 
 @pytest.fixture

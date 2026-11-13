@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import pytest
 
+
 from cacao_accounting import create_app
 from cacao_accounting.audit_chain import verify_audit_trail_chain
 from cacao_accounting.config import configuracion
@@ -37,6 +38,9 @@ from cacao_accounting.database import (
     User,
     database,
 )
+
+
+pytestmark = pytest.mark.database
 
 
 @pytest.fixture

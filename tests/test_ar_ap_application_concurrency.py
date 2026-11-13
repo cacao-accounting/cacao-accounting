@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import func, select
 
+
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import arap_ledger_service
@@ -44,6 +45,9 @@ from cacao_accounting.database import (
     User,
     database,
 )
+
+
+pytestmark = pytest.mark.database
 
 
 @pytest.fixture

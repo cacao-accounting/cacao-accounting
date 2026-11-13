@@ -10,10 +10,14 @@ from uuid import uuid4
 
 import pytest
 
+
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import AuditTrail, Currency, EmailQueue, Entity, Party, SalesInvoice, User, database
 from cacao_accounting.messaging.email import retry_email_queue_item
+
+
+pytestmark = pytest.mark.database
 
 
 @pytest.fixture
@@ -44,8 +48,8 @@ def invoice_email_app(tmp_path):
         database.session.add(Currency(code=currency_code, name="Córdoba", decimals=2, active=True, default=True))
         company = Entity(
             code=company_code,
-            name="Empresa de notificación",
-            company_name="Empresa de notificación SA",
+            name=f"Empresa de notificación {suffix}",
+            company_name=f"Empresa de notificación {suffix} SA",
             tax_id=customer_code,
             currency=currency_code,
             enabled=True,

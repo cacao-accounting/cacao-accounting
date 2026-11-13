@@ -8,7 +8,8 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError
+
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -21,6 +22,9 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.imports.adapters.cash_forecast_entry import CashForecastEntryAdapter
+
+
+pytestmark = pytest.mark.database
 
 
 @pytest.fixture
@@ -61,8 +65,8 @@ def test_cash_forecast_import_rejects_unknown_currency_without_orphan(forecast_i
         database.session.add(Currency(code=currency_code, name="Moneda de pronóstico", decimals=2, active=True, default=False))
         company = Entity(
             code=company_code,
-            name="Empresa de pronóstico",
-            company_name="Empresa de pronóstico SA",
+            name=f"Empresa de pronóstico {suffix}",
+            company_name=f"Empresa de pronóstico {suffix} SA",
             tax_id=f"T{suffix}",
             currency=currency_code,
             enabled=True,
@@ -116,7 +120,7 @@ def test_cash_forecast_import_rejects_unknown_currency_without_orphan(forecast_i
         }
         assert adapter.validate_row(invalid_row) == []
         adapter.persist_document(adapter.build_document([invalid_row], context))
-        with pytest.raises(IntegrityError):
+        with pytest.raises(DBAPIError):
             database.session.flush()
         database.session.rollback()
 

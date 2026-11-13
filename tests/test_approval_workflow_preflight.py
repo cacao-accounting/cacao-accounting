@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 
+
 from cacao_accounting import create_app
 from cacao_accounting.approval_preflight import ApprovalWorkflowRequired
 from cacao_accounting.bancos.services import create_petty_cash_expense
@@ -26,6 +27,9 @@ from cacao_accounting.database import (
     PettyCashExpense,
     database,
 )
+
+
+pytestmark = pytest.mark.database
 
 
 @pytest.fixture
