@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 William José Moreno Reyes
 
-"""Business authorization and status invariants for petty cash replenishment."""
+"""Business authorization, reservation and status invariants for petty cash replenishment."""
 
 from __future__ import annotations
 
@@ -19,7 +19,12 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-from cacao_accounting.bancos.services import replenish_petty_cash, set_petty_cash_replenishment_status
+from cacao_accounting.bancos.services import (
+    cancel_petty_cash_expense,
+    create_petty_cash_replenishment,
+    replenish_petty_cash,
+    set_petty_cash_replenishment_status,
+)
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Accounts,
@@ -29,6 +34,7 @@ from cacao_accounting.database import (
     Modules,
     PaymentEntry,
     PettyCashAccount,
+    PettyCashExpense,
     PettyCashReplenishment,
     Roles,
     RolesAccess,
@@ -314,3 +320,126 @@ def test_replenishment_waits_for_sqlite_writer_and_rechecks_committed_status(rep
         replenishment = database.session.get(PettyCashReplenishment, ids["replenishment_by_preparer"])
         assert replenishment is not None
         assert replenishment.status == "reembolsado"
+
+
+def test_replenishment_waits_for_sqlite_writer_and_rechecks_claimed_expense(replenishment_app):
+    """A competing request sees the first reservation after its SQLite transaction commits."""
+    application, ids = replenishment_app
+    with application.app_context():
+        if database.engine.dialect.name != "sqlite":
+            pytest.skip("La intercalación verifica la reserva de escritor específica de SQLite.")
+        fund = database.session.execute(database.select(PettyCashAccount).filter_by(company=ids["company"])).scalar_one()
+        expense = PettyCashExpense(
+            company=ids["company"],
+            petty_cash_id=fund.id,
+            posting_date=date(2026, 10, 19),
+            amount=Decimal("100"),
+            concept="Compra operativa",
+            expense_account_code=f"EXP-{ids['company']}",
+            docstatus=1,
+        )
+        previous_request = PettyCashReplenishment(
+            company=ids["company"],
+            petty_cash_id=fund.id,
+            request_date=date(2026, 10, 20),
+            amount=Decimal("100"),
+            status="borrador",
+            docstatus=0,
+        )
+        database.session.add_all([expense, previous_request])
+        database.session.commit()
+        expense_id = expense.id
+        previous_request_id = previous_request.id
+        fund_id = fund.id
+
+        database.session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+        expense.replenishment_id = previous_request_id
+        database.session.flush()
+        started = Event()
+
+        def competing_request():
+            with application.app_context():
+                stale_expense = database.session.get(PettyCashExpense, expense_id)
+                assert stale_expense is not None
+                assert stale_expense.replenishment_id is None
+                started.set()
+                create_petty_cash_replenishment(
+                    company=ids["company"],
+                    petty_cash_id=fund_id,
+                    expense_ids=[expense_id],
+                    request_date=date(2026, 10, 21),
+                    actor_id=ids["preparer_user"],
+                )
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            request = executor.submit(competing_request)
+            assert started.wait(timeout=5)
+            with pytest.raises(TimeoutError):
+                request.result(timeout=0.1)
+
+            database.session.commit()
+            with pytest.raises(ValueError, match="no estan disponibles"):
+                request.result(timeout=5)
+
+        assert expense.replenishment_id == previous_request_id
+        assert (
+            database.session.execute(
+                database.select(database.func.count(PettyCashReplenishment.id)).filter_by(company=ids["company"])
+            ).scalar_one()
+            == 3
+        )
+
+
+def test_expense_cancellation_waits_for_sqlite_reservation(replenishment_app):
+    """A cancellation that loaded an unreserved expense must see a concurrent claim."""
+    application, ids = replenishment_app
+    with application.app_context():
+        if database.engine.dialect.name != "sqlite":
+            pytest.skip("La intercalación verifica la reserva de escritor específica de SQLite.")
+        fund = database.session.execute(database.select(PettyCashAccount).filter_by(company=ids["company"])).scalar_one()
+        expense = PettyCashExpense(
+            company=ids["company"],
+            petty_cash_id=fund.id,
+            posting_date=date(2026, 10, 19),
+            amount=Decimal("100"),
+            concept="Compra operativa",
+            expense_account_code=f"EXP-{ids['company']}",
+            docstatus=1,
+        )
+        prior_request = PettyCashReplenishment(
+            company=ids["company"],
+            petty_cash_id=fund.id,
+            request_date=date(2026, 10, 20),
+            amount=Decimal("100"),
+            status="borrador",
+            docstatus=0,
+        )
+        database.session.add_all([expense, prior_request])
+        database.session.commit()
+        expense_id = expense.id
+
+        database.session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+        expense.replenishment_id = prior_request.id
+        database.session.flush()
+        started = Event()
+
+        def competing_cancellation():
+            with application.app_context():
+                stale_expense = database.session.get(PettyCashExpense, expense_id)
+                assert stale_expense is not None
+                assert stale_expense.replenishment_id is None
+                started.set()
+                cancel_petty_cash_expense(stale_expense, actor_id=ids["preparer_user"])
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            cancellation = executor.submit(competing_cancellation)
+            assert started.wait(timeout=5)
+            with pytest.raises(TimeoutError):
+                cancellation.result(timeout=0.1)
+
+            database.session.commit()
+            with pytest.raises(ValueError, match="gasto reservado en una reposición"):
+                cancellation.result(timeout=5)
+
+        assert expense.docstatus == 1
+        assert expense.replenishment_id == prior_request.id

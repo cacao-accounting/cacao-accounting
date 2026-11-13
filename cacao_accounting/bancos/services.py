@@ -1043,6 +1043,8 @@ def cancel_petty_cash_expense(
     """Anula un gasto de caja chica, revirtiendo su asiento contable (append-only)."""
     from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
 
+    _begin_sqlite_write_transaction()
+    expense = cast(PettyCashExpense, _lock_row_for_transition(PettyCashExpense, expense.id))
     if expense.docstatus != 1:
         raise ValueError(_("Solo se puede anular un gasto ya posteado."))
     if expense.replenishment_id:
@@ -1067,7 +1069,6 @@ def cancel_petty_cash_expense(
         if journal is not None:
             # RELEASE of an outermost SQLite SAVEPOINT commits immediately.
             # This transaction must also contain the subledger update below.
-            _begin_sqlite_write_transaction()
             cancel_submitted_journal(
                 str(journal.id),
                 user_id=actor_id,
@@ -1389,12 +1390,14 @@ def create_petty_cash_replenishment(
     ids = list(dict.fromkeys(str(item) for item in expense_ids if item))
     if not ids:
         raise ValueError(_("Seleccione al menos un gasto para reponer."))
+    _begin_sqlite_write_transaction()
     expenses = list(
         database.session.execute(
             database.select(PettyCashExpense)
             .filter(PettyCashExpense.id.in_(ids))
             .order_by(PettyCashExpense.id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         ).scalars()
     )
     if len(expenses) != len(ids) or any(
