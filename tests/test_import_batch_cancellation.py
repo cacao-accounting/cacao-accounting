@@ -34,8 +34,10 @@ def importador_operando():
     )
     with application.app_context():
         database.create_all()
-        from cacao_accounting.database import Entity
+        from cacao_accounting.database import Currency, Entity
 
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add(
             Entity(
                 code="cacao",
