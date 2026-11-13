@@ -363,13 +363,56 @@ def _cost_center_descendant_codes(entity: str, center_code: str) -> set[str]:
     while pending:
         current = pending.pop()
         children = database.session.execute(
-            database.select(CostCenter.code).filter(CostCenter.entity == entity, CostCenter.parent == current)
+            database.select(CostCenter.code)
+            .filter(CostCenter.entity == entity, CostCenter.parent == current)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         ).scalars()
         for child_code in children:
             if child_code not in descendants:
                 descendants.add(child_code)
                 pending.append(child_code)
     return descendants
+
+
+def _lock_cost_center_companies(company_codes: Sequence[str]) -> None:
+    """Serialize cost center hierarchy changes in deterministic company order."""
+    from cacao_accounting.database import Entity
+
+    for company_code in sorted(set(code for code in company_codes if code)):
+        database.session.execute(
+            database.select(Entity.code)
+            .where(Entity.code == company_code)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
+
+def _lock_cost_center(entity: str, center_code: str) -> Any | None:
+    """Refresh and lock one cost center before changing its hierarchy role."""
+    from cacao_accounting.database import CostCenter
+
+    _lock_cost_center_companies((entity,))
+    return database.session.execute(
+        database.select(CostCenter)
+        .where(CostCenter.entity == entity, CostCenter.code == center_code)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+
+
+def _cost_center_has_children(entity: str, center_code: str) -> bool:
+    """Check for a current direct child while holding its row lock."""
+    from cacao_accounting.database import CostCenter
+
+    child = database.session.execute(
+        database.select(CostCenter.id)
+        .where(CostCenter.entity == entity, CostCenter.parent == center_code)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+        .limit(1)
+    ).first()
+    return child is not None
 
 
 def _resolve_cost_center_parent(entity: str, parent_ref: str) -> tuple[str, str]:
@@ -403,16 +446,13 @@ def _validate_cost_center_parent(
     *,
     current_code: str | None = None,
 ) -> str | None:
-    from cacao_accounting.database import CostCenter
-
+    _lock_cost_center_companies((entity,))
     if not parent_ref:
         return None
     parent_code, _parent_label = _resolve_cost_center_parent(entity, parent_ref)
     if current_code and parent_code == current_code:
         raise ValueError(_("Un centro de costos no puede ser padre de si mismo."))
-    parent = database.session.execute(
-        database.select(CostCenter).filter(CostCenter.entity == entity, CostCenter.code == parent_code)
-    ).scalar_one_or_none()
+    parent = _lock_cost_center(entity, parent_code)
     if parent is None:
         raise ValueError(_("El centro de costos padre indicado no existe para la entidad seleccionada."))
     if not bool(parent.active) or not bool(parent.enabled):

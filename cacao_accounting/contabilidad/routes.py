@@ -30,6 +30,9 @@ from cacao_accounting.contabilidad.services import (
     _build_account_edit_form,
     _resolve_cost_center_parent,
     _validate_cost_center_parent,
+    _lock_cost_center,
+    _lock_cost_center_companies,
+    _cost_center_has_children,
     _validate_project_creation_form,
     _populate_project_edit_form,
     _validate_project_edit_form,
@@ -1676,6 +1679,11 @@ def editar_centro_costo(id_cc):
     registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalar_one_or_none()
     if registro is None:
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
+    requested_entity = request.form.get("entidad") if request.method == "POST" else None
+    _lock_cost_center_companies((registro.entity, requested_entity or registro.entity))
+    registro = _lock_cost_center(registro.entity, registro.code)
+    if registro is None:
+        return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
     formulario, entity_initial_label, parent_initial_label = _build_cost_center_edit_form(registro)
     TITULO = _("Contabilidad | Editar Centro de Costos") + " - " + APPNAME
@@ -1711,6 +1719,25 @@ def editar_centro_costo(id_cc):
         )
     except ValueError as error:
         flash_error(error)
+        return render_template(
+            _TPL_CENTRO_COSTO_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+    hierarchy_change = entity != registro.entity or (registro.group and not bool(formulario.grupo.data))
+    if hierarchy_change and _cost_center_has_children(registro.entity, registro.code):
+        if entity != registro.entity:
+            hierarchy_error = ValueError(
+                _("No se puede cambiar la compañía de un centro de costos porque tiene centros hijos.")
+            )
+        else:
+            hierarchy_error = ValueError(
+                _("No se puede quitar la condición de grupo porque el centro de costos tiene centros hijos.")
+            )
+        flash_error(hierarchy_error)
         return render_template(
             _TPL_CENTRO_COSTO_CREAR,
             titulo=TITULO,
@@ -1762,6 +1789,12 @@ def eliminar_centro_costo(id_cc):
 
     registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalar_one_or_none()
     if registro:
+        registro = _lock_cost_center(registro.entity, registro.code)
+        if registro is None:
+            return redirect(url_for(CONTABILIDAD_CCOSTOS))
+        if _cost_center_has_children(registro.entity, registro.code):
+            flash_error(ValueError(_("No se puede eliminar el centro de costos porque tiene centros hijos.")))
+            return redirect(url_for(CONTABILIDAD_CCOSTOS))
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
         if _reject_delete_with_dependencies(
