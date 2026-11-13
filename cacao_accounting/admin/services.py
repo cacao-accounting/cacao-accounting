@@ -30,6 +30,7 @@ from cacao_accounting.database import (
     Roles,
     RolesAccess,
     RolesUser,
+    UserCompanyAccess,
     User,
     database,
 )
@@ -40,6 +41,7 @@ from cacao_accounting.exceptions import flash_error
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 from cacao_accounting.i18n import _, _l
+from cacao_accounting.internal_control_service import user_company_access_transition
 
 LISTA_MODULOS = "admin.lista_modulos"
 
@@ -66,6 +68,28 @@ ADMIN_APPROVAL_MATRIX_ENDPOINT = "admin.config_approval_matrix"
 ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT = "admin.config_control_presupuestario"
 
 DEBE_SELECCIONAR_COMPANIA_MSG = "Debe seleccionar una compania."
+
+
+def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
+    """Replace company scope while auditing each revoked assignment."""
+    database.session.execute(database.select(User).where(User.id == user_id).with_for_update()).scalar_one()
+    existing = {
+        assignment.company_code: assignment
+        for assignment in database.session.execute(
+            database.select(UserCompanyAccess).where(UserCompanyAccess.user_id == user_id)
+        ).scalars()
+    }
+    removed = [assignment for code, assignment in existing.items() if code not in company_codes]
+    added = company_codes.difference(existing)
+    if removed:
+        with user_company_access_transition(*removed):
+            for assignment in removed:
+                database.session.delete(assignment)
+            database.session.add_all([UserCompanyAccess(user_id=user_id, company_code=code) for code in added])
+            database.session.commit()
+        return
+    database.session.add_all([UserCompanyAccess(user_id=user_id, company_code=code) for code in added])
+    database.session.commit()
 
 
 def _require_system_admin() -> None:

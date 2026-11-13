@@ -98,6 +98,7 @@ from cacao_accounting.admin.services import (
     _crear_usuario_desde_form,
     _date_form,
     _decimal_form,
+    replace_user_company_access,
     _email_settings_values,
     _handle_approval_matrix_post,
     _obtener_modulos_disponibles,
@@ -1570,14 +1571,7 @@ def usuario_companias(user_id: str):
         )
     if form.validate_on_submit():
         selected = set(form.companies.data or [])
-        for assignment in database.session.execute(
-            database.select(UserCompanyAccess).where(UserCompanyAccess.user_id == usuario.id)
-        ).scalars():
-            database.session.delete(assignment)
-        database.session.add_all(
-            [UserCompanyAccess(user_id=usuario.id, company_code=company_code) for company_code in selected]
-        )
-        database.session.commit()
+        replace_user_company_access(usuario.id, selected)
         flash(_("Compañías actualizadas correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))
     return render_template("admin/usuario_companias.html", form=form, usuario=usuario)

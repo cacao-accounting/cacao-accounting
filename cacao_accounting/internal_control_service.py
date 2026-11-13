@@ -16,12 +16,15 @@ from sqlalchemy.orm import Session, object_session
 from sqlalchemy.sql.dml import Delete, Insert, Update
 
 from cacao_accounting.audit_trail_service import _current_actor, _json_default
-from cacao_accounting.database import AuditTrail, DocBase, database, obtiene_texto_unico
+from cacao_accounting.database import AuditTrail, DocBase, UserCompanyAccess, database, obtiene_texto_unico
 from cacao_accounting.internal_control_sql import raw_sql_mutates_protected_table
 from cacao_accounting.i18n import _
 from cacao_accounting.runtime_mode import is_cloud_mode, is_desktop_mode
 
 _ACTOR: ContextVar[tuple[str | None, str] | None] = ContextVar("icfr_actor", default=None)
+_USER_COMPANY_ACCESS_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
+    "icfr_user_company_access_transition", default=frozenset()
+)
 _APPROVAL_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_approval_transition", default=frozenset())
 _FLOW_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_flow_transition", default=frozenset())
 _BANK_RECONCILIATION_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
@@ -129,6 +132,19 @@ def audit_actor(user_id: str | None, name: str) -> Iterator[None]:
         yield
     finally:
         _ACTOR.reset(token)
+
+
+@contextmanager
+def user_company_access_transition(*assignments: UserCompanyAccess) -> Iterator[None]:
+    """Authorize deletion of specific company-access rows during an audited replacement."""
+    if not assignments or any(not isinstance(row, UserCompanyAccess) or not inspect(row).persistent for row in assignments):
+        raise ValueError("A company-access transition requires persisted UserCompanyAccess rows")
+    allowed = _USER_COMPANY_ACCESS_TRANSITION.get().union(id(row) for row in assignments)
+    token = _USER_COMPANY_ACCESS_TRANSITION.set(frozenset(allowed))
+    try:
+        yield
+    finally:
+        _USER_COMPANY_ACCESS_TRANSITION.reset(token)
 
 
 def current_audit_actor() -> tuple[str | None, str | None]:
@@ -417,7 +433,7 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
         changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
         if table in EVIDENCE_TABLES and (target in session.deleted or changed):
             raise ValueError(_("La evidencia de auditoría es inmutable."))
-        _guard_sensitive_delete(table, target in session.deleted)
+        _guard_sensitive_delete(target, target in session.deleted)
         _guard_flow_evidence(target, table, changed, target in session.deleted)
         _guard_approval_request(target, table, changed, target in session.deleted)
         _guard_authorized_transition(target, table, changed)
@@ -476,10 +492,13 @@ def _guard_approval_request(target: Any, table: str, changed: set[str], deleted:
         raise ValueError(_("La evidencia de auditoría es inmutable."))
 
 
-def _guard_sensitive_delete(table: str, deleted: bool) -> None:
-    """Reject ORM deletion of sensitive records while auditing normal updates."""
-    if deleted and _is_sensitive_table(table):
-        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+def _guard_sensitive_delete(target: Any, deleted: bool) -> None:
+    """Reject sensitive ORM deletion except for an explicit company-access change."""
+    if not deleted or not _is_sensitive_table(target.__table__.name):
+        return
+    if isinstance(target, UserCompanyAccess) and id(target) in _USER_COMPANY_ACCESS_TRANSITION.get():
+        return
+    raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
 
 
 def _guard_authorized_transition(target: Any, table: str, changed: set[str]) -> None:
