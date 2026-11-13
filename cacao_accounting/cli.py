@@ -25,6 +25,7 @@ from sqlalchemy.exc import SQLAlchemyError
 # Recursos locales
 # --------------------------------------------------------------------------------------
 from cacao_accounting.logs import log
+from cacao_accounting.config import env_bool
 from cacao_accounting.version import APPNAME, VERSION
 
 from cacao_accounting.i18n import _
@@ -121,10 +122,15 @@ def _obtener_aplicacion():
 
 def _entorno_actual() -> str:
     """Devuelve el nombre del entorno de ejecución configurado."""
-    if os.environ.get("CACAO_TEST"):
+    if env_bool("CACAO_TEST"):
         return "test"
-    if os.environ.get("FLASK_ENV") == "production":
+    configured_environments = {
+        value.strip().lower() for value in (os.environ.get("FLASK_ENV"), os.environ.get("ENV")) if value
+    }
+    if configured_environments.intersection({"prod", "production"}):
         return "production"
+    if configured_environments.intersection({"test", "testing"}):
+        return "test"
     return "development"
 
 
@@ -167,13 +173,16 @@ def linea_comandos(ctx: click.Context, env: str | None, verbose: bool, quiet: bo
         log.remove()
         log.add(sys.stderr, level="WARNING")
 
-    if env == "test":
+    selected_environment = env or _entorno_actual()
+    if selected_environment == "test":
         os.environ["CACAO_TEST"] = "True"
-    elif env == "prod":
+    elif selected_environment in {"prod", "production"}:
         os.environ["FLASK_ENV"] = "production"
+    elif env == "dev" and not os.environ.get("FLASK_ENV") and not os.environ.get("ENV"):
+        os.environ["FLASK_ENV"] = "development"
 
     ctx.ensure_object(dict)
-    ctx.obj["ENV"] = env or _entorno_actual()
+    ctx.obj["ENV"] = selected_environment
 
     if ctx.invoked_subcommand is None:
         _mostrar_banner()

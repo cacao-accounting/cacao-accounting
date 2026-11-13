@@ -19,6 +19,7 @@ from sqlalchemy.exc import InternalError, InterfaceError, OperationalError, Prog
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import database
+from cacao_accounting.config import env_bool
 from cacao_accounting.logs import log
 
 from cacao_accounting.i18n import _
@@ -514,7 +515,7 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
         ValueError: Si faltan las credenciales y no es entorno de desarrollo.
     """
     environments = {value.strip().lower() for value in (environ.get("FLASK_ENV"), environ.get("ENV")) if value}
-    is_dev = bool(environments) and environments.issubset({"dev", "development"})
+    is_dev = not env_bool("CACAO_TEST") and bool(environments) and environments.issubset({"dev", "development"})
 
     usuario = environ.get("CACAO_USER") or environ.get("ADMIN_USER")
     contrasena = environ.get("CACAO_PSWD") or environ.get("CACAO_PASSWORD") or environ.get("ADMIN_PASSWORD")
