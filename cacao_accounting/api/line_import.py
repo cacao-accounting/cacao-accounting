@@ -127,15 +127,7 @@ def get_open_items() -> ResponseReturnValue:
     company = (request.args.get("company") or "").strip()
     party_type = (request.args.get("party_type") or "").strip().lower()
     party = (request.args.get("party") or "").strip()
-    reference_type = (request.args.get("reference_type") or "").strip()
-    reference_type = {
-        "invoice": "sales_invoice" if party_type == "customer" else "purchase_invoice",
-        "debit_note": "sales_debit_note" if party_type == "customer" else "purchase_debit_note",
-        "credit_note": "sales_credit_note" if party_type == "customer" else "purchase_credit_note",
-        "payment": "payment_entry",
-        "payment_entry": "payment_entry",
-        "journal_entry": "journal_entry",
-    }.get(reference_type, reference_type)
+    reference_type = _normalize_open_item_reference_type((request.args.get("reference_type") or "").strip(), party_type)
     query_text = (request.args.get("q") or "").strip().casefold()
     if not company or party_type not in {"customer", "supplier"} or not party:
         return jsonify({"results": []})
@@ -147,6 +139,25 @@ def get_open_items() -> ResponseReturnValue:
     items = list_cached_open_items(company=company, party_type=party_type, party_id=party)
     if not items:
         items = list_open_items(company=company, party_type=party_type, party_id=party)
+    return jsonify({"results": _filter_open_item_results(items, reference_type, query_text)})
+
+
+def _normalize_open_item_reference_type(reference_type: str, party_type: str) -> str:
+    """Map selector aliases to the document types stored by the ledger."""
+    sales = party_type == "customer"
+    reference_aliases = {
+        "invoice": "sales_invoice" if sales else "purchase_invoice",
+        "debit_note": "sales_debit_note" if sales else "purchase_debit_note",
+        "credit_note": "sales_credit_note" if sales else "purchase_credit_note",
+        "payment": "payment_entry",
+        "payment_entry": "payment_entry",
+        "journal_entry": "journal_entry",
+    }
+    return reference_aliases.get(reference_type, reference_type)
+
+
+def _filter_open_item_results(items: tuple[Any, ...], reference_type: str, query_text: str) -> list[dict[str, Any]]:
+    """Filter open documents and shape the bounded response used by the selector."""
     results = []
     for item in items:
         if reference_type and item.document_type != reference_type:
@@ -170,7 +181,7 @@ def get_open_items() -> ResponseReturnValue:
                 "line_number": item.line_number,
             }
         )
-    return jsonify({"results": results[:100]})
+    return results[:100]
 
 
 def _normalize_header(value: Any) -> str:

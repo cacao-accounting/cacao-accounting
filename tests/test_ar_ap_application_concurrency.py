@@ -46,7 +46,6 @@ from cacao_accounting.database import (
     database,
 )
 
-
 pytestmark = pytest.mark.database
 
 
@@ -436,6 +435,65 @@ def _multi_credit_adjustment_payload(seed, target_open_item_ids: list[str], refe
     }
 
 
+def test_posted_customer_balance_reconciles_and_appears_in_journal_selector(arap_application):
+    """A posted customer balance is visible and consistent in both accounting APIs."""
+    application, seed = arap_application
+    journal_id = _seed_opening_journal(application, seed)
+    with application.app_context():
+        journal = database.session.get(ComprobanteContable, journal_id)
+        assert journal is not None and journal.document_no
+        document_number = journal.document_no
+
+    client = application.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = seed["user_id"]
+        session["_fresh"] = True
+
+    policy_response = client.post(
+        "/api/accounting/arap-reconciliation",
+        json={"company": seed["company"], "mode": "strict", "tolerance": "0.01", "enabled": True},
+    )
+    assert policy_response.status_code == 200, policy_response.get_data(as_text=True)
+    saved_policy = policy_response.get_json()
+    assert saved_policy["company"] == seed["company"]
+    assert saved_policy["mode"] == "strict"
+    assert Decimal(saved_policy["tolerance"]) == Decimal("0.01")
+    assert saved_policy["enabled"] is True
+
+    reconciliation = client.get(
+        "/api/accounting/arap-reconciliation",
+        query_string={"company": seed["company"], "as_of_date": seed["today"].isoformat()},
+    )
+    assert reconciliation.status_code == 200, reconciliation.get_data(as_text=True)
+    reconciliation_body = reconciliation.get_json()
+    assert reconciliation_body["balanced"] is True
+    customer_line = next(
+        line
+        for line in reconciliation_body["lines"]
+        if line["party_type"] == "customer" and line["party_id"] == seed["customer_id"]
+    )
+    assert customer_line["subledger_amount"] == "100.0000"
+    assert customer_line["gl_amount"] == "100.0000"
+    assert customer_line["difference"] == "0.0000"
+
+    open_items = client.get(
+        "/api/line-import/open-items",
+        query_string={
+            "company": seed["company"],
+            "party_type": "customer",
+            "party": seed["customer_id"],
+            "reference_type": "journal_entry",
+            "q": document_number,
+        },
+    )
+    assert open_items.status_code == 200, open_items.get_data(as_text=True)
+    results = open_items.get_json()["results"]
+    assert len(results) == 1
+    assert results[0]["document_id"] == journal_id
+    assert results[0]["label"] == document_number
+    assert results[0]["outstanding"] == "100.0000"
+
+
 @pytest.mark.parametrize("party_type", ["customer", "supplier"])
 def test_payment_applications_cannot_consume_shared_balance_twice(arap_application, monkeypatch, party_type):
     """Two invoices cannot concurrently consume more than one customer's or supplier's payment."""
@@ -458,6 +516,7 @@ def test_payment_applications_cannot_consume_shared_balance_twice(arap_applicati
             payment = database.session.get(PaymentEntry, seed["payment_id"])
             invoice_model = SalesInvoice if party_type == "customer" else PurchaseInvoice
             invoice = database.session.get(invoice_model, invoice_id)
+            assert payment is not None and invoice is not None
             try:
                 post_payment_application_ar_ap(
                     payment,

@@ -1439,8 +1439,6 @@ def api_document_flow_payment_reconciliation_candidates():
 @login_required
 def api_accounting_arap_reconciliation():
     """Diagnostica o configura la política de conciliación continua AR/AP↔GL."""
-    from cacao_accounting.database import ArApReconciliationPolicy, database
-
     company = str(request.args.get("company") or request.args.get("company_id") or "").strip()
     if request.method == "POST":
         payload = request.get_json(silent=True) or {}
@@ -1450,28 +1448,40 @@ def api_accounting_arap_reconciliation():
     exige_acceso_compania("accounting", company, "autorizar" if request.method == "POST" else "consultar")
 
     if request.method == "POST":
-        payload = request.get_json(silent=True) or {}
-        mode = str(payload.get("mode") or "strict").strip().lower()
-        if mode not in {"strict", "warn", "log"}:
-            return jsonify({"error": _("La política debe ser strict, warn o log.")}), 400
-        try:
-            tolerance = Decimal(str(payload.get("tolerance", "0.01")))
-        except Exception:  # noqa: BLE001
-            return jsonify({"error": _("La tolerancia debe ser decimal.")}), 400
-        if not tolerance.is_finite() or tolerance < 0:
-            return jsonify({"error": _("La tolerancia debe ser finita y no negativa.")}), 400
-        row = database.session.execute(
-            database.select(ArApReconciliationPolicy).where(ArApReconciliationPolicy.company == company)
-        ).scalar_one_or_none()
-        if row is None:
-            row = ArApReconciliationPolicy(company=company)
-            database.session.add(row)
-        row.mode = mode
-        row.tolerance = tolerance
-        row.enabled = bool(payload.get("enabled", True))
-        database.session.commit()
-        return jsonify({"company": company, "mode": row.mode, "tolerance": str(row.tolerance), "enabled": row.enabled})
+        return _save_arap_reconciliation_policy(company)
 
+    return _get_arap_reconciliation_status(company)
+
+
+def _save_arap_reconciliation_policy(company: str):
+    """Valida y persiste la política de conciliación recibida por POST."""
+    from cacao_accounting.database import ArApReconciliationPolicy, database
+
+    payload = request.get_json(silent=True) or {}
+    mode = str(payload.get("mode") or "strict").strip().lower()
+    if mode not in {"strict", "warn", "log"}:
+        return jsonify({"error": _("La política debe ser strict, warn o log.")}), 400
+    try:
+        tolerance = Decimal(str(payload.get("tolerance", "0.01")))
+    except Exception:  # noqa: BLE001
+        return jsonify({"error": _("La tolerancia debe ser decimal.")}), 400
+    if not tolerance.is_finite() or tolerance < 0:
+        return jsonify({"error": _("La tolerancia debe ser finita y no negativa.")}), 400
+    row = database.session.execute(
+        database.select(ArApReconciliationPolicy).where(ArApReconciliationPolicy.company == company)
+    ).scalar_one_or_none()
+    if row is None:
+        row = ArApReconciliationPolicy(company=company)
+        database.session.add(row)
+    row.mode = mode
+    row.tolerance = tolerance
+    row.enabled = bool(payload.get("enabled", True))
+    database.session.commit()
+    return jsonify({"company": company, "mode": row.mode, "tolerance": str(row.tolerance), "enabled": row.enabled})
+
+
+def _get_arap_reconciliation_status(company: str):
+    """Obtiene los saldos AR/AP y GL para una compañía y fecha de corte."""
     from cacao_accounting.contabilidad.arap_gl_reconciliation import ARAPGLReconciliationError, reconcile_arap_to_gl
 
     try:

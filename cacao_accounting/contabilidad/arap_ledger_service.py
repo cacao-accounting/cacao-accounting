@@ -656,7 +656,7 @@ def _process_payment_reference(
         _add_book_entry(target_movement, book=book, amount=book_amount, gl_entry=candidates[0] if candidates else None)
     applied = _new_movement(
         document,
-        amount=-payment_sign * _decimal(reference.payment_amount or reference.allocated_amount),
+        amount=-payment_sign * _payment_reference_amount(reference),
         event_type="allocation",
         options=MovementOptions(
             reference_type=str(reference.reference_type),
@@ -665,6 +665,33 @@ def _process_payment_reference(
         ),
     )
     movements.append(applied)
+    _add_payment_reference_book_entries(
+        movement=applied,
+        document=document,
+        reference=reference,
+        payment_currency=payment_currency,
+        payment_date=payment_date,
+        payment_sign=payment_sign,
+    )
+    return movements
+
+
+def _payment_reference_amount(reference: PaymentReference) -> Decimal:
+    """Resolve the payment-currency amount recorded for an allocation."""
+    return _decimal(reference.payment_amount or reference.allocated_amount)
+
+
+def _add_payment_reference_book_entries(
+    *,
+    movement: ARAPLedgerEntry,
+    document: PaymentEntry,
+    reference: PaymentReference,
+    payment_currency: str,
+    payment_date: date,
+    payment_sign: Decimal,
+) -> None:
+    """Add a payment allocation entry in every active book currency."""
+    payment_amount = _payment_reference_amount(reference)
     for book in _active_books(str(document.company)):
         rate = _book_exchange_rate(
             str(document.company),
@@ -674,14 +701,11 @@ def _process_payment_reference(
             _decimal(document.exchange_rate),
         )
         _add_book_entry(
-            applied,
+            movement,
             book=book,
-            amount=(-payment_sign * _decimal(reference.payment_amount or reference.allocated_amount) * rate).quantize(
-                Decimal("0.0001")
-            ),
+            amount=(-payment_sign * payment_amount * rate).quantize(Decimal("0.0001")),
             gl_entry=None,
         )
-    return movements
 
 
 @dataclass(frozen=True)
