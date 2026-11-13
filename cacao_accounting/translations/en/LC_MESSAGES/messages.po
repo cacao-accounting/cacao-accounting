@@ -21187,6 +21187,10 @@ msgstr "Email sending retry is not available in DESKTOP mode."
 msgid "El registro de correo no existe."
 msgstr "The email log does not exist."
 
+#: cacao_accounting/messaging/email.py
+msgid "Solo se pueden reintentar correos pendientes o fallidos."
+msgstr "Only pending or failed emails can be retried."
+
 #: cacao_accounting/messaging/email.py:281
 msgid ""
 "La capacidad de envío de correos electrónicos no está disponible en modo "

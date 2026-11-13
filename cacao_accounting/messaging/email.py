@@ -193,6 +193,8 @@ def retry_email_queue_item(queue_id: str) -> Any:
     item = database.session.get(EmailQueue, queue_id)
     if not item:
         raise EmailError(_("El registro de correo no existe."))
+    if item.status not in {"pending", "failed"}:
+        raise EmailError(_("Solo se pueden reintentar correos pendientes o fallidos."))
 
     item.attempts = (item.attempts or 0) + 1
     try:

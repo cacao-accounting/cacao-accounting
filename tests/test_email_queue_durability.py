@@ -10,12 +10,14 @@ trazabilidad y permitía reenvíos ciegos.
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
 from cacao_accounting.api import _send_document_emails
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import EmailQueue, database
+from cacao_accounting.messaging.email import EmailError, retry_email_queue_item
 
 
 def _crear_app():
@@ -124,6 +126,76 @@ def test_si_falla_el_commit_posterior_queda_evidencia_pendiente(monkeypatch):
             assert len(filas) == 1
             assert filas[0].status == "pending"
             assert filas[0].document_id == "INV-3"
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_no_reintenta_un_correo_ya_enviado(monkeypatch):
+    """A direct retry request cannot resend a terminal sent queue item."""
+    application = _crear_app()
+    try:
+
+        def envio_inesperado(**_kwargs):
+            pytest.fail("A sent email must not reach the transport again.")
+
+        monkeypatch.setattr("cacao_accounting.messaging.email.send_email", envio_inesperado)
+        with application.app_context():
+            item = EmailQueue(
+                recipient="sent@example.com",
+                subject="Notificación",
+                body="Mensaje original",
+                status="sent",
+                attempts=1,
+            )
+            database.session.add(item)
+            database.session.commit()
+            queue_id = item.id
+
+            with pytest.raises(EmailError):
+                retry_email_queue_item(queue_id)
+
+            database.session.expire_all()
+            unchanged = database.session.get(EmailQueue, queue_id)
+            assert unchanged is not None
+            assert unchanged.status == "sent"
+            assert unchanged.attempts == 1
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+@pytest.mark.parametrize("status", ["pending", "failed"])
+def test_reintenta_correos_pendientes_y_fallidos(monkeypatch, status):
+    """Only the explicitly eligible queue states can reach the SMTP transport."""
+    application = _crear_app()
+    try:
+        enviados = []
+        monkeypatch.setattr(
+            "cacao_accounting.messaging.email.send_email",
+            lambda **kwargs: enviados.append(kwargs["to_email"]),
+        )
+        with application.app_context():
+            item = EmailQueue(
+                recipient=f"{status}@example.com",
+                subject="Notificación",
+                body="Mensaje original",
+                status=status,
+                attempts=1,
+                error_message="Fallo previo" if status == "failed" else None,
+            )
+            database.session.add(item)
+            database.session.commit()
+            queue_id = item.id
+
+            reintentado = retry_email_queue_item(queue_id)
+
+            assert enviados == [f"{status}@example.com"]
+            assert reintentado.status == "sent"
+            assert reintentado.attempts == 2
+            assert reintentado.error_message is None
     finally:
         with application.app_context():
             database.session.remove()
