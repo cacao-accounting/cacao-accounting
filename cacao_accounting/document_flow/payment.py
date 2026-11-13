@@ -2043,7 +2043,7 @@ def _apply_payment_target_line(
     outstanding = compute_outstanding_amount(invoice)
     _validate_payment_target_allocation(allocated, outstanding)
     _persist_payment_target_allocation(payment, reference_type, reference_id, invoice, allocated, outstanding, effective_rate)
-    return allocated
+    return (allocated * effective_rate).quantize(Decimal("0.0001"))
 
 
 def _validate_payment_target_allocation(allocated: Decimal, outstanding: Decimal) -> None:
@@ -2064,18 +2064,36 @@ def _persist_payment_target_allocation(
     exchange_rate: Decimal = Decimal("1"),
 ) -> None:
     """Persist the payment reference and document relation for an allocation."""
+    document_currency = _document_transaction_currency(invoice) or getattr(payment, "currency", None)
+    payment_currency = getattr(payment, "currency", None) or document_currency
+    payment_amount = (allocated * exchange_rate).quantize(Decimal("0.0001"))
+    document_rate = _document_exchange_rate(invoice)
+    payment_rate = _document_exchange_rate(payment)
+    base_allocated_amount = (allocated * document_rate).quantize(Decimal("0.0001"))
+    base_payment_amount = (payment_amount * payment_rate).quantize(Decimal("0.0001"))
     reference = PaymentReference(
         payment_id=payment.id,
-        reference_type=reference_type,
+        reference_type=_payment_candidate_physical_type(reference_type),
+        flow_source_type=reference_type,
         reference_id=reference_id,
+        reference_document_no=getattr(invoice, "document_no", None) or reference_id,
+        reference_date=_payment_candidate_date(invoice),
+        party_type=payment.party_type,
+        party_id=payment.party_id,
+        company=getattr(payment, "company", None),
+        currency=document_currency,
         total_amount=getattr(invoice, "grand_total", None),
         outstanding_amount=outstanding,
+        outstanding_amount_after=outstanding - allocated,
         allocated_amount=allocated,
-        payment_currency=getattr(payment, "currency", None),
-        payment_amount=allocated * exchange_rate,
+        payment_currency=payment_currency,
+        payment_amount=payment_amount,
         payment_exchange_rate=exchange_rate,
+        base_allocated_amount=base_allocated_amount,
+        base_payment_amount=base_payment_amount,
+        fx_difference_amount=base_allocated_amount - base_payment_amount,
         allocation_date=payment.posting_date,
-        exchange_rate=getattr(payment, "exchange_rate", None),
+        exchange_rate=document_rate,
         discount_amount=getattr(payment, "discount_amount", None),
         gain_loss_amount=getattr(payment, "gain_loss_amount", None),
         difference_amount=None,
@@ -2105,7 +2123,7 @@ def _persist_payment_target_allocation(
             payment,
             invoice,
             document_amount=allocated,
-            payment_amount=allocated * exchange_rate,
+            payment_amount=payment_amount,
             allocation_date=getattr(payment, "posting_date", None) or date.today(),
             reference_type=reference_type,
         )
