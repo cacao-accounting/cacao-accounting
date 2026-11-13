@@ -569,35 +569,46 @@ def items_plantilla_impuesto(template_id: str):
 
 def _tax_rule_form_state(rule: Any, form: Any) -> SimpleNamespace:
     """Reconstruye una regla fiscal con los valores enviados para el re-render."""
+    defaults = {
+        "name": "",
+        "company": "",
+        "concept": "",
+        "applies_to": "both",
+        "level": "transaction",
+        "tax_type": "tax",
+        "calculation_method": "percentage",
+        "rate": "0",
+        "amount": "0",
+        "base_mode": "goods",
+        "include_concepts": "",
+        "exclude_concepts": "",
+        "sequence": "10",
+        "accounting_treatment": "separate_tax_account",
+        "recognition_event": "invoice",
+        "account_id": "",
+        "currency": "",
+        "country": "",
+        "valid_from": None,
+        "valid_to": None,
+        "allocation_method": "",
+    }
+    values = {field: form.get(field) or default for field, default in defaults.items()}
+    values.update(
+        {
+            field: form.get(field) is not None
+            for field in (
+                "affects_inventory",
+                "affects_cost",
+                "affects_document_total",
+                "affects_settlement",
+                "participates_in_next_base",
+                "is_active",
+            )
+        }
+    )
     return SimpleNamespace(
         id=getattr(rule, "id", None),
-        name=form.get("name") or "",
-        company=form.get("company") or "",
-        concept=form.get("concept") or "",
-        applies_to=form.get("applies_to") or "both",
-        level=form.get("level") or "transaction",
-        tax_type=form.get("tax_type") or "tax",
-        calculation_method=form.get("calculation_method") or "percentage",
-        rate=form.get("rate") or "0",
-        amount=form.get("amount") or "0",
-        base_mode=form.get("base_mode") or "goods",
-        include_concepts=form.get("include_concepts") or "",
-        exclude_concepts=form.get("exclude_concepts") or "",
-        sequence=form.get("sequence") or "10",
-        accounting_treatment=form.get("accounting_treatment") or "separate_tax_account",
-        recognition_event=form.get("recognition_event") or "invoice",
-        account_id=form.get("account_id") or "",
-        currency=form.get("currency") or "",
-        country=form.get("country") or "",
-        valid_from=form.get("valid_from") or None,
-        valid_to=form.get("valid_to") or None,
-        allocation_method=form.get("allocation_method") or "",
-        affects_inventory=form.get("affects_inventory") is not None,
-        affects_cost=form.get("affects_cost") is not None,
-        affects_document_total=form.get("affects_document_total") is not None,
-        affects_settlement=form.get("affects_settlement") is not None,
-        participates_in_next_base=form.get("participates_in_next_base") is not None,
-        is_active=form.get("is_active") is not None,
+        **values,
     )
 
 
