@@ -1382,53 +1382,68 @@ def caja_chica_gasto_nuevo():
     fondos = _obtener_fondos_compania()
     formulario.petty_cash_id.choices = [(f.id, f"{f.company} - {f.name}") for f in fondos]
     voucher_id = request.args.get("voucher_id") or request.form.get("voucher_id") or ""
-    voucher = database.session.get(PettyCashVoucher, voucher_id) if voucher_id else None
-    if voucher:
-        # El vale precargado aporta datos del beneficiario y del importe; su
-        # compañía y fondo deben pertenecer al alcance antes de copiarlos.
-        exige_acceso_compania("cash", voucher.company or "", "crear")
-        if voucher.petty_cash_id not in {fondo.id for fondo in fondos}:
-            abort(403)
+    voucher = _voucher_for_expense_form(voucher_id, fondos)
     if voucher and request.method == "GET":
-        formulario.company.data = voucher.company
-        formulario.petty_cash_id.data = voucher.petty_cash_id
-        formulario.voucher_id.data = voucher.id
-        formulario.beneficiary.data = voucher.delivered_to
-        formulario.concept.data = voucher.concept
-        formulario.amount.data = str(voucher.amount)
-        formulario.cost_center_code.data = voucher.cost_center_code
+        _prefill_expense_form_from_voucher(formulario, voucher)
     titulo = _("Nuevo Gasto de Caja Chica") + " - " + APPNAME
 
     if formulario.validate_on_submit() or request.method == "POST":
-        company = request.form.get("company")
-        petty_cash_id = request.form.get("petty_cash_id")
-        if not company or not petty_cash_id:
-            flash(_("Seleccione la compañía y la caja chica."), "danger")
-            return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
-        exige_acceso_compania("cash", company, "crear")
-        try:
-            create_petty_cash_expense(
-                company=company,
-                petty_cash_id=petty_cash_id,
-                expense_account_code=request.form.get("expense_account_code") or "",
-                concept=request.form.get("concept") or "",
-                amount=_form_decimal("amount", "0"),
-                cost_center_code=request.form.get("cost_center_code") or "",
-                beneficiary=request.form.get("beneficiary") or None,
-                unit_code=request.form.get("unit_code") or None,
-                project_code=request.form.get("project_code") or None,
-                posted_date=date.fromisoformat(request.form.get("posting_date") or date.today().isoformat()),
-                voucher_id=request.form.get("voucher_id") or None,
-                remarks=request.form.get("remarks") or None,
-                actor_id=str(current_user.id),
-            )
-        except ValueError as exc:
-            flash(_(str(exc)), "danger")
-            return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
-        flash(_("Gasto de caja chica registrado y contabilizado."), "success")
-        return redirect(url_for("bancos.caja_chica_gasto_lista"))
+        return _submit_petty_cash_expense_form(formulario, fondos, titulo)
 
     return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
+
+
+def _voucher_for_expense_form(voucher_id, funds):
+    """Load a voucher only when its company and fund are visible to the user."""
+    voucher = database.session.get(PettyCashVoucher, voucher_id) if voucher_id else None
+    if voucher is None:
+        return None
+    exige_acceso_compania("cash", voucher.company or "", "crear")
+    if voucher.petty_cash_id not in {fund.id for fund in funds}:
+        abort(403)
+    return voucher
+
+
+def _prefill_expense_form_from_voucher(formulario, voucher) -> None:
+    """Copy authorized voucher values into the new expense form."""
+    formulario.company.data = voucher.company
+    formulario.petty_cash_id.data = voucher.petty_cash_id
+    formulario.voucher_id.data = voucher.id
+    formulario.beneficiary.data = voucher.delivered_to
+    formulario.concept.data = voucher.concept
+    formulario.amount.data = str(voucher.amount)
+    formulario.cost_center_code.data = voucher.cost_center_code
+
+
+def _submit_petty_cash_expense_form(formulario, funds, title):
+    """Validate company scope and submit the expense form to the posting service."""
+    company = request.form.get("company")
+    petty_cash_id = request.form.get("petty_cash_id")
+    if not company or not petty_cash_id:
+        flash(_("Seleccione la compañía y la caja chica."), "danger")
+        return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=funds, titulo=title)
+    exige_acceso_compania("cash", company, "crear")
+    try:
+        create_petty_cash_expense(
+            company=company,
+            petty_cash_id=petty_cash_id,
+            expense_account_code=request.form.get("expense_account_code") or "",
+            concept=request.form.get("concept") or "",
+            amount=_form_decimal("amount", "0"),
+            cost_center_code=request.form.get("cost_center_code") or "",
+            beneficiary=request.form.get("beneficiary") or None,
+            unit_code=request.form.get("unit_code") or None,
+            project_code=request.form.get("project_code") or None,
+            posted_date=date.fromisoformat(request.form.get("posting_date") or date.today().isoformat()),
+            voucher_id=request.form.get("voucher_id") or None,
+            remarks=request.form.get("remarks") or None,
+            actor_id=str(current_user.id),
+        )
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+        return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=funds, titulo=title)
+    flash(_("Gasto de caja chica registrado y contabilizado."), "success")
+    return redirect(url_for("bancos.caja_chica_gasto_lista"))
 
 
 @bancos.route("/petty-cash-reconciliation/list")

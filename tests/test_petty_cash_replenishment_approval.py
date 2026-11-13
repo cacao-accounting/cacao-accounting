@@ -24,10 +24,12 @@ from cacao_accounting.bancos.services import (
     cancel_petty_cash_expense,
     create_default_petty_cash,
     create_petty_cash_replenishment,
+    create_petty_cash_voucher,
     post_petty_cash_reconciliation_adjustment,
     replenish_petty_cash,
     set_petty_cash_default,
     set_petty_cash_replenishment_status,
+    set_petty_cash_voucher_status,
 )
 from cacao_accounting.document_identifiers import (
     IdentifierConfigurationError,
@@ -39,12 +41,14 @@ from cacao_accounting.document_identifiers import (
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Accounts,
+    AccountingPeriod,
     Book,
     CacaoConfig,
     ComprobanteContable,
     CostCenter,
     Currency,
     Entity,
+    FiscalYear,
     GLEntry,
     Modules,
     NamingSeries,
@@ -53,6 +57,7 @@ from cacao_accounting.database import (
     PettyCashExpense,
     PettyCashReplenishment,
     PettyCashReconciliation,
+    PettyCashVoucher,
     Roles,
     RolesAccess,
     RolesUser,
@@ -272,6 +277,168 @@ def test_replenishment_approval_requires_authority_and_different_actor(replenish
         )
         assert approved.status == "aprobado"
         assert approved.approved_by == ids["approver_user"]
+
+
+def test_delivered_voucher_form_posts_expense_and_reconciles_gl(replenishment_app):
+    """Liquidating a delivered voucher through the form creates one balanced expense."""
+    application, ids = replenishment_app
+    company = ids["company"]
+    expense_code = f"EX{company[1:]}"
+    cost_center_code = f"C{company[1:]}"
+    posting_date = date(2026, 10, 20)
+
+    with application.app_context():
+        fund = database.session.execute(database.select(PettyCashAccount).filter_by(company=company)).scalar_one()
+        accounting_module = database.session.execute(
+            database.select(Modules).filter_by(module="accounting")
+        ).scalar_one_or_none()
+        if accounting_module is None:
+            accounting_module = Modules(module="accounting", default=True, enabled=True)
+            database.session.add(accounting_module)
+            database.session.flush()
+        accounting_module.enabled = True
+
+        editor_role = database.session.execute(database.select(Roles).filter_by(name=f"cash-editor-{company}")).scalar_one()
+        cash_module_id = obtener_id_modulo_por_nombre("cash")
+        cash_access = database.session.execute(
+            database.select(RolesAccess).filter_by(rol_id=editor_role.id, module_id=cash_module_id)
+        ).scalar_one()
+        cash_access.create = True
+        cash_access.view = True
+        accounting_access = database.session.execute(
+            database.select(RolesAccess).filter_by(rol_id=editor_role.id, module_id=accounting_module.id)
+        ).scalar_one_or_none()
+        if accounting_access is None:
+            database.session.add(
+                RolesAccess(
+                    rol_id=editor_role.id,
+                    module_id=accounting_module.id,
+                    access=True,
+                    create=True,
+                    approve=True,
+                )
+            )
+        else:
+            accounting_access.access = True
+            accounting_access.create = True
+            accounting_access.approve = True
+
+        database.session.add_all(
+            [
+                Accounts(
+                    code=expense_code,
+                    name="Suministros de oficina",
+                    entity=company,
+                    group=False,
+                    active=True,
+                    enabled=True,
+                    classification="expense",
+                    account_type="expense",
+                ),
+                CostCenter(
+                    code=cost_center_code,
+                    name="Administración",
+                    entity=company,
+                    active=True,
+                    enabled=True,
+                ),
+                Book(
+                    entity=company,
+                    code=f"B{company[1:9]}",
+                    name="Libro principal de gastos",
+                    status="activo",
+                    currency=fund.currency,
+                    is_primary=True,
+                ),
+            ]
+        )
+        fiscal_year = FiscalYear(
+            entity=company,
+            name="2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+        )
+        database.session.add(fiscal_year)
+        database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                entity=company,
+                fiscal_year_id=fiscal_year.id,
+                name="Octubre 2026",
+                status="open",
+                enabled=True,
+                is_closed=False,
+                start=date(2026, 10, 1),
+                end=date(2026, 10, 31),
+            )
+        )
+        database.session.commit()
+
+        voucher = create_petty_cash_voucher(
+            company=company,
+            petty_cash_id=fund.id,
+            posted_date=posting_date,
+            delivered_to="María Pérez",
+            concept="Compra de útiles de oficina",
+            amount=Decimal("75.00"),
+            cost_center_code=cost_center_code,
+        )
+        set_petty_cash_voucher_status(voucher, "entregado")
+        voucher_id = voucher.id
+        fund_id = fund.id
+        cash_permissions = Permisos(cash_module_id, ids["editor_user"])
+        assert cash_permissions.crear is True
+        assert cash_permissions.tiene_acceso_compania(company) is True
+
+    client = _authenticated_client(application, ids["editor_user"])
+    form_response = client.get(f"/cash_management/petty-cash-expense/new?voucher_id={voucher_id}")
+    assert form_response.status_code == 200, form_response.get_data(as_text=True)
+    form_html = form_response.get_data(as_text=True)
+    assert "Compra de útiles de oficina" in form_html
+    assert "María Pérez" in form_html
+    assert "75.00" in form_html
+
+    response = client.post(
+        "/cash_management/petty-cash-expense/new",
+        data={
+            "company": company,
+            "petty_cash_id": fund_id,
+            "voucher_id": voucher_id,
+            "posting_date": posting_date.isoformat(),
+            "beneficiary": "María Pérez",
+            "concept": "Compra de útiles de oficina",
+            "expense_account_code": expense_code,
+            "amount": "75.00",
+            "cost_center_code": cost_center_code,
+        },
+    )
+    assert response.status_code == 302, response.get_data(as_text=True)
+
+    with application.app_context():
+        voucher = database.session.get(PettyCashVoucher, voucher_id)
+        assert voucher is not None and voucher.voucher_status == "liquidado"
+        expense = database.session.execute(database.select(PettyCashExpense).filter_by(voucher_id=voucher_id)).scalar_one()
+        assert expense.docstatus == 1
+        assert expense.amount == Decimal("75.0000")
+        journal = database.session.get(ComprobanteContable, expense.journal_id)
+        assert journal is not None and journal.status == "submitted"
+        entries = (
+            database.session.execute(
+                database.select(GLEntry)
+                .filter_by(company=company, voucher_type="journal_entry", voucher_id=journal.id)
+                .where(GLEntry.is_cancelled.is_(False))
+            )
+            .scalars()
+            .all()
+        )
+        assert len(entries) == 2
+        assert sum((entry.debit for entry in entries), Decimal("0")) == Decimal("75.0000")
+        assert sum((entry.credit for entry in entries), Decimal("0")) == Decimal("75.0000")
+        assert {(entry.account_code, entry.debit, entry.credit) for entry in entries} == {
+            (expense_code, Decimal("75.0000"), Decimal("0.0000")),
+            (f"PC-{company}", Decimal("0.0000"), Decimal("75.0000")),
+        }
 
 
 def test_concurrent_default_selection_keeps_one_fund(replenishment_app):

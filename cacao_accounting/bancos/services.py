@@ -927,28 +927,16 @@ def create_petty_cash_expense(
 
         posted_date = _date.today()
     fund = _validate_petty_cash_fund(petty_cash_id, company)
-    if not concept.strip():
-        raise ValueError(_("El concepto del gasto es obligatorio."))
-    if amount is None or amount <= 0:
-        raise ValueError(_("El importe del gasto debe ser mayor a cero."))
-    if not cost_center_code:
-        raise ValueError(_("El gasto de caja chica requiere un centro de costo."))
-    _validate_petty_cash_dimensions(company, cost_center_code, unit_code, project_code)
-
-    _validate_petty_cash_expense_account(company, expense_account_code)
-    voucher = None
-    if voucher_id:
-        try:
-            voucher = cast(PettyCashVoucher, _lock_row_for_transition(PettyCashVoucher, voucher_id))
-            if voucher.company != company or voucher.petty_cash_id != petty_cash_id:
-                raise ValueError(_("El vale origen no pertenece a la caja chica seleccionada."))
-            if voucher.voucher_status != "entregado" or voucher.expense_id:
-                raise ValueError(_("El vale origen no esta disponible para liquidarse."))
-            if amount != voucher.amount:
-                raise ValueError(_("El importe del gasto debe coincidir con el importe del vale."))
-        except Exception:
-            database.session.rollback()
-            raise
+    _validate_petty_cash_expense_request(
+        company=company,
+        expense_account_code=expense_account_code,
+        concept=concept,
+        amount=amount,
+        cost_center_code=cost_center_code,
+        unit_code=unit_code,
+        project_code=project_code,
+    )
+    voucher = _lock_and_validate_petty_cash_voucher(voucher_id, company, petty_cash_id, amount)
 
     try:
         journal = post_petty_cash_expense_journal(
@@ -992,8 +980,7 @@ def create_petty_cash_expense(
             )
         except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
             pass
-        if voucher_id:
-            assert voucher is not None
+        if voucher is not None:
             voucher.voucher_status = "liquidado"
             voucher.expense_id = expense.id
         database.session.commit()
@@ -1001,6 +988,47 @@ def create_petty_cash_expense(
         database.session.rollback()
         raise
     return expense
+
+
+def _validate_petty_cash_expense_request(
+    *,
+    company: str,
+    expense_account_code: str,
+    concept: str,
+    amount: Decimal,
+    cost_center_code: str,
+    unit_code: str | None,
+    project_code: str | None,
+) -> None:
+    """Validate required expense fields, company dimensions, and posting account."""
+    if not concept.strip():
+        raise ValueError(_("El concepto del gasto es obligatorio."))
+    if amount is None or amount <= 0:
+        raise ValueError(_("El importe del gasto debe ser mayor a cero."))
+    if not cost_center_code:
+        raise ValueError(_("El gasto de caja chica requiere un centro de costo."))
+    _validate_petty_cash_dimensions(company, cost_center_code, unit_code, project_code)
+    _validate_petty_cash_expense_account(company, expense_account_code)
+
+
+def _lock_and_validate_petty_cash_voucher(
+    voucher_id: str | None, company: str, petty_cash_id: str, amount: Decimal
+) -> PettyCashVoucher | None:
+    """Lock a voucher and ensure it can settle exactly this petty cash expense."""
+    if not voucher_id:
+        return None
+    try:
+        voucher = cast(PettyCashVoucher, _lock_row_for_transition(PettyCashVoucher, voucher_id))
+        if voucher.company != company or voucher.petty_cash_id != petty_cash_id:
+            raise ValueError(_("El vale origen no pertenece a la caja chica seleccionada."))
+        if voucher.voucher_status != "entregado" or voucher.expense_id:
+            raise ValueError(_("El vale origen no esta disponible para liquidarse."))
+        if amount != voucher.amount:
+            raise ValueError(_("El importe del gasto debe coincidir con el importe del vale."))
+        return voucher
+    except Exception:
+        database.session.rollback()
+        raise
 
 
 def create_petty_cash_expense_from_voucher(
