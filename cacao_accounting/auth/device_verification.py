@@ -333,13 +333,13 @@ def validar_token_recuperacion(token: str, consumir: bool = True) -> User | None
     return user
 
 
-def enviar_otp_por_email(user: User, code: str) -> None:
-    """Envía un correo con el código OTP de verificación."""
+def enviar_otp_por_email(user: User, code: str) -> bool:
+    """Envía un código OTP y reporta si el servidor aceptó la entrega."""
     from cacao_accounting.messaging.email import EmailError, send_email
 
     if not user.e_mail:
         log.warning("User %s has no email configured", user.user)
-        return
+        return False
     body = (
         f"{_('Hola')} {user.name or user.user},\n\n"
         f"{_('Se detectó un intento de inicio de sesión desde un navegador no reconocido.')}\n\n"
@@ -356,6 +356,8 @@ def enviar_otp_por_email(user: User, code: str) -> None:
         )
     except EmailError as exc:
         log.error("Error sending OTP to %s: %s", user.e_mail, exc)
+        return False
+    return True
 
 
 def enviar_token_recuperacion_email(user: User, token: str) -> bool:

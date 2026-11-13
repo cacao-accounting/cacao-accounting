@@ -66,14 +66,60 @@ def validar_acceso(usuario, clave) -> bool:
     return helpers.validar_acceso(usuario, clave)
 
 
-def _session_security_is_active() -> bool:
-    """Return True when origin protection is enabled and SMTP is ready."""
-    from cacao_accounting.admin.session_security_service import (
-        is_session_security_enabled,
-        smtp_is_configured,
-    )
+def _session_security_is_enabled() -> bool:
+    """Return whether origin protection is persistently enabled."""
+    from cacao_accounting.admin.session_security_service import is_session_security_enabled
 
-    return is_session_security_enabled() and smtp_is_configured()
+    return is_session_security_enabled()
+
+
+def _handle_session_security_login(identidad: User) -> ResponseReturnValue:
+    """Authenticate a known device or complete a new device's OTP challenge."""
+    from cacao_accounting.auth.device_verification import usuario_tiene_email
+    from cacao_accounting.admin.session_security_service import smtp_is_configured, usuario_actual_ip
+
+    if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+        flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."))
+        return INICIO_SESION
+
+    device_token = request.cookies.get("__Secure-device-id") or request.cookies.get("device-id")
+    from cacao_accounting.auth.device_verification import verificar_cookie_dispositivo
+
+    if device_token and verificar_cookie_dispositivo(identidad.id, device_token):
+        helpers.asignar_token_para_usuario(identidad)
+        login_user(identidad)
+        return helpers.redireccion_despues_de_login()
+
+    if not smtp_is_configured():
+        current_app.logger.error("Session security is enabled but SMTP is not configured; OTP login denied")
+        flash(
+            _("La verificación en dos pasos está activada, pero el correo no está disponible. " "Contacte al administrador.")
+        )
+        return INICIO_SESION
+
+    if not usuario_tiene_email(identidad):
+        flash(_("Su cuenta no tiene un correo electrónico configurado. Contacte al administrador."))
+        return INICIO_SESION
+
+    from cacao_accounting.auth.device_verification import enviar_otp_por_email, generar_otp
+
+    otp_user_id = identidad.id
+    database.session.rollback()
+    otp_code = generar_otp(otp_user_id, purpose="device_verification")
+    session["otp_user_id"] = otp_user_id
+    session["otp_ip"] = usuario_actual_ip()
+    session["otp_user_agent"] = (request.user_agent.string or "")[:255]
+    if not enviar_otp_por_email(identidad, otp_code):
+        database.session.rollback()
+        session.pop("otp_user_id", None)
+        session.pop("otp_ip", None)
+        session.pop("otp_user_agent", None)
+        flash(_("No se pudo enviar el código de verificación. Intente más tarde o contacte al administrador."))
+        return INICIO_SESION
+
+    database.session.commit()
+    flash(_("Se envió un código de verificación a su correo electrónico."))
+    return redirect(url_for("login.verify_otp"))
 
 
 @login.route("/login", methods=["GET", "POST"])
@@ -121,38 +167,8 @@ def inicio_sesion():  # pragma: no cover
         flash(_("Solo un usuario administrador puede iniciar sesion."))
         return INICIO_SESION
 
-    if _session_security_is_active():
-        from cacao_accounting.auth.device_verification import usuario_tiene_email
-        from cacao_accounting.admin.session_security_service import usuario_actual_ip
-
-        device_token = request.cookies.get("__Secure-device-id") or request.cookies.get("device-id")
-        from cacao_accounting.auth.device_verification import verificar_cookie_dispositivo
-
-        if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
-            flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."))
-            return INICIO_SESION
-
-        if device_token and verificar_cookie_dispositivo(identidad.id, device_token):
-            helpers.asignar_token_para_usuario(identidad)
-            login_user(identidad)
-            return helpers.redireccion_despues_de_login()
-
-        if not usuario_tiene_email(identidad):
-            flash(_("Su cuenta no tiene un correo electrónico configurado. Contacte al administrador."))
-            return INICIO_SESION
-
-        from cacao_accounting.auth.device_verification import enviar_otp_por_email, generar_otp
-
-        otp_user_id = identidad.id
-        database.session.rollback()
-        otp_code = generar_otp(otp_user_id, purpose="device_verification")
-        session["otp_user_id"] = otp_user_id
-        session["otp_ip"] = usuario_actual_ip()
-        session["otp_user_agent"] = (request.user_agent.string or "")[:255]
-        enviar_otp_por_email(identidad, otp_code)
-        database.session.commit()
-        flash(_("Se envió un código de verificación a su correo electrónico."))
-        return redirect(url_for("login.verify_otp"))
+    if _session_security_is_enabled():
+        return _handle_session_security_login(identidad)
 
     helpers.asignar_token_para_usuario(identidad)
     login_user(identidad)

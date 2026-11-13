@@ -25457,3 +25457,11 @@ msgstr "Device verification requires a stable SECRET_KEY configured by the admin
 #: cacao_accounting/auth/__init__.py
 msgid "La recuperación requiere una SECRET_KEY estable configurada por el administrador."
 msgstr "Password recovery requires a stable SECRET_KEY configured by the administrator."
+
+#: cacao_accounting/auth/__init__.py
+msgid "La verificación en dos pasos está activada, pero el correo no está disponible. Contacte al administrador."
+msgstr "Two-step verification is enabled, but email is unavailable. Contact the administrator."
+
+#: cacao_accounting/auth/__init__.py
+msgid "No se pudo enviar el código de verificación. Intente más tarde o contacte al administrador."
+msgstr "The verification code could not be sent. Try again later or contact the administrator."
