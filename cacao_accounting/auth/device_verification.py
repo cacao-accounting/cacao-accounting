@@ -4,15 +4,23 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import cast
+from typing import Any, cast
 
-from sqlalchemy import select, update
+from flask import current_app
+from sqlalchemy import case, or_, select, update
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from cacao_accounting.database import (
+    AuthSecretIssuanceLock,
     OtpVerification,
     PasswordResetToken,
     RecognizedDevice,
@@ -42,22 +50,87 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _secret_digest(secret_type: str, user_id: str, secret: str, purpose: str = "") -> bytes:
+    """Return a keyed, non-reversible digest bound to its auth context."""
+    key = current_app.secret_key
+    if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+        raise RuntimeError("A stable Flask SECRET_KEY is required to protect authentication secrets")
+    if isinstance(key, str):
+        key = key.encode("utf-8")
+    if not isinstance(key, bytes) or not key:
+        raise RuntimeError("A Flask SECRET_KEY is required to protect authentication secrets")
+    payload = "\0".join((secret_type, user_id, purpose, secret)).encode("utf-8")
+    return hmac.new(key, payload, hashlib.sha256).digest()
+
+
+def _otp_digest(user_id: str, purpose: str, code: str) -> str:
+    """Encode an OTP digest into the existing six-character storage field."""
+    digest = _secret_digest("otp", user_id, code, purpose)
+    encoded = base64.urlsafe_b64encode(digest).decode("ascii")
+    return f"${encoded[:5]}"
+
+
+def _device_digest(user_id: str, token: str) -> str:
+    """Encode a device-token digest into the existing 36-character field."""
+    digest = _secret_digest("device", user_id, token)
+    encoded = base64.urlsafe_b64encode(digest[:27]).decode("ascii")
+    return f"${encoded[:35]}"
+
+
+def _reset_token_digest(token: str) -> str:
+    """Return the indexed HMAC stored for a reset token."""
+    return f"${_secret_digest('password-reset', '', token).hex()[:63]}"
+
+
+def _secret_issuance_statement(dialect: str, lock_table: Any, user_id: str) -> Any:
+    """Build a dialect-specific write that serializes secret issuance."""
+    statement: Any
+    if dialect == "sqlite":
+        statement = sqlite_insert(lock_table).values(user_id=user_id)
+        statement = statement.on_conflict_do_update(
+            index_elements=[lock_table.c.user_id],
+            set_={"user_id": user_id},
+        )
+    elif dialect == "postgresql":
+        statement = postgresql_insert(lock_table).values(user_id=user_id)
+        statement = statement.on_conflict_do_update(
+            index_elements=[lock_table.c.user_id],
+            set_={"user_id": user_id},
+        )
+    elif dialect in {"mysql", "mariadb"}:
+        statement = mysql_insert(lock_table).values(user_id=user_id)
+        statement = statement.on_duplicate_key_update(user_id=user_id)
+    else:
+        raise RuntimeError(f"Auth secret issuance locking is unsupported for database dialect {dialect}")
+    return statement
+
+
+def _lock_secret_issuance(user_id: str) -> None:
+    """Serialize issuance and revocation of temporary secrets for one account."""
+    lock_table = AuthSecretIssuanceLock.__table__
+    dialect = database.session.get_bind().dialect.name
+    statement = _secret_issuance_statement(dialect, lock_table, user_id)
+    database.session.execute(statement)
+
+
 def generar_otp(user_id: str, purpose: str = "device_verification") -> str:
     """Genera un código OTP de 6 dígitos y lo persiste en la base de datos.
 
     Cualquier OTP previo pendiente del mismo usuario y propósito se marca
     como consumido para evitar confusión entre códigos.
     """
+    code = "".join(secrets.choice("0123456789") for _ in range(OTP_LENGTH))
+    code_digest = _otp_digest(user_id, purpose, code)
+    _lock_secret_issuance(user_id)
     previos = database.session.scalars(
-        select(OtpVerification).filter_by(user_id=user_id, purpose=purpose, consumed=False)
+        select(OtpVerification).filter_by(user_id=user_id, purpose=purpose, consumed=False).with_for_update()
     ).all()
     for otp in previos:
         otp.consumed = True
 
-    code = "".join(secrets.choice("0123456789") for _ in range(OTP_LENGTH))
     registro = OtpVerification(
         user_id=user_id,
-        code=code,
+        code=code_digest,
         purpose=purpose,
         expires_at=_now_utc() + timedelta(minutes=OTP_TTL_MINUTES),
         attempts=0,
@@ -77,40 +150,77 @@ def validar_otp(user_id: str, code: str, purpose: str = "device_verification") -
     llamada.
     """
     now = _now_utc()
-    registro = database.session.scalar(
-        select(OtpVerification)
+    registro_id = database.session.scalar(
+        select(OtpVerification.id)
         .filter_by(
             user_id=user_id,
             purpose=purpose,
             consumed=False,
         )
         .order_by(OtpVerification.created.desc())
+        .with_for_update()
     )
-    if registro is None:
+    if registro_id is None:
         return False
 
-    if _as_utc(registro.expires_at) < now:
-        registro.consumed = True
+    code_digest = _otp_digest(user_id, purpose, code)
+    filtros_activo = (
+        OtpVerification.id == registro_id,
+        OtpVerification.consumed.is_(False),
+    )
+
+    database.session.execute(
+        update(OtpVerification)
+        .where(
+            *filtros_activo,
+            or_(OtpVerification.expires_at < now, OtpVerification.attempts >= OTP_MAX_ATTEMPTS),
+        )
+        .values(consumed=True)
+        .execution_options(synchronize_session=False)
+    )
+
+    reclamo_correcto = cast(
+        CursorResult,
+        database.session.execute(
+            update(OtpVerification)
+            .where(
+                *filtros_activo,
+                OtpVerification.expires_at >= now,
+                OtpVerification.attempts < OTP_MAX_ATTEMPTS,
+                OtpVerification.code == code_digest,
+            )
+            .values(attempts=OtpVerification.attempts + 1, consumed=True)
+            .execution_options(synchronize_session=False)
+        ),
+    )
+    if reclamo_correcto.rowcount == 1:
+        database.session.flush()
+        log.debug("OTP validated for user %s", user_id)
+        return True
+
+    registro_fallido = cast(
+        CursorResult,
+        database.session.execute(
+            update(OtpVerification)
+            .where(
+                *filtros_activo,
+                OtpVerification.expires_at >= now,
+                OtpVerification.attempts < OTP_MAX_ATTEMPTS,
+                OtpVerification.code != code_digest,
+            )
+            .values(
+                attempts=OtpVerification.attempts + 1,
+                consumed=case((OtpVerification.attempts + 1 >= OTP_MAX_ATTEMPTS, True), else_=False),
+            )
+            .execution_options(synchronize_session=False)
+        ),
+    )
+    if registro_fallido.rowcount == 1:
         database.session.flush()
         return False
 
-    if registro.attempts >= OTP_MAX_ATTEMPTS:
-        registro.consumed = True
-        database.session.flush()
-        return False
-
-    registro.attempts += 1
-
-    if not secrets.compare_digest(registro.code, code):
-        if registro.attempts >= OTP_MAX_ATTEMPTS:
-            registro.consumed = True
-        database.session.flush()
-        return False
-
-    registro.consumed = True
     database.session.flush()
-    log.debug("OTP validated for user %s", user_id)
-    return True
+    return False
 
 
 def establecer_cookie_dispositivo(
@@ -123,7 +233,7 @@ def establecer_cookie_dispositivo(
     now = _now_utc()
     registro = RecognizedDevice(
         user_id=user_id,
-        token=token,
+        token=_device_digest(user_id, token),
         user_agent=user_agent[:255] if user_agent else None,
         ip_address=ip_address,
         expires_at=now + timedelta(days=DEVICE_COOKIE_TTL_DAYS),
@@ -137,7 +247,9 @@ def establecer_cookie_dispositivo(
 def verificar_cookie_dispositivo(user_id: str, token: str) -> bool:
     """Verifica si un token de dispositivo es válido y no está expirado."""
     now = _now_utc()
-    registro = database.session.scalar(select(RecognizedDevice).filter_by(user_id=user_id, token=token))
+    registro = database.session.scalar(
+        select(RecognizedDevice).filter_by(user_id=user_id, token=_device_digest(user_id, token))
+    )
     if registro is None:
         return False
     if _as_utc(registro.expires_at) < now:
@@ -156,14 +268,18 @@ def revocar_dispositivo(device_id: str) -> None:
 
 def generar_token_recuperacion(user_id: str) -> str:
     """Genera un token de recuperación de contraseña y lo retorna."""
-    previos = database.session.scalars(select(PasswordResetToken).filter_by(user_id=user_id, consumed=False)).all()
+    token = secrets.token_urlsafe(32)
+    token_digest = _reset_token_digest(token)
+    _lock_secret_issuance(user_id)
+    previos = database.session.scalars(
+        select(PasswordResetToken).filter_by(user_id=user_id, consumed=False).with_for_update()
+    ).all()
     for t in previos:
         t.consumed = True
 
-    token = secrets.token_urlsafe(32)
     registro = PasswordResetToken(
         user_id=user_id,
-        token=token,
+        token=token_digest,
         expires_at=_now_utc() + timedelta(hours=PASSWORD_RESET_TTL_HOURS),
         consumed=False,
     )
@@ -181,7 +297,8 @@ def validar_token_recuperacion(token: str, consumir: bool = True) -> User | None
     el token se marca como usado cuando se procesa el cambio de contraseña.
     """
     now = _now_utc()
-    registro = database.session.scalar(select(PasswordResetToken).filter_by(token=token, consumed=False))
+    # Resolve the indexed digest without querying by the raw bearer token.
+    registro = database.session.scalar(select(PasswordResetToken).filter_by(token=_reset_token_digest(token), consumed=False))
     if registro is None:
         return None
     if _as_utc(registro.expires_at) < now:

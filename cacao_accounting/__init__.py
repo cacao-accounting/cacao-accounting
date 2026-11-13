@@ -511,13 +511,16 @@ def _csrf_ssl_strict_default() -> bool:
 
 
 def _configure_app_secret_key(app: Flask) -> None:
-    """Configure a deterministic test secret or a random production key."""
+    """Configure the application key and record whether it is stable across processes."""
     if app.config.get("SECRET_KEY"):
+        app.config["AUTH_TOKEN_KEY_STABLE"] = True
         return
     if app.config.get("TESTING"):
         app.config["SECRET_KEY"] = "-".join(("test", "secret", "key"))
+        app.config["AUTH_TOKEN_KEY_STABLE"] = True
         return
     app.config["SECRET_KEY"] = token_urlsafe(32)
+    app.config["AUTH_TOKEN_KEY_STABLE"] = False
 
 
 def _register_app_hooks(app: Flask) -> None:

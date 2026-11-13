@@ -5591,13 +5591,24 @@ class UserCompanyAccess(database.Model, BaseTabla):  # type: ignore[name-defined
     )
 
 
+class AuthSecretIssuanceLock(database.Model):  # type: ignore[name-defined]
+    """Persistent row used to serialize credential issuance per account."""
+
+    __tablename__ = "auth_secret_issuance_lock"
+
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        primary_key=True,
+    )
+
+
 class RecognizedDevice(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Navegador o dispositivo reconocido para un usuario.
 
-    Almacena un token UUID4 por cada navegador que haya superado la
-    verificación OTP. El token se entrega como cookie firmada y se
-    valida contra esta tabla en cada inicio de sesión cuando la
-    protección de orígenes está habilitada.
+    Almacena una representación HMAC del token UUID4 entregado como cookie.
+    El token original solo existe en el cliente y se valida contra esta tabla
+    en cada inicio de sesión cuando la protección de orígenes está habilitada.
     """
 
     __tablename__ = "recognized_device"
@@ -5617,7 +5628,7 @@ class RecognizedDevice(database.Model, BaseTabla):  # type: ignore[name-defined]
 class OtpVerification(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Código OTP de un solo uso para verificación de dispositivo o recuperación.
 
-    Cada registro almacena un código de 6 dígitos generado con ``secrets``,
+    Cada registro almacena una representación HMAC del código de 6 dígitos,
     con un tiempo de vida corto (5 minutos por defecto) y un contador de
     intentos. Se marca como consumido tras una validación exitosa o al
     exceder el máximo de intentos permitidos.
@@ -5641,10 +5652,9 @@ class OtpVerification(database.Model, BaseTabla):  # type: ignore[name-defined]
 class PasswordResetToken(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Token de un solo uso para recuperación de contraseña por email.
 
-    El token es un UUID4 generado criptográficamente, con un TTL de 1 hora.
-    Se almacena en texto plano para poder expirarlo y marcarlo como
-    consumido; no se usa para hash adicional porque la protección está
-    en el TTL y en el uso único.
+    El token generado criptográficamente tiene un TTL de 1 hora. La base de
+    datos conserva solo un HMAC hexadecimal para poder validarlo sin almacenar
+    el secreto que se entrega en el enlace.
     """
 
     __tablename__ = "password_reset_token"

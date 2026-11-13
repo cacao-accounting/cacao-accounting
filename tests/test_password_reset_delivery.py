@@ -13,7 +13,7 @@ from __future__ import annotations
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
-from cacao_accounting.auth.device_verification import generar_token_recuperacion
+from cacao_accounting.auth.device_verification import generar_token_recuperacion, validar_token_recuperacion
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Currency, Entity, PasswordResetToken, User, database
 from cacao_accounting.messaging.email import EmailError
@@ -92,8 +92,10 @@ def test_fallo_de_correo_conserva_el_token_anterior(monkeypatch):
         with application.app_context():
             tokens = _tokens(application)
             assert len(tokens) == 1
-            assert tokens[0].token == token_previo
+            assert tokens[0].token != token_previo
+            assert len(tokens[0].token) == 64
             assert tokens[0].consumed is False
+            assert validar_token_recuperacion(token_previo, consumir=False).id == "usuario"
     finally:
         with application.app_context():
             database.session.remove()
@@ -119,9 +121,9 @@ def test_entrega_correcta_consume_el_anterior_y_activa_el_nuevo(monkeypatch):
         with application.app_context():
             tokens = _tokens(application)
             assert len(tokens) == 2
-            anteriores = [token for token in tokens if token.token == token_previo]
-            assert anteriores and anteriores[0].consumed is True
-            assert any(token.consumed is False for token in tokens)
+            assert all(token.token != token_previo for token in tokens)
+            assert sum(not token.consumed for token in tokens) == 1
+            assert validar_token_recuperacion(token_previo, consumir=False) is None
     finally:
         with application.app_context():
             database.session.remove()

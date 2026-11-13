@@ -11,7 +11,7 @@ from typing import Any
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from argon2 import PasswordHasher
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 
@@ -128,6 +128,10 @@ def inicio_sesion():  # pragma: no cover
         device_token = request.cookies.get("__Secure-device-id") or request.cookies.get("device-id")
         from cacao_accounting.auth.device_verification import verificar_cookie_dispositivo
 
+        if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+            flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."))
+            return INICIO_SESION
+
         if device_token and verificar_cookie_dispositivo(identidad.id, device_token):
             helpers.asignar_token_para_usuario(identidad)
             login_user(identidad)
@@ -139,8 +143,10 @@ def inicio_sesion():  # pragma: no cover
 
         from cacao_accounting.auth.device_verification import enviar_otp_por_email, generar_otp
 
-        otp_code = generar_otp(identidad.id, purpose="device_verification")
-        session["otp_user_id"] = identidad.id
+        otp_user_id = identidad.id
+        database.session.rollback()
+        otp_code = generar_otp(otp_user_id, purpose="device_verification")
+        session["otp_user_id"] = otp_user_id
         session["otp_ip"] = usuario_actual_ip()
         session["otp_user_agent"] = (request.user_agent.string or "")[:255]
         enviar_otp_por_email(identidad, otp_code)
@@ -158,6 +164,10 @@ def inicio_sesion():  # pragma: no cover
 def verify_otp():  # pragma: no cover
     """Verificación de OTP para dispositivos no reconocidos."""
     from cacao_accounting.auth.forms import OtpVerificationForm
+
+    if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+        flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."))
+        return INICIO_SESION
 
     user_id = session.get("otp_user_id")
     if not user_id:
@@ -229,13 +239,18 @@ def forgot_password():  # pragma: no cover
         user = database.session.execute(database.select(User).filter(User.e_mail.ilike(email))).scalar_one_or_none()
 
         if user and user.active and usuario_tiene_email(user):
-            token = generar_token_recuperacion(user.id)
-            if enviar_token_recuperacion_email(user, token):
-                database.session.commit()
+            if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+                current_app.logger.error("Password recovery requires a stable SECRET_KEY configuration")
             else:
-                # La entrega falló: no se consume el enlace previo ni queda
-                # activo un token que la persona nunca recibió.
+                user_id = user.id
                 database.session.rollback()
+                token = generar_token_recuperacion(user_id)
+                if enviar_token_recuperacion_email(user, token):
+                    database.session.commit()
+                else:
+                    # La entrega falló: no se consume el enlace previo ni queda
+                    # activo un token que la persona nunca recibió.
+                    database.session.rollback()
 
         flash(_("Si el correo electrónico está registrado, recibirá un enlace de recuperación."))
         return redirect(url_for("login.forgot_password"))
@@ -255,6 +270,11 @@ def reset_password(token: str):  # pragma: no cover
     from cacao_accounting.auth.device_verification import validar_token_recuperacion
     from cacao_accounting.auth.forms import ResetPasswordForm
     from cacao_accounting.auth.helpers import validar_clave_segura
+
+    if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+        current_app.logger.error("Password reset validation requires a stable SECRET_KEY configuration")
+        flash(_("La recuperación requiere una SECRET_KEY estable configurada por el administrador."))
+        return redirect(url_for("login.forgot_password"))
 
     user = validar_token_recuperacion(token, consumir=False)
     if user is None:

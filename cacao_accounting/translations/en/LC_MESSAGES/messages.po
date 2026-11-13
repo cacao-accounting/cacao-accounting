@@ -25449,3 +25449,11 @@ msgstr "Archived"
 #: cacao_accounting/admin/routes.py
 msgid "El mínimo de ofertas debe ser un número entero."
 msgstr "The minimum number of offers must be an integer."
+
+#: cacao_accounting/auth/__init__.py
+msgid "La verificación requiere una SECRET_KEY estable configurada por el administrador."
+msgstr "Device verification requires a stable SECRET_KEY configured by the administrator."
+
+#: cacao_accounting/auth/__init__.py
+msgid "La recuperación requiere una SECRET_KEY estable configurada por el administrador."
+msgstr "Password recovery requires a stable SECRET_KEY configured by the administrator."
