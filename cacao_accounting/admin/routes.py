@@ -112,6 +112,7 @@ from cacao_accounting.admin.services import (
     _process_pending_approval_post,
     _require_system_admin,
     _save_email_settings,
+    _set_user_active,
     _send_email_test,
     _validar_creacion_usuario,
     _validate_portal_fields,
@@ -1404,11 +1405,7 @@ def lista_usuarios():
             if _would_leave_no_admin(usuario, active=nuevo_estado, classification=usuario.classification):
                 flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
                 return redirect(url_for(LISTA_USUARIOS))
-            usuario.active = nuevo_estado
-            if not usuario.active:
-                # La desactivación revoca el token persistido: un JWT en
-                # vigencia con credenciales válidas dejaría de autorizar.
-                usuario.token = None
+            _set_user_active(usuario, nuevo_estado)
             database.session.commit()
             estado = _("habilitado") if usuario.active else _("deshabilitado")
             flash(_("Usuario %(user)s %(status)s correctamente.") % {"user": usuario.user, "status": estado}, "success")

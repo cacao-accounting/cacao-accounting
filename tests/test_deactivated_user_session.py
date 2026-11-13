@@ -10,12 +10,16 @@ pero no las sesiones web. El user loader recargaba al usuario por ID sin mirar
 
 from __future__ import annotations
 
+import pytest
+from flask_login import login_user
 from sqlalchemy.pool import StaticPool
+from werkzeug.exceptions import Forbidden
 
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Currency, Entity, User, database
+from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.database import Currency, Entity, Modules, User, database
 
 CONTRASENA = "sesion-desactivada-2026"
 
@@ -41,6 +45,7 @@ def _crear_app():
         database.session.add_all(
             [
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Modules(module="admin", default=False, enabled=True),
                 Entity(
                     code="cacao",
                     name="Cacao",
@@ -104,6 +109,51 @@ def test_el_user_loader_ignora_usuarios_inactivos():
             database.session.commit()
 
             assert cargar_sesion("operador") is None
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_el_usuario_con_active_null_no_recibe_permisos():
+    """A nullable active flag must fail closed in the shared permission resolver."""
+    application = _crear_app()
+    try:
+        with application.app_context():
+            usuario = database.session.get(User, "operador")
+            modulo = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one()
+            assert usuario is not None
+            usuario.active = None
+            usuario.classification = "admin"
+            database.session.commit()
+
+            permisos = Permisos(modulo=modulo.id, usuario=usuario.id)
+            assert permisos.administrador is False
+            assert permisos.autorizado is False
+            assert permisos.access is False
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_guardia_admin_rechaza_active_null():
+    """The admin guard must require explicit active=True, even after login."""
+    from cacao_accounting.admin.services import _require_system_admin
+
+    application = _crear_app()
+    try:
+        with application.test_request_context("/settings/users"):
+            with application.app_context():
+                usuario = database.session.get(User, "operador")
+                assert usuario is not None
+                usuario.active = None
+                usuario.classification = "admin"
+                database.session.commit()
+                assert login_user(usuario)
+
+                with pytest.raises(Forbidden):
+                    _require_system_admin()
     finally:
         with application.app_context():
             database.session.remove()

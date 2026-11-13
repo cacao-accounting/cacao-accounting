@@ -99,6 +99,12 @@ def asignar_token_para_usuario(identidad: User) -> None:
         log.warning("No se pudo generar auth token.")
 
 
+def revocar_credenciales_usuario(identidad: User) -> None:
+    """Invalidate every browser session and API token issued to a user."""
+    identidad.auth_version = User.auth_version + 1
+    identidad.token = None
+
+
 def redireccion_despues_de_login():
     """Devuelve la redirección apropiada tras un inicio de sesión exitoso."""
     setup_wizard = database.session.execute(database.select(Config).filter_by(key="SETUP_COMPLETE")).first()

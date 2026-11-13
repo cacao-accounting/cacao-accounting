@@ -103,7 +103,7 @@ class Permisos:
         self.libro = libro
         self.__init_valido = bool(self.valida_modulo(modulo) and usuario)
         self.usuario_model = database.session.get(User, usuario) if usuario else None
-        if self.usuario_model is None or self.usuario_model.active is False:
+        if self.usuario_model is None or self.usuario_model.active is not True:
             self.__init_valido = False
         self.roles: list[str] = []
         self.permisos_usuario: list[RolesAccess] = []

@@ -94,7 +94,7 @@ def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
 
 def _require_system_admin() -> None:
     """Restringe configuracion global al administrador del sistema."""
-    if not current_user or not current_user.is_authenticated or getattr(current_user, "active", None) is False:
+    if not current_user or not current_user.is_authenticated or getattr(current_user, "active", None) is not True:
         abort(403)
     if getattr(current_user, "classification", None) == "admin":
         return
@@ -449,8 +449,16 @@ def _apply_user_edit(form, usuario) -> bool:
     usuario.classification = new_classification
     usuario.party_id = form.party_id.data or None
     usuario.company = form.company.data or None
-    usuario.active = bool(form.active.data)
+    _set_user_active(usuario, bool(form.active.data))
     return True
+
+
+def _set_user_active(usuario: User, active: bool) -> None:
+    """Change account availability and invalidate credentials on each transition."""
+    if usuario.active is active:
+        return
+    usuario.active = active
+    helpers.revocar_credenciales_usuario(usuario)
 
 
 def _handle_approval_matrix_post(set_setup_value, selected_company: str):

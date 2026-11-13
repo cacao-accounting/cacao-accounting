@@ -133,7 +133,7 @@ def test_token_del_usuario_desactivado_no_autoriza_el_llamado(api_con_usuarios):
 
 
 def test_deshabilitar_por_admin_revoca_el_token_persistido(api_con_usuarios):
-    """El gesto de administración desactiva al usuario y anula su token."""
+    """Toggle revokes API and browser credentials across reactivation."""
     application, client = api_con_usuarios
     _iniciar_sesion(client, "vendedor")
     token = _token_persistido(application, "vendedor")
@@ -158,4 +158,61 @@ def test_deshabilitar_por_admin_revoca_el_token_persistido(api_con_usuarios):
         deshabilitado = database.session.execute(database.select(Usuario).filter_by(user="vendedor")).scalar_one()
         assert deshabilitado.active is False
         assert deshabilitado.token is None
+        assert deshabilitado.auth_version == 1
     assert _llamar_api_test(client, token) == 401
+
+    response = client.post(
+        "/settings/users",
+        data={"user_id": identidad.id, "action": "toggle"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    with application.app_context():
+        reactivado = database.session.execute(database.select(Usuario).filter_by(user="vendedor")).scalar_one()
+        assert reactivado.active is True
+        assert reactivado.auth_version == 2
+    assert _llamar_api_test(client, token) == 401
+
+
+def test_editar_usuario_revoca_jwt_y_sesion_tras_reactivacion(api_con_usuarios):
+    """The edit form cannot revive a JWT or browser session after reactivation."""
+    application, _ = api_con_usuarios
+    browser_client = application.test_client()
+    _iniciar_sesion(browser_client, "vendedor")
+    token = _token_persistido(application, "vendedor")
+    assert token is not None
+    assert _llamar_api_test(application.test_client(), token) == 200
+
+    admin_client = application.test_client()
+    _iniciar_sesion(admin_client, "admin")
+
+    def editar_usuario(*, active: bool):
+        data = {"usuario": "vendedor", "name": "Vendedor Local", "classification": "system"}
+        if active:
+            data["active"] = "y"
+        return admin_client.post("/settings/users/vendedor/edit", data=data)
+
+    assert editar_usuario(active=False).status_code == 302
+    with application.app_context():
+        usuario = database.session.get(User, "vendedor")
+        assert usuario is not None
+        assert usuario.active is False
+        assert usuario.auth_version == 1
+        assert usuario.token is None
+    assert _llamar_api_test(application.test_client(), token) == 401
+    assert browser_client.get("/auth/profile").status_code == 302
+
+    assert editar_usuario(active=True).status_code == 302
+    with application.app_context():
+        usuario = database.session.get(User, "vendedor")
+        assert usuario is not None
+        assert usuario.active is True
+        assert usuario.auth_version == 2
+    assert _llamar_api_test(application.test_client(), token) == 401
+    assert browser_client.get("/auth/profile").status_code == 302
+
+    fresh_client = application.test_client()
+    _iniciar_sesion(fresh_client, "vendedor")
+    new_token = _token_persistido(application, "vendedor")
+    assert new_token is not None and new_token != token
+    assert _llamar_api_test(fresh_client, new_token) == 200
