@@ -24,6 +24,7 @@ from cacao_accounting.contabilidad.recurring_journal_service import (
 from cacao_accounting.database import (
     Accounts,
     Book,
+    Currency,
     Entity,
     Modules,
     Project,
@@ -51,6 +52,8 @@ def plantillas_recurrentes():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="accounting", default=False, enabled=True),
