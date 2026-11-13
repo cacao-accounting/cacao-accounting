@@ -6,11 +6,14 @@ from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 from html import escape
+from pathlib import Path
 from typing import Any
+from urllib.parse import SplitResult, unquote, urlsplit
 
 from flask import current_app, has_request_context, request
 from werkzeug.exceptions import HTTPException
-from flask_weasyprint import HTML
+from weasyprint import HTML
+from weasyprint.urls import URLFetcher, URLFetcherResponse, path2url
 from jinja2 import BaseLoader, StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
 from sqlalchemy import select
@@ -34,6 +37,57 @@ from cacao_accounting.printing.validators import validate_css_safety, validate_t
 
 
 from cacao_accounting.i18n import _
+
+
+class _PrintPDFURLFetcher(URLFetcher):
+    """Fetch inline data and app-owned static files, never network resources."""
+
+    def __init__(self, base_url: str, static_folder: str | None) -> None:
+        super().__init__(allowed_protocols={"data"})
+        self.base = urlsplit(base_url)
+        self.static_root = Path(static_folder).resolve() if static_folder else None
+        self.file_fetcher = URLFetcher(allowed_protocols={"file"})
+
+    def __call__(self, url: str) -> URLFetcherResponse:
+        """Resolve an approved resource or reject the request before I/O."""
+        parts = urlsplit(url)
+        if parts.scheme.lower() == "data":
+            return super().__call__(url)
+        if not self._has_application_origin(parts):
+            raise ValueError("PDF resource is outside the application static assets")
+
+        static_path = self._static_path(parts.path)
+        if static_path is None:
+            raise ValueError("PDF resource is outside the application static assets")
+        return self.file_fetcher(path2url(str(static_path)))
+
+    def _has_application_origin(self, parts: SplitResult) -> bool:
+        """Return whether a resource URL shares the request origin."""
+        if parts.scheme.lower() not in {"http", "https"} or not parts.hostname or parts.username or parts.password:
+            return False
+        return self._origin(parts) == self._origin(self.base)
+
+    @staticmethod
+    def _origin(parts: SplitResult) -> tuple[str, str, int]:
+        """Normalize the default HTTP port when comparing origins."""
+        scheme = parts.scheme.lower()
+        try:
+            port = parts.port
+        except ValueError:
+            return scheme, (parts.hostname or "").lower(), -1
+        if port is None:
+            port = 443 if scheme == "https" else 80
+        return scheme, (parts.hostname or "").lower(), port
+
+    def _static_path(self, url_path: str) -> Path | None:
+        """Map only contained files beneath Flask's `/static/` directory."""
+        static_prefix = "/static/"
+        if self.static_root is None or not url_path.startswith(static_prefix):
+            return None
+        candidate = (self.static_root / unquote(url_path[len(static_prefix) :])).resolve()
+        if not candidate.is_relative_to(self.static_root) or not candidate.is_file():
+            return None
+        return candidate
 
 
 class PrintService:
@@ -119,7 +173,7 @@ class PrintService:
             )
             rendered_body = self.env.from_string(template.template_body).render(**context)
             html_string = self.build_print_html(rendered_body, template.stylesheet_body)
-            pdf = HTML(string=html_string, base_url=self._base_url()).write_pdf()
+            pdf = self._render_pdf_document(html_string)
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -168,7 +222,7 @@ class PrintService:
             if "validation.qr_data_uri" in template_body:
                 ValidationService().get_qr_data_uri("https://cacaocontent.com/public/validate_doc/sample")
             if validate_pdf:
-                HTML(string=self.build_print_html(rendered, stylesheet_body), base_url=self._base_url()).write_pdf()
+                self._render_pdf_document(self.build_print_html(rendered, stylesheet_body))
         except RuntimeError as exc:
             raise TemplateValidationError(str(exc)) from exc
         except TemplateError as exc:
@@ -579,6 +633,12 @@ class PrintService:
         if has_request_context():
             return request.url_root
         return current_app.config.get("SERVER_NAME") or "http://localhost/"
+
+    def _render_pdf_document(self, html_string: str) -> bytes:
+        """Render a PDF without allowing WeasyPrint to make network requests."""
+        base_url = self._base_url()
+        fetcher = _PrintPDFURLFetcher(base_url, current_app.static_folder)
+        return bytes(HTML(string=html_string, base_url=base_url, url_fetcher=fetcher).write_pdf())
 
     def _empty_validation_context(self) -> dict[str, str | bool | None]:
         return {"enabled": False, "public_url": None, "qr_data_uri": None, "token": None}
