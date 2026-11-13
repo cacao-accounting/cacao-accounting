@@ -33,7 +33,7 @@ from cacao_accounting.internal_control_service import audit_actor
 
 def _foreign_company() -> None:
     """Ensure a second company exists for ownership isolation scenarios."""
-    if database.session.get(Entity, "alpha") is not None:
+    if database.session.query(Entity).filter_by(code="alpha").one_or_none() is not None:
         return
     database.session.add(
         Entity(
