@@ -8,9 +8,15 @@ import io
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List
 
+from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 
-from cacao_accounting.contabilidad.budget_service import BudgetError, _parse_budget_amount
+from cacao_accounting.contabilidad.budget_service import (
+    BudgetError,
+    BudgetService,
+    _lock_budget_for_line_write,
+    _parse_budget_amount,
+)
 from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
@@ -393,9 +399,34 @@ class BudgetImportService:
         if not batch or batch.status != "validated":
             raise BudgetError(_("Lote de importación no válido o ya procesado."))
 
+        processing = False
         try:
+            budget = _lock_budget_for_line_write(batch.budget_id)
+            batch = database.session.execute(
+                select(BudgetImport)
+                .where(BudgetImport.id == import_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ).scalar_one_or_none()
+            if not batch or batch.status != "validated":
+                raise BudgetError(_("Lote de importación no válido o ya procesado."))
+            processing = True
+            if not budget or batch.budget_id != budget.id or budget.status != "draft":
+                raise BudgetError(_("Solo se pueden importar líneas a presupuestos en borrador."))
+
+            budget_service = BudgetService()
             staging_lines = self.get_staged_lines(import_id=import_id, limit=0)
             for sl in staging_lines:
+                budget_service._validate_line_uniqueness(
+                    budget,
+                    {
+                        "account_id": sl.account_id,
+                        "cost_center_id": sl.cost_center_id,
+                        "business_unit_id": sl.business_unit_id,
+                        "project_id": sl.project_id,
+                        "period_id": sl.period_id,
+                    },
+                )
                 line = BudgetLine(
                     budget_id=batch.budget_id,
                     account_id=sl.account_id,
@@ -414,19 +445,30 @@ class BudgetImportService:
             database.session.query(BudgetImportLine).filter_by(import_id=import_id).delete()
             database.session.commit()
         except BudgetError:
-            database.session.rollback()
-            failed_batch = database.session.get(BudgetImport, import_id)
-            if failed_batch:
-                failed_batch.status = "failed"
-            database.session.commit()
+            if processing:
+                self._mark_validated_batch_failed(import_id)
+            else:
+                database.session.rollback()
             raise
         except SQLAlchemyError as e:
-            database.session.rollback()
-            failed_batch = database.session.get(BudgetImport, import_id)
-            if failed_batch:
-                failed_batch.status = "failed"
-            database.session.commit()
+            if processing:
+                self._mark_validated_batch_failed(import_id)
+            else:
+                database.session.rollback()
             raise BudgetError(_("Error atómico en inserción: %(error)s") % {"error": e}) from e
+
+    def _mark_validated_batch_failed(self, import_id: str) -> None:
+        """Mark a processed preview failed without overwriting a terminal state."""
+        database.session.rollback()
+        result = database.session.execute(
+            update(BudgetImport)
+            .where(BudgetImport.id == import_id, BudgetImport.status == "validated")
+            .values(status="failed")
+        )
+        if getattr(result, "rowcount", 0):
+            database.session.commit()
+        else:
+            database.session.rollback()
 
     def _parse_period_amount(self, row: dict, period_name: str) -> tuple[Decimal | None, str | None]:
         raw_value = row.get(period_name, "").strip()

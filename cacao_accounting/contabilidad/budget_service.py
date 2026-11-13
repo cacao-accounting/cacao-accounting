@@ -3,9 +3,13 @@
 
 """Servicio para la gestión de presupuestos."""
 
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+import sqlite3
 from typing import Any, Dict, Optional
+
+from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from cacao_accounting.database import (
     AccountingPeriod,
@@ -32,6 +36,34 @@ class BudgetError(Exception):
 
 
 _MAX_BUDGET_AMOUNT = Decimal("9999999999999999.9999")
+
+
+def _lock_budget_for_line_write(budget_id: str) -> Budget | None:
+    """Serialize line writers on the budget aggregate across supported engines."""
+    session = database.session
+    if session.get_bind().dialect.name == "sqlite":
+        connection = session.connection()
+        raw_connection = connection.connection.driver_connection
+        if raw_connection is not None and not raw_connection.in_transaction:
+            original_timeout = int(connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one())
+            connection.exec_driver_sql("PRAGMA busy_timeout=5000")
+            busy_error: OperationalError | None = None
+            try:
+                connection.exec_driver_sql("BEGIN IMMEDIATE")
+            except OperationalError as exc:
+                error_code = getattr(exc.orig, "sqlite_errorcode", None)
+                if error_code is None or error_code & 0xFF not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+                    raise
+                busy_error = exc
+            finally:
+                connection.exec_driver_sql(f"PRAGMA busy_timeout={original_timeout}")
+            if busy_error is not None:
+                session.rollback()
+                raise BudgetError(_("Otro usuario está modificando este presupuesto. Intente nuevamente.")) from busy_error
+
+    return session.execute(
+        select(Budget).where(Budget.id == budget_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
 
 
 def _parse_budget_amount(value: Any, *, dialect_name: str | None = None) -> Decimal:
@@ -113,7 +145,7 @@ class BudgetService:
 
     def add_budget_line(self, budget_id: str, data: Dict[str, Any], user_id: str) -> BudgetLine:
         """Agrega una línea a un presupuesto en borrador."""
-        budget = database.session.get(Budget, budget_id)
+        budget = _lock_budget_for_line_write(budget_id)
         if not budget or budget.status != "draft":
             raise BudgetError(_("El presupuesto no existe o no está en borrador."))
 
@@ -141,7 +173,12 @@ class BudgetService:
         if not line:
             raise BudgetError(_("Línea de presupuesto no encontrada."))
 
-        budget = database.session.get(Budget, line.budget_id)
+        budget = _lock_budget_for_line_write(line.budget_id)
+        line = database.session.execute(
+            select(BudgetLine).where(BudgetLine.id == line_id).with_for_update().execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if not line:
+            raise BudgetError(_("Línea de presupuesto no encontrada."))
         if not budget or budget.status != "draft":
             raise BudgetError(_("Solo se pueden editar líneas de presupuestos en borrador."))
 
@@ -277,7 +314,7 @@ class BudgetService:
         business_unit_id = data.get("business_unit_id")
         project_id = data.get("project_id")
 
-        query = database.session.query(BudgetLine).filter(
+        query = select(BudgetLine).where(
             BudgetLine.budget_id == budget.id,
             BudgetLine.account_id == data["account_id"],
             BudgetLine.cost_center_id == data["cost_center_id"],
@@ -290,9 +327,12 @@ class BudgetService:
             BudgetLine.project_id.is_(None) if project_id is None else BudgetLine.project_id == project_id,
         )
         if exclude_line_id:
-            query = query.filter(BudgetLine.id != exclude_line_id)
+            query = query.where(BudgetLine.id != exclude_line_id)
 
-        if query.first():
+        existing = (
+            database.session.execute(query.with_for_update().execution_options(populate_existing=True)).scalars().first()
+        )
+        if existing:
             raise BudgetError(_("Ya existe una línea para esta combinación de dimensiones y período."))
 
     def get_budget_totals(self, budget_id: str) -> Dict[str, Decimal]:

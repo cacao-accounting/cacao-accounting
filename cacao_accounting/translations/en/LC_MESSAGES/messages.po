@@ -14096,6 +14096,10 @@ msgstr "Revaluation cannot be performed in a closed or non-existent period."
 msgid "Otra revalorización está ejecutándose para el período seleccionado. Intente nuevamente."
 msgstr "Another revaluation is running for the selected period. Please try again."
 
+#: cacao_accounting/contabilidad/budget_service.py
+msgid "Otro usuario está modificando este presupuesto. Intente nuevamente."
+msgstr "Another user is modifying this budget. Please try again."
+
 msgid "Otra anulación de revalorización está en curso. Intente nuevamente."
 msgstr "Another revaluation cancellation is in progress. Please try again."
 
