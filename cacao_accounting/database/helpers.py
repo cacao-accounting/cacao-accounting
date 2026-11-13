@@ -516,6 +516,7 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
     """
     environments = {value.strip().lower() for value in (environ.get("FLASK_ENV"), environ.get("ENV")) if value}
     is_dev = not env_bool("CACAO_TEST") and bool(environments) and environments.issubset({"dev", "development"})
+    is_database_test = env_bool("CI") and env_bool("CACAO_TEST") and env_bool("CHECK_DATABASE") and not environments
 
     usuario = environ.get("CACAO_USER") or environ.get("ADMIN_USER")
     contrasena = environ.get("CACAO_PSWD") or environ.get("CACAO_PASSWORD") or environ.get("ADMIN_PASSWORD")
@@ -526,7 +527,7 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
         usuario = usuario or "cacao"
         contrasena = contrasena or "cacao"
 
-    if not is_dev and usuario.casefold() == "cacao" and contrasena == "cacao":
+    if not (is_dev or is_database_test) and usuario.casefold() == "cacao" and contrasena == "cacao":
         raise ValueError(_("Las credenciales predeterminadas CACAO no se permiten fuera de desarrollo."))
 
     return usuario, contrasena

@@ -25,7 +25,7 @@ def test_default_initial_credentials_are_available_in_development(monkeypatch, e
     assert resolver_credenciales_iniciales() == ("cacao", "cacao")
 
 
-@pytest.mark.parametrize("environment", ["production", "testing", ""])
+@pytest.mark.parametrize("environment", ["production", "testing"])
 def test_default_initial_credentials_are_rejected_outside_development(monkeypatch, environment):
     """Default administrator credentials cannot initialize non-development environments."""
     monkeypatch.delenv("FLASK_ENV", raising=False)
@@ -53,6 +53,40 @@ def test_explicit_default_credentials_are_rejected_outside_development(monkeypat
     """Explicit legacy aliases cannot bypass the non-development guard."""
     monkeypatch.delenv("FLASK_ENV", raising=False)
     monkeypatch.setenv("ENV", environment)
+    monkeypatch.setenv("CACAO_USER", "cacao")
+    monkeypatch.setenv("CACAO_PSWD", "cacao")
+    monkeypatch.delenv("ADMIN_USER", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    monkeypatch.setenv("CACAO_TEST", "True")
+    monkeypatch.setenv("CHECK_DATABASE", "true")
+    monkeypatch.setenv("CI", "true")
+
+    with pytest.raises(ValueError):
+        resolver_credenciales_iniciales()
+
+
+def test_explicit_default_credentials_are_allowed_for_database_integration_tests(monkeypatch):
+    """Isolated CI engine checks may initialize disposable databases with their test credentials."""
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.delenv("FLASK_ENV", raising=False)
+    monkeypatch.setenv("CACAO_TEST", "True")
+    monkeypatch.setenv("CHECK_DATABASE", "true")
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("CACAO_USER", "cacao")
+    monkeypatch.setenv("CACAO_PSWD", "cacao")
+    monkeypatch.delenv("ADMIN_USER", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+
+    assert resolver_credenciales_iniciales() == ("cacao", "cacao")
+
+
+def test_engine_checks_outside_ci_still_reject_default_credentials(monkeypatch):
+    """Engine-test flags alone cannot enable weak credentials outside CI."""
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.delenv("FLASK_ENV", raising=False)
+    monkeypatch.setenv("CACAO_TEST", "True")
+    monkeypatch.setenv("CHECK_DATABASE", "true")
+    monkeypatch.delenv("CI", raising=False)
     monkeypatch.setenv("CACAO_USER", "cacao")
     monkeypatch.setenv("CACAO_PSWD", "cacao")
     monkeypatch.delenv("ADMIN_USER", raising=False)
