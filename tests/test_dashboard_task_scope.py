@@ -41,6 +41,7 @@ def dashboard_cloud():
         database.create_all()
         from cacao_accounting.database import (
             AccountingPeriod,
+            Currency,
             DocumentTask,
             Entity,
             Modules,
@@ -53,6 +54,7 @@ def dashboard_cloud():
 
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="purchases", default=False, enabled=True),
@@ -76,6 +78,11 @@ def dashboard_cloud():
                     enabled=True,
                     status="activo",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 AccountingPeriod(
                     entity="cacao",
                     name="PERIODO-CACAO-10",

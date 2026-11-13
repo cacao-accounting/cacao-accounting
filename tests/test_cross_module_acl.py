@@ -28,10 +28,21 @@ CONTRASENA = "cross-acl-2026"
 def _sembrar_empresa(app):
     with app.app_context():
         database.create_all()
-        from cacao_accounting.database import Entity, Item, Modules, SalesOrder, SalesOrderItem, UOM, User, UserCompanyAccess
+        from cacao_accounting.database import (
+            Currency,
+            Entity,
+            Item,
+            Modules,
+            SalesOrder,
+            SalesOrderItem,
+            UOM,
+            User,
+            UserCompanyAccess,
+        )
 
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="inventory", default=False, enabled=True),
@@ -47,6 +58,11 @@ def _sembrar_empresa(app):
                     status="default",
                 ),
                 UOM(code="Unidad", name="Unidad", is_active=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Item(
                     code="CHOCOLATE-100G", name="Chocolate 100g", item_type="goods", default_uom="Unidad", is_stock_item=False
                 ),
