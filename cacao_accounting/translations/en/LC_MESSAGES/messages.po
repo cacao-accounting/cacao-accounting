@@ -14067,6 +14067,13 @@ msgstr "The accounting period does not belong to the selected company."
 msgid "No se puede operar revalorizacion en un periodo cerrado o inexistente."
 msgstr "Revaluation cannot be performed in a closed or non-existent period."
 
+#: cacao_accounting/contabilidad/exchange_revaluation_service.py
+msgid "Otra revalorización está ejecutándose para el período seleccionado. Intente nuevamente."
+msgstr "Another revaluation is running for the selected period. Please try again."
+
+msgid "Otra anulación de revalorización está en curso. Intente nuevamente."
+msgstr "Another revaluation cancellation is in progress. Please try again."
+
 #: cacao_accounting/contabilidad/exchange_revaluation_service.py:164
 msgid "El año y el mes son requeridos para ejecutar la revalorización."
 msgstr "The year and month are required to run the revaluation."

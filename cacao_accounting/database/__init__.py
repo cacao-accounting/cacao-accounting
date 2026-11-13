@@ -28,6 +28,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.engine import Engine
+from sqlalchemy.dialects.mysql import DATETIME as MySQLDateTime
 from sqlalchemy.orm import synonym, validates
 from ulid import ULID
 
@@ -5363,6 +5364,8 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
             "document_id",
             "timestamp",
         ),
+        database.Index("ix_audit_trail_payload_hash", "payload_hash"),
+        database.Index("ix_audit_trail_prev_hash", "prev_hash"),
     )
     id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
     document_type = database.Column(database.String(80), nullable=False)
@@ -5379,7 +5382,11 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
         database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
     )
     actor_name = database.Column(database.String(255), nullable=True)
-    timestamp = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
+    timestamp = database.Column(
+        database.DateTime(timezone=True).with_variant(MySQLDateTime(fsp=6), "mysql"),
+        default=database.func.now(),
+        nullable=False,
+    )
     before_json = database.Column(database.Text(), nullable=True)
     after_json = database.Column(database.Text(), nullable=True)
     changes_json = database.Column(database.Text(), nullable=True)
@@ -5390,6 +5397,14 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
     prev_hash = database.Column(database.String(64), nullable=True)
     payload_hash = database.Column(database.String(64), nullable=True)
     hash_version = database.Column(database.Integer(), nullable=True)
+
+
+class AuditChainState(database.Model):  # type: ignore[name-defined]
+    """Mutable chain-head pointer kept separately from immutable audit evidence."""
+
+    __tablename__ = "audit_chain_state"
+    id = database.Column(database.String(16), primary_key=True)
+    head_hash = database.Column(database.String(64), nullable=True)
 
 
 class EmailQueue(database.Model, BaseTabla):  # type: ignore[name-defined]

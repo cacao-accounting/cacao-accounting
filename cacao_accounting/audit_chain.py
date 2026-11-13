@@ -28,9 +28,12 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-from cacao_accounting.database import AuditTrail, database, obtiene_texto_unico
+from sqlalchemy import update
+
+from cacao_accounting.database import AuditChainState, AuditTrail, database, obtiene_texto_unico
 
 _HASH_LENGTH = 64
+_CHAIN_STATE_ID = "main"
 # v1 (filas heredadas): el payload no ata la identidad de la propia fila, por
 # lo que una fila movida a otra posición queda indistinguible. v2 la incluye.
 V1_FIELDS = (
@@ -112,38 +115,75 @@ def compute_payload_hash(source: Any, *, version: int | None = None) -> str:
 
 
 def _last_chain_hash(connection: Any) -> str | None:
-    """Return the terminal hash by link topology, independent of row ids."""
-    successor = AuditTrail.__table__.alias("audit_chain_successor")
-    has_successor = database.select(successor.c.id).where(successor.c.prev_hash == AuditTrail.payload_hash).exists()
-    heads = (
-        connection.execute(
-            database.select(AuditTrail.payload_hash).where(AuditTrail.payload_hash.is_not(None), ~has_successor).limit(2)
-        )
-        .scalars()
-        .all()
+    """Return the serialized mutable pointer to the audit-chain head."""
+    statement = database.select(AuditChainState.head_hash).where(AuditChainState.id == _CHAIN_STATE_ID)
+    if connection.dialect.name != "sqlite":
+        statement = statement.with_for_update()
+    return connection.execute(statement.execution_options(populate_existing=True)).scalar_one()
+
+
+def _legacy_chain_head(connection: Any) -> str | None:
+    """Find the terminal hash when initializing state for an existing chain."""
+    statement = database.select(AuditTrail.id, AuditTrail.payload_hash, AuditTrail.prev_hash).where(
+        AuditTrail.payload_hash.is_not(None)
     )
-    if len(heads) > 1:
-        raise RuntimeError("La cadena de auditoría tiene más de una cabeza terminal.")
-    return heads[0] if heads else None
+    if connection.dialect.name == "mysql":
+        statement = statement.with_for_update()
+    rows = connection.execute(statement).all()
+    if not rows:
+        return None
+    children: dict[str | None, list[Any]] = {}
+    for row in rows:
+        children.setdefault(row.prev_hash, []).append(row)
+    roots = children.get(None, [])
+    if len(roots) != 1:
+        raise RuntimeError("La cadena de auditoría no tiene una raíz única.")
+    visited: set[str] = set()
+    current = roots[0]
+    tail_hash = None
+    while current is not None:
+        if current.id in visited:
+            raise RuntimeError("La cadena de auditoría contiene un ciclo.")
+        visited.add(current.id)
+        tail_hash = current.payload_hash
+        successors = children.get(current.payload_hash, [])
+        if len(successors) > 1:
+            raise RuntimeError("La cadena de auditoría contiene ramas.")
+        current = successors[0] if successors else None
+    if len(visited) != len(rows):
+        raise RuntimeError("La cadena de auditoría contiene filas huérfanas.")
+    return tail_hash
 
 
 def _serialize_chain_head(connection: Any) -> None:
-    """Serializa escritores concurrentes del encabezado de la cadena.
-
-    Un advisory lock transaccional serializa incluso el primer escritor,
-    cuando la cadena está vacía. El bloqueo de fila sobre la cabeza permanece
-    como defensa adicional. Este mecanismo es específico de PostgreSQL;
-    SQLite serializa escritores localmente.
-    """
+    """Create and lock the mutable singleton that tracks the audit-chain head."""
     dialect = getattr(getattr(connection, "dialect", None), "name", "")
-    if dialect != "postgresql":
-        return
-    connection.exec_driver_sql("SELECT pg_advisory_xact_lock(481239, 926)")
-    successor = AuditTrail.__table__.alias("audit_chain_successor")
-    has_successor = database.select(successor.c.id).where(successor.c.prev_hash == AuditTrail.payload_hash).exists()
-    connection.execute(
-        database.select(AuditTrail.id).where(AuditTrail.payload_hash.is_not(None), ~has_successor).limit(1).with_for_update()
-    ).all()
+    if dialect == "mysql":
+        connection.exec_driver_sql(
+            "INSERT INTO audit_chain_state (id, head_hash) VALUES (%s, NULL) " "ON DUPLICATE KEY UPDATE id = VALUES(id)",
+            (_CHAIN_STATE_ID,),
+        )
+    elif dialect == "sqlite":
+        connection.exec_driver_sql(
+            "INSERT OR IGNORE INTO audit_chain_state (id, head_hash) VALUES (?, NULL)", (_CHAIN_STATE_ID,)
+        )
+    else:
+        connection.exec_driver_sql(
+            "INSERT INTO audit_chain_state (id, head_hash) VALUES (%s, NULL) ON CONFLICT (id) DO NOTHING",
+            (_CHAIN_STATE_ID,),
+        )
+    if dialect == "postgresql":
+        connection.exec_driver_sql("SELECT pg_advisory_xact_lock(481239, 926)")
+    head = _last_chain_hash(connection)
+    if head is None:
+        legacy_head = _legacy_chain_head(connection)
+        if legacy_head is not None:
+            _set_chain_head(connection, legacy_head)
+
+
+def _set_chain_head(connection: Any, head_hash: str) -> None:
+    """Advance the mutable pointer in the transaction that appends evidence."""
+    connection.execute(update(AuditChainState).where(AuditChainState.id == _CHAIN_STATE_ID).values(head_hash=head_hash))
 
 
 def _chain_head_after_lock(connection: Any) -> str | None:
@@ -177,6 +217,7 @@ def stamp_audit_values(connection: Any, values: dict[str, Any]) -> dict[str, Any
     values["prev_hash"] = _pending_chain_tail(connection)
     values["payload_hash"] = compute_payload_hash(values)
     connection.info[_CHAIN_TAIL_INFO_KEY] = (connection.get_transaction(), values["payload_hash"])
+    _set_chain_head(connection, values["payload_hash"])
     return values
 
 
@@ -198,6 +239,7 @@ def stamp_audit_entry(connection: Any, entry: Any) -> None:
     entry.prev_hash = _pending_chain_tail(connection)
     entry.payload_hash = compute_payload_hash(entry)
     connection.info[_CHAIN_TAIL_INFO_KEY] = (connection.get_transaction(), entry.payload_hash)
+    _set_chain_head(connection, entry.payload_hash)
 
 
 def chain_pending_rows(session: Any) -> None:
@@ -228,6 +270,7 @@ def chain_pending_rows(session: Any) -> None:
         row.payload_hash = compute_payload_hash(row)
         tail = row.payload_hash
     connection.info[_CHAIN_TAIL_INFO_KEY] = (connection.get_transaction(), tail)
+    _set_chain_head(connection, tail)
 
 
 def _payload_hash_issues(rows: list[Any]) -> list[dict[str, str]]:
@@ -284,8 +327,29 @@ def verify_audit_trail_chain() -> list[dict[str, str]]:
     identidad de la fila a su contenido, así que mover una fila a otra posición
     o duplicar su payload queda detectado.
     """
-    rows = database.session.scalars(database.select(AuditTrail).order_by(AuditTrail.id.asc())).all()
+    snapshots = database.session.execute(
+        database.select(AuditTrail, AuditChainState.id, AuditChainState.head_hash)
+        .select_from(AuditChainState)
+        .outerjoin(AuditTrail, database.true())
+        .where(AuditChainState.id == _CHAIN_STATE_ID)
+        .order_by(AuditTrail.id.asc())
+    ).all()
+    if snapshots:
+        rows = [snapshot[0] for snapshot in snapshots if snapshot[0] is not None]
+        pointer_id, head = snapshots[0][1], snapshots[0][2]
+    else:
+        # Legacy create_all databases can have audit rows before lazy pointer
+        # bootstrap. There is no pointer to compare in that case.
+        rows = list(database.session.scalars(database.select(AuditTrail).order_by(AuditTrail.id.asc())).all())
+        pointer_id, head = None, None
     hashed_rows = [row for row in rows if row.payload_hash is not None]
     issues = _payload_hash_issues(hashed_rows) + _chain_link_issues(hashed_rows)
+    referenced_hashes = {row.prev_hash for row in hashed_rows if row.prev_hash is not None}
+    terminal_hashes = [row.payload_hash for row in hashed_rows if row.payload_hash not in referenced_hashes]
+    if pointer_id is not None:
+        if len(terminal_hashes) == 1 and head != terminal_hashes[0]:
+            issues.append({"row": _CHAIN_STATE_ID, "finding": "head_pointer_mismatch"})
+        elif len(terminal_hashes) != 1 and head is not None:
+            issues.append({"row": _CHAIN_STATE_ID, "finding": "head_pointer_mismatch"})
     issues.sort(key=lambda issue: (issue["row"], issue["finding"]))
     return issues
