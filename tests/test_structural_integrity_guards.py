@@ -26,10 +26,15 @@ from cacao_accounting.database import (
     ApprovalAction,
     ApprovalRequest,
     AuditTrail,
+    Currency,
     DocumentRelation,
+    Entity,
     GLEntry,
+    Item,
     StockLedgerEntry,
+    UOM,
     User,
+    Warehouse,
     database,
 )
 
@@ -51,6 +56,32 @@ def app_garantizado(request):
     application = create_app(settings)
     with application.app_context():
         database.create_all()
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                UOM(code="UND", name="Unidad"),
+            ]
+        )
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                Item(code="IT-INT", name="Artículo", item_type="goods", default_uom="UND"),
+                Warehouse(code="BOD-INT", name="Bodega", company="cacao"),
+            ]
+        )
+        database.session.flush()
         database.session.add(User(user="integridad", name="Integridad", password=b"x", active=True))
         database.session.commit()
     yield application

@@ -21,6 +21,7 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     BalanceConfirmation,
     BalanceConfirmationInvitation,
+    Currency,
     Entity,
     Party,
     database,
@@ -47,6 +48,8 @@ def _crear_app(invitation_status: str):
     token = f"token-{invitation_status}"
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add(
             Entity(
                 code="cacao",

@@ -22,6 +22,7 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     CompanyParty,
     Contact,
+    Currency,
     Entity,
     Modules,
     Party,
@@ -51,6 +52,7 @@ def confirmaciones_cloud():
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Entity(
                     code="alpha",

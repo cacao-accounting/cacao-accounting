@@ -22,6 +22,7 @@ def _sembrar(app):
     with app.app_context():
         database.create_all()
         from cacao_accounting.database import (
+            Currency,
             Entity,
             Modules,
             Roles,
@@ -36,6 +37,12 @@ def _sembrar(app):
         database.session.add_all(
             [
                 Modules(module="accounting", default=False, enabled=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Entity(
                     code="cacao",
                     name="Cacao Accounting",

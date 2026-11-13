@@ -18,7 +18,7 @@ from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Entity, Modules, User, database
+from cacao_accounting.database import Currency, Entity, Modules, User, database
 
 CONTRASENA = "entidad-edit-2026"
 
@@ -42,6 +42,7 @@ def _crear_app(modo_escritorio: bool, entidades: int):
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Entity(
                     code="cacao",

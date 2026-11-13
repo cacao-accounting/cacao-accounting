@@ -37,10 +37,11 @@ def empresa_con_año_cerrado():
     )
     with application.app_context():
         database.create_all()
-        from cacao_accounting.database import AccountingPeriod, Entity, FiscalYear
+        from cacao_accounting.database import AccountingPeriod, Currency, Entity, FiscalYear
 
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Entity(
                     code="cacao",
                     name="Cacao Accounting",
@@ -58,6 +59,11 @@ def empresa_con_año_cerrado():
                     is_closed=True,
                     financial_closed=False,
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 AccountingPeriod(
                     entity="cacao",
                     name=f"{AÑO_CERRADO}-12",

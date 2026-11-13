@@ -16,7 +16,7 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.auxiliares import obtener_entidad
-from cacao_accounting.database import Entity, Modules, User, database
+from cacao_accounting.database import Currency, Entity, Modules, User, database
 
 CONTRASENA = "entidad-default-2026"
 
@@ -36,6 +36,8 @@ def entidades_default():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="accounting", default=False, enabled=True),

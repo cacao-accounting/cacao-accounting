@@ -18,7 +18,7 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
-from cacao_accounting.database import ARAPLedgerEntry, ComprobanteContable, database
+from cacao_accounting.database import ARAPLedgerEntry, ComprobanteContable, Currency, Entity, Party, database
 
 FECHA = date(2026, 10, 15)
 
@@ -40,6 +40,21 @@ def _crear_app():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.add(Party(id="CUST-1", code="CUST-1", name="Cliente", is_customer=True, is_supplier=False))
+        database.session.commit()
     return application
 
 
@@ -116,6 +131,16 @@ def test_anular_un_diario_reversa_encuentra_su_apertura():
     application = _crear_app()
     try:
         with application.app_context():
+            apertura_original = _movimiento(
+                document_type="journal_entry",
+                document_id="ORIG-1",
+                event_type="opening",
+                voucher_type="journal_entry",
+                voucher_id="ORIG-OPEN",
+                document_amount=100,
+            )
+            database.session.add(apertura_original)
+            database.session.flush()
             diario = ComprobanteContable(
                 id="R1",
                 entity="cacao",
@@ -130,7 +155,7 @@ def test_anular_un_diario_reversa_encuentra_su_apertura():
                 voucher_type="journal_entry",
                 voucher_id="R1",
                 is_reversal=True,
-                reversal_of="ORIG-OPEN",
+                reversal_of=apertura_original.id,
                 document_amount=-100,
             )
             asignacion = _movimiento(

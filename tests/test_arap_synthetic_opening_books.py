@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     Currency,
     Entity,
     GLEntry,
+    Party,
     SalesInvoice,
     database,
 )
@@ -65,6 +66,9 @@ def _crear_app():
                 ),
             ]
         )
+        database.session.flush()
+        cliente = Party(id="CUST-1", code="CUST-1", name="Cliente", is_customer=True, is_supplier=False)
+        database.session.add(cliente)
         database.session.flush()
         libro_nio = Book(
             entity="cacao",

@@ -23,6 +23,7 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predete
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     AccountingPeriod,
+    Currency,
     Entity,
     ExchangeRevaluation,
     Modules,
@@ -53,6 +54,12 @@ def guard_contable():
         database.session.add_all(
             [
                 Modules(module="accounting", default=False, enabled=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Entity(
                     code="alpha",
                     name="Alpha",
@@ -71,6 +78,11 @@ def guard_contable():
                     enabled=True,
                     status="activo",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 AccountingPeriod(
                     entity="beta",
                     name="PERIODO-BETA-10",

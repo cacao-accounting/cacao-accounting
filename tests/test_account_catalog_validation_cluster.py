@@ -43,15 +43,23 @@ def _crear_app():
                 Modules(module="accounting", default=False, enabled=True),
                 Modules(module="inventory", default=False, enabled=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
+            ]
+        )
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 User(
                     id="admin",
                     user="admin",

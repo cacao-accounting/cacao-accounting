@@ -67,24 +67,30 @@ def _crear_app():
                     active=True,
                     classification="admin",
                 ),
-                Accounts(
-                    entity="cacao",
-                    code="1100",
-                    name="Cuentas de activo",
-                    group=True,
-                    active=True,
-                    enabled=True,
-                ),
-                Accounts(
-                    entity="cacao",
-                    code="1101",
-                    name="Caja",
-                    group=False,
-                    active=True,
-                    enabled=True,
-                    parent="1100",
-                ),
             ]
+        )
+        database.session.flush()
+        database.session.add(
+            Accounts(
+                entity="cacao",
+                code="1100",
+                name="Cuentas de activo",
+                group=True,
+                active=True,
+                enabled=True,
+            )
+        )
+        database.session.flush()
+        database.session.add(
+            Accounts(
+                entity="cacao",
+                code="1101",
+                name="Caja",
+                group=False,
+                active=True,
+                enabled=True,
+                parent="1100",
+            )
         )
         database.session.commit()
     return application

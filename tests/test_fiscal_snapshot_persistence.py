@@ -36,10 +36,11 @@ def fiscal_empresa():
     )
     with application.app_context():
         database.create_all()
-        from cacao_accounting.database import Entity, TaxRule
+        from cacao_accounting.database import Currency, Entity, TaxRule
 
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Entity(
                     code="cacao",
                     name="Cacao Accounting",
@@ -49,6 +50,11 @@ def fiscal_empresa():
                     enabled=True,
                     status="default",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 TaxRule(
                     company="cacao",
                     name="Tasa fija mayor",
