@@ -908,6 +908,9 @@ def create_petty_cash_expense(
     actor_id: str | None = None,
 ) -> PettyCashExpense:
     """Crea y postea un gasto de caja chica (Dr Gasto / Cr Caja Chica)."""
+    from cacao_accounting.approval_preflight import ensure_approval_flow_supported
+
+    ensure_approval_flow_supported(company)
     if posted_date is None:
         from datetime import date as _date
 

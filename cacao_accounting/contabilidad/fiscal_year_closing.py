@@ -235,12 +235,19 @@ def _build_closing_voucher_payload(
 
 def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_id: str) -> ComprobanteContable:
     """Ejecuta el proceso de cierre de año fiscal."""
+    from cacao_accounting.approval_preflight import ApprovalWorkflowRequired, ensure_approval_flow_supported
+
     fiscal_year = database.session.get(FiscalYear, fiscal_year_id, with_for_update=True)
     if not fiscal_year:
         raise FiscalYearClosingError(_("Año fiscal no encontrado."))
 
     if fiscal_year.entity != company:
         raise FiscalYearClosingError(_("La compañía no coincide con la entidad del año fiscal."))
+
+    try:
+        ensure_approval_flow_supported(company)
+    except ApprovalWorkflowRequired as exc:
+        raise FiscalYearClosingError(str(exc)) from exc
 
     from cacao_accounting.database import AccountingPeriod
 

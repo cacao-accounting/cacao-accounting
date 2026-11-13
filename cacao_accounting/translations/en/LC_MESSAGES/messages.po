@@ -2115,6 +2115,10 @@ msgstr "Error retrying delivery: %(error)s"
 msgid "No se pudo completar la entrega del correo: %(error)s"
 msgstr "The email delivery could not be completed: %(error)s"
 
+#: cacao_accounting/approval_preflight.py
+msgid "Este flujo aún no admite aprobación independiente; no se creó el asiento contable."
+msgstr "This workflow does not yet support independent approval; no journal entry was created."
+
 #: cacao_accounting/admin/routes.py:424
 msgid "Método de valuacion guardado correctamente."
 msgstr "Valuation method saved successfully."
