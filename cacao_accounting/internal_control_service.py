@@ -13,7 +13,9 @@ from flask import current_app, has_app_context
 from sqlalchemy import and_, event, inspect, or_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, object_session
+from sqlalchemy.sql.elements import BinaryExpression, Null
 from sqlalchemy.sql.dml import Delete, Insert, Update
+from sqlalchemy.sql import operators
 
 from cacao_accounting.audit_trail_service import _current_actor, _json_default
 from cacao_accounting.database import AuditTrail, DocBase, UserCompanyAccess, database, obtiene_texto_unico
@@ -24,6 +26,9 @@ from cacao_accounting.runtime_mode import is_cloud_mode, is_desktop_mode
 _ACTOR: ContextVar[tuple[str | None, str] | None] = ContextVar("icfr_actor", default=None)
 _USER_COMPANY_ACCESS_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
     "icfr_user_company_access_transition", default=frozenset()
+)
+_USER_EMAIL_IDENTITY_BACKFILL: ContextVar[frozenset[str]] = ContextVar(
+    "icfr_user_email_identity_backfill", default=frozenset()
 )
 _APPROVAL_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_approval_transition", default=frozenset())
 _FLOW_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_flow_transition", default=frozenset())
@@ -145,6 +150,19 @@ def user_company_access_transition(*assignments: UserCompanyAccess) -> Iterator[
         yield
     finally:
         _USER_COMPANY_ACCESS_TRANSITION.reset(token)
+
+
+@contextmanager
+def user_email_identity_backfill(*user_ids: str) -> Iterator[None]:
+    """Authorize the derived email-identity update for the supplied user IDs only."""
+    if not user_ids or any(not user_id for user_id in user_ids):
+        raise ValueError("An email identity backfill requires persisted user IDs")
+    allowed = _USER_EMAIL_IDENTITY_BACKFILL.get().union(user_ids)
+    token = _USER_EMAIL_IDENTITY_BACKFILL.set(frozenset(allowed))
+    try:
+        yield
+    finally:
+        _USER_EMAIL_IDENTITY_BACKFILL.reset(token)
 
 
 def current_audit_actor() -> tuple[str | None, str | None]:
@@ -800,6 +818,8 @@ def _guard_bulk_update(
     connection: Any, clause: Update | Delete, multiparams: Any, params: Any, table_name: str | None
 ) -> None:
     """Protect direct Core updates and deletes from rewriting evidence."""
+    if _is_authorized_user_email_identity_backfill(clause, multiparams or params):
+        return
     if table_name == "bank_transaction":
         _guard_bank_transaction_statement(connection, clause, multiparams, params)
     if table_name in POLYMORPHIC_EVIDENCE_TABLES:
@@ -818,6 +838,61 @@ def _guard_bulk_update(
         _guard_cacao_config_statement(clause, multiparams, params)
     if _is_sensitive_table(table_name):
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+
+
+def _is_authorized_user_email_identity_backfill(statement: Any, parameters: Any) -> bool:
+    """Allow only the derived-key update for IDs in an explicit backfill scope."""
+    from cacao_accounting.email_identity import normalize_user_email
+
+    table = getattr(statement, "table", None)
+    if table is None or table.name != "user" or not isinstance(statement, Update):
+        return False
+    changed = {getattr(key, "key", key) for key in (getattr(statement, "_values", None) or {})}
+    if changed != {"email_identity"} or len(statement._where_criteria) != 3:
+        return False
+
+    predicates = {
+        (clause.left.key, clause.operator, getattr(clause.right, "key", None))
+        for clause in statement._where_criteria
+        if isinstance(clause, BinaryExpression) and clause.left.table is table
+    }
+    if not _has_email_identity_null_predicate(statement, predicates):
+        return False
+
+    parameter_sets = parameters if isinstance(parameters, list) else [parameters]
+    updated_ids = {
+        values.get("email_identity_user_id")
+        for values in parameter_sets
+        if isinstance(values, dict) and values.get("email_identity_user_id") is not None
+    }
+    if not updated_ids or not updated_ids.issubset(_USER_EMAIL_IDENTITY_BACKFILL.get()):
+        return False
+    required_parameters = {"email_identity_user_id", "email_identity_source", "email_identity_value"}
+    if not all(isinstance(values, dict) for values in parameter_sets):
+        return False
+    return all(
+        required_parameters.issubset(values)
+        and (normalize_user_email(values["email_identity_source"]) or "") == values["email_identity_value"]
+        for values in parameter_sets
+    )
+
+
+def _has_email_identity_null_predicate(statement: Any, predicates: set[tuple[Any, Any, Any]]) -> bool:
+    """Confirm the third backfill predicate requires an unset identity key."""
+    expected = {
+        ("id", operators.eq, "email_identity_user_id"),
+        ("e_mail", operators.eq, "email_identity_source"),
+    }
+    if not expected.issubset(predicates):
+        return False
+    return any(
+        isinstance(clause, BinaryExpression)
+        and clause.left.table is statement.table
+        and clause.left.key == "email_identity"
+        and clause.operator is operators.is_
+        and isinstance(clause.right, Null)
+        for clause in statement._where_criteria
+    )
 
 
 def _guard_bank_transaction_statement(connection: Any, clause: Any, multiparams: Any, params: Any) -> None:
@@ -1143,6 +1218,12 @@ def _guard_sensitive_bulk(state: Any) -> None:
     if not _enabled() or not (state.is_update or state.is_delete):
         return
     table = getattr(state.statement, "table", None)
+    if (
+        table is not None
+        and table.name == "user"
+        and _is_authorized_user_email_identity_backfill(state.statement, state.parameters)
+    ):
+        return
     sensitive_tables = {
         mapper.local_table.name
         for mapper in cast(Any, database.Model).registry.mappers

@@ -487,6 +487,9 @@ def create_app(ajustes: dict | None = None) -> Flask:
     registrar_rutas_predeterminadas(app=cacao_app)
 
     with cacao_app.app_context():
+        from cacao_accounting.database.helpers import _ensure_user_email_identity_column
+
+        _ensure_user_email_identity_column()
         try:
             from cacao_accounting.database.helpers import _ensure_file_sha256_column
 

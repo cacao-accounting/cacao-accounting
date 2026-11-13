@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from cacao_accounting.database import User, database
+from cacao_accounting.email_identity import normalize_user_email
 from cacao_accounting.i18n import _
 from cacao_accounting.logs import log
 
@@ -145,7 +146,8 @@ def notificar_intento_fallido(usuario: User) -> None:
     """Envía correo de alerta al usuario tras intentos fallidos."""
     from cacao_accounting.messaging.email import EmailError, send_email
 
-    if not usuario.e_mail:
+    recipient_email = normalize_user_email(usuario.e_mail)
+    if not recipient_email:
         return
 
     intentos = usuario.failed_login_count or 0
@@ -170,10 +172,10 @@ def notificar_intento_fallido(usuario: User) -> None:
 
     try:
         send_email(
-            to_email=usuario.e_mail,
+            to_email=recipient_email,
             subject=str(asunto),
             body=cuerpo,
             is_html=False,
         )
     except EmailError as exc:
-        log.error("Error sending failed login notification to %s: %s", usuario.e_mail, exc)
+        log.error("Error sending failed login notification to %s: %s", recipient_email, exc)

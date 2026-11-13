@@ -14,12 +14,14 @@ from argon2 import PasswordHasher
 from flask import Blueprint, current_app, flash, has_request_context, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user, user_logged_in
+from sqlalchemy.exc import IntegrityError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth import helpers
 from cacao_accounting.database import User, database
+from cacao_accounting.email_identity import normalize_user_email
 from cacao_accounting.i18n import _
 from cacao_accounting.limiter import limiter
 
@@ -259,8 +261,13 @@ def forgot_password():  # pragma: no cover
 
     form = ForgotPasswordForm()
     if request.method == "POST" and form.validate_on_submit():
-        email = form.email.data.strip().lower()
-        user = database.session.execute(database.select(User).filter(User.e_mail.ilike(email))).scalar_one_or_none()
+        email = normalize_user_email(form.email.data)
+        matching_user_ids = (
+            database.session.execute(database.select(User.id).where(User.email_identity == email).limit(2)).scalars().all()
+            if email
+            else []
+        )
+        user = database.session.get(User, matching_user_ids[0]) if len(matching_user_ids) == 1 else None
 
         if user and user.active and usuario_tiene_email(user):
             if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
@@ -420,23 +427,37 @@ def _handle_profile_update(profile_form: Any, password_form: Any) -> ResponseRet
     if not profile_form.guardar_perfil.data or not profile_form.validate():
         return None
 
-    email = profile_form.e_mail.data or None
-    if email and _profile_email_exists_for_another_user(email):
+    email = normalize_user_email(profile_form.e_mail.data)
+    current_email = normalize_user_email(current_user.e_mail)
+    email_changed = bool(email and email != current_email)
+    if email_changed and _profile_email_exists_for_another_user(email):
         flash(_("El correo electrónico ya está en uso por otro usuario."))
         return _render_profile(profile_form, password_form)
 
     _apply_profile_form(profile_form, email)
-    database.session.commit()
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        if not email_changed or not _profile_email_exists_for_another_user(email):
+            raise
+        flash(_("El correo electrónico ya está en uso por otro usuario."))
+        return _render_profile(profile_form, password_form)
     flash(_("Información de perfil actualizada correctamente."))
     return redirect(url_for("login.profile"))
 
 
-def _profile_email_exists_for_another_user(email: str) -> bool:
+def _profile_email_exists_for_another_user(email: str | None) -> bool:
     """Return whether another user already owns the email address."""
-    existing_user = database.session.execute(
-        database.select(User).filter(User.e_mail == email, User.id != current_user.id)
-    ).first()
-    return existing_user is not None
+    normalized_email = normalize_user_email(email)
+    if normalized_email is None:
+        return False
+    return (
+        database.session.execute(
+            database.select(User.id).where(User.email_identity == normalized_email, User.id != current_user.id).limit(1)
+        ).first()
+        is not None
+    )
 
 
 def _apply_profile_form(profile_form: Any, email: str | None) -> None:
@@ -445,7 +466,8 @@ def _apply_profile_form(profile_form: Any, email: str | None) -> None:
     current_user.name2 = profile_form.name2.data
     current_user.last_name = profile_form.last_name.data
     current_user.last_name2 = profile_form.last_name2.data
-    current_user.e_mail = email
+    if normalize_user_email(current_user.e_mail) != email:
+        current_user.e_mail = email
     current_user.phone = profile_form.phone.data
     current_user.language = profile_form.language.data or None
 

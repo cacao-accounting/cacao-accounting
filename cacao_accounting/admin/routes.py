@@ -55,6 +55,7 @@ from cacao_accounting.database import (
     UserCompanyAccess,
     database,
 )
+from cacao_accounting.email_identity import normalize_user_email
 
 
 from cacao_accounting.contabilidad.default_accounts import (
@@ -114,6 +115,7 @@ from cacao_accounting.admin.services import (
     _save_email_settings,
     _set_user_active,
     _send_email_test,
+    _user_email_is_taken,
     _validar_creacion_usuario,
     _validate_portal_fields,
     _would_leave_no_admin,
@@ -1441,9 +1443,16 @@ def crear_usuario():
     if form.validate_on_submit() and _validate_portal_fields(form) and _validar_creacion_usuario(form):
         nuevo_usuario = _crear_usuario_desde_form(form)
         database.session.add(nuevo_usuario)
-        database.session.commit()
-        flash(_("Usuario creado correctamente."), "success")
-        return redirect(url_for(LISTA_USUARIOS))
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            if not _user_email_is_taken(form.e_mail.data):
+                raise
+            form.e_mail.errors.append("El correo electrónico ya está en uso.")
+        else:
+            flash(_("Usuario creado correctamente."), "success")
+            return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_form.html",
@@ -1467,10 +1476,19 @@ def editar_usuario(user_id: str):
 
     form = UserEditForm(obj=usuario)
     _populate_portal_choices(form)
-    if form.validate_on_submit() and _validate_portal_fields(form) and _apply_user_edit(form, usuario):
-        database.session.commit()
-        flash(_("Usuario actualizado correctamente."), "success")
-        return redirect(url_for(LISTA_USUARIOS))
+    if form.validate_on_submit() and _validate_portal_fields(form):
+        email_changed = normalize_user_email(form.e_mail.data) != normalize_user_email(usuario.e_mail)
+        if _apply_user_edit(form, usuario):
+            try:
+                database.session.commit()
+            except IntegrityError:
+                database.session.rollback()
+                if not email_changed or not _user_email_is_taken(form.e_mail.data, exclude_user_id=usuario.id):
+                    raise
+                form.e_mail.errors.append("El correo electrónico ya está en uso.")
+            else:
+                flash(_("Usuario actualizado correctamente."), "success")
+                return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_form.html",

@@ -34,6 +34,7 @@ from cacao_accounting.database import (
     User,
     database,
 )
+from cacao_accounting.email_identity import normalize_user_email
 
 from cacao_accounting.exceptions import flash_error
 
@@ -374,7 +375,7 @@ def _crear_usuario_desde_form(form: UserCreateForm) -> User:
         name2=form.name2.data or None,
         last_name=form.last_name.data or None,
         last_name2=form.last_name2.data or None,
-        e_mail=form.e_mail.data or None,
+        e_mail=normalize_user_email(form.e_mail.data),
         phone=form.phone.data or None,
         classification=form.classification.data or None,
         party_id=form.party_id.data or None,
@@ -384,18 +385,28 @@ def _crear_usuario_desde_form(form: UserCreateForm) -> User:
     )
 
 
+def _user_email_is_taken(email: str | None, exclude_user_id: str | None = None) -> bool:
+    """Check canonical email ownership, optionally excluding the edited account."""
+    normalized_email = normalize_user_email(email)
+    if normalized_email is None:
+        return False
+    statement = database.select(User.id).where(User.email_identity == normalized_email)
+    if exclude_user_id is not None:
+        statement = statement.where(User.id != exclude_user_id)
+    return database.session.execute(statement.limit(1)).first() is not None
+
+
 def _validar_creacion_usuario(form: UserCreateForm) -> bool:
     """Valida la creación de un usuario nuevo y registra errores en el formulario."""
     existen_usuario = database.session.execute(database.select(User).filter_by(user=form.usuario.data)).scalar_one_or_none()
-    existe_email = None
-    if form.e_mail.data:
-        existe_email = database.session.execute(database.select(User).filter_by(e_mail=form.e_mail.data)).scalar_one_or_none()
+    email = normalize_user_email(form.e_mail.data)
+    existe_email = _user_email_is_taken(email)
 
     valid_password = helpers.validar_clave_segura(form.password.data)
     match (existen_usuario, existe_email, valid_password):
         case (usuario, _, _) if usuario is not None:
             form.usuario.errors.append("El nombre de usuario ya está en uso.")
-        case (_, correo, _) if correo is not None:
+        case (_, True, _):
             form.e_mail.errors.append("El correo electrónico ya está en uso.")
         case (_, _, False):
             form.password.errors.append(
@@ -411,15 +422,13 @@ def _apply_user_edit(form, usuario) -> bool:
     existe_usuario = database.session.execute(
         database.select(User).filter(User.user == form.usuario.data).filter(User.id != usuario.id)
     ).scalar_one_or_none()
-    existe_email = None
-    if form.e_mail.data:
-        existe_email = database.session.execute(
-            database.select(User).filter(User.e_mail == form.e_mail.data).filter(User.id != usuario.id)
-        ).scalar_one_or_none()
+    email = normalize_user_email(form.e_mail.data)
+    current_email = normalize_user_email(usuario.e_mail)
+    existe_email = email != current_email and _user_email_is_taken(email, exclude_user_id=usuario.id)
     if existe_usuario is not None:
         form.usuario.errors.append("El nombre de usuario ya está en uso.")
         return False
-    if existe_email is not None:
+    if existe_email:
         form.e_mail.errors.append("El correo electrónico ya está en uso.")
         return False
 
@@ -428,7 +437,8 @@ def _apply_user_edit(form, usuario) -> bool:
     usuario.name2 = form.name2.data or None
     usuario.last_name = form.last_name.data or None
     usuario.last_name2 = form.last_name2.data or None
-    usuario.e_mail = form.e_mail.data or None
+    if email != current_email:
+        usuario.e_mail = email
     usuario.phone = form.phone.data or None
     new_classification = form.classification.data or None
     if new_classification in {"customer", "supplier"} and not form.party_id.data:

@@ -125,6 +125,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
         try:
             database.create_all()
             log.info("Esquema de base de datos creado correctamente.")
+            _ensure_user_email_identity_column()
             _ensure_stock_valuation_layer_batch_column()
             _ensure_purchase_line_version_columns()
             _ensure_audit_trail_hash_version_column()
@@ -676,6 +677,126 @@ def _ensure_stock_valuation_layer_batch_column() -> None:
         database.session.rollback()
     except Exception as exc:
         log.warning("Could not ensure StockValuationLayer.batch_id during initialization: {}", exc)
+
+
+def _ensure_user_email_identity_column() -> None:
+    """Add and backfill the indexed, portable identity key for user emails.
+
+    Backfilling keeps legacy case variants discoverable without choosing a
+    database-specific Unicode ``lower()`` implementation. The index is
+    intentionally non-unique so existing ambiguous identities remain visible
+    to password recovery, which fails closed when more than one row matches.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    from cacao_accounting.database import User
+
+    inspector = sa_inspect(database.engine)
+    if not inspector.has_table(User.__tablename__):
+        return
+
+    columns = {column["name"] for column in inspector.get_columns(User.__tablename__)}
+    if User.email_identity.name not in columns:
+        _add_user_email_identity_column(User)
+    _create_user_email_identity_index(User)
+    _backfill_user_email_identity(User)
+
+
+def _add_user_email_identity_column(User) -> None:
+    """Add the identity column, tolerating another process creating it first."""
+    from time import sleep
+
+    from sqlalchemy import inspect as sa_inspect
+
+    preparer = database.engine.dialect.identifier_preparer
+    table_name = preparer.quote(User.__tablename__)
+    identity_column = preparer.quote(User.email_identity.name)
+    dialect = database.engine.dialect.name
+    add_column_if_missing = " IF NOT EXISTS" if dialect == "postgresql" else ""
+    alter_statement = database.text(
+        f"ALTER TABLE {table_name} ADD COLUMN{add_column_if_missing} {identity_column} VARCHAR(150)"
+    )
+    for attempt in range(5):
+        try:
+            database.session.execute(alter_statement)
+            database.session.commit()
+            return
+        except (OperationalError, ProgrammingError):
+            database.session.rollback()
+            columns = {column["name"] for column in sa_inspect(database.engine).get_columns(User.__tablename__)}
+            if User.email_identity.name in columns:
+                return
+            if attempt == 4:
+                raise
+            sleep(0.05 * (attempt + 1))
+
+
+def _create_user_email_identity_index(User) -> None:
+    """Create the email identity index safely when application workers start together."""
+    from time import sleep
+
+    from sqlalchemy import inspect as sa_inspect
+
+    email_index = next(index for index in User.__table__.indexes if index.name == "ix_user_email_identity")
+    for attempt in range(5):
+        try:
+            email_index.create(bind=database.engine, checkfirst=True)
+            database.session.commit()
+            return
+        except SQLAlchemyError:
+            database.session.rollback()
+            index_names = {index["name"] for index in sa_inspect(database.engine).get_indexes(User.__tablename__)}
+            if email_index.name in index_names:
+                return
+            if attempt == 4:
+                raise
+            sleep(0.05 * (attempt + 1))
+
+
+def _backfill_user_email_identity(User) -> None:
+    """Fill canonical identity keys in batches without overwriting concurrent edits.
+
+    A blank key marks a legacy address containing only whitespace. It cannot
+    match normalized form input and lets the backfill finish without rewriting
+    the original legacy value.
+    """
+    from sqlalchemy import bindparam, select, update
+
+    from cacao_accounting.email_identity import normalize_user_email
+    from cacao_accounting.internal_control_service import user_email_identity_backfill
+
+    user_table = User.__table__
+    update_statement = (
+        update(user_table)
+        .where(
+            user_table.c.id == bindparam("email_identity_user_id"),
+            user_table.c.e_mail == bindparam("email_identity_source"),
+            user_table.c.email_identity.is_(None),
+        )
+        .values(email_identity=bindparam("email_identity_value"))
+    )
+    while True:
+        criteria = [
+            user_table.c.email_identity.is_(None),
+            user_table.c.e_mail.is_not(None),
+        ]
+        rows = database.session.execute(
+            select(user_table.c.id, user_table.c.e_mail).where(*criteria).order_by(user_table.c.id).limit(500)
+        ).all()
+        if not rows:
+            break
+        updates = [
+            {
+                "email_identity_user_id": user_id,
+                "email_identity_source": email,
+                "email_identity_value": normalize_user_email(email) or "",
+            }
+            for user_id, email in rows
+        ]
+        user_ids = tuple(str(values["email_identity_user_id"]) for values in updates)
+        with user_email_identity_backfill(*user_ids):
+            database.session.execute(update_statement, updates)
+        database.session.commit()
 
 
 def _ensure_purchase_line_version_columns() -> None:

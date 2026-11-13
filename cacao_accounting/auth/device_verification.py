@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     User,
     database,
 )
+from cacao_accounting.email_identity import normalize_user_email
 from cacao_accounting.logs import log
 
 from cacao_accounting.i18n import _
@@ -337,7 +338,8 @@ def enviar_otp_por_email(user: User, code: str) -> bool:
     """Envía un código OTP y reporta si el servidor aceptó la entrega."""
     from cacao_accounting.messaging.email import EmailError, send_email
 
-    if not user.e_mail:
+    recipient_email = normalize_user_email(user.e_mail)
+    if not recipient_email:
         log.warning("User %s has no email configured", user.user)
         return False
     body = (
@@ -349,13 +351,13 @@ def enviar_otp_por_email(user: User, code: str) -> bool:
     )
     try:
         send_email(
-            to_email=user.e_mail,
+            to_email=recipient_email,
             subject=_("Cacao Accounting - Código de verificación"),
             body=body,
             is_html=False,
         )
     except EmailError as exc:
-        log.error("Error sending OTP to %s: %s", user.e_mail, exc)
+        log.error("Error sending OTP to %s: %s", recipient_email, exc)
         return False
     return True
 
@@ -366,7 +368,8 @@ def enviar_token_recuperacion_email(user: User, token: str) -> bool:
 
     from cacao_accounting.messaging.email import EmailError, send_email
 
-    if not user.e_mail:
+    recipient_email = normalize_user_email(user.e_mail)
+    if not recipient_email:
         log.warning("User %s has no email configured", user.user)
         return False
     try:
@@ -385,13 +388,13 @@ def enviar_token_recuperacion_email(user: User, token: str) -> bool:
     )
     try:
         send_email(
-            to_email=user.e_mail,
+            to_email=recipient_email,
             subject=_("Cacao Accounting - Recuperación de contraseña"),
             body=body,
             is_html=False,
         )
     except EmailError as exc:
-        log.error("Error sending password reset to %s: %s", user.e_mail, exc)
+        log.error("Error sending password reset to %s: %s", recipient_email, exc)
         return False
     return True
 

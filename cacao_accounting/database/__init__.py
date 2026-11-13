@@ -28,9 +28,10 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import synonym
+from sqlalchemy.orm import synonym, validates
 from ulid import ULID
 
+from cacao_accounting.email_identity import normalize_user_email
 from cacao_accounting.i18n import _, _l
 
 _UNIT_CODE_FK = "unit.code"
@@ -322,6 +323,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     last_name = database.Column(database.String(80))
     last_name2 = database.Column(database.String(80))
     e_mail = database.Column(database.String(150), unique=True, nullable=True)
+    email_identity = database.Column(database.String(150), nullable=True, index=True)
     password = database.Column(database.LargeBinary(), nullable=False)
     classification = database.Column(database.String(15))
     active = database.Column(database.Boolean())
@@ -339,6 +341,13 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     company = database.Column(
         database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
     )
+
+    @validates("e_mail")
+    def _normalize_email(self, _key: str, value: str | None) -> str | None:
+        """Store and index the canonical identity for every ORM email assignment."""
+        normalized = normalize_user_email(value)
+        self.email_identity = normalized
+        return normalized
 
     @property
     def is_portal_customer(self) -> bool:
