@@ -18,6 +18,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     ApprovalMatrix,
+    Currency,
     Entity,
     Modules,
     Roles,
@@ -45,6 +46,7 @@ def _crear_app(enabled: bool):
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="admin", default=False, enabled=True),
                 Entity(
                     code="cacao",

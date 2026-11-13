@@ -18,7 +18,7 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.device_verification import generar_otp
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Entity, OtpVerification, User, database
+from cacao_accounting.database import Currency, Entity, OtpVerification, User, database
 
 CONTRASENA = "verify-otp-2026"
 
@@ -41,6 +41,8 @@ def _crear_app():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add_all(
             [
                 Entity(

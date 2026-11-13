@@ -17,7 +17,7 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.admin.session_security_service import lockout_minutes_remaining
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Entity, Modules, User, database
+from cacao_accounting.database import Currency, Entity, Modules, User, database
 
 
 @pytest.mark.parametrize(
@@ -47,6 +47,8 @@ def test_la_pantalla_muestra_un_minuto_para_sesenta_segundos(monkeypatch):
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="admin", default=False, enabled=True),

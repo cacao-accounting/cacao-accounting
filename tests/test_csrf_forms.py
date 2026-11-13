@@ -19,7 +19,7 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Entity, ExternalCounter, Modules, User, database
+from cacao_accounting.database import Currency, Entity, ExternalCounter, Modules, User, database
 
 CONTRASENA = "csrf-formularios-2026"
 
@@ -41,6 +41,7 @@ def formularios_csrf():
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Modules(module="admin", default=False, enabled=True),
                 Entity(

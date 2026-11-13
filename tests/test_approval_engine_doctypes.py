@@ -37,8 +37,15 @@ def motor_aprobaciones():
     )
     with application.app_context():
         database.create_all()
-        from cacao_accounting.database import Modules
+        from cacao_accounting.database import Currency, Modules
 
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Currency(code="USD", name="Dólar", decimals=2, active=True, default=False),
+                Currency(code="EUR", name="Euro", decimals=2, active=True, default=False),
+            ]
+        )
         database.session.add_all(
             [
                 Modules(module=nombre, default=False, enabled=True)

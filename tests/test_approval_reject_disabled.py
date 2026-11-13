@@ -20,6 +20,7 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     ApprovalAction,
     ApprovalRequest,
+    Currency,
     Entity,
     Modules,
     SalesInvoice,
@@ -57,6 +58,7 @@ def _crear_app():
         )
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Entity(
                     code="cacao",
                     name="Cacao",
@@ -75,9 +77,10 @@ def _crear_app():
                     active=True,
                     classification="admin",
                 ),
-                documento,
             ]
         )
+        database.session.flush()
+        database.session.add(documento)
         database.session.flush()
         database.session.add(
             ApprovalRequest(

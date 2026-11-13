@@ -18,7 +18,7 @@ from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Entity, Modules, Roles, RolesUser, User, database
+from cacao_accounting.database import Currency, Entity, Modules, Roles, RolesUser, User, database
 
 CONTRASENA = "ultimo-admin-2026"
 
@@ -42,6 +42,7 @@ def _crear_app(admins: int = 1, admin_por_rol: bool = False):
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="admin", default=False, enabled=True),
                 Entity(
                     code="cacao",

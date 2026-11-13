@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from cacao_accounting.database import AuditTrail, database
+from cacao_accounting.database import AuditTrail, User, database
 from cacao_accounting.query_tools.audit import log_query_tool_event, serialize_parameters
 from cacao_accounting.query_tools.context import QueryContext
 
@@ -40,9 +40,10 @@ def test_el_evento_persistido_no_contiene_el_secreto(app):
     """El after_json de auditoría no filtra el secreto de una lista."""
     tool_name = "redaction-probe"
     with app.app_context():
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
         log_query_tool_event(
             action="query_tool.executed",
-            context=QueryContext(user_id="audit"),
+            context=QueryContext(user_id=admin.id),
             tool_name=tool_name,
             parameters={"filters": [{"api_key": "list-secret"}]},
         )

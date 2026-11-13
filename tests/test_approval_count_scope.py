@@ -22,6 +22,7 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predete
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     ApprovalRequest,
+    Currency,
     Entity,
     Modules,
     User,
@@ -49,6 +50,7 @@ def aprobaciones_cloud():
         database.create_all()
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="admin", default=False, enabled=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Entity(
@@ -94,6 +96,7 @@ def aprobaciones_cloud():
                 UserCompanyAccess(user_id="aprobador", company_code="alpha"),
             ]
         )
+        database.session.flush()
         database.session.add_all(
             [
                 ApprovalRequest(

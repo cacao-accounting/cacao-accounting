@@ -58,15 +58,25 @@ def _crear_app():
                 Modules(module="admin", default=False, enabled=True),
                 Modules(module="accounting", default=False, enabled=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
+                UOM(code="UND", name="Unidad", is_active=True),
+                Roles(name="approver", note="Aprobador"),
+            ]
+        )
+        database.session.flush()
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 User(
                     id="admin",
                     user="admin",
@@ -75,10 +85,13 @@ def _crear_app():
                     active=True,
                     classification="admin",
                 ),
-                UOM(code="UND", name="Unidad", is_active=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Item(code="ART-1", name="Artículo", item_type="goods", default_uom="UND", is_active=True),
                 PriceList(name="Ventas", company="cacao", currency="NIO", is_selling=True, is_active=True),
-                Roles(name="approver", note="Aprobador"),
             ]
         )
         database.session.commit()
