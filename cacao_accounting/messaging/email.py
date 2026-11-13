@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import sqlite3
 import ssl
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -17,7 +18,7 @@ from cryptography.fernet import InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from flask import current_app, has_app_context
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from cacao_accounting.database import CacaoConfig, database
 from cacao_accounting.runtime_mode import is_desktop_mode
@@ -182,50 +183,127 @@ def _send_smtp_message(
     smtp.quit()
 
 
-def retry_email_queue_item(queue_id: str) -> Any:
-    """Reintenta el envío de un correo fallido desde la cola de correos."""
-    from datetime import datetime, timezone
+def _reserve_sqlite_email_delivery() -> None:
+    """Reserve SQLite's writer before reading an email delivery candidate."""
+    if database.engine.dialect.name != "sqlite":
+        return
+    try:
+        database.session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+    except OperationalError as exc:
+        error_code = getattr(exc.orig, "sqlite_errorcode", None)
+        if error_code is None or error_code & 0xFF not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+            raise
+        message = _("Otro envío de correo está en curso. Intente nuevamente.")
+        database.session.rollback()
+        raise EmailError(message) from exc
+
+
+def _email_queue_item_for_update(queue_id: str) -> Any:
+    """Load the queue row as a current read while holding its retry lock."""
     from cacao_accounting.database import EmailQueue
 
-    if is_desktop_mode():
+    return database.session.execute(
+        database.select(EmailQueue)
+        .where(EmailQueue.id == queue_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+
+
+def _persist_delivery_failure(queue_id: str, attempts: int, error_message: str) -> None:
+    """Leave an uncertain or failed delivery eligible for a later retry."""
+    database.session.rollback()
+    item = _email_queue_item_for_update(queue_id)
+    if item is None or item.status == "sent":
+        database.session.rollback()
+        return
+    item.status = "failed"
+    item.attempts = attempts
+    item.error_message = error_message
+    item.sent_at = None
+    database.session.commit()
+
+
+def _audit_retry_success(item: Any) -> None:
+    """Record a linked document notification without poisoning the queue commit."""
+    if not item.document_type or not item.document_id:
+        return
+    try:
+        with database.session.begin_nested():
+            from cacao_accounting.document_flow.repository import get_document
+            from cacao_accounting.audit_trail_service import log_email_sent
+
+            doc = get_document(item.document_type, item.document_id)
+            if doc:
+                log_email_sent(
+                    doc,
+                    recipients=item.recipient,
+                    subject=item.subject,
+                    comment=f"correo reintentado y enviado exitosamente a {item.recipient}",
+                )
+    except Exception as audit_exc:
+        LOGGER.warning("No se pudo registrar auditoría en reintento: %s", audit_exc)
+
+
+def deliver_email_queue_item(queue_id: str, *, retry: bool) -> tuple[Any, bool]:
+    """Serialize initial delivery and admin retries on the same queue row."""
+    from datetime import datetime, timezone
+
+    if retry and is_desktop_mode():
         raise EmailError(_("El reintento de envío de correos no está disponible en modo DESKTOP."))
 
-    item = database.session.get(EmailQueue, queue_id)
+    _reserve_sqlite_email_delivery()
+    item = _email_queue_item_for_update(queue_id)
     if not item:
         raise EmailError(_("El registro de correo no existe."))
-    if item.status not in {"pending", "failed"}:
+    if item.status == "sent" and not retry:
+        return item, False
+    eligible_statuses = {"pending", "failed"} if retry else {"pending"}
+    if item.status not in eligible_statuses:
         raise EmailError(_("Solo se pueden reintentar correos pendientes o fallidos."))
 
-    item.attempts = (item.attempts or 0) + 1
+    attempts = (item.attempts or 0) + (1 if retry else 0)
+    item.attempts = attempts
     try:
-        send_email(to_email=item.recipient, subject=item.subject, body=item.body, is_html=False)
-        item.status = "sent"
-        item.error_message = None
-        item.sent_at = datetime.now(timezone.utc)
-
-        if item.document_type and item.document_id:
-            try:
-                from cacao_accounting.document_flow.repository import get_document
-                from cacao_accounting.audit_trail_service import log_email_sent
-
-                doc = get_document(item.document_type, item.document_id)
-                if doc:
-                    log_email_sent(
-                        doc,
-                        recipients=item.recipient,
-                        subject=item.subject,
-                        comment=f"correo reintentado y enviado exitosamente a {item.recipient}",
-                    )
-            except Exception as audit_exc:
-                LOGGER.warning("No se pudo registrar auditoría en reintento: %s", audit_exc)
-
-        database.session.commit()
-        return item
+        send_email(to_email=item.recipient, subject=item.subject, body=item.body, is_html=item.is_html)
     except Exception as exc:
-        item.status = "failed"
-        item.error_message = str(exc)
+        try:
+            item.status = "failed"
+            item.attempts = attempts
+            item.error_message = str(exc)
+            item.sent_at = None
+            database.session.commit()
+        except Exception as persistence_exc:
+            database.session.rollback()
+            try:
+                _persist_delivery_failure(queue_id, attempts, str(exc))
+            except Exception:
+                database.session.rollback()
+                LOGGER.exception("No se pudo persistir el fallo del envío de correo %s", queue_id)
+            exc = persistence_exc
+        raise EmailError(_("No se pudo completar la entrega del correo: %(error)s") % {"error": exc}) from exc
+
+    item.status = "sent"
+    item.error_message = None
+    item.sent_at = datetime.now(timezone.utc)
+    if retry:
+        _audit_retry_success(item)
+    try:
         database.session.commit()
-        raise EmailError(_("Error al reintentar envío: %(error)s") % {"error": exc}) from exc
+    except Exception as exc:
+        try:
+            _persist_delivery_failure(queue_id, attempts, str(exc))
+        except Exception:
+            database.session.rollback()
+            LOGGER.exception("No se pudo persistir el estado reintentable del correo %s", queue_id)
+        raise EmailError(_("No se pudo completar la entrega del correo: %(error)s") % {"error": exc}) from exc
+    return item, True
+
+
+def retry_email_queue_item(queue_id: str) -> Any:
+    """Reintenta el envío de un correo fallido desde la cola de correos."""
+    item, _delivered = deliver_email_queue_item(queue_id, retry=True)
+    return item
 
 
 def can_send_transaction_emails() -> bool:

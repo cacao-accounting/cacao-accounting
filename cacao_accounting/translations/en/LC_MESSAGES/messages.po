@@ -2110,6 +2110,11 @@ msgstr "Email resent successfully."
 msgid "Error al reintentar envío: %(error)s"
 msgstr "Error retrying delivery: %(error)s"
 
+#: cacao_accounting/messaging/email.py
+#, python-format
+msgid "No se pudo completar la entrega del correo: %(error)s"
+msgstr "The email delivery could not be completed: %(error)s"
+
 #: cacao_accounting/admin/routes.py:424
 msgid "Método de valuacion guardado correctamente."
 msgstr "Valuation method saved successfully."
@@ -21193,6 +21198,10 @@ msgstr "Email sending retry is not available in DESKTOP mode."
 #: cacao_accounting/messaging/email.py:195
 msgid "El registro de correo no existe."
 msgstr "The email log does not exist."
+
+#: cacao_accounting/messaging/email.py
+msgid "Otro envío de correo está en curso. Intente nuevamente."
+msgstr "Another email delivery is in progress. Please try again."
 
 #: cacao_accounting/messaging/email.py
 msgid "Solo se pueden reintentar correos pendientes o fallidos."

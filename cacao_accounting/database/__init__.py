@@ -5416,6 +5416,7 @@ class EmailQueue(database.Model, BaseTabla):  # type: ignore[name-defined]
     recipient = database.Column(database.String(255), nullable=False)
     subject = database.Column(database.String(255), nullable=False)
     body = database.Column(database.Text(), nullable=False)
+    is_html = database.Column(database.Boolean(), nullable=False, default=False, server_default=database.false())
     status = database.Column(database.String(20), nullable=False, default="pending", index=True)
     error_message = database.Column(database.Text(), nullable=True)
     attempts = database.Column(database.Integer(), nullable=False, default=0)

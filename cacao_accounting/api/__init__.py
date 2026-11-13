@@ -852,14 +852,15 @@ def _send_document_emails(
     recipients: list[str],
     subject: str,
     body: str,
-) -> tuple[list[str], list[str]]:
+    *,
+    is_html: bool = False,
+) -> tuple[list[str], list[str], list[str]]:
     """Envía cada destinatario y persiste su resultado independiente en la cola."""
-    from datetime import datetime, timezone
-
     from cacao_accounting.database import EmailQueue
-    from cacao_accounting.messaging.email import send_email
+    from cacao_accounting.messaging.email import deliver_email_queue_item
 
     sent_recipients: list[str] = []
+    newly_sent_recipients: list[str] = []
     errors: list[str] = []
     for to_email in recipients:
         queue_item = EmailQueue(
@@ -868,6 +869,7 @@ def _send_document_emails(
             recipient=to_email,
             subject=subject,
             body=body,
+            is_html=is_html,
             status="pending",
             attempts=1,
         )
@@ -878,16 +880,14 @@ def _send_document_emails(
         # reconciliar y no se reenvía a ciegas.
         database.session.commit()
         try:
-            send_email(to_email=to_email, subject=subject, body=body, is_html=False)
-            queue_item.status = "sent"
-            queue_item.sent_at = datetime.now(timezone.utc)
-            sent_recipients.append(to_email)
+            result, delivered = deliver_email_queue_item(queue_item.id, retry=False)
+            if result.status == "sent":
+                sent_recipients.append(to_email)
+                if delivered:
+                    newly_sent_recipients.append(to_email)
         except Exception as exc:
-            queue_item.status = "failed"
-            queue_item.error_message = str(exc)
             errors.append(f"{to_email}: {exc}")
-        database.session.commit()
-    return sent_recipients, errors
+    return sent_recipients, newly_sent_recipients, errors
 
 
 @api.route("/api/documents/<document_type>/<document_id>/email", methods=["POST"])
@@ -916,10 +916,12 @@ def api_document_send_email(document_type: str, document_id: str):
     body = str(payload.get("body") or payload.get("message") or "").strip() or _(
         "Estimado(a),\n\nSe le notifica la emisión del documento #{document_no}.\n\nAtentamente,\n{company}"
     ).format(document_no=doc_no, company=company)
-    sent_recipients, errors = _send_document_emails(document_type, document_id, recipient_list, subject, body)
+    sent_recipients, newly_sent_recipients, errors = _send_document_emails(
+        document_type, document_id, recipient_list, subject, body
+    )
 
-    if sent_recipients:
-        recipients_str = ", ".join(sent_recipients)
+    if newly_sent_recipients:
+        recipients_str = ", ".join(newly_sent_recipients)
         log_email_sent(
             doc,
             recipients=recipients_str,
@@ -927,6 +929,8 @@ def api_document_send_email(document_type: str, document_id: str):
             comment=f"correo enviado exitosamente a {recipients_str}",
         )
         database.session.commit()
+
+    if sent_recipients:
         if errors:
             return (
                 jsonify(
