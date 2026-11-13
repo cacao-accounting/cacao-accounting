@@ -20,6 +20,7 @@ from cacao_accounting.database import (
     Address,
     CompanyParty,
     Contact,
+    Currency,
     Entity,
     Modules,
     Party,
@@ -51,6 +52,12 @@ def _crear_app():
             [
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="purchases", default=False, enabled=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 Entity(
                     code="cacao",
                     name="Cacao",

@@ -34,8 +34,10 @@ def portal_compartido():
     )
     with application.app_context():
         database.create_all()
-        from cacao_accounting.database import Entity, SalesInvoice, User
+        from cacao_accounting.database import Currency, Entity, Party, SalesInvoice, User
 
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add_all(
             [
                 Entity(
@@ -56,6 +58,21 @@ def portal_compartido():
                     enabled=True,
                     status="activo",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add(
+            Party(
+                id="SHARED-PARTY",
+                code="SHARED-PARTY",
+                name="Cliente compartido",
+                is_customer=True,
+                is_supplier=False,
+            )
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 SalesInvoice(
                     company="cacao",
                     document_no="INV-CA-1",

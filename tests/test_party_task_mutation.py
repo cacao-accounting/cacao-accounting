@@ -39,6 +39,7 @@ def terceros_mutacion():
         database.create_all()
         from cacao_accounting.database import (
             CompanyParty,
+            Currency,
             DocumentTask,
             Entity,
             Modules,
@@ -49,6 +50,7 @@ def terceros_mutacion():
 
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="purchases", default=False, enabled=True),
                 Modules(module="inventory", default=False, enabled=True),
@@ -72,6 +74,11 @@ def terceros_mutacion():
                     enabled=True,
                     status="activo",
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 User(
                     id="editor",
                     user="editor",
@@ -93,6 +100,11 @@ def terceros_mutacion():
                     password=proteger_passwd(CONTRASENA),
                     active=True,
                 ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 UserCompanyAccess(user_id="editor", company_code="cacao"),
                 UserCompanyAccess(user_id="gerente", company_code="cacao"),
                 UserCompanyAccess(user_id="lemedor", company_code="cacao"),

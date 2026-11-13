@@ -18,6 +18,7 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Accounts,
     CompanyParty,
+    Currency,
     Entity,
     Party,
     PartyAccount,
@@ -61,6 +62,13 @@ def _crear_app():
     )
     with application.app_context():
         database.create_all()
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Currency(code="USD", name="Dólar", decimals=2, active=True, default=False),
+            ]
+        )
+        database.session.flush()
         database.session.add(
             Entity(
                 code="cacao",
@@ -72,6 +80,7 @@ def _crear_app():
                 status="default",
             )
         )
+        database.session.flush()
         database.session.add_all(
             [
                 Accounts(

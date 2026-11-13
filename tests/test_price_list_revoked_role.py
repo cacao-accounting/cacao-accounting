@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    Currency,
     Entity,
     Modules,
     PriceList,
@@ -44,6 +45,8 @@ def _crear_app(rol_activo: bool):
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add_all(
             [
                 Modules(module="admin", default=False, enabled=True),

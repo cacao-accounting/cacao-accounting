@@ -19,6 +19,7 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Accounts,
     CompanyParty,
+    Currency,
     Entity,
     Party,
     PartyAccount,
@@ -42,6 +43,8 @@ def tercero_dual():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add(
             Entity(
                 code="cacao",

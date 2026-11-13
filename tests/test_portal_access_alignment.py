@@ -16,7 +16,7 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Entity, Party, User, database
+from cacao_accounting.database import Currency, Entity, Party, User, database
 
 CONTRASENA = "portal-alineacion-2026"
 
@@ -36,6 +36,8 @@ def portal_usuarios():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add(
             Entity(
                 code="cacao",
@@ -167,6 +169,8 @@ def test_desktop_no_redirige_al_portal():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
         database.session.add(
             Entity(
                 code="cacao",

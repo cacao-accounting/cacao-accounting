@@ -46,6 +46,7 @@ def terceros_cloud():
             BankAccount,
             BankTransaction,
             CompanyParty,
+            Currency,
             Entity,
             Modules,
             Party,
@@ -55,6 +56,7 @@ def terceros_cloud():
 
         database.session.add_all(
             [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="purchases", default=False, enabled=True),
                 Modules(module="cash", default=False, enabled=True),

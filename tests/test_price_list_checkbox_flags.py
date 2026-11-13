@@ -23,6 +23,7 @@ from cacao_accounting.database import (
     ItemPrice,
     Modules,
     PriceList,
+    UOM,
     User,
     database,
 )
@@ -45,6 +46,8 @@ def _crear_app():
     )
     with application.app_context():
         database.create_all()
+        database.session.add(UOM(code="Unidad", name="Unidad"))
+        database.session.flush()
         database.session.add_all(
             [
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
