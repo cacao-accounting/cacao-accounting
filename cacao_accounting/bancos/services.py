@@ -11,6 +11,8 @@ import json
 
 from typing import Any, TypedDict, cast
 
+from sqlalchemy.orm import aliased
+
 from cacao_accounting.exceptions import flash_error
 from cacao_accounting.default_scope import lock_default_scope
 
@@ -93,7 +95,7 @@ from cacao_accounting.fiscal_persistence_service import load_document_fiscal_lin
 
 from cacao_accounting.list_filters import apply_list_filters, apply_period_filter, attach_period_picker, require_period_company
 
-from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, primary_ledger_id
+from cacao_accounting.ledger_queries import primary_ledger_id
 
 
 from cacao_accounting.audit_trail_service import log_create
@@ -389,11 +391,18 @@ def petty_cash_ledger_balance(petty_cash: PettyCashAccount, as_of_date: date | N
     """
     if not petty_cash.account_id:
         return Decimal("0")
-    query = exclude_cancelled_gl_entries(
-        database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0))
-    ).where(
+    cancelled_source = aliased(GLEntry)
+    same_period_cancellation = database.exists(
+        database.select(cancelled_source.id).where(
+            cancelled_source.id == GLEntry.reversal_of,
+            cancelled_source.is_cancelled.is_(True),
+        )
+    )
+    query = database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
         GLEntry.account_id == petty_cash.account_id,
         GLEntry.company == petty_cash.company,
+        GLEntry.is_cancelled.is_(False),
+        database.or_(GLEntry.is_reversal.is_(False), ~same_period_cancellation),
     )
     ledger_id = primary_ledger_id(str(petty_cash.company))
     if ledger_id:

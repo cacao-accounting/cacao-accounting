@@ -26,12 +26,14 @@ from cacao_accounting.bancos.services import (
     create_default_petty_cash,
     create_petty_cash_replenishment,
     create_petty_cash_voucher,
+    petty_cash_ledger_balance,
     post_petty_cash_reconciliation_adjustment,
     replenish_petty_cash,
     set_petty_cash_default,
     set_petty_cash_replenishment_status,
     set_petty_cash_voucher_status,
 )
+from cacao_accounting.contabilidad.journal_service import duplicate_journal_as_reversal_draft, submit_journal
 from cacao_accounting.document_identifiers import (
     IdentifierConfigurationError,
     enforce_single_default_series,
@@ -525,6 +527,10 @@ def test_petty_cash_expense_cancellation_reverses_gl_and_reopens_voucher(repleni
     with application.app_context():
         expense = database.session.get(PettyCashExpense, expense_id)
         assert expense is not None and expense.journal_id
+        fund = database.session.get(PettyCashAccount, str(scenario["fund_id"]))
+        assert fund is not None
+        assert petty_cash_ledger_balance(fund) == Decimal("-75.0000")
+        assert petty_cash_ledger_balance(fund, as_of_date=posting_date.replace(day=19)) == Decimal("0")
         journal_id = str(expense.journal_id)
         original_entries = (
             database.session.execute(
@@ -590,6 +596,10 @@ def test_petty_cash_expense_cancellation_reverses_gl_and_reopens_voucher(repleni
             for entry in originals
         } == original_snapshot
         assert all(not entry.is_cancelled for entry in reversals)
+        fund = database.session.get(PettyCashAccount, str(scenario["fund_id"]))
+        assert fund is not None
+        assert petty_cash_ledger_balance(fund) == Decimal("0")
+        assert petty_cash_ledger_balance(fund, as_of_date=posting_date) == Decimal("0")
         assert sum((entry.debit for entry in entries if not entry.is_cancelled), Decimal("0")) == Decimal("75.0000")
         assert sum((entry.credit for entry in entries if not entry.is_cancelled), Decimal("0")) == Decimal("75.0000")
         assert all(
@@ -599,6 +609,45 @@ def test_petty_cash_expense_cancellation_reverses_gl_and_reopens_voucher(repleni
             )
             for account_id, debit, credit in original_amounts
         )
+
+
+def test_petty_cash_balance_includes_later_period_reversal(replenishment_app):
+    """A valid next-period reversal clears the balance only from its posting date."""
+    application, ids = replenishment_app
+    scenario = _prepare_delivered_expense_voucher(application, ids)
+    expense_id = _post_prepared_petty_cash_expense(application, scenario, ids["editor_user"])
+    with application.app_context():
+        expense = database.session.get(PettyCashExpense, expense_id)
+        assert expense is not None and expense.journal_id
+        fund = database.session.get(PettyCashAccount, str(scenario["fund_id"]))
+        assert fund is not None
+        november = date(2026, 11, 15)
+        fiscal_year_id = database.session.execute(
+            database.select(FiscalYear.id).filter_by(entity=str(scenario["company"]), name="2026")
+        ).scalar_one()
+        database.session.add(
+            AccountingPeriod(
+                entity=str(scenario["company"]),
+                fiscal_year_id=fiscal_year_id,
+                name="Noviembre 2026",
+                status="open",
+                enabled=True,
+                is_closed=False,
+                start=date(2026, 11, 1),
+                end=date(2026, 11, 30),
+            )
+        )
+        database.session.commit()
+        reversal = duplicate_journal_as_reversal_draft(
+            str(expense.journal_id),
+            user_id=ids["editor_user"],
+            reversal_date_raw=november,
+            reason="Reversión en el período siguiente",
+        )
+        submit_journal(reversal.id, user_id=ids["editor_user"])
+
+        assert petty_cash_ledger_balance(fund, as_of_date=date(2026, 10, 31)) == Decimal("-75.0000")
+        assert petty_cash_ledger_balance(fund, as_of_date=november) == Decimal("0")
 
 
 def test_petty_cash_expense_creation_rolls_back_gl_if_subledger_insert_fails(replenishment_app):
