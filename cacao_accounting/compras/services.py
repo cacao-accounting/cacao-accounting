@@ -2916,19 +2916,24 @@ def _handle_purchase_invoice_edit_post(registro):
         registro.supplier_invoice_no = request.form.get("supplier_invoice_no") or registro.supplier_invoice_no
         if "tax_template_id" in request.form:
             registro.tax_template_id = request.form.get("tax_template_id") or None
+        registro.transaction_currency = (
+            request.form.get("transaction_currency") or request.form.get("currency") or registro.transaction_currency
+        )
         _validate_purchase_tax_template(
             registro.company,
             registro.tax_template_id,
             registro.transaction_currency,
         )
         registro.remarks = request.form.get("remarks")
+        _copy_logistics(registro, form=request.form)
         for item in _active_invoice_items(registro.id):
             item.is_superseded = True
         _total_qty, total = _save_purchase_invoice_items(registro.id)
+        items = _active_invoice_items(registro.id)
+        _validate_purchase_invoice_source(registro, items)
         fx_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
         registro.exchange_rate = fx_rate
         base_total, _base = _compute_base_amounts(total, fx_rate)
-        items = _active_invoice_items(registro.id)
         grand_total = calculate_document_total_with_taxes(registro, total, items, request.form.get("tax_summary_payload"))
         base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
         registro.total = total

@@ -1309,8 +1309,10 @@ def _voucher_form_state(fondos: list) -> SimpleNamespace:
     fondo = next((registro for registro in fondos if registro.id == petty_cash_id), None)
     return SimpleNamespace(
         company=request.form.get("company") or "",
+        company_label=request.form.get("company") or "",
         naming_series_id=request.form.get("naming_series") or "",
         petty_cash_id=petty_cash_id,
+        petty_cash_label=f"{fondo.company} - {fondo.name}" if fondo else "",
         transaction_currency=fondo.currency if fondo else "",
         posting_date=None,
         amount=None,

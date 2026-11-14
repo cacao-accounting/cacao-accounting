@@ -220,11 +220,10 @@ def inventario_uom_lista():
 @login_required
 def inventario_bodega_lista():
     """Listado de bodegas."""
-    consulta = database.paginate(
-        _inventory_company_scoped_select(Warehouse),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        Warehouse,
+        (Warehouse.code, Warehouse.name),
+        include_status=False,
     )
     titulo = _("Listado de Bodegas") + " - " + APPNAME
     return render_template("inventario/bodega_lista.html", consulta=consulta, titulo=titulo)
