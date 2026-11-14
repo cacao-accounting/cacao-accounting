@@ -64,6 +64,8 @@ def role_permission_app(tmp_path):
         database.session.commit()
         user_id, role_id, module_id = str(user.id), role.id, module.id
         admin_module_id = admin_module.id
+        database.session.add(RolesAccess(rol_id=role_id, module_id=admin_module_id, access=True, view=True))
+        database.session.commit()
 
     yield app, user_id, role_id, module_id
 
@@ -110,7 +112,6 @@ def test_concurrent_admin_saves_leave_one_complete_role_permission_matrix(role_p
             database.session.execute(
                 database.select(RolesAccess).where(
                     RolesAccess.rol_id == role_id,
-                    RolesAccess.module_id == module_id,
                 )
             )
             .scalars()
@@ -118,4 +119,5 @@ def test_concurrent_admin_saves_leave_one_complete_role_permission_matrix(role_p
         )
 
     assert len(permissions) == 1
+    assert permissions[0].module_id == module_id
     assert (permissions[0].access, permissions[0].view) in {(True, False), (False, True)}
