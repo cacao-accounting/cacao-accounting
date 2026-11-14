@@ -199,7 +199,7 @@ def create_batch(params: BatchParams) -> Batch:
     return batch
 
 
-def batch_balance_rows(batch_id: str) -> list[dict[str, Any]]:
+def batch_balance_rows(batch_id: str, companies: list[str] | None = None) -> list[dict[str, Any]]:
     """Devuelve el saldo de un lote por bodega desde el ledger físico.
 
     Usa el predicado compartido que excluye los pares de anulación del mismo
@@ -208,15 +208,14 @@ def batch_balance_rows(batch_id: str) -> list[dict[str, Any]]:
     """
     from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
 
-    rows = database.session.execute(
-        exclude_cancelled_stock_entries(
-            select(
-                StockLedgerEntry.warehouse,
-                func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
-                func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
-            ).where(StockLedgerEntry.batch_id == batch_id)
-        ).group_by(StockLedgerEntry.warehouse)
-    ).all()
+    query = select(
+        StockLedgerEntry.warehouse,
+        func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
+        func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
+    ).where(StockLedgerEntry.batch_id == batch_id)
+    if companies is not None:
+        query = query.where(StockLedgerEntry.company.in_(companies)) if companies else query.where(database.false())
+    rows = database.session.execute(exclude_cancelled_stock_entries(query).group_by(StockLedgerEntry.warehouse)).all()
     return [
         {"warehouse": warehouse, "balance_qty": _decimal_value(qty), "stock_value": _decimal_value(value)}
         for warehouse, qty, value in rows

@@ -692,11 +692,16 @@ def inventario_bodega(warehouse_id):
 @inventario.route("/batch/list")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_lote_lista():
     """Listado de lotes de inventario."""
+    companies = _inventory_authorized_companies()
+    batch_ids = database.select(StockLedgerEntry.batch_id).where(
+        StockLedgerEntry.company.in_(companies), StockLedgerEntry.batch_id.is_not(None)
+    )
     consulta = database.paginate(
         apply_list_filters(
-            database.select(Batch),
+            database.select(Batch).where(Batch.id.in_(batch_ids)),
             Batch,
             (Batch.batch_no, Batch.item_code),
             include_status=False,
@@ -748,17 +753,34 @@ def inventario_lote_nuevo():
 @inventario.route("/batch/<batch_id>")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_lote(batch_id):
     """Detalle de lote con saldo por bodega y movimientos."""
+    companies = _inventory_authorized_companies()
+    if not companies:
+        abort(404)
     registro = database.session.get(Batch, batch_id)
     if not registro:
         abort(404)
+    has_authorized_activity = database.session.execute(
+        database.select(StockLedgerEntry.id)
+        .where(
+            StockLedgerEntry.batch_id == registro.id,
+            StockLedgerEntry.company.in_(companies),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if has_authorized_activity is None:
+        abort(404)
     item = database.session.execute(database.select(Item).filter_by(code=registro.item_code)).scalars().first()
-    balances = batch_balance_rows(registro.id)
+    balances = batch_balance_rows(registro.id, companies=companies)
     movimientos = (
         database.session.execute(
             database.select(StockLedgerEntry)
-            .filter_by(batch_id=registro.id)
+            .where(
+                StockLedgerEntry.batch_id == registro.id,
+                StockLedgerEntry.company.in_(companies),
+            )
             .order_by(StockLedgerEntry.posting_date.desc(), StockLedgerEntry.created.desc(), StockLedgerEntry.id.desc())
             .limit(50)
         )
