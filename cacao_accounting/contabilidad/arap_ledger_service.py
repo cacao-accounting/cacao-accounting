@@ -17,6 +17,7 @@ from decimal import Decimal
 from typing import Any, Iterable, cast
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy.orm.attributes import set_committed_value
 
 from cacao_accounting.database import (
     ARAPLedgerBookEntry,
@@ -1788,7 +1789,27 @@ def _cancellation_originals(document: Any, source_types: set[str], source_ids: s
     )
     if not include_reversal_movements:
         query = query.where(ARAPLedgerEntry.is_reversal.is_(False))
-    return list(database.session.execute(query).scalars().all())
+    originals = list(database.session.execute(query).scalars().all())
+    if not originals:
+        return originals
+
+    original_ids = [str(movement.id) for movement in originals]
+    book_entries = (
+        database.session.execute(
+            select(ARAPLedgerBookEntry).where(ARAPLedgerBookEntry.ledger_entry_id.in_(original_ids)).with_for_update()
+        )
+        .scalars()
+        .all()
+    )
+    book_entries_by_movement: dict[str, list[ARAPLedgerBookEntry]] = {movement_id: [] for movement_id in original_ids}
+    for book_entry in book_entries:
+        book_entries_by_movement[str(book_entry.ledger_entry_id)].append(book_entry)
+    for movement in originals:
+        # A prior document lookup may have opened a MySQL REPEATABLE READ
+        # snapshot before a concurrent allocation committed. Locking reads
+        # above fetch current book evidence; install it without marking rows dirty.
+        set_committed_value(movement, "book_entries", book_entries_by_movement[str(movement.id)])
+    return originals
 
 
 def _reverse_arap_movement(

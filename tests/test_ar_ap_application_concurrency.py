@@ -54,7 +54,7 @@ from cacao_accounting.internal_control_service import audit_actor
 pytestmark = pytest.mark.database
 
 
-def _snapshot_arap_movements(movements):
+def _snapshot_arap_movements(movements, book_entries_by_movement=None):
     """Capture immutable subledger evidence and per-book valuations by row ID."""
     return {
         str(movement.id): (
@@ -91,7 +91,11 @@ def _snapshot_arap_movements(movements):
                         book_entry.is_reversal,
                         book_entry.reversal_of,
                     )
-                    for book_entry in movement.book_entries
+                    for book_entry in (
+                        book_entries_by_movement[str(movement.id)]
+                        if book_entries_by_movement is not None
+                        else movement.book_entries
+                    )
                 )
             ),
         )
@@ -99,7 +103,7 @@ def _snapshot_arap_movements(movements):
     }
 
 
-def _assert_append_only_arap_reversals(originals, reversals):
+def _assert_append_only_arap_reversals(originals, reversals, book_entries_by_movement=None):
     """Require one linked, amount-inverting reversal for each original ledger row."""
     originals_by_id = {str(movement.id): movement for movement in originals}
     assert len(reversals) == len(originals_by_id)
@@ -110,8 +114,14 @@ def _assert_append_only_arap_reversals(originals, reversals):
         assert reversal.is_reversal is True
         assert reversal.event_type == "cancellation"
         assert reversal.document_amount == -original.document_amount
-        original_books = {str(entry.id): entry for entry in original.book_entries}
-        reversal_books = {str(entry.reversal_of): entry for entry in reversal.book_entries}
+        original_book_entries = (
+            book_entries_by_movement[str(original.id)] if book_entries_by_movement is not None else original.book_entries
+        )
+        reversal_book_entries = (
+            book_entries_by_movement[str(reversal.id)] if book_entries_by_movement is not None else reversal.book_entries
+        )
+        original_books = {str(entry.id): entry for entry in original_book_entries}
+        reversal_books = {str(entry.reversal_of): entry for entry in reversal_book_entries}
         assert set(reversal_books) == set(original_books)
         for original_book_id, original_book in original_books.items():
             reversal_book = reversal_books[original_book_id]
@@ -1071,22 +1081,44 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
             cancellation_lock_attempted.set()
         locked_document = original_document_lock(document)
         if locked_document.id == payment_id:
+            # MySQL REPEATABLE READ can retain the snapshot from the earlier
+            # document lookup while waiting for the application transaction.
+            # Use locking reads to capture the committed allocation after the
+            # cancellation acquired the payment lock.
             originals = (
                 database.session.execute(
-                    select(ARAPLedgerEntry).where(
+                    select(ARAPLedgerEntry)
+                    .where(
                         ARAPLedgerEntry.is_reversal.is_(False),
                         or_(
                             (ARAPLedgerEntry.document_type == "payment_entry") & (ARAPLedgerEntry.document_id == payment_id),
                             (ARAPLedgerEntry.reference_type == "payment_entry") & (ARAPLedgerEntry.reference_id == payment_id),
                         ),
                     )
+                    .with_for_update()
                 )
                 .scalars()
                 .all()
             )
-            gl_originals = database.session.execute(select(GLEntry).where(GLEntry.id.in_(payment_gl_ids))).scalars().all()
+            gl_originals = (
+                database.session.execute(select(GLEntry).where(GLEntry.id.in_(payment_gl_ids)).with_for_update())
+                .scalars()
+                .all()
+            )
             cancellation_snapshot["arap_original_ids"] = [str(movement.id) for movement in originals]
-            cancellation_snapshot["arap"] = _snapshot_arap_movements(originals)
+            arap_book_entries = (
+                database.session.execute(
+                    select(ARAPLedgerBookEntry)
+                    .where(ARAPLedgerBookEntry.ledger_entry_id.in_(cancellation_snapshot["arap_original_ids"]))
+                    .with_for_update()
+                )
+                .scalars()
+                .all()
+            )
+            book_entries_by_movement = {movement_id: [] for movement_id in cancellation_snapshot["arap_original_ids"]}
+            for book_entry in arap_book_entries:
+                book_entries_by_movement[str(book_entry.ledger_entry_id)].append(book_entry)
+            cancellation_snapshot["arap"] = _snapshot_arap_movements(originals, book_entries_by_movement)
             cancellation_snapshot["gl_originals"] = {
                 str(entry.id): (
                     entry.company,
@@ -1206,8 +1238,41 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
             .scalars()
             .all()
         )
-        assert _snapshot_arap_movements(payment_arap_originals) == cancellation_snapshot["arap"]
-        _assert_append_only_arap_reversals(payment_arap_originals, payment_arap_reversals)
+        original_book_entries = (
+            database.session.execute(
+                select(ARAPLedgerBookEntry)
+                .where(ARAPLedgerBookEntry.ledger_entry_id.in_(cancellation_snapshot["arap_original_ids"]))
+                .with_for_update()
+            )
+            .scalars()
+            .all()
+        )
+        book_entries_by_movement = {movement_id: [] for movement_id in cancellation_snapshot["arap_original_ids"]}
+        for book_entry in original_book_entries:
+            book_entries_by_movement[str(book_entry.ledger_entry_id)].append(book_entry)
+        arap_snapshot_after = _snapshot_arap_movements(payment_arap_originals, book_entries_by_movement)
+        assert arap_snapshot_after == cancellation_snapshot["arap"]
+        arap_book_rows = (
+            database.session.execute(
+                select(ARAPLedgerBookEntry)
+                .where(
+                    ARAPLedgerBookEntry.ledger_entry_id.in_(
+                        [str(movement.id) for movement in payment_arap_originals + payment_arap_reversals]
+                    )
+                )
+                .with_for_update()
+            )
+            .scalars()
+            .all()
+        )
+        book_entries_by_movement = {str(movement.id): [] for movement in payment_arap_originals + payment_arap_reversals}
+        for book_entry in arap_book_rows:
+            book_entries_by_movement[str(book_entry.ledger_entry_id)].append(book_entry)
+        _assert_append_only_arap_reversals(
+            payment_arap_originals,
+            payment_arap_reversals,
+            book_entries_by_movement,
+        )
 
         payment_gl_originals = database.session.execute(select(GLEntry).where(GLEntry.id.in_(payment_gl_ids))).scalars().all()
         assert {
