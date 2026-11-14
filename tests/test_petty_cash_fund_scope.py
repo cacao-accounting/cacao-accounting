@@ -21,12 +21,16 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
+from cacao_accounting.bancos.services import post_petty_cash_expense_journal
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AccountingPeriod,
     Accounts,
     Book,
+    CostCenter,
     Currency,
     Entity,
+    FiscalYear,
     Modules,
     PettyCashAccount,
     PettyCashExpense,
@@ -143,6 +147,83 @@ def caja_multicompania():
         }
         database.session.add_all(fondos.values())
         database.session.flush()
+        # Un gasto posteado (docstatus=1) nace del GL (Dr Gasto / Cr Caja
+        # Chica); para poder anularlo el fondo alpha necesita su asiento
+        # asociado, el periodo contable que lo cobija y quien lo posteo.
+        database.session.add_all(
+            [
+                Accounts(
+                    code="5.01.01.001",
+                    name="Suministros de personal",
+                    entity="alpha",
+                    group=False,
+                    active=True,
+                    enabled=True,
+                    classification="expense",
+                    account_type="expense",
+                ),
+                CostCenter(code="ADM-ALPHA", name="Administración Alpha", entity="alpha", active=True, enabled=True),
+                FiscalYear(
+                    entity="alpha",
+                    name="2026",
+                    year_start_date=date(2026, 1, 1),
+                    year_end_date=date(2026, 12, 31),
+                    is_closed=False,
+                ),
+            ]
+        )
+        database.session.flush()
+        fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(entity="alpha")).scalar_one()
+        database.session.add(
+            AccountingPeriod(
+                entity="alpha",
+                fiscal_year_id=fiscal_year.id,
+                name="Octubre 2026",
+                status="open",
+                enabled=True,
+                is_closed=False,
+                start=date(2026, 10, 1),
+                end=date(2026, 10, 31),
+            )
+        )
+        database.session.add_all(
+            [
+                User(
+                    id="contador",
+                    user="contador",
+                    name="Contador Alpha",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                ),
+                UserCompanyAccess(user_id="contador", company_code="alpha"),
+            ]
+        )
+        database.session.flush()
+        rol_contador = Roles(name="contador-alpha", note="Postea asientos de caja chica")
+        database.session.add(rol_contador)
+        database.session.flush()
+        modulo_contabilidad = database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one()
+        database.session.add(
+            RolesAccess(
+                rol_id=rol_contador.id,
+                module_id=modulo_contabilidad.id,
+                access=True,
+                create=True,
+                approve=True,
+            )
+        )
+        database.session.add(RolesUser(user_id="contador", role_id=rol_contador.id, active=True))
+        database.session.flush()
+        asiento_gasto_alpha = post_petty_cash_expense_journal(
+            company="alpha",
+            petty_cash=fondos["alpha"],
+            expense_account_code="5.01.01.001",
+            concept="Cafe alpha",
+            amount=Decimal("10"),
+            cost_center_code="ADM-ALPHA",
+            posted_date=FECHA,
+            actor_id="contador",
+        )
         database.session.add_all(
             [
                 PettyCashExpense(
@@ -152,6 +233,7 @@ def caja_multicompania():
                     expense_account_code="5.01.01.001",
                     amount=Decimal("10"),
                     posting_date=FECHA,
+                    journal_id=asiento_gasto_alpha.id,
                     docstatus=1,
                 ),
                 PettyCashExpense(
@@ -212,7 +294,7 @@ def _iniciar(client) -> None:
     assert response.status_code == 200
 
 
-def _configurar_permiso_caja(application, *, anular: bool, editar: bool) -> None:
+def _configurar_permiso_caja(application, *, anular: bool, editar: bool, reversar_asiento: bool = False) -> None:
     """Asigna al usuario una acción de caja precisa para comprobar guards HTTP."""
     with application.app_context():
         user_id = "tesorera"
@@ -230,6 +312,18 @@ def _configurar_permiso_caja(application, *, anular: bool, editar: bool) -> None
                 edit=editar,
             )
         )
+        if reversar_asiento:
+            # Anular un gasto posteado revierte su asiento; la reversa exige
+            # autoridad contable (set_null) sobre el módulo de contabilidad.
+            accounting_module = database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one()
+            database.session.add(
+                RolesAccess(
+                    rol_id=role.id,
+                    module_id=accounting_module.id,
+                    access=True,
+                    set_null=True,
+                )
+            )
         database.session.add(RolesUser(user_id=user_id, role_id=role.id, active=True))
         database.session.commit()
 
@@ -288,9 +382,9 @@ def test_gasto_precarga_el_vale_propio(caja_multicompania):
 
 
 def test_anular_gasto_usa_permiso_anular_y_alcance_de_compania(caja_multicompania):
-    """Una persona con permiso anular, sin editar, puede anular en su compañía."""
+    """Con permiso anular (sin editar) y autoridad contable, anula en su compañía."""
     application, _ = caja_multicompania
-    _configurar_permiso_caja(application, anular=True, editar=False)
+    _configurar_permiso_caja(application, anular=True, editar=False, reversar_asiento=True)
     with application.app_context():
         expense = database.session.execute(
             database.select(PettyCashExpense).filter_by(company="alpha", concept="Cafe alpha")
