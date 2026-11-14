@@ -17,7 +17,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import arap_ledger_service
 from cacao_accounting.contabilidad import posting_service
-from cacao_accounting.contabilidad.arap_allocation import list_cached_open_items
+from cacao_accounting.contabilidad.arap_allocation import list_cached_open_items, list_open_items
 from cacao_accounting.contabilidad.arap_ledger_service import post_payment_application_ar_ap
 from cacao_accounting.contabilidad.journal_service import (
     JournalValidationError,
@@ -1026,7 +1026,13 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
             party_type="customer",
             party_id=seed["customer_id"],
         )
+        ledger_items = list_open_items(
+            company=seed["company"],
+            party_type="customer",
+            party_id=seed["customer_id"],
+        )
         assert all(item.document_type != "payment_entry" or item.document_id != payment_id for item in cached_items)
+        assert all(item.document_type != "payment_entry" or item.document_id != payment_id for item in ledger_items)
 
 
 def test_cancel_partially_paid_invoice_closes_its_open_item_cache(arap_application):
