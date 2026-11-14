@@ -704,6 +704,71 @@ def test_petty_cash_expense_creation_rolls_back_gl_if_subledger_insert_fails(rep
                 connection.exec_driver_sql("DROP TRIGGER IF EXISTS reject_petty_cash_expense_insert")
 
 
+def test_concurrent_voucher_liquidation_posts_one_expense(replenishment_app):
+    """Two independent requests can create only one expense for a delivered voucher."""
+    from threading import Barrier
+
+    application, ids = replenishment_app
+    scenario = _prepare_delivered_expense_voucher(application, ids)
+    start = Barrier(2)
+
+    def liquidate() -> str:
+        """Attempt the same voucher settlement using an isolated request session."""
+        with application.app_context():
+            try:
+                start.wait(timeout=5)
+                expense = create_petty_cash_expense(
+                    company=str(scenario["company"]),
+                    petty_cash_id=str(scenario["fund_id"]),
+                    expense_account_code=str(scenario["expense_code"]),
+                    concept="Compra de útiles de oficina",
+                    amount=Decimal("75.00"),
+                    cost_center_code=str(scenario["cost_center_code"]),
+                    voucher_id=str(scenario["voucher_id"]),
+                    actor_id=ids["editor_user"],
+                    posted_date=date.fromisoformat(str(scenario["posting_date"])),
+                )
+                return f"posted:{expense.id}"
+            except (ValueError, IntegrityError) as exc:
+                database.session.rollback()
+                return f"rejected:{exc}"
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = [future.result(timeout=30) for future in [executor.submit(liquidate) for _ in range(2)]]
+
+    assert sum(result.startswith("posted:") for result in results) == 1
+    with application.app_context():
+        expenses = (
+            database.session.execute(database.select(PettyCashExpense).filter_by(voucher_id=str(scenario["voucher_id"])))
+            .scalars()
+            .all()
+        )
+        assert len(expenses) == 1 and expenses[0].docstatus == 1
+        journals = (
+            database.session.execute(
+                database.select(ComprobanteContable).where(ComprobanteContable.id == expenses[0].journal_id)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(journals) == 1 and journals[0].status == "submitted"
+        entries = (
+            database.session.execute(
+                database.select(GLEntry).where(
+                    GLEntry.voucher_id == expenses[0].journal_id,
+                    GLEntry.is_cancelled.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(entries) == 2
+        assert sum((Decimal(str(entry.debit)) for entry in entries), Decimal("0")) == Decimal("75.0000")
+        assert sum((Decimal(str(entry.credit)) for entry in entries), Decimal("0")) == Decimal("75.0000")
+
+
 def test_petty_cash_expense_cancellation_rolls_back_gl_if_subledger_update_fails(replenishment_app):
     """A failed cancellation update keeps the posted expense, voucher and GL active."""
     application, ids = replenishment_app

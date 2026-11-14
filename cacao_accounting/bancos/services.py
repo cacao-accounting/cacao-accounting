@@ -1041,6 +1041,7 @@ def _lock_and_validate_petty_cash_voucher(
     if not voucher_id:
         return None
     try:
+        _begin_sqlite_write_transaction()
         voucher = cast(PettyCashVoucher, _lock_row_for_transition(PettyCashVoucher, voucher_id))
         if voucher.company != company or voucher.petty_cash_id != petty_cash_id:
             raise ValueError(_("El vale origen no pertenece a la caja chica seleccionada."))
