@@ -138,9 +138,12 @@ def dual_role_s2p_scenario(tmp_path: Path, request):
         _get_or_create(UOM, code="UND", defaults={"name": "Unidad"})
         database.session.flush()
 
-        if database.session.execute(
-            select(UserCompanyAccess).filter_by(user_id=admin.id, company_code="cacao")
-        ).scalar_one_or_none() is None:
+        if (
+            database.session.execute(
+                select(UserCompanyAccess).filter_by(user_id=admin.id, company_code="cacao")
+            ).scalar_one_or_none()
+            is None
+        ):
             database.session.add(UserCompanyAccess(user_id=admin.id, company_code="cacao"))
 
         _get_or_create(
@@ -237,9 +240,10 @@ def dual_role_s2p_scenario(tmp_path: Path, request):
             select(Accounts.id).where(Accounts.entity == "cacao", Accounts.code == "2101")
         ).scalar_one()
 
-        if database.session.execute(
-            select(CompanyParty).filter_by(company="cacao", party_id=party.id)
-        ).scalar_one_or_none() is None:
+        if (
+            database.session.execute(select(CompanyParty).filter_by(company="cacao", party_id=party.id)).scalar_one_or_none()
+            is None
+        ):
             database.session.add(
                 CompanyParty(
                     company="cacao",
@@ -249,9 +253,10 @@ def dual_role_s2p_scenario(tmp_path: Path, request):
                     allow_purchase_invoice_without_receipt=True,
                 )
             )
-        if database.session.execute(
-            select(PartyAccount).filter_by(party_id=party.id, company="cacao")
-        ).scalar_one_or_none() is None:
+        if (
+            database.session.execute(select(PartyAccount).filter_by(party_id=party.id, company="cacao")).scalar_one_or_none()
+            is None
+        ):
             database.session.add(
                 PartyAccount(
                     party_id=party.id,
