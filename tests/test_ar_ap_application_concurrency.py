@@ -50,6 +50,72 @@ from cacao_accounting.database import (
 pytestmark = pytest.mark.database
 
 
+def _snapshot_arap_movements(movements):
+    """Capture immutable subledger evidence and per-book valuations by row ID."""
+    return {
+        str(movement.id): (
+            movement.company,
+            movement.ledger_type,
+            movement.party_type,
+            movement.party_id,
+            movement.document_type,
+            movement.document_id,
+            movement.posting_date,
+            movement.event_type,
+            movement.currency,
+            movement.document_amount,
+            movement.economic_line_id,
+            movement.reference_type,
+            movement.reference_id,
+            movement.voucher_type,
+            movement.voucher_id,
+            movement.is_reversal,
+            movement.reversal_of,
+            tuple(
+                sorted(
+                    (
+                        str(book_entry.id),
+                        str(book_entry.ledger_entry_id),
+                        str(book_entry.ledger_id),
+                        book_entry.document_amount,
+                        book_entry.book_amount,
+                        book_entry.exchange_rate,
+                        book_entry.debit,
+                        book_entry.credit,
+                        book_entry.account_id,
+                        book_entry.gl_entry_id,
+                        book_entry.is_reversal,
+                        book_entry.reversal_of,
+                    )
+                    for book_entry in movement.book_entries
+                )
+            ),
+        )
+        for movement in movements
+    }
+
+
+def _assert_append_only_arap_reversals(originals, reversals):
+    """Require one linked, amount-inverting reversal for each original ledger row."""
+    originals_by_id = {str(movement.id): movement for movement in originals}
+    assert len(reversals) == len(originals_by_id)
+    assert {str(reversal.reversal_of) for reversal in reversals} == set(originals_by_id)
+
+    for reversal in reversals:
+        original = originals_by_id[str(reversal.reversal_of)]
+        assert reversal.is_reversal is True
+        assert reversal.event_type == "cancellation"
+        assert reversal.document_amount == -original.document_amount
+        original_books = {str(entry.id): entry for entry in original.book_entries}
+        reversal_books = {str(entry.reversal_of): entry for entry in reversal.book_entries}
+        assert set(reversal_books) == set(original_books)
+        for original_book_id, original_book in original_books.items():
+            reversal_book = reversal_books[original_book_id]
+            assert reversal_book.is_reversal is True
+            assert reversal_book.book_amount == -original_book.book_amount
+            assert (reversal_book.debit, reversal_book.credit) == (original_book.credit, original_book.debit)
+
+
 @pytest.fixture
 def arap_application(tmp_path):
     """Create an isolated business database or use an opt-in external engine."""
@@ -775,6 +841,94 @@ def test_cancellation_waits_for_manual_allocation_and_reverses_its_movement(arap
         assert allocation_cache.unallocated_amount == Decimal("70.0000")
 
 
+def test_cancel_manual_allocation_closes_its_own_open_item(arap_application):
+    """Cancelling an allocating journal closes its own cache and reopens the target."""
+    application, seed = arap_application
+    opening_journal_id = _seed_opening_journal(application, seed)
+
+    with application.app_context():
+        target = database.session.execute(
+            select(ARAPOpenItem).filter_by(document_type="journal_entry", document_id=opening_journal_id)
+        ).scalar_one()
+        adjustment = create_journal_draft(
+            _credit_adjustment_payload(seed, target.id, "70", "Crédito a saldo inicial"),
+            user_id=seed["user_id"],
+        )
+        submit_journal(adjustment.id, user_id=seed["user_id"])
+        adjustment_id = str(adjustment.id)
+        own_cache = database.session.execute(
+            select(ARAPOpenItem).filter_by(document_type="journal_entry", document_id=adjustment_id)
+        ).scalar_one()
+        assert own_cache.unallocated_amount == Decimal("0.0000")
+        assert own_cache.status == "closed"
+        originals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.voucher_type == "journal_entry",
+                    ARAPLedgerEntry.voucher_id == adjustment_id,
+                    ARAPLedgerEntry.is_reversal.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert originals
+        original_snapshot = _snapshot_arap_movements(originals)
+        database.session.commit()
+
+    with application.app_context():
+        adjustment = database.session.get(ComprobanteContable, adjustment_id)
+        assert adjustment is not None
+        cancel_submitted_journal(
+            adjustment_id,
+            user_id=seed["user_id"],
+            reason="Corrección del crédito",
+            cancellation_date=seed["today"],
+        )
+
+    with application.app_context():
+        adjustment = database.session.get(ComprobanteContable, adjustment_id)
+        own_cache = database.session.execute(
+            select(ARAPOpenItem).filter_by(document_type="journal_entry", document_id=adjustment_id)
+        ).scalar_one()
+        target_cache = database.session.execute(
+            select(ARAPOpenItem).filter_by(document_type="journal_entry", document_id=opening_journal_id)
+        ).scalar_one()
+        originals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.voucher_type == "journal_entry",
+                    ARAPLedgerEntry.voucher_id == adjustment_id,
+                    ARAPLedgerEntry.is_reversal.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        reversals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(ARAPLedgerEntry.reversal_of.in_([row.id for row in originals]))
+            )
+            .scalars()
+            .all()
+        )
+        cached_items = list_cached_open_items(
+            company=seed["company"],
+            party_type="customer",
+            party_id=seed["customer_id"],
+        )
+        assert adjustment is not None and adjustment.status == "cancelled"
+        assert own_cache.unallocated_amount == Decimal("0.0000")
+        assert own_cache.status == "closed"
+        assert target_cache.unallocated_amount == Decimal("100.0000")
+        assert target_cache.status == "open"
+        assert ARAPLedgerEntry.document_balance("journal_entry", adjustment_id) == Decimal("0.0000")
+        assert ARAPLedgerEntry.document_balance("journal_entry", opening_journal_id) == Decimal("100.0000")
+        assert _snapshot_arap_movements(originals) == original_snapshot
+        _assert_append_only_arap_reversals(originals, reversals)
+        assert all(item.document_id != adjustment_id for item in cached_items)
+
+
 def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(arap_application, monkeypatch):
     """Cancelling a payment after waiting on allocation sees and reverses that allocation."""
     application, seed = arap_application
@@ -873,3 +1027,84 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
             party_id=seed["customer_id"],
         )
         assert all(item.document_type != "payment_entry" or item.document_id != payment_id for item in cached_items)
+
+
+def test_cancel_partially_paid_invoice_closes_its_open_item_cache(arap_application):
+    """Cancelling an invoice closes its cache even after reversing its allocation."""
+    application, seed = arap_application
+    seed = _seed_payment_application_business_data(application, seed, "customer")
+    invoice_id = seed["invoices"][0]
+
+    with application.app_context():
+        invoice = database.session.get(SalesInvoice, invoice_id)
+        payment = database.session.get(PaymentEntry, seed["payment_id"])
+        assert invoice is not None and payment is not None
+        post_payment_application_ar_ap(
+            payment,
+            invoice,
+            document_amount=Decimal("40"),
+            payment_amount=Decimal("40"),
+            allocation_date=seed["today"],
+        )
+        database.session.commit()
+        cache = database.session.execute(
+            select(ARAPOpenItem).filter_by(document_type="sales_invoice", document_id=invoice_id)
+        ).scalar_one()
+        assert cache.unallocated_amount == Decimal("20.0000")
+        originals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.document_type == "sales_invoice",
+                    ARAPLedgerEntry.document_id == invoice_id,
+                    ARAPLedgerEntry.is_reversal.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(originals) == 2
+        original_snapshot = _snapshot_arap_movements(originals)
+
+    with application.app_context():
+        invoice = database.session.get(SalesInvoice, invoice_id)
+        assert invoice is not None
+        # This scenario seeds the AR/AP ledger directly to isolate the cancellation cache transition.
+        arap_ledger_service.cancel_document_ar_ap(invoice, cancellation_date=seed["today"])
+        invoice.docstatus = 2
+        database.session.commit()
+
+    with application.app_context():
+        invoice = database.session.get(SalesInvoice, invoice_id)
+        cache = database.session.execute(
+            select(ARAPOpenItem).filter_by(document_type="sales_invoice", document_id=invoice_id)
+        ).scalar_one()
+        originals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.document_type == "sales_invoice",
+                    ARAPLedgerEntry.document_id == invoice_id,
+                    ARAPLedgerEntry.is_reversal.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        reversals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(ARAPLedgerEntry.reversal_of.in_([row.id for row in originals]))
+            )
+            .scalars()
+            .all()
+        )
+        cached_items = list_cached_open_items(
+            company=seed["company"],
+            party_type="customer",
+            party_id=seed["customer_id"],
+        )
+        assert invoice is not None and invoice.docstatus == 2
+        assert cache.unallocated_amount == Decimal("0.0000")
+        assert cache.status == "closed"
+        assert ARAPLedgerEntry.document_balance("sales_invoice", invoice_id) == Decimal("0.0000")
+        assert _snapshot_arap_movements(originals) == original_snapshot
+        _assert_append_only_arap_reversals(originals, reversals)
+        assert all(item.document_type != "sales_invoice" or item.document_id != invoice_id for item in cached_items)
