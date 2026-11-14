@@ -21,6 +21,7 @@ from cacao_accounting.database import (
     Batch,
     Item,
     ItemCategory,
+    ItemUOMConversion,
     StockEntry,
     StockEntryItem,
     StockLedgerEntry,
@@ -94,6 +95,43 @@ from cacao_accounting.i18n import _
 logger = logging.getLogger(__name__)
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
+
+
+def _stock_entry_item_choices() -> list[dict[str, Any]]:
+    """Build the item catalog with its configured UOMs and base factors."""
+    items = database.session.execute(database.select(Item)).scalars().all()
+    item_codes = [item.code for item in items]
+    conversions = (
+        database.session.execute(database.select(ItemUOMConversion).where(ItemUOMConversion.item_code.in_(item_codes)))
+        .scalars()
+        .all()
+        if item_codes
+        else []
+    )
+    conversions_by_item: dict[str, list[ItemUOMConversion]] = {}
+    for conversion in conversions:
+        conversions_by_item.setdefault(conversion.item_code, []).append(conversion)
+
+    choices = []
+    for item in items:
+        item_conversions = conversions_by_item.get(item.code, [])
+        factors = {item.default_uom: "1"} if item.default_uom else {}
+        for conversion in item_conversions:
+            factors[conversion.from_uom] = str(conversion.conversion_factor)
+        choices.append(
+            {
+                "code": item.code,
+                "name": item.name,
+                "uom": item.default_uom,
+                "allowed_uoms": list(factors),
+                "uom_factors": factors,
+                "has_batch": item.has_batch,
+                "has_serial_no": item.has_serial_no,
+                "has_expiry_date": item.has_expiry_date,
+            }
+        )
+    return choices
+
 
 INVENTARIO_INVENTARIO_ENTRADA_NUEVO = "inventario.inventario_entrada_nuevo"
 
@@ -760,17 +798,7 @@ def inventario_entrada_nuevo():
     ]
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
-    items_disponibles = [
-        {
-            "code": item.code,
-            "name": item.name,
-            "uom": item.default_uom,
-            "has_batch": item.has_batch,
-            "has_serial_no": item.has_serial_no,
-            "has_expiry_date": item.has_expiry_date,
-        }
-        for (item,) in database.session.execute(database.select(Item)).all()
-    ]
+    items_disponibles = _stock_entry_item_choices()
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     purpose = request.args.get("purpose") or _infer_stock_entry_purpose(request.path)
     formulario.purpose.data = purpose or formulario.purpose.data
@@ -902,17 +930,7 @@ def inventario_entrada_editar(entry_id: str):
     ]
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
-    items_disponibles = [
-        {
-            "code": item.code,
-            "name": item.name,
-            "uom": item.default_uom,
-            "has_batch": item.has_batch,
-            "has_serial_no": item.has_serial_no,
-            "has_expiry_date": item.has_expiry_date,
-        }
-        for (item,) in database.session.execute(database.select(Item)).all()
-    ]
+    items_disponibles = _stock_entry_item_choices()
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
