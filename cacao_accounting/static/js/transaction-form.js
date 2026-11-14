@@ -624,6 +624,7 @@
           const newFactor = Number(line.uom_factors?.[uom]);
           if (oldFactor > 0 && newFactor > 0) {
             line.qty = toNumber(line.qty) * oldFactor / newFactor;
+            line.rate = toNumber(line.rate) * newFactor / oldFactor;
           }
           line.uom = uom;
           this.calcAmount(line);

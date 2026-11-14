@@ -30,6 +30,7 @@ from cacao_accounting.database import (
 from cacao_accounting.inventario import services as inventory_services
 from cacao_accounting.inventario.routes import _stock_entry_item_choices
 from cacao_accounting.inventario.services import (
+    _delete_and_resave_stock_entry_items,
     _handle_stock_entry_edit_post,
     _render_stock_entry_edit_form,
     _render_stock_reconciliation_edit_form,
@@ -94,24 +95,30 @@ def test_stock_entry_item_catalog_exposes_configured_uoms_and_base_factors(app):
         assert saved_line.qty == Decimal("2")
         assert saved_line.uom == commercial_uom
         assert saved_line.qty_in_base_uom == Decimal("24.000000000")
+        assert saved_line.basic_rate == Decimal("5.0000")
+        assert saved_line.amount == Decimal("10.0000")
 
         database.session.rollback()
 
 
-def test_transaction_form_preserves_and_converts_commercial_uom(app):
-    """The production Alpine form keeps the edit quantity and converts it on UOM change."""
+def test_transaction_form_converts_uom_without_changing_stock_value(app, monkeypatch):
+    """Changing UOM preserves physical quantity and the persisted line value."""
+    suffix = uuid4().hex[:8].upper()
+    base_uom = f"EA{suffix}"
+    commercial_uom = f"BX{suffix}"
+    item_code = f"ITEM-{suffix}"
     config = {
         "viewKey": "draft",
         "items": [
             {
-                "code": "BOLT",
+                "code": item_code,
                 "name": "Bolts",
-                "default_uom": "EA",
-                "allowed_uoms": ["EA", "BX"],
-                "uom_factors": {"EA": "1", "BX": "12"},
+                "default_uom": base_uom,
+                "allowed_uoms": [base_uom, commercial_uom],
+                "uom_factors": {base_uom: "1", commercial_uom: "12"},
             }
         ],
-        "uoms": [{"code": "EA", "name": "Each"}, {"code": "BX", "name": "Box"}],
+        "uoms": [{"code": base_uom, "name": "Each"}, {"code": commercial_uom, "name": "Box"}],
     }
     js_path = Path(__file__).parents[1] / "cacao_accounting/static/js/transaction-form.js"
     script = r"""
@@ -124,18 +131,105 @@ eval(fs.readFileSync(process.argv[1], 'utf8'));
 alpineInit();
 const form = transactionFormFactory(JSON.parse(process.argv[2]));
 form.refreshCatalogPrice = async () => {};
-const line = form.normalizeLine({item_code: 'BOLT', item_name: 'Bolts', qty: 2, uom: 'BX', rate: 5});
-if (line.uom !== 'BX' || line.qty !== 2) throw new Error('edit changed the stored commercial quantity');
-form.onUomChange(line, 'EA');
-if (line.uom !== 'EA' || line.qty !== 24) throw new Error('UOM change did not preserve base quantity');
+const config = JSON.parse(process.argv[2]);
+const baseUom = config.items[0].default_uom;
+const commercialUom = config.items[0].allowed_uoms[1];
+const line = form.normalizeLine({item_code: config.items[0].code, item_name: 'Bolts', qty: 2, uom: commercialUom, rate: 5});
+if (line.uom !== commercialUom || line.qty !== 2 || line.rate !== 5 || line.amount !== 10) {
+  throw new Error('edit changed the stored commercial line before UOM conversion');
+}
+form.onUomChange(line, baseUom);
+if (line.uom !== baseUom || line.qty !== 24) throw new Error('UOM change did not preserve base quantity');
+if (Math.abs(line.rate - (5 / 12)) > 1e-9) throw new Error('UOM change did not convert the unit rate');
+if (Math.abs(line.amount - 10) > 1e-9) throw new Error('UOM change did not preserve the line amount');
+form.onUomChange(line, commercialUom);
+if (line.uom !== commercialUom || Math.abs(line.qty - 2) > 1e-9) throw new Error('UOM roundtrip changed physical quantity');
+if (Math.abs(line.rate - 5) > 1e-9 || Math.abs(line.amount - 10) > 1e-9) {
+  throw new Error('UOM roundtrip changed unit rate or line amount');
+}
+form.onUomChange(line, baseUom);
+process.stdout.write(JSON.stringify(line));
 """
-    result = subprocess.run(
-        ["node", "-e", script, str(js_path), json.dumps(config)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
+    with app.app_context():
+        database.session.add_all([UOM(code=base_uom, name="Each"), UOM(code=commercial_uom, name="Box")])
+        database.session.flush()
+        item = Item(
+            code=item_code,
+            name="Bolts",
+            item_type="goods",
+            is_stock_item=True,
+            default_uom=base_uom,
+        )
+        database.session.add(item)
+        database.session.flush()
+        database.session.add(
+            ItemUOMConversion(
+                item_code=item_code,
+                from_uom=commercial_uom,
+                to_uom=base_uom,
+                conversion_factor=Decimal("12"),
+            )
+        )
+        entry = StockEntry(company="cacao", purpose="material_receipt", transaction_currency="NIO", base_currency="NIO")
+        database.session.add(entry)
+        database.session.flush()
+        original_line = StockEntryItem(
+            stock_entry_id=entry.id,
+            item_code=item_code,
+            qty=Decimal("2"),
+            uom=commercial_uom,
+            qty_in_base_uom=Decimal("24"),
+            basic_rate=Decimal("5"),
+            amount=Decimal("10"),
+        )
+        database.session.add(original_line)
+        database.session.flush()
+        assert (original_line.qty, original_line.uom, original_line.basic_rate, original_line.amount) == (
+            Decimal("2"),
+            commercial_uom,
+            Decimal("5"),
+            Decimal("10"),
+        )
+
+        result = subprocess.run(
+            ["node", "-e", script, str(js_path), json.dumps(config)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        converted_line = json.loads(result.stdout)
+        assert converted_line["uom"] == base_uom
+        assert converted_line["qty"] == 24
+        assert converted_line["rate"] == pytest.approx(5 / 12)
+        assert converted_line["amount"] == pytest.approx(10)
+
+        monkeypatch.setattr(inventory_services, "_validate_stock_entry_company", lambda _value, _action: "cacao")
+        monkeypatch.setattr(inventory_services, "_validate_stock_entry_dimensions", lambda *_args: None)
+        form_data = {
+            "purpose": "material_receipt",
+            "company": "cacao",
+            "posting_date": "2026-11-14",
+            "transaction_currency": "NIO",
+            "item_code_0": item_code,
+            "qty_0": str(converted_line["qty"]),
+            "uom_0": converted_line["uom"],
+            "rate_0": str(converted_line["rate"]),
+            "amount_0": str(converted_line["amount"]),
+        }
+        with app.test_request_context("/stock-entry/test/edit", method="POST", data=form_data):
+            inventory_services._update_stock_entry_from_form(entry)
+            _delete_and_resave_stock_entry_items(entry)
+
+        saved_line = database.session.execute(
+            database.select(StockEntryItem).filter_by(stock_entry_id=entry.id, item_code=item_code)
+        ).scalar_one()
+        assert saved_line.qty == Decimal("24.000000000")
+        assert saved_line.uom == base_uom
+        assert saved_line.qty_in_base_uom == Decimal("24.000000000")
+        assert saved_line.basic_rate == Decimal("0.4167")
+        assert saved_line.amount == Decimal("10.0000")
+        database.session.rollback()
 
 
 def test_stock_entry_edit_renderer_reuses_rejected_post_lines(app):
