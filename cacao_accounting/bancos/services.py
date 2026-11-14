@@ -769,15 +769,23 @@ _PETTY_CASH_VOUCHER_STATUS_FLOW = {
 def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str) -> PettyCashVoucher:
     """Transiciona el estado de un vale (borrador -> entregado -> liquidado | cancelado)."""
     new_status = (new_status or "").strip().lower()
+    try:
+        _begin_sqlite_write_transaction()
+        voucher = cast(PettyCashVoucher, _lock_row_for_transition(PettyCashVoucher, voucher.id))
+    except Exception:
+        database.session.rollback()
+        raise
     current = voucher.voucher_status or "borrador"
     allowed = _PETTY_CASH_VOUCHER_STATUS_FLOW.get(current, set())
     if new_status not in allowed:
+        database.session.rollback()
         raise ValueError(
             _("Transición de estado no válida: %(current)s -> %(new_status)s") % {"current": current, "new_status": new_status}
         )
     if new_status == "liquidado":
         expense = database.session.get(PettyCashExpense, voucher.expense_id) if voucher.expense_id else None
         if expense is None or expense.voucher_id != voucher.id or expense.docstatus != 1 or not expense.journal_id:
+            database.session.rollback()
             raise ValueError(_("Un vale solo puede liquidarse mediante un gasto contabilizado."))
         journal = database.session.get(ComprobanteContable, expense.journal_id)
         has_active_gl = database.session.execute(
@@ -790,7 +798,13 @@ def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str) ->
             .limit(1)
         ).scalar_one_or_none()
         if journal is None or journal.status != "submitted" or not has_active_gl:
+            database.session.rollback()
             raise ValueError(_("Un vale solo puede liquidarse mediante un gasto con asiento GL activo."))
+    if new_status == "cancelado" and voucher.expense_id:
+        expense = database.session.get(PettyCashExpense, voucher.expense_id)
+        if expense and expense.docstatus == 1:
+            database.session.rollback()
+            raise ValueError(_("No se puede cancelar un vale con un gasto contabilizado activo."))
     voucher.voucher_status = new_status
     if new_status == "cancelado":
         voucher.docstatus = 2

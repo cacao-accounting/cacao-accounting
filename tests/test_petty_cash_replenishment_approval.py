@@ -481,6 +481,38 @@ def test_delivered_voucher_form_posts_expense_and_reconciles_gl(replenishment_ap
         }
 
 
+def test_posted_voucher_cannot_be_cancelled_while_expense_is_active(replenishment_app):
+    """An active posted expense must be reversed before its voucher can be cancelled."""
+    application, ids = replenishment_app
+    scenario = _prepare_delivered_expense_voucher(application, ids)
+    expense_id = _post_prepared_petty_cash_expense(application, scenario, ids["editor_user"])
+    with application.app_context():
+        voucher = database.session.get(PettyCashVoucher, str(scenario["voucher_id"]))
+        assert voucher is not None and voucher.expense_id == expense_id
+        voucher.voucher_status = "entregado"
+        database.session.commit()
+        with pytest.raises(ValueError, match="gasto contabilizado activo"):
+            set_petty_cash_voucher_status(voucher, "cancelado")
+        connection = database.session.connection()
+        assert not connection.connection.driver_connection.in_transaction
+        persisted_voucher = database.session.get(PettyCashVoucher, str(scenario["voucher_id"]))
+        persisted_expense = database.session.get(PettyCashExpense, expense_id)
+        assert persisted_voucher is not None and persisted_voucher.voucher_status == "entregado"
+        assert persisted_voucher.expense_id == expense_id
+        assert persisted_expense is not None and persisted_expense.docstatus == 1
+
+
+def test_missing_voucher_releases_sqlite_write_transaction(replenishment_app):
+    """A failed row lock must release SQLite's writer reservation."""
+    application, _ids = replenishment_app
+    with application.app_context():
+        missing_voucher = PettyCashVoucher(id="missing-petty-cash-voucher")
+        with pytest.raises(ValueError, match="documento no existe"):
+            set_petty_cash_voucher_status(missing_voucher, "cancelado")
+        connection = database.session.connection()
+        assert not connection.connection.driver_connection.in_transaction
+
+
 def test_petty_cash_expense_cancellation_reverses_gl_and_reopens_voucher(replenishment_app):
     """A successful cancellation preserves original GL rows and reopens its voucher."""
     application, ids = replenishment_app
