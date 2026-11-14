@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import SplitResult, unquote, urlsplit
 
-from flask import current_app, has_request_context, request
+from flask import abort, current_app, has_request_context, request
 from werkzeug.exceptions import HTTPException
 from weasyprint import HTML
 from weasyprint.urls import URLFetcher, URLFetcherResponse, path2url
@@ -18,7 +18,7 @@ from jinja2 import BaseLoader, StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
 from sqlalchemy import select
 
-from cacao_accounting.database import database
+from cacao_accounting.database import Entity, database
 from cacao_accounting.printing.exceptions import (
     PrintPermissionError,
     PrintTemplateNotFoundError,
@@ -31,7 +31,7 @@ from cacao_accounting.printing.models import (
     PrintTemplateVersion,
     PublicDocumentValidation,
 )
-from cacao_accounting.printing.registry import PrintableDocumentDefinition, get_printable_document
+from cacao_accounting.printing.registry import PRINTABLE_DOCUMENTS, PrintableDocumentDefinition, get_printable_document
 from cacao_accounting.printing.settings import external_validation_base_url, external_validation_enabled
 from cacao_accounting.printing.validation import ValidationService
 from cacao_accounting.printing.validators import validate_css_safety, validate_template_security
@@ -224,7 +224,7 @@ class PrintService:
         doc_def = get_printable_document(document_type)
         if doc_def is None:
             raise TemplateValidationError(
-                _("Document type %(document_type)s is not registered.") % {"document_type": document_type}
+                _("Tipo de documento %(document_type)s no registrado.") % {"document_type": document_type}
             )
 
         try:
@@ -384,8 +384,8 @@ class PrintService:
             PrintJobLog(
                 company_code=company_code,
                 user_id=user_id,
-                document_type=document_type,
-                document_id=document_id,
+                document_type=document_type[:80],
+                document_id=document_id[:26],
                 template_id=template.id if template else None,
                 template_version=template.version if template else None,
                 output_format=output_format,
@@ -405,6 +405,7 @@ class PrintService:
     ) -> dict[str, Any]:
         doc_def = get_printable_document(document_type)
         if doc_def is None:
+            self._authorize_unknown_document_attempt(company_code)
             raise PrintableDocumentNotRegisteredError(
                 _("Tipo de documento %(document_type)s no registrado.") % {"document_type": document_type}
             )
@@ -419,6 +420,19 @@ class PrintService:
         self._inject_audit_metadata(context, document_id, company_code)
         self._inject_validation_context(context, document_type, document_id, company_code)
         return context
+
+    @staticmethod
+    def _authorize_unknown_document_attempt(company_code: str) -> None:
+        """Require access to a printable module before auditing an unknown type."""
+        from cacao_accounting.decorators import exige_acceso_compania_cualquiera
+
+        company_exists = database.session.execute(
+            select(Entity.code).where(Entity.code == company_code, Entity.enabled.is_(True))
+        ).scalar_one_or_none()
+        if company_exists is None:
+            abort(404)
+        modules = tuple(sorted({definition["permission"].split(".", 1)[0] for definition in PRINTABLE_DOCUMENTS.values()}))
+        exige_acceso_compania_cualquiera(modules, company_code)
 
     def _inject_audit_metadata(self, context: dict[str, Any], document_id: str, company_code: str) -> None:
         """Add creation and approval actors from the immutable audit trail."""

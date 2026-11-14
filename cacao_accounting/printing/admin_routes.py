@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from cacao_accounting.database import Bank, BankAccount, Entity, Roles, RolesUser, database
 from cacao_accounting.decorators import resolve_required_company, _single_authorized_company
-from cacao_accounting.printing.exceptions import PrintingError, TemplateValidationError
+from cacao_accounting.printing.exceptions import PrintableDocumentNotRegisteredError, PrintingError, TemplateValidationError
 from cacao_accounting.printing.models import PrintTemplate, PrintTemplateVersion
 from cacao_accounting.printing.registry import get_printable_document, list_printable_documents
 from cacao_accounting.printing.service import PrintService
@@ -235,6 +235,8 @@ def preview_template(template_id: int):
             template_id=template.id,
             sample=True,
         )
+    except PrintableDocumentNotRegisteredError:
+        abort(404)
     except PrintingError as exc:
         return _("Error al generar la vista previa: %(error)s") % {"error": exc}, 500
 
