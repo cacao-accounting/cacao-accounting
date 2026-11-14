@@ -1229,6 +1229,7 @@ def _build_row_metadata(
             {
                 "code": account_code,
                 "parent": parent_code,
+                "section": row.get("section"),
                 "has_children": bool(child_counts.get(account_code)),
                 "level": _resolve_row_level(row, account_code),
                 "drilldown_url": _build_drill_down_url(
@@ -1283,6 +1284,7 @@ def _group_rows_by_field(
 ) -> list[dict[str, object]]:
     grouped_rows: list[dict[str, object]] = []
     current_group: str | None = None
+    group_index = -1
     group_debit = Decimal("0")
     group_credit = Decimal("0")
     for index, row in enumerate(display_rows):
@@ -1292,13 +1294,16 @@ def _group_rows_by_field(
             if current_group is not None:
                 grouped_rows.append(_build_group_subtotal_row(group_debit, group_credit, ledger_currency))
             group_title = _(group_by.replace("_", " ").title())
+            group_index += 1
             grouped_rows.append({"__row_type": "group", "__group_title": f"{group_title}: {group_value}"})
             current_group = group_value
             group_debit = Decimal("0")
             group_credit = Decimal("0")
         group_debit = _add_to_decimal_or_zero(group_debit, row.get("debit"))
         group_credit = _add_to_decimal_or_zero(group_credit, row.get("credit"))
-        grouped_rows.append(row)
+        grouped_row = dict(row)
+        grouped_row["__tree_group"] = group_index
+        grouped_rows.append(grouped_row)
     if current_group is not None:
         grouped_rows.append(_build_group_subtotal_row(group_debit, group_credit, ledger_currency))
     return grouped_rows

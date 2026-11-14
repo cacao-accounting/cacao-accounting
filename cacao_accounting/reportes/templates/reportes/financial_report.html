@@ -126,7 +126,11 @@
     </div>
     {% endif %}
     <div class="ca-report-table-wrapper">
-      <table class="ca-table ca-report-table">
+      <table
+        class="ca-table ca-report-table"
+        data-expand-label="{{ _('Expandir') }}"
+        data-collapse-label="{{ _('Colapsar') }}"
+      >
         <caption style="display:none;">{{ report_title }}</caption>
         <thead>
           <tr>
@@ -157,9 +161,19 @@
           </tr>
           {% else %}
             {% set meta = row.get('__meta') %}
-          <tr class="{% if meta and meta.is_group %}ca-group-row{% endif %}">
+          <tr
+            class="{% if meta and meta.is_group %}ca-group-row{% endif %}"
+            data-tree-section="{% if row.get('__tree_group') is not none %}group-{{ row.get('__tree_group') }}{% elif meta %}{{ meta.section or '' }}{% endif %}"
+          >
             {% for column in columns %}
-            <td class="{% if column in right_align_columns %}text-end{% endif %}" {% if meta and meta.code %}data-code="{{ meta.code }}" data-parent="{{ meta.parent }}" data-level="{{ meta.level }}"{% endif %}>
+            <td
+              class="{% if column in right_align_columns %}text-end{% endif %}"
+              {% if column == 'account_code' and meta and meta.code %}
+              data-code="{{ meta.code }}"
+              data-parent="{{ meta.parent }}"
+              data-level="{{ meta.level }}"
+              {% endif %}
+            >
               {% if column == 'account_code' and row.get(column) not in (None, '—', '') %}
               <span class="ca-tree-label" data-indent="{{ (meta.level if meta else 1) - 1 }}">
                 {% if meta and meta.drilldown_url %}
@@ -210,7 +224,7 @@
   .ca-total-label{font-size:.75rem;color:var(--ca-text-secondary)}
   .ca-total-value{font-size:.8125rem;text-align:right}
   .ca-total-ok{justify-content:center;font-weight:600;color:#198754}
-  .ca-tree-toggle{cursor:pointer;font-weight:600}
+  .ca-tree-toggle{padding:0;border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;font-weight:600;line-height:inherit}
   .ca-report-table tbody tr.ca-report-group,.ca-report-table tbody tr.ca-report-subtotal{background:var(--ca-surface-hover);color:var(--ca-text)}
   .ca-group-row{background:rgba(13,110,253,.04)!important;font-weight:600}
   .ca-tree-label{display:inline-flex;align-items:center;gap:.35rem}
@@ -240,49 +254,7 @@
       });
     }
 
-    const rows = Array.from(document.querySelectorAll('.ca-report-table tbody tr'));
-    rows.forEach(function (row) {
-      const cell = row.querySelector('td[data-code]');
-      if (!cell) return;
-      const parent = cell.dataset.parent || '';
-      if (parent) row.dataset.parentCode = parent;
-    });
-
-    function toggleChildren(code, hide) {
-      rows.forEach(function (row) {
-        if ((row.dataset.parentCode || '') !== code) return;
-        row.style.display = hide ? 'none' : '';
-        const childCell = row.querySelector('td[data-code]');
-        if (!childCell) return;
-        const childCode = childCell.dataset.code || '';
-        if (hide) toggleChildren(childCode, true);
-      });
-    }
-
-    rows.forEach(function (row) {
-      const cell = row.querySelector('td[data-code]');
-      if (!cell) return;
-      const code = cell.dataset.code || '';
-      if (!code) return;
-      const hasChildren = rows.some(function (candidate) {
-        return (candidate.dataset.parentCode || '') === code;
-      });
-      if (!hasChildren) return;
-      const text = cell.textContent || '';
-      cell.textContent = '';
-      const toggle = document.createElement('span');
-      toggle.className = 'ca-tree-toggle';
-      toggle.textContent = '▾';
-      cell.appendChild(toggle);
-      cell.appendChild(document.createTextNode(' ' + text));
-      let collapsed = false;
-      toggle.addEventListener('click', function (event) {
-        event.preventDefault();
-        collapsed = !collapsed;
-        toggle.textContent = collapsed ? '▸' : '▾';
-        toggleChildren(code, collapsed);
-      });
-    });
 </script>
+<script src="{{ url_for('static', filename='js/financial-report-tree.js') }}"></script>
 
 {% endblock %}
