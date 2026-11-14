@@ -854,8 +854,11 @@ def inventario_entrada_nuevo():
     }
     if request.method == "POST":
         if formulario.validate():
-            return _handle_stock_entry_new_post(request.form)
-        flash(_("Revise los datos de la entrada de almacén."), "danger")
+            response = _handle_stock_entry_new_post(request.form)
+            if response is not None:
+                return response
+        else:
+            flash(_("Revise los datos de la entrada de almacén."), "danger")
 
     if purpose == "stock_reconciliation":
         return render_template(
