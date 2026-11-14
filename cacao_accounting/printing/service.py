@@ -22,6 +22,7 @@ from cacao_accounting.database import database
 from cacao_accounting.printing.exceptions import (
     PrintPermissionError,
     PrintTemplateNotFoundError,
+    PrintableDocumentNotRegisteredError,
     TemplateValidationError,
 )
 from cacao_accounting.printing.models import (
@@ -140,7 +141,14 @@ class PrintService:
                 output_format="html_preview",
             )
             return html
-        except (PrintPermissionError, PrintTemplateNotFoundError, TemplateValidationError, TemplateError, ValueError) as exc:
+        except (
+            PrintableDocumentNotRegisteredError,
+            PrintPermissionError,
+            PrintTemplateNotFoundError,
+            TemplateValidationError,
+            TemplateError,
+            ValueError,
+        ) as exc:
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -183,7 +191,14 @@ class PrintService:
                 output_format="pdf",
             )
             return bytes(pdf)
-        except (PrintPermissionError, PrintTemplateNotFoundError, TemplateValidationError, TemplateError, ValueError) as exc:
+        except (
+            PrintableDocumentNotRegisteredError,
+            PrintPermissionError,
+            PrintTemplateNotFoundError,
+            TemplateValidationError,
+            TemplateError,
+            ValueError,
+        ) as exc:
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -390,7 +405,9 @@ class PrintService:
     ) -> dict[str, Any]:
         doc_def = get_printable_document(document_type)
         if doc_def is None:
-            raise ValueError(_("Tipo de documento %(document_type)s no registrado.") % {"document_type": document_type})
+            raise PrintableDocumentNotRegisteredError(
+                _("Tipo de documento %(document_type)s no registrado.") % {"document_type": document_type}
+            )
         if sample:
             context = doc_def["sample_context_builder"](user=user, company=company_code)
             self._inject_validation_context(context, document_type, "sample", company_code)

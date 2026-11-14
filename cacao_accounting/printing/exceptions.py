@@ -19,3 +19,7 @@ class PrintPermissionError(PrintingError):
 
 class TemplateValidationError(PrintingError):
     """Raised when template validation fails."""
+
+
+class PrintableDocumentNotRegisteredError(PrintingError):
+    """Raised when a printable document type is not registered."""
