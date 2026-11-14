@@ -489,6 +489,8 @@ def test_posted_voucher_cannot_be_cancelled_while_expense_is_active(replenishmen
     scenario = _prepare_delivered_expense_voucher(application, ids)
     expense_id = _post_prepared_petty_cash_expense(application, scenario, ids["editor_user"])
     with application.app_context():
+        if database.engine.dialect.name != "sqlite":
+            pytest.skip("La comprobación de BEGIN IMMEDIATE solo aplica a SQLite.")
         voucher = database.session.get(PettyCashVoucher, str(scenario["voucher_id"]))
         assert voucher is not None and voucher.expense_id == expense_id
         voucher.voucher_status = "entregado"
@@ -508,6 +510,8 @@ def test_missing_voucher_releases_sqlite_write_transaction(replenishment_app):
     """A failed row lock must release SQLite's writer reservation."""
     application, _ids = replenishment_app
     with application.app_context():
+        if database.engine.dialect.name != "sqlite":
+            pytest.skip("La comprobación de BEGIN IMMEDIATE solo aplica a SQLite.")
         missing_voucher = PettyCashVoucher(id="missing-petty-cash-voucher")
         with pytest.raises(ValueError, match="documento no existe"):
             set_petty_cash_voucher_status(missing_voucher, "cancelado")
