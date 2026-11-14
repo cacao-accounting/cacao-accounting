@@ -162,15 +162,16 @@ def _require_flow_company_access(payload: dict[str, Any], action: str = "crear")
     module = _module_for_document_type(source_type)
     if module:
         if source_type in {"purchase_order", "purchase_receipt", "delivery_note"} and action == "consultar":
-            access_modules = ("sales", "inventory") if source_type == "delivery_note" else ("purchases", "inventory")
-            exige_acceso_compania_cualquiera(access_modules, getattr(source, "company", None), action)
+            exige_acceso_compania_cualquiera(
+                _document_read_access_modules(source_type), getattr(source, "company", None), action
+            )
         else:
             exige_acceso_compania(module, getattr(source, "company", None), action)
 
 
 def _module_for_document_type(document_type: str) -> str | None:
     """Map a document-flow type to its operational ACL module."""
-    return {
+    module = {
         "sales_request": "sales",
         "sales_quotation": "sales",
         "sales_order": "sales",
@@ -187,6 +188,26 @@ def _module_for_document_type(document_type: str) -> str | None:
         "journal_entry": "accounting",
         "payment_entry": "cash",
     }.get(document_type)
+    if module:
+        return module
+    document_type_spec = DOCUMENT_TYPES.get(document_type)
+    return document_type_spec.permission_module if document_type_spec else None
+
+
+def _document_read_access_modules(document_type: str) -> tuple[str, ...]:
+    """Return all operational modules allowed to read a source document."""
+    if document_type == "delivery_note":
+        return ("sales", "inventory")
+    if document_type in {"purchase_order", "purchase_receipt"}:
+        return ("purchases", "inventory")
+    module = _module_for_document_type(document_type)
+    return (module,) if module else ()
+
+
+def _puede_leer_documento_compania(document_type: str, company: str | None) -> bool:
+    """Apply the same module alternatives to source lists as detail reads."""
+    modules = _document_read_access_modules(document_type)
+    return bool(modules) and any(_puede_consultar_modulo_compania(module, company) for module in modules)
 
 
 def _require_flow_target_access(payload: dict[str, Any], action: str = "crear") -> None:
@@ -345,8 +366,9 @@ def _require_document_read_access(document_type: str, document_id: str) -> Any:
     module = _module_for_document_type(normalized_type)
     if module:
         if normalized_type in {"purchase_order", "purchase_receipt", "delivery_note"}:
-            access_modules = ("sales", "inventory") if normalized_type == "delivery_note" else ("purchases", "inventory")
-            exige_acceso_compania_cualquiera(access_modules, getattr(document, "company", None), "consultar")
+            exige_acceso_compania_cualquiera(
+                _document_read_access_modules(normalized_type), getattr(document, "company", None), "consultar"
+            )
         else:
             exige_acceso_compania(module, getattr(document, "company", None), "consultar")
     return document
@@ -1351,8 +1373,8 @@ def api_document_flow_source_documents():
     # para que no se anuncie un origen cuyo detalle el usuario no puede pedir.
     fuentes_visibles = []
     for row in sources:
-        modulo_fuente = _module_for_document_type(str(row.get("source_type") or ""))
-        if modulo_fuente and _puede_consultar_modulo_compania(modulo_fuente, str(row.get("company") or "") or company):
+        tipo_fuente = str(row.get("source_type") or "")
+        if _puede_leer_documento_compania(tipo_fuente, str(row.get("company") or "") or company):
             fuentes_visibles.append(row)
     return jsonify({"target_type": target_type, "source_documents": fuentes_visibles})
 
@@ -1368,9 +1390,17 @@ def api_document_flow_pending_lines():
     company = request.args.get("company") or request.args.get("company_id")
     if not source_type or not target_type or not source_ids or not company:
         abort(400)
-    module = _module_for_document_type(normalize_doctype(source_type))
-    if module:
-        exige_acceso_compania(module, company, "consultar")
+    normalized_source_type = normalize_doctype(source_type)
+    access_modules = _document_read_access_modules(normalized_source_type)
+    if not access_modules:
+        abort(400)
+    for source_id in source_ids:
+        source_document = _require_document_read_access(normalized_source_type, source_id)
+        source_company = getattr(source_document, "company", None)
+        if not source_company:
+            abort(403)
+        if source_company != company:
+            abort(409)
     try:
         lines = get_pending_lines(
             source_document_type=source_type,
