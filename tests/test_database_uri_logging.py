@@ -21,10 +21,10 @@ def test_diagnostico_no_escribe_uri_ni_parametros_sensibles(app, monkeypatch):
     """Conserva la versión del motor sin emitir usuario, contraseña o token."""
     uri = "postgresql+psycopg2://ci-user:ci-password@db.internal/cacao?sslpassword=ssl-secret&token=token-secret"
     salida = StringIO()
-    sink_id = log.add(salida, format="{message}")
+    sink_id = log.add(salida, format="{message}", level="INFO")
     try:
         with app.app_context():
-            app.config["SQLALCHEMY_DATABASE_URI"] = uri
+            monkeypatch.setitem(app.config, "SQLALCHEMY_DATABASE_URI", uri)
             monkeypatch.setattr(database.session, "execute", lambda _query: [("PostgreSQL 16",)])
 
             _log_database_version()
@@ -55,7 +55,7 @@ def test_diagnostico_real_no_registra_uri_del_motor_configurado():
         }
     )
     salida = StringIO()
-    sink_id = log.add(salida, format="{message}")
+    sink_id = log.add(salida, format="{message}", level="INFO")
     try:
         with application.app_context():
             assert database.engine.dialect.name == dialect
