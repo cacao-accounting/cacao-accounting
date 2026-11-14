@@ -14,7 +14,7 @@ import sqlite3
 from decimal import Decimal
 
 from sqlalchemy import select
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from cacao_accounting.exceptions import flash_error
 
@@ -892,8 +892,44 @@ def create_monthly_close_run(company: str, period_id: str) -> tuple[Any, bool]:
 
     close_run = PeriodCloseRun(company=company, period_id=period_id, run_status="open")
     session.add(close_run)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        if not _is_monthly_close_unique_violation(exc):
+            raise
+        session.rollback()
+        period = _lock_monthly_close_period(company, period_id)
+        if period.is_closed:
+            raise PeriodCloseError(_("El periodo ya se encuentra cerrado.")) from exc
+        existing = session.execute(
+            select(PeriodCloseRun)
+            .where(PeriodCloseRun.company == company, PeriodCloseRun.period_id == period_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if existing is None:
+            raise
+        return existing, False
     return close_run, True
+
+
+def _is_monthly_close_unique_violation(error: IntegrityError) -> bool:
+    """Return whether an integrity error is the monthly-close key collision."""
+    original = error.orig
+    diagnostic = getattr(original, "diag", None)
+    if getattr(diagnostic, "constraint_name", None) == "uq_period_close_run_company_period":
+        return True
+
+    message = str(original).lower()
+    if "uq_period_close_run_company_period" in message:
+        return True
+
+    error_code = getattr(original, "sqlite_errorcode", None)
+    return bool(
+        error_code is not None
+        and error_code & 0xFF == sqlite3.SQLITE_CONSTRAINT
+        and "period_close_run.company, period_close_run.period_id" in message
+    )
 
 
 def finalize_monthly_close(close_run_id: str, user_id: str, *, commit: bool = True) -> Any:

@@ -13,6 +13,8 @@ from typing import Optional
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask import Flask, g, has_request_context
+from sqlalchemy import Index, func, inspect as sa_inspect, select
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import InternalError, InterfaceError, OperationalError, ProgrammingError, SQLAlchemyError
 
 # ---------------------------------------------------------------------------------------
@@ -131,6 +133,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_purchase_line_version_columns()
             _ensure_audit_trail_hash_version_column()
             _ensure_file_sha256_column()
+            _ensure_monthly_close_run_unique_constraint()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -866,6 +869,92 @@ def _ensure_file_sha256_column() -> None:
     except Exception as exc:
         database.session.rollback()
         log.warning("Could not ensure file.sha256 during initialization: {}", exc)
+
+
+def _ensure_monthly_close_run_unique_constraint() -> None:
+    """Install the company/period uniqueness guard without rewriting old rows.
+
+    New schemas get the constraint from SQLAlchemy metadata. Existing schemas
+    receive an equivalent unique index after duplicate keys have been checked.
+    Ambiguous historical runs are preserved and block this schema update so a
+    person can resolve them without an automated business choice.
+    """
+    engine = database.engine
+    from cacao_accounting.database import PeriodCloseRun
+
+    if not sa_inspect(engine).has_table(PeriodCloseRun.__tablename__):
+        return
+
+    if engine.dialect.name == "sqlite":
+        with engine.connect() as connection:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            try:
+                _create_monthly_close_unique_guard(connection)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return
+
+    try:
+        with engine.begin() as connection:
+            _create_monthly_close_unique_guard(connection)
+    except SQLAlchemyError:
+        if _monthly_close_unique_guard_exists(engine):
+            return
+        raise
+
+
+def _monthly_close_unique_guard_exists(bind: Engine | Connection) -> bool:
+    """Validate the canonical unique object and its protected columns."""
+    from cacao_accounting.database import PeriodCloseRun
+
+    table_name = PeriodCloseRun.__tablename__
+    index_name = "uq_period_close_run_company_period"
+    expected_columns = ["company", "period_id"]
+    inspector = sa_inspect(bind)
+    if not inspector.has_table(table_name):
+        return False
+
+    for constraint in inspector.get_unique_constraints(table_name):
+        if constraint.get("name") == index_name:
+            if constraint.get("column_names") == expected_columns:
+                return True
+            raise RuntimeError(f"El constraint {index_name} no protege company y period_id.")
+
+    for index in inspector.get_indexes(table_name):
+        if index.get("name") == index_name:
+            if index.get("unique") and index.get("column_names") == expected_columns:
+                return True
+            raise RuntimeError(f"El índice {index_name} no protege company y period_id de forma única.")
+    return False
+
+
+def _create_monthly_close_unique_guard(connection: Connection) -> None:
+    """Create the guard on an open connection after checking historical rows."""
+    from cacao_accounting.database import PeriodCloseRun
+
+    index_name = "uq_period_close_run_company_period"
+    if _monthly_close_unique_guard_exists(connection):
+        return
+
+    duplicate = connection.execute(
+        select(PeriodCloseRun.company, PeriodCloseRun.period_id, func.count())
+        .group_by(PeriodCloseRun.company, PeriodCloseRun.period_id)
+        .having(func.count() > 1)
+        .limit(1)
+    ).first()
+    if duplicate is not None:
+        message = _(
+            "No se puede aplicar la unicidad de cierres mensuales: hay varias corridas "
+            "para compañía %(company)s y período %(period)s. Los registros existentes se conservaron."
+        ) % {"company": duplicate.company, "period": duplicate.period_id}
+        raise RuntimeError(message)
+
+    Index(index_name, PeriodCloseRun.company, PeriodCloseRun.period_id, unique=True).create(
+        bind=connection,
+        checkfirst=False,
+    )
 
 
 def _ensure_audit_trail_hash_version_column() -> None:

@@ -25583,3 +25583,7 @@ msgstr "The business unit does not exist or does not belong to the journal's com
 #: cacao_accounting/contabilidad/journal_service.py cacao_accounting/contabilidad/posting_service.py
 msgid "El proyecto no existe o no pertenece a la compañía del comprobante."
 msgstr "The project does not exist or does not belong to the journal's company."
+
+#: cacao_accounting/database/helpers.py
+msgid "No se puede aplicar la unicidad de cierres mensuales: hay varias corridas para compañía %(company)s y período %(period)s. Los registros existentes se conservaron."
+msgstr "Monthly close uniqueness cannot be applied: multiple runs exist for company %(company)s and period %(period)s. Existing records were preserved."

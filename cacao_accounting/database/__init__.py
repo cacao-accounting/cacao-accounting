@@ -5297,6 +5297,7 @@ class PeriodCloseRun(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Ejecucion de cierre de periodo."""
 
     __tablename__ = "period_close_run"
+    __table_args__ = (database.UniqueConstraint("company", "period_id", name="uq_period_close_run_company_period"),)
     company = database.Column(
         database.String(10),
         database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
