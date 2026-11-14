@@ -11,13 +11,13 @@ jobs:
       matrix:
         include:
           - python-version: "3.12"
-            mode: deps
+            mode: full
           - python-version: "3.13"
             mode: full
           - python-version: "3.13"
             mode: desktop
           - python-version: "3.14"
-            mode: deps
+            mode: full
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
