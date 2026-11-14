@@ -164,7 +164,7 @@ def create_journal_draft(
     )
     _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
     _validate_line_books(data.company, data.books, data.lines)
-    _validate_ar_ap_lines(data.company, data.lines)
+    _validate_ar_ap_lines(data.company, data.lines, validate_references=source_economic_line_ids is None)
     primary_book = data.books[0] if data.books else None
     journal = ComprobanteContable(
         entity=data.company,
@@ -602,7 +602,7 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     )
     _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
     _validate_line_books(data.company, data.books, data.lines)
-    _validate_ar_ap_lines(data.company, data.lines)
+    _validate_ar_ap_lines(data.company, data.lines, validate_references=not bool(journal.reversal_of))
     primary_book = data.books[0] if data.books else None
 
     journal.entity = data.company
@@ -1024,7 +1024,7 @@ def _validate_ar_ap_reference(
         raise JournalValidationError(_("La referencia AP/AR debe tener sentido contrario al movimiento."))
 
 
-def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
+def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput], *, validate_references: bool = True) -> None:
     """Valida terceros y referencias AP/AR antes de guardar el borrador."""
     for line in lines:
         account = _account_record(company, line.account)
@@ -1033,7 +1033,8 @@ def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
         party_type = _normalize_party_type(line.party_type)
         if ar_ap_type:
             _validate_ar_ap_party(company, line, account_type, party_type)
-        _validate_ar_ap_reference(company, line, account_type, ar_ap_type, party_type)
+        if validate_references:
+            _validate_ar_ap_reference(company, line, account_type, ar_ap_type, party_type)
 
 
 def _validate_line_books(company: str, books: list[str] | None, lines: list[JournalLineInput]) -> None:

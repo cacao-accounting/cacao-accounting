@@ -1757,6 +1757,17 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
     )
     if existing:
         return list(existing)
+    if document.reversal_of:
+        originals = _cancellation_originals(
+            document,
+            {"journal_entry"},
+            {str(document.reversal_of)},
+            reference_id=str(document.reversal_of),
+        )
+        originals = sorted(originals, key=lambda row: 0 if row.event_type == "allocation" else 1)
+        _lock_open_item_caches_for_movements(originals)
+        return [_reverse_arap_movement(original, document, getattr(document, "date", None)) for original in originals]
+
     entry_list = list(entries)
     movements: list[ARAPLedgerEntry] = []
     for line in _journal_party_lines(document):
@@ -1764,7 +1775,13 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
     return movements
 
 
-def _cancellation_originals(document: Any, source_types: set[str], source_ids: set[str]) -> list[ARAPLedgerEntry]:
+def _cancellation_originals(
+    document: Any,
+    source_types: set[str],
+    source_ids: set[str],
+    *,
+    reference_id: str | None = None,
+) -> list[ARAPLedgerEntry]:
     """Obtiene movimientos originales que deben tener una contrapartida."""
     already_reversed = select(ARAPLedgerEntry.reversal_of).where(
         ARAPLedgerEntry.is_reversal.is_(True),
@@ -1778,7 +1795,8 @@ def _cancellation_originals(document: Any, source_types: set[str], source_ids: s
     else:
         source_filter = (
             (ARAPLedgerEntry.document_type.in_(source_types)) & (ARAPLedgerEntry.document_id.in_(source_ids))
-            | (ARAPLedgerEntry.reference_type == "journal_entry") & (ARAPLedgerEntry.reference_id == str(document.id))
+            | (ARAPLedgerEntry.reference_type == "journal_entry")
+            & (ARAPLedgerEntry.reference_id == str(reference_id or document.id))
             | (ARAPLedgerEntry.voucher_type == "journal_entry") & (ARAPLedgerEntry.voucher_id == str(document.id))
         )
     query = (

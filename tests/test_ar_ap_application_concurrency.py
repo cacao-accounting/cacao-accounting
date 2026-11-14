@@ -25,6 +25,7 @@ from cacao_accounting.contabilidad.journal_service import (
     JournalValidationError,
     cancel_submitted_journal,
     create_journal_draft,
+    duplicate_journal_as_reversal_draft,
     submit_journal,
 )
 from cacao_accounting.database import (
@@ -528,27 +529,34 @@ def _seed_payment_gl_evidence(application, seed):
         return [entry.id for entry in entries if entry.voucher_type == "payment_entry"]
 
 
-def _seed_opening_journal(application, seed) -> str:
-    """Post a real customer invoice balance through the manual journal flow."""
+def _seed_opening_journal(application, seed, books: list[str] | None = None, party_type: str = "customer") -> str:
+    """Post a customer receivable or supplier payable through the manual journal flow."""
+    receivable = party_type == "customer"
+    account = seed["receivable"] if receivable else seed["payable"]
+    party_id = seed["customer_id"] if receivable else seed["supplier_id"]
+    party_account_line = {
+        "account": account,
+        "debit": "100" if receivable else "0",
+        "credit": "0" if receivable else "100",
+        "currency": seed["currency"],
+        "party_type": party_type,
+        "party": party_id,
+    }
+    offset_line = {
+        "account": seed["sales"] if receivable else seed["bank"],
+        "debit": "0" if receivable else "100",
+        "credit": "100" if receivable else "0",
+        "currency": seed["currency"],
+    }
     payload = {
         "company": seed["company"],
         "posting_date": seed["today"].isoformat(),
-        "books": [seed["book"]],
+        "books": books or [seed["book"]],
         "transaction_currency": seed["currency"],
         "base_currency": seed["currency"],
         "exchange_rate": "1",
         "reference": "Saldo inicial de factura de cliente",
-        "lines": [
-            {
-                "account": seed["receivable"],
-                "debit": "100",
-                "credit": "0",
-                "currency": seed["currency"],
-                "party_type": "customer",
-                "party": seed["customer_id"],
-            },
-            {"account": seed["sales"], "debit": "0", "credit": "100", "currency": seed["currency"]},
-        ],
+        "lines": [party_account_line, offset_line],
     }
     with application.app_context():
         journal = create_journal_draft(payload, user_id=seed["user_id"])
@@ -831,6 +839,205 @@ def test_concurrent_manual_credits_never_overapply_one_receivable(arap_applicati
             )
         ).scalar_one()
         assert Decimal(str(ar_balance)) == Decimal("-80.0000")
+
+
+@pytest.mark.parametrize(
+    ("party_type", "allocation_amount"), [("customer", "60"), ("customer", "100"), ("supplier", "60"), ("supplier", "100")]
+)
+def test_manual_reversal_restores_closed_or_partial_arap_reference(arap_application, party_type, allocation_amount):
+    """A later-period reversal restores partial and closed customer or supplier balances."""
+    application, seed = arap_application
+
+    with application.app_context():
+        second_book = Book(
+            code=f"B2{uuid4().hex[:7].upper()}",
+            name="Libro adicional de cartera",
+            entity=seed["company"],
+            currency=seed["currency"],
+            status="activo",
+            is_primary=False,
+            default=False,
+        )
+        database.session.add(second_book)
+        database.session.commit()
+        book_codes = [seed["book"], second_book.code]
+
+    opening_journal_id = _seed_opening_journal(application, seed, books=book_codes, party_type=party_type)
+
+    with application.app_context():
+        target = database.session.execute(
+            select(ARAPOpenItem).filter_by(document_type="journal_entry", document_id=opening_journal_id)
+        ).scalar_one()
+        if party_type == "customer":
+            allocation_payload = _credit_adjustment_payload(
+                seed, str(target.id), allocation_amount, "Ajuste AP/AR para reversar"
+            )
+        else:
+            allocation_payload = {
+                "company": seed["company"],
+                "posting_date": seed["today"].isoformat(),
+                "books": book_codes,
+                "transaction_currency": seed["currency"],
+                "base_currency": seed["currency"],
+                "exchange_rate": "1",
+                "reference": "Ajuste AP/AR para reversar",
+                "lines": [
+                    {"account": seed["bank"], "debit": "0", "credit": allocation_amount, "currency": seed["currency"]},
+                    {
+                        "account": seed["payable"],
+                        "debit": allocation_amount,
+                        "credit": "0",
+                        "currency": seed["currency"],
+                        "party_type": "supplier",
+                        "party": seed["supplier_id"],
+                        "reference_type": "journal_entry",
+                        "reference_open_item_id": str(target.id),
+                    },
+                ],
+            }
+        allocation_payload["books"] = book_codes
+        allocation = create_journal_draft(
+            allocation_payload,
+            user_id=seed["user_id"],
+        )
+        submit_journal(allocation.id, user_id=seed["user_id"])
+        source_id = str(allocation.id)
+        source_movements = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.voucher_type == "journal_entry",
+                    ARAPLedgerEntry.voucher_id == source_id,
+                    ARAPLedgerEntry.is_reversal.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        related_movements = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.reference_type == "journal_entry",
+                    ARAPLedgerEntry.reference_id == source_id,
+                    ARAPLedgerEntry.is_reversal.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        source_movements_by_id = {str(row.id): row for row in [*source_movements, *related_movements]}
+        source_snapshot = _snapshot_arap_movements(list(source_movements_by_id.values()))
+
+        next_year = seed["today"].year + 1
+        fiscal_year = FiscalYear(
+            entity=seed["company"],
+            name=f"FY-REV-{uuid4().hex[:8]}",
+            year_start_date=date(next_year, 1, 1),
+            year_end_date=date(next_year, 12, 31),
+            is_closed=False,
+            financial_closed=False,
+        )
+        database.session.add(fiscal_year)
+        database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                entity=seed["company"],
+                fiscal_year_id=fiscal_year.id,
+                name=f"Período de reversión {uuid4().hex[:8]}",
+                status="open",
+                enabled=True,
+                is_closed=False,
+                start=date(next_year, 1, 1),
+                end=date(next_year, 12, 31),
+            )
+        )
+        database.session.commit()
+
+        reversal = duplicate_journal_as_reversal_draft(
+            source_id,
+            user_id=seed["user_id"],
+            reversal_date_raw=date(next_year, 1, 15),
+            reason="Revertir aplicación contra saldo AP/AR",
+        )
+        reversal_id = str(reversal.id)
+        submit_journal(reversal_id, user_id=seed["user_id"])
+
+        originals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.voucher_type == "journal_entry",
+                    ARAPLedgerEntry.voucher_id == source_id,
+                    ARAPLedgerEntry.is_reversal.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        target_movements = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.reference_type == "journal_entry",
+                    ARAPLedgerEntry.reference_id == source_id,
+                    ARAPLedgerEntry.is_reversal.is_(False),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        originals_by_id = {str(row.id): row for row in [*originals, *target_movements]}
+        reversals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.voucher_id == reversal_id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        originals = list(originals_by_id.values())
+        reversed_by_id = {str(row.reversal_of): row for row in reversals}
+        original_book_entries = (
+            database.session.execute(
+                select(ARAPLedgerBookEntry).where(ARAPLedgerBookEntry.ledger_entry_id.in_(originals_by_id))
+            )
+            .scalars()
+            .all()
+        )
+        reversal_book_entries = (
+            database.session.execute(
+                select(ARAPLedgerBookEntry).where(ARAPLedgerBookEntry.ledger_entry_id.in_([row.id for row in reversals]))
+            )
+            .scalars()
+            .all()
+        )
+        original_books_by_id = {(str(row.id), str(row.ledger_id)): row for row in original_book_entries}
+        reversal_books_by_original = {(str(row.reversal_of), str(row.ledger_id)): row for row in reversal_book_entries}
+        restored_target = database.session.get(ARAPOpenItem, target.id)
+        source_cache = database.session.execute(
+            select(ARAPOpenItem).filter_by(document_type="journal_entry", document_id=source_id)
+        ).scalar_one()
+
+        assert len(reversals) == len(originals)
+        assert set(reversed_by_id) == {str(row.id) for row in originals}
+        assert all(reversed_by_id[str(row.id)].document_amount == -row.document_amount for row in originals)
+        assert set(reversal_books_by_original) == set(original_books_by_id)
+        assert {ledger_id for _entry_id, ledger_id in original_books_by_id} == {
+            str(book_id) for book_id in database.session.execute(select(Book.id).where(Book.code.in_(book_codes))).scalars()
+        }
+        for original_key, original_book in original_books_by_id.items():
+            reversal_book = reversal_books_by_original[original_key]
+            assert reversal_book.book_amount == -original_book.book_amount
+            assert reversal_book.exchange_rate == original_book.exchange_rate
+            assert (reversal_book.debit, reversal_book.credit) == (original_book.credit, original_book.debit)
+        assert restored_target is not None and restored_target.unallocated_amount == Decimal("100.0000")
+        assert source_cache.unallocated_amount == Decimal("0.0000")
+        assert ARAPLedgerEntry.document_balance("journal_entry", opening_journal_id) == Decimal("100.0000")
+        assert ARAPLedgerEntry.document_balance("journal_entry", source_id) == Decimal("0.0000")
+        reloaded_originals = (
+            database.session.execute(select(ARAPLedgerEntry).where(ARAPLedgerEntry.id.in_(source_movements_by_id)))
+            .scalars()
+            .all()
+        )
+        assert _snapshot_arap_movements(reloaded_originals) == source_snapshot
 
 
 def test_cancellation_waits_for_manual_allocation_and_reverses_its_movement(arap_application, monkeypatch):
