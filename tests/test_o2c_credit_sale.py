@@ -2,15 +2,19 @@
 
 from datetime import date
 from decimal import Decimal
+from importlib import import_module
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import func, select
 
 from cacao_accounting.approval_engine import approved_execution
-from cacao_accounting.contabilidad.posting_service import cancel_document, submit_document
+from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document, submit_document
 from cacao_accounting.database import (
     ARAPLedgerEntry,
     ARAPOpenItem,
+    DocumentTransition,
+    DeliveryNote,
     GLEntry,
     Accounts,
     Item,
@@ -24,6 +28,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.service import create_target_document
 from cacao_accounting.internal_control_service import audit_actor
+from cacao_accounting.ventas.services import _cancel_linked_delivery_note
 
 
 def test_venta_credito_abono_parcial_y_anulacion_conservan_evidencia(entorno_contable):
@@ -124,6 +129,59 @@ def test_venta_credito_abono_parcial_y_anulacion_conservan_evidencia(entorno_con
                 ARAPLedgerEntry.document_id == invoice.id,
             )
         ).scalar_one()
+        payment_arap_events_before = database.session.execute(
+            select(func.count(ARAPLedgerEntry.id)).where(ARAPLedgerEntry.document_id == payment.id)
+        ).scalar_one()
+        payment_transitions_before = database.session.execute(
+            select(func.count(DocumentTransition.id)).where(
+                DocumentTransition.source_id == payment.id,
+                DocumentTransition.transition_type == "cancellation",
+            )
+        ).scalar_one()
+
+        with audit_actor(actor.id, actor.name), approved_execution(payment, actor.id):
+            with pytest.raises(PostingError, match="debe coincidir con la fecha de contabilización del documento"):
+                cancel_document(
+                    payment,
+                    reason="Abono registrado por error",
+                    actor_user_id=actor.id,
+                    cancellation_date=date(2026, 5, 21),
+                )
+        database.session.expire_all()
+        payment = database.session.get(PaymentEntry, payment.id)
+        assert payment is not None and payment.docstatus == 1
+        assert (
+            database.session.execute(
+                select(func.count(ARAPLedgerEntry.id)).where(ARAPLedgerEntry.document_id == invoice.id)
+            ).scalar_one()
+            == arap_events_before
+        )
+        invoice_open_item = database.session.execute(
+            select(ARAPOpenItem).where(
+                ARAPOpenItem.document_type == "sales_invoice",
+                ARAPOpenItem.document_id == invoice.id,
+            )
+        ).scalar_one()
+        assert Decimal(str(invoice_open_item.unallocated_amount)) == Decimal("60")
+        assert (
+            database.session.execute(select(func.count(GLEntry.id)).where(GLEntry.voucher_id == payment.id)).scalar_one()
+            == payment_gl_before
+        )
+        assert (
+            database.session.execute(
+                select(func.count(ARAPLedgerEntry.id)).where(ARAPLedgerEntry.document_id == payment.id)
+            ).scalar_one()
+            == payment_arap_events_before
+        )
+        assert (
+            database.session.execute(
+                select(func.count(DocumentTransition.id)).where(
+                    DocumentTransition.source_id == payment.id,
+                    DocumentTransition.transition_type == "cancellation",
+                )
+            ).scalar_one()
+            == payment_transitions_before
+        )
 
         with audit_actor(actor.id, actor.name), approved_execution(payment, actor.id):
             cancel_document(
@@ -190,6 +248,49 @@ def test_venta_credito_abono_parcial_y_anulacion_conservan_evidencia(entorno_con
             ).scalar_one()
             > arap_events_before
         )
+
+
+def test_anular_factura_usa_fecha_de_contabilizacion_de_nota_vinculada(entorno_contable, monkeypatch):
+    """La nota de entrega vinculada conserva su propia fecha de anulación."""
+    with entorno_contable.app.app_context():
+        delivery_date = date(2026, 5, 10)
+        invoice_date = date(2026, 5, 15)
+        delivery_note = DeliveryNote(company="cacao", posting_date=delivery_date, docstatus=1)
+        database.session.add(delivery_note)
+        database.session.flush()
+        invoice = SalesInvoice(
+            company="cacao",
+            posting_date=invoice_date,
+            delivery_note_id=delivery_note.id,
+            update_inventory=True,
+            docstatus=1,
+        )
+        database.session.add(invoice)
+        database.session.flush()
+        actor_id = database.session.execute(select(User.id).where(User.user == "admin")).scalar_one()
+
+        cancellation_calls = []
+        sales_services = import_module("cacao_accounting.ventas.services")
+        monkeypatch.setattr(
+            sales_services,
+            "cancel_document",
+            lambda document, **kwargs: cancellation_calls.append((document, kwargs)),
+        )
+        monkeypatch.setattr(sales_services, "_restore_reservation_for_delivery_note", lambda document: None)
+        monkeypatch.setattr(sales_services, "log_cancel", lambda document: None)
+
+        with entorno_contable.app.test_request_context():
+            _cancel_linked_delivery_note(
+                invoice,
+                reason="Factura cancelada",
+                actor_user_id=actor_id,
+            )
+
+        assert invoice.posting_date != delivery_note.posting_date
+        assert len(cancellation_calls) == 1
+        cancelled_document, cancellation_kwargs = cancellation_calls[0]
+        assert cancelled_document.id == delivery_note.id
+        assert cancellation_kwargs["cancellation_date"] == delivery_date
 
 
 def test_reembolso_de_nota_credito_anulado_restaura_saldo_abierto(entorno_contable):

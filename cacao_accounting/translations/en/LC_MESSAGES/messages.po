@@ -13960,8 +13960,8 @@ msgid "El usuario que ejecuta la anulación no existe."
 msgstr "The user performing the cancellation does not exist."
 
 #: cacao_accounting/contabilidad/cancellation_service.py:141
-msgid "La fecha de anulación no puede ser anterior a la fecha original."
-msgstr "The cancellation date cannot be earlier than the original date."
+msgid "La fecha de anulación debe coincidir con la fecha de contabilización del documento."
+msgstr "The cancellation date must match the document posting date."
 
 #: cacao_accounting/contabilidad/cancellation_service.py:153
 msgid ""

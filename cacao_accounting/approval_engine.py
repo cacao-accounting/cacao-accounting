@@ -106,7 +106,6 @@ def _cancel_posted_document(
             document,
             reason=reason,
             actor_user_id=actor_user_id,
-            cancellation_date=cancellation_date,
             requested_at=requested_at,
         )
     cancel_document(

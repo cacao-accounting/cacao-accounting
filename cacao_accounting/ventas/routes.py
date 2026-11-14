@@ -2540,7 +2540,6 @@ def ventas_factura_venta_cancel(invoice_id: str):
             registro,
             reason=reason,
             actor_user_id=str(current_user.id),
-            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
         )
         cancel_document(
             registro,

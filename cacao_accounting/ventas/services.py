@@ -2395,7 +2395,6 @@ def _cancel_linked_delivery_note(
     invoice: SalesInvoice,
     reason: str | None = None,
     actor_user_id: str | None = None,
-    cancellation_date: Any = None,
     requested_at: Any = None,
 ) -> None:
     """Cancela la Nota de Entrega vinculada si update_inventory esta activo."""
@@ -2411,7 +2410,7 @@ def _cancel_linked_delivery_note(
             dn,
             reason=reason,
             actor_user_id=actor_user_id,
-            cancellation_date=cancellation_date,
+            cancellation_date=dn.posting_date,
             requested_at=requested_at,
         )  # type: ignore[misc]
     _restore_reservation_for_delivery_note(dn)

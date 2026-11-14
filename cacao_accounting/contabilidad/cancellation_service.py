@@ -137,8 +137,8 @@ def _resolve_effective_dates(request: CancellationRequest, document: Any) -> tup
         effective_date = parse_posting_date(request.effective_date) if request.effective_date is not None else original_date
     except IdentifierConfigurationError as exc:
         raise CancellationPolicyError(str(exc)) from exc
-    if effective_date < original_date:
-        raise CancellationPolicyError(_("La fecha de anulación no puede ser anterior a la fecha original."))
+    if effective_date != original_date:
+        raise CancellationPolicyError(_("La fecha de anulación debe coincidir con la fecha de contabilización del documento."))
     return original_date, effective_date
 
 
