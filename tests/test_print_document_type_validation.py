@@ -156,7 +156,7 @@ def print_scope_app():
     admin_name = f"print-admin-audit-{uuid4().hex[:8]}"
     with application.app_context():
         database.create_all()
-        created_currency = database.session.get(Currency, "USD") is None
+        created_currency = database.session.execute(select(Currency).filter_by(code="USD")).scalar_one_or_none() is None
         if created_currency:
             database.session.add(Currency(code="USD", name="US Dollar", decimals=2, active=True))
         database.session.add_all(
