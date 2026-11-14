@@ -13,6 +13,7 @@ from cacao_accounting.database import database
 from cacao_accounting.imports.column_labels import canonical_columns
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.readers.csv_reader import CSVReader
+from cacao_accounting.imports.readers.limits import ImportReadLimitError
 from cacao_accounting.imports.readers.xls_reader import XLSReader
 from cacao_accounting.imports.readers.xlsx_reader import XLSXReader
 from cacao_accounting.imports.readers.ods_reader import ODSReader
@@ -309,8 +310,14 @@ class ImportService:
         return errors_count
 
     def _handle_validation_error(self, batch: ImportBatch, batch_id: str, e: Exception) -> None:
-        """Maneja errores inesperados durante validación."""
-        database.session.add(ImportBatchError(batch_id=batch_id, error_type="SYSTEM_ERROR", message=str(e)))
+        """Registra fallos de validación y evita dejar el lote procesando."""
+        error_type = "RESOURCE_LIMIT" if isinstance(e, ImportReadLimitError) else "SYSTEM_ERROR"
+        if error_type == "RESOURCE_LIMIT":
+            ImportBatchError.query.filter(
+                ImportBatchError.batch_id == batch_id,
+                ImportBatchError.error_type.in_(STRUCTURAL_ERROR_TYPES | {"RESOURCE_LIMIT"}),
+            ).delete(synchronize_session=False)
+        database.session.add(ImportBatchError(batch_id=batch_id, error_type=error_type, message=str(e)))
         batch.import_status = 7
         batch.started_at = None
         database.session.commit()
@@ -323,9 +330,24 @@ class ImportService:
 
         reader = self._get_reader(batch.source_format)
         adapter = self._get_adapter(batch.record_type)
-        table = reader.read(batch.source_path)
-        self._canonicalize_table_headers(table, adapter)
         persisted_errors = ImportBatchError.query.filter_by(batch_id=batch_id).all()
+        try:
+            table = reader.read(batch.source_path)
+        except ImportReadLimitError as exc:
+            errors = [
+                error
+                for error in persisted_errors
+                if error.error_type not in STRUCTURAL_ERROR_TYPES and error.error_type != "RESOURCE_LIMIT"
+            ]
+            errors.append(ImportBatchError(batch_id=batch_id, error_type="RESOURCE_LIMIT", message=str(exc)))
+            return {
+                "batch": batch,
+                "columns": [],
+                "sample_rows": [],
+                "total_documents": 0,
+                "errors": errors,
+            }
+        self._canonicalize_table_headers(table, adapter)
         structural_errors = self._collect_structural_errors(batch_id, table, adapter)
         errors = [error for error in persisted_errors if error.error_type not in STRUCTURAL_ERROR_TYPES]
         errors.extend(structural_errors)
@@ -558,7 +580,8 @@ class ImportService:
         if current_batch:
             current_batch.import_status = 7
             current_batch.started_at = None
-            err_record = ImportBatchError(batch_id=batch_id, error_type="FATAL_ERROR", message=str(e))
+            error_type = "RESOURCE_LIMIT" if isinstance(e, ImportReadLimitError) else "FATAL_ERROR"
+            err_record = ImportBatchError(batch_id=batch_id, error_type=error_type, message=str(e))
             database.session.add(err_record)
             database.session.commit()
 

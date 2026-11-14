@@ -5989,6 +5989,10 @@ msgstr "The column has data but no header."
 msgid "La fila contiene datos después de la última columna con encabezado."
 msgstr "The row contains data after the last column with a header."
 
+#: cacao_accounting/imports/readers/limits.py
+msgid "El archivo excede los límites de recursos de importación."
+msgstr "The file exceeds the import resource limits."
+
 #: cacao_accounting/api/line_import.py:250
 msgid "La columna no pertenece a la plantilla."
 msgstr "The column does not belong to the template."
