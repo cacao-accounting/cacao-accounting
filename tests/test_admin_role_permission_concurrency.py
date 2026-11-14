@@ -54,12 +54,17 @@ def role_permission_app(tmp_path):
         module = Modules(module=f"permission-test-{suffix}", default=False, enabled=True)
         admin_module = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
         created_admin_module = admin_module is None
-        admin_module_was_enabled = admin_module.enabled if admin_module is not None else None
         if admin_module is None:
+            if not database_uri.startswith("sqlite"):
+                database.session.remove()
+                database.engine.dispose()
+                pytest.skip("La base externa debe inicializar el módulo admin habilitado.")
             admin_module = Modules(module="admin", default=False, enabled=True)
             database.session.add(admin_module)
-        else:
-            admin_module.enabled = True
+        elif not admin_module.enabled:
+            database.session.remove()
+            database.engine.dispose()
+            pytest.skip("El módulo admin debe estar habilitado en la base de pruebas.")
         database.session.add_all([user, role, module])
         database.session.commit()
         user_id, role_id, module_id = str(user.id), role.id, module.id
@@ -76,10 +81,6 @@ def role_permission_app(tmp_path):
         database.session.execute(database.delete(User).where(User.id == user_id))
         if created_admin_module:
             database.session.execute(database.delete(Modules).where(Modules.id == admin_module_id))
-        elif admin_module_was_enabled is not None:
-            database.session.execute(
-                database.update(Modules).where(Modules.id == admin_module_id).values(enabled=admin_module_was_enabled)
-            )
         database.session.commit()
         database.session.remove()
         database.engine.dispose()
