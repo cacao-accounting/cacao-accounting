@@ -219,8 +219,10 @@ def test_tipo_desconocido_no_crea_auditoria_en_compania_no_autorizada(print_scop
         assert jobs[0].success is False
 
     denied_response = client.get(f"/print/{document_type}/document-1/preview?company=cacao")
+    nonexistent_response = client.get(f"/print/{document_type}/document-1/preview?company=unknown-company")
 
     assert denied_response.status_code == 403
+    assert nonexistent_response.status_code == denied_response.status_code
     with application.app_context():
         jobs = database.session.execute(select(PrintJobLog).filter_by(document_type=document_type)).scalars().all()
         assert len(jobs) == 1

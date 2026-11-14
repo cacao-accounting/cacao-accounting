@@ -426,13 +426,13 @@ class PrintService:
         """Require access to a printable module before auditing an unknown type."""
         from cacao_accounting.decorators import exige_acceso_compania_cualquiera
 
+        modules = tuple(sorted({definition["permission"].split(".", 1)[0] for definition in PRINTABLE_DOCUMENTS.values()}))
+        exige_acceso_compania_cualquiera(modules, company_code)
         company_exists = database.session.execute(
             select(Entity.code).where(Entity.code == company_code, Entity.enabled.is_(True))
         ).scalar_one_or_none()
         if company_exists is None:
             abort(404)
-        modules = tuple(sorted({definition["permission"].split(".", 1)[0] for definition in PRINTABLE_DOCUMENTS.values()}))
-        exige_acceso_compania_cualquiera(modules, company_code)
 
     def _inject_audit_metadata(self, context: dict[str, Any], document_id: str, company_code: str) -> None:
         """Add creation and approval actors from the immutable audit trail."""
