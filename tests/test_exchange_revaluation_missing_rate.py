@@ -103,16 +103,32 @@ def _mes_de_cierre_libre() -> tuple[int, int]:
             ExchangeRate.origin.in_(["USD", "EUR", "NIO"]), ExchangeRate.destination.in_(["USD", "EUR", "NIO"])
         )
     ).all()
-    for anio in range(2001, 2027):
-        for mes in range(2, 12):
-            cierre = date(anio, mes, calendar.monthrange(anio, mes)[1])
-            contaminado = any(
-                (par := frozenset((origen, destino))) in ({frozenset(("EUR", "NIO"))} if tasa_fecha <= cierre else set())
-                or (par in {frozenset(("USD", "EUR")), frozenset(("EUR", "NIO"))} and tasa_fecha == cierre)
-                for origen, destino, tasa_fecha in filas
-            )
-            if not contaminado:
-                return anio, mes
+    eur_nio = [f for f in filas if frozenset((f.origin, f.destination)) == frozenset(("EUR", "NIO"))]
+    min_eur_nio = min((f.date for f in eur_nio), default=None)
+
+    def _valido(cierre: date) -> bool:
+        for origen, destino, tasa_fecha in filas:
+            par = frozenset((origen, destino))
+            if par == frozenset(("EUR", "NIO")) and tasa_fecha <= cierre:
+                return False
+            if par in {frozenset(("USD", "EUR")), frozenset(("EUR", "NIO"))} and tasa_fecha == cierre:
+                return False
+        return True
+
+    rangos = []
+    if min_eur_nio:
+        rangos.append(range(1990, min_eur_nio.year + 1))
+    rangos.append(range(2001, 2031))
+    rangos.append(range(2031, 2201))
+
+    for anios in rangos:
+        for anio in anios:
+            for mes in range(1, 13):
+                cierre = date(anio, mes, calendar.monthrange(anio, mes)[1])
+                if min_eur_nio and cierre >= min_eur_nio:
+                    continue
+                if _valido(cierre):
+                    return anio, mes
     raise AssertionError("No hay mes libre para sembrar el escenario de tasas.")
 
 

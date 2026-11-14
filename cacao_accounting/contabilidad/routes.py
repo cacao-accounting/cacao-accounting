@@ -1858,7 +1858,14 @@ def nuevo_proyecto():
     ]
     TITULO = _("Contabilidad | Nuevo Proyecto") + " - " + APPNAME
 
-    if formulario.validate_on_submit() or request.method == "POST":
+    if request.method == "POST":
+        if not formulario.validate():
+            return render_template(
+                _TPL_PROYECTO_CREAR,
+                titulo=TITULO,
+                form=formulario,
+                budget_currency_code="",
+            )
         try:
             parent_id, capitalization_account_id, capitalizable = _validate_project_creation_form(formulario)
         except ValueError as error:
