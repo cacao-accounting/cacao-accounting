@@ -5,6 +5,8 @@
 
 from datetime import date
 
+from sqlalchemy import select
+
 from cacao_accounting.database import (
     Bank,
     BankAccount,
@@ -22,7 +24,8 @@ def test_reconciliation_item_diagnostics_excludes_other_companies(app):
     """Orphan and missing-context diagnostics use the parent reconciliation company."""
     with app.app_context():
         for code in ("alpha", "beta"):
-            if database.session.get(Entity, code) is None:
+            existing_company = database.session.execute(select(Entity).where(Entity.code == code)).scalar_one_or_none()
+            if existing_company is None:
                 database.session.add(
                     Entity(
                         code=code,
