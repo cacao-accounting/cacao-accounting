@@ -288,7 +288,7 @@ class EntornoContable:
 
 
 @pytest.fixture
-def entorno_contable(app) -> EntornoContable:
+def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
     """Semilla mínima para escenarios contables y operativos."""
     with app.app_context():
         company = database.session.execute(select(Entity).filter_by(code="cacao")).scalar_one()
@@ -306,12 +306,13 @@ def entorno_contable(app) -> EntornoContable:
                 currency="NIO",
             )
             database.session.add(book_secondary)
+        book_secondary.currency = "NIO"
 
         for code, name in (("NIO", "Córdoba"), ("USD", "Dólar")):
             if database.session.execute(select(Currency).filter_by(code=code)).scalar_one_or_none() is None:
                 database.session.add(Currency(code=code, name=name, decimals=2, active=True, default=code == "NIO"))
 
-        fy = database.session.execute(select(FiscalYear).filter_by(entity="cacao")).scalar_one_or_none()
+        fy = database.session.get(FiscalYear, "FY2026")
         if fy is None:
             fy = FiscalYear(
                 id="FY2026",
@@ -323,7 +324,7 @@ def entorno_contable(app) -> EntornoContable:
             )
             database.session.add(fy)
 
-        period = database.session.execute(select(AccountingPeriod).filter_by(entity="cacao")).scalar_one_or_none()
+        period = database.session.get(AccountingPeriod, "P2026-05")
         if period is None:
             period = AccountingPeriod(
                 id="P2026-05",
@@ -430,6 +431,18 @@ def entorno_contable(app) -> EntornoContable:
             )
 
         database.session.commit()
+
+        secondary_book_id = book_secondary.id
+
+        def restore_secondary_book_currency() -> None:
+            """Restore the shared secondary book after tests that customize it."""
+            with app.app_context():
+                secondary_book = database.session.get(Book, secondary_book_id)
+                if secondary_book is not None and secondary_book.currency != "NIO":
+                    secondary_book.currency = "NIO"
+                    database.session.commit()
+
+        request.addfinalizer(restore_secondary_book_currency)
 
         return EntornoContable(
             app=app,
