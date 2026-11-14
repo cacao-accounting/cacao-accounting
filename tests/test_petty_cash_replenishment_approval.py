@@ -1113,6 +1113,19 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
         assert sum((Decimal(str(entry.credit)) for entry in gl_entries), Decimal("0")) == Decimal("10")
 
 
+def test_missing_reconciliation_releases_sqlite_write_transaction(replenishment_app):
+    """A failed reconciliation lock releases SQLite's writer reservation."""
+    application, _ids = replenishment_app
+    with application.app_context():
+        if database.engine.dialect.name != "sqlite":
+            pytest.skip("La comprobación de BEGIN IMMEDIATE solo aplica a SQLite.")
+        missing = PettyCashReconciliation(id="missing-reconciliation")
+        with pytest.raises(ValueError, match="documento no existe"):
+            post_petty_cash_reconciliation_adjustment(missing, adjustment_account_code="unused")
+        connection = database.session.connection()
+        assert not connection.connection.driver_connection.in_transaction
+
+
 def test_replenishment_cannot_skip_payment_to_reimbursed_status(replenishment_app):
     """Only the posted bank debit note can complete a replenishment."""
     application, ids = replenishment_app

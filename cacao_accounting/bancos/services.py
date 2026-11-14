@@ -1335,9 +1335,31 @@ def post_petty_cash_reconciliation_adjustment(
     cost_center_code: str | None = None,
     actor_id: str | None = None,
 ) -> ComprobanteContable:
+    """Postea un ajuste y revierte la transacción ante cualquier error."""
+    try:
+        _begin_sqlite_write_transaction()
+        locked_reconciliation = cast(
+            PettyCashReconciliation, _lock_row_for_transition(PettyCashReconciliation, reconciliation.id)
+        )
+        return _post_locked_petty_cash_reconciliation_adjustment(
+            locked_reconciliation,
+            adjustment_account_code=adjustment_account_code,
+            cost_center_code=cost_center_code,
+            actor_id=actor_id,
+        )
+    except Exception:
+        database.session.rollback()
+        raise
+
+
+def _post_locked_petty_cash_reconciliation_adjustment(
+    reconciliation: PettyCashReconciliation,
+    *,
+    adjustment_account_code: str,
+    cost_center_code: str | None = None,
+    actor_id: str | None = None,
+) -> ComprobanteContable:
     """Registra explicitamente el sobrante o faltante de una conciliacion."""
-    _begin_sqlite_write_transaction()
-    reconciliation = cast(PettyCashReconciliation, _lock_row_for_transition(PettyCashReconciliation, reconciliation.id))
     if reconciliation.status != "conciliado":
         raise ValueError(_("La conciliación debe estar conciliada antes de registrar el ajuste."))
     if not reconciliation.difference:
