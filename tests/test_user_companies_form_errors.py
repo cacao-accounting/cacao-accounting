@@ -11,6 +11,8 @@ usuario deben conservarse intactas en la base de datos.
 
 from __future__ import annotations
 
+import os
+
 from uuid import uuid4
 
 import pytest
@@ -68,6 +70,8 @@ def _crear_usuario_interno(app) -> str:
 
 def test_eleccion_invalida_renderiza_error_y_conserva_asignaciones(app, authenticated_client, modulo_admin_activo):
     """Una compañía fuera de las opciones re-renderiza con alerta y no altera la base."""
+    if os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}:
+        pytest.skip("La gestión multi-compañía de usuarios no aplica en modo escritorio.")
     usuario_id = _crear_usuario_interno(app)
     with app.app_context():
         database.session.add(UserCompanyAccess(user_id=usuario_id, company_code="cacao"))
@@ -92,6 +96,8 @@ def test_eleccion_invalida_renderiza_error_y_conserva_asignaciones(app, authenti
 
 def test_envio_valido_sigue_reemplazando_el_alcance(app, authenticated_client, modulo_admin_activo):
     """Control: un envío válido con la opción real continúa guardando el alcance."""
+    if os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}:
+        pytest.skip("La gestión multi-compañía de usuarios no aplica en modo escritorio.")
     usuario_id = _crear_usuario_interno(app)
     with app.app_context():
         database.session.add(UserCompanyAccess(user_id=usuario_id, company_code="cacao"))

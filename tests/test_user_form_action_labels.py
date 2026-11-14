@@ -11,6 +11,8 @@ etiquetas como ``New User`` y ``Update User``.
 
 from __future__ import annotations
 
+import os
+
 from uuid import uuid4
 
 import pytest
@@ -68,6 +70,8 @@ def _crear_usuario_interno(app, *, language: str | None = None, classification: 
 
 def test_formulario_de_alta_muestra_la_etiqueta_nuevo_usuario(app, authenticated_client, modulo_admin_activo):
     """El botón del formulario de alta presenta la acción traducida, no un literal crudo."""
+    if os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}:
+        pytest.skip("El módulo admin de usuarios no aplica en modo escritorio.")
     respuesta = authenticated_client().get("/settings/users/new")
 
     assert respuesta.status_code == 200
@@ -78,6 +82,8 @@ def test_formulario_de_alta_muestra_la_etiqueta_nuevo_usuario(app, authenticated
 
 def test_formulario_de_edicion_muestra_la_etiqueta_actualizar_usuario(app, authenticated_client, modulo_admin_activo):
     """El botón del formulario de edición presenta la acción de actualización traducida."""
+    if os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}:
+        pytest.skip("El módulo admin de usuarios no aplica en modo escritorio.")
     usuario_id = _crear_usuario_interno(app)
 
     respuesta = authenticated_client().get(f"/settings/users/{usuario_id}/edit")

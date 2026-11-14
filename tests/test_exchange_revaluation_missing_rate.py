@@ -54,6 +54,16 @@ pytestmark = pytest.mark.database
 CONTRASENA = "Revaluacion-Test-2026!"
 
 
+def _obtener_o_crear_moneda(code: str, name: str, decimals: int = 2, active: bool = True, default: bool = False):
+    moneda = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
+    if moneda is None:
+        moneda = Currency(code=code, name=name, decimals=decimals, active=active, default=default)
+        database.session.add(moneda)
+    elif default and not getattr(moneda, "default", False):
+        moneda.default = True
+    return moneda
+
+
 @pytest.fixture
 def business_app(tmp_path):
     """Crea una aplicación real con una base aislada en el motor configurado."""
@@ -118,12 +128,13 @@ def _sembrar_libro_secundario_en_euros(company: str, *, con_tasa_eur_nio: bool) 
     anio, mes = _mes_de_cierre_libre()
     inicio = date(anio, mes, 1)
     cierre = date(anio, mes, calendar.monthrange(anio, mes)[1])
-    database.session.add_all(
-        [
-            Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-            Currency(code="USD", name="Dólar", decimals=2, active=True),
-            Currency(code="EUR", name="Euro", decimals=2, active=True),
-            Modules(module="accounting", default=False, enabled=True),
+    _obtener_o_crear_moneda("NIO", "Córdoba", 2, True, True)
+    _obtener_o_crear_moneda("USD", "Dólar", 2, True, False)
+    _obtener_o_crear_moneda("EUR", "Euro", 2, True, False)
+    if database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one_or_none() is None:
+        database.session.add(Modules(module="accounting", default=False, enabled=True))
+    if database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none() is None:
+        database.session.add(
             Entity(
                 code=company,
                 name=f"Empresa multi-moneda {company}",
@@ -132,9 +143,8 @@ def _sembrar_libro_secundario_en_euros(company: str, *, con_tasa_eur_nio: bool) 
                 currency="NIO",
                 enabled=True,
                 status="default",
-            ),
-        ]
-    )
+            )
+        )
     database.session.flush()
     database.session.add(
         User(

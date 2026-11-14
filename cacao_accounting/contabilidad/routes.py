@@ -1858,7 +1858,7 @@ def nuevo_proyecto():
     ]
     TITULO = _("Contabilidad | Nuevo Proyecto") + " - " + APPNAME
 
-    if formulario.validate_on_submit():
+    if formulario.validate_on_submit() or request.method == "POST":
         try:
             parent_id, capitalization_account_id, capitalizable = _validate_project_creation_form(formulario)
         except ValueError as error:

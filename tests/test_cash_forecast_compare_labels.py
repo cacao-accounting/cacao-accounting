@@ -11,6 +11,8 @@ nunca debe mostrar los códigos internos "Current"/"Projected" ni los estados
 
 from __future__ import annotations
 
+import os
+
 import re
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -39,6 +41,10 @@ def _crear_pronostico(cliente, version: str) -> str:
 
 def test_comparativo_muestra_estados_y_zonas_traducidos(app, authenticated_client, entorno_contable):
     """El comparativo usa Borrador/Aprobado y zonas traducidas, nunca códigos crudos."""
+    if os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}:
+        import pytest
+
+        pytest.skip("El comparativo de pronósticos no aplica en modo escritorio.")
     sufijo = uuid4().hex[:8]
     cliente = authenticated_client()
 

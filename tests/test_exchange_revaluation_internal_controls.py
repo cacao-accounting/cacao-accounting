@@ -44,6 +44,16 @@ from cacao_accounting.database import (
 pytestmark = pytest.mark.database
 
 
+def _obtener_o_crear_moneda(code: str, name: str, decimals: int = 2, active: bool = True, default: bool = False):
+    moneda = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
+    if moneda is None:
+        moneda = Currency(code=code, name=name, decimals=decimals, active=active, default=default)
+        database.session.add(moneda)
+    elif default and not getattr(moneda, "default", False):
+        moneda.default = True
+    return moneda
+
+
 @pytest.fixture
 def business_app(tmp_path):
     """Aplicación con los controles internos de integridad financiera activos."""
@@ -91,11 +101,12 @@ def _sembrar_exposicion_bancaria(company: str) -> str:
     anio, mes = _mes_de_cierre_libre()
     inicio = date(anio, mes, 1)
     cierre = date(anio, mes, calendar.monthrange(anio, mes)[1])
-    database.session.add_all(
-        [
-            Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-            Currency(code="USD", name="Dólar", decimals=2, active=True),
-            Modules(module="accounting", default=False, enabled=True),
+    _obtener_o_crear_moneda("NIO", "Córdoba", 2, True, True)
+    _obtener_o_crear_moneda("USD", "Dólar", 2, True, False)
+    if database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one_or_none() is None:
+        database.session.add(Modules(module="accounting", default=False, enabled=True))
+    if database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none() is None:
+        database.session.add(
             Entity(
                 code=company,
                 name=f"Empresa de prueba {company}",
@@ -104,9 +115,8 @@ def _sembrar_exposicion_bancaria(company: str) -> str:
                 currency="NIO",
                 enabled=True,
                 status="default",
-            ),
-        ]
-    )
+            )
+        )
     database.session.flush()
     database.session.add(
         User(
