@@ -31,7 +31,7 @@ from cacao_accounting.printing.models import (
     PrintTemplateVersion,
     PublicDocumentValidation,
 )
-from cacao_accounting.printing.registry import PRINTABLE_DOCUMENTS, PrintableDocumentDefinition, get_printable_document
+from cacao_accounting.printing.registry import PRINTABLE_DOCUMENTS, get_printable_document
 from cacao_accounting.printing.settings import external_validation_base_url, external_validation_enabled
 from cacao_accounting.printing.validation import ValidationService
 from cacao_accounting.printing.validators import validate_css_safety, validate_template_security
@@ -115,6 +115,8 @@ class PrintService:
         export_url: str = "/",
     ) -> str:
         """Render preview HTML for a sample or real document."""
+        if not sample and get_printable_document(document_type) is not None:
+            self._authorize_registered_print_attempt(document_type, user, company_code)
         template: PrintTemplate | None = None
         try:
             context = self._build_context(document_type, document_id, user, company_code, sample)
@@ -170,6 +172,8 @@ class PrintService:
         template_id: str | int | None = None,
     ) -> bytes:
         """Render a registered document as PDF bytes."""
+        if get_printable_document(document_type) is not None:
+            self._authorize_registered_print_attempt(document_type, user, company_code)
         template: PrintTemplate | None = None
         try:
             context = self._build_context(document_type, document_id, user, company_code, sample=False)
@@ -415,7 +419,7 @@ class PrintService:
             return context
         if not document_id:
             raise ValueError(_("document_id is required for non-sample rendering."))
-        self._authorize_document(document_type, document_id, user, company_code, doc_def)
+        self._authorize_document(document_type, document_id, user, company_code)
         context = doc_def["context_builder"](document_id, user, company_code)
         self._inject_audit_metadata(context, document_id, company_code)
         self._inject_validation_context(context, document_type, document_id, company_code)
@@ -433,6 +437,33 @@ class PrintService:
         ).scalar_one_or_none()
         if company_exists is None:
             abort(404)
+
+    @staticmethod
+    def _authorize_registered_print_attempt(document_type: str, user: Any, company_code: str) -> None:
+        """Authorize the company before a denied attempt can be audited there."""
+        from cacao_accounting.database import Entity
+        from cacao_accounting.decorators import exige_acceso_compania
+
+        company_exists = database.session.execute(
+            select(Entity.code).where(Entity.code == company_code, Entity.enabled.is_(True))
+        ).scalar_one_or_none()
+        if company_exists is None:
+            raise PrintPermissionError(_("Document is not available for this company."))
+
+        classification = str(getattr(user, "classification", "") or "").lower()
+        if classification in {"customer", "supplier"}:
+            if str(getattr(user, "company", "") or "") != str(company_code):
+                raise PrintPermissionError(_("Document is not available for this company."))
+            return
+
+        definition = get_printable_document(document_type)
+        if definition is None:
+            return
+        module_name = definition["permission"].split(".", 1)[0]
+        try:
+            exige_acceso_compania(module_name, company_code, "consultar")
+        except HTTPException as exc:
+            raise PrintPermissionError(_("User has no permission to print this document.")) from exc
 
     def _inject_audit_metadata(self, context: dict[str, Any], document_id: str, company_code: str) -> None:
         """Add creation and approval actors from the immutable audit trail."""
@@ -462,10 +493,8 @@ class PrintService:
         document_id: str,
         user: Any,
         company_code: str,
-        definition: PrintableDocumentDefinition,
     ) -> None:
         """Ensure the user can print this exact document and company."""
-        from cacao_accounting.decorators import exige_acceso_compania
         from cacao_accounting.database import (
             ComprobanteContable,
             DeliveryNote,
@@ -530,12 +559,6 @@ class PrintService:
         if classification in {"customer", "supplier"}:
             self._authorize_portal_document(document, document_type, user, company_code, classification)
             return
-
-        module_name = definition["permission"].split(".", 1)[0]
-        try:
-            exige_acceso_compania(module_name, company_code, "consultar")
-        except HTTPException as exc:
-            raise PrintPermissionError(_("User has no permission to print this document.")) from exc
 
     def _authorize_portal_document(
         self,

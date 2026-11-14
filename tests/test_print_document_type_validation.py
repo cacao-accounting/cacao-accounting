@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     Roles,
     RolesAccess,
     RolesUser,
+    SalesInvoice,
     User,
     UserCompanyAccess,
     database,
@@ -288,6 +289,66 @@ def test_tipo_desconocido_no_crea_auditoria_en_compania_no_autorizada(print_scop
 
 
 @pytest.mark.database
+def test_tipo_registrado_audita_solo_intentos_en_companias_autorizadas(print_scope_app):
+    """Registered print attempts are audited only after company authorization."""
+    (
+        application,
+        _unknown_document_type,
+        user_id,
+        auth_version,
+        _,
+        _,
+        authorized_company,
+        unauthorized_company,
+        nonexistent_company,
+        *_rest,
+    ) = print_scope_app
+    client = application.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_auth_version"] = auth_version
+        session["_fresh"] = True
+
+    authorized_missing_response = client.get(f"/print/sales_invoice/missing-document/preview?company={authorized_company}")
+    assert authorized_missing_response.status_code == 404
+
+    with application.app_context():
+        foreign_invoice = SalesInvoice(company=unauthorized_company)
+        database.session.add(foreign_invoice)
+        database.session.commit()
+        foreign_invoice_id = str(foreign_invoice.id)
+
+    try:
+        denied_missing_response = client.get(f"/print/sales_invoice/missing-document/preview?company={unauthorized_company}")
+        denied_foreign_document_response = client.get(
+            f"/print/sales_invoice/{foreign_invoice_id}/preview?company={unauthorized_company}"
+        )
+        nonexistent_company_response = client.get(
+            f"/print/sales_invoice/missing-document/preview?company={nonexistent_company}"
+        )
+
+        assert denied_missing_response.status_code == 404
+        assert denied_foreign_document_response.status_code == 404
+        assert nonexistent_company_response.status_code == 404
+        with application.app_context():
+            jobs = database.session.execute(select(PrintJobLog).filter_by(document_type="sales_invoice")).scalars().all()
+            assert len(jobs) == 1
+            assert jobs[0].company_code == authorized_company
+            assert jobs[0].document_id == "missing-document"
+            assert jobs[0].success is False
+    finally:
+        with application.app_context():
+            database.session.execute(
+                database.delete(PrintJobLog).where(
+                    PrintJobLog.user_id == user_id,
+                    PrintJobLog.document_type == "sales_invoice",
+                )
+            )
+            database.session.execute(database.delete(SalesInvoice).where(SalesInvoice.id == foreign_invoice_id))
+            database.session.commit()
+
+
+@pytest.mark.database
 def test_tipo_desconocido_de_admin_con_compania_inexistente_no_falla_al_auditar(print_scope_app):
     """Una compañía desconocida no alcanza la FK de PrintJobLog aunque el usuario sea admin."""
     application, document_type, _, _, admin_id, auth_version, _, _, nonexistent_company, *_ = print_scope_app
@@ -298,8 +359,10 @@ def test_tipo_desconocido_de_admin_con_compania_inexistente_no_falla_al_auditar(
         session["_fresh"] = True
 
     response = client.get(f"/print/{document_type}/document-1/preview?company={nonexistent_company}")
+    registered_response = client.get(f"/print/sales_invoice/missing-document/preview?company={nonexistent_company}")
 
     assert response.status_code == 404
+    assert registered_response.status_code == 404
     with application.app_context():
         jobs = database.session.execute(select(PrintJobLog).filter_by(document_type=document_type)).scalars().all()
         assert jobs == []
