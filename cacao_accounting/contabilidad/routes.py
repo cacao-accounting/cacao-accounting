@@ -2506,15 +2506,27 @@ def nueva_tasa_cambio():
                 monedas=monedas_choices,
             )
         assert rate is not None
-        DATA = ExchangeRate(
-            origin=formulario.origin.data,
-            destination=formulario.destination.data,
-            rate=rate,
-            date=formulario.date.data,
-        )
-        database.session.add(DATA)
-        database.session.commit()
-        return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
+        if _exchange_rate_conflicts(formulario.origin.data, formulario.destination.data, formulario.date.data):
+            flash(_("Ya existe una tasa de cambio para ese par de monedas y fecha."), "danger")
+        else:
+            DATA = ExchangeRate(
+                origin=formulario.origin.data,
+                destination=formulario.destination.data,
+                rate=rate,
+                date=formulario.date.data,
+            )
+            database.session.add(DATA)
+            try:
+                database.session.commit()
+            except IntegrityError as error:
+                _handle_exchange_rate_integrity_error(
+                    error,
+                    formulario.origin.data,
+                    formulario.destination.data,
+                    formulario.date.data,
+                )
+            else:
+                return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
 
     return render_template(
         _TPL_TC_CREAR,
@@ -2544,23 +2556,33 @@ def tipo_cambio(rate_id):
     )
 
 
-def _exchange_rate_conflicts(origin: str, destination: str, rate_date: object, exclude_id: str) -> bool:
+def _exchange_rate_conflicts(origin: str, destination: str, rate_date: object, exclude_id: str | None = None) -> bool:
     """Indica si otro registro ya ocupa el mismo par de monedas y fecha."""
     from cacao_accounting.database import ExchangeRate
 
-    return (
-        database.session.execute(
-            database.select(ExchangeRate.id)
-            .where(
-                ExchangeRate.origin == origin,
-                ExchangeRate.destination == destination,
-                ExchangeRate.date == rate_date,
-                ExchangeRate.id != exclude_id,
-            )
-            .limit(1)
-        ).scalar_one_or_none()
-        is not None
+    query = database.select(ExchangeRate.id).where(
+        ExchangeRate.origin == origin,
+        ExchangeRate.destination == destination,
+        ExchangeRate.date == rate_date,
     )
+    if exclude_id is not None:
+        query = query.where(ExchangeRate.id != exclude_id)
+    return database.session.execute(query.limit(1)).scalar_one_or_none() is not None
+
+
+def _handle_exchange_rate_integrity_error(
+    error: IntegrityError,
+    origin: str,
+    destination: str,
+    rate_date: object,
+    exclude_id: str | None = None,
+) -> None:
+    """Distinguish a concurrent duplicate rate from another persistence failure."""
+    database.session.rollback()
+    if _exchange_rate_conflicts(origin, destination, rate_date, exclude_id):
+        flash(_("Ya existe una tasa de cambio para ese par de monedas y fecha."), "danger")
+    else:
+        flash_error(error)
 
 
 @contabilidad.route("/exchange/<rate_id>/edit", methods=["GET", "POST"])
@@ -2577,6 +2599,7 @@ def editar_tasa_cambio(rate_id):
     if registro is None:
         flash(_("La tasa de cambio indicada no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
+    registro_id = registro.id
 
     formulario = FormularioTasaCambio(obj=registro)
     monedas_choices = obtener_lista_monedas_activas()
@@ -2624,7 +2647,7 @@ def editar_tasa_cambio(rate_id):
                 formulario.origin.data,
                 formulario.destination.data,
                 formulario.date.data,
-                registro.id,
+                registro_id,
             ):
                 flash(_("Ya existe una tasa de cambio para ese par de monedas y fecha."), "danger")
             else:
@@ -2634,11 +2657,16 @@ def editar_tasa_cambio(rate_id):
                 registro.date = formulario.date.data
                 try:
                     database.session.commit()
-                except IntegrityError:
-                    database.session.rollback()
-                    flash(_("Ya existe una tasa de cambio para ese par de monedas y fecha."), "danger")
+                except IntegrityError as error:
+                    _handle_exchange_rate_integrity_error(
+                        error,
+                        formulario.origin.data,
+                        formulario.destination.data,
+                        formulario.date.data,
+                        registro_id,
+                    )
                 else:
-                    return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro.id))
+                    return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro_id))
 
     return render_template(
         _TPL_TC_CREAR,
