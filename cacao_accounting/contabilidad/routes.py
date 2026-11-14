@@ -872,10 +872,11 @@ def hierarchy_parent_options(node_type: str):
     exclude_ids: set[str] = set()
     exclude_id = request.args.get("exclude_id")
     if exclude_id:
-        excluded_node = database.session.get(model, exclude_id)
-        if excluded_node is None or excluded_node.entity != entity:
-            abort(404)
-        exclude_ids = {exclude_id, *get_descendant_ids(model, exclude_id)}
+        excluded_node_id = database.session.execute(
+            database.select(model.id).where(model.id == exclude_id, model.entity == entity)
+        ).scalar_one_or_none()
+        if excluded_node_id is not None:
+            exclude_ids = {excluded_node_id, *get_descendant_ids(model, excluded_node_id)}
 
     choices = hierarchy_parent_choices(model, entity, exclude_ids)
     return jsonify([{"value": value, "label": label} for value, label in choices])
