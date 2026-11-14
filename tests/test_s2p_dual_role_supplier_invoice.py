@@ -95,129 +95,171 @@ def dual_role_s2p_scenario(tmp_path: Path, request):
     application = create_app(app_settings)
     with application.app_context():
         database.create_all()
-        database.session.add_all(
-            [
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
-                Modules(module="sales", default=False, enabled=True),
-                Modules(module="purchases", default=False, enabled=True),
-                Modules(module="accounting", default=True, enabled=True),
-                User(
-                    user="admin",
-                    name="Administrador de prueba",
-                    password=b"unused",
-                    classification="admin",
-                    active=True,
-                    company="cacao",
-                ),
-                UOM(code="UND", name="Unidad"),
-            ]
+
+        def _get_or_create(model, defaults=None, **lookup):
+            obj = database.session.execute(select(model).filter_by(**lookup)).scalar_one_or_none()
+            if obj is None:
+                params = {**lookup, **(defaults or {})}
+                obj = model(**params)
+                database.session.add(obj)
+                database.session.flush()
+            return obj
+
+        if database.session.execute(select(Currency).filter_by(code="NIO")).scalar_one_or_none() is None:
+            database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+            database.session.flush()
+
+        _get_or_create(
+            Entity,
+            code="cacao",
+            defaults={
+                "name": "Cacao",
+                "company_name": "Cacao SA",
+                "tax_id": "J0001",
+                "currency": "NIO",
+                "enabled": True,
+                "status": "default",
+            },
+        )
+        _get_or_create(Modules, module="sales", defaults={"default": False, "enabled": True})
+        _get_or_create(Modules, module="purchases", defaults={"default": False, "enabled": True})
+        _get_or_create(Modules, module="accounting", defaults={"default": True, "enabled": True})
+        admin = _get_or_create(
+            User,
+            user="admin",
+            defaults={
+                "name": "Administrador de prueba",
+                "password": b"unused",
+                "classification": "admin",
+                "active": True,
+                "company": "cacao",
+            },
+        )
+        _get_or_create(UOM, code="UND", defaults={"name": "Unidad"})
+        database.session.flush()
+
+        if database.session.execute(
+            select(UserCompanyAccess).filter_by(user_id=admin.id, company_code="cacao")
+        ).scalar_one_or_none() is None:
+            database.session.add(UserCompanyAccess(user_id=admin.id, company_code="cacao"))
+
+        _get_or_create(
+            FiscalYear,
+            id="FY2026",
+            defaults={
+                "entity": "cacao",
+                "name": "2026",
+                "year_start_date": date(2026, 1, 1),
+                "year_end_date": date(2026, 12, 31),
+                "is_closed": False,
+            },
         )
         database.session.flush()
-        admin = database.session.execute(select(User).where(User.user == "admin")).scalar_one()
-        database.session.add(UserCompanyAccess(user_id=admin.id, company_code="cacao"))
-        database.session.add(
-            FiscalYear(
-                id="FY2026",
-                entity="cacao",
-                name="2026",
-                year_start_date=date(2026, 1, 1),
-                year_end_date=date(2026, 12, 31),
-                is_closed=False,
+        _get_or_create(
+            AccountingPeriod,
+            id="P2026-05",
+            defaults={
+                "entity": "cacao",
+                "fiscal_year_id": "FY2026",
+                "name": "Mayo 2026",
+                "start": date(2026, 5, 1),
+                "end": date(2026, 5, 31),
+                "enabled": True,
+                "is_closed": False,
+                "status": "open",
+            },
+        )
+        _get_or_create(
+            Accounts,
+            entity="cacao",
+            code="1105",
+            defaults={
+                "name": "Cuentas por cobrar",
+                "group": False,
+                "active": True,
+                "enabled": True,
+                "classification": "asset",
+                "account_type": "receivable",
+            },
+        )
+        _get_or_create(
+            Accounts,
+            entity="cacao",
+            code="2101",
+            defaults={
+                "name": "Cuentas por pagar",
+                "group": False,
+                "active": True,
+                "enabled": True,
+                "classification": "liability",
+                "account_type": "payable",
+            },
+        )
+        _get_or_create(
+            Item,
+            code="ITEM-DUAL",
+            defaults={
+                "name": "Servicio contratado",
+                "item_type": "service",
+                "is_stock_item": False,
+                "is_purchase_item": True,
+                "default_uom": "UND",
+            },
+        )
+        _get_or_create(
+            PurchaseMatchingConfig,
+            company="cacao",
+            defaults={
+                "matching_type": "2-way",
+                "require_purchase_order": False,
+                "bridge_account_required": False,
+                "auto_reconcile": False,
+            },
+        )
+        database.session.flush()
+
+        party = database.session.execute(select(Party).filter_by(code="DUAL-TEST")).scalar_one_or_none()
+        if party is None:
+            party = Party(
+                code="DUAL-TEST",
+                name="Proveedor y cliente de la operación",
+                tax_id="TAX-DUAL-TEST",
+                is_customer=True,
+                is_supplier=True,
             )
-        )
-        database.session.flush()
-        database.session.add_all(
-            [
-                AccountingPeriod(
-                    id="P2026-05",
-                    entity="cacao",
-                    fiscal_year_id="FY2026",
-                    name="Mayo 2026",
-                    start=date(2026, 5, 1),
-                    end=date(2026, 5, 31),
-                    enabled=True,
-                    is_closed=False,
-                    status="open",
-                ),
-                Accounts(
-                    entity="cacao",
-                    code="1105",
-                    name="Cuentas por cobrar",
-                    group=False,
-                    active=True,
-                    enabled=True,
-                    classification="asset",
-                    account_type="receivable",
-                ),
-                Accounts(
-                    entity="cacao",
-                    code="2101",
-                    name="Cuentas por pagar",
-                    group=False,
-                    active=True,
-                    enabled=True,
-                    classification="liability",
-                    account_type="payable",
-                ),
-                Item(
-                    code="ITEM-DUAL",
-                    name="Servicio contratado",
-                    item_type="service",
-                    is_stock_item=False,
-                    is_purchase_item=True,
-                    default_uom="UND",
-                ),
-                PurchaseMatchingConfig(
-                    company="cacao",
-                    matching_type="2-way",
-                    require_purchase_order=False,
-                    bridge_account_required=False,
-                    auto_reconcile=False,
-                ),
-            ]
-        )
-        database.session.flush()
-        party = Party(
-            code="DUAL-TEST",
-            name="Proveedor y cliente de la operación",
-            tax_id="TAX-DUAL-TEST",
-            is_customer=True,
-            is_supplier=True,
-        )
-        database.session.add(party)
-        database.session.flush()
+            database.session.add(party)
+            database.session.flush()
+
         receivable_id = database.session.execute(
             select(Accounts.id).where(Accounts.entity == "cacao", Accounts.code == "1105")
         ).scalar_one()
         payable_id = database.session.execute(
             select(Accounts.id).where(Accounts.entity == "cacao", Accounts.code == "2101")
         ).scalar_one()
-        database.session.add_all(
-            [
+
+        if database.session.execute(
+            select(CompanyParty).filter_by(company="cacao", party_id=party.id)
+        ).scalar_one_or_none() is None:
+            database.session.add(
                 CompanyParty(
                     company="cacao",
                     party_id=party.id,
                     is_active=True,
                     allow_purchase_invoice_without_order=True,
                     allow_purchase_invoice_without_receipt=True,
-                ),
+                )
+            )
+        if database.session.execute(
+            select(PartyAccount).filter_by(party_id=party.id, company="cacao")
+        ).scalar_one_or_none() is None:
+            database.session.add(
                 PartyAccount(
                     party_id=party.id,
                     company="cacao",
                     receivable_account_id=receivable_id,
                     payable_account_id=payable_id,
-                ),
-            ]
-        )
+                )
+            )
         database.session.commit()
         seed = {
             "party_id": str(party.id),
