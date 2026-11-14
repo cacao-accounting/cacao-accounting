@@ -67,5 +67,6 @@ def test_diagnostico_real_no_registra_uri_del_motor_configurado():
 
     resultado = salida.getvalue()
     assert "Versión de base de datos" in resultado
-    assert uri not in resultado
+    if uri in resultado:
+        pytest.fail("El diagnóstico expuso una URI de conexión.")
     assert "Running on" in resultado
