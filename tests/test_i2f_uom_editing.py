@@ -8,12 +8,19 @@ from __future__ import annotations
 import json
 import subprocess
 from decimal import Decimal
+from html.parser import HTMLParser
 from pathlib import Path
 from uuid import uuid4
 
 from cacao_accounting.database import Item, ItemUOMConversion, StockEntry, StockEntryItem, UOM, database
+from cacao_accounting.inventario import services as inventory_services
 from cacao_accounting.inventario.routes import _stock_entry_item_choices
-from cacao_accounting.inventario.services import _save_stock_entry_item
+from cacao_accounting.inventario.services import (
+    _handle_stock_entry_edit_post,
+    _render_stock_entry_edit_form,
+    _render_stock_reconciliation_edit_form,
+    _save_stock_entry_item,
+)
 
 
 def test_stock_entry_item_catalog_exposes_configured_uoms_and_base_factors(app):
@@ -114,3 +121,153 @@ if (line.uom !== 'EA' || line.qty !== 24) throw new Error('UOM change did not pr
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_stock_entry_edit_renderer_reuses_rejected_post_lines(app):
+    """A rejected edit renders posted line data instead of the persisted snapshot."""
+
+    class TransactionFormParser(HTMLParser):
+        """Read the transaction configuration attached to the real edit form."""
+
+        config = None
+
+        def handle_starttag(self, tag, attrs):
+            config_value = dict(attrs).get("x-data")
+            if tag == "form" and config_value:
+                self.config = config_value
+
+    with app.app_context():
+        entry = StockEntry(company="cacao", purpose="material_receipt", remarks="Persisted")
+        database.session.add(entry)
+        database.session.flush()
+        form_data = {
+            "purpose": "material_receipt",
+            "company": "cacao",
+            "naming_series": "SERIES-2",
+            "currency": "NIO",
+            "posting_date": "2026-11-14",
+            "from_warehouse": "FROM-WH",
+            "to_warehouse": "TO-WH",
+            "remarks": "Rejected draft",
+            "item_code_0": "ART01",
+            "item_name_0": "Edited name",
+            "qty_0": "3",
+            "uom_0": "BOX",
+            "rate_0": "7.5",
+            "amount_0": "22.5",
+            "batch_id_0": "",
+            "serial_no_0": "",
+            "account_0": "ACCOUNT-LINE",
+            "cost_center_0": "COST-LINE",
+            "unit_0": "UNIT-LINE",
+            "project_0": "PROJECT-LINE",
+            "remarks_0": "Line note",
+        }
+        with app.test_request_context("/stock-entry/test/edit", method="POST", data=form_data):
+            response = _render_stock_entry_edit_form(entry, [], [], formulario=None)
+
+        parser = TransactionFormParser()
+        parser.feed(response)
+        rendered_config = json.loads(parser.config[parser.config.index("(") + 1 : -1])
+        assert rendered_config["initialHeader"]["remarks"] == "Rejected draft"
+        assert rendered_config["initialHeader"]["naming_series"] == "SERIES-2"
+        assert rendered_config["initialHeader"]["currency"] == "NIO"
+        assert rendered_config["initialHeader"]["from_warehouse"] == "FROM-WH"
+        assert rendered_config["initialHeader"]["to_warehouse"] == "TO-WH"
+        assert rendered_config["initialLines"] == [
+            {
+                "item_code": "ART01",
+                "item_name": "Edited name",
+                "qty": "3",
+                "uom": "BOX",
+                "rate": "7.5",
+                "amount": "22.5",
+                "batch_id": "",
+                "serial_no": "",
+                "source_type": "",
+                "source_id": "",
+                "source_item_id": "",
+                "account": "ACCOUNT-LINE",
+                "cost_center": "COST-LINE",
+                "unit": "UNIT-LINE",
+                "project": "PROJECT-LINE",
+                "remarks": "Line note",
+            }
+        ]
+        database.session.rollback()
+
+
+def test_stock_reconciliation_edit_renderer_reuses_rejected_post(app):
+    """A rejected reconciliation retains its dimensions, warehouse, and counts."""
+
+    class ReconciliationFormParser(HTMLParser):
+        """Read the reconciliation configuration attached to the real edit form."""
+
+        config = None
+
+        def handle_starttag(self, tag, attrs):
+            config_value = dict(attrs).get("x-data")
+            if tag == "form" and config_value:
+                self.config = config_value
+
+    with app.app_context():
+        entry = StockEntry(company="cacao", purpose="stock_reconciliation", remarks="Persisted")
+        database.session.add(entry)
+        database.session.flush()
+        form_data = {
+            "purpose": "stock_reconciliation",
+            "company": "cacao",
+            "posting_date": "2026-11-14",
+            "naming_series": "SERIES-3",
+            "from_warehouse": "FROM-WH",
+            "to_warehouse": "TO-WH",
+            "adjustment_account_id": "ACCOUNT-1",
+            "cost_center_code": "CC-1",
+            "unit_code": "UNIT-1",
+            "project_code": "PROJECT-1",
+            "remarks": "Rejected reconciliation",
+            "item_code_0": "ART01",
+            "uom_0": "EA",
+            "warehouse_0": "COUNT-WH",
+            "current_qty_0": "10",
+            "counted_qty_0": "8",
+            "current_valuation_rate_0": "2",
+            "target_valuation_rate_0": "2",
+            "current_stock_value_0": "20",
+            "target_stock_value_0": "16",
+        }
+        with app.test_request_context("/stock-entry/test/edit", method="POST", data=form_data):
+            response = _render_stock_reconciliation_edit_form(entry, [], [], formulario=None)
+
+        parser = ReconciliationFormParser()
+        parser.feed(response)
+        rendered_config = json.loads(parser.config[parser.config.index("(") + 1 : -1])
+        assert rendered_config["header"]["remarks"] == "Rejected reconciliation"
+        assert rendered_config["header"]["cost_center_code"] == "CC-1"
+        assert rendered_config["header"]["naming_series"] == "SERIES-3"
+        assert rendered_config["header"]["to_warehouse"] == "TO-WH"
+        assert rendered_config["lines"][0]["counted_qty"] == "8"
+        assert rendered_config["lines"][0]["warehouse"] == "COUNT-WH"
+        database.session.rollback()
+
+
+def test_stock_entry_domain_error_rolls_back_and_keeps_editable_response(app, monkeypatch):
+    """A domain failure rolls back mutations and signals the route to re-render."""
+    with app.app_context():
+        entry = StockEntry(company="cacao", purpose="material_receipt", remarks="Persisted")
+        database.session.add(entry)
+        database.session.commit()
+        entry_id = entry.id
+
+        def fail_after_header_update(registro):
+            registro.remarks = "Must roll back"
+            raise ValueError("invalid stock line")
+
+        monkeypatch.setattr(inventory_services, "_update_stock_entry_from_form", fail_after_header_update)
+        with app.test_request_context("/stock-entry/test/edit", method="POST", data={"remarks": "Rejected"}):
+            response = _handle_stock_entry_edit_post(entry)
+
+        persisted = database.session.get(StockEntry, entry_id)
+        assert response is None
+        assert persisted is not None and persisted.remarks == "Persisted"
+        database.session.rollback()

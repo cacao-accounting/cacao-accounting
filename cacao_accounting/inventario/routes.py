@@ -133,6 +133,19 @@ def _stock_entry_item_choices() -> list[dict[str, Any]]:
     return choices
 
 
+def _submit_stock_entry_edit(registro: StockEntry, formulario: Any):
+    """Submit a stock entry edit or flash validation errors for in-place correction."""
+    if formulario.validate():
+        return _handle_stock_entry_edit_post(registro)
+    for field_name, errors in formulario.errors.items():
+        label = getattr(formulario, field_name).label.text
+        for error in errors:
+            flash(f"{label}: {error}", "danger")
+    if not formulario.errors:
+        flash(_("Revise los datos de la entrada de almacén."), "danger")
+    return None
+
+
 INVENTARIO_INVENTARIO_ENTRADA_NUEVO = "inventario.inventario_entrada_nuevo"
 
 INVENTARIO_ENTRADA_LISTA_HTML = "inventario/entrada_lista.html"
@@ -934,13 +947,13 @@ def inventario_entrada_editar(entry_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        if formulario.validate():
-            return _handle_stock_entry_edit_post(registro)
-        flash(_("Revise los datos de la entrada de almacén."), "danger")
+        response = _submit_stock_entry_edit(registro, formulario)
+        if response is not None:
+            return response
 
     if registro.purpose == "stock_reconciliation":
-        return _render_stock_reconciliation_edit_form(registro, items_disponibles, uoms_disponibles)
-    return _render_stock_entry_edit_form(registro, items_disponibles, uoms_disponibles)
+        return _render_stock_reconciliation_edit_form(registro, items_disponibles, uoms_disponibles, formulario)
+    return _render_stock_entry_edit_form(registro, items_disponibles, uoms_disponibles, formulario)
 
 
 @inventario.route("/stock-entry/<entry_id>/duplicate", methods=["POST"])

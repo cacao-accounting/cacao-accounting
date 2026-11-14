@@ -861,7 +861,52 @@ def _handle_stock_entry_edit_post(registro: StockEntry):
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
-        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=registro.id))
+        return None
+
+
+def _submitted_stock_entry_lines() -> list[dict[str, str]]:
+    """Return posted line values so a rejected edit can be corrected in place."""
+    indexes = {
+        int(key.rsplit("_", 1)[1]) for key in request.form if key.startswith("item_code_") and key.rsplit("_", 1)[1].isdigit()
+    }
+    fields = (
+        ("item_code", "item_code"),
+        ("item_name", "item_name"),
+        ("qty", "qty"),
+        ("uom", "uom"),
+        ("rate", "rate"),
+        ("amount", "amount"),
+        ("batch_id", "batch_id"),
+        ("serial_no", "serial_no"),
+        ("source_type", "source_type"),
+        ("source_id", "source_id"),
+        ("source_item_id", "source_item_id"),
+        ("account", "account"),
+        ("cost_center", "cost_center"),
+        ("unit", "unit"),
+        ("project", "project"),
+        ("remarks", "remarks"),
+    )
+    return [{name: request.form.get(f"{field}_{index}", "") for name, field in fields} for index in sorted(indexes)]
+
+
+def _submitted_stock_reconciliation_lines() -> list[dict[str, str]]:
+    """Return posted reconciliation values after an edit validation failure."""
+    indexes = {
+        int(key.rsplit("_", 1)[1]) for key in request.form if key.startswith("item_code_") and key.rsplit("_", 1)[1].isdigit()
+    }
+    fields = (
+        "item_code",
+        "uom",
+        "warehouse",
+        "current_qty",
+        "counted_qty",
+        "current_valuation_rate",
+        "target_valuation_rate",
+        "current_stock_value",
+        "target_stock_value",
+    )
+    return [{field: request.form.get(f"{field}_{index}", "") for field in fields} for index in sorted(indexes)]
 
 
 def _capture_stock_entry_state(registro: StockEntry) -> dict:
@@ -943,13 +988,31 @@ def _render_stock_entry_edit_form(
     registro: StockEntry,
     items_disponibles: list,
     uoms_disponibles: list,
+    formulario=None,
 ):
     """Renderiza el formulario de edición de entrada de inventario."""
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
 
-    formulario = FormularioEntradaAlmacen(obj=registro)
+    formulario = formulario or FormularioEntradaAlmacen(obj=registro)
 
     lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
+    initial_lines = (
+        _submitted_stock_entry_lines()
+        if request.method == "POST"
+        else [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty),
+                "uom": item.uom or "",
+                "rate": str(item.basic_rate or 0),
+                "amount": str(item.amount or 0),
+                "batch_id": item.batch_id or "",
+                "serial_no": item.serial_no or "",
+            }
+            for item in lineas
+        ]
+    )
     transaction_config = {
         "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",
@@ -962,23 +1025,15 @@ def _render_stock_entry_edit_form(
             {"value": "delivery_note", "label": _("Remisión de Mercadería Vendida")},
         ],
         "initialHeader": {
-            "company": registro.company or "",
-            "posting_date": str(registro.posting_date or ""),
-            "remarks": registro.remarks or "",
+            "company": request.form.get("company", registro.company or ""),
+            "naming_series": request.form.get("naming_series", registro.naming_series_id or ""),
+            "currency": request.form.get("currency", registro.transaction_currency or ""),
+            "posting_date": request.form.get("posting_date", str(registro.posting_date or "")),
+            "from_warehouse": request.form.get("from_warehouse", registro.from_warehouse or ""),
+            "to_warehouse": request.form.get("to_warehouse", registro.to_warehouse or ""),
+            "remarks": request.form.get("remarks", registro.remarks or ""),
         },
-        "initialLines": [
-            {
-                "item_code": item.item_code,
-                "item_name": item.item_name,
-                "qty": str(item.qty),
-                "uom": item.uom or "",
-                "rate": str(item.basic_rate or 0),
-                "amount": str(item.amount or 0),
-                "batch_id": item.batch_id or "",
-                "serial_no": item.serial_no or "",
-            }
-            for item in lineas
-        ],
+        "initialLines": initial_lines,
     }
     titulo = _stock_entry_title(registro.purpose)
     return render_template(
@@ -999,36 +1054,45 @@ def _render_stock_reconciliation_edit_form(
     registro: StockEntry,
     items_disponibles: list,
     uoms_disponibles: list,
+    formulario=None,
 ):
     """Renderiza el formulario específico para editar una conciliación."""
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
 
-    formulario = FormularioEntradaAlmacen(obj=registro)
+    formulario = formulario or FormularioEntradaAlmacen(obj=registro)
     lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
+    submitted = request.method == "POST"
     reconciliation_config = {
         "header": {
-            "company": registro.company or "",
-            "posting_date": str(registro.posting_date or ""),
-            "adjustment_account_id": registro.adjustment_account_id or "",
-            "cost_center_code": registro.cost_center_code or "",
-            "unit_code": registro.unit_code or "",
-            "project_code": registro.project_code or "",
-            "remarks": registro.remarks or "",
+            "company": request.form.get("company", registro.company or ""),
+            "posting_date": request.form.get("posting_date", str(registro.posting_date or "")),
+            "naming_series": request.form.get("naming_series", registro.naming_series_id or ""),
+            "from_warehouse": request.form.get("from_warehouse", registro.from_warehouse or ""),
+            "to_warehouse": request.form.get("to_warehouse", registro.to_warehouse or ""),
+            "adjustment_account_id": request.form.get("adjustment_account_id", registro.adjustment_account_id or ""),
+            "cost_center_code": request.form.get("cost_center_code", registro.cost_center_code or ""),
+            "unit_code": request.form.get("unit_code", registro.unit_code or ""),
+            "project_code": request.form.get("project_code", registro.project_code or ""),
+            "remarks": request.form.get("remarks", registro.remarks or ""),
         },
-        "lines": [
-            {
-                "item_code": line.item_code,
-                "warehouse": line.target_warehouse or line.source_warehouse or "",
-                "uom": line.uom or "",
-                "current_qty": str(line.current_qty or 0),
-                "counted_qty": str(line.counted_qty or 0),
-                "current_valuation_rate": str(line.current_valuation_rate or 0),
-                "target_valuation_rate": str(line.target_valuation_rate or 0),
-                "current_stock_value": str(line.current_stock_value or 0),
-                "target_stock_value": str(line.target_stock_value or 0),
-            }
-            for line in lineas
-        ],
+        "lines": (
+            _submitted_stock_reconciliation_lines()
+            if submitted
+            else [
+                {
+                    "item_code": line.item_code,
+                    "warehouse": line.target_warehouse or line.source_warehouse or "",
+                    "uom": line.uom or "",
+                    "current_qty": str(line.current_qty or 0),
+                    "counted_qty": str(line.counted_qty or 0),
+                    "current_valuation_rate": str(line.current_valuation_rate or 0),
+                    "target_valuation_rate": str(line.target_valuation_rate or 0),
+                    "current_stock_value": str(line.current_stock_value or 0),
+                    "target_stock_value": str(line.target_stock_value or 0),
+                }
+                for line in lineas
+            ]
+        ),
     }
     return render_template(
         "inventario/stock_reconciliation_nuevo.html",
