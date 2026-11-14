@@ -11,6 +11,7 @@ debe dejar constancia del intento fallido en la bitácora de impresión.
 
 from __future__ import annotations
 
+import os
 from uuid import uuid4
 
 import pytest
@@ -127,11 +128,19 @@ def test_admin_preview_de_plantilla_legacy_invalida_responde_404_generico(app, a
 
 @pytest.fixture
 def print_scope_app():
-    """Aísla RBAC y auditoría para probar un usuario con permiso en un módulo."""
+    """Isolate RBAC and audit rows while using the configured database engine."""
+    database_uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if not database_uri.startswith("sqlite") and os.environ.get("CHECK_DATABASE", "").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true y una base dedicada.")
     application = create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_DATABASE_URI": database_uri,
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
@@ -140,39 +149,48 @@ def print_scope_app():
         }
     )
     document_type = f"unknown-cross-company-{uuid4().hex}"
+    authorized_company = f"P{uuid4().hex[:8]}"
+    unauthorized_company = f"Q{uuid4().hex[:8]}"
+    nonexistent_company = f"X{uuid4().hex[:8]}"
     user_name = f"print-audit-{uuid4().hex[:8]}"
     admin_name = f"print-admin-audit-{uuid4().hex[:8]}"
     with application.app_context():
         database.create_all()
+        created_currency = database.session.get(Currency, "USD") is None
+        if created_currency:
+            database.session.add(Currency(code="USD", name="US Dollar", decimals=2, active=True))
         database.session.add_all(
             [
-                Currency(code="USD", name="US Dollar", decimals=2, active=True),
                 Entity(
-                    code="alpha",
-                    name="Alpha",
-                    company_name="Alpha Company",
+                    code=authorized_company,
+                    name="Authorized test company",
+                    company_name="Authorized Test Company",
                     tax_id=f"ALPHA-{uuid4().hex[:8]}",
                     currency="USD",
                     enabled=True,
                 ),
                 Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao Company",
+                    code=unauthorized_company,
+                    name="Unauthorized test company",
+                    company_name="Unauthorized Test Company",
                     tax_id=f"CACAO-{uuid4().hex[:8]}",
                     currency="USD",
                     enabled=True,
                 ),
-                Modules(module="sales", default=False, enabled=True),
             ]
         )
+        sales_module = database.session.execute(select(Modules).filter_by(module="sales")).scalar_one_or_none()
+        created_sales_module = sales_module is None
+        if sales_module is None:
+            sales_module = Modules(module="sales", default=False, enabled=True)
+            database.session.add(sales_module)
         user = User(
             user=user_name,
             name="Print audit test",
             password=b"unused-test-password",
             classification="user",
             active=True,
-            company="alpha",
+            company=authorized_company,
         )
         admin = User(
             user=admin_name,
@@ -180,46 +198,87 @@ def print_scope_app():
             password=b"unused-test-password",
             classification="admin",
             active=True,
-            company="alpha",
+            company=authorized_company,
         )
         role = Roles(name=f"Print audit {uuid4().hex[:8]}", note="Single-module access test")
-        sales_module = database.session.execute(select(Modules).filter_by(module="sales")).scalar_one()
         database.session.add_all([user, admin, role])
         database.session.flush()
         database.session.add_all(
             [
                 RolesAccess(rol_id=role.id, module_id=sales_module.id, view=True),
                 RolesUser(user_id=user.id, role_id=role.id, active=True),
-                UserCompanyAccess(user_id=user.id, company_code="alpha"),
+                UserCompanyAccess(user_id=user.id, company_code=authorized_company),
             ]
         )
         database.session.commit()
         user_id, admin_id = str(user.id), str(admin.id)
+        role_id = role.id
         auth_version, admin_auth_version = user.auth_version, admin.auth_version
-    yield application, document_type, user_id, auth_version, admin_id, admin_auth_version
+        sales_module_id = sales_module.id
+    yield (
+        application,
+        document_type,
+        user_id,
+        auth_version,
+        admin_id,
+        admin_auth_version,
+        authorized_company,
+        unauthorized_company,
+        nonexistent_company,
+        role_id,
+        sales_module_id,
+        created_sales_module,
+        created_currency,
+    )
     with application.app_context():
+        database.session.execute(database.delete(PrintJobLog).where(PrintJobLog.document_type == document_type))
+        database.session.execute(
+            database.delete(RolesAccess).where(RolesAccess.rol_id == role_id, RolesAccess.module_id == sales_module_id)
+        )
+        database.session.execute(database.delete(RolesUser).where(RolesUser.user_id.in_([user_id, admin_id])))
+        database.session.execute(database.delete(UserCompanyAccess).where(UserCompanyAccess.user_id == user_id))
+        database.session.execute(database.delete(User).where(User.id.in_([user_id, admin_id])))
+        database.session.execute(database.delete(Roles).where(Roles.id == role_id))
+        database.session.execute(database.delete(Entity).where(Entity.code.in_([authorized_company, unauthorized_company])))
+        if created_sales_module:
+            database.session.execute(database.delete(Modules).where(Modules.id == sales_module_id))
+        if created_currency:
+            database.session.execute(database.delete(Currency).where(Currency.code == "USD"))
+        database.session.commit()
         database.session.remove()
         database.engine.dispose()
 
 
+@pytest.mark.database
 def test_tipo_desconocido_no_crea_auditoria_en_compania_no_autorizada(print_scope_app):
     """Un permiso de ventas autoriza auditoría solo en la compañía asignada."""
-    application, document_type, user_id, auth_version, _, _ = print_scope_app
+    (
+        application,
+        document_type,
+        user_id,
+        auth_version,
+        _,
+        _,
+        authorized_company,
+        unauthorized_company,
+        nonexistent_company,
+        *_rest,
+    ) = print_scope_app
     client = application.test_client()
     with client.session_transaction() as session:
         session["_user_id"] = user_id
         session["_auth_version"] = auth_version
         session["_fresh"] = True
-    allowed_response = client.get(f"/print/{document_type}/document-1/preview?company=alpha")
+    allowed_response = client.get(f"/print/{document_type}/document-1/preview?company={authorized_company}")
     assert allowed_response.status_code == 404
     with application.app_context():
         jobs = database.session.execute(select(PrintJobLog).filter_by(document_type=document_type)).scalars().all()
         assert len(jobs) == 1
-        assert jobs[0].company_code == "alpha"
+        assert jobs[0].company_code == authorized_company
         assert jobs[0].success is False
 
-    denied_response = client.get(f"/print/{document_type}/document-1/preview?company=cacao")
-    nonexistent_response = client.get(f"/print/{document_type}/document-1/preview?company=unknown-company")
+    denied_response = client.get(f"/print/{document_type}/document-1/preview?company={unauthorized_company}")
+    nonexistent_response = client.get(f"/print/{document_type}/document-1/preview?company={nonexistent_company}")
 
     assert denied_response.status_code == 403
     assert nonexistent_response.status_code == denied_response.status_code
@@ -228,16 +287,17 @@ def test_tipo_desconocido_no_crea_auditoria_en_compania_no_autorizada(print_scop
         assert len(jobs) == 1
 
 
+@pytest.mark.database
 def test_tipo_desconocido_de_admin_con_compania_inexistente_no_falla_al_auditar(print_scope_app):
     """Una compañía desconocida no alcanza la FK de PrintJobLog aunque el usuario sea admin."""
-    application, document_type, _, _, admin_id, auth_version = print_scope_app
+    application, document_type, _, _, admin_id, auth_version, _, _, nonexistent_company, *_ = print_scope_app
     client = application.test_client()
     with client.session_transaction() as session:
         session["_user_id"] = admin_id
         session["_auth_version"] = auth_version
         session["_fresh"] = True
 
-    response = client.get(f"/print/{document_type}/document-1/preview?company=unknown-company")
+    response = client.get(f"/print/{document_type}/document-1/preview?company={nonexistent_company}")
 
     assert response.status_code == 404
     with application.app_context():
