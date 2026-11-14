@@ -1128,17 +1128,17 @@ def cancel_petty_cash_expense(
             )
             if period and not (period.start <= cancellation_date <= period.end):
                 raise ValueError(_("La anulación de un gasto solo se permite en el mismo periodo contable."))
-        if expense.journal_id:
-            journal = database.session.get(ComprobanteContable, expense.journal_id)
-            if journal is not None:
-                # RELEASE of an outermost SQLite SAVEPOINT commits immediately.
-                # This transaction must also contain the subledger update below.
-                cancel_submitted_journal(
-                    str(journal.id),
-                    user_id=actor_id,
-                    reason=reason or "Anulacion de gasto de caja chica",
-                    commit=False,
-                )
+        journal = database.session.get(ComprobanteContable, expense.journal_id) if expense.journal_id else None
+        if journal is None:
+            raise ValueError(_("No se puede anular un gasto posteado sin un comprobante contable asociado."))
+        # RELEASE of an outermost SQLite SAVEPOINT commits immediately.
+        # This transaction must also contain the subledger update below.
+        cancel_submitted_journal(
+            str(journal.id),
+            user_id=actor_id,
+            reason=reason or "Anulacion de gasto de caja chica",
+            commit=False,
+        )
         expense.docstatus = 2
         expense.cancel_reason = reason or None
         if expense.voucher_id:

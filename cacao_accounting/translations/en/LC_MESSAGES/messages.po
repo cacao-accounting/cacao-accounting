@@ -8123,6 +8123,10 @@ msgstr "The voucher has already been settled."
 msgid "Solo se puede anular un gasto ya posteado."
 msgstr "Only an already posted expense can be cancelled."
 
+#: cacao_accounting/bancos/services.py
+msgid "No se puede anular un gasto posteado sin un comprobante contable asociado."
+msgstr "A posted expense without an associated accounting voucher cannot be cancelled."
+
 #: cacao_accounting/bancos/services.py:995
 msgid "No se puede anular un gasto después de reponer la Caja Chica."
 msgstr "An expense cannot be cancelled after replenishing the Petty Cash."

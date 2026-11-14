@@ -635,6 +635,61 @@ def test_petty_cash_expense_cancellation_reverses_gl_and_reopens_voucher(repleni
         )
 
 
+def test_posted_petty_cash_expense_without_journal_cannot_be_cancelled(replenishment_app):
+    """A posted expense without its required journal must remain unchanged on cancellation."""
+    application, ids = replenishment_app
+    scenario = _prepare_delivered_expense_voucher(application, ids)
+    expense_id = _post_prepared_petty_cash_expense(application, scenario, ids["editor_user"])
+    voucher_id = str(scenario["voucher_id"])
+    company = str(scenario["company"])
+    posting_date = date.fromisoformat(str(scenario["posting_date"]))
+
+    with application.app_context():
+        expense = database.session.get(PettyCashExpense, expense_id)
+        assert expense is not None and expense.journal_id
+        journal_id = str(expense.journal_id)
+        expense.journal_id = None
+        database.session.commit()
+        before = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(company=company, voucher_type="journal_entry", voucher_id=journal_id)
+            )
+            .scalars()
+            .all()
+        )
+        before_snapshot = {
+            entry.id: (entry.debit, entry.credit, entry.is_cancelled, entry.is_reversal, entry.reversal_of) for entry in before
+        }
+        assert len(before) == 2
+
+        with pytest.raises(ValueError, match="sin un comprobante contable asociado"):
+            cancel_petty_cash_expense(
+                expense,
+                reason="Compra duplicada",
+                actor_id=ids["editor_user"],
+                cancellation_date=posting_date,
+            )
+
+        expense = database.session.get(PettyCashExpense, expense_id)
+        voucher = database.session.get(PettyCashVoucher, voucher_id)
+        journal = database.session.get(ComprobanteContable, journal_id)
+        after = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(company=company, voucher_type="journal_entry", voucher_id=journal_id)
+            )
+            .scalars()
+            .all()
+        )
+        assert expense is not None and expense.docstatus == 1 and expense.journal_id is None
+        assert voucher is not None and voucher.voucher_status == "liquidado" and voucher.expense_id == expense_id
+        assert journal is not None and journal.status == "submitted"
+        assert {
+            entry.id: (entry.debit, entry.credit, entry.is_cancelled, entry.is_reversal, entry.reversal_of) for entry in after
+        } == before_snapshot
+        fund = database.session.get(PettyCashAccount, str(scenario["fund_id"]))
+        assert fund is not None and petty_cash_ledger_balance(fund) == Decimal("-75.0000")
+
+
 def test_petty_cash_balance_includes_later_period_reversal(replenishment_app):
     """A valid next-period reversal clears the balance only from its posting date."""
     application, ids = replenishment_app
@@ -1124,6 +1179,25 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
             currency=fund.currency,
             is_primary=True,
         )
+        fiscal_year = FiscalYear(
+            entity=company,
+            name="2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+        )
+        database.session.add(fiscal_year)
+        database.session.flush()
+        period = AccountingPeriod(
+            entity=company,
+            fiscal_year_id=fiscal_year.id,
+            name="Octubre 2026",
+            status="open",
+            enabled=True,
+            is_closed=False,
+            start=date(2026, 10, 1),
+            end=date(2026, 10, 31),
+        )
         reconciliation = PettyCashReconciliation(
             company=company,
             petty_cash_id=fund.id,
@@ -1139,7 +1213,7 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
             docstatus=1,
             transaction_currency=fund.currency,
         )
-        database.session.add_all([expense_account, cost_center, book, reconciliation])
+        database.session.add_all([expense_account, cost_center, book, period, reconciliation])
         database.session.commit()
         reconciliation_id = reconciliation.id
         cash_account_id = fund.account_id
