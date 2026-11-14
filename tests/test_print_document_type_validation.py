@@ -11,11 +11,15 @@ debe dejar constancia del intento fallido en la bitácora de impresión.
 
 from __future__ import annotations
 
+from uuid import uuid4
+
+from sqlalchemy import select
+
 from cacao_accounting.database import database
-from cacao_accounting.printing.models import PrintJobLog
+from cacao_accounting.printing.models import PrintJobLog, PrintTemplate
 
 
-def _last_print_job(app, document_type: str) -> PrintJobLog:
+def _last_print_job(app, document_type: str) -> PrintJobLog | None:
     """Devuelve el último trabajo de impresión registrado para el tipo dado."""
     with app.app_context():
         return (
@@ -53,3 +57,27 @@ def test_pdf_de_tipo_no_registrado_responde_404_y_registra_fallo(app, authentica
     assert job.success is False
     assert job.output_format == "pdf"
     assert "no registrado" in (job.error_message or "").lower()
+
+
+def test_create_template_does_not_persist_unregistered_document_type(app, authenticated_client):
+    """Un POST manipulado no debe dejar un borrador que nunca se pueda publicar."""
+    client = authenticated_client("admin")
+    code = f"invalid-document-type-{uuid4().hex}"
+
+    response = client.post(
+        "/admin/print-templates/new",
+        data={
+            "document_type": "not-registered-audit",
+            "code": code,
+            "name": "Invalid template type",
+            "template_body": "<html><body>Safe sample</body></html>",
+            "stylesheet_body": "",
+            "paper_size": "letter",
+            "orientation": "portrait",
+        },
+    )
+
+    assert response.status_code == 200
+    with app.app_context():
+        persisted = database.session.execute(select(PrintTemplate).filter_by(code=code)).scalar_one_or_none()
+        assert persisted is None
