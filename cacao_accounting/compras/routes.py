@@ -9,6 +9,8 @@ from datetime import date
 
 from decimal import Decimal
 
+from sqlalchemy import and_
+
 from logging import getLogger
 
 
@@ -1364,11 +1366,7 @@ def compras_comparativo_ofertas(rfq_id: str):
         .filter_by(purchase_quotation_id=rfq_id)
         .order_by(PurchaseQuotationAward.created.desc())
     ).scalar_one_or_none()
-    award_lines = (
-        database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalars().all()
-        if award
-        else []
-    )
+    award_lines = _purchase_award_lines(award, registro)
     titulo = _titulo_comparativo() + " - " + (registro.document_no or rfq_id)
     return render_template(
         "compras/comparativo_ofertas.html",
@@ -1384,6 +1382,29 @@ def compras_comparativo_ofertas(rfq_id: str):
         negotiation_round=current_negotiation_round(rfq_id),
         titulo=titulo,
     )
+
+
+def _purchase_award_lines(
+    award: PurchaseQuotationAward | None, registro: PurchaseQuotation
+) -> list[tuple[PurchaseQuotationAwardItem, SupplierQuotation | None, str | None]]:
+    """Load awarded lines with supplier names only from this RFQ and company."""
+    if award is None:
+        return []
+
+    statement = (
+        database.select(PurchaseQuotationAwardItem, SupplierQuotation, Party.name)
+        .outerjoin(
+            SupplierQuotation,
+            and_(
+                SupplierQuotation.id == PurchaseQuotationAwardItem.supplier_quotation_id,
+                SupplierQuotation.company == registro.company,
+                SupplierQuotation.purchase_quotation_id == registro.id,
+            ),
+        )
+        .outerjoin(Party, Party.id == SupplierQuotation.supplier_id)
+        .where(PurchaseQuotationAwardItem.award_id == award.id)
+    )
+    return [tuple(row) for row in database.session.execute(statement).all()]
 
 
 @compras.route("/request-for-quotation/<rfq_id>/negotiation-round", methods=["POST"])

@@ -79,8 +79,17 @@
   <table class="ca-table">
     <caption style="display: none;">{{ _("Detalle de líneas adjudicadas.") }}</caption>
     <thead><tr><th>{{ _("Artículo") }}</th><th>{{ _("Proveedor") }}</th><th>{{ _("Cantidad") }}</th><th>{{ _("Tarifa") }}</th><th>{{ _("Total") }}</th></tr></thead>
-    <tbody>{% for line in award_lines %}
-      <tr><td>{{ line.item_code }}</td><td>{{ line.supplier_quotation_id }}</td><td>{{ line.qty }}</td><td>{{ line.rate }}</td><td>{{ line.amount }}</td></tr>
+    <tbody>{% for line, quotation, supplier_party_name in award_lines %}
+      <tr>
+        <td>{{ line.item_code }}</td>
+        <td>
+          {% if quotation %}
+          <span>{{ quotation.supplier_name or supplier_party_name or "-" }}</span>
+          <a href="{{ url_for('compras.compras_cotizacion_proveedor', quotation_id=quotation.id) }}">{{ _("Ver") }}</a>
+          {% else %}-{% endif %}
+        </td>
+        <td>{{ line.qty }}</td><td>{{ line.rate }}</td><td>{{ line.amount }}</td>
+      </tr>
     {% endfor %}</tbody>
   </table>
 </div>
