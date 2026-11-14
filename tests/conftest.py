@@ -247,10 +247,33 @@ def authenticated_client(app, reference_users):
     """Cliente HTTP autenticado por perfil sin repetir el hash de password."""
 
     def _factory(username: str = "admin"):
-        user = reference_users[username]
+        user_id = str(reference_users[username].id)
+        with app.app_context():
+            user = database.session.get(User, user_id)
+            if user is None:
+                raise AssertionError(f"The reference user {username!r} is missing from the test database.")
+            if username == "admin":
+                user.classification = "admin"
+                user.active = True
+                admin_role = database.session.execute(select(Roles).filter_by(name="admin")).scalar_one()
+                role_assignment = database.session.execute(
+                    select(RolesUser).filter_by(user_id=user_id, role_id=admin_role.id)
+                ).scalar_one_or_none()
+                if role_assignment is None:
+                    database.session.add(RolesUser(user_id=user_id, role_id=admin_role.id, active=True))
+                else:
+                    role_assignment.active = True
+                company_access = database.session.execute(
+                    select(UserCompanyAccess).filter_by(user_id=user_id, company_code="cacao")
+                ).scalar_one_or_none()
+                if company_access is None:
+                    database.session.add(UserCompanyAccess(user_id=user_id, company_code="cacao"))
+                database.session.commit()
+            auth_version = user.auth_version
         client = app.test_client()
         with client.session_transaction() as session:
-            session["_user_id"] = str(user.id)
+            session["_user_id"] = user_id
+            session["_auth_version"] = auth_version
             session["_fresh"] = True
         return client
 
