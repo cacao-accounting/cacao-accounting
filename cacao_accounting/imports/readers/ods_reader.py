@@ -3,7 +3,7 @@
 
 """Lector de archivos ODS."""
 
-from xml.sax import make_parser
+from defusedxml.sax import make_parser
 from xml.sax.handler import ContentHandler, feature_external_ges, feature_namespaces
 from xml.sax.xmlreader import AttributesNSImpl
 from zipfile import ZipFile
