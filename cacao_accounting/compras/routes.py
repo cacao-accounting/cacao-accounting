@@ -3423,7 +3423,8 @@ def compras_import_landed_cost_nuevo():
     formulario = FormularioImportLandedCost()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
 
-    selected_company = request.values.get("company") or (
+    submitted_values = request.form if request.method == "POST" else request.args
+    selected_company = submitted_values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
     formulario.naming_series.choices = _series_choices("import_landed_cost", selected_company)
@@ -3440,8 +3441,8 @@ def compras_import_landed_cost_nuevo():
 
     transaction_config = {
         "initialHeader": {
-            "company": request.values.get("company", selected_company) or "",
-            "posting_date": request.values.get("posting_date", str(date.today())) or "",
+            "company": submitted_values.get("company", selected_company) or "",
+            "posting_date": submitted_values.get("posting_date", str(date.today())) or "",
         },
         "columns": [
             {"key": "item_code", "label": "Articulo", "type": "select", "required": True},
