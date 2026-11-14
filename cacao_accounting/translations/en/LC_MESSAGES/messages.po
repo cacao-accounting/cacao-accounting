@@ -13914,6 +13914,10 @@ msgstr "Invalid fiscal year for the company."
 msgid "El código de presupuesto ya existe para este año fiscal y libro."
 msgstr "The budget code already exists for this fiscal year and book."
 
+#: cacao_accounting/inventario/routes.py
+msgid "El código ya está en uso."
+msgstr "The code is already in use."
+
 #: cacao_accounting/contabilidad/budget_service.py:216
 msgid "Cuenta contable no válida."
 msgstr "Invalid accounting account."

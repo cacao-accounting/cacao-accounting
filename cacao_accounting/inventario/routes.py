@@ -15,6 +15,7 @@ from cacao_accounting.cache import invalidate_cache
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
 from flask_login import current_user, login_required
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.database import (
     Accounts,
@@ -79,6 +80,7 @@ from cacao_accounting.inventario.services import (
     _item_category_choices,
     _currency_choices,
     _warehouse_company_rows_for_template,
+    _is_duplicate_master_code_violation,
     _validate_warehouse_company_rows,
     _save_warehouse_company_rows,
     _infer_stock_entry_purpose,
@@ -583,13 +585,19 @@ def inventario_uom_nuevo():
     formulario = FormularioUOM()
     titulo = _("Nueva Unidad de Medida") + " - " + APPNAME
     if formulario.validate_on_submit():
-        uom = UOM(
-            code=formulario.code.data,
-            name=formulario.name.data,
-        )
-        database.session.add(uom)
-        database.session.commit()
-        return redirect("/inventory/uom/list")
+        try:
+            uom = UOM(
+                code=formulario.code.data,
+                name=formulario.name.data,
+            )
+            database.session.add(uom)
+            database.session.commit()
+            return redirect("/inventory/uom/list")
+        except IntegrityError as exc:
+            database.session.rollback()
+            if not _is_duplicate_master_code_violation(exc, "uom"):
+                raise
+            flash(_("El código ya está en uso."), "danger")
     return render_template("inventario/uom_nuevo.html", form=formulario, titulo=titulo)
 
 
@@ -634,16 +642,28 @@ def inventario_bodega_nuevo():
                 titulo=titulo,
                 warehouse_company_rows=warehouse_company_rows,
             )
-        bodega = Warehouse(
-            code=request.form.get("code"),
-            name=request.form.get("name"),
-            company=company_rows[0]["company"],
-        )
-        database.session.add(bodega)
-        database.session.flush()
-        _save_warehouse_company_rows(bodega.code, company_rows)
-        database.session.commit()
-        return redirect("/inventory/warehouse/list")
+        try:
+            bodega = Warehouse(
+                code=request.form.get("code"),
+                name=request.form.get("name"),
+                company=company_rows[0]["company"],
+            )
+            database.session.add(bodega)
+            database.session.flush()
+            _save_warehouse_company_rows(bodega.code, company_rows)
+            database.session.commit()
+            return redirect("/inventory/warehouse/list")
+        except IntegrityError as exc:
+            database.session.rollback()
+            if not _is_duplicate_master_code_violation(exc, "warehouse"):
+                raise
+            flash(_("El código ya está en uso."), "danger")
+            return render_template(
+                "inventario/bodega_nuevo.html",
+                form=formulario,
+                titulo=titulo,
+                warehouse_company_rows=warehouse_company_rows,
+            )
     return render_template(
         "inventario/bodega_nuevo.html",
         form=formulario,

@@ -4,12 +4,15 @@
 """Modulo de Inventarios."""
 
 import logging
+import sqlite3
 
 from datetime import date
 
 from decimal import Decimal
 
 from typing import Any, Mapping
+
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.exceptions import flash_error
 
@@ -93,6 +96,45 @@ STOCK_ENTRY_PURPOSES = frozenset(
         "adjustment_negative",
     }
 )
+
+
+def _is_duplicate_master_code_violation(error: IntegrityError, table_name: str) -> bool:
+    """Identifica colisiones conocidas de código único en UOM y bodegas."""
+    constraints_by_table = {
+        "uom": {"ix_uom_code"},
+        "warehouse": {"uq_warehouse_code", "uq_warehouse_code_global"},
+    }
+    sqlite_columns_by_table = {"uom": "uom.code", "warehouse": "warehouse.code"}
+    constraints = constraints_by_table.get(table_name)
+    sqlite_columns = sqlite_columns_by_table.get(table_name)
+    if not constraints or not sqlite_columns:
+        return False
+
+    original = error.orig
+    diagnostic = getattr(original, "diag", None)
+    constraint_name = getattr(diagnostic, "constraint_name", None)
+    if constraint_name in constraints:
+        return True
+
+    message = str(original).lower()
+    if any(constraint.lower() in message for constraint in constraints):
+        return True
+
+    dialect = database.engine.dialect.name
+    if dialect == "sqlite":
+        error_code = getattr(original, "sqlite_errorcode", None)
+        return bool(
+            error_code is not None
+            and error_code & 0xFF == sqlite3.SQLITE_CONSTRAINT
+            and "unique constraint failed" in message
+            and sqlite_columns in message
+        )
+
+    if dialect in {"mysql", "mariadb"}:
+        error_args = getattr(original, "args", ())
+        return bool(error_args and error_args[0] == 1062 and any(constraint.lower() in message for constraint in constraints))
+
+    return False
 
 
 def _parse_date(value: str | None) -> date | None:
