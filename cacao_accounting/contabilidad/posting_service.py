@@ -4418,6 +4418,23 @@ def _validate_manual_reversal_ledgers(
         if source_ledgers and source_ledgers != reversal_ledgers:
             raise PostingError(_("La reversión debe incluir cada libro contable de la línea de origen."))
 
+        for context in contexts:
+            if context.ledger_id not in reversal_ledgers:
+                continue
+            _manual_reversal_source_entry(document, line, context)
+
+    transition_id = database.session.execute(
+        select(DocumentTransition.id).where(
+            DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
+            DocumentTransition.source_id == document.reversal_of,
+            DocumentTransition.target_type == JOURNAL_TRANSACTION_TYPE,
+            DocumentTransition.target_id == document.id,
+            DocumentTransition.transition_type == "reversal",
+        )
+    ).scalar_one_or_none()
+    if transition_id is None:
+        raise PostingError(_("La reversión manual no tiene una transición válida."))
+
 
 def _post_comprobante_line(
     document: ComprobanteContable,

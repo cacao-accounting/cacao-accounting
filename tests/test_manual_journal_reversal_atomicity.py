@@ -11,8 +11,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 
 from cacao_accounting.contabilidad.journal_service import (
+    JournalValidationError,
     create_journal_draft,
     duplicate_journal_as_reversal_draft,
+    list_journal_lines,
     submit_journal,
 )
 from cacao_accounting.database import (
@@ -21,6 +23,7 @@ from cacao_accounting.database import (
     ComprobanteContable,
     DocumentTransition,
     FiscalYear,
+    GLEntry,
     User,
     database,
 )
@@ -135,6 +138,46 @@ def test_reversal_transition_conflict_rolls_back_the_draft(app, entorno_contable
 
         assert orphaned_draft is None
         assert transition_id is None
+        if created_reversal_period_id:
+            database.session.delete(database.session.get(AccountingPeriod, created_reversal_period_id))
+            database.session.commit()
+
+
+def test_submit_rejects_orphaned_reversal_draft(app, entorno_contable):
+    """A legacy reversal draft without its source transition cannot reach the GL."""
+    with app.app_context():
+        source_id, created_reversal_period_id = _create_submitted_journal(entorno_contable)
+        user_id = database.session.execute(select(User.id).where(User.user == "admin")).scalar_one()
+        book_code = database.session.execute(select(Book.code).where(Book.code == "DEFAULT_BOOK")).scalar_one()
+        orphaned_draft = create_journal_draft(
+            {
+                "company": "cacao",
+                "posting_date": "2026-06-15",
+                "books": [book_code],
+                "transaction_currency": "NIO",
+                "base_currency": "NIO",
+                "exchange_rate": "1",
+                "lines": [
+                    {"order": 1, "account": "1102", "debit": "25", "credit": ""},
+                    {"order": 2, "account": "1101", "debit": "", "credit": "25"},
+                ],
+            },
+            user_id=user_id,
+            assign_identifier=False,
+            source_economic_line_ids=[str(line.economic_line_id or line.id) for line in list_journal_lines(source_id)],
+        )
+        orphaned_draft.reversal_of = source_id
+        database.session.commit()
+
+        with pytest.raises(JournalValidationError, match="no tiene una transición válida"):
+            submit_journal(orphaned_draft.id, user_id=user_id)
+
+        persisted_draft = database.session.get(ComprobanteContable, orphaned_draft.id)
+        gl_entry_id = database.session.execute(
+            select(GLEntry.id).where(GLEntry.voucher_id == orphaned_draft.id)
+        ).scalar_one_or_none()
+        assert persisted_draft is not None and persisted_draft.status == "draft"
+        assert gl_entry_id is None
         if created_reversal_period_id:
             database.session.delete(database.session.get(AccountingPeriod, created_reversal_period_id))
             database.session.commit()

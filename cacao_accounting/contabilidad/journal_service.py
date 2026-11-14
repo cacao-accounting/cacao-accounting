@@ -569,7 +569,7 @@ def duplicate_journal_as_reversal_draft(
 
 
 def _journal_reversal_transition_exists(source_id: str) -> bool:
-    """Check whether the source journal acquired a reversal after a write conflict."""
+    """Check whether a source journal already has a reversal transition."""
     transition_id = database.session.execute(
         select(DocumentTransition.id).where(
             DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
