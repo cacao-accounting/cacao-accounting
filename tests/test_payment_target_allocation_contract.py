@@ -2,8 +2,17 @@
 
 from datetime import date
 from decimal import Decimal
+from uuid import uuid4
 
-from cacao_accounting.database import Party, PaymentEntry, PaymentReference, PurchaseInvoice, SalesInvoice, database
+from cacao_accounting.database import (
+    DocumentRelation,
+    Party,
+    PaymentEntry,
+    PaymentReference,
+    PurchaseInvoice,
+    SalesInvoice,
+    database,
+)
 from cacao_accounting.document_flow.service import create_target_document
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.handlers.operational import get_payment_applications
@@ -125,6 +134,98 @@ def test_pago_destino_suma_importes_por_linea_y_persiste_contexto(entorno_contab
             invoice_usd.id,
             invoice_legacy.id,
         }
+
+
+def test_pago_destino_difiere_commit_y_permite_rollback_atomico(entorno_contable):
+    """A caller can roll back every draft payment effect before committing a retry."""
+    with entorno_contable.app.app_context():
+        customer_id = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one().id
+        invoice = _factura_venta(
+            customer_id,
+            currency="NIO",
+            total="100",
+            rate="1",
+            number=f"V-ROLLBACK-{uuid4().hex[:10]}",
+        )
+        invoice.base_outstanding_amount = Decimal("100")
+        invoice_id = invoice.id
+        database.session.commit()
+        payload = {
+            "target_document_type": "payment_entry",
+            "company": COMPANIA,
+            "posting_date": FECHA.isoformat(),
+            "payment_type": "receive",
+            "party_type": "customer",
+            "party_id": customer_id,
+            "currency": "NIO",
+            "base_currency": "NIO",
+            "exchange_rate": "1",
+            "lines": [
+                {
+                    "source_document_type": "sales_invoice",
+                    "source_document_id": invoice_id,
+                    "allocated_amount": "25",
+                }
+            ],
+        }
+
+        uncommitted = create_target_document(payload, commit=False)
+        rolled_back_payment_id = uncommitted["target_id"]
+        assert database.session.get(PaymentEntry, rolled_back_payment_id) is not None
+        assert Decimal(str(database.session.get(SalesInvoice, invoice_id).outstanding_amount)) == Decimal("75")
+        assert Decimal(str(database.session.get(SalesInvoice, invoice_id).base_outstanding_amount)) == Decimal("75")
+        assert (
+            database.session.execute(
+                database.select(PaymentReference.id).where(PaymentReference.payment_id == rolled_back_payment_id)
+            ).scalar_one_or_none()
+            is not None
+        )
+        assert (
+            database.session.execute(
+                database.select(DocumentRelation.id).where(DocumentRelation.target_id == rolled_back_payment_id)
+            ).scalar_one_or_none()
+            is not None
+        )
+
+        database.session.rollback()
+        database.session.expire_all()
+        invoice_after_rollback = database.session.get(SalesInvoice, invoice_id)
+        assert database.session.get(PaymentEntry, rolled_back_payment_id) is None
+        assert (
+            database.session.execute(
+                database.select(PaymentReference.id).where(PaymentReference.payment_id == rolled_back_payment_id)
+            ).scalar_one_or_none()
+            is None
+        )
+        assert (
+            database.session.execute(
+                database.select(DocumentRelation.id).where(DocumentRelation.target_id == rolled_back_payment_id)
+            ).scalar_one_or_none()
+            is None
+        )
+        assert Decimal(str(invoice_after_rollback.outstanding_amount)) == Decimal("100")
+        assert Decimal(str(invoice_after_rollback.base_outstanding_amount)) == Decimal("100")
+
+        committed = create_target_document(payload, commit=False)
+        committed_payment_id = committed["target_id"]
+        database.session.commit()
+        persisted_payment = database.session.get(PaymentEntry, committed_payment_id)
+        persisted_invoice = database.session.get(SalesInvoice, invoice_id)
+        assert persisted_payment is not None
+        assert (
+            database.session.execute(
+                database.select(PaymentReference.id).where(PaymentReference.payment_id == committed_payment_id)
+            ).scalar_one_or_none()
+            is not None
+        )
+        assert (
+            database.session.execute(
+                database.select(DocumentRelation.id).where(DocumentRelation.target_id == committed_payment_id)
+            ).scalar_one_or_none()
+            is not None
+        )
+        assert Decimal(str(persisted_invoice.outstanding_amount)) == Decimal("75")
+        assert Decimal(str(persisted_invoice.base_outstanding_amount)) == Decimal("75")
 
 
 def test_pago_destino_registra_cuentas_por_pagar_en_moneda_del_pago(entorno_contable):
