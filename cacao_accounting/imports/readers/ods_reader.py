@@ -195,7 +195,7 @@ class _ODSContentParser(ContentHandler):
         else:
             self.budget.consume_repeated_rows(len(self.row_data), self.row_repeat)
             if self.header_seen and self._has_data(self.row_data):
-                self.rows.extend([self.row_data] * self.row_repeat)
+                self.rows.extend(self.row_data.copy() for _ in range(self.row_repeat))
         self.row_data = None
         self.row_depth = 0
 

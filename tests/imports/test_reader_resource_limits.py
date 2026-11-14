@@ -726,6 +726,19 @@ def test_ods_rejects_repeated_rows_before_expanding_them(tmp_path, monkeypatch):
         ODSReader().read(str(path))
 
 
+def test_ods_repeated_rows_have_independent_storage(tmp_path):
+    """Mutar una fila repetida no cambia los valores de sus otras instancias."""
+    path = tmp_path / "repeated_rows_independent.ods"
+    _write_ods(path, ["name"], [("Ana", 1)], row_repeat="2")
+
+    result = ODSReader().read(str(path))
+
+    assert result.rows == [["Ana"], ["Ana"]]
+    assert result.rows[0] is not result.rows[1]
+    result.rows[0][0] = "Cambiada"
+    assert result.rows[1] == ["Ana"]
+
+
 def test_ods_reads_typed_values_and_empty_sheet(tmp_path):
     """ODS conserva valores numéricos, fecha, booleano y hoja sin filas."""
     path = tmp_path / "typed.ods"
