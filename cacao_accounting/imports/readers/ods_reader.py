@@ -26,13 +26,7 @@ class ODSReader(BaseReader):
 
         columns = [str(c) for c in rows_data[0]]
         rows = rows_data[1:]
-        valid_cols, col_indices = self._compute_valid_columns(columns, rows)
-
-        final_rows = []
-        for r in rows:
-            final_rows.append([r[i] if i < len(r) else "" for i in col_indices])
-
-        return NormalizedTable(columns=valid_cols, rows=final_rows, source_format="ods")
+        return NormalizedTable(columns=columns, rows=rows, source_format="ods")
 
     def _extract_row_data(self, row: table.TableRow) -> list:
         """Extrae los datos de una fila de tabla ODS."""
@@ -56,13 +50,3 @@ class ODSReader(BaseReader):
             return cell.getAttribute("booleanvalue")
 
         return teletype.extractText(cell)
-
-    def _compute_valid_columns(self, columns: list, rows: list) -> tuple[list, list]:
-        """Calcula los índices de columnas válidas (no vacías)."""
-        valid_cols = []
-        col_indices = []
-        for i, col in enumerate(columns):
-            if col:
-                valid_cols.append(col)
-                col_indices.append(i)
-        return valid_cols, col_indices

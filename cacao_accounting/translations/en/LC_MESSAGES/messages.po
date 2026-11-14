@@ -5985,6 +5985,10 @@ msgstr "There must be a single importable line sheet."
 msgid "La columna tiene datos pero no tiene encabezado."
 msgstr "The column has data but no header."
 
+#: cacao_accounting/imports/services/import_service.py
+msgid "La fila contiene datos después de la última columna con encabezado."
+msgstr "The row contains data after the last column with a header."
+
 #: cacao_accounting/api/line_import.py:250
 msgid "La columna no pertenece a la plantilla."
 msgstr "The column does not belong to the template."
