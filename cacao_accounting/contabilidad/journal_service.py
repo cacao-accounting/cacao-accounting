@@ -67,6 +67,8 @@ JOURNAL_STATUS_REJECTED = "rejected"
 JOURNAL_STATUS_SUBMITTED = "submitted"
 JOURNAL_STATUS_CANCELLED = "cancelled"
 JOURNAL_DUPLICABLE_STATUSES = {JOURNAL_STATUS_DRAFT, JOURNAL_STATUS_REJECTED, JOURNAL_STATUS_SUBMITTED}
+JOURNAL_REVERSAL_RETRY_PREFIX = "reversal_retry_"
+JOURNAL_REVERSAL_RETRY_LIMIT = 99_999
 AR_AP_ACCOUNT_TYPES = {"receivable", "payable", "customer_advance", "supplier_advance"}
 CUSTOMER_AR_AP_ACCOUNT_TYPES = {"receivable", "customer_advance"}
 
@@ -481,6 +483,21 @@ def duplicate_journal_as_reversal_draft(
     reason: str | None = None,
 ) -> ComprobanteContable:
     """Genera borrador de reversión invirtiendo debe/haber del comprobante origen."""
+    try:
+        _reserve_sqlite_reversal_writer()
+        return _create_journal_reversal_draft(journal_id, user_id, reversal_date_raw, reason)
+    except Exception:
+        database.session.rollback()
+        raise
+
+
+def _create_journal_reversal_draft(
+    journal_id: str,
+    user_id: str,
+    reversal_date_raw: date | str,
+    reason: str | None = None,
+) -> ComprobanteContable:
+    """Validate and persist a reversal attempt inside the reserved transaction."""
     source = database.session.execute(
         select(ComprobanteContable)
         .where(ComprobanteContable.id == journal_id)
@@ -491,15 +508,18 @@ def duplicate_journal_as_reversal_draft(
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if source.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError(_("Solo se puede revertir un comprobante contabilizado."))
-    existing_reversal = database.session.execute(
-        select(DocumentTransition.id).where(
-            DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
-            DocumentTransition.source_id == source.id,
-            DocumentTransition.transition_type == "reversal",
+    transitions = _journal_reversal_transitions(source.id)
+    if _journal_reversal_transition_exists(source.id, transitions):
+        raise JournalValidationError(_("El comprobante ya tiene una reversión registrada."))
+    active_reversal = database.session.execute(
+        select(ComprobanteContable.id).where(
+            ComprobanteContable.reversal_of == source.id,
+            ComprobanteContable.status.in_((JOURNAL_STATUS_DRAFT, JOURNAL_STATUS_SUBMITTED)),
         )
     ).scalar_one_or_none()
-    if existing_reversal is not None:
+    if active_reversal is not None:
         raise JournalValidationError(_("El comprobante ya tiene una reversión registrada."))
+    transition_type = _next_journal_reversal_transition_type(transitions)
     normalized_reason = (reason or "").strip()
     if not normalized_reason:
         raise JournalValidationError(_("Debe indicar el motivo de la reversión."))
@@ -547,7 +567,7 @@ def duplicate_journal_as_reversal_draft(
                 source_id=source.id,
                 target_type=JOURNAL_TRANSACTION_TYPE,
                 target_id=reversed_draft.id,
-                transition_type="reversal",
+                transition_type=transition_type,
                 company=source.entity,
                 posting_date=reversal_date,
                 accounting_period_id=reversal_period.id,
@@ -568,16 +588,63 @@ def duplicate_journal_as_reversal_draft(
     return reversed_draft
 
 
-def _journal_reversal_transition_exists(source_id: str) -> bool:
-    """Check whether a source journal already has a reversal transition."""
-    transition_id = database.session.execute(
-        select(DocumentTransition.id).where(
+def _reserve_sqlite_reversal_writer() -> None:
+    """Reserve SQLite's writer before reading source reversal attempts."""
+    if database.engine.dialect.name != "sqlite":
+        return
+    connection = database.session.connection()
+    raw_connection = connection.connection.driver_connection
+    if raw_connection is not None and not raw_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
+def _journal_reversal_transitions(source_id: str) -> list[DocumentTransition]:
+    """Return immutable reversal attempts recorded for a source journal."""
+    transitions = database.session.execute(
+        select(DocumentTransition)
+        .where(
             DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
             DocumentTransition.source_id == source_id,
-            DocumentTransition.transition_type == "reversal",
         )
-    ).scalar_one_or_none()
-    return transition_id is not None
+        .with_for_update()
+    ).scalars()
+    return [row for row in transitions if _is_journal_reversal_transition_type(row.transition_type)]
+
+
+def _is_journal_reversal_transition_type(transition_type: str) -> bool:
+    """Identify the original reservation and append-only retry event types."""
+    return transition_type == "reversal" or transition_type.startswith(JOURNAL_REVERSAL_RETRY_PREFIX)
+
+
+def _journal_reversal_transition_exists(source_id: str, transitions: list[DocumentTransition] | None = None) -> bool:
+    """Return whether a non-rejected attempt still reserves or reversed its source."""
+    for transition in transitions if transitions is not None else _journal_reversal_transitions(source_id):
+        if transition.target_type != JOURNAL_TRANSACTION_TYPE or not transition.target_id:
+            return True
+        target_status = database.session.execute(
+            select(ComprobanteContable.status).where(ComprobanteContable.id == transition.target_id)
+        ).scalar_one_or_none()
+        if target_status != JOURNAL_STATUS_REJECTED:
+            return True
+    return False
+
+
+def _next_journal_reversal_transition_type(transitions: list[DocumentTransition]) -> str:
+    """Choose a unique append-only transition type for the next retry attempt."""
+    if not transitions:
+        return "reversal"
+    retry_numbers = []
+    for transition in transitions:
+        if transition.transition_type == "reversal":
+            continue
+        suffix = transition.transition_type.removeprefix(JOURNAL_REVERSAL_RETRY_PREFIX)
+        if not suffix.isdigit() or len(suffix) != 5:
+            raise JournalValidationError(_("El historial de reversión del comprobante no es válido."))
+        retry_numbers.append(int(suffix))
+    next_number = max(retry_numbers, default=0) + 1
+    if next_number > JOURNAL_REVERSAL_RETRY_LIMIT:
+        raise JournalValidationError(_("El comprobante alcanzó el límite de intentos de reversión."))
+    return f"{JOURNAL_REVERSAL_RETRY_PREFIX}{next_number:05d}"
 
 
 def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str) -> ComprobanteContable:

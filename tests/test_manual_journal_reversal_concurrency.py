@@ -18,6 +18,7 @@ from cacao_accounting.contabilidad.journal_service import (
     JournalValidationError,
     create_journal_draft,
     duplicate_journal_as_reversal_draft,
+    reject_journal_draft,
     submit_journal,
 )
 from cacao_accounting.database import (
@@ -232,3 +233,54 @@ def test_concurrent_reversal_requests_create_one_draft_and_transition(concurrent
 
     assert len(reversal_drafts) == 1
     assert transition.target_id == reversal_drafts[0].id
+
+    with app.app_context():
+        reject_journal_draft(transition.target_id, user_id=seed["user_id"])
+
+    retry_barrier = Barrier(2)
+
+    def create_retry():
+        with app.app_context():
+            database.session.remove()
+            retry_barrier.wait(timeout=10)
+            try:
+                draft = duplicate_journal_as_reversal_draft(
+                    seed["source_id"],
+                    user_id=seed["user_id"],
+                    reversal_date_raw=date(2027, 2, 15),
+                    reason="Concurrent retry after rejection",
+                )
+                return "created", str(draft.id)
+            except JournalValidationError:
+                return "rejected", "retry already exists"
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        retry_outcomes = list(workers.map(lambda _index: create_retry(), range(2)))
+
+    assert [status for status, _detail in retry_outcomes].count("created") == 1
+    assert [status for status, _detail in retry_outcomes].count("rejected") == 1
+
+    with app.app_context():
+        transitions = (
+            database.session.execute(
+                select(DocumentTransition)
+                .where(
+                    DocumentTransition.source_type == "journal_entry",
+                    DocumentTransition.source_id == seed["source_id"],
+                )
+                .order_by(DocumentTransition.id)
+            )
+            .scalars()
+            .all()
+        )
+        drafts = (
+            database.session.execute(select(ComprobanteContable).where(ComprobanteContable.reversal_of == seed["source_id"]))
+            .scalars()
+            .all()
+        )
+
+    assert len(drafts) == 2
+    assert {transition.transition_type for transition in transitions} == {"reversal", "reversal_retry_00001"}
+    assert {draft.status for draft in drafts} == {"rejected", "draft"}

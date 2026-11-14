@@ -437,7 +437,7 @@ def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
         database.session.execute(
             database.select(GeneratedIdentifierLog)
             .filter_by(sequence_id=sequence_id)
-            .order_by(GeneratedIdentifierLog.generated_at.desc())
+            .order_by(GeneratedIdentifierLog.generated_at.desc(), GeneratedIdentifierLog.id.desc())
         )
         .scalars()
         .first()

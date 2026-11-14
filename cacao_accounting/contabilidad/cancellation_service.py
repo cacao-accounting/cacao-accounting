@@ -15,6 +15,7 @@ from cacao_accounting.database import (
     AccountingPeriod,
     BankAccount,
     BankTransaction,
+    ComprobanteContable,
     DocumentRelation,
     DocumentTransition,
     LandedCostAllocation,
@@ -169,15 +170,24 @@ def _validate_dependencies(document: Any, source_type: str, source_id: str) -> N
 
 def _ensure_no_previous_cancellation(source_type: str, source_id: str) -> None:
     """Enforce cancellation idempotency before writing the transition."""
-    existing = database.session.execute(
-        select(DocumentTransition.id).where(
+    transitions = database.session.execute(
+        select(DocumentTransition).where(
             DocumentTransition.source_type == source_type,
             DocumentTransition.source_id == source_id,
-            DocumentTransition.transition_type.in_(("cancellation", "reversal")),
         )
-    ).scalar_one_or_none()
-    if existing is not None:
-        raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
+    ).scalars()
+    for transition in transitions:
+        if transition.transition_type == "cancellation":
+            raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
+        if transition.transition_type != "reversal" and not transition.transition_type.startswith("reversal_retry_"):
+            continue
+        if transition.target_type != "journal_entry" or not transition.target_id:
+            raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
+        target_status = database.session.execute(
+            select(ComprobanteContable.status).where(ComprobanteContable.id == transition.target_id)
+        ).scalar_one_or_none()
+        if target_status != "rejected":
+            raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
 
 
 def active_cancellation_dependencies(document: Any, source_type: str, source_id: str) -> list[CancellationDependency]:

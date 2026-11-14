@@ -4411,16 +4411,24 @@ def _validate_manual_reversal_ledgers(
                 continue
             _manual_reversal_source_entry(document, line, context)
 
-    transition_id = database.session.execute(
-        select(DocumentTransition.id).where(
+    transition_types = database.session.execute(
+        select(DocumentTransition.transition_type).where(
             DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
             DocumentTransition.source_id == document.reversal_of,
             DocumentTransition.target_type == JOURNAL_TRANSACTION_TYPE,
             DocumentTransition.target_id == document.id,
-            DocumentTransition.transition_type == "reversal",
         )
-    ).scalar_one_or_none()
-    if transition_id is None:
+    ).scalars()
+    has_reversal_transition = any(
+        transition_type == "reversal"
+        or (
+            transition_type.startswith("reversal_retry_")
+            and transition_type.removeprefix("reversal_retry_").isdigit()
+            and len(transition_type.removeprefix("reversal_retry_")) == 5
+        )
+        for transition_type in transition_types
+    )
+    if not has_reversal_transition:
         raise PostingError(_("La reversión manual no tiene una transición válida."))
 
 

@@ -29,6 +29,7 @@ from cacao_accounting.database import (
     CompanyDefaultAccount,
     CompanyParty,
     CostCenter,
+    ComprobanteContable,
     DocumentTransition,
     Entity,
     ExchangeRate,
@@ -2542,22 +2543,30 @@ def _movement_voucher_status(entry: GLEntry) -> str:
 
 def _movement_cancellation_metadata(entry: GLEntry) -> dict[str, Any]:
     """Obtiene la transición y los metadatos de cancelación de una línea."""
-    transition = (
-        database.session.execute(
-            select(DocumentTransition)
-            .where(
-                DocumentTransition.transition_type.in_(("cancellation", "reversal")),
-                DocumentTransition.source_type == entry.voucher_type,
-                or_(
-                    DocumentTransition.source_id == entry.voucher_id,
-                    DocumentTransition.target_id == entry.voucher_id,
-                ),
-            )
-            .order_by(DocumentTransition.executed_at.desc(), DocumentTransition.id.desc())
+    transitions = database.session.execute(
+        select(DocumentTransition)
+        .where(
+            DocumentTransition.source_type == entry.voucher_type,
+            or_(
+                DocumentTransition.source_id == entry.voucher_id,
+                DocumentTransition.target_id == entry.voucher_id,
+            ),
         )
-        .scalars()
-        .first()
-    )
+        .order_by(DocumentTransition.executed_at.desc(), DocumentTransition.id.desc())
+    ).scalars()
+    transition = None
+    for candidate in transitions:
+        if candidate.transition_type == "cancellation":
+            transition = candidate
+            break
+        if not _is_posted_reversal_transition(candidate):
+            continue
+        target_status = database.session.execute(
+            select(ComprobanteContable.status).where(ComprobanteContable.id == candidate.target_id)
+        ).scalar_one_or_none()
+        if target_status == "submitted":
+            transition = candidate
+            break
     if transition is None:
         return {
             "is_cancelled": bool(entry.is_cancelled),
@@ -2579,6 +2588,16 @@ def _movement_cancellation_metadata(entry: GLEntry) -> dict[str, Any]:
         "cancellation_actor": transition.actor_user_id,
         "cancellation_reason": transition.reason,
     }
+
+
+def _is_posted_reversal_transition(transition: DocumentTransition) -> bool:
+    """Recognize append-only reversal attempts without exposing rejected drafts as ledger events."""
+    if transition.transition_type == "reversal":
+        return True
+    if not transition.transition_type.startswith("reversal_retry_"):
+        return False
+    retry_number = transition.transition_type.removeprefix("reversal_retry_")
+    return retry_number.isdigit() and len(retry_number) == 5
 
 
 def _movement_detail_row_values(
