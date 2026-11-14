@@ -10,11 +10,12 @@ from threading import Barrier, Event, current_thread
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 
 from cacao_accounting import create_app
+from cacao_accounting.approval_engine import approved_execution
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import arap_ledger_service
 from cacao_accounting.contabilidad import posting_service
@@ -39,6 +40,7 @@ from cacao_accounting.database import (
     Currency,
     Entity,
     FiscalYear,
+    GLEntry,
     Modules,
     Party,
     PaymentEntry,
@@ -47,6 +49,7 @@ from cacao_accounting.database import (
     User,
     database,
 )
+from cacao_accounting.internal_control_service import audit_actor
 
 pytestmark = pytest.mark.database
 
@@ -233,6 +236,16 @@ def arap_application(tmp_path):
             enabled=True,
             currency=currency_code,
         )
+        bank = Accounts(
+            entity=company_code,
+            code=f"BNK{suffix}",
+            name="Banco de pruebas",
+            classification="asset",
+            account_type="bank",
+            active=True,
+            enabled=True,
+            currency=currency_code,
+        )
         cost_center = CostCenter(
             entity=company_code,
             code=f"CC{suffix}",
@@ -248,7 +261,7 @@ def arap_application(tmp_path):
             active=True,
             company=company_code,
         )
-        database.session.add_all([fiscal_year, period, receivable, payable, sales, returns, cost_center, user])
+        database.session.add_all([fiscal_year, period, receivable, payable, sales, returns, bank, cost_center, user])
         database.session.flush()
         database.session.add_all(
             [
@@ -271,6 +284,9 @@ def arap_application(tmp_path):
             "payable": payable.code,
             "payable_id": payable.id,
             "sales": sales.code,
+            "sales_id": sales.id,
+            "bank_id": bank.id,
+            "bank": bank.code,
             "returns": returns.code,
             "cost_center": cost_center.code,
             "user_id": user.id,
@@ -405,6 +421,101 @@ def _seed_payment_application_business_data(application, seed, party_type):
             "payment_id": payment.id,
             "document_type": document_type,
         }
+
+
+def _seed_payment_gl_evidence(application, seed):
+    """Persist balanced invoice/payment GL rows matching the seeded AR/AP books."""
+    with application.app_context():
+        entries = []
+        for invoice_id in seed["invoices"]:
+            invoice = database.session.get(SalesInvoice, invoice_id)
+            assert invoice is not None
+            entries.extend(
+                [
+                    GLEntry(
+                        company=seed["company"],
+                        ledger_id=seed["book_id"],
+                        account_id=seed["receivable_id"],
+                        account_code=seed["receivable"],
+                        debit=Decimal("60"),
+                        credit=Decimal("0"),
+                        debit_in_account_currency=Decimal("60"),
+                        credit_in_account_currency=Decimal("0"),
+                        account_currency=seed["currency"],
+                        company_currency=seed["currency"],
+                        exchange_rate=Decimal("1"),
+                        party_type="customer",
+                        party_id=seed["customer_id"],
+                        posting_date=seed["today"],
+                        voucher_type="sales_invoice",
+                        voucher_id=invoice_id,
+                        document_no=invoice.document_no,
+                    ),
+                    GLEntry(
+                        company=seed["company"],
+                        ledger_id=seed["book_id"],
+                        account_id=seed["sales_id"],
+                        account_code=seed["sales"],
+                        debit=Decimal("0"),
+                        credit=Decimal("60"),
+                        debit_in_account_currency=Decimal("0"),
+                        credit_in_account_currency=Decimal("60"),
+                        account_currency=seed["currency"],
+                        company_currency=seed["currency"],
+                        exchange_rate=Decimal("1"),
+                        posting_date=seed["today"],
+                        voucher_type="sales_invoice",
+                        voucher_id=invoice_id,
+                        document_no=invoice.document_no,
+                    ),
+                ]
+            )
+
+        payment = database.session.get(PaymentEntry, seed["payment_id"])
+        assert payment is not None
+        entries.extend(
+            [
+                GLEntry(
+                    company=seed["company"],
+                    ledger_id=seed["book_id"],
+                    account_id=seed["bank_id"],
+                    account_code=seed["bank"],
+                    debit=Decimal("100"),
+                    credit=Decimal("0"),
+                    debit_in_account_currency=Decimal("100"),
+                    credit_in_account_currency=Decimal("0"),
+                    account_currency=seed["currency"],
+                    company_currency=seed["currency"],
+                    exchange_rate=Decimal("1"),
+                    posting_date=seed["today"],
+                    voucher_type="payment_entry",
+                    voucher_id=str(payment.id),
+                    document_no=payment.document_no,
+                ),
+                GLEntry(
+                    company=seed["company"],
+                    ledger_id=seed["book_id"],
+                    account_id=seed["receivable_id"],
+                    account_code=seed["receivable"],
+                    debit=Decimal("0"),
+                    credit=Decimal("100"),
+                    debit_in_account_currency=Decimal("0"),
+                    credit_in_account_currency=Decimal("100"),
+                    account_currency=seed["currency"],
+                    company_currency=seed["currency"],
+                    exchange_rate=Decimal("1"),
+                    party_type="customer",
+                    party_id=seed["customer_id"],
+                    posting_date=seed["today"],
+                    voucher_type="payment_entry",
+                    voucher_id=str(payment.id),
+                    document_no=payment.document_no,
+                ),
+            ]
+        )
+        database.session.add_all(entries)
+        database.session.commit()
+        return [entry.id for entry in entries if entry.voucher_type == "payment_entry"]
 
 
 def _seed_opening_journal(application, seed) -> str:
@@ -934,15 +1045,18 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
     """Cancelling a payment after waiting on allocation sees and reverses that allocation."""
     application, seed = arap_application
     seed = _seed_payment_application_business_data(application, seed, "customer")
+    payment_gl_ids = _seed_payment_gl_evidence(application, seed)
     invoice_id = seed["invoices"][0]
     payment_id = seed["payment_id"]
     application_locked = Event()
     release_application = Event()
     cancellation_lock_attempted = Event()
+    cancellation_document_locked = Event()
     original_header_lock = arap_ledger_service._lock_payment_application_headers
     original_writer_reservation = arap_ledger_service._reserve_sqlite_open_item_writer
     original_document_lock = posting_service._lock_document_for_transition
     cancellation_thread_name = None
+    cancellation_snapshot = {}
 
     def pause_after_payment_header_lock(payment, document):
         locked_payment = original_header_lock(payment, document)
@@ -955,7 +1069,49 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
     def signal_payment_cancellation_lock(document):
         if document.id == payment_id:
             cancellation_lock_attempted.set()
-        return original_document_lock(document)
+        locked_document = original_document_lock(document)
+        if locked_document.id == payment_id:
+            originals = (
+                database.session.execute(
+                    select(ARAPLedgerEntry).where(
+                        ARAPLedgerEntry.is_reversal.is_(False),
+                        or_(
+                            (ARAPLedgerEntry.document_type == "payment_entry") & (ARAPLedgerEntry.document_id == payment_id),
+                            (ARAPLedgerEntry.reference_type == "payment_entry") & (ARAPLedgerEntry.reference_id == payment_id),
+                        ),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            gl_originals = database.session.execute(select(GLEntry).where(GLEntry.id.in_(payment_gl_ids))).scalars().all()
+            cancellation_snapshot["arap_original_ids"] = [str(movement.id) for movement in originals]
+            cancellation_snapshot["arap"] = _snapshot_arap_movements(originals)
+            cancellation_snapshot["gl_originals"] = {
+                str(entry.id): (
+                    entry.company,
+                    entry.ledger_id,
+                    entry.account_id,
+                    entry.account_code,
+                    entry.debit,
+                    entry.credit,
+                    entry.debit_in_account_currency,
+                    entry.credit_in_account_currency,
+                    entry.account_currency,
+                    entry.company_currency,
+                    entry.exchange_rate,
+                    entry.party_type,
+                    entry.party_id,
+                    entry.posting_date,
+                    entry.voucher_type,
+                    entry.voucher_id,
+                    entry.document_no,
+                )
+                for entry in gl_originals
+            }
+            assert len(gl_originals) == 2
+            cancellation_document_locked.set()
+        return locked_document
 
     def signal_sqlite_writer_reservation():
         if current_thread().name == cancellation_thread_name and database.engine.dialect.name == "sqlite":
@@ -989,10 +1145,17 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
         with application.app_context():
             try:
                 payment = database.session.get(PaymentEntry, payment_id)
-                arap_ledger_service._reserve_sqlite_open_item_writer()
-                payment = posting_service._lock_document_for_transition(payment)
-                arap_ledger_service.cancel_document_ar_ap(payment, cancellation_date=seed["today"])
-                payment.docstatus = 2
+                try:
+                    with audit_actor(seed["user_id"], "Usuario de prueba"), approved_execution(payment, seed["user_id"]):
+                        posting_service.cancel_document(
+                            payment,
+                            reason="Pago de prueba cancelado después de aplicar",
+                            actor_user_id=seed["user_id"],
+                            cancellation_date=seed["today"],
+                        )
+                except Exception:
+                    cancellation_lock_attempted.set()
+                    raise
                 database.session.commit()
                 return "cancelled"
             finally:
@@ -1009,6 +1172,8 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
         assert apply_future.result(timeout=20) == "applied"
         assert cancel_future.result(timeout=20) == "cancelled"
 
+    assert cancellation_document_locked.is_set()
+
     with application.app_context():
         payment_cache = database.session.execute(
             select(ARAPOpenItem).filter_by(document_type="payment_entry", document_id=payment_id)
@@ -1023,6 +1188,69 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
         assert invoice_cache.unallocated_amount == Decimal("60.0000")
         assert ARAPLedgerEntry.document_balance("payment_entry", payment_id) == Decimal("0.0000")
         assert ARAPLedgerEntry.document_balance("sales_invoice", invoice_id) == Decimal("60.0000")
+        payment_arap_originals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(ARAPLedgerEntry.id.in_(cancellation_snapshot["arap_original_ids"]))
+            )
+            .scalars()
+            .all()
+        )
+        payment_arap_reversals = (
+            database.session.execute(
+                select(ARAPLedgerEntry).where(
+                    ARAPLedgerEntry.voucher_type == "payment_entry",
+                    ARAPLedgerEntry.voucher_id == payment_id,
+                    ARAPLedgerEntry.is_reversal.is_(True),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert _snapshot_arap_movements(payment_arap_originals) == cancellation_snapshot["arap"]
+        _assert_append_only_arap_reversals(payment_arap_originals, payment_arap_reversals)
+
+        payment_gl_originals = database.session.execute(select(GLEntry).where(GLEntry.id.in_(payment_gl_ids))).scalars().all()
+        assert {
+            str(entry.id): (
+                entry.company,
+                entry.ledger_id,
+                entry.account_id,
+                entry.account_code,
+                entry.debit,
+                entry.credit,
+                entry.debit_in_account_currency,
+                entry.credit_in_account_currency,
+                entry.account_currency,
+                entry.company_currency,
+                entry.exchange_rate,
+                entry.party_type,
+                entry.party_id,
+                entry.posting_date,
+                entry.voucher_type,
+                entry.voucher_id,
+                entry.document_no,
+            )
+            for entry in payment_gl_originals
+        } == cancellation_snapshot["gl_originals"]
+        assert all(entry.is_cancelled for entry in payment_gl_originals)
+        payment_gl_reversals = (
+            database.session.execute(
+                select(GLEntry).where(
+                    GLEntry.voucher_type == "payment_entry",
+                    GLEntry.voucher_id == payment_id,
+                    GLEntry.is_reversal.is_(True),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        originals_by_id = {str(entry.id): entry for entry in payment_gl_originals}
+        assert {str(entry.reversal_of) for entry in payment_gl_reversals} == set(originals_by_id)
+        for reversal in payment_gl_reversals:
+            original = originals_by_id[str(reversal.reversal_of)]
+            assert reversal.debit == original.credit
+            assert reversal.credit == original.debit
+            assert reversal.is_reversal is True
         cached_items = list_cached_open_items(
             company=seed["company"],
             party_type="customer",
