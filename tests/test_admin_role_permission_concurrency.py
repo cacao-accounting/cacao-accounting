@@ -28,11 +28,12 @@ def role_permission_app(tmp_path):
     elif os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
         pytest.skip("Los motores externos requieren CHECK_DATABASE=true y una base dedicada.")
 
+    engine_options = {**configuracion.get("SQLALCHEMY_ENGINE_OPTIONS", {}), "pool_size": 4, "max_overflow": 0}
     app = create_app(
         {
             **configuracion,
             "SQLALCHEMY_DATABASE_URI": database_uri,
-            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 4, "max_overflow": 0},
+            "SQLALCHEMY_ENGINE_OPTIONS": engine_options,
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
