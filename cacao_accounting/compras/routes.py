@@ -2630,6 +2630,8 @@ def compras_recepcion_nuevo():
             _require_purchase_document_access(origen, "consultar")
 
     selected_company = _resolve_receipt_selected_company(recepcion_origen, orden_origen, formulario)
+    if selected_company:
+        exige_acceso_compania("inventory", selected_company, "crear")
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
     items_disponibles, uoms_disponibles, bodegas_disponibles = _receipt_catalogs(selected_company)
     is_return = bool(recepcion_origen) or request.args.get("is_return") in {"1", "true", "True"}
@@ -3437,6 +3439,10 @@ def compras_import_landed_cost_nuevo():
     items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
 
     transaction_config = {
+        "initialHeader": {
+            "company": request.values.get("company", selected_company) or "",
+            "posting_date": request.values.get("posting_date", str(date.today())) or "",
+        },
         "columns": [
             {"key": "item_code", "label": "Articulo", "type": "select", "required": True},
             {"key": "item_name", "label": "Nombre", "type": "text", "readonly": True},
