@@ -731,6 +731,17 @@ def _validate_stock_entry_dimensions(
             raise ValueError(_("La dimensión %(label)s no pertenece a la compañía del documento.") % {"label": label})
 
 
+def _validate_stock_entry_adjustment_account(account_id: str | None, company: str) -> None:
+    """Ensure an explicitly selected reconciliation account belongs to its company."""
+    if not account_id:
+        return
+    account = database.session.get(Accounts, account_id)
+    if account is None:
+        raise ValueError(_("La cuenta contable configurada no existe."))
+    if account.entity != company:
+        raise ValueError(_("La cuenta contable debe pertenecer a la compañía del documento."))
+
+
 def _validate_stock_entry_warehouses(entry: StockEntry, *line_warehouses: str | None) -> None:
     """Validate draft warehouses against the entry company and active state.
 
@@ -933,22 +944,29 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
         raise ValueError(_("No se puede cambiar el propósito de una entrada de almacén existente."))
     if company != registro.company:
         raise ValueError(_("No se puede cambiar la compañía de una entrada de almacén existente."))
-    _validate_stock_entry_dimensions(
-        company,
-        request.form.get("cost_center_code") or None,
-        request.form.get("unit_code") or None,
-        request.form.get("project_code") or None,
-    )
+    if purpose == "stock_reconciliation":
+        adjustment_account_id = request.form.get("adjustment_account_id", registro.adjustment_account_id) or None
+        cost_center_code = request.form.get("cost_center_code", registro.cost_center_code) or None
+        unit_code = request.form.get("unit_code", registro.unit_code) or None
+        project_code = request.form.get("project_code", registro.project_code) or None
+    else:
+        adjustment_account_id = registro.adjustment_account_id
+        cost_center_code = registro.cost_center_code
+        unit_code = registro.unit_code
+        project_code = registro.project_code
+    if purpose == "stock_reconciliation":
+        _validate_stock_entry_adjustment_account(adjustment_account_id, company)
+    _validate_stock_entry_dimensions(company, cost_center_code, unit_code, project_code)
     registro.purpose = purpose
     registro.company = company
     registro.posting_date = _validate_stock_entry_posting_date(request.form)
-    registro.from_warehouse = request.form.get("from_warehouse") or None
-    registro.to_warehouse = request.form.get("to_warehouse") or None
-    registro.adjustment_account_id = request.form.get("adjustment_account_id") or None
-    registro.cost_center_code = request.form.get("cost_center_code") or None
-    registro.unit_code = request.form.get("unit_code") or None
-    registro.project_code = request.form.get("project_code") or None
-    registro.remarks = request.form.get("remarks")
+    registro.from_warehouse = request.form.get("from_warehouse", registro.from_warehouse) or None
+    registro.to_warehouse = request.form.get("to_warehouse", registro.to_warehouse) or None
+    registro.adjustment_account_id = adjustment_account_id
+    registro.cost_center_code = cost_center_code
+    registro.unit_code = unit_code
+    registro.project_code = project_code
+    registro.remarks = request.form.get("remarks", registro.remarks)
     raw_currency = request.form.get("transaction_currency") or request.form.get("currency") or ""
     if not raw_currency and not registro.transaction_currency:
         raise ValueError(_("La entrada de inventario requiere una moneda transaccional explicita."))
