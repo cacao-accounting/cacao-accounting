@@ -59,6 +59,9 @@ def test_vista_previa_rechaza_css_malicioso_ya_guardado(monkeypatch, stylesheet_
     service = PrintService()
     template = SimpleNamespace(template_body="<p>Invoice</p>", stylesheet_body=stylesheet_body)
     log_job = Mock()
+    # Prueba unitaria sin app context: la autorización de compañía se cubre en
+    # pruebas de integración; aqui se aísla para ejercer solo la revalidación.
+    monkeypatch.setattr(service, "_authorize_registered_print_attempt", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(service, "_build_context", lambda *_args, **_kwargs: {})
     monkeypatch.setattr(service, "resolve_template", lambda *_args, **_kwargs: template)
     monkeypatch.setattr(service, "log_print_job", log_job)
