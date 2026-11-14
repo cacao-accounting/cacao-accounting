@@ -183,6 +183,20 @@ def test_payment_form_preserves_source_order_in_authorized_company(payment_sourc
     assert "PO-ALPHA" in response.get_data(as_text=True)
 
 
+def test_payment_post_uses_form_sources_instead_of_query_sources(payment_source_company_scenario):
+    """A POST ignores a stale foreign query value when the form selects an authorized source."""
+    app, ids = payment_source_company_scenario
+    response = _authenticated_client(app).post(
+        f"/cash_management/payment/new?from_purchase_order={ids['beta']}",
+        data={"from_purchase_order": ids["alpha"]},
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "PO-ALPHA" in body
+    assert "PO-BETA-SECRET" not in body
+
+
 def test_payment_post_rejects_unscoped_source_without_persisting(app, entorno_contable, authenticated_client):
     """A forged POST cannot apply an unscoped order or leave partial payment evidence."""
     with app.app_context():

@@ -3174,15 +3174,16 @@ def _payment_withholding_total(payment_id: str) -> Decimal:
 
 def _payment_source_rows_from_request() -> list[dict[str, object]]:
     """Load payment source rows from the current request."""
+    source_values = request.args if request.method == "GET" else request.form
     return _payment_source_rows(
-        request.values.getlist("from_purchase_invoice"),
-        request.values.getlist("from_sales_invoice"),
-        request.values.getlist("from_purchase_order"),
-        request.values.getlist("from_sales_order"),
-        request.values.getlist("from_purchase_credit_note"),
-        request.values.getlist("from_purchase_debit_note"),
-        request.values.getlist("from_sales_credit_note"),
-        request.values.getlist("from_sales_debit_note"),
+        source_values.getlist("from_purchase_invoice"),
+        source_values.getlist("from_sales_invoice"),
+        source_values.getlist("from_purchase_order"),
+        source_values.getlist("from_sales_order"),
+        source_values.getlist("from_purchase_credit_note"),
+        source_values.getlist("from_purchase_debit_note"),
+        source_values.getlist("from_sales_credit_note"),
+        source_values.getlist("from_sales_debit_note"),
     )
 
 
