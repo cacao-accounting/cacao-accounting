@@ -1106,47 +1106,51 @@ def cancel_petty_cash_expense(
     """Anula un gasto de caja chica, revirtiendo su asiento contable (append-only)."""
     from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
 
-    _begin_sqlite_write_transaction()
-    expense = cast(PettyCashExpense, _lock_row_for_transition(PettyCashExpense, expense.id))
-    if expense.docstatus != 1:
-        raise ValueError(_("Solo se puede anular un gasto ya posteado."))
-    if expense.replenishment_id:
-        replenishment = database.session.get(PettyCashReplenishment, expense.replenishment_id)
-        if replenishment and replenishment.status == "reembolsado":
-            raise ValueError(_("No se puede anular un gasto después de reponer la Caja Chica."))
-        raise ValueError(_("No se puede anular un gasto reservado en una reposición de Caja Chica."))
-    if cancellation_date is not None and hasattr(expense, "posting_date"):
-        from cacao_accounting.database import AccountingPeriod
+    try:
+        _begin_sqlite_write_transaction()
+        expense = cast(PettyCashExpense, _lock_row_for_transition(PettyCashExpense, expense.id))
+        if expense.docstatus != 1:
+            raise ValueError(_("Solo se puede anular un gasto ya posteado."))
+        if expense.replenishment_id:
+            replenishment = database.session.get(PettyCashReplenishment, expense.replenishment_id)
+            if replenishment and replenishment.status == "reembolsado":
+                raise ValueError(_("No se puede anular un gasto después de reponer la Caja Chica."))
+            raise ValueError(_("No se puede anular un gasto reservado en una reposición de Caja Chica."))
+        if cancellation_date is not None and hasattr(expense, "posting_date"):
+            from cacao_accounting.database import AccountingPeriod
 
-        period = (
-            database.session.query(AccountingPeriod)
-            .filter(AccountingPeriod.entity == expense.company)
-            .filter(AccountingPeriod.start <= expense.posting_date)
-            .filter(AccountingPeriod.end >= expense.posting_date)
-            .first()
-        )
-        if period and not (period.start <= cancellation_date <= period.end):
-            raise ValueError(_("La anulación de un gasto solo se permite en el mismo periodo contable."))
-    if expense.journal_id:
-        journal = database.session.get(ComprobanteContable, expense.journal_id)
-        if journal is not None:
-            # RELEASE of an outermost SQLite SAVEPOINT commits immediately.
-            # This transaction must also contain the subledger update below.
-            cancel_submitted_journal(
-                str(journal.id),
-                user_id=actor_id,
-                reason=reason or "Anulacion de gasto de caja chica",
-                commit=False,
+            period = (
+                database.session.query(AccountingPeriod)
+                .filter(AccountingPeriod.entity == expense.company)
+                .filter(AccountingPeriod.start <= expense.posting_date)
+                .filter(AccountingPeriod.end >= expense.posting_date)
+                .first()
             )
-    expense.docstatus = 2
-    expense.cancel_reason = reason or None
-    if expense.voucher_id:
-        voucher = database.session.get(PettyCashVoucher, expense.voucher_id)
-        if voucher is not None and voucher.expense_id == expense.id:
-            voucher.voucher_status = "entregado"
-            voucher.expense_id = None
-    database.session.commit()
-    return expense
+            if period and not (period.start <= cancellation_date <= period.end):
+                raise ValueError(_("La anulación de un gasto solo se permite en el mismo periodo contable."))
+        if expense.journal_id:
+            journal = database.session.get(ComprobanteContable, expense.journal_id)
+            if journal is not None:
+                # RELEASE of an outermost SQLite SAVEPOINT commits immediately.
+                # This transaction must also contain the subledger update below.
+                cancel_submitted_journal(
+                    str(journal.id),
+                    user_id=actor_id,
+                    reason=reason or "Anulacion de gasto de caja chica",
+                    commit=False,
+                )
+        expense.docstatus = 2
+        expense.cancel_reason = reason or None
+        if expense.voucher_id:
+            voucher = database.session.get(PettyCashVoucher, expense.voucher_id)
+            if voucher is not None and voucher.expense_id == expense.id:
+                voucher.voucher_status = "entregado"
+                voucher.expense_id = None
+        database.session.commit()
+        return expense
+    except Exception:
+        database.session.rollback()
+        raise
 
 
 # --------------------------------------------------------------------------------------------- #

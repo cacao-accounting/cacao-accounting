@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import date
@@ -13,6 +15,7 @@ from threading import Event
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import event
 from sqlalchemy.exc import IntegrityError
 
 
@@ -73,6 +76,23 @@ PASSWORD = "cash-approval-test-2026"
 
 
 pytestmark = pytest.mark.database
+
+
+@contextmanager
+def _reject_petty_cash_expense_write(operation: str, message: str) -> Iterator[None]:
+    """Inject a database write failure at the expense persistence boundary on any engine."""
+    engine = database.engine
+
+    def reject_statement(connection, cursor, statement, parameters, context, executemany):
+        normalized_statement = statement.lstrip().upper()
+        if normalized_statement.startswith(operation) and "PETTY_CASH_EXPENSE" in normalized_statement:
+            raise IntegrityError(statement, parameters, RuntimeError(message))
+
+    event.listen(engine, "before_cursor_execute", reject_statement)
+    try:
+        yield
+    finally:
+        event.remove(engine, "before_cursor_execute", reject_statement)
 
 
 @pytest.fixture
@@ -662,15 +682,7 @@ def test_petty_cash_expense_creation_rolls_back_gl_if_subledger_insert_fails(rep
     voucher_id = str(scenario["voucher_id"])
 
     with application.app_context():
-        if database.engine.dialect.name != "sqlite":
-            pytest.skip("La inyección de fallo usa un trigger efímero de SQLite.")
         database.session.remove()
-        with database.engine.begin() as connection:
-            connection.exec_driver_sql(
-                "CREATE TRIGGER reject_petty_cash_expense_insert "
-                "BEFORE INSERT ON petty_cash_expense "
-                "BEGIN SELECT RAISE(ABORT, 'injected subledger insert failure'); END"
-            )
 
     try:
         with application.app_context():
@@ -680,11 +692,10 @@ def test_petty_cash_expense_creation_rolls_back_gl_if_subledger_insert_fails(rep
                 .all()
             )
             before_gl = database.session.execute(database.select(GLEntry.id).where(GLEntry.company == company)).scalars().all()
-            with pytest.raises(IntegrityError, match="injected subledger insert failure"):
-                _post_prepared_petty_cash_expense(application, scenario, ids["editor_user"])
-            database.session.remove()
-
-        with application.app_context():
+            with _reject_petty_cash_expense_write("INSERT", "injected subledger insert failure"):
+                with pytest.raises(IntegrityError, match="injected subledger insert failure"):
+                    _post_prepared_petty_cash_expense(application, scenario, ids["editor_user"])
+            assert database.session.is_active
             voucher = database.session.get(PettyCashVoucher, voucher_id)
             expenses = (
                 database.session.execute(database.select(PettyCashExpense).filter_by(voucher_id=voucher_id)).scalars().all()
@@ -704,8 +715,6 @@ def test_petty_cash_expense_creation_rolls_back_gl_if_subledger_insert_fails(rep
     finally:
         with application.app_context():
             database.session.remove()
-            with database.engine.begin() as connection:
-                connection.exec_driver_sql("DROP TRIGGER IF EXISTS reject_petty_cash_expense_insert")
 
 
 def test_concurrent_voucher_liquidation_posts_one_expense(replenishment_app):
@@ -783,8 +792,6 @@ def test_petty_cash_expense_cancellation_rolls_back_gl_if_subledger_update_fails
     posting_date = date.fromisoformat(str(scenario["posting_date"]))
 
     with application.app_context():
-        if database.engine.dialect.name != "sqlite":
-            pytest.skip("La inyección de fallo usa un trigger efímero de SQLite.")
         expense = database.session.get(PettyCashExpense, expense_id)
         assert expense is not None and expense.journal_id
         journal_id = str(expense.journal_id)
@@ -797,27 +804,20 @@ def test_petty_cash_expense_cancellation_rolls_back_gl_if_subledger_update_fails
         )
         assert len(original_entries) == 2
         database.session.remove()
-        with database.engine.begin() as connection:
-            connection.exec_driver_sql(
-                "CREATE TRIGGER reject_petty_cash_expense_update "
-                "BEFORE UPDATE ON petty_cash_expense "
-                "BEGIN SELECT RAISE(ABORT, 'injected subledger update failure'); END"
-            )
 
     try:
         with application.app_context():
             expense = database.session.get(PettyCashExpense, expense_id)
             assert expense is not None
-            with pytest.raises(IntegrityError, match="injected subledger update failure"):
-                cancel_petty_cash_expense(
-                    expense,
-                    reason="Compra duplicada",
-                    actor_id=ids["editor_user"],
-                    cancellation_date=posting_date,
-                )
-            database.session.remove()
-
-        with application.app_context():
+            with _reject_petty_cash_expense_write("UPDATE", "injected subledger update failure"):
+                with pytest.raises(IntegrityError, match="injected subledger update failure"):
+                    cancel_petty_cash_expense(
+                        expense,
+                        reason="Compra duplicada",
+                        actor_id=ids["editor_user"],
+                        cancellation_date=posting_date,
+                    )
+            assert database.session.is_active
             expense = database.session.get(PettyCashExpense, expense_id)
             voucher = database.session.get(PettyCashVoucher, voucher_id)
             journal = database.session.get(ComprobanteContable, journal_id)
@@ -839,8 +839,6 @@ def test_petty_cash_expense_cancellation_rolls_back_gl_if_subledger_update_fails
     finally:
         with application.app_context():
             database.session.remove()
-            with database.engine.begin() as connection:
-                connection.exec_driver_sql("DROP TRIGGER IF EXISTS reject_petty_cash_expense_update")
 
 
 def test_concurrent_default_selection_keeps_one_fund(replenishment_app):
