@@ -70,6 +70,10 @@
                   <div class="ca-smart-select" x-data='smartSelect({
                     doctype: "company",
                     name: "company",
+                    filters: {
+                      company_scope_module: {{ company_scope_module|tojson }},
+                      company_scope_action: {{ company_scope_action|tojson }}
+                    },
                     minChars: 1,
                     preload: true,
                     initialValue: row.company,

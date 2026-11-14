@@ -73,6 +73,7 @@ from cacao_accounting.party_settings import (
 
 from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
+    companias_autorizadas_por_accion,
     exigir_companias_tercero,
     requiere_edicion_tercero,
     apply_party_profile,
@@ -826,6 +827,7 @@ def ventas_factura_venta_devolucion_nueva():
 @ventas.route("/customer/list")
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "consultar")
 def ventas_cliente_lista():
     """Listado de clientes."""
     from cacao_accounting.party_management import filtrar_parties_por_companias
@@ -846,6 +848,7 @@ def ventas_cliente_lista():
 @ventas.route("/customer/new", methods=["GET", "POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "crear")
 def ventas_cliente_nuevo():
     """Formulario para crear un nuevo cliente."""
     from cacao_accounting.ventas.forms import FormularioCliente
@@ -853,10 +856,20 @@ def ventas_cliente_nuevo():
 
     formulario = FormularioCliente()
     titulo = _("Nuevo Cliente") + " - " + APPNAME
-    company_choices = obtener_lista_entidades_por_id_razonsocial()
-    selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
+    allowed_companies = set(companias_autorizadas_por_accion("sales", "crear"))
+    company_choices = [
+        choice for choice in obtener_lista_entidades_por_id_razonsocial() if str(choice[0]) in allowed_companies
+    ]
+    requested_company = request.values.get("company")
+    if requested_company and requested_company not in allowed_companies:
+        abort(403)
+    selected_company = requested_company or (company_choices[0][0] if company_choices else None)
+    if selected_company is None:
+        abort(403)
     company_settings_rows = party_company_settings_rows(None, selected_company, role="customer")
     if request.method == "POST":
+        if any(company not in allowed_companies for company in request.form.getlist("company") if company):
+            abort(403)
         return _handle_cliente_create(request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -865,6 +878,8 @@ def ventas_cliente_nuevo():
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="sales",
+        company_scope_action="crear",
         group_label=party_group_label(request.form.get("party_group_id") or None),
     )
 
@@ -883,16 +898,21 @@ def ventas_cliente(customer_id):
         abort(404)
     # #1525: el detalle solo se muestra si el usuario consulta ventas en una
     # de las compañías vinculadas al tercero.
-    if not tercero_tiene_vinculo_autorizado(registro[0].id, _authorized_companies(("sales",))):
+    authorized_companies = _authorized_companies(("sales",))
+    if not tercero_tiene_vinculo_autorizado(registro[0].id, authorized_companies):
         abort(403)
     titulo = registro[0].name + " - " + APPNAME
-    detail = build_party_detail_context(registro[0])
+    detail = build_party_detail_context(registro[0], authorized_companies)
     return render_template(
         "ventas/cliente.html",
         registro=registro[0],
         detail=detail,
-        company_settings_rows=party_company_settings_rows(registro[0].id, None, role="customer"),
+        company_settings_rows=party_company_settings_rows(
+            registro[0].id, None, role="customer", authorized_companies=authorized_companies
+        ),
         company_settings_form_action=url_for("ventas.ventas_cliente_configuracion_compania", customer_id=registro[0].id),
+        company_scope_module="sales",
+        company_scope_action="editar",
         titulo=titulo,
     )
 
@@ -924,6 +944,7 @@ def ventas_cliente_configuracion_compania(customer_id: str):
 @ventas.route("/customer/<customer_id>/edit", methods=["GET", "POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "editar")
 def ventas_cliente_editar(customer_id: str):
     """Formulario para editar un cliente."""
     from cacao_accounting.ventas.forms import FormularioCliente
@@ -934,12 +955,24 @@ def ventas_cliente_editar(customer_id: str):
     ).scalar_one_or_none()
     if not cliente:
         abort(404)
+    requiere_edicion_tercero(cliente.id, "sales")
     formulario = FormularioCliente(obj=cliente)
     titulo = _("Editar Cliente") + " - " + APPNAME
-    company_choices = obtener_lista_entidades_por_id_razonsocial()
-    selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
-    company_settings_rows = party_company_settings_rows(cliente.id, selected_company, role="customer")
+    allowed_companies = set(companias_autorizadas_por_accion("sales", "editar"))
+    company_choices = [
+        choice for choice in obtener_lista_entidades_por_id_razonsocial() if str(choice[0]) in allowed_companies
+    ]
+    requested_company = request.values.get("company")
+    if requested_company and requested_company not in allowed_companies:
+        abort(403)
+    selected_company = requested_company or (company_choices[0][0] if company_choices else None)
+    if selected_company is None:
+        abort(403)
+    company_settings_rows = party_company_settings_rows(
+        cliente.id, selected_company, role="customer", authorized_companies=allowed_companies
+    )
     if request.method == "POST":
+        exigir_companias_tercero(cliente.id, "sales", request.form.getlist("company"))
         return _handle_cliente_update(cliente, request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         VENTAS_CLIENTE_NUEVO_TEMPLATE,
@@ -950,6 +983,8 @@ def ventas_cliente_editar(customer_id: str):
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="sales",
+        company_scope_action="editar",
         group_label=party_group_label(cliente.party_group_id),
     )
 
@@ -994,6 +1029,7 @@ def ventas_cliente_contacto_editar(customer_id: str, link_id: str):
 def ventas_cliente_contacto_desactivar(customer_id: str, link_id: str):
     """Desactiva un contacto de cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         deactivate_party_contact(customer_id, link_id)
         database.session.commit()
@@ -1044,6 +1080,7 @@ def ventas_cliente_direccion_editar(customer_id: str, link_id: str):
 def ventas_cliente_direccion_desactivar(customer_id: str, link_id: str):
     """Desactiva una direccion de cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         deactivate_party_address(customer_id, link_id)
         database.session.commit()

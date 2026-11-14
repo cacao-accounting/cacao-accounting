@@ -630,6 +630,8 @@ def _handle_supplier_create(
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="purchases",
+        company_scope_action="crear",
         group_label=party_group_label(form.get("party_group_id") or None),
     )
 
@@ -668,6 +670,8 @@ def _handle_supplier_update(
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="purchases",
+        company_scope_action="editar",
         group_label=party_group_label(proveedor.party_group_id),
     )
 

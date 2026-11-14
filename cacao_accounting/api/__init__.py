@@ -62,7 +62,15 @@ from cacao_accounting.collaboration_service import (
     open_task_count,
     update_task_status,
 )
-from cacao_accounting.database import CompanyParty, Entity, FileAttachment, Party, StockBin, database
+from cacao_accounting.database import (
+    CompanyParty,
+    Entity,
+    FileAttachment,
+    Party,
+    StockBin,
+    UserCompanyAccess,
+    database,
+)
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania, exige_acceso_compania_cualquiera
@@ -82,6 +90,7 @@ from cacao_accounting.document_flow.tree import build_document_flow_tree
 from cacao_accounting.fiscal_preview_service import fiscal_preview
 from cacao_accounting.cache import user_scoped_cache
 from cacao_accounting.search_select import SearchSelectError, search_select
+from cacao_accounting.party_management import companias_autorizadas_por_accion
 from cacao_accounting.api.line_import import line_import_bp
 from cacao_accounting.api.dashboard import dashboard_api
 from cacao_accounting.runtime_mode import is_desktop_mode
@@ -652,16 +661,32 @@ def test_appy():
     return jsonify(responde_data)
 
 
-def _search_select_request_values() -> tuple[str, str, str | None, dict[str, list[str]]]:
+def _search_select_request_values() -> tuple[str, str, str | None, dict[str, list[str]], str | None, str | None]:
     """Extract and normalize the Smart Select request fields."""
     doctype = request.args.get("doctype", "").strip()
     query = request.args.get("q", "").strip()
     raw_limit = request.args.get("limit")
-    reserved_params = {"doctype", "q", "limit"}
+    scope_module = request.args.get("company_scope_module")
+    scope_action = request.args.get("company_scope_action")
+    reserved_params = {"doctype", "q", "limit", "company_scope_module", "company_scope_action"}
     filters = {
         key: request.args.getlist(key) for key in request.args if key not in reserved_params and request.args.getlist(key)
     }
-    return doctype, query, raw_limit, filters
+    return doctype, query, raw_limit, filters, scope_module, scope_action
+
+
+def _restrict_company_scope_for_action(
+    doctype: str, company_scope: set[str], scope_module: str | None, scope_action: str | None
+) -> set[str]:
+    """Restrict company suggestions to the action that owns the form."""
+    if scope_module is None and scope_action is None:
+        return company_scope
+    if doctype != "company" or scope_module not in {"sales", "purchases"} or scope_action not in {"crear", "editar"}:
+        abort(400)
+    allowed_companies = set(companias_autorizadas_por_accion(scope_module, scope_action))
+    if not allowed_companies:
+        abort(403)
+    return company_scope & allowed_companies
 
 
 def _require_search_select_company_access(filters: dict[str, list[str]]) -> None:
@@ -683,8 +708,22 @@ def _require_search_select_company_access(filters: dict[str, list[str]]) -> None
         abort(403)
 
 
+def _explicit_company_grants() -> set[str]:
+    """Return enabled company grants without the Cloud administrator bypass."""
+    rows = database.session.execute(
+        database.select(UserCompanyAccess.company_code)
+        .join(Entity, Entity.code == UserCompanyAccess.company_code)
+        .where(UserCompanyAccess.user_id == current_user.id, Entity.enabled.is_(True))
+    ).scalars()
+    return {str(code) for code in rows}
+
+
 def _search_select_company_scope(doctype: str, filters: dict[str, list[str]]) -> set[str]:
     """Build the current user's authorized company scope for the requested catalog."""
+    if not is_desktop_mode():
+        granted_company_scope = _explicit_company_grants()
+        return _filter_company_scope_for_catalog(granted_company_scope, doctype, filters)
+
     scope_entities = database.select(Entity)
     if getattr(current_user, "classification", None) != "admin":
         scope_entities = scope_entities.where(Entity.enabled.is_(True))
@@ -800,9 +839,10 @@ def _catalogo_permitido(doctype: str, company: str | None) -> bool:
 @login_required
 def api_search_select():
     """Devuelve opciones para campos de seleccion asistida."""
-    doctype, query, raw_limit, filters = _search_select_request_values()
+    doctype, query, raw_limit, filters, scope_module, scope_action = _search_select_request_values()
     _require_search_select_company_access(filters)
     company_scope = _search_select_company_scope(doctype, filters)
+    company_scope = _restrict_company_scope_for_action(doctype, company_scope, scope_module, scope_action)
     if not _catalogo_permitido(doctype, filters.get("company", [None])[0] if filters.get("company") else None):
         return jsonify({"error": _("No se encuentra autorizado para consultar este catálogo.")}), 403
     try:

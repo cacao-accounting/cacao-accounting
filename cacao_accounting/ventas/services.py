@@ -99,6 +99,7 @@ from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
     apply_party_profile,
     build_party_detail_context,
+    companias_autorizadas_por_accion,
     create_party_address,
     create_party_contact,
     deactivate_party_address,
@@ -643,10 +644,7 @@ def _authorized_companies(access_modules: tuple[str, ...]) -> set[str]:
     """Return companies the current user may consult in the given modules."""
     companies: set[str] = set()
     for module in access_modules:
-        module_id = obtener_id_modulo_por_nombre(module)
-        permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        if permissions.consultar:
-            companies.update(permissions.obtener_companias_autorizadas())
+        companies.update(companias_autorizadas_por_accion(module, "consultar"))
     return companies
 
 
@@ -796,6 +794,8 @@ def _handle_cliente_create(
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="sales",
+        company_scope_action="crear",
         group_label=party_group_label(form.get("party_group_id") or None),
     )
 
@@ -835,6 +835,8 @@ def _handle_cliente_update(
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="sales",
+        company_scope_action="editar",
         group_label=party_group_label(cliente.party_group_id),
     )
 

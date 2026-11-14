@@ -17,10 +17,12 @@ from cacao_accounting.database import (
     Address,
     CompanyParty,
     Contact,
+    Entity,
     Party,
     PartyAddress,
     PartyContact,
     PartyGroup,
+    UserCompanyAccess,
     database,
 )
 from cacao_accounting.party_settings import PartyCompanySettings, build_party_company_settings
@@ -70,20 +72,32 @@ def tercero_tiene_vinculo_autorizado(party_id: str, companies: Iterable[str]) ->
     )
 
 
-def companias_editables_de_modulo(module: str) -> list[str]:
-    """Compañías donde el usuario actual puede editar en el módulo dado (#1282)."""
+def companias_autorizadas_por_accion(module: str, action: str) -> list[str]:
+    """Return action-scoped company grants, requiring explicit Cloud grants."""
     from flask_login import current_user
 
     from cacao_accounting.auth.permisos import Permisos as _Permisos
-    from cacao_accounting.database import Entity as _Entity
     from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre as _obtener_id
+    from cacao_accounting.runtime_mode import is_desktop_mode
 
     permisos = _Permisos(modulo=_obtener_id(module), usuario=getattr(current_user, "id", None))
-    if permisos.administrador:
-        return list(database.session.execute(database.select(_Entity.code).where(_Entity.enabled.is_(True))).scalars())
-    if not permisos.editar:
+    if not getattr(permisos, action, False):
         return []
+    if not is_desktop_mode():
+        return list(
+            database.session.execute(
+                database.select(UserCompanyAccess.company_code)
+                .join(Entity, Entity.code == UserCompanyAccess.company_code)
+                .where(UserCompanyAccess.user_id == current_user.id, Entity.enabled.is_(True))
+                .order_by(UserCompanyAccess.company_code)
+            ).scalars()
+        )
     return list(permisos.obtener_companias_autorizadas())
+
+
+def companias_editables_de_modulo(module: str) -> list[str]:
+    """Compañías donde el usuario actual puede editar en el módulo dado (#1282)."""
+    return companias_autorizadas_por_accion(module, "editar")
 
 
 def exigir_companias_tercero(party_id: str, module: str, submitted: Iterable[str], action: str = "editar") -> None:
@@ -92,13 +106,14 @@ def exigir_companias_tercero(party_id: str, module: str, submitted: Iterable[str
     El POST procesa las compañías presentes en el formulario y elimina las
     asociaciones omitidas: ambas listas se validan antes de mutar.
     """
-    from cacao_accounting.decorators import exige_acceso_compania as _exige
+    from flask import abort as _abort
 
     presentes = [str(company).strip() for company in submitted if str(company).strip()]
     restantes = list(database.session.execute(database.select(CompanyParty.company).filter_by(party_id=party_id)).scalars())
     objetivo = list(dict.fromkeys(presentes + [company for company in restantes if company not in presentes]))
-    for company in objetivo:
-        _exige(module, company, action)
+    autorizadas = set(companias_autorizadas_por_accion(module, action))
+    if any(company not in autorizadas for company in objetivo):
+        _abort(403)
 
 
 def requiere_edicion_tercero(party_id: str, module: str) -> None:
@@ -250,13 +265,15 @@ def _compose_address_label(
     return ", ".join([part for part in parts if part])
 
 
-def build_party_detail_context(party: Party) -> PartyDetailContext:
-    """Construye el contexto completo del detalle de cliente/proveedor."""
-    company_rows = (
-        database.session.execute(select(CompanyParty).filter_by(party_id=party.id).order_by(CompanyParty.company))
-        .scalars()
-        .all()
-    )
+def build_party_detail_context(party: Party, authorized_companies: Iterable[str]) -> PartyDetailContext:
+    """Construye el detalle usando solo configuraciones de compañías autorizadas."""
+    company_scope = {str(company) for company in authorized_companies if str(company).strip()}
+    company_query = select(CompanyParty).filter_by(party_id=party.id)
+    if company_scope:
+        company_query = company_query.where(CompanyParty.company.in_(company_scope))
+    else:
+        company_query = company_query.where(database.false())
+    company_rows = database.session.execute(company_query.order_by(CompanyParty.company)).scalars().all()
     settings = [build_party_company_settings(party.id, row.company) for row in company_rows]
     return PartyDetailContext(
         group_label=party_group_label(party.party_group_id) or "",

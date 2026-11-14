@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from sqlalchemy import or_, select
 
@@ -318,13 +318,19 @@ def party_company_settings_rows(
     selected_company: str | None,
     *,
     role: str,
+    authorized_companies: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Devuelve filas editables de configuracion por compania para Cliente/Proveedor."""
+    company_scope = (
+        None if authorized_companies is None else {str(company) for company in authorized_companies if str(company).strip()}
+    )
     companies: list[str] = []
     if party_id:
         query = select(CompanyParty.company).filter_by(party_id=party_id).order_by(CompanyParty.company)
+        if company_scope is not None:
+            query = query.where(CompanyParty.company.in_(company_scope)) if company_scope else query.where(database.false())
         companies = [str(company) for company in database.session.execute(query).scalars()]
-    if not companies and selected_company:
+    if not companies and selected_company and (company_scope is None or selected_company in company_scope):
         companies = [selected_company]
     return [
         _party_company_settings_row(build_party_company_settings(party_id or "", company, role=role)) for company in companies

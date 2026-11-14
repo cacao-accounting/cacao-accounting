@@ -142,12 +142,15 @@ from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
     apply_party_profile,
     build_party_detail_context,
+    companias_autorizadas_por_accion,
     create_party_address,
     create_party_contact,
     deactivate_party_address,
     deactivate_party_contact,
+    exigir_companias_tercero,
     generate_party_code,
     party_group_label,
+    requiere_edicion_tercero,
     toggle_party_customer_role,
     toggle_party_supplier_role as toggle_party_supplier_role,  # noqa: F401
     PartyRoleToggleError,
@@ -1634,6 +1637,7 @@ def compras_factura_compra_nota_credito_nueva():
 @compras.route("/supplier/list")
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "consultar")
 def compras_proveedor_lista():
     """Listado de proveedores."""
     from cacao_accounting.party_management import filtrar_parties_por_companias
@@ -1694,6 +1698,7 @@ def compras_reconciliation_panel():
 @compras.route("/supplier/new", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "crear")
 def compras_proveedor_nuevo():
     """Formulario para crear un nuevo proveedor."""
     from cacao_accounting.compras.forms import FormularioProveedor
@@ -1701,11 +1706,20 @@ def compras_proveedor_nuevo():
 
     formulario = FormularioProveedor()
     titulo = _("Nuevo Proveedor") + " - " + APPNAME
-    company_choices = obtener_lista_entidades_por_id_razonsocial()
-
-    selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
+    allowed_companies = set(companias_autorizadas_por_accion("purchases", "crear"))
+    company_choices = [
+        choice for choice in obtener_lista_entidades_por_id_razonsocial() if str(choice[0]) in allowed_companies
+    ]
+    requested_company = request.values.get("company")
+    if requested_company and requested_company not in allowed_companies:
+        abort(403)
+    selected_company = requested_company or (company_choices[0][0] if company_choices else None)
+    if selected_company is None:
+        abort(403)
     company_settings_rows = party_company_settings_rows(None, selected_company, role="supplier")
     if request.method == "POST":
+        if any(company not in allowed_companies for company in request.form.getlist("company") if company):
+            abort(403)
         return _handle_supplier_create(request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
@@ -1714,6 +1728,8 @@ def compras_proveedor_nuevo():
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="purchases",
+        company_scope_action="crear",
         group_label=party_group_label(request.form.get("party_group_id") or None),
     )
 
@@ -1730,16 +1746,21 @@ def compras_proveedor(supplier_id):
         abort(404)
     # #1525: el detalle solo se muestra si el usuario consulta compras en una
     # de las compañías vinculadas al tercero.
-    if not tercero_tiene_vinculo_autorizado(registro[0].id, _authorized_companies(("purchases",))):
+    authorized_companies = _authorized_companies(("purchases",))
+    if not tercero_tiene_vinculo_autorizado(registro[0].id, authorized_companies):
         abort(403)
     titulo = registro[0].name + " - " + APPNAME
-    detail = build_party_detail_context(registro[0])
+    detail = build_party_detail_context(registro[0], authorized_companies)
     return render_template(
         "compras/proveedor.html",
         registro=registro[0],
         detail=detail,
-        company_settings_rows=party_company_settings_rows(registro[0].id, None, role="supplier"),
+        company_settings_rows=party_company_settings_rows(
+            registro[0].id, None, role="supplier", authorized_companies=authorized_companies
+        ),
         company_settings_form_action=url_for("compras.compras_proveedor_configuracion_compania", supplier_id=registro[0].id),
+        company_scope_module="purchases",
+        company_scope_action="editar",
         titulo=titulo,
     )
 
@@ -1768,6 +1789,7 @@ def compras_proveedor_configuracion_compania(supplier_id: str):
 @compras.route("/supplier/<supplier_id>/edit", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "editar")
 def compras_proveedor_editar(supplier_id: str):
     """Formulario para editar un proveedor."""
     from cacao_accounting.compras.forms import FormularioProveedor
@@ -1778,12 +1800,24 @@ def compras_proveedor_editar(supplier_id: str):
     ).scalar_one_or_none()
     if not proveedor:
         abort(404)
+    requiere_edicion_tercero(proveedor.id, "purchases")
     formulario = FormularioProveedor(obj=proveedor)
     titulo = _("Editar Proveedor") + " - " + APPNAME
-    company_choices = obtener_lista_entidades_por_id_razonsocial()
-    selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
-    company_settings_rows = party_company_settings_rows(proveedor.id, selected_company, role="supplier")
+    allowed_companies = set(companias_autorizadas_por_accion("purchases", "editar"))
+    company_choices = [
+        choice for choice in obtener_lista_entidades_por_id_razonsocial() if str(choice[0]) in allowed_companies
+    ]
+    requested_company = request.values.get("company")
+    if requested_company and requested_company not in allowed_companies:
+        abort(403)
+    selected_company = requested_company or (company_choices[0][0] if company_choices else None)
+    if selected_company is None:
+        abort(403)
+    company_settings_rows = party_company_settings_rows(
+        proveedor.id, selected_company, role="supplier", authorized_companies=allowed_companies
+    )
     if request.method == "POST":
+        exigir_companias_tercero(proveedor.id, "purchases", request.form.getlist("company"))
         return _handle_supplier_update(proveedor, request.form, selected_company, company_choices, formulario, titulo)
     return render_template(
         COMPRAS_PROVEEDOR_NUEVO_TEMPLATE,
@@ -1794,6 +1828,8 @@ def compras_proveedor_editar(supplier_id: str):
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="purchases",
+        company_scope_action="editar",
         group_label=party_group_label(proveedor.party_group_id),
     )
 
@@ -1842,6 +1878,7 @@ def compras_proveedor_contacto_editar(supplier_id: str, link_id: str):
 def compras_proveedor_contacto_desactivar(supplier_id: str, link_id: str):
     """Desactiva un contacto de proveedor."""
     _party_or_404(supplier_id)
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         deactivate_party_contact(supplier_id, link_id)
         database.session.commit()
@@ -1896,6 +1933,7 @@ def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
 def compras_proveedor_direccion_desactivar(supplier_id: str, link_id: str):
     """Desactiva una direccion de proveedor."""
     _party_or_404(supplier_id)
+    requiere_edicion_tercero(supplier_id, "purchases")
     try:
         deactivate_party_address(supplier_id, link_id)
         database.session.commit()
