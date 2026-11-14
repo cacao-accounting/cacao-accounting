@@ -17,6 +17,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import arap_ledger_service
 from cacao_accounting.contabilidad import posting_service
+from cacao_accounting.contabilidad.arap_allocation import list_cached_open_items
 from cacao_accounting.contabilidad.arap_ledger_service import post_payment_application_ar_ap
 from cacao_accounting.contabilidad.journal_service import (
     JournalValidationError,
@@ -866,3 +867,9 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
         assert invoice_cache.unallocated_amount == Decimal("60.0000")
         assert ARAPLedgerEntry.document_balance("payment_entry", payment_id) == Decimal("0.0000")
         assert ARAPLedgerEntry.document_balance("sales_invoice", invoice_id) == Decimal("60.0000")
+        cached_items = list_cached_open_items(
+            company=seed["company"],
+            party_type="customer",
+            party_id=seed["customer_id"],
+        )
+        assert all(item.document_type != "payment_entry" or item.document_id != payment_id for item in cached_items)
