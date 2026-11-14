@@ -17,6 +17,7 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Roles, RolesUser, User, database
+from cacao_accounting.printing.models import PrintTemplate
 
 CONTRASENA = "print-admin-2026"
 
@@ -57,14 +58,33 @@ def _iniciar(client) -> None:
     assert response.status_code == 200
 
 
-def test_sin_rol_admin_las_plantillas_se_deniegan(impresion_sin_rol_admin):
-    """La ausencia del rol admin no abre el CRUD de plantillas."""
+def test_sin_rol_admin_todas_las_rutas_de_gestion_se_deniegan(impresion_sin_rol_admin):
+    """La ausencia del rol admin deniega lectura y mutaciones de plantillas."""
     client = impresion_sin_rol_admin.test_client()
     _iniciar(client)
 
-    response = client.get("/admin/print-templates")
+    requests = [
+        ("get", "/admin/print-templates"),
+        ("get", "/admin/print-templates/new"),
+        ("post", "/admin/print-templates/new"),
+        ("get", "/admin/print-templates/settings"),
+        ("post", "/admin/print-templates/settings"),
+        ("get", "/admin/print-templates/1/edit"),
+        ("post", "/admin/print-templates/1/edit"),
+        ("post", "/admin/print-templates/1/duplicate"),
+        ("post", "/admin/print-templates/1/publish"),
+        ("post", "/admin/print-templates/1/archive"),
+        ("post", "/admin/print-templates/1/set-default"),
+        ("get", "/admin/print-templates/1/preview"),
+        ("get", "/admin/print-templates/1/versions"),
+    ]
 
-    assert response.status_code == 403
+    for method, path in requests:
+        response = getattr(client, method)(path)
+        assert response.status_code == 403, f"{method.upper()} {path} permitió acceso sin rol admin"
+
+    with impresion_sin_rol_admin.app_context():
+        assert database.session.query(PrintTemplate).count() == 0
 
 
 def test_con_rol_admin_las_plantillas_se_permiten(impresion_sin_rol_admin):
