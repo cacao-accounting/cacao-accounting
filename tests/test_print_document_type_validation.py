@@ -54,6 +54,8 @@ def test_preview_de_tipo_no_registrado_responde_404_y_registra_fallo(app, authen
 
     assert response.status_code == 404
     assert b"not-registered" not in response.data
+    assert b"PrintableDocumentNotRegisteredError" not in response.data
+    assert b"is not registered" not in response.data.lower()
     job = _last_print_job(app, "not-registered")
     assert job is not None
     assert job.success is False
@@ -69,6 +71,8 @@ def test_pdf_de_tipo_no_registrado_responde_404_y_registra_fallo(app, authentica
 
     assert response.status_code == 404
     assert b"not-registered" not in response.data
+    assert b"PrintableDocumentNotRegisteredError" not in response.data
+    assert b"is not registered" not in response.data.lower()
     job = _last_print_job(app, "not-registered")
     assert job is not None
     assert job.success is False
