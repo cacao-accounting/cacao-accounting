@@ -92,7 +92,8 @@ def crea_usuario_admin(user: str, passwd: str):
         log.trace("Usuario administrador creado correctamente.")
 
 
-def _debe_imprimir_uri_database() -> bool:
+def _debe_registrar_version_database() -> bool:
+    """Check whether environment flags enable database-version diagnostics."""
     return bool(environ.get("CACAO_PRINT_DATABASE_URI") and environ.get("CACAO_TEST"))
 
 
@@ -123,7 +124,7 @@ def _log_database_version() -> None:
 
 def base_data(user, passwd, carga_rapida):
     """Definición de metodo para cargar información base al sistema."""
-    if _debe_imprimir_uri_database():
+    if _debe_registrar_version_database():
         with current_app.app_context():
             _log_database_version()
 
