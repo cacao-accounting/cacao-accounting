@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     WithholdingCertificate,
     database,
 )
+from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, parse_posting_date
 
 
@@ -179,7 +180,9 @@ def _ensure_no_previous_cancellation(source_type: str, source_id: str) -> None:
     for transition in transitions:
         if transition.transition_type == "cancellation":
             raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
-        if transition.transition_type != "reversal" and not transition.transition_type.startswith("reversal_retry_"):
+        if transition.transition_type != "reversal" and not transition.transition_type.startswith(
+            JOURNAL_REVERSAL_RETRY_PREFIX
+        ):
             continue
         if transition.target_type != "journal_entry" or not transition.target_id:
             raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))

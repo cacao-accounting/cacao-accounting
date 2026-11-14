@@ -16,6 +16,7 @@ from sqlalchemy import and_, case, func, literal, or_, select
 from sqlalchemy.orm import aliased
 
 from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
+from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
 from cacao_accounting.database import (
     AccountingPeriod,
     ARAPLedgerEntry,
@@ -2594,9 +2595,9 @@ def _is_posted_reversal_transition(transition: DocumentTransition) -> bool:
     """Recognize append-only reversal attempts without exposing rejected drafts as ledger events."""
     if transition.transition_type == "reversal":
         return True
-    if not transition.transition_type.startswith("reversal_retry_"):
+    if not transition.transition_type.startswith(JOURNAL_REVERSAL_RETRY_PREFIX):
         return False
-    retry_number = transition.transition_type.removeprefix("reversal_retry_")
+    retry_number = transition.transition_type.removeprefix(JOURNAL_REVERSAL_RETRY_PREFIX)
     return retry_number.isdigit() and len(retry_number) == 5
 
 

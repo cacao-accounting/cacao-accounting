@@ -63,6 +63,7 @@ from cacao_accounting.warehouse_accounting import (
 )
 
 from cacao_accounting.contabilidad.default_accounts import DefaultAccountError, validate_gl_account_usage
+from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
 
 from cacao_accounting.contabilidad.cancellation_service import (
     CancellationContext,
@@ -4422,9 +4423,9 @@ def _validate_manual_reversal_ledgers(
     has_reversal_transition = any(
         transition_type == "reversal"
         or (
-            transition_type.startswith("reversal_retry_")
-            and transition_type.removeprefix("reversal_retry_").isdigit()
-            and len(transition_type.removeprefix("reversal_retry_")) == 5
+            transition_type.startswith(JOURNAL_REVERSAL_RETRY_PREFIX)
+            and transition_type.removeprefix(JOURNAL_REVERSAL_RETRY_PREFIX).isdigit()
+            and len(transition_type.removeprefix(JOURNAL_REVERSAL_RETRY_PREFIX)) == 5
         )
         for transition_type in transition_types
     )

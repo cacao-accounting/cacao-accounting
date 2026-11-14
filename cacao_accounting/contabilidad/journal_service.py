@@ -20,6 +20,7 @@ from cacao_accounting.contabilidad.journal_repository import (
     list_journal_lines,
     replace_journal_lines,
 )
+from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RETRY_PREFIX
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, post_comprobante_contable
 from cacao_accounting.audit_trail_service import (
     log_cancel,
@@ -67,7 +68,6 @@ JOURNAL_STATUS_REJECTED = "rejected"
 JOURNAL_STATUS_SUBMITTED = "submitted"
 JOURNAL_STATUS_CANCELLED = "cancelled"
 JOURNAL_DUPLICABLE_STATUSES = {JOURNAL_STATUS_DRAFT, JOURNAL_STATUS_REJECTED, JOURNAL_STATUS_SUBMITTED}
-JOURNAL_REVERSAL_RETRY_PREFIX = "reversal_retry_"
 JOURNAL_REVERSAL_RETRY_LIMIT = 99_999
 AR_AP_ACCOUNT_TYPES = {"receivable", "payable", "customer_advance", "supplier_advance"}
 CUSTOMER_AR_AP_ACCOUNT_TYPES = {"receivable", "customer_advance"}
