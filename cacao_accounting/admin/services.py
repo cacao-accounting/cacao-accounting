@@ -357,9 +357,12 @@ def _obtener_rol(role_id: str, *, for_update: bool = False) -> Roles | None:
     return database.session.get(Roles, role_id)
 
 
-def _obtener_permisos_por_rol(role_id: str) -> list[RolesAccess]:
+def _obtener_permisos_por_rol(role_id: str, *, for_update: bool = False) -> list[RolesAccess]:
     """Devuelve permisos asignados a un rol."""
-    return list(database.session.execute(database.select(RolesAccess).filter_by(rol_id=role_id)).scalars().all())
+    statement = database.select(RolesAccess).filter_by(rol_id=role_id)
+    if for_update:
+        statement = statement.with_for_update().execution_options(populate_existing=True)
+    return list(database.session.execute(statement).scalars().all())
 
 
 def _obtener_modulos_disponibles() -> list[Modules]:

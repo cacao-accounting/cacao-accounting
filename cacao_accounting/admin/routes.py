@@ -1741,7 +1741,7 @@ def _save_rol_permisos(role_id, modulos, acciones, rangos_existentes) -> bool:
     ranks = {modulo.id: request.form.get(f"rank_{modulo.id}", "") for modulo in modulos}
     if any(value not in {"", "1", "2", "3"} for value in ranks.values()):
         abort(400)
-    for row in _obtener_permisos_por_rol(role_id):
+    for row in _obtener_permisos_por_rol(role_id, for_update=True):
         database.session.delete(row)
     for modulo in modulos:
         permiso_kwargs = _rol_permiso_kwargs(role_id, modulo, acciones, ranks, rangos_existentes)
@@ -1767,12 +1767,15 @@ def rol_permisos(role_id: str):
 
     modulos = _obtener_modulos_disponibles()
     acciones = _PERMISOS_ACCIONES
+    reemplazando_permisos = request.method == "POST"
     permisos_existentes = {
         perm.module_id: {accion: getattr(perm, accion, False) for accion, _label in acciones}
-        for perm in _obtener_permisos_por_rol(role_id)
+        for perm in _obtener_permisos_por_rol(role_id, for_update=reemplazando_permisos)
     }
 
-    rangos_existentes = {perm.module_id: perm.approval_rank for perm in _obtener_permisos_por_rol(role_id)}
+    rangos_existentes = {
+        perm.module_id: perm.approval_rank for perm in _obtener_permisos_por_rol(role_id, for_update=reemplazando_permisos)
+    }
     if _save_rol_permisos(role_id, modulos, acciones, rangos_existentes):
         return redirect(url_for(LISTA_ROLES))
 
