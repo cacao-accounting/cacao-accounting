@@ -2065,7 +2065,7 @@ def _validate_payment_reference_document(
     if getattr(document, "docstatus", 0) != 1:
         raise ValueError(_("El documento referenciado debe estar aprobado."))
     _block_disputed_purchase_reconciliation(document)
-    if payment.company and document.company and payment.company != document.company:
+    if not payment.company or not document.company or payment.company != document.company:
         from werkzeug.exceptions import Conflict
 
         raise Conflict(_("El documento referenciado no pertenece a la misma compañía."))

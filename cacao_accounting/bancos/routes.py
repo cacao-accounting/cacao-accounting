@@ -1747,12 +1747,15 @@ def bancos_pago_nuevo():
     """Formulario para crear un nuevo pago."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
+    source_rows = _payment_source_rows_from_request()
+    for source_row in source_rows:
+        source_document = source_row["document"]
+        exige_acceso_compania("cash", getattr(source_document, "company", None), "consultar")
+
     if request.method == "POST":
         response = _create_payment_from_request()
         if response is not None:
             return response
-
-    source_rows = _payment_source_rows_from_request()
 
     initial_payment = {}
     if source_rows:
