@@ -56,7 +56,7 @@ def dual_role_s2p_scenario(tmp_path: Path, request):
         with bootstrap_engine.begin() as connection:
             connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
         connect_args = (
-            {"server_settings": {"search_path": f"{schema_name},public"}}
+            {"startup_params": {"search_path": schema_name}}
             if "+pg8000" in uri
             else {"options": f"-csearch_path={schema_name},public"}
         )
