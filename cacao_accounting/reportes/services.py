@@ -1602,10 +1602,16 @@ def _reconciliation_item_diagnostics(transaction_ids: set[str], company: str | N
     También diagnostica partidas bancarias activas sin contexto contable
     persistido (moneda/pierna), que deben migrarse con backfill o revisarse.
     """
-    item_query = select(ReconciliationItem).where(
-        ReconciliationItem.source_type == "bank_transaction",
-        ReconciliationItem.status != "cancelled",
+    item_query = (
+        select(ReconciliationItem)
+        .join(Reconciliation, ReconciliationItem.reconciliation_id == Reconciliation.id)
+        .where(
+            ReconciliationItem.source_type == "bank_transaction",
+            ReconciliationItem.status != "cancelled",
+        )
     )
+    if company:
+        item_query = item_query.where(Reconciliation.company == company)
     rows: list[ReportRow] = []
     flagged_ids: set[str] = set()
     for item in database.session.execute(item_query).scalars():
