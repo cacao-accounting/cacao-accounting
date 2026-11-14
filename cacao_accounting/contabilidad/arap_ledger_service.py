@@ -32,7 +32,9 @@ from cacao_accounting.database import (
     PaymentEntry,
     PaymentReference,
     PurchaseInvoice,
+    PurchaseOrder,
     SalesInvoice,
+    SalesOrder,
     database,
 )
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype, payment_reference_affects_arap
@@ -1855,4 +1857,39 @@ def cancel_document_ar_ap(document: Any, *, cancellation_date: date | None = Non
     originals = _cancellation_originals(document, source_types, source_ids)
     originals = sorted(originals, key=lambda row: 0 if row.event_type == "allocation" else 1)
     _lock_open_item_caches_for_movements(originals)
-    return [_reverse_arap_movement(original, document, cancellation_date) for original in originals]
+    reversals = [_reverse_arap_movement(original, document, cancellation_date) for original in originals]
+    if isinstance(document, PaymentEntry):
+        _refresh_reversed_payment_targets(originals)
+    return reversals
+
+
+def _refresh_reversed_payment_targets(originals: list[ARAPLedgerEntry]) -> None:
+    """Actualiza las cachés de documentos afectados tras revertir aplicaciones."""
+    from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+    sales_document_types = {
+        "sales_invoice",
+        "sales_credit_note",
+        "sales_debit_note",
+        "sales_return",
+        "sales_order",
+    }
+    purchase_document_types = {
+        "purchase_invoice",
+        "purchase_credit_note",
+        "purchase_debit_note",
+        "purchase_order",
+    }
+    document_ids = {
+        (movement.document_type, movement.document_id)
+        for movement in originals
+        if movement.event_type == "allocation" and movement.document_type in sales_document_types | purchase_document_types
+    }
+    for document_type, document_id in document_ids:
+        if document_type in sales_document_types:
+            model = SalesOrder if document_type == "sales_order" else SalesInvoice
+        else:
+            model = PurchaseOrder if document_type == "purchase_order" else PurchaseInvoice
+        target = database.session.get(model, document_id)
+        if target is not None:
+            refresh_outstanding_amount_cache(target)
