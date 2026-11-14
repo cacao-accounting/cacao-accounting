@@ -22,6 +22,7 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.bancos.services import (
     cancel_petty_cash_expense,
+    create_petty_cash_expense,
     create_default_petty_cash,
     create_petty_cash_replenishment,
     create_petty_cash_voucher,
@@ -218,6 +219,142 @@ def _authenticated_client(application, user_id: str):
     return client
 
 
+def _prepare_delivered_expense_voucher(application, ids: dict[str, str]) -> dict[str, object]:
+    """Prepare a delivered voucher and the accounting references needed to post its expense."""
+    company = ids["company"]
+    expense_code = f"EX{company[1:]}"
+    cost_center_code = f"C{company[1:]}"
+    posting_date = date(2026, 10, 20)
+
+    with application.app_context():
+        fund = database.session.execute(database.select(PettyCashAccount).filter_by(company=company)).scalar_one()
+        accounting_module = database.session.execute(
+            database.select(Modules).filter_by(module="accounting")
+        ).scalar_one_or_none()
+        if accounting_module is None:
+            accounting_module = Modules(module="accounting", default=True, enabled=True)
+            database.session.add(accounting_module)
+            database.session.flush()
+        accounting_module.enabled = True
+
+        editor_role = database.session.execute(database.select(Roles).filter_by(name=f"cash-editor-{company}")).scalar_one()
+        cash_module_id = obtener_id_modulo_por_nombre("cash")
+        cash_access = database.session.execute(
+            database.select(RolesAccess).filter_by(rol_id=editor_role.id, module_id=cash_module_id)
+        ).scalar_one()
+        cash_access.create = True
+        cash_access.view = True
+        accounting_access = database.session.execute(
+            database.select(RolesAccess).filter_by(rol_id=editor_role.id, module_id=accounting_module.id)
+        ).scalar_one_or_none()
+        if accounting_access is None:
+            database.session.add(
+                RolesAccess(
+                    rol_id=editor_role.id,
+                    module_id=accounting_module.id,
+                    access=True,
+                    create=True,
+                    approve=True,
+                    set_null=True,
+                )
+            )
+        else:
+            accounting_access.access = True
+            accounting_access.create = True
+            accounting_access.approve = True
+            accounting_access.set_null = True
+
+        database.session.add_all(
+            [
+                Accounts(
+                    code=expense_code,
+                    name="Suministros de oficina",
+                    entity=company,
+                    group=False,
+                    active=True,
+                    enabled=True,
+                    classification="expense",
+                    account_type="expense",
+                ),
+                CostCenter(
+                    code=cost_center_code,
+                    name="Administración",
+                    entity=company,
+                    active=True,
+                    enabled=True,
+                ),
+                Book(
+                    entity=company,
+                    code=f"B{company[1:9]}",
+                    name="Libro principal de gastos",
+                    status="activo",
+                    currency=fund.currency,
+                    is_primary=True,
+                ),
+            ]
+        )
+        fiscal_year = FiscalYear(
+            entity=company,
+            name="2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+        )
+        database.session.add(fiscal_year)
+        database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                entity=company,
+                fiscal_year_id=fiscal_year.id,
+                name="Octubre 2026",
+                status="open",
+                enabled=True,
+                is_closed=False,
+                start=date(2026, 10, 1),
+                end=date(2026, 10, 31),
+            )
+        )
+        voucher = create_petty_cash_voucher(
+            company=company,
+            petty_cash_id=fund.id,
+            posted_date=posting_date,
+            delivered_to="María Pérez",
+            concept="Compra de útiles de oficina",
+            amount=Decimal("75.00"),
+            cost_center_code=cost_center_code,
+        )
+        set_petty_cash_voucher_status(voucher, "entregado")
+        database.session.commit()
+        result = {
+            "company": company,
+            "expense_code": expense_code,
+            "cost_center_code": cost_center_code,
+            "posting_date": posting_date,
+            "voucher_id": voucher.id,
+            "fund_id": fund.id,
+            "cash_module_id": cash_module_id,
+        }
+    return result
+
+
+def _post_prepared_petty_cash_expense(application, scenario: dict[str, object], actor_id: str) -> str:
+    """Post the prepared voucher through the same domain service used by the form."""
+    with application.app_context():
+        expense = create_petty_cash_expense(
+            company=str(scenario["company"]),
+            petty_cash_id=str(scenario["fund_id"]),
+            expense_account_code=str(scenario["expense_code"]),
+            concept="Compra de útiles de oficina",
+            amount=Decimal("75.00"),
+            cost_center_code=str(scenario["cost_center_code"]),
+            posted_date=scenario["posting_date"],
+            voucher_id=str(scenario["voucher_id"]),
+            beneficiary="María Pérez",
+            actor_id=actor_id,
+        )
+        return str(expense.id)
+
+
 def test_replenishment_approval_requires_authority_and_different_actor(replenishment_app):
     """An editor cannot approve; separation applies only when company policy asks."""
     application, ids = replenishment_app
@@ -282,112 +419,15 @@ def test_replenishment_approval_requires_authority_and_different_actor(replenish
 def test_delivered_voucher_form_posts_expense_and_reconciles_gl(replenishment_app):
     """Liquidating a delivered voucher through the form creates one balanced expense."""
     application, ids = replenishment_app
-    company = ids["company"]
-    expense_code = f"EX{company[1:]}"
-    cost_center_code = f"C{company[1:]}"
-    posting_date = date(2026, 10, 20)
-
+    scenario = _prepare_delivered_expense_voucher(application, ids)
+    company = str(scenario["company"])
+    expense_code = str(scenario["expense_code"])
+    cost_center_code = str(scenario["cost_center_code"])
+    posting_date = date.fromisoformat(str(scenario["posting_date"]))
+    voucher_id = str(scenario["voucher_id"])
+    fund_id = str(scenario["fund_id"])
     with application.app_context():
-        fund = database.session.execute(database.select(PettyCashAccount).filter_by(company=company)).scalar_one()
-        accounting_module = database.session.execute(
-            database.select(Modules).filter_by(module="accounting")
-        ).scalar_one_or_none()
-        if accounting_module is None:
-            accounting_module = Modules(module="accounting", default=True, enabled=True)
-            database.session.add(accounting_module)
-            database.session.flush()
-        accounting_module.enabled = True
-
-        editor_role = database.session.execute(database.select(Roles).filter_by(name=f"cash-editor-{company}")).scalar_one()
-        cash_module_id = obtener_id_modulo_por_nombre("cash")
-        cash_access = database.session.execute(
-            database.select(RolesAccess).filter_by(rol_id=editor_role.id, module_id=cash_module_id)
-        ).scalar_one()
-        cash_access.create = True
-        cash_access.view = True
-        accounting_access = database.session.execute(
-            database.select(RolesAccess).filter_by(rol_id=editor_role.id, module_id=accounting_module.id)
-        ).scalar_one_or_none()
-        if accounting_access is None:
-            database.session.add(
-                RolesAccess(
-                    rol_id=editor_role.id,
-                    module_id=accounting_module.id,
-                    access=True,
-                    create=True,
-                    approve=True,
-                )
-            )
-        else:
-            accounting_access.access = True
-            accounting_access.create = True
-            accounting_access.approve = True
-
-        database.session.add_all(
-            [
-                Accounts(
-                    code=expense_code,
-                    name="Suministros de oficina",
-                    entity=company,
-                    group=False,
-                    active=True,
-                    enabled=True,
-                    classification="expense",
-                    account_type="expense",
-                ),
-                CostCenter(
-                    code=cost_center_code,
-                    name="Administración",
-                    entity=company,
-                    active=True,
-                    enabled=True,
-                ),
-                Book(
-                    entity=company,
-                    code=f"B{company[1:9]}",
-                    name="Libro principal de gastos",
-                    status="activo",
-                    currency=fund.currency,
-                    is_primary=True,
-                ),
-            ]
-        )
-        fiscal_year = FiscalYear(
-            entity=company,
-            name="2026",
-            year_start_date=date(2026, 1, 1),
-            year_end_date=date(2026, 12, 31),
-            is_closed=False,
-        )
-        database.session.add(fiscal_year)
-        database.session.flush()
-        database.session.add(
-            AccountingPeriod(
-                entity=company,
-                fiscal_year_id=fiscal_year.id,
-                name="Octubre 2026",
-                status="open",
-                enabled=True,
-                is_closed=False,
-                start=date(2026, 10, 1),
-                end=date(2026, 10, 31),
-            )
-        )
-        database.session.commit()
-
-        voucher = create_petty_cash_voucher(
-            company=company,
-            petty_cash_id=fund.id,
-            posted_date=posting_date,
-            delivered_to="María Pérez",
-            concept="Compra de útiles de oficina",
-            amount=Decimal("75.00"),
-            cost_center_code=cost_center_code,
-        )
-        set_petty_cash_voucher_status(voucher, "entregado")
-        voucher_id = voucher.id
-        fund_id = fund.id
-        cash_permissions = Permisos(cash_module_id, ids["editor_user"])
+        cash_permissions = Permisos(str(scenario["cash_module_id"]), ids["editor_user"])
         assert cash_permissions.crear is True
         assert cash_permissions.tiene_acceso_compania(company) is True
 
@@ -439,6 +479,218 @@ def test_delivered_voucher_form_posts_expense_and_reconciles_gl(replenishment_ap
             (expense_code, Decimal("75.0000"), Decimal("0.0000")),
             (f"PC-{company}", Decimal("0.0000"), Decimal("75.0000")),
         }
+
+
+def test_petty_cash_expense_cancellation_reverses_gl_and_reopens_voucher(replenishment_app):
+    """A successful cancellation preserves original GL rows and reopens its voucher."""
+    application, ids = replenishment_app
+    scenario = _prepare_delivered_expense_voucher(application, ids)
+    expense_id = _post_prepared_petty_cash_expense(application, scenario, ids["editor_user"])
+    company = str(scenario["company"])
+    voucher_id = str(scenario["voucher_id"])
+    posting_date = date.fromisoformat(str(scenario["posting_date"]))
+
+    with application.app_context():
+        expense = database.session.get(PettyCashExpense, expense_id)
+        assert expense is not None and expense.journal_id
+        journal_id = str(expense.journal_id)
+        original_entries = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(company=company, voucher_type="journal_entry", voucher_id=journal_id)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(original_entries) == 2
+        original_snapshot = {
+            entry.id: (
+                entry.account_id,
+                entry.debit,
+                entry.credit,
+                entry.debit_in_account_currency,
+                entry.credit_in_account_currency,
+                entry.account_currency,
+                entry.company_currency,
+                entry.exchange_rate,
+                entry.ledger_id,
+            )
+            for entry in original_entries
+        }
+        original_amounts = [(entry.account_id, entry.debit, entry.credit) for entry in original_entries]
+
+        cancel_petty_cash_expense(
+            expense,
+            reason="Compra duplicada",
+            actor_id=ids["editor_user"],
+            cancellation_date=posting_date,
+        )
+
+    with application.app_context():
+        expense = database.session.get(PettyCashExpense, expense_id)
+        voucher = database.session.get(PettyCashVoucher, voucher_id)
+        journal = database.session.get(ComprobanteContable, journal_id)
+        entries = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(company=company, voucher_type="journal_entry", voucher_id=journal_id)
+            )
+            .scalars()
+            .all()
+        )
+        originals = [entry for entry in entries if not entry.is_reversal]
+        reversals = [entry for entry in entries if entry.is_reversal]
+        assert expense is not None and expense.docstatus == 2
+        assert voucher is not None and voucher.voucher_status == "entregado" and voucher.expense_id is None
+        assert journal is not None and journal.status == "cancelled"
+        assert len(originals) == len(reversals) == 2
+        assert all(entry.is_cancelled for entry in originals)
+        assert {
+            entry.id: (
+                entry.account_id,
+                entry.debit,
+                entry.credit,
+                entry.debit_in_account_currency,
+                entry.credit_in_account_currency,
+                entry.account_currency,
+                entry.company_currency,
+                entry.exchange_rate,
+                entry.ledger_id,
+            )
+            for entry in originals
+        } == original_snapshot
+        assert all(not entry.is_cancelled for entry in reversals)
+        assert sum((entry.debit for entry in entries if not entry.is_cancelled), Decimal("0")) == Decimal("75.0000")
+        assert sum((entry.credit for entry in entries if not entry.is_cancelled), Decimal("0")) == Decimal("75.0000")
+        assert all(
+            any(
+                reversal.account_id == account_id and reversal.debit == credit and reversal.credit == debit
+                for reversal in reversals
+            )
+            for account_id, debit, credit in original_amounts
+        )
+
+
+def test_petty_cash_expense_creation_rolls_back_gl_if_subledger_insert_fails(replenishment_app):
+    """A failed expense insert leaves its delivered voucher and GL untouched."""
+    application, ids = replenishment_app
+    scenario = _prepare_delivered_expense_voucher(application, ids)
+    company = str(scenario["company"])
+    voucher_id = str(scenario["voucher_id"])
+
+    with application.app_context():
+        if database.engine.dialect.name != "sqlite":
+            pytest.skip("La inyección de fallo usa un trigger efímero de SQLite.")
+        database.session.remove()
+        with database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE TRIGGER reject_petty_cash_expense_insert "
+                "BEFORE INSERT ON petty_cash_expense "
+                "BEGIN SELECT RAISE(ABORT, 'injected subledger insert failure'); END"
+            )
+
+    try:
+        with application.app_context():
+            before_journals = (
+                database.session.execute(database.select(ComprobanteContable.id).where(ComprobanteContable.entity == company))
+                .scalars()
+                .all()
+            )
+            before_gl = database.session.execute(database.select(GLEntry.id).where(GLEntry.company == company)).scalars().all()
+            with pytest.raises(IntegrityError, match="injected subledger insert failure"):
+                _post_prepared_petty_cash_expense(application, scenario, ids["editor_user"])
+            database.session.remove()
+
+        with application.app_context():
+            voucher = database.session.get(PettyCashVoucher, voucher_id)
+            expenses = (
+                database.session.execute(database.select(PettyCashExpense).filter_by(voucher_id=voucher_id)).scalars().all()
+            )
+            journals = (
+                database.session.execute(database.select(ComprobanteContable.id).where(ComprobanteContable.entity == company))
+                .scalars()
+                .all()
+            )
+            gl_entries = (
+                database.session.execute(database.select(GLEntry.id).where(GLEntry.company == company)).scalars().all()
+            )
+            assert voucher is not None and voucher.voucher_status == "entregado" and voucher.expense_id is None
+            assert expenses == []
+            assert journals == before_journals
+            assert gl_entries == before_gl
+    finally:
+        with application.app_context():
+            database.session.remove()
+            with database.engine.begin() as connection:
+                connection.exec_driver_sql("DROP TRIGGER IF EXISTS reject_petty_cash_expense_insert")
+
+
+def test_petty_cash_expense_cancellation_rolls_back_gl_if_subledger_update_fails(replenishment_app):
+    """A failed cancellation update keeps the posted expense, voucher and GL active."""
+    application, ids = replenishment_app
+    scenario = _prepare_delivered_expense_voucher(application, ids)
+    expense_id = _post_prepared_petty_cash_expense(application, scenario, ids["editor_user"])
+    company = str(scenario["company"])
+    voucher_id = str(scenario["voucher_id"])
+    posting_date = date.fromisoformat(str(scenario["posting_date"]))
+
+    with application.app_context():
+        if database.engine.dialect.name != "sqlite":
+            pytest.skip("La inyección de fallo usa un trigger efímero de SQLite.")
+        expense = database.session.get(PettyCashExpense, expense_id)
+        assert expense is not None and expense.journal_id
+        journal_id = str(expense.journal_id)
+        original_entries = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(company=company, voucher_type="journal_entry", voucher_id=journal_id)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(original_entries) == 2
+        database.session.remove()
+        with database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE TRIGGER reject_petty_cash_expense_update "
+                "BEFORE UPDATE ON petty_cash_expense "
+                "BEGIN SELECT RAISE(ABORT, 'injected subledger update failure'); END"
+            )
+
+    try:
+        with application.app_context():
+            expense = database.session.get(PettyCashExpense, expense_id)
+            assert expense is not None
+            with pytest.raises(IntegrityError, match="injected subledger update failure"):
+                cancel_petty_cash_expense(
+                    expense,
+                    reason="Compra duplicada",
+                    actor_id=ids["editor_user"],
+                    cancellation_date=posting_date,
+                )
+            database.session.remove()
+
+        with application.app_context():
+            expense = database.session.get(PettyCashExpense, expense_id)
+            voucher = database.session.get(PettyCashVoucher, voucher_id)
+            journal = database.session.get(ComprobanteContable, journal_id)
+            entries = (
+                database.session.execute(
+                    database.select(GLEntry).filter_by(company=company, voucher_type="journal_entry", voucher_id=journal_id)
+                )
+                .scalars()
+                .all()
+            )
+            assert expense is not None and expense.docstatus == 1
+            assert voucher is not None and voucher.voucher_status == "liquidado" and voucher.expense_id == expense_id
+            assert journal is not None and journal.status == "submitted"
+            assert len(entries) == 2
+            assert all(not entry.is_cancelled and not entry.is_reversal for entry in entries)
+            assert {(entry.id, entry.debit, entry.credit) for entry in entries} == {
+                (entry.id, entry.debit, entry.credit) for entry in original_entries
+            }
+    finally:
+        with application.app_context():
+            database.session.remove()
+            with database.engine.begin() as connection:
+                connection.exec_driver_sql("DROP TRIGGER IF EXISTS reject_petty_cash_expense_update")
 
 
 def test_concurrent_default_selection_keeps_one_fund(replenishment_app):
