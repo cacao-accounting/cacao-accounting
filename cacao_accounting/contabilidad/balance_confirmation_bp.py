@@ -16,6 +16,7 @@ from cacao_accounting.database import (
     database,
     BalanceConfirmation,
     BalanceConfirmationInvitation,
+    CompanyParty,
     Entity,
     Party,
     Contact,
@@ -25,7 +26,7 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.decorators import modulo_activo, exige_acceso_compania
 from cacao_accounting.contabilidad.balance_confirmation import (
     create_balance_confirmation,
-    prepare_invitation_token,
+    generate_invitation_credentials,
     verify_snapshot_hash,
 )
 from cacao_accounting.messaging.email import send_email, EmailError
@@ -63,38 +64,107 @@ def _as_utc(value: datetime | None) -> datetime | None:
 
 
 def _mark_expired(confirmation: BalanceConfirmation) -> bool:
-    """Marca la confirmación como expirada si la fecha de expiración ya pasó.
+    """Expire an unanswered confirmation whose deadline has passed.
 
-    Registra el evento de auditoría y cierra las invitaciones pendientes para
-    que no queden mostrando un estado de pendiente inconsistente con la
-    confirmación.
+    A conditional update makes expiration compete atomically with a public
+    response, so it cannot replace a terminal response. Active invitations
+    are closed in the same transaction as the audit event.
     """
+    active_statuses = ("draft", "sent", "viewed")
+    if confirmation.status == "expired":
+        return True
+    if confirmation.status not in active_statuses:
+        return False
+
     expires_at = _as_utc(confirmation.expires_at)
     if expires_at is None or _utcnow() <= expires_at:
         return False
-    if confirmation.status != "expired":
-        confirmation.status = "expired"
-        expired_at = _utcnow()
-        pending_invitations = (
-            database.session.execute(
-                select(BalanceConfirmationInvitation).where(
-                    BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id,
-                    BalanceConfirmationInvitation.status == "pending",
-                )
+
+    expired_at = _utcnow()
+    result = database.session.execute(
+        update(BalanceConfirmation)
+        .where(
+            BalanceConfirmation.id == confirmation.id,
+            BalanceConfirmation.status.in_(active_statuses),
+            BalanceConfirmation.expires_at <= expired_at,
+        )
+        .values(status="expired")
+        .execution_options(synchronize_session=False)
+    )
+    if getattr(result, "rowcount", 0) == 0:
+        database.session.rollback()
+        database.session.refresh(confirmation)
+        return confirmation.status == "expired"
+
+    database.session.refresh(confirmation)
+    active_invitations = (
+        database.session.execute(
+            select(BalanceConfirmationInvitation).where(
+                BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id,
+                BalanceConfirmationInvitation.status.in_(("pending", "viewed")),
             )
-            .scalars()
-            .all()
         )
-        for invitation in pending_invitations:
-            invitation.status = "expired"
-            invitation.expires_at = expired_at
-        log_balance_confirmation_event(
-            confirmation,
-            "balance_confirmation_expired",
-            comment="La solicitud de confirmación de saldo expiró automáticamente.",
-        )
-        database.session.commit()
+        .scalars()
+        .all()
+    )
+    for invitation in active_invitations:
+        invitation.status = "expired"
+        invitation.expires_at = expired_at
+
+    log_balance_confirmation_event(
+        confirmation,
+        "balance_confirmation_expired",
+        comment="La solicitud de confirmación de saldo expiró automáticamente.",
+    )
+    database.session.commit()
     return True
+
+
+def _claim_confirmation_delivery(confirmation: BalanceConfirmation, allowed_statuses: tuple[str, ...]) -> bool:
+    """Lock an active confirmation while its invitation email is in flight.
+
+    The no-op status update is a row lock on PostgreSQL and a write lock on
+    SQLite. Public responses and expiration use conditional updates against
+    the same row, so only one transition can proceed at a time.
+    """
+    result = database.session.execute(
+        update(BalanceConfirmation)
+        .where(
+            BalanceConfirmation.id == confirmation.id,
+            BalanceConfirmation.status == confirmation.status,
+            BalanceConfirmation.status.in_(allowed_statuses),
+            BalanceConfirmation.sent_at == confirmation.sent_at,
+        )
+        .values(status=BalanceConfirmation.status)
+        .execution_options(synchronize_session=False)
+    )
+    if getattr(result, "rowcount", 0) != 1:
+        database.session.rollback()
+        database.session.refresh(confirmation)
+        return False
+
+    database.session.refresh(confirmation)
+    expires_at = _as_utc(confirmation.expires_at)
+    if expires_at is None or _utcnow() <= expires_at:
+        return True
+
+    database.session.rollback()
+    database.session.refresh(confirmation)
+    return False
+
+
+def _active_invitation_exists(confirmation_id: str, invitation_id: str, token_hash: str):
+    """Return a SQL predicate for the currently active invitation credential."""
+    return (
+        select(BalanceConfirmationInvitation.id)
+        .where(
+            BalanceConfirmationInvitation.id == invitation_id,
+            BalanceConfirmationInvitation.balance_confirmation_id == confirmation_id,
+            BalanceConfirmationInvitation.token_hash == token_hash,
+            BalanceConfirmationInvitation.status.in_(("pending", "viewed")),
+        )
+        .exists()
+    )
 
 
 @balance_confirmations_bp.before_request
@@ -117,6 +187,23 @@ def _confirmation_companies() -> list[tuple[str, str]]:
             continue
         companies.append((code, name))
     return companies
+
+
+def _party_allowed_companies(party_id: str, companies: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Filtra las compañías del usuario donde el tercero está activo."""
+    codes = [code for code, _ in companies]
+    if not codes:
+        return []
+    active_codes = set(
+        database.session.execute(
+            select(CompanyParty.company).where(
+                CompanyParty.party_id == party_id,
+                CompanyParty.company.in_(codes),
+                CompanyParty.is_active.is_(True),
+            )
+        ).scalars()
+    )
+    return [(code, name) for code, name in companies if code in active_codes]
 
 
 def _party_suggested_emails(party_id: str, party: Party) -> list[str]:
@@ -192,6 +279,9 @@ def crear_confirmacion_form():
             return redirect(url_for("compras.compras_proveedor_lista"))
 
     companies = _confirmation_companies()
+    companies = _party_allowed_companies(party_id, companies)
+    if not companies:
+        abort(403)
     suggested_emails = _party_suggested_emails(party_id, party)
 
     if request.method == "POST":
@@ -222,9 +312,17 @@ def ver_confirmacion(confirmation_id: str):
     party = database.session.get(Party, confirmation.party_id)
     company = database.session.execute(select(Entity).where(Entity.code == confirmation.company)).scalar_one_or_none()
 
-    snapshot = {}
+    snapshot: dict = {}
     if confirmation.snapshot_json:
-        snapshot = json.loads(confirmation.snapshot_json)
+        try:
+            loaded = json.loads(confirmation.snapshot_json)
+        except (TypeError, ValueError):
+            loaded = {}
+        snapshot = loaded if isinstance(loaded, dict) else {}
+    if not isinstance(snapshot.get("items"), list):
+        snapshot["items"] = []
+    if not isinstance(snapshot.get("totals"), dict):
+        snapshot["totals"] = {}
 
     invitations = (
         database.session.execute(
@@ -261,8 +359,18 @@ def enviar_confirmacion(confirmation_id: str):
     # Validar acceso de autorización para la compañía de la confirmación
     exige_acceso_compania("accounting", confirmation.company, "autorizar")
 
+    if _mark_expired(confirmation):
+        flash(_("Esta solicitud de confirmación de saldo ha expirado."), "danger")
+        return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
+
     if confirmation.status not in ("draft", "sent"):
         flash(_("La confirmación de saldo no se encuentra en un estado válido para envío."), "danger")
+        return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
+    if not _claim_confirmation_delivery(confirmation, ("draft", "sent")):
+        if _mark_expired(confirmation):
+            flash(_("Esta solicitud de confirmación de saldo ha expirado."), "danger")
+        else:
+            flash(_("La confirmación de saldo no se encuentra en un estado válido para envío."), "danger")
         return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
 
     invitations = (
@@ -282,9 +390,8 @@ def enviar_confirmacion(confirmation_id: str):
 
     any_sent = False
     for inv in invitations:
-        # Generar token y código de forma segura durante el envío para no perderlos en redirecciones
-        raw_token, raw_code = prepare_invitation_token(inv)
-        inv.status = "pending"
+        # Keep current credentials until the recipient's email is accepted.
+        raw_token, raw_code, token_hash, code_hash = generate_invitation_credentials()
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
@@ -307,6 +414,9 @@ Atentamente,
                 subject=_("Solicitud de Confirmación de Saldo - %(company)s") % {"company": company_name},
                 body=body,
             )
+            inv.token_hash = token_hash
+            inv.verification_code_hash = code_hash
+            inv.status = "pending"
             inv.sent_at = _utcnow()
             any_sent = True
         except EmailError as exc:
@@ -339,8 +449,18 @@ def reenviar_confirmacion(confirmation_id: str):
     # Validar acceso de autorización para la compañía de la confirmación
     exige_acceso_compania("accounting", confirmation.company, "autorizar")
 
+    if _mark_expired(confirmation):
+        flash(_("Esta solicitud de confirmación de saldo ha expirado."), "danger")
+        return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
+
     if confirmation.status not in ("sent", "viewed"):
         flash(_("Solo se pueden reenviar solicitudes ya enviadas o visualizadas."), "danger")
+        return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
+    if not _claim_confirmation_delivery(confirmation, ("sent", "viewed")):
+        if _mark_expired(confirmation):
+            flash(_("Esta solicitud de confirmación de saldo ha expirado."), "danger")
+        else:
+            flash(_("Solo se pueden reenviar solicitudes ya enviadas o visualizadas."), "danger")
         return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
 
     invitations = (
@@ -360,10 +480,8 @@ def reenviar_confirmacion(confirmation_id: str):
 
     any_sent = False
     for inv in invitations:
-        # Generar nuevos tokens y códigos de verificación de forma segura
-        raw_token, raw_code = prepare_invitation_token(inv)
-        inv.failed_attempts = 0
-        inv.status = "pending"
+        # Keep current credentials until the recipient's email is accepted.
+        raw_token, raw_code, token_hash, code_hash = generate_invitation_credentials()
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
@@ -386,6 +504,10 @@ Atentamente,
                 subject=_("Reenvío de Solicitud de Confirmación de Saldo - %(company)s") % {"company": company_name},
                 body=body,
             )
+            inv.token_hash = token_hash
+            inv.verification_code_hash = code_hash
+            inv.failed_attempts = 0
+            inv.status = "pending"
             inv.sent_at = _utcnow()
             any_sent = True
         except EmailError as exc:
@@ -393,6 +515,7 @@ Atentamente,
 
     if any_sent:
         confirmation.status = "sent"
+        confirmation.sent_at = _utcnow()
         log_balance_confirmation_event(
             confirmation,
             "balance_confirmation_resent",
@@ -534,9 +657,20 @@ def public_confirm_balance_verify(token: str):
     if not invitation:
         return render_template(TEMPLATE_NOT_FOUND), 404
 
-    confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+    if invitation.status in ("cancelled", "responded", "expired"):
+        flash(_("La invitación no se encuentra disponible."), "danger")
+        return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
+
+    confirmation = database.session.execute(
+        select(BalanceConfirmation).where(BalanceConfirmation.id == invitation.balance_confirmation_id).with_for_update()
+    ).scalar_one_or_none()
     if not confirmation or confirmation.status in ("confirmed", "disputed", "cancelled"):
         flash(_("La confirmación no se encuentra disponible."), "danger")
+        return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
+
+    database.session.refresh(invitation)
+    if invitation.token_hash != token_hash or invitation.status not in ("pending", "viewed"):
+        flash(_("La invitación no se encuentra disponible."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Verificar fecha de expiración también en la verificación POST
@@ -637,9 +771,16 @@ def public_confirm_balance_respond(token: str):
     if not invitation:
         return render_template(TEMPLATE_NOT_FOUND), 404
 
-    confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+    confirmation = database.session.execute(
+        select(BalanceConfirmation).where(BalanceConfirmation.id == invitation.balance_confirmation_id).with_for_update()
+    ).scalar_one_or_none()
     if not confirmation or confirmation.status in ("confirmed", "disputed", "cancelled"):
         flash(_("La confirmación no se encuentra disponible para responder."), "danger")
+        return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
+
+    database.session.refresh(invitation)
+    if invitation.token_hash != token_hash or invitation.status not in ("pending", "viewed"):
+        flash(_("La invitación no se encuentra disponible."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Verificar fecha de expiración también en la respuesta POST
@@ -674,6 +815,7 @@ def public_confirm_balance_respond(token: str):
         .where(
             BalanceConfirmation.id == confirmation.id,
             BalanceConfirmation.status.in_(("draft", "sent", "viewed")),
+            _active_invitation_exists(confirmation.id, invitation.id, token_hash),
         )
         .values(
             status=response_status,

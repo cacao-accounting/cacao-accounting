@@ -7,6 +7,8 @@ from datetime import date
 
 from decimal import Decimal, InvalidOperation
 
+from types import SimpleNamespace
+
 import json
 
 
@@ -57,6 +59,8 @@ from cacao_accounting.database import (
 
 from cacao_accounting.auth.permisos import Permisos
 
+from sqlalchemy.exc import IntegrityError
+
 from cacao_accounting.database.helpers import get_active_naming_series
 
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
@@ -85,6 +89,8 @@ from cacao_accounting.audit_trail_service import format_document_timeline, log_c
 from cacao_accounting.bancos.services import (
     _safe_bank_reconciliation_candidates,
     _validate_bank_account_numbering_defaults,
+    _validate_bank_account_references,
+    _validate_payment_gl_accounts,
     _ensure_bank_account_counter_mapping,
     _lookup_series_name,
     _lookup_counter_name,
@@ -206,6 +212,17 @@ def _cash_accessible_companies():
     return database.select(Book.entity).where(Book.entity.in_(companies))
 
 
+def _cash_can_edit(company: str | None) -> bool:
+    """Return whether the current user can mutate cash records for a company."""
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("cash"),
+        usuario=current_user.id,
+    )
+    if permissions.administrador:
+        return True
+    return bool(permissions.editar and permissions.tiene_acceso_compania(company))
+
+
 from cacao_accounting.bancos import cash_forecast as _cf  # noqa: F401, E402
 
 
@@ -318,7 +335,13 @@ def bancos_transferencia_lista():
         database.select(PaymentEntry).filter_by(payment_type="internal_transfer"),
     )
     titulo = _("Listado de Transferencias Internas") + " - " + APPNAME
-    return render_template(BANCOS_PAGO_LISTA_HTML, consulta=consulta, titulo=titulo, is_transfer_list=True)
+    return render_template(
+        BANCOS_PAGO_LISTA_HTML,
+        consulta=consulta,
+        titulo=titulo,
+        is_transfer_list=True,
+        list_endpoint="bancos.bancos_transferencia_lista",
+    )
 
 
 @bancos.route("/payment/debit-note/list")
@@ -338,6 +361,7 @@ def bancos_nota_debito_lista():
         titulo=titulo,
         page_heading=_("Listado de Notas de Débito Bancario"),
         new_url=url_for("bancos.bancos_nota_debito_nueva"),
+        list_endpoint="bancos.bancos_nota_debito_lista",
     )
 
 
@@ -358,6 +382,7 @@ def bancos_nota_credito_lista():
         titulo=titulo,
         page_heading=_("Listado de Notas de Crédito Bancario"),
         new_url=url_for("bancos.bancos_nota_credito_nueva"),
+        list_endpoint="bancos.bancos_nota_credito_lista",
     )
 
 
@@ -452,25 +477,23 @@ def bancos_transaccion_reconciliar():
 @modulo_activo("cash")
 @login_required
 def bancos_conciliacion_bancaria():
-    """Panel de conciliacion bancaria con transacciones pendientes."""
+    """Panel de conciliacion bancaria limitado a una compañía explícita."""
+    companies = _reconciliation_companies()
     company = request.args.get("company") or None
-    query = database.select(BankTransaction).filter_by(is_reconciled=False)
     if company:
         exige_acceso_compania("cash", company, "consultar")
-        query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
-            BankAccount.company == company
+    elif len(companies) == 1:
+        company = companies[0][0]
+
+    transactions = []
+    if company:
+        query = (
+            database.select(BankTransaction)
+            .filter_by(is_reconciled=False)
+            .join(BankAccount, BankAccount.id == BankTransaction.bank_account_id)
+            .filter(BankAccount.company == company)
         )
-    elif not getattr(current_user, "classification", None) == "admin":
-        module_id = obtener_id_modulo_por_nombre("cash")
-        permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
-        if not companies:
-            query = query.where(database.false())
-        else:
-            query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
-                BankAccount.company.in_(companies)
-            )
-    transactions = database.session.execute(query.order_by(BankTransaction.posting_date)).scalars().all()
+        transactions = database.session.execute(query.order_by(BankTransaction.posting_date)).scalars().all()
     suggestions = {transaction.id: _safe_bank_reconciliation_candidates(transaction) for transaction in transactions}
     return render_template(
         "bancos/conciliacion_bancaria.html",
@@ -478,8 +501,18 @@ def bancos_conciliacion_bancaria():
         transactions=transactions,
         suggestions=suggestions,
         company=company,
+        companies=companies,
         reconciliation_date=date.today().isoformat(),
     )
+
+
+def _reconciliation_companies() -> list[tuple[str, str]]:
+    """Devuelve las compañías habilitadas visibles para conciliación."""
+    scope = _cash_accessible_companies()
+    query = database.select(Entity.code, Entity.name).where(Entity.enabled.is_(True)).order_by(Entity.code)
+    if scope is not None:
+        query = query.where(Entity.code.in_(scope))
+    return [(fila[0], fila[1] or fila[0]) for fila in database.session.execute(query).all()]
 
 
 @bancos.route("/bank-reconciliation/<bank_account_id>")
@@ -539,8 +572,11 @@ def _parse_reconciliation_item_from_form(
 ) -> tuple[BankReconciliationMatch | None, tuple[str, Decimal] | None, str | None]:
     """Parsea una fila de conciliacion bancaria desde el formulario."""
     target = request.form.get(f"target_{transaction_id}") or ""
-    amount = _form_decimal(f"amount_{transaction_id}")
-    difference = _form_decimal(f"difference_{transaction_id}")
+    try:
+        amount = _form_decimal(f"amount_{transaction_id}")
+        difference = _form_decimal(f"difference_{transaction_id}")
+    except ValueError as exc:
+        return None, None, str(exc)
     if not target or amount <= 0:
         if difference > 0:
             return None, None, _("Una diferencia bancaria requiere un candidato y un monto conciliado.")
@@ -661,7 +697,7 @@ def bancos_reglas_matching():
             amount_tolerance=Decimal(request.form.get("amount_tolerance") or "0"),
             reference_contains=request.form.get("reference_contains") or None,
             priority=int(request.form.get("priority") or 100),
-            is_active=bool(request.form.get("is_active", "1")),
+            is_active=request.form.get("is_active") is not None,
             auto_reconcile=bool(request.form.get("auto_reconcile")),
         )
         database.session.add(rule)
@@ -747,7 +783,15 @@ def bancos_transferencia_nueva():
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     if request.method == "POST":
-        return bancos_pago_nuevo()
+        response = _create_payment_from_request()
+        if response is not None:
+            return response
+        return render_template(
+            "bancos/transferencia_nueva.html",
+            titulo=_("Nueva Transferencia Bancaria") + " - " + APPNAME,
+            payment_type="internal_transfer",
+            companies=obtener_lista_entidades_por_id_razonsocial(),
+        )
 
     return render_template(
         "bancos/transferencia_nueva.html",
@@ -798,10 +842,15 @@ def bancos_banco(bank_id):
 def bancos_cuenta_bancaria_nuevo():
     """Formulario para crear una nueva cuenta bancaria."""
     from cacao_accounting.bancos.forms import FormularioCuentaBancaria
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial, obtener_lista_monedas
+    from cacao_accounting.contabilidad.auxiliares import (
+        obtener_lista_entidades_por_id_razonsocial,
+        obtener_lista_monedas_activas,
+    )
 
     formulario = FormularioCuentaBancaria()
-    formulario.bank_id.choices = [(b[0].id, b[0].name) for b in database.session.execute(database.select(Bank)).all()]
+    formulario.bank_id.choices = [
+        (b[0].id, b[0].name) for b in database.session.execute(database.select(Bank).filter_by(is_active=True)).all()
+    ]
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     submitted_company = request.values.get("company")
     if submitted_company and not any(value == submitted_company for value, _label in formulario.company.choices):
@@ -812,11 +861,13 @@ def bancos_cuenta_bancaria_nuevo():
             # The smart-select route enforces authorization separately; keep
             # valid direct submissions visible to WTForms as well.
             formulario.company.choices.append((submitted_company, company_record.name or submitted_company))
-    formulario.currency.choices = [("", "")] + obtener_lista_monedas()
+    formulario.currency.choices = [("", "")] + obtener_lista_monedas_activas()
     selected_company = request.values.get("company") or None
     formulario.gl_account_id.choices = [("", "")] + [
         (str(account.id), f"{account.code} - {account.name}")
-        for account in database.session.execute(database.select(Accounts).filter_by(account_type="bank")).scalars()
+        for account in database.session.execute(
+            database.select(Accounts).filter_by(account_type="bank", active=True, enabled=True, group=False)
+        ).scalars()
     ]
     formulario.default_naming_series_id.choices = [("", "")] + [
         (str(series.id), series.name) for series in get_active_naming_series("payment_entry", selected_company)
@@ -836,12 +887,13 @@ def bancos_cuenta_bancaria_nuevo():
         default_naming_series_id = request.form.get("default_naming_series_id") or None
         default_external_counter_id = request.form.get("default_external_counter_id") or None
         exige_acceso_compania("cash", company, "crear")
-        if gl_account_id:
-            gl_account = database.session.get(Accounts, gl_account_id)
-            if not gl_account or gl_account.entity != company or gl_account.account_type != "bank":
-                flash(_("Seleccione una cuenta contable de tipo banco para la compañía indicada."), "danger")
-                return render_template(BANCOS_BANCO_CUENTA_NUEVO_HTML, form=formulario, titulo=titulo)
         try:
+            _validate_bank_account_references(
+                company=company,
+                bank_id=request.form.get("bank_id"),
+                currency=request.form.get("currency") or None,
+                gl_account_id=gl_account_id,
+            )
             default_naming_series_id, default_external_counter_id = _validate_bank_account_numbering_defaults(
                 company=company,
                 naming_series_id=default_naming_series_id,
@@ -862,10 +914,15 @@ def bancos_cuenta_bancaria_nuevo():
             default_external_counter_id=default_external_counter_id,
         )
         database.session.add(cuenta)
-        database.session.flush()
-        _ensure_bank_account_counter_mapping(cuenta)
-        _ensure_bank_account_numbering_config(cuenta)
-        database.session.commit()
+        try:
+            database.session.flush()
+            _ensure_bank_account_counter_mapping(cuenta)
+            _ensure_bank_account_numbering_config(cuenta)
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("Ya existe una cuenta bancaria con ese número para la compañía indicada."), "danger")
+            return render_template(BANCOS_BANCO_CUENTA_NUEVO_HTML, form=formulario, titulo=titulo)
         return redirect("/cash_management/bank-account/list")
     return render_template(BANCOS_BANCO_CUENTA_NUEVO_HTML, form=formulario, titulo=titulo)
 
@@ -939,15 +996,21 @@ def bancos_cuenta_bancaria(account_id):
             )
 
     company = registro.company
-    naming_series_options = []
-    for et in set(ENTITY_MAP.values()):
-        series_list = get_active_naming_series(entity_type=et, company=company)
-        for s in series_list:
-            naming_series_options.append({"value": s.id, "label": f"{s.name} ({s.prefix_template})"})
+    naming_series_options: dict[str, list[dict[str, str]]] = {}
+    for payment_type in PAYMENT_TYPES:
+        et = ENTITY_MAP.get(payment_type, "payment_entry")
+        naming_series_options[payment_type] = [
+            {"value": s.id, "label": f"{s.name} ({s.prefix_template})"}
+            for s in get_active_naming_series(entity_type=et, company=company)
+        ]
 
     external_counter_options = []
     counters = (
-        database.session.execute(database.select(ExternalCounter).filter_by(company=company, is_active=True)).scalars().all()
+        database.session.execute(
+            database.select(ExternalCounter).filter_by(company=company, is_active=True, counter_type="checkbook")
+        )
+        .scalars()
+        .all()
     )
     for c in counters:
         external_counter_options.append({"value": c.id, "label": f"{c.name} ({c.next_suggested_formatted})"})
@@ -1042,7 +1105,7 @@ def caja_chica_nuevo():
                 custodian_id=request.form.get("custodian_id") or None,
                 float_amount=_form_decimal("float_amount", "0"),
                 is_default=request.form.get("is_default") == "1",
-                is_active=request.form.get("is_active", "1") != "0",
+                is_active=request.form.get("is_active") is not None,
                 notes=request.form.get("notes") or None,
             )
         except ValueError as exc:
@@ -1076,6 +1139,7 @@ def caja_chica(pc_id):
         saldo=saldo,
         vales_abiertos=vales_abiertos,
         pendiente_reposicion=pendiente_reposicion,
+        can_edit_cash=_cash_can_edit(registro.company),
         titulo=titulo,
     )
 
@@ -1202,7 +1266,13 @@ def caja_chica_vale_nuevo():
         petty_cash_id = request.form.get("petty_cash_id")
         if not company or not petty_cash_id:
             flash(_("Seleccione la compañía y la caja chica."), "danger")
-            return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
+            return render_template(
+                BANCOS_CAJA_CHICA_VALE_NUEVO_HTML,
+                form=formulario,
+                fondos=fondos,
+                titulo=titulo,
+                vale=_voucher_form_state(fondos),
+            )
         exige_acceso_compania("cash", company, "crear")
         try:
             create_petty_cash_voucher(
@@ -1219,12 +1289,35 @@ def caja_chica_vale_nuevo():
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
-            return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
+            return render_template(
+                BANCOS_CAJA_CHICA_VALE_NUEVO_HTML,
+                form=formulario,
+                fondos=fondos,
+                titulo=titulo,
+                vale=_voucher_form_state(fondos),
+            )
         flash(_("Vale de caja chica creado."), "success")
         return redirect(url_for("bancos.caja_chica_vale_lista"))
 
     # Prellenar dimensiones segun la compania seleccionada (requiere JS/alpine del cliente)
     return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
+
+
+def _voucher_form_state(fondos: list) -> SimpleNamespace:
+    """Rehidrata los selectores del vale con los valores del POST rechazado."""
+    petty_cash_id = request.form.get("petty_cash_id") or ""
+    fondo = next((registro for registro in fondos if registro.id == petty_cash_id), None)
+    return SimpleNamespace(
+        company=request.form.get("company") or "",
+        naming_series_id=request.form.get("naming_series") or "",
+        petty_cash_id=petty_cash_id,
+        transaction_currency=fondo.currency if fondo else "",
+        posting_date=None,
+        amount=None,
+        cost_center_code=request.form.get("cost_center_code") or "",
+        unit_code=request.form.get("unit_code") or "",
+        project_code=request.form.get("project_code") or "",
+    )
 
 
 @bancos.route("/petty-cash-voucher/<v_id>/status", methods=["POST"])
@@ -1289,47 +1382,68 @@ def caja_chica_gasto_nuevo():
     fondos = _obtener_fondos_compania()
     formulario.petty_cash_id.choices = [(f.id, f"{f.company} - {f.name}") for f in fondos]
     voucher_id = request.args.get("voucher_id") or request.form.get("voucher_id") or ""
-    voucher = database.session.get(PettyCashVoucher, voucher_id) if voucher_id else None
+    voucher = _voucher_for_expense_form(voucher_id, fondos)
     if voucher and request.method == "GET":
-        formulario.company.data = voucher.company
-        formulario.petty_cash_id.data = voucher.petty_cash_id
-        formulario.voucher_id.data = voucher.id
-        formulario.beneficiary.data = voucher.delivered_to
-        formulario.concept.data = voucher.concept
-        formulario.amount.data = str(voucher.amount)
-        formulario.cost_center_code.data = voucher.cost_center_code
+        _prefill_expense_form_from_voucher(formulario, voucher)
     titulo = _("Nuevo Gasto de Caja Chica") + " - " + APPNAME
 
     if formulario.validate_on_submit() or request.method == "POST":
-        company = request.form.get("company")
-        petty_cash_id = request.form.get("petty_cash_id")
-        if not company or not petty_cash_id:
-            flash(_("Seleccione la compañía y la caja chica."), "danger")
-            return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
-        exige_acceso_compania("cash", company, "crear")
-        try:
-            create_petty_cash_expense(
-                company=company,
-                petty_cash_id=petty_cash_id,
-                expense_account_code=request.form.get("expense_account_code") or "",
-                concept=request.form.get("concept") or "",
-                amount=_form_decimal("amount", "0"),
-                cost_center_code=request.form.get("cost_center_code") or "",
-                beneficiary=request.form.get("beneficiary") or None,
-                unit_code=request.form.get("unit_code") or None,
-                project_code=request.form.get("project_code") or None,
-                posted_date=date.fromisoformat(request.form.get("posting_date") or date.today().isoformat()),
-                voucher_id=request.form.get("voucher_id") or None,
-                remarks=request.form.get("remarks") or None,
-                actor_id=str(current_user.id),
-            )
-        except ValueError as exc:
-            flash(_(str(exc)), "danger")
-            return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
-        flash(_("Gasto de caja chica registrado y contabilizado."), "success")
-        return redirect(url_for("bancos.caja_chica_gasto_lista"))
+        return _submit_petty_cash_expense_form(formulario, fondos, titulo)
 
     return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
+
+
+def _voucher_for_expense_form(voucher_id, funds):
+    """Load a voucher only when its company and fund are visible to the user."""
+    voucher = database.session.get(PettyCashVoucher, voucher_id) if voucher_id else None
+    if voucher is None:
+        return None
+    exige_acceso_compania("cash", voucher.company or "", "crear")
+    if voucher.petty_cash_id not in {fund.id for fund in funds}:
+        abort(403)
+    return voucher
+
+
+def _prefill_expense_form_from_voucher(formulario, voucher) -> None:
+    """Copy authorized voucher values into the new expense form."""
+    formulario.company.data = voucher.company
+    formulario.petty_cash_id.data = voucher.petty_cash_id
+    formulario.voucher_id.data = voucher.id
+    formulario.beneficiary.data = voucher.delivered_to
+    formulario.concept.data = voucher.concept
+    formulario.amount.data = str(voucher.amount)
+    formulario.cost_center_code.data = voucher.cost_center_code
+
+
+def _submit_petty_cash_expense_form(formulario, funds, title):
+    """Validate company scope and submit the expense form to the posting service."""
+    company = request.form.get("company")
+    petty_cash_id = request.form.get("petty_cash_id")
+    if not company or not petty_cash_id:
+        flash(_("Seleccione la compañía y la caja chica."), "danger")
+        return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=funds, titulo=title)
+    exige_acceso_compania("cash", company, "crear")
+    try:
+        create_petty_cash_expense(
+            company=company,
+            petty_cash_id=petty_cash_id,
+            expense_account_code=request.form.get("expense_account_code") or "",
+            concept=request.form.get("concept") or "",
+            amount=_form_decimal("amount", "0"),
+            cost_center_code=request.form.get("cost_center_code") or "",
+            beneficiary=request.form.get("beneficiary") or None,
+            unit_code=request.form.get("unit_code") or None,
+            project_code=request.form.get("project_code") or None,
+            posted_date=date.fromisoformat(request.form.get("posting_date") or date.today().isoformat()),
+            voucher_id=request.form.get("voucher_id") or None,
+            remarks=request.form.get("remarks") or None,
+            actor_id=str(current_user.id),
+        )
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+        return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=funds, titulo=title)
+    flash(_("Gasto de caja chica registrado y contabilizado."), "success")
+    return redirect(url_for("bancos.caja_chica_gasto_lista"))
 
 
 @bancos.route("/petty-cash-reconciliation/list")
@@ -1468,11 +1582,42 @@ def caja_chica_reposicion_lista():
     if scope is not None:
         query = query.where(PettyCashReplenishment.company.in_(scope))
     registros = list(database.session.execute(query).scalars())
+    fondos = _petty_cash_fund_labels({registro.petty_cash_id for registro in registros})
+    bank_accounts: dict[str, list[tuple[str, str]]] = {}
+    company_codes = {registro.company for registro in registros if registro.company}
+    if company_codes:
+        cuentas = (
+            database.session.execute(
+                database.select(BankAccount)
+                .where(BankAccount.company.in_(company_codes), BankAccount.is_active.is_(True))
+                .order_by(BankAccount.account_name)
+            )
+            .scalars()
+            .all()
+        )
+        for cuenta in cuentas:
+            bank_accounts.setdefault(cuenta.company, []).append(
+                (cuenta.id, f"{cuenta.account_name} - {cuenta.account_no or ''}".strip())
+            )
     return render_template(
         "bancos/caja_chica_reposicion_lista.html",
         registros=registros,
+        fondos=fondos,
+        bank_accounts=bank_accounts,
         titulo=_("Reposiciones de Caja Chica") + " - " + APPNAME,
     )
+
+
+def _petty_cash_fund_labels(fund_ids: set[str]) -> dict[str, tuple[str, str]]:
+    """Resuelve nombre y compañía de los fondos usados por la lista."""
+    if not fund_ids:
+        return {}
+    filas = database.session.execute(
+        database.select(PettyCashAccount.id, PettyCashAccount.name, PettyCashAccount.company).where(
+            PettyCashAccount.id.in_(fund_ids)
+        )
+    ).all()
+    return {fila[0]: (fila[1], fila[2]) for fila in filas}
 
 
 @bancos.route("/petty-cash-replenishment/new", methods=["GET", "POST"])
@@ -1483,7 +1628,24 @@ def caja_chica_reposicion_nueva():
     """Crea una solicitud de reposicion con gastos aun no repuestos."""
     fondos = _obtener_fondos_compania()
     selected_fund = request.form.get("petty_cash_id") or request.args.get("petty_cash_id")
+    # El POST valida la compañía, pero el GET consulta los gastos antes de
+    # cualquier autorización. Un fondo fuera del alcance no debe revelar sus
+    # gastos ni siquiera con un petty_cash_id conocido.
+    if selected_fund and selected_fund not in {fondo.id for fondo in fondos}:
+        abort(403)
     gastos = petty_cash_expenses_available_for_replenishment(selected_fund) if selected_fund else []
+    selected_company = ""
+    company_label = ""
+    selected_fund_label = ""
+    selected_currency = ""
+    if selected_fund:
+        fondo = next((registro for registro in fondos if registro.id == selected_fund), None)
+        if fondo:
+            selected_company = fondo.company or ""
+            selected_fund_label = f"{fondo.company} - {fondo.name}"
+            selected_currency = fondo.currency or ""
+            entidad = database.session.execute(database.select(Entity).filter_by(code=selected_company)).scalar_one_or_none()
+            company_label = f"{selected_company} - {entidad.name}" if entidad else selected_company
     if request.method == "POST":
         company = request.form.get("company") or ""
         exige_acceso_compania("cash", company, "crear")
@@ -1506,6 +1668,10 @@ def caja_chica_reposicion_nueva():
         fondos=fondos,
         gastos=gastos,
         selected_fund=selected_fund,
+        selected_company=selected_company,
+        company_label=company_label,
+        selected_fund_label=selected_fund_label,
+        selected_currency=selected_currency,
         titulo=_("Nueva Reposición de Caja Chica") + " - " + APPNAME,
     )
 
@@ -1518,9 +1684,11 @@ def caja_chica_reposicion_estado(r_id):
     reposicion = database.session.get(PettyCashReplenishment, r_id)
     if not reposicion:
         abort(404)
-    exige_acceso_compania("cash", reposicion.company or "", "editar")
+    new_status = request.form.get("status") or ""
+    action = "autorizar" if new_status == "aprobado" else "editar"
+    exige_acceso_compania("cash", reposicion.company or "", action)
     try:
-        set_petty_cash_replenishment_status(reposicion, request.form.get("status") or "", actor_id=str(current_user.id))
+        set_petty_cash_replenishment_status(reposicion, new_status, actor_id=str(current_user.id))
     except ValueError as exc:
         flash(_(str(exc)), "danger")
     else:
@@ -1560,7 +1728,7 @@ def caja_chica_gasto_anular(e_id):
     expense = database.session.get(PettyCashExpense, e_id)
     if not expense:
         abort(404)
-    exige_acceso_compania("cash", expense.company or "", "editar")
+    exige_acceso_compania("cash", expense.company or "", "anular")
     try:
         from cacao_accounting.bancos.services import cancel_petty_cash_expense
 
@@ -1579,12 +1747,15 @@ def bancos_pago_nuevo():
     """Formulario para crear un nuevo pago."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
+    source_rows = _payment_source_rows_from_request()
+    for source_row in source_rows:
+        source_document = source_row["document"]
+        exige_acceso_compania("cash", getattr(source_document, "company", None), "consultar")
+
     if request.method == "POST":
         response = _create_payment_from_request()
         if response is not None:
             return response
-
-    source_rows = _payment_source_rows_from_request()
 
     initial_payment = {}
     if source_rows:
@@ -1715,10 +1886,20 @@ def bancos_pago_submit(payment_id: str):
         if ApprovalEngine.handle_submission(registro, current_user, "Pago"):
             return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
 
+        # Revalida al contabilizar: una cuenta pudo desactivarse o convertirse
+        # en agrupadora después de guardar el borrador.
+        _validate_payment_gl_accounts(
+            company=registro.company,
+            payment_type=registro.payment_type,
+            bank_account_id=registro.bank_account_id,
+            target_bank_account_id=registro.target_bank_account_id,
+            paid_from_account_id=registro.paid_from_account_id,
+            paid_to_account_id=registro.paid_to_account_id,
+        )
         submit_document(registro)  # type: ignore[misc]
         log_submit(registro)
         database.session.commit()
-    except PostingError as exc:  # type: ignore[misc]
+    except (PostingError, ValueError) as exc:  # type: ignore[misc]
         database.session.rollback()
         flash(_(str(exc)), "danger")
         return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))

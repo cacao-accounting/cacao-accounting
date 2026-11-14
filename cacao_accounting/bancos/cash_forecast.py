@@ -24,6 +24,7 @@ from cacao_accounting.contabilidad.auxiliares import (
 )
 from cacao_accounting.bancos.cash_forecast_service import (
     CashForecastConversionError,
+    _resolve_company_currency,
     get_cash_forecast_matrix,
     get_forecast_comparison,
 )
@@ -141,6 +142,12 @@ def _handle_cash_forecast_new_post(company: str):
 
     if not version or not fiscal_year_id or not periodicity:
         flash(_("Todos los campos obligatorios deben ser completados."), "danger")
+        return None
+
+    from cacao_accounting.bancos.cash_forecast_service import CASH_FORECAST_PERIODICITIES
+
+    if periodicity not in CASH_FORECAST_PERIODICITIES:
+        flash(_("La periodicidad debe ser semanal o mensual."), "danger")
         return None
 
     fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
@@ -452,6 +459,7 @@ def cash_forecast_compare():
         base_forecast=base_forecast,
         compare_forecast=compare_forecast,
         comparison=comparison,
+        currency=_resolve_company_currency(str(company or "")),
         titulo=_("Comparación de Escenarios de Flujo de Caja"),
     )
 

@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block contenido %}
+{% set zone_labels = {"Real": _("Real"), "Current": _("Actual"), "Projected": _("Proyectado")} %}
+{% set forecast_status_labels = {"Draft": _("Borrador"), "Approved": _("Aprobado"), "Closed": _("Cerrado"), "Archived": _("Archivado")} %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Caja y Bancos") }}</a></li>
@@ -36,7 +38,7 @@
         <select name="base_id" id="base_id" class="form-select form-select-sm" required>
           <option value="" disabled selected>{{ _("Seleccione escenario base") }}</option>
           {% for f in forecasts %}
-          <option value="{{ f.id }}" {% if f.id == base_id %}selected{% endif %}>{{ f.version }} ({{ f.status }})</option>
+          <option value="{{ f.id }}" {% if f.id == base_id %}selected{% endif %}>{{ f.version }} ({{ forecast_status_labels.get(f.status, f.status) }})</option>
           {% endfor %}
         </select>
       </div>
@@ -46,7 +48,7 @@
         <select name="compare_id" id="compare_id" class="form-select form-select-sm" required>
           <option value="" disabled selected>{{ _("Seleccione escenario a comparar") }}</option>
           {% for f in forecasts %}
-          <option value="{{ f.id }}" {% if f.id == compare_id %}selected{% endif %}>{{ f.version }} ({{ f.status }})</option>
+          <option value="{{ f.id }}" {% if f.id == compare_id %}selected{% endif %}>{{ f.version }} ({{ forecast_status_labels.get(f.status, f.status) }})</option>
           {% endfor %}
         </select>
       </div>
@@ -65,12 +67,12 @@
       <div class="col-md-6 border-end">
         <span class="text-muted d-block small">{{ _("Escenario Base (A)") }}</span>
         <strong class="fs-5 text-primary">{{ base_forecast.version }}</strong>
-        <span class="badge bg-secondary d-inline-block">{{ base_forecast.status }}</span>
+        <span class="badge bg-secondary d-inline-block">{{ forecast_status_labels.get(base_forecast.status, base_forecast.status) }}</span>
       </div>
       <div class="col-md-6">
         <span class="text-muted d-block small">{{ _("Escenario a Comparar (B)") }}</span>
         <strong class="fs-5 text-success">{{ compare_forecast.version }}</strong>
-        <span class="badge bg-secondary d-inline-block">{{ compare_forecast.status }}</span>
+        <span class="badge bg-secondary d-inline-block">{{ forecast_status_labels.get(compare_forecast.status, compare_forecast.status) }}</span>
       </div>
     </div>
   </div>
@@ -93,21 +95,21 @@
         <tr>
           <td>
             <strong>{{ row.period }}</strong>
-            <span class="badge bg-light text-dark small ms-1">{{ row.zone }}</span>
+            <span class="badge bg-light text-dark small ms-1">{{ zone_labels.get(row.zone, row.zone) }}</span>
           </td>
-          <td class="text-end text-primary">{{ format_money_with_currency(row.base_projected) }}</td>
-          <td class="text-end text-success">{{ format_money_with_currency(row.compare_projected) }}</td>
+          <td class="text-end text-primary">{{ format_money_with_currency(row.base_projected, currency) }}</td>
+          <td class="text-end text-success">{{ format_money_with_currency(row.compare_projected, currency) }}</td>
           <td class="text-end fw-bold {% if row.variance > 0 %}text-success{% elif row.variance < 0 %}text-danger{% endif %}">
-            {{ format_money_with_currency(row.variance) }}
+            {{ format_money_with_currency(row.variance, currency) }}
           </td>
           <td class="text-end text-muted small">
             {% if row.variance_manual_inflow != 0 %}
-            {{ "+" if row.variance_manual_inflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_inflow) }}
+            {{ "+" if row.variance_manual_inflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_inflow, currency) }}
             {% else %}-{% endif %}
           </td>
           <td class="text-end text-muted small">
             {% if row.variance_manual_outflow != 0 %}
-            {{ "+" if row.variance_manual_outflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_outflow) }}
+            {{ "+" if row.variance_manual_outflow > 0 else "" }}{{ format_money_with_currency(row.variance_manual_outflow, currency) }}
             {% else %}-{% endif %}
           </td>
         </tr>

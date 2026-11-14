@@ -3,7 +3,7 @@
 {% from "reportes/report_macros.html" import period_range_field %}
 {% block contenido %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ report_title }}</li>
@@ -17,7 +17,7 @@
   <div class="p-3">
     <form method="get" class="row g-2 mb-3">
       <div class="col-md-2">
-        <input name="company" value="{{ company or request.args.get('company', '') }}" class="form-control" placeholder="{{ _('Compañía') }}">
+        <input name="company" id="report-company" value="{{ company or request.args.get('company', '') }}" class="form-control" placeholder="{{ _('Compañía') }}">
       </div>
       <div class="col-md-2">
         <input name="party_type" value="{{ request.args.get('party_type', '') }}" class="form-control" placeholder="{{ _('Tipo tercero') }}">

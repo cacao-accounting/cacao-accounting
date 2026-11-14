@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_gasto_nuevo.html"></div>
@@ -30,6 +30,7 @@
   </div>
   <form method="post" id="form-main" class="row g-3 p-3">
     {{ form.csrf_token }}
+      <input type="hidden" name="voucher_id" value="{{ form.voucher_id.data or request.args.get('voucher_id', '') }}">
     <div class="col-md-4">
       <label class="form-label" for="company">{{ _('Compañía') }} <span class="text-danger">*</span></label>
       {{ tf_macros.smart_select(
@@ -110,7 +111,8 @@
           label=_("Centro de costo"),
           filters={"company": {"selector": "#company"}},
           filter_sources=["#company"],
-          required_filters=["company"]
+          required_filters=["company"],
+          required=True
       ) }}
     </div>
     <div class="col-md-4">

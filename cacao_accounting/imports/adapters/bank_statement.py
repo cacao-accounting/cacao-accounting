@@ -29,7 +29,14 @@ class BankStatementAdapter(BaseImportAdapter):
 
     @staticmethod
     def _optional_amount(value: Any) -> Decimal | None:
-        """Convierte una columna vacía o cero en un lado bancario ausente."""
+        """Convierte una columna vacía o cero en un lado bancario ausente.
+
+        Los importes con separadores ambiguos se rechazan en lugar de
+        interpretarse: un importe con milés por convención europea que se
+        lea como decimales corrompe el extracto por un factor de 1000.
+        ``1.000,00`` y ``1,234.56`` son inequívocos; ``1.000`` y ``1,000``
+        no lo son y abortan la fila con un error de negocio.
+        """
         if value is None or (isinstance(value, str) and value == ""):
             return None
         normalized = str(value).strip().replace(" ", "")
@@ -45,6 +52,10 @@ class BankStatementAdapter(BaseImportAdapter):
             normalized = normalized.replace(",", ".")
         elif normalized.count(".") > 1:
             raise InvalidOperation(_("Separador de miles ambiguo"))
+        elif "." in normalized:
+            decimal_part = normalized.rsplit(".", 1)[1]
+            if len(decimal_part) == 3:
+                raise InvalidOperation(_("Separador de miles ambiguo"))
         amount = Decimal(normalized)
         if not amount.is_finite():
             raise ValueError(_("El monto debe ser finito."))
@@ -71,9 +82,9 @@ class BankStatementAdapter(BaseImportAdapter):
         for field in ("deposit", "withdrawal"):
             try:
                 amounts[field] = self._optional_amount(row_data.get(field))
-            except (InvalidOperation, TypeError, ValueError):
+            except (InvalidOperation, TypeError, ValueError) as exc:
                 amounts[field] = None
-                errors.append(f"Monto bancario inválido en columna '{field}': {row_data.get(field)}")
+                errors.append(f"Monto bancario inválido en columna '{field}': {row_data.get(field)} ({exc})")
             else:
                 amt = amounts[field]
                 if amt is not None and amt < 0:
@@ -120,6 +131,10 @@ class BankStatementAdapter(BaseImportAdapter):
                     posting_date = date.fromisoformat(posting_date)
                 except ValueError as exc:
                     raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
+            deposit = self._optional_amount(row.get("deposit"))
+            withdrawal = self._optional_amount(row.get("withdrawal"))
+            if (deposit is not None and deposit < 0) or (withdrawal is not None and withdrawal < 0):
+                raise ValueError(_("El monto bancario no puede ser negativo."))
             transactions.append(
                 {
                     "bank_account_id": str(row.get("bank_account_id", "")),
@@ -127,11 +142,11 @@ class BankStatementAdapter(BaseImportAdapter):
                     "posting_date": posting_date,
                     "reference_number": str(row.get("reference_number", "")),
                     "description": str(row.get("description", "")),
-                    "deposit": self._optional_amount(row.get("deposit")),
-                    "withdrawal": self._optional_amount(row.get("withdrawal")),
+                    "deposit": deposit,
+                    "withdrawal": withdrawal,
                 }
             )
-            if transactions[-1]["deposit"] is not None and transactions[-1]["withdrawal"] is not None:
+            if deposit is not None and withdrawal is not None:
                 raise ValueError(_("Una fila bancaria no puede contener depósito y retiro simultáneamente."))
         return transactions
 

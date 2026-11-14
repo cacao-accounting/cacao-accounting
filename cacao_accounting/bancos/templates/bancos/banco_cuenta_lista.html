@@ -6,7 +6,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/banco_cuenta_lista.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
@@ -17,9 +17,12 @@
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
     <h5 class="ca-card-title"><i class="bi bi-credit-card"></i> {{ _('Listado de Cuentas Bancarias.') }}</h5>
+    {% set acceso = permisos(modulo=id_modulo("cash"), usuario=usuario.id) %}
+    {% if acceso.crear %}
     <a href="{{ url_for('bancos.bancos_cuenta_bancaria_nuevo') }}" class="btn btn-sm btn-primary">
       <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
+    {% endif %}
   </div>
   {{ macros.list_filters(show_status=False, placeholder=_("Buscar por nombre o referencia...")) }}
   <table class="ca-table">

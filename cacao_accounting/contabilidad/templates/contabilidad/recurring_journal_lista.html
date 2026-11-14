@@ -40,7 +40,6 @@
           <th>{{ _('Compañía') }}</th>
           <th>{{ _('Estado') }}</th>
           <th>{{ _('Frecuencia') }}</th>
-          <th>{{ _('Próxima Aplicación') }}</th>
           <th>{{ _('Acciones') }}</th>
         </tr>
       </thead>
@@ -64,7 +63,6 @@
             {% endif %}
           </td>
           <td>{{ _(item.frequency) }}</td>
-          <td>{{ item.next_application_date or '-' }}</td>
           <td>
             <a href="{{ url_for('contabilidad.ver_plantilla_recurrente', identifier=item.id) }}" class="btn btn-outline-primary btn-sm">
               <i class="bi bi-eye"></i>
@@ -73,7 +71,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-4">
+          <td colspan="6" class="text-center text-muted py-4">
             {{ _('No se encontraron plantillas de comprobantes recurrentes.') }}
           </td>
         </tr>

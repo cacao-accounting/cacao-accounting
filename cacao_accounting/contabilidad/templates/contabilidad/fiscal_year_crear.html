@@ -2,7 +2,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
@@ -24,6 +24,17 @@
   <div class="p-4">
     <form method="post" id="form-fiscal-year" class="row g-3">
       {{ form.csrf_token }}
+      {% if form.errors %}
+      <div class="col-12">
+        <div class="alert alert-danger py-2 mb-0">
+          <ul class="mb-0">
+            {% for field_errors in form.errors.values() %}
+              {% for error in field_errors %}<li>{{ error }}</li>{% endfor %}
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
       <div class="col-md-4">
         <label class="form-label" for="id-anno">{{ _('Código / Nombre') }} <span class="text-danger">*</span></label>
         {{ form.id(class="form-control form-control-sm", id="id-anno", required=True) }}

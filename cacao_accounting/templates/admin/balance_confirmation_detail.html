@@ -78,7 +78,7 @@
         <h5 class="ca-card-title mb-0"><i class="bi bi-list-columns me-1"></i> {{ _('Partidas Incluidas en Snapshot') }}</h5>
       </div>
       <div class="p-4">
-        {% if snapshot["items"] %}
+        {% if snapshot.get("items") %}
           <div class="table-responsive">
             <table class="table table-bordered table-striped align-middle">
               <caption class="visually-hidden">{{ _('Partidas Incluidas en Snapshot') }}</caption>
@@ -94,7 +94,7 @@
                 </tr>
               </thead>
               <tbody>
-                {% for item in snapshot["items"] %}
+                {% for item in snapshot.get("items", []) %}
                   <tr>
                     <td>{{ item.document_type }}</td>
                     <td class="fw-bold">{{ item.document_no }}</td>
@@ -112,7 +112,7 @@
           <div class="ca-card bg-light p-3 mt-3">
             <h6 class="fw-bold mb-2"><i class="bi bi-wallet2 me-1"></i> {{ _('Totales por Moneda') }}</h6>
             <div class="row">
-              {% for currency, total_val in snapshot["totals"].items() %}
+              {% for currency, total_val in snapshot.get("totals", {}).items() %}
                 <div class="col-md-6 mb-2">
                   <span class="text-muted small">{{ _('Total Pendiente') }} ({{ currency }}):</span>
                   <strong class="fs-5 ms-2 {% if total_val|float < 0 %}text-danger{% else %}text-primary{% endif %}">

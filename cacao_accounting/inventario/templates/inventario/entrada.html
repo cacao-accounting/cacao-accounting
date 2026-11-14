@@ -5,7 +5,7 @@
 {% if TESTING %}<div
   data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/entrada.html">
 </div>{% endif %}
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
           class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
@@ -38,14 +38,14 @@
 {{ macros.detail_nav_buttons(
             url_for('inventario.inventario_entrada_lista'),
             url_for('inventario.inventario_entrada_nuevo')) }}
-{{ macros.document_print_button("stock_entry", registro.id) }}
+{{ macros.document_print_button("stock_entry", registro.id, company=registro.company) }}
 {{ macros.document_create_actions("stock_entry", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}
 {{ dv_macros.detail_header(
     registro.document_no or registro.id,
     _('Movimiento de Inventario'),
-    registro.docstatus,
+    document_status_info('stock_entry', registro),
     buttons,
     [
       (_('Número'), registro.document_no),

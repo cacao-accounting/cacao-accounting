@@ -536,6 +536,7 @@
             source_id: '',
             source_item_id: '',
             allowed_uoms: [],
+            uom_factors: {},
             ...config.linePrototype
           };
         },
@@ -604,6 +605,7 @@
 
         _applyItemUom(line, item) {
           line.allowed_uoms = normalizeAllowedUoms(item.allowed_uoms, item.default_uom);
+          line.uom_factors = item.uom_factors || {};
           const allowedUomSet = new Set(line.allowed_uoms);
           if (line.allowed_uoms.length && !allowedUomSet.has(line.uom)) {
             line.uom = line.allowed_uoms[0];
@@ -618,7 +620,14 @@
         },
 
         onUomChange(line, uom) {
+          const oldFactor = Number(line.uom_factors?.[line.uom]);
+          const newFactor = Number(line.uom_factors?.[uom]);
+          if (oldFactor > 0 && newFactor > 0) {
+            line.qty = toNumber(line.qty) * oldFactor / newFactor;
+            line.rate = toNumber(line.rate) * newFactor / oldFactor;
+          }
           line.uom = uom;
+          this.calcAmount(line);
           return this.refreshCatalogPrice(line);
         },
 
@@ -866,7 +875,10 @@
             const data = await response.json();
             if (requestId !== taxPreviewRequestId) return;
             if (!response.ok) {
-              this.taxCharges.error = data?.message || i18n.errorTaxPreview || 'No se pudo calcular.';
+              const detail = Array.isArray(data?.errors) && data.errors.length
+                ? data.errors.join(' ')
+                : (data?.message || i18n.errorTaxPreview || 'No se pudo calcular.');
+              this.taxCharges.error = detail;
               this.taxCharges.loading = false;
               return;
             }
@@ -904,6 +916,13 @@
         },
 
         applyTaxPreviewData(data) {
+          const errors = Array.isArray(data.errors) ? data.errors.filter(Boolean) : [];
+          if (errors.length) {
+            this.taxCharges.error = errors.join(' ');
+            this.taxCharges.loading = false;
+            return;
+          }
+          this.taxCharges.error = '';
           this.taxCharges.profile = data.profile || null;
           this.taxCharges.summary = data.summary || this.taxCharges.summary;
           this.taxCharges.lines = Array.isArray(data.tax_lines) ? data.tax_lines : [];

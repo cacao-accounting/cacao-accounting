@@ -4,22 +4,25 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from html import escape
+from pathlib import Path
 from typing import Any
+from urllib.parse import SplitResult, unquote, urlsplit
 
-from flask import current_app, has_request_context, request
+from flask import abort, current_app, has_request_context, request
 from werkzeug.exceptions import HTTPException
-from flask_weasyprint import HTML
+from weasyprint import HTML
+from weasyprint.urls import URLFetcher, URLFetcherResponse, path2url
 from jinja2 import BaseLoader, StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
 from sqlalchemy import select
 
-from cacao_accounting.database import database
+from cacao_accounting.database import Entity, database
 from cacao_accounting.printing.exceptions import (
     PrintPermissionError,
     PrintTemplateNotFoundError,
+    PrintableDocumentNotRegisteredError,
     TemplateValidationError,
 )
 from cacao_accounting.printing.models import (
@@ -28,7 +31,7 @@ from cacao_accounting.printing.models import (
     PrintTemplateVersion,
     PublicDocumentValidation,
 )
-from cacao_accounting.printing.registry import PrintableDocumentDefinition, get_printable_document
+from cacao_accounting.printing.registry import PRINTABLE_DOCUMENTS, get_printable_document
 from cacao_accounting.printing.settings import external_validation_base_url, external_validation_enabled
 from cacao_accounting.printing.validation import ValidationService
 from cacao_accounting.printing.validators import validate_css_safety, validate_template_security
@@ -37,12 +40,55 @@ from cacao_accounting.printing.validators import validate_css_safety, validate_t
 from cacao_accounting.i18n import _
 
 
-@dataclass(frozen=True)
-class TemplateValidationResult:
-    """Result returned by template validation."""
+class _PrintPDFURLFetcher(URLFetcher):
+    """Fetch inline data and app-owned static files, never network resources."""
 
-    valid: bool
-    message: str = ""
+    def __init__(self, base_url: str, static_folder: str | None) -> None:
+        super().__init__(allowed_protocols={"data"})
+        self.base = urlsplit(base_url)
+        self.static_root = Path(static_folder).resolve() if static_folder else None
+        self.file_fetcher = URLFetcher(allowed_protocols={"file"})
+
+    def __call__(self, url: str) -> URLFetcherResponse:
+        """Resolve an approved resource or reject the request before I/O."""
+        parts = urlsplit(url)
+        if parts.scheme.lower() == "data":
+            return super().__call__(url)
+        if not self._has_application_origin(parts):
+            raise ValueError("PDF resource is outside the application static assets")
+
+        static_path = self._static_path(parts.path)
+        if static_path is None:
+            raise ValueError("PDF resource is outside the application static assets")
+        return self.file_fetcher(path2url(str(static_path)))
+
+    def _has_application_origin(self, parts: SplitResult) -> bool:
+        """Return whether a resource URL shares the request origin."""
+        if parts.scheme.lower() not in {"http", "https"} or not parts.hostname or parts.username or parts.password:
+            return False
+        return self._origin(parts) == self._origin(self.base)
+
+    @staticmethod
+    def _origin(parts: SplitResult) -> tuple[str, str, int]:
+        """Normalize the default HTTP port when comparing origins."""
+        scheme = parts.scheme.lower()
+        try:
+            port = parts.port
+        except ValueError:
+            return scheme, (parts.hostname or "").lower(), -1
+        if port is None:
+            port = 443 if scheme == "https" else 80
+        return scheme, (parts.hostname or "").lower(), port
+
+    def _static_path(self, url_path: str) -> Path | None:
+        """Map only contained files beneath Flask's `/static/` directory."""
+        static_prefix = "/static/"
+        if self.static_root is None or not url_path.startswith(static_prefix):
+            return None
+        candidate = (self.static_root / unquote(url_path[len(static_prefix) :])).resolve()
+        if not candidate.is_relative_to(self.static_root) or not candidate.is_file():
+            return None
+        return candidate
 
 
 class PrintService:
@@ -69,6 +115,8 @@ class PrintService:
         export_url: str = "/",
     ) -> str:
         """Render preview HTML for a sample or real document."""
+        if not sample and get_printable_document(document_type) is not None:
+            self._authorize_registered_print_attempt(document_type, user, company_code)
         template: PrintTemplate | None = None
         try:
             context = self._build_context(document_type, document_id, user, company_code, sample)
@@ -95,7 +143,14 @@ class PrintService:
                 output_format="html_preview",
             )
             return html
-        except (PrintPermissionError, PrintTemplateNotFoundError, TemplateError, ValueError) as exc:
+        except (
+            PrintableDocumentNotRegisteredError,
+            PrintPermissionError,
+            PrintTemplateNotFoundError,
+            TemplateValidationError,
+            TemplateError,
+            ValueError,
+        ) as exc:
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -117,6 +172,8 @@ class PrintService:
         template_id: str | int | None = None,
     ) -> bytes:
         """Render a registered document as PDF bytes."""
+        if get_printable_document(document_type) is not None:
+            self._authorize_registered_print_attempt(document_type, user, company_code)
         template: PrintTemplate | None = None
         try:
             context = self._build_context(document_type, document_id, user, company_code, sample=False)
@@ -128,7 +185,7 @@ class PrintService:
             )
             rendered_body = self.env.from_string(template.template_body).render(**context)
             html_string = self.build_print_html(rendered_body, template.stylesheet_body)
-            pdf = HTML(string=html_string, base_url=self._base_url()).write_pdf()
+            pdf = self._render_pdf_document(html_string)
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -138,7 +195,14 @@ class PrintService:
                 output_format="pdf",
             )
             return bytes(pdf)
-        except (PrintPermissionError, PrintTemplateNotFoundError, TemplateError, ValueError) as exc:
+        except (
+            PrintableDocumentNotRegisteredError,
+            PrintPermissionError,
+            PrintTemplateNotFoundError,
+            TemplateValidationError,
+            TemplateError,
+            ValueError,
+        ) as exc:
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -164,19 +228,20 @@ class PrintService:
         doc_def = get_printable_document(document_type)
         if doc_def is None:
             raise TemplateValidationError(
-                _("Document type %(document_type)s is not registered.") % {"document_type": document_type}
+                _("Tipo de documento %(document_type)s no registrado.") % {"document_type": document_type}
             )
 
         try:
             context = doc_def["sample_context_builder"]()
             self._inject_validation_context(context, document_type, "sample", None)
             rendered = self.env.from_string(template_body).render(**context)
+            validate_template_security(rendered)
             if not rendered.strip():
                 raise TemplateValidationError(_("La plantilla renderizada esta vacia."))
             if "validation.qr_data_uri" in template_body:
                 ValidationService().get_qr_data_uri("https://cacaocontent.com/public/validate_doc/sample")
             if validate_pdf:
-                HTML(string=self.build_print_html(rendered, stylesheet_body), base_url=self._base_url()).write_pdf()
+                self._render_pdf_document(self.build_print_html(rendered, stylesheet_body))
         except RuntimeError as exc:
             raise TemplateValidationError(str(exc)) from exc
         except TemplateError as exc:
@@ -269,6 +334,8 @@ class PrintService:
         export_url: str = "/",
     ) -> str:
         """Build the final standalone HTML document with embedded CSS."""
+        validate_template_security(rendered_body)
+        validate_css_safety(stylesheet_body)
         css = stylesheet_body or ""
         safe_return_url = escape(return_url or "/", quote=True)
         safe_export_url = escape(export_url or "/", quote=True)
@@ -321,8 +388,8 @@ class PrintService:
             PrintJobLog(
                 company_code=company_code,
                 user_id=user_id,
-                document_type=document_type,
-                document_id=document_id,
+                document_type=document_type[:80],
+                document_id=document_id[:26],
                 template_id=template.id if template else None,
                 template_version=template.version if template else None,
                 output_format=output_format,
@@ -342,18 +409,61 @@ class PrintService:
     ) -> dict[str, Any]:
         doc_def = get_printable_document(document_type)
         if doc_def is None:
-            raise ValueError(_("Tipo de documento %(document_type)s no registrado.") % {"document_type": document_type})
+            self._authorize_unknown_document_attempt(company_code)
+            raise PrintableDocumentNotRegisteredError(
+                _("Tipo de documento %(document_type)s no registrado.") % {"document_type": document_type}
+            )
         if sample:
             context = doc_def["sample_context_builder"](user=user, company=company_code)
             self._inject_validation_context(context, document_type, "sample", company_code)
             return context
         if not document_id:
             raise ValueError(_("document_id is required for non-sample rendering."))
-        self._authorize_document(document_type, document_id, user, company_code, doc_def)
+        self._authorize_document(document_type, document_id, user, company_code)
         context = doc_def["context_builder"](document_id, user, company_code)
         self._inject_audit_metadata(context, document_id, company_code)
         self._inject_validation_context(context, document_type, document_id, company_code)
         return context
+
+    @staticmethod
+    def _authorize_unknown_document_attempt(company_code: str) -> None:
+        """Require access to a printable module before auditing an unknown type."""
+        from cacao_accounting.decorators import exige_acceso_compania_cualquiera
+
+        modules = tuple(sorted({definition["permission"].split(".", 1)[0] for definition in PRINTABLE_DOCUMENTS.values()}))
+        exige_acceso_compania_cualquiera(modules, company_code)
+        company_exists = database.session.execute(
+            select(Entity.code).where(Entity.code == company_code, Entity.enabled.is_(True))
+        ).scalar_one_or_none()
+        if company_exists is None:
+            abort(404)
+
+    @staticmethod
+    def _authorize_registered_print_attempt(document_type: str, user: Any, company_code: str) -> None:
+        """Authorize the company before a denied attempt can be audited there."""
+        from cacao_accounting.database import Entity
+        from cacao_accounting.decorators import exige_acceso_compania
+
+        company_exists = database.session.execute(
+            select(Entity.code).where(Entity.code == company_code, Entity.enabled.is_(True))
+        ).scalar_one_or_none()
+        if company_exists is None:
+            raise PrintPermissionError(_("Document is not available for this company."))
+
+        classification = str(getattr(user, "classification", "") or "").lower()
+        if classification in {"customer", "supplier"}:
+            if str(getattr(user, "company", "") or "") != str(company_code):
+                raise PrintPermissionError(_("Document is not available for this company."))
+            return
+
+        definition = get_printable_document(document_type)
+        if definition is None:
+            return
+        module_name = definition["permission"].split(".", 1)[0]
+        try:
+            exige_acceso_compania(module_name, company_code, "consultar")
+        except HTTPException as exc:
+            raise PrintPermissionError(_("User has no permission to print this document.")) from exc
 
     def _inject_audit_metadata(self, context: dict[str, Any], document_id: str, company_code: str) -> None:
         """Add creation and approval actors from the immutable audit trail."""
@@ -383,10 +493,8 @@ class PrintService:
         document_id: str,
         user: Any,
         company_code: str,
-        definition: PrintableDocumentDefinition,
     ) -> None:
         """Ensure the user can print this exact document and company."""
-        from cacao_accounting.decorators import exige_acceso_compania
         from cacao_accounting.database import (
             ComprobanteContable,
             DeliveryNote,
@@ -448,21 +556,30 @@ class PrintService:
             raise PrintPermissionError(_("Document is not available for this company."))
 
         classification = str(getattr(user, "classification", "") or "").lower()
-        party_id = getattr(user, "party_id", None)
-        if classification == "customer":
-            if not party_id or getattr(document, "customer_id", None) != party_id:
-                raise PrintPermissionError(_("Document is not available for this customer."))
-            return
-        if classification == "supplier":
-            if not party_id or getattr(document, "supplier_id", None) != party_id:
-                raise PrintPermissionError(_("Document is not available for this supplier."))
+        if classification in {"customer", "supplier"}:
+            self._authorize_portal_document(document, document_type, user, company_code, classification)
             return
 
-        module_name = definition["permission"].split(".", 1)[0]
-        try:
-            exige_acceso_compania(module_name, company_code, "consultar")
-        except HTTPException as exc:
-            raise PrintPermissionError(_("User has no permission to print this document.")) from exc
+    def _authorize_portal_document(
+        self,
+        document: Any,
+        document_type: str,
+        user: Any,
+        company_code: str,
+        classification: str,
+    ) -> None:
+        """Autorization for portal users (customer/supplier)."""
+        # #1562: el portal navega únicamente la compañía propia del
+        # usuario; que el tercero esté compartido con otra compañía no
+        # concede la impresión de esa otra compañía.
+        user_company = str(getattr(user, "company", "") or "")
+        if not user_company or user_company != str(company_code):
+            raise PrintPermissionError(_("Document is not available for this company."))
+        party_id = getattr(user, "party_id", None)
+        party_column = {"customer": "customer_id", "supplier": "supplier_id"}.get(classification, "customer_id")
+        if not party_id or getattr(document, party_column, None) != party_id:
+            verb = "customer" if classification == "customer" else "supplier"
+            raise PrintPermissionError(_("Document is not available for this %(verb)s.") % {"verb": verb})
 
     def _resolve_template_by_id(
         self,
@@ -570,6 +687,12 @@ class PrintService:
         if has_request_context():
             return request.url_root
         return current_app.config.get("SERVER_NAME") or "http://localhost/"
+
+    def _render_pdf_document(self, html_string: str) -> bytes:
+        """Render a PDF without allowing WeasyPrint to make network requests."""
+        base_url = self._base_url()
+        fetcher = _PrintPDFURLFetcher(base_url, current_app.static_folder)
+        return bytes(HTML(string=html_string, base_url=base_url, url_fetcher=fetcher).write_pdf())
 
     def _empty_validation_context(self) -> dict[str, str | bool | None]:
         return {"enabled": False, "public_url": None, "qr_data_uri": None, "token": None}

@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-{% import "transaction_form_macros.html" as tf_macros %}
-<nav aria-label="breadcrumb">
+{% import "transaction_form_macros.html" as tf_macros with context %}
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>

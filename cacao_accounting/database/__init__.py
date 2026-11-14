@@ -8,17 +8,20 @@
 from decimal import Decimal
 from dataclasses import dataclass
 import hashlib
+import logging
+from typing import Any
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from cuid2 import Cuid
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import (
+    and_,
     CheckConstraint,
     ForeignKeyConstraint,
     Index,
+    or_,
     UniqueConstraint,
     event,
     func,
@@ -26,9 +29,12 @@ from sqlalchemy import (
     select,
     text,
 )
+from sqlalchemy.engine import Engine
+from sqlalchemy.dialects.mysql import DATETIME as MySQLDateTime
+from sqlalchemy.orm import synonym, validates
 from ulid import ULID
-from sqlalchemy.orm import synonym
 
+from cacao_accounting.email_identity import normalize_user_email
 from cacao_accounting.i18n import _, _l
 
 _UNIT_CODE_FK = "unit.code"
@@ -48,8 +54,25 @@ _PURCHASE_INVOICE_ITEM_ID_FK = "purchase_invoice_item.id"
 # Definición principal de la clase del ORM.
 # < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
+LOGGER = logging.getLogger(__name__)
 
-# SQLite Foreign Key pragma listener is handled explicitly per session in tests if needed
+
+@event.listens_for(Engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection: Any, connection_record: Any) -> None:
+    """Enable declared foreign keys on every new SQLite connection."""
+    del connection_record
+    if dbapi_connection.__class__.__module__ != "sqlite3":
+        return
+
+    previous_autocommit = dbapi_connection.autocommit
+    dbapi_connection.autocommit = True
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    finally:
+        dbapi_connection.autocommit = previous_autocommit
+
 
 ENTITY_CODE = "entity.code"
 CURRENCY_CODE = "currency.code"
@@ -152,15 +175,6 @@ def obtiene_texto_unico() -> str:
     return str(ULID())
 
 
-def obtiene_texto_unico_cuid2() -> str:
-    """Genera un texto unico en base a CUID2."""
-    # Genera un id unico de 10 caractes
-    # Se utiliza para los registros detalle, principalmente las entradas del mayor general
-    GENERATOR: Cuid = Cuid(length=10)
-
-    return str(GENERATOR.generate())
-
-
 # <---------------------------------------------------------------------------------------------> #
 # Key / Value config.
 # <---------------------------------------------------------------------------------------------> #
@@ -212,28 +226,11 @@ class BaseTransaccion(BaseTabla):
     date = database.Column(database.Date())
     reference = database.Column(database.String(50))
     memo = database.Column(database.String(200), nullable=True)
-    canceled = database.Column(database.DateTime(timezone=True), nullable=True)
-    canceled_by = database.Column(database.String(26), nullable=True)
     cancelled_at = database.Column(database.DateTime(timezone=True), nullable=True)
     cancelled_by = database.Column(database.String(26), nullable=True)
     cancel_reason = database.Column(database.Text(), nullable=True)
     applied = database.Column(database.DateTime(timezone=True), nullable=True)
-    applied_by = database.Column(database.String(26), nullable=True)
     serie = database.Column(database.String(100), nullable=True)
-    sequential = database.Column(database.Integer(), nullable=True)
-    sequential_id = database.Column(database.String(26), nullable=True)
-
-
-class BaseTercero(BaseTabla):
-    """Base para crear terceros en la entidad."""
-
-    name = database.Column(database.String(150), nullable=False)
-    comercial_name = database.Column(database.String(150), nullable=False)
-    classification = database.Column(database.String(50), nullable=False)
-    group = database.Column(database.String(50), nullable=False)
-    enabled = database.Column(database.Boolean(), nullable=True)
-    id_ = database.Column(database.String(30), nullable=True)
-    tax_id = database.Column(database.String(30), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -329,9 +326,11 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     last_name = database.Column(database.String(80))
     last_name2 = database.Column(database.String(80))
     e_mail = database.Column(database.String(150), unique=True, nullable=True)
+    email_identity = database.Column(database.String(150), nullable=True, index=True)
     password = database.Column(database.LargeBinary(), nullable=False)
     classification = database.Column(database.String(15))
     active = database.Column(database.Boolean())
+    auth_version = database.Column(database.Integer(), nullable=False, default=0, server_default="0")
     genre = database.Column(database.String(10))
     birthday = database.Column(database.Date())
     phone = database.Column(database.String(50))
@@ -346,27 +345,30 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
         database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
     )
 
+    @validates("e_mail")
+    def _normalize_email(self, _key: str, value: str | None) -> str | None:
+        """Store and index the canonical identity for every ORM email assignment."""
+        normalized = normalize_user_email(value)
+        self.email_identity = normalized
+        return normalized
+
     @property
     def is_portal_customer(self) -> bool:
-        """Retorna verdadero si el usuario es de tipo cliente."""
-        if self.classification == "customer":
-            return True
-        if not self.id:
-            return False
-        from cacao_accounting.auth.roles import tiene_rol
+        """Retorna verdadero si el usuario puede entrar al portal de clientes."""
+        from cacao_accounting.runtime_mode import is_desktop_mode
 
-        return tiene_rol(self.id, "customer")
+        if is_desktop_mode():
+            return False
+        return self.classification == "customer" and bool(self.party_id and self.company)
 
     @property
     def is_portal_supplier(self) -> bool:
-        """Retorna verdadero si el usuario es de tipo proveedor."""
-        if self.classification == "supplier":
-            return True
-        if not self.id:
-            return False
-        from cacao_accounting.auth.roles import tiene_rol
+        """Retorna verdadero si el usuario puede entrar al portal de proveedores."""
+        from cacao_accounting.runtime_mode import is_desktop_mode
 
-        return tiene_rol(self.id, "supplier")
+        if is_desktop_mode():
+            return False
+        return self.classification == "supplier" and bool(self.party_id and self.company)
 
     @property
     def token(self) -> str | None:
@@ -378,8 +380,9 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
                 cached_token = cache.get(f"jwt_token:{self.id}")
                 if cached_token:
                     return str(cached_token)
-            except (ImportError, AttributeError, OSError):
-                pass
+            except Exception as exc:
+                # The optional cache must not prevent authentication checks from using their fallback.
+                LOGGER.warning("JWT token cache read failed (%s)", type(exc).__name__)
         return getattr(self, "_token_volatile", None)
 
     @token.setter
@@ -394,8 +397,9 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
                     cache.delete(f"jwt_token:{self.id}")
                 else:
                     cache.set(f"jwt_token:{self.id}", value, timeout=8 * 3600)
-            except (ImportError, AttributeError, OSError):
-                pass
+            except Exception as exc:
+                # Credential-version checks revoke stale JWTs even when cache cleanup is unavailable.
+                LOGGER.warning("JWT token cache update failed (%s)", type(exc).__name__)
 
 
 class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -457,10 +461,6 @@ class Modules(database.Model, BaseTabla):  # type: ignore[name-defined]
     enabled = database.Column(database.Boolean(), nullable=True)
 
 
-# Alias para compatibilidad
-Modulos = Modules
-
-
 # <---------------------------------------------------------------------------------------------> #
 # Descripción de la estructura funcional de la entidad (Compañía).
 # <---------------------------------------------------------------------------------------------> #
@@ -495,15 +495,6 @@ class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
     default = database.Column(database.Boolean())
     valuation_method = database.Column(database.String(20), default="moving_average")
 
-    @property
-    def is_active(self) -> bool:
-        """Alias de compatibilidad para lifecycle activo/inactivo."""
-        return bool(self.enabled)
-
-    @is_active.setter
-    def is_active(self, value: bool) -> None:
-        self.enabled = bool(value)
-
 
 class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Unidad de negocio: sucursal, oficina o area operativa.
@@ -513,10 +504,22 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
     permitiendo analizar resultados por sucursal o punto de operacion.
     """
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="unidad_unica"),)
+    __table_args__ = (
+        database.UniqueConstraint("entity", "code", name="unidad_unica"),
+        database.UniqueConstraint("entity", "id", name="uq_unit_entity_id"),
+        database.ForeignKeyConstraint(
+            ["entity", "parent_id"],
+            ["unit.entity", "unit.id"],
+            name="fk_unit_parent_same_entity",
+            ondelete=FK_RESTRICT,
+            onupdate=FK_RESTRICT,
+        ),
+    )
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(50), nullable=False)
-    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
+    entity = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
     enabled = database.Column(database.Boolean(), nullable=True)
     parent_id = database.Column(
         database.String(26), database.ForeignKey("unit.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
@@ -555,9 +558,6 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
         """Return the flat list of all descendant Unit records (recursive)."""
         return _get_hierarchy_descendants(self, Unit)
 
-
-# Alias para compatibilidad
-Unidad = Unit
 
 # <---------------------------------------------------------------------------------------------> #
 # Multi-Ledger: soporte para multiples libros contables paralelos.
@@ -762,9 +762,21 @@ class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
 class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Proyecto — dimension analitica con presupuesto y fechas definidas."""
 
-    __table_args__ = (database.UniqueConstraint("entity", "code", name="py_unico"),)
+    __table_args__ = (
+        database.UniqueConstraint("entity", "code", name="py_unico"),
+        database.UniqueConstraint("entity", "id", name="uq_project_entity_id"),
+        database.ForeignKeyConstraint(
+            ["entity", "parent_id"],
+            ["project.entity", "project.id"],
+            name="fk_project_parent_same_entity",
+            ondelete=FK_RESTRICT,
+            onupdate=FK_RESTRICT,
+        ),
+    )
     enabled = database.Column(database.Boolean(), index=True)
-    entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
+    entity = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
     code = database.Column(database.String(10), unique=True, index=True)
     name = database.Column(database.String(100))
     start = database.Column(database.Date())
@@ -831,7 +843,28 @@ class NamingSeries(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __tablename__ = "naming_series"
-    __table_args__ = (database.UniqueConstraint("entity_type", "company", "name", name="uq_naming_series_name"),)
+    __table_args__ = (
+        database.UniqueConstraint("entity_type", "company", "name", name="uq_naming_series_name"),
+        Index(
+            "uq_naming_series_default_company",
+            "entity_type",
+            "company",
+            unique=True,
+            sqlite_where=text("is_default = 1 AND company IS NOT NULL"),
+            postgresql_where=text("is_default IS TRUE AND company IS NOT NULL"),
+        ).ddl_if(
+            dialect=("sqlite", "postgresql")  # type: ignore[arg-type]
+        ),  # type: ignore[arg-type]
+        Index(
+            "uq_naming_series_default_global",
+            "entity_type",
+            unique=True,
+            sqlite_where=text("is_default = 1 AND company IS NULL"),
+            postgresql_where=text("is_default IS TRUE AND company IS NULL"),
+        ).ddl_if(
+            dialect=("sqlite", "postgresql")  # type: ignore[arg-type]
+        ),  # type: ignore[arg-type]
+    )
     name = database.Column(database.String(100), nullable=False)
     # Tipo de entidad: sales_invoice, payment_entry, journal_entry, etc.
     entity_type = database.Column(database.String(50), nullable=False, index=True)
@@ -842,6 +875,13 @@ class NamingSeries(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
     # Solo una serie activa puede ser predeterminada por entity_type + company.
     is_default = database.Column(database.Boolean(), default=False, nullable=False, index=True)
+
+
+class DefaultScopeLock(database.Model):  # type: ignore[name-defined]
+    """Fila estable para serializar cambios en valores predeterminados."""
+
+    __tablename__ = "default_scope_lock"
+    scope_key = database.Column(database.String(64), primary_key=True, nullable=False)
 
 
 class Sequence(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1577,7 +1617,7 @@ def _persisted_ledger_is_cancelled(connection, state, target) -> bool:
         value = identity[0]
     if value is None:
         return False
-    row = connection.execute(select(column).where(table.c[table.primary_key[0].key] == value)).first()
+    row = connection.execute(select(column).where(table.c[state.mapper.primary_key[0].key] == value)).first()
     return bool(row is not None and row[0])
 
 
@@ -3058,7 +3098,18 @@ class PettyCashAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     """
 
     __tablename__ = "petty_cash_account"
-    __table_args__ = (database.UniqueConstraint("company", "name", name="uq_petty_cash_account"),)
+    __table_args__ = (
+        database.UniqueConstraint("company", "name", name="uq_petty_cash_account"),
+        Index(
+            "uq_petty_cash_account_default_company",
+            "company",
+            unique=True,
+            sqlite_where=text("is_default = 1"),
+            postgresql_where=text("is_default IS TRUE"),
+        ).ddl_if(
+            dialect=("sqlite", "postgresql")  # type: ignore[arg-type]
+        ),  # type: ignore[arg-type]
+    )
     company = database.Column(
         database.String(10),
         database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -3392,8 +3443,6 @@ class ArApReconciliationPolicy(database.Model, BaseTabla):  # type: ignore[name-
     mode = database.Column(database.String(10), nullable=False, default="strict")
     tolerance = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=Decimal("0.01"))
     enabled = database.Column(database.Boolean(), nullable=False, default=True)
-    # Alias retained for callers that used the earlier all-caps model name.
-    is_enabled = synonym("enabled")
 
 
 class ARAPOpenItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -3454,13 +3503,6 @@ class ARAPOpenItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     source_voucher_id = database.Column(database.String(26), nullable=True, index=True)
     version = database.Column(database.Integer(), nullable=False, default=1)
     memo = database.Column(database.Text(), nullable=True)
-
-
-# Backwards-compatible spelling used by the AR/AP ledger service.  Keep one
-# mapped class for this table: declaring a second SQLAlchemy model with the
-# same ``__tablename__`` makes application imports fail before the metadata can
-# be created.
-ARAPReconciliationPolicy = ArApReconciliationPolicy
 
 
 class ARAPLedgerEntry(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -3640,16 +3682,6 @@ class ARAPLedgerBookEntry(database.Model, BaseTabla):  # type: ignore[name-defin
     )
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False, index=True)
     memo = database.Column(database.Text(), nullable=True)
-
-    amount_document = synonym("document_amount")
-    amount_in_book_currency = synonym("book_amount")
-    functional_amount = synonym("book_amount")
-    functional_currency = synonym("book_currency")
-    book_id = synonym("ledger_id")
-    source_currency = synonym("document_currency")
-    destination_currency = synonym("book_currency")
-    amount_in_document_currency = synonym("document_amount")
-    amount_in_functional_currency = synonym("book_amount")
 
     ledger_entry = database.relationship(
         "ARAPLedgerEntry",
@@ -4386,30 +4418,6 @@ class DimensionValue(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 event.listens_for(GLEntry, "before_update")(_reject_ledger_mutation)
 event.listens_for(GLEntry, "before_delete")(_reject_ledger_delete)
-
-
-class GLEntryDimension(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Dimension analitica adicional de una entrada GL (0..N por entrada)."""
-
-    __tablename__ = "gl_entry_dimension"
-    gl_entry_id = database.Column(
-        database.String(26),
-        database.ForeignKey(GL_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    dimension_type_id = database.Column(
-        database.String(26),
-        database.ForeignKey("dimension_type.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    dimension_value_id = database.Column(
-        database.String(26),
-        database.ForeignKey("dimension_value.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -5289,6 +5297,7 @@ class PeriodCloseRun(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Ejecucion de cierre de periodo."""
 
     __tablename__ = "period_close_run"
+    __table_args__ = (database.UniqueConstraint("company", "period_id", name="uq_period_close_run_company_period"),)
     company = database.Column(
         database.String(10),
         database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -5325,138 +5334,6 @@ class PeriodCloseCheck(database.Model, BaseTabla):  # type: ignore[name-defined]
 # <---------------------------------------------------------------------------------------------> #
 # Collaboration — Comentarios, Asignaciones y Workflows.
 # <---------------------------------------------------------------------------------------------> #
-class Comment(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Comentario en cualquier registro del sistema."""
-
-    __tablename__ = "comment"
-    reference_type = database.Column(database.String(50), nullable=False, index=True)
-    reference_id = database.Column(database.String(26), nullable=False, index=True)
-    content = database.Column(database.Text(), nullable=False)
-    is_deleted = database.Column(database.Boolean(), default=False, nullable=False)
-
-
-class CommentMention(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Mencion de usuario en un comentario."""
-
-    __tablename__ = "comment_mention"
-    comment_id = database.Column(
-        database.String(26),
-        database.ForeignKey("comment.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    user_id = database.Column(
-        database.String(26),
-        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-
-
-class Assignment(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Asignacion de un registro a un usuario."""
-
-    __tablename__ = "assignment"
-    reference_type = database.Column(database.String(50), nullable=False, index=True)
-    reference_id = database.Column(database.String(26), nullable=False, index=True)
-    assigned_to = database.Column(
-        database.String(26),
-        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    assigned_by = database.Column(
-        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
-    )
-    # open, in_progress, completed, cancelled
-    assignment_status = database.Column(database.String(20), nullable=False, default="open")
-    due_date = database.Column(database.Date(), nullable=True)
-
-
-class Workflow(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Definicion de flujo de trabajo."""
-
-    __tablename__ = "workflow"
-    __table_args__ = (database.UniqueConstraint("entity_type", "name", name="uq_workflow_type_name"),)
-    name = database.Column(database.String(100), nullable=False)
-    entity_type = database.Column(database.String(50), nullable=False, index=True)
-    is_active = database.Column(database.Boolean(), default=True, nullable=False)
-
-
-class WorkflowState(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Estado en un flujo de trabajo."""
-
-    __tablename__ = "workflow_state"
-    __table_args__ = (database.UniqueConstraint("workflow_id", "name", name="uq_workflow_state_name"),)
-    workflow_id = database.Column(
-        database.String(26),
-        database.ForeignKey("workflow.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    name = database.Column(database.String(50), nullable=False)
-    is_initial = database.Column(database.Boolean(), default=False, nullable=False)
-    is_final = database.Column(database.Boolean(), default=False, nullable=False)
-
-
-class WorkflowTransition(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Transicion entre estados de un flujo de trabajo."""
-
-    __tablename__ = "workflow_transition"
-    __table_args__ = (database.UniqueConstraint("from_state_id", "to_state_id", "action_name", name="uq_workflow_transition"),)
-    from_state_id = database.Column(
-        database.String(26),
-        database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    to_state_id = database.Column(
-        database.String(26),
-        database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    action_name = database.Column(database.String(100), nullable=False)
-    role_required = database.Column(database.String(50), nullable=True)
-
-
-class WorkflowInstance(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Instancia de un flujo de trabajo activo en un registro."""
-
-    __tablename__ = "workflow_instance"
-    workflow_id = database.Column(
-        database.String(26),
-        database.ForeignKey("workflow.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    reference_type = database.Column(database.String(50), nullable=False, index=True)
-    reference_id = database.Column(database.String(26), nullable=False, index=True)
-    current_state_id = database.Column(
-        database.String(26), database.ForeignKey(WORKFLOW_STATE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
-    )
-
-
-class WorkflowActionLog(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Log inmutable de acciones en instancias de workflow."""
-
-    __tablename__ = "workflow_action_log"
-    workflow_instance_id = database.Column(
-        database.String(26),
-        database.ForeignKey("workflow_instance.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    action = database.Column(database.String(100), nullable=False)
-    performed_by = database.Column(
-        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
-    )
-    performed_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
-    from_state = database.Column(database.String(50), nullable=True)
-    to_state = database.Column(database.String(50), nullable=True)
-    remarks = database.Column(database.Text(), nullable=True)
-
-
 # <---------------------------------------------------------------------------------------------> #
 # File Attachments — Archivos adjuntos.
 # <---------------------------------------------------------------------------------------------> #
@@ -5469,6 +5346,9 @@ class File(database.Model, BaseTabla):  # type: ignore[name-defined]
     blob_reference = database.Column(database.String(500), nullable=True)
     file_size = database.Column(database.Integer(), nullable=True)
     mime_type = database.Column(database.String(100), nullable=True)
+    # Hash SHA-256 del contenido real, calculado al almacenar el archivo.
+    # Es inmutable una vez persistido; queda NULL solo en archivos históricos.
+    sha256 = database.Column(database.String(64), nullable=True, index=True)
     uploaded_by = database.Column(
         database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
@@ -5526,6 +5406,8 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
             "document_id",
             "timestamp",
         ),
+        database.Index("ix_audit_trail_payload_hash", "payload_hash"),
+        database.Index("ix_audit_trail_prev_hash", "prev_hash"),
     )
     id = database.Column(database.String(26), primary_key=True, nullable=False, index=True, default=obtiene_texto_unico)
     document_type = database.Column(database.String(80), nullable=False)
@@ -5542,7 +5424,11 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
         database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True, index=True
     )
     actor_name = database.Column(database.String(255), nullable=True)
-    timestamp = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
+    timestamp = database.Column(
+        database.DateTime(timezone=True).with_variant(MySQLDateTime(fsp=6), "mysql"),
+        default=database.func.now(),
+        nullable=False,
+    )
     before_json = database.Column(database.Text(), nullable=True)
     after_json = database.Column(database.Text(), nullable=True)
     changes_json = database.Column(database.Text(), nullable=True)
@@ -5555,6 +5441,14 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
     hash_version = database.Column(database.Integer(), nullable=True)
 
 
+class AuditChainState(database.Model):  # type: ignore[name-defined]
+    """Mutable chain-head pointer kept separately from immutable audit evidence."""
+
+    __tablename__ = "audit_chain_state"
+    id = database.Column(database.String(16), primary_key=True)
+    head_hash = database.Column(database.String(64), nullable=True)
+
+
 class EmailQueue(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Cola de correos electrónicos y registro de notificaciones del sistema."""
 
@@ -5564,6 +5458,7 @@ class EmailQueue(database.Model, BaseTabla):  # type: ignore[name-defined]
     recipient = database.Column(database.String(255), nullable=False)
     subject = database.Column(database.String(255), nullable=False)
     body = database.Column(database.Text(), nullable=False)
+    is_html = database.Column(database.Boolean(), nullable=False, default=False, server_default=database.false())
     status = database.Column(database.String(20), nullable=False, default="pending", index=True)
     error_message = database.Column(database.Text(), nullable=True)
     attempts = database.Column(database.Integer(), nullable=False, default=0)
@@ -5768,13 +5663,24 @@ class UserCompanyAccess(database.Model, BaseTabla):  # type: ignore[name-defined
     )
 
 
+class AuthSecretIssuanceLock(database.Model):  # type: ignore[name-defined]
+    """Persistent row used to serialize credential issuance per account."""
+
+    __tablename__ = "auth_secret_issuance_lock"
+
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        primary_key=True,
+    )
+
+
 class RecognizedDevice(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Navegador o dispositivo reconocido para un usuario.
 
-    Almacena un token UUID4 por cada navegador que haya superado la
-    verificación OTP. El token se entrega como cookie firmada y se
-    valida contra esta tabla en cada inicio de sesión cuando la
-    protección de orígenes está habilitada.
+    Almacena una representación HMAC del token UUID4 entregado como cookie.
+    El token original solo existe en el cliente y se valida contra esta tabla
+    en cada inicio de sesión cuando la protección de orígenes está habilitada.
     """
 
     __tablename__ = "recognized_device"
@@ -5794,7 +5700,7 @@ class RecognizedDevice(database.Model, BaseTabla):  # type: ignore[name-defined]
 class OtpVerification(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Código OTP de un solo uso para verificación de dispositivo o recuperación.
 
-    Cada registro almacena un código de 6 dígitos generado con ``secrets``,
+    Cada registro almacena una representación HMAC del código de 6 dígitos,
     con un tiempo de vida corto (5 minutos por defecto) y un contador de
     intentos. Se marca como consumido tras una validación exitosa o al
     exceder el máximo de intentos permitidos.
@@ -5818,10 +5724,9 @@ class OtpVerification(database.Model, BaseTabla):  # type: ignore[name-defined]
 class PasswordResetToken(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Token de un solo uso para recuperación de contraseña por email.
 
-    El token es un UUID4 generado criptográficamente, con un TTL de 1 hora.
-    Se almacena en texto plano para poder expirarlo y marcarlo como
-    consumido; no se usa para hash adicional porque la protección está
-    en el TTL y en el uso único.
+    El token generado criptográficamente tiene un TTL de 1 hora. La base de
+    datos conserva solo un HMAC hexadecimal para poder validarlo sin almacenar
+    el secreto que se entrega en el enlace.
     """
 
     __tablename__ = "password_reset_token"
@@ -5835,55 +5740,6 @@ class PasswordResetToken(database.Model, BaseTabla):  # type: ignore[name-define
     token = database.Column(database.String(64), nullable=False, unique=True, index=True)
     expires_at = database.Column(database.DateTime(timezone=True), nullable=False)
     consumed = database.Column(database.Boolean(), nullable=False, default=False)
-
-
-def _item_has_usage(connection, item_code: str) -> bool:
-    """Detecta si un item ya tiene registros transaccionales o de stock."""
-    usage_tables = (
-        StockLedgerEntry.__table__,
-        StockEntryItem.__table__,
-        PurchaseOrderItem.__table__,
-        PurchaseReceiptItem.__table__,
-        PurchaseInvoiceItem.__table__,
-        SalesOrderItem.__table__,
-        DeliveryNoteItem.__table__,
-        SalesInvoiceItem.__table__,
-    )
-    for table in usage_tables:
-        if "item_code" not in table.c:
-            continue
-        statement = select(1).select_from(table).where(table.c.item_code == item_code).limit(1)
-        if connection.execute(statement).first():
-            return True
-    return False
-
-
-def _warehouse_has_usage(connection, warehouse_code: str) -> bool:
-    """Detecta si un almacén ya tiene registros transaccionales o de stock."""
-    usage_checks = [
-        (StockLedgerEntry.__table__, ["warehouse"]),
-        (StockEntry.__table__, ["from_warehouse", "to_warehouse"]),
-        (StockEntryItem.__table__, ["source_warehouse", "target_warehouse"]),
-        (StockBin.__table__, ["warehouse"]),
-        (StockValuationLayer.__table__, ["warehouse"]),
-        (LandedCostAllocation.__table__, ["warehouse"]),
-        (PurchaseOrderItem.__table__, ["warehouse"]),
-        (PurchaseReceiptItem.__table__, ["warehouse"]),
-        (PurchaseInvoiceItem.__table__, ["warehouse"]),
-        (SalesOrderItem.__table__, ["warehouse"]),
-        (DeliveryNoteItem.__table__, ["warehouse"]),
-        (SalesInvoiceItem.__table__, ["warehouse"]),
-        (SerialNumber.__table__, ["warehouse"]),
-        (PurchaseReconciliationItem.__table__, ["warehouse"]),
-    ]
-    for table, cols in usage_checks:
-        for col in cols:
-            if col not in table.c:
-                continue
-            statement = select(1).select_from(table).where(table.c[col] == warehouse_code).limit(1)
-            if connection.execute(statement).first():
-                return True
-    return False
 
 
 def _get_hierarchy_descendants(node_instance, model_class) -> list:
@@ -5914,32 +5770,65 @@ def _get_hierarchy_descendants(node_instance, model_class) -> list:
     return res
 
 
-def _party_has_usage(connection, party_id: str) -> bool:
-    """Detecta si un cliente/proveedor ya tiene registros transaccionales."""
-    usage_checks = [
-        (GLEntry.__table__, ["party_id"]),
-        (PurchaseOrder.__table__, ["supplier_id"]),
-        (PurchaseReceipt.__table__, ["supplier_id"]),
-        (PurchaseInvoice.__table__, ["supplier_id"]),
-        (PurchaseQuotation.__table__, ["supplier_id"]),
-        (SupplierQuotation.__table__, ["supplier_id"]),
-        (SalesOrder.__table__, ["customer_id"]),
-        (SalesRequest.__table__, ["customer_id"]),
-        (SalesQuotation.__table__, ["customer_id"]),
-        (DeliveryNote.__table__, ["customer_id"]),
-        (SalesInvoice.__table__, ["customer_id"]),
-        (PaymentEntry.__table__, ["party_id"]),
-        (PaymentReference.__table__, ["party_id"]),
-        (Reconciliation.__table__, ["party_id"]),
-        (ExchangeRevaluationItem.__table__, ["partner_id"]),
-    ]
-    for table, cols in usage_checks:
-        for col in cols:
-            if col not in table.c:
+def _has_restricting_foreign_key_reference(connection, target_column, value: str) -> bool:
+    """Detect persisted rows behind any declared RESTRICT foreign key."""
+    target_table = target_column.table
+    references = []
+    for table in database.metadata.tables.values():
+        for constraint in table.foreign_key_constraints:
+            if (constraint.ondelete or "RESTRICT").upper().replace("_", " ") not in {"RESTRICT", "NO ACTION"}:
                 continue
-            statement = select(1).select_from(table).where(table.c[col] == party_id).limit(1)
-            if connection.execute(statement).first():
-                return True
+
+            elements = list(constraint.elements)
+            if not any(
+                element.column.table is target_table and element.column.name == target_column.name for element in elements
+            ):
+                continue
+
+            if len(elements) == 1:
+                reference_query = select(1).select_from(table).where(elements[0].parent == value)
+            else:
+                target_alias = target_table.alias()
+                join_condition = and_(*(element.parent == target_alias.c[element.column.name] for element in elements))
+                reference_query = (
+                    select(1)
+                    .select_from(table.join(target_alias, join_condition))
+                    .where(target_alias.c[target_column.name] == value)
+                )
+            references.append(reference_query.exists())
+    if not references:
+        return False
+    return connection.execute(select(1).where(or_(*references)).limit(1)).first() is not None
+
+
+def _item_has_usage(connection, item_code: str) -> bool:
+    """Detecta si un item ya tiene registros transaccionales o de stock."""
+    usage_tables = (
+        StockLedgerEntry.__table__,
+        StockEntryItem.__table__,
+        PurchaseOrderItem.__table__,
+        PurchaseReceiptItem.__table__,
+        PurchaseInvoiceItem.__table__,
+        SalesOrderItem.__table__,
+        DeliveryNoteItem.__table__,
+        SalesInvoiceItem.__table__,
+    )
+    for table in usage_tables:
+        if "item_code" not in table.c:
+            continue
+        statement = select(1).select_from(table).where(table.c.item_code == item_code).limit(1)
+        if connection.execute(statement).first():
+            return True
+    return False
+
+
+def _party_has_unconstrained_usage(connection, party_id: str) -> bool:
+    """Detect persisted business references to a party without declared foreign keys."""
+    reference_tables = (PaymentReference.__table__, RecurringJournalItem.__table__)
+    for table in reference_tables:
+        statement = select(1).select_from(table).where(table.c.party_id == party_id).limit(1)
+        if connection.execute(statement).first():
+            return True
     return False
 
 
@@ -5959,7 +5848,7 @@ def _lock_item_delete_after_usage(_mapper, connection, target) -> None:
     """Impide eliminar físicamente un item si ya tiene uso transaccional."""
     from cacao_accounting.exceptions import IntegrityError
 
-    if target.code and _item_has_usage(connection, str(target.code)):
+    if target.code and _has_restricting_foreign_key_reference(connection, Item.__table__.c.code, str(target.code)):
         raise IntegrityError(
             _(
                 "El artículo cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
@@ -5973,7 +5862,7 @@ def _lock_warehouse_delete_after_usage(_mapper, connection, target) -> None:
     """Impide eliminar físicamente una bodega si ya tiene uso transaccional."""
     from cacao_accounting.exceptions import IntegrityError
 
-    if target.code and _warehouse_has_usage(connection, str(target.code)):
+    if target.code and _has_restricting_foreign_key_reference(connection, Warehouse.__table__.c.code, str(target.code)):
         raise IntegrityError(
             _(
                 "La bodega cuenta con transacciones activas en el sistema y no puede ser eliminada físicamente. "
@@ -5987,7 +5876,10 @@ def _lock_party_delete_after_usage(_mapper, connection, target) -> None:
     """Impide eliminar físicamente un tercero (cliente/proveedor) si ya tiene uso transaccional."""
     from cacao_accounting.exceptions import IntegrityError
 
-    if target.id and _party_has_usage(connection, str(target.id)):
+    if target.id and (
+        _has_restricting_foreign_key_reference(connection, Party.__table__.c.id, str(target.id))
+        or _party_has_unconstrained_usage(connection, str(target.id))
+    ):
         raise IntegrityError(
             _(
                 "El cliente/proveedor cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
@@ -6222,3 +6114,16 @@ event.listens_for(DocumentTransition, "before_update")(_reject_ledger_mutation)
 event.listens_for(DocumentTransition, "before_delete")(_reject_ledger_delete)
 event.listens_for(AuditLog, "before_update")(_reject_ledger_mutation)
 event.listens_for(AuditLog, "before_delete")(_reject_ledger_delete)
+
+
+@event.listens_for(File, "before_update")
+def _reject_file_hash_mutation(mapper, connection, target) -> None:  # noqa: ARG001
+    """Impide reescribir el SHA-256 una vez persistido un archivo.
+
+    El hash es la evidencia de integridad del contenido almacenado. Un archivo
+    histórico puede pasar de ``NULL`` a un valor calculado por un backfill
+    controlado, pero un hash ya persistido no cambia ni se borra.
+    """
+    history = inspect(target).attrs["sha256"].history
+    if history.has_changes() and history.deleted and history.deleted[0] is not None:
+        raise ValueError(_("El hash SHA-256 de un archivo almacenado es inmutable."))

@@ -7,7 +7,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: contabilidad/external_counter_lista.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
@@ -85,6 +85,7 @@
             </a>
             <form method="post" action="{{ url_for('contabilidad.external_counter_toggle_active', counter_id=item.id) }}"
                   class="d-inline" onsubmit="return confirm('{{ _("Cambiar estado del contador?") }}')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-xs {% if item.is_active %}btn-outline-secondary{% else %}btn-outline-success{% endif %}"
                       title="{% if item.is_active %}{{ _("Desactivar") }}{% else %}{{ _("Activar") }}{% endif %}">
                 <i class="bi {% if item.is_active %}bi-pause{% else %}bi-play{% endif %}"></i>

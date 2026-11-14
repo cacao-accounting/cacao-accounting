@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
 
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 
 from cacao_accounting.contabilidad.journal_repository import (
     add_journal,
@@ -32,6 +33,7 @@ from cacao_accounting.audit_trail_service import (
 from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
+    BankAccount,
     Book,
     ComprobanteContable,
     ComprobanteContableDetalle,
@@ -43,8 +45,10 @@ from cacao_accounting.database import (
     FiscalYear,
     NamingSeries,
     Party,
+    Project,
     RecurringJournalApplication,
     RecurringJournalTemplate,
+    Unit,
     User,
     database,
 )
@@ -63,6 +67,8 @@ JOURNAL_STATUS_REJECTED = "rejected"
 JOURNAL_STATUS_SUBMITTED = "submitted"
 JOURNAL_STATUS_CANCELLED = "cancelled"
 JOURNAL_DUPLICABLE_STATUSES = {JOURNAL_STATUS_DRAFT, JOURNAL_STATUS_REJECTED, JOURNAL_STATUS_SUBMITTED}
+JOURNAL_REVERSAL_RETRY_PREFIX = "reversal_retry_"
+JOURNAL_REVERSAL_RETRY_LIMIT = 99_999
 AR_AP_ACCOUNT_TYPES = {"receivable", "payable", "customer_advance", "supplier_advance"}
 CUSTOMER_AR_AP_ACCOUNT_TYPES = {"receivable", "customer_advance"}
 
@@ -98,6 +104,7 @@ class JournalLineInput:
     remarks: str | None
     is_advance: bool
     bank_account_id: str | None
+    economic_line_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -126,9 +133,27 @@ def create_journal_draft(
     *,
     allow_closing: bool = False,
     allow_fiscal_year_closing: bool = False,
+    commit: bool = True,
+    source_economic_line_ids: Sequence[str] | None = None,
 ) -> ComprobanteContable:
-    """Crea un comprobante contable manual en borrador."""
+    """Crea un comprobante contable manual en borrador.
+
+    ``commit=False`` permite componer el borrador dentro de una transacción
+    mayor, de modo que quien lo invoca controle el límite transaccional y sus
+    bloqueos. El comportamiento predeterminado sigue confirmando el borrador.
+    ``source_economic_line_ids`` solo lo usa el servicio interno de reversión
+    para conservar la relación de cada línea con su origen.
+    """
     data = _normalize_journal_payload(payload)
+    if source_economic_line_ids is not None:
+        if len(source_economic_line_ids) != len(data.lines) or any(not line_id for line_id in source_economic_line_ids):
+            raise JournalValidationError(_("La reversión debe conservar la identidad de cada línea de origen."))
+        data = replace(
+            data,
+            lines=[
+                replace(line, economic_line_id=str(line_id)) for line, line_id in zip(data.lines, source_economic_line_ids)
+            ],
+        )
     if data.is_closing and not allow_closing:
         raise JournalValidationError(_("El comprobante de cierre solo puede crearse desde un flujo autorizado."))
     if data.is_fiscal_year_closing and not allow_fiscal_year_closing:
@@ -141,7 +166,7 @@ def create_journal_draft(
     )
     _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
     _validate_line_books(data.company, data.books, data.lines)
-    _validate_ar_ap_lines(data.company, data.lines)
+    _validate_ar_ap_lines(data.company, data.lines, validate_references=source_economic_line_ids is None)
     primary_book = data.books[0] if data.books else None
     journal = ComprobanteContable(
         entity=data.company,
@@ -162,11 +187,14 @@ def create_journal_draft(
         fiscal_year_id=data.fiscal_year_id,
     )
     lines = [_line_model(data.company, data.posting_date, data.transaction_currency, line) for line in data.lines]
-    journal = add_journal(journal, lines)
+    journal = add_journal(journal, lines, commit=commit)
     if assign_identifier:
         _assign_identifier_if_needed(journal, data.naming_series_id)
     log_create(journal)
-    database.session.commit()
+    if commit:
+        database.session.commit()
+    else:
+        database.session.flush()
     return journal
 
 
@@ -248,6 +276,9 @@ def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = N
 
     actor = database.session.get(User, actor_id)
     actor_name = str((actor.name or actor.user) if actor else actor_id)
+    from cacao_accounting.contabilidad.arap_ledger_service import lock_journal_open_item_references
+
+    lock_journal_open_item_references(journal)
     with audit_actor(str(actor_id), actor_name):
         fiscal_year = _validate_fiscal_year_closing(journal)
 
@@ -452,20 +483,43 @@ def duplicate_journal_as_reversal_draft(
     reason: str | None = None,
 ) -> ComprobanteContable:
     """Genera borrador de reversión invirtiendo debe/haber del comprobante origen."""
-    source = get_journal(journal_id)
+    try:
+        _reserve_sqlite_reversal_writer()
+        return _create_journal_reversal_draft(journal_id, user_id, reversal_date_raw, reason)
+    except Exception:
+        database.session.rollback()
+        raise
+
+
+def _create_journal_reversal_draft(
+    journal_id: str,
+    user_id: str,
+    reversal_date_raw: date | str,
+    reason: str | None = None,
+) -> ComprobanteContable:
+    """Validate and persist a reversal attempt inside the reserved transaction."""
+    source = database.session.execute(
+        select(ComprobanteContable)
+        .where(ComprobanteContable.id == journal_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if source is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if source.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError(_("Solo se puede revertir un comprobante contabilizado."))
-    existing_reversal = database.session.execute(
-        select(DocumentTransition.id).where(
-            DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
-            DocumentTransition.source_id == source.id,
-            DocumentTransition.transition_type == "reversal",
+    transitions = _journal_reversal_transitions(source.id)
+    if _journal_reversal_transition_exists(source.id, transitions):
+        raise JournalValidationError(_("El comprobante ya tiene una reversión registrada."))
+    active_reversal = database.session.execute(
+        select(ComprobanteContable.id).where(
+            ComprobanteContable.reversal_of == source.id,
+            ComprobanteContable.status.in_((JOURNAL_STATUS_DRAFT, JOURNAL_STATUS_SUBMITTED)),
         )
     ).scalar_one_or_none()
-    if existing_reversal is not None:
+    if active_reversal is not None:
         raise JournalValidationError(_("El comprobante ya tiene una reversión registrada."))
+    transition_type = _next_journal_reversal_transition_type(transitions)
     normalized_reason = (reason or "").strip()
     if not normalized_reason:
         raise JournalValidationError(_("Debe indicar el motivo de la reversión."))
@@ -483,7 +537,8 @@ def duplicate_journal_as_reversal_draft(
         raise JournalValidationError(_("No puede crear una reversión en un periodo contable cerrado o deshabilitado."))
     if source.is_fiscal_year_closing:
         raise JournalValidationError(_("El cierre fiscal debe revertirse desde el flujo de cierre fiscal."))
-    payload = serialize_journal_for_form(source)
+    source_lines = list_journal_lines(source.id)
+    payload = serialize_journal_for_form(source, lines=source_lines)
     payload["posting_date"] = reversal_date.isoformat()
     payload["reference"] = source.document_no or source.id
     payload["memo"] = f"Reversión de {source.document_no or source.id}"
@@ -493,29 +548,103 @@ def duplicate_journal_as_reversal_draft(
     payload["reversal_of"] = source.id
     payload["lines"] = _reversed_payload_lines(payload.get("lines", []))
 
-    reversed_draft = create_journal_draft(payload, user_id=user_id, assign_identifier=False)
-    reversed_draft.status = JOURNAL_STATUS_DRAFT
-    reversed_draft.reversal_of = source.id
-    _assign_identifier_if_needed(reversed_draft, source.naming_series_id or reversed_draft.naming_series_id)
-    database.session.add(reversed_draft)
-    database.session.flush()
-    database.session.add(
-        DocumentTransition(
-            source_type=JOURNAL_TRANSACTION_TYPE,
-            source_id=source.id,
-            target_type=JOURNAL_TRANSACTION_TYPE,
-            target_id=reversed_draft.id,
-            transition_type="reversal",
-            company=source.entity,
-            posting_date=reversal_date,
-            accounting_period_id=reversal_period.id,
-            actor_user_id=user_id,
-            reason=normalized_reason,
+    try:
+        reversed_draft = create_journal_draft(
+            payload,
+            user_id=user_id,
+            assign_identifier=False,
+            commit=False,
+            source_economic_line_ids=[str(line.economic_line_id or line.id) for line in source_lines],
         )
-    )
-    log_reversal_draft_created(reversed_draft)
-    database.session.commit()
+        reversed_draft.status = JOURNAL_STATUS_DRAFT
+        reversed_draft.reversal_of = source.id
+        _assign_identifier_if_needed(reversed_draft, source.naming_series_id or reversed_draft.naming_series_id)
+        database.session.add(reversed_draft)
+        database.session.flush()
+        database.session.add(
+            DocumentTransition(
+                source_type=JOURNAL_TRANSACTION_TYPE,
+                source_id=source.id,
+                target_type=JOURNAL_TRANSACTION_TYPE,
+                target_id=reversed_draft.id,
+                transition_type=transition_type,
+                company=source.entity,
+                posting_date=reversal_date,
+                accounting_period_id=reversal_period.id,
+                actor_user_id=user_id,
+                reason=normalized_reason,
+            )
+        )
+        log_reversal_draft_created(reversed_draft)
+        database.session.commit()
+    except DBAPIError as exc:
+        database.session.rollback()
+        if _journal_reversal_transition_exists(source.id):
+            raise JournalValidationError(_("El comprobante ya tiene una reversión registrada.")) from exc
+        raise
+    except Exception:
+        database.session.rollback()
+        raise
     return reversed_draft
+
+
+def _reserve_sqlite_reversal_writer() -> None:
+    """Reserve SQLite's writer before reading source reversal attempts."""
+    if database.engine.dialect.name != "sqlite":
+        return
+    connection = database.session.connection()
+    raw_connection = connection.connection.driver_connection
+    if raw_connection is not None and not raw_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
+def _journal_reversal_transitions(source_id: str) -> list[DocumentTransition]:
+    """Return immutable reversal attempts recorded for a source journal."""
+    transitions = database.session.execute(
+        select(DocumentTransition)
+        .where(
+            DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
+            DocumentTransition.source_id == source_id,
+        )
+        .with_for_update()
+    ).scalars()
+    return [row for row in transitions if _is_journal_reversal_transition_type(row.transition_type)]
+
+
+def _is_journal_reversal_transition_type(transition_type: str) -> bool:
+    """Identify the original reservation and append-only retry event types."""
+    return transition_type == "reversal" or transition_type.startswith(JOURNAL_REVERSAL_RETRY_PREFIX)
+
+
+def _journal_reversal_transition_exists(source_id: str, transitions: list[DocumentTransition] | None = None) -> bool:
+    """Return whether a non-rejected attempt still reserves or reversed its source."""
+    for transition in transitions if transitions is not None else _journal_reversal_transitions(source_id):
+        if transition.target_type != JOURNAL_TRANSACTION_TYPE or not transition.target_id:
+            return True
+        target_status = database.session.execute(
+            select(ComprobanteContable.status).where(ComprobanteContable.id == transition.target_id)
+        ).scalar_one_or_none()
+        if target_status != JOURNAL_STATUS_REJECTED:
+            return True
+    return False
+
+
+def _next_journal_reversal_transition_type(transitions: list[DocumentTransition]) -> str:
+    """Choose a unique append-only transition type for the next retry attempt."""
+    if not transitions:
+        return "reversal"
+    retry_numbers = []
+    for transition in transitions:
+        if transition.transition_type == "reversal":
+            continue
+        suffix = transition.transition_type.removeprefix(JOURNAL_REVERSAL_RETRY_PREFIX)
+        if not suffix.isdigit() or len(suffix) != 5:
+            raise JournalValidationError(_("El historial de reversión del comprobante no es válido."))
+        retry_numbers.append(int(suffix))
+    next_number = max(retry_numbers, default=0) + 1
+    if next_number > JOURNAL_REVERSAL_RETRY_LIMIT:
+        raise JournalValidationError(_("El comprobante alcanzó el límite de intentos de reversión."))
+    return f"{JOURNAL_REVERSAL_RETRY_PREFIX}{next_number:05d}"
 
 
 def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str) -> ComprobanteContable:
@@ -530,6 +659,8 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     previous_posting_date = journal.date
     previous_naming_series_id = journal.naming_series_id
     data = _normalize_journal_payload(payload)
+    if journal.reversal_of:
+        data = _preserve_reversal_line_identities(journal, data)
     if data.is_closing != bool(journal.is_closing) or data.is_fiscal_year_closing != bool(journal.is_fiscal_year_closing):
         raise JournalValidationError(_("Los flags de cierre no pueden cambiarse al editar un borrador."))
     data = replace(
@@ -538,7 +669,7 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     )
     _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
     _validate_line_books(data.company, data.books, data.lines)
-    _validate_ar_ap_lines(data.company, data.lines)
+    _validate_ar_ap_lines(data.company, data.lines, validate_references=not bool(journal.reversal_of))
     primary_book = data.books[0] if data.books else None
 
     journal.entity = data.company
@@ -571,9 +702,13 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     return journal
 
 
-def serialize_journal_for_form(journal: ComprobanteContable) -> dict[str, Any]:
+def serialize_journal_for_form(
+    journal: ComprobanteContable,
+    *,
+    lines: Sequence[ComprobanteContableDetalle] | None = None,
+) -> dict[str, Any]:
     """Convierte un comprobante manual a un payload compatible con el formulario."""
-    lines = list_journal_lines(journal.id)
+    lines = list(lines) if lines is not None else list_journal_lines(journal.id)
     selected_books = _selected_books_for_journal(journal)
     account_codes = {line.account for line in lines if line.account}
     cost_center_codes = {line.cost_center for line in lines if line.cost_center}
@@ -734,8 +869,13 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
         raise JournalValidationError(_("Cada linea del comprobante debe ser un objeto."))
     debit = _decimal(raw_line.get("debit"))
     credit = _decimal(raw_line.get("credit"))
+    raw_order = raw_line.get("order")
+    try:
+        order = int(raw_order) if raw_order not in (None, "") else fallback_order
+    except (TypeError, ValueError) as exc:
+        raise JournalValidationError(_("El orden de la línea debe ser un número entero.")) from exc
     return JournalLineInput(
-        order=int(raw_line.get("order") or fallback_order),
+        order=order,
         book=_optional_text(raw_line.get("book")),
         account=_optional_text(raw_line.get("account")) or "",
         cost_center=_optional_text(raw_line.get("cost_center")),
@@ -773,12 +913,29 @@ def _validate_journal_line(company: str, line: JournalLineInput, account_cache: 
         raise JournalValidationError(_("El tipo de cambio de la línea debe ser mayor que cero."))
     if line.reference_exchange_rate is not None and line.reference_exchange_rate <= 0:
         raise JournalValidationError(_("El tipo de cambio de la referencia debe ser mayor que cero."))
+    _validate_journal_line_dimensions(company, line)
     account = account_cache.get(line.account)
     if line.account not in account_cache:
         account = _account_record(company, line.account)
         account_cache[line.account] = account
     if account is not None and account.account_type == "expense" and not line.cost_center:
         raise JournalValidationError(_("Las cuentas de gasto requieren centro de costo."))
+
+
+def _validate_journal_line_dimensions(company: str, line: JournalLineInput) -> None:
+    """Validate the company ownership of dimensions attached to a journal line."""
+    if line.bank_account_id:
+        bank_account = database.session.get(BankAccount, line.bank_account_id)
+        if not bank_account or bank_account.company != company:
+            raise JournalValidationError(_("La cuenta bancaria no existe o no pertenece a la compañía del comprobante."))
+    if line.unit:
+        unit = database.session.query(Unit).filter_by(code=line.unit).first()
+        if not unit or unit.entity != company:
+            raise JournalValidationError(_("La unidad no existe o no pertenece a la compañía del comprobante."))
+    if line.project:
+        project = database.session.query(Project).filter_by(code=line.project).first()
+        if not project or project.entity != company:
+            raise JournalValidationError(_("El proyecto no existe o no pertenece a la compañía del comprobante."))
 
 
 def _validate_balanced_lines(
@@ -934,7 +1091,7 @@ def _validate_ar_ap_reference(
         raise JournalValidationError(_("La referencia AP/AR debe tener sentido contrario al movimiento."))
 
 
-def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
+def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput], *, validate_references: bool = True) -> None:
     """Valida terceros y referencias AP/AR antes de guardar el borrador."""
     for line in lines:
         account = _account_record(company, line.account)
@@ -943,7 +1100,8 @@ def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
         party_type = _normalize_party_type(line.party_type)
         if ar_ap_type:
             _validate_ar_ap_party(company, line, account_type, party_type)
-        _validate_ar_ap_reference(company, line, account_type, ar_ap_type, party_type)
+        if validate_references:
+            _validate_ar_ap_reference(company, line, account_type, ar_ap_type, party_type)
 
 
 def _validate_line_books(company: str, books: list[str] | None, lines: list[JournalLineInput]) -> None:
@@ -1035,8 +1193,28 @@ def _line_model(
         third_code=_party_id_for_line(company, line.party),
         bank_account_id=line.bank_account_id,
         is_advance=line.is_advance,
+        economic_line_id=line.economic_line_id,
         voucher_type=JOURNAL_TRANSACTION_TYPE,
     )
+
+
+def _preserve_reversal_line_identities(journal: ComprobanteContable, data: JournalDraftInput) -> JournalDraftInput:
+    """Carry trusted source-line identities through edits to a reversal draft."""
+    source_ids_by_order: dict[int, str] = {}
+    for source_line in list_journal_lines(journal.id):
+        if source_line.order is None or source_line.order in source_ids_by_order or not source_line.economic_line_id:
+            raise JournalValidationError(_("No se puede editar una reversión sin identidad única por línea."))
+        source_ids_by_order[source_line.order] = str(source_line.economic_line_id)
+    if len(source_ids_by_order) != len(data.lines):
+        raise JournalValidationError(_("No se puede cambiar la cantidad de líneas de una reversión."))
+
+    updated_lines: list[JournalLineInput] = []
+    for line in data.lines:
+        source_id = source_ids_by_order.pop(line.order, None)
+        if source_id is None:
+            raise JournalValidationError(_("No se puede cambiar la identidad de las líneas de una reversión."))
+        updated_lines.append(replace(line, economic_line_id=source_id))
+    return replace(data, lines=updated_lines)
 
 
 def _assign_identifier_if_needed(journal: ComprobanteContable, naming_series_id: str | None) -> None:
@@ -1049,6 +1227,7 @@ def _assign_identifier_if_needed(journal: ComprobanteContable, naming_series_id:
             posting_date_raw=journal.date,
             naming_series_id=naming_series_id,
             allow_closing=allow_closing,
+            allow_fiscal_year_closing=bool(getattr(journal, "is_fiscal_year_closing", False)),
         )
     except IdentifierConfigurationError:
         return
@@ -1186,7 +1365,7 @@ def _cost_center_labels_for_company(company: str, cost_center_codes: set[str]) -
 
 def _reversed_payload_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     reversed_lines: list[dict[str, Any]] = []
-    for line in lines:
+    for order, line in enumerate(lines, start=1):
         if not isinstance(line, dict):
             continue
         debit_value = line.get("debit") or ""
@@ -1194,6 +1373,7 @@ def _reversed_payload_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]
         reversed_line = dict(line)
         reversed_line["debit"] = credit_value
         reversed_line["credit"] = debit_value
+        reversed_line["order"] = order
         reversed_lines.append(reversed_line)
     return reversed_lines
 

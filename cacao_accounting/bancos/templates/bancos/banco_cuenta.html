@@ -77,7 +77,7 @@
             <template x-if="editing">
               <select class="form-select form-select-sm" x-model="configs['{{ cfg.payment_type }}'].naming_series_id">
                 <option value="">{{ _('(predeterminado del sistema)') }}</option>
-                {% for opt in naming_series_options %}
+                {% for opt in naming_series_options[cfg.payment_type] %}
                 <option value="{{ opt.value }}">{{ opt.label }}</option>
                 {% endfor %}
               </select>
@@ -149,7 +149,7 @@ function numberingConfig() {
         const payload = Object.values(this.configs);
         const response = await fetch('{{ url_for("bancos.bancos_cuenta_bancaria_numbering_config", account_id=registro.id) }}', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
           body: JSON.stringify({ configs: payload })
         });
         if (!response.ok) throw new Error('Error al guardar');

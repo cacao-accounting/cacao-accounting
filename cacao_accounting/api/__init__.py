@@ -26,6 +26,9 @@ from cacao_accounting.attachment_service import (
     get_attachment_file,
     get_item_image_file,
     list_attachments,
+    log_attachment_access_denied,
+    log_attachment_downloaded,
+    update_attachment_metadata,
     upload_attachment,
     upload_item_image,
 )
@@ -64,12 +67,17 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania, exige_acceso_compania_cualquiera
 from cacao_accounting.api.dashboard import user_can_access_company
-from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
-from cacao_accounting.document_flow.repository import get_document
+from cacao_accounting.company_context import authorized_company_codes
+from cacao_accounting.document_flow.registry import (
+    DOCUMENT_TYPES,
+    DocumentType,
+    get_document_type,
+    normalize_doctype,
+)
+from cacao_accounting.document_flow.repository import get_document, get_document_company, get_document_item
 from cacao_accounting.document_flow.service import get_source_items
 from cacao_accounting.i18n import _
 from cacao_accounting.document_flow.status import document_status_payload
-from cacao_accounting.document_flow.tracing import document_flow_tree
 from cacao_accounting.document_flow.tree import build_document_flow_tree
 from cacao_accounting.fiscal_preview_service import fiscal_preview
 from cacao_accounting.cache import user_scoped_cache
@@ -135,24 +143,35 @@ def _cached_master_data_search(
 
 
 def _require_flow_company_access(payload: dict[str, Any], action: str = "crear") -> None:
-    """Authorize document-flow mutations against the source document company."""
+    """Authorize document-flow mutations against the source document company.
+
+    Algunos destinos, como ``payment_entry``, identifican sus facturas en las
+    líneas de conciliación y no en la cabecera; en ese caso la autorización se
+    resuelve por cada línea en ``_require_flow_source_lines_access``.
+    """
     source_type = normalize_doctype(str(payload.get("source_document_type") or payload.get("source_type") or ""))
     source_id = str(payload.get("source_document_id") or payload.get("source_id") or "")
-    source = get_document(source_type, source_id) if source_type and source_id else None
+    if not source_type or not source_id:
+        target_type = normalize_doctype(str(payload.get("target_document_type") or payload.get("target_type") or ""))
+        if target_type == "payment_entry":
+            return
+        abort(404)
+    source = get_document(source_type, source_id)
     if not source:
         abort(404)
     module = _module_for_document_type(source_type)
     if module:
         if source_type in {"purchase_order", "purchase_receipt", "delivery_note"} and action == "consultar":
-            access_modules = ("sales", "inventory") if source_type == "delivery_note" else ("purchases", "inventory")
-            exige_acceso_compania_cualquiera(access_modules, getattr(source, "company", None), action)
+            exige_acceso_compania_cualquiera(
+                _document_read_access_modules(source_type), getattr(source, "company", None), action
+            )
         else:
             exige_acceso_compania(module, getattr(source, "company", None), action)
 
 
 def _module_for_document_type(document_type: str) -> str | None:
     """Map a document-flow type to its operational ACL module."""
-    return {
+    module = {
         "sales_request": "sales",
         "sales_quotation": "sales",
         "sales_order": "sales",
@@ -169,6 +188,113 @@ def _module_for_document_type(document_type: str) -> str | None:
         "journal_entry": "accounting",
         "payment_entry": "cash",
     }.get(document_type)
+    if module:
+        return module
+    document_type_spec = DOCUMENT_TYPES.get(document_type)
+    return document_type_spec.permission_module if document_type_spec else None
+
+
+def _document_read_access_modules(document_type: str) -> tuple[str, ...]:
+    """Return all operational modules allowed to read a source document."""
+    if document_type == "delivery_note":
+        return ("sales", "inventory")
+    if document_type in {"purchase_order", "purchase_receipt"}:
+        return ("purchases", "inventory")
+    module = _module_for_document_type(document_type)
+    return (module,) if module else ()
+
+
+def _puede_leer_documento_compania(document_type: str, company: str | None) -> bool:
+    """Apply the same module alternatives to source lists as detail reads."""
+    modules = _document_read_access_modules(document_type)
+    return bool(modules) and any(_puede_consultar_modulo_compania(module, company) for module in modules)
+
+
+def _require_flow_target_access(payload: dict[str, Any], action: str = "crear") -> None:
+    """Autoriza la compañía destino de un documento destino genérico.
+
+    La guardia de la cabecera fuente no concede permiso para operar la
+    compañía en la que se materializará el documento destino.
+    """
+    target_type = normalize_doctype(str(payload.get("target_document_type") or payload.get("target_type") or ""))
+    company = str(payload.get("company") or payload.get("company_id") or "")
+    module = _module_for_document_type(target_type)
+    if module and company:
+        exige_acceso_compania(module, company, action)
+
+
+_PAYMENT_REFERENCE_TYPES = frozenset(
+    {
+        "purchase_invoice",
+        "purchase_credit_note",
+        "purchase_debit_note",
+        "sales_invoice",
+        "sales_credit_note",
+        "sales_debit_note",
+        "sales_return",
+    }
+)
+
+
+def _require_flow_source_lines_access(payload: dict[str, Any], action: str = "crear") -> None:
+    """Autoriza el documento fuente real de cada línea seleccionada.
+
+    El destino se construye desde las líneas, no desde la cabecera del
+    payload, y cada línea puede referenciar un documento distinto: se valida
+    la pertenencia a compañía del documento padre real de la línea física.
+    """
+    target_type = normalize_doctype(str(payload.get("target_document_type") or payload.get("target_type") or ""))
+    for selected in payload.get("lines") or []:
+        source_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
+        item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
+        document_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
+        if not item_id:
+            _require_payment_reference_access(target_type, source_type, document_id, action)
+            continue
+        _require_source_item_access(source_type, item_id, document_id, action)
+
+
+def _require_payment_reference_access(
+    target_type: str,
+    source_type: str,
+    document_id: str,
+    action: str,
+) -> None:
+    """Autoriza una línea de pago que referencia una factura completa."""
+    if target_type != "payment_entry":
+        return
+    if source_type not in _PAYMENT_REFERENCE_TYPES or not document_id:
+        abort(400)
+    company = get_document_company(source_type, document_id)
+    if not company:
+        abort(404)
+    module = _module_for_document_type(source_type)
+    if module:
+        exige_acceso_compania(module, company, action)
+
+
+def _require_source_item_access(
+    source_type: str,
+    item_id: str,
+    document_id: str,
+    action: str,
+) -> None:
+    """Autoriza una línea que referencia un ítem de documento concreto."""
+    if not source_type:
+        abort(400)
+    source_item = get_document_item(source_type, item_id)
+    if not source_item:
+        abort(404)
+    source_spec = get_document_type(source_type)
+    parent_id = str(getattr(source_item, source_spec.parent_field))
+    if document_id and document_id != parent_id:
+        abort(400)
+    company = get_document_company(source_type, parent_id)
+    if not company:
+        abort(404)
+    module = _module_for_document_type(source_type)
+    if module:
+        exige_acceso_compania(module, company, action)
 
 
 _FISCAL_PREVIEW_MODULES = {
@@ -240,8 +366,9 @@ def _require_document_read_access(document_type: str, document_id: str) -> Any:
     module = _module_for_document_type(normalized_type)
     if module:
         if normalized_type in {"purchase_order", "purchase_receipt", "delivery_note"}:
-            access_modules = ("sales", "inventory") if normalized_type == "delivery_note" else ("purchases", "inventory")
-            exige_acceso_compania_cualquiera(access_modules, getattr(document, "company", None), "consultar")
+            exige_acceso_compania_cualquiera(
+                _document_read_access_modules(normalized_type), getattr(document, "company", None), "consultar"
+            )
         else:
             exige_acceso_compania(module, getattr(document, "company", None), "consultar")
     return document
@@ -268,18 +395,29 @@ def _require_document_send_access(document_type: str, document_id: str) -> Any:
 
 
 def _require_attachment_master_access(normalized_type: str, reference_id: str, action: str) -> bool:
-    """Authorize access to master entities (e.g. supplier, customer)."""
+    """Authorize access to master entities (e.g. supplier, customer).
+
+    Refleja la política de #1284: el adjunto es visible para las compañías en
+    las que el tercero está activo, respetando los permisos del usuario. Un
+    tercero inactivo, sin activación en una compañía habilitada o sin vínculo
+    con ella no expone adjuntos, ni siquiera para un administrador.
+    """
     master_module = ATTACHMENT_MASTER_MODULES.get(normalized_type)
     if not master_module:
         return False
-    if not database.session.get(Party, reference_id):
+    party = database.session.get(Party, reference_id)
+    if party is None:
         abort(404)
-    if getattr(current_user, "classification", None) == "admin":
-        return True
+    if not party.is_active:
+        abort(403)
     companies = (
         database.session.execute(
-            database.select(CompanyParty.company).where(
-                CompanyParty.party_id == reference_id, CompanyParty.is_active.is_(True)
+            database.select(CompanyParty.company)
+            .join(Entity, Entity.code == CompanyParty.company)
+            .where(
+                CompanyParty.party_id == reference_id,
+                CompanyParty.is_active.is_(True),
+                Entity.enabled.is_(True),
             )
         )
         .scalars()
@@ -287,6 +425,8 @@ def _require_attachment_master_access(normalized_type: str, reference_id: str, a
     )
     if not companies:
         abort(403)
+    if getattr(current_user, "classification", None) == "admin":
+        return True
     for company in companies:
         try:
             exige_acceso_compania(master_module, company, action)
@@ -396,7 +536,7 @@ def _redirect_after_form_post(default_endpoint: str = HOME_ENDPOINT):
     return redirect(url_for(default_endpoint))
 
 
-def _require_attachment_file_access(file_id: str, action: str = "consultar") -> None:
+def _require_attachment_file_access(file_id: str, action: str = "consultar") -> FileAttachment:
     """Authorize at least one reference linked to an attachment file."""
     links = database.session.execute(database.select(FileAttachment).where(FileAttachment.file_id == file_id)).scalars().all()
     if not links:
@@ -404,7 +544,7 @@ def _require_attachment_file_access(file_id: str, action: str = "consultar") -> 
     for link in links:
         try:
             _require_attachment_reference_access(link.reference_type, link.reference_id, action)
-            return
+            return link
         except HTTPException as exc:
             if exc.code != 403:
                 raise
@@ -414,9 +554,11 @@ def _require_attachment_file_access(file_id: str, action: str = "consultar") -> 
 def _require_inventory_image_access(action: str = "consultar") -> None:
     """Require inventory permission for product-image access.
 
-    Mutations (upload/delete) require the inventory ``editar`` permission;
-    reads require at least ``consultar``, matching the item detail view that
-    is gated by ``modulo_activo("inventory")``.
+    Las imágenes pertenecen al artículo global y se comparten entre compañías
+    (#1376), por lo que no se exige acceso a una compañía concreta (#1301).
+    Las mutaciones (subir/borrar) requieren el permiso ``editar`` del módulo
+    Inventario; la lectura requiere ``consultar``, igual que la vista de
+    detalle del artículo.
     """
     if getattr(current_user, "classification", None) == "admin":
         return
@@ -425,6 +567,37 @@ def _require_inventory_image_access(action: str = "consultar") -> None:
     permission = {"consultar": "consultar", "editar": "editar"}[action]
     if not getattr(permisos, permission, False):
         abort(403)
+
+
+def _token_unauthorized_response(message: str) -> tuple[dict[str, str | None], int]:
+    """Return the standard response for a rejected API credential."""
+    return {"message": message, "data": None, "error": "Unauthorized"}, 401
+
+
+def _identity_for_api_token(token: str):
+    """Return the active user whose persisted token and version match the JWT."""
+    try:
+        data = decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
+    except PyJWTError:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    user_id = data.get("user_id")
+    if not isinstance(user_id, str) or not user_id:
+        return None
+
+    from cacao_accounting.database import User, database
+
+    identidad = database.session.get(User, user_id)
+    if (
+        not identidad
+        or identidad.token != token
+        or not identidad.active
+        or data.get("auth_version", 0) != identidad.auth_version
+    ):
+        return None
+    return identidad
 
 
 def token_requerido(f):  # pragma: no cover
@@ -441,38 +614,27 @@ def token_requerido(f):  # pragma: no cover
                 token = parts[1]
 
         if not token:
-            return {
-                "message": "Authentication Token is missing!",
-                "data": None,
-                "error": "Unauthorized",
-            }, 401
+            return _token_unauthorized_response("Authentication Token is missing!")
 
         try:
-            data = decode(token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
-            assert data is not None  # nosec
-            user_id = data.get("user_id")
-
-            from cacao_accounting.database import User, database
-
-            identidad = database.session.get(User, user_id)
-            if not identidad or identidad.token != token:
-                return {
-                    "message": "Invalid or expired Authentication token!",
-                    "data": None,
-                    "error": "Unauthorized",
-                }, 401
-
-            from flask_login import login_user
-
-            if not current_user or not current_user.is_authenticated:
-                login_user(identidad, remember=False, force=False)
-
-        except (KeyError, PyJWTError) as e:
+            identidad = _identity_for_api_token(token)
+        except KeyError:
+            current_app.logger.exception("API token authentication configuration is incomplete")
             return {
                 "message": "Something went wrong",
                 "data": None,
-                "error": str(e),
+                "error": "Internal Server Error",
             }, 500
+        if identidad is None:
+            return _token_unauthorized_response("Invalid or expired Authentication token!")
+
+        from flask_login import login_user
+
+        if not current_user or not current_user.is_authenticated:
+            # El usuario pudo ser deshabilitado entre el login web y la
+            # llamada al API: sin sesión válida la vista no se ejecuta.
+            if not login_user(identidad, remember=False, force=False):
+                return _token_unauthorized_response("Invalid or expired Authentication token!")
 
         return f(*args, **kwds)
 
@@ -558,6 +720,82 @@ def _search_select_payload(
     return search_select(doctype=doctype, query=query, filters=filters, limit=limit, company_scope=company_scope)
 
 
+_SEARCH_SELECT_MODULE: dict[str, Any] = {
+    "account": "accounting",
+    "account_id": "accounting",
+    "account_code": "accounting",
+    "book": "accounting",
+    "accounting_period": "accounting",
+    "accounting_period_id": "accounting",
+    "fiscal_year_id": "accounting",
+    "budget": "accounting",
+    "tax_template": "accounting",
+    "tax_rule": "accounting",
+    "naming_series": "accounting",
+    "voucher_type": "accounting",
+    "document_no": "accounting",
+    "external_counter": "accounting",
+    "cost_center": "accounting",
+    "cost_center_id": "accounting",
+    "unit": "accounting",
+    "unit_id": "accounting",
+    "business_unit": "accounting",
+    "business_unit_id": "accounting",
+    "project": "accounting",
+    "project_id": "accounting",
+    "bank_account": "cash",
+    "bank": "cash",
+    "petty_cash": "cash",
+    "customer": "sales",
+    "supplier": "purchases",
+    # Catálogos compartidos de terceros/precios: cualquiera de los módulos
+    # comerciales que los usan concede la consulta.
+    "party": ("sales", "purchases"),
+    "party_group": ("sales", "purchases"),
+    "customer_group": ("sales", "purchases"),
+    "supplier_group": ("sales", "purchases"),
+    "price_list": ("sales", "purchases"),
+    # Catálogos de ítems y medidas usados por compras, ventas e inventario.
+    "item": ("sales", "purchases", "inventory"),
+    "batch": ("sales", "purchases", "inventory"),
+    "item_category": ("sales", "purchases", "inventory"),
+    "warehouse": ("sales", "purchases", "inventory"),
+    # Catálogos generales sin módulo dueño: su alcance lo maneja la compañía.
+    "company": None,
+    "currency": None,
+    "uom": None,
+    "user": None,
+}
+
+
+def _puede_consultar_modulo_compania(modulo: str, company: str | None) -> bool:
+    """Verificación no abortante de consulta por módulo y compañía."""
+    try:
+        autenticado = bool(current_user and current_user.is_authenticated)
+    except Exception:
+        autenticado = False
+    if not autenticado:
+        return False
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre(modulo), usuario=current_user.id)
+    if permisos.administrador:
+        return True
+    if not permisos.consultar:
+        return False
+    if company is None:
+        return bool(permisos.obtener_companias_autorizadas())
+    return bool(permisos.tiene_acceso_compania(company))
+
+
+def _catalogo_permitido(doctype: str, company: str | None) -> bool:
+    """Exige el permiso de consulta del módulo dueño de los datos del catálogo."""
+    dueño = _SEARCH_SELECT_MODULE.get(doctype)
+    if dueño is None:
+        return True
+    if isinstance(dueño, str):
+        return _puede_consultar_modulo_compania(dueño, company)
+    return any(_puede_consultar_modulo_compania(modulo, company) for modulo in dueño)
+
+
 @api.route("/api/search-select")
 @login_required
 def api_search_select():
@@ -565,6 +803,8 @@ def api_search_select():
     doctype, query, raw_limit, filters = _search_select_request_values()
     _require_search_select_company_access(filters)
     company_scope = _search_select_company_scope(doctype, filters)
+    if not _catalogo_permitido(doctype, filters.get("company", [None])[0] if filters.get("company") else None):
+        return jsonify({"error": _("No se encuentra autorizado para consultar este catálogo.")}), 403
     try:
         payload = _search_select_payload(doctype, query, filters, raw_limit, company_scope)
     except ValueError as exc:
@@ -585,6 +825,8 @@ def api_fiscal_preview():
     except ValueError as exc:
         current_app.logger.warning("Fiscal preview validation error: %s", str(exc))
         return jsonify({"error": _("No se pudo calcular el preview fiscal."), "message": _("Revise los datos enviados.")}), 400
+    if result.get("errors"):
+        return jsonify(result), 422
     return jsonify(result)
 
 
@@ -632,14 +874,15 @@ def _send_document_emails(
     recipients: list[str],
     subject: str,
     body: str,
-) -> tuple[list[str], list[str]]:
+    *,
+    is_html: bool = False,
+) -> tuple[list[str], list[str], list[str]]:
     """Envía cada destinatario y persiste su resultado independiente en la cola."""
-    from datetime import datetime, timezone
-
     from cacao_accounting.database import EmailQueue
-    from cacao_accounting.messaging.email import send_email
+    from cacao_accounting.messaging.email import deliver_email_queue_item
 
     sent_recipients: list[str] = []
+    newly_sent_recipients: list[str] = []
     errors: list[str] = []
     for to_email in recipients:
         queue_item = EmailQueue(
@@ -648,21 +891,25 @@ def _send_document_emails(
             recipient=to_email,
             subject=subject,
             body=body,
+            is_html=is_html,
             status="pending",
             attempts=1,
         )
         database.session.add(queue_item)
         database.session.flush()
+        # La fila queda durable antes de invocar SMTP: si el commit posterior
+        # falla tras la aceptación del correo, se conserva evidencia para
+        # reconciliar y no se reenvía a ciegas.
+        database.session.commit()
         try:
-            send_email(to_email=to_email, subject=subject, body=body, is_html=False)
-            queue_item.status = "sent"
-            queue_item.sent_at = datetime.now(timezone.utc)
-            sent_recipients.append(to_email)
+            result, delivered = deliver_email_queue_item(queue_item.id, retry=False)
+            if result.status == "sent":
+                sent_recipients.append(to_email)
+                if delivered:
+                    newly_sent_recipients.append(to_email)
         except Exception as exc:
-            queue_item.status = "failed"
-            queue_item.error_message = str(exc)
             errors.append(f"{to_email}: {exc}")
-    return sent_recipients, errors
+    return sent_recipients, newly_sent_recipients, errors
 
 
 @api.route("/api/documents/<document_type>/<document_id>/email", methods=["POST"])
@@ -691,10 +938,12 @@ def api_document_send_email(document_type: str, document_id: str):
     body = str(payload.get("body") or payload.get("message") or "").strip() or _(
         "Estimado(a),\n\nSe le notifica la emisión del documento #{document_no}.\n\nAtentamente,\n{company}"
     ).format(document_no=doc_no, company=company)
-    sent_recipients, errors = _send_document_emails(document_type, document_id, recipient_list, subject, body)
+    sent_recipients, newly_sent_recipients, errors = _send_document_emails(
+        document_type, document_id, recipient_list, subject, body
+    )
 
-    if sent_recipients:
-        recipients_str = ", ".join(sent_recipients)
+    if newly_sent_recipients:
+        recipients_str = ", ".join(newly_sent_recipients)
         log_email_sent(
             doc,
             recipients=recipients_str,
@@ -702,6 +951,8 @@ def api_document_send_email(document_type: str, document_id: str):
             comment=f"correo enviado exitosamente a {recipients_str}",
         )
         database.session.commit()
+
+    if sent_recipients:
         if errors:
             return (
                 jsonify(
@@ -808,7 +1059,7 @@ def my_tasks():
         "tasks/my.html",
         tasks=tasks,
         document_url=document_url,
-        active_users=active_users(),
+        active_users=active_users(companies=authorized_company_codes()),
         open_task_count=open_task_count(str(current_user.id)),
         titulo=_("Mis tareas"),
     )
@@ -866,16 +1117,23 @@ def api_list_attachments(reference_type: str, reference_id: str):
 @api.route("/attachments/download/<file_id>", methods=["GET"])
 @login_required
 def api_download_attachment(file_id: str):
-    """Download/serve an attached file."""
-    _require_attachment_file_access(file_id)
+    """Download/serve an attached file with an audited delivery."""
+    try:
+        link = _require_attachment_file_access(file_id)
+    except HTTPException:
+        log_attachment_access_denied(file_id, action="download")
+        raise
     try:
         file_rec, path = get_attachment_file(file_id)
-        return send_file(
+        log_attachment_downloaded(file_rec, link.reference_type, link.reference_id)
+        response = send_file(
             path,
             download_name=file_rec.file_name,
             mimetype=file_rec.mime_type or "application/octet-stream",
             as_attachment=True,
         )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
     except AttachmentError as exc:
         abort(exc.status_code)
 
@@ -887,9 +1145,13 @@ def api_delete_attachment(file_id: str):
     payload = request.get_json(silent=True) or request.form.to_dict()
     ref_type = payload.get("reference_type") or request.args.get("reference_type") or ""
     ref_id = payload.get("reference_id") or request.args.get("reference_id") or ""
-    _require_attachment_reference_access(ref_type, ref_id, "editar")
     try:
-        delete_attachment(file_id, ref_type, ref_id, user_id=str(current_user.id))
+        _require_attachment_reference_access(ref_type, ref_id, "editar")
+    except HTTPException:
+        log_attachment_access_denied(file_id, reference_type=ref_type, reference_id=ref_id, action="delete")
+        raise
+    try:
+        result = delete_attachment(file_id, ref_type, ref_id, user_id=str(current_user.id))
     except AttachmentError as exc:
         if _wants_form_redirect():
             flash(str(exc), "danger")
@@ -898,9 +1160,33 @@ def api_delete_attachment(file_id: str):
 
     if _wants_form_redirect():
         flash(_("Adjunto eliminado."), "info")
+        if not result["file_removed"]:
+            flash(_("El archivo físico quedó pendiente de limpieza."), "warning")
         return _redirect_after_form_post()
 
-    return jsonify({"success": True})
+    return jsonify({"success": result["deleted"], **result})
+
+
+@api.route("/api/attachments/<file_id>/metadata", methods=["PATCH", "POST"])
+@login_required
+def api_update_attachment_metadata(file_id: str):
+    """Update editable attachment metadata with an audited change."""
+    try:
+        _require_attachment_file_access(file_id, "editar")
+    except HTTPException:
+        log_attachment_access_denied(file_id, action="update")
+        raise
+    payload = request.get_json(silent=True) or request.form.to_dict()
+    try:
+        result = update_attachment_metadata(
+            file_id,
+            remarks=payload.get("remarks"),
+            file_name=payload.get("file_name"),
+            user_id=str(current_user.id),
+        )
+    except AttachmentError as exc:
+        return jsonify({"error": str(exc)}), exc.status_code
+    return jsonify(result)
 
 
 @api.route("/api/inventory/items/<item_id>/image", methods=["POST"])
@@ -929,7 +1215,10 @@ def api_upload_item_image(item_id: str):
 def api_get_item_image(item_id: str):
     """Serve product image of an inventory item."""
     _require_inventory_image_access("consultar")
-    file_rec, path = get_item_image_file(item_id)
+    try:
+        file_rec, path = get_item_image_file(item_id)
+    except AttachmentError as exc:
+        abort(exc.status_code)
     if not path or not file_rec:
         abort(404)
     mime_type = (file_rec.mime_type or "image/png").lower()
@@ -1043,6 +1332,13 @@ def api_document_flow_items():
     sources = request.args.getlist("source")
     if not target_type or not sources:
         abort(400)
+    for value in sources:
+        # Cada documento origen se autoriza de forma independiente: la
+        # petición puede mezclar orígenes y ninguno debe escapar al ACL.
+        if ":" not in value:
+            abort(400)
+        source_type, source_id = value.split(":", 1)
+        _require_document_read_access(source_type, source_id)
     try:
         items = get_document_flow_items(target_type, sources)
     except DocumentFlowError as exc:
@@ -1072,7 +1368,15 @@ def api_document_flow_source_documents():
         )
     except (DocumentFlowError, KeyError):
         abort(400)
-    return jsonify({"target_type": target_type, "source_documents": sources})
+    # #1515: el acceso al módulo destino no concede consulta de los módulos
+    # de los orígenes; cada fila de la lista se filtra por su módulo fuente
+    # para que no se anuncie un origen cuyo detalle el usuario no puede pedir.
+    fuentes_visibles = []
+    for row in sources:
+        tipo_fuente = str(row.get("source_type") or "")
+        if _puede_leer_documento_compania(tipo_fuente, str(row.get("company") or "") or company):
+            fuentes_visibles.append(row)
+    return jsonify({"target_type": target_type, "source_documents": fuentes_visibles})
 
 
 @api.route("/api/document-flow/pending-lines")
@@ -1086,9 +1390,17 @@ def api_document_flow_pending_lines():
     company = request.args.get("company") or request.args.get("company_id")
     if not source_type or not target_type or not source_ids or not company:
         abort(400)
-    module = _module_for_document_type(normalize_doctype(source_type))
-    if module:
-        exige_acceso_compania(module, company, "consultar")
+    normalized_source_type = normalize_doctype(source_type)
+    access_modules = _document_read_access_modules(normalized_source_type)
+    if not access_modules:
+        abort(400)
+    for source_id in source_ids:
+        source_document = _require_document_read_access(normalized_source_type, source_id)
+        source_company = getattr(source_document, "company", None)
+        if not source_company:
+            abort(403)
+        if source_company != company:
+            abort(409)
     try:
         lines = get_pending_lines(
             source_document_type=source_type,
@@ -1157,8 +1469,6 @@ def api_document_flow_payment_reconciliation_candidates():
 @login_required
 def api_accounting_arap_reconciliation():
     """Diagnostica o configura la política de conciliación continua AR/AP↔GL."""
-    from cacao_accounting.database import ArApReconciliationPolicy, database
-
     company = str(request.args.get("company") or request.args.get("company_id") or "").strip()
     if request.method == "POST":
         payload = request.get_json(silent=True) or {}
@@ -1168,28 +1478,40 @@ def api_accounting_arap_reconciliation():
     exige_acceso_compania("accounting", company, "autorizar" if request.method == "POST" else "consultar")
 
     if request.method == "POST":
-        payload = request.get_json(silent=True) or {}
-        mode = str(payload.get("mode") or "strict").strip().lower()
-        if mode not in {"strict", "warn", "log"}:
-            return jsonify({"error": _("La política debe ser strict, warn o log.")}), 400
-        try:
-            tolerance = Decimal(str(payload.get("tolerance", "0.01")))
-        except Exception:  # noqa: BLE001
-            return jsonify({"error": _("La tolerancia debe ser decimal.")}), 400
-        if not tolerance.is_finite() or tolerance < 0:
-            return jsonify({"error": _("La tolerancia debe ser finita y no negativa.")}), 400
-        row = database.session.execute(
-            database.select(ArApReconciliationPolicy).where(ArApReconciliationPolicy.company == company)
-        ).scalar_one_or_none()
-        if row is None:
-            row = ArApReconciliationPolicy(company=company)
-            database.session.add(row)
-        row.mode = mode
-        row.tolerance = tolerance
-        row.enabled = bool(payload.get("enabled", True))
-        database.session.commit()
-        return jsonify({"company": company, "mode": row.mode, "tolerance": str(row.tolerance), "enabled": row.enabled})
+        return _save_arap_reconciliation_policy(company)
 
+    return _get_arap_reconciliation_status(company)
+
+
+def _save_arap_reconciliation_policy(company: str):
+    """Valida y persiste la política de conciliación recibida por POST."""
+    from cacao_accounting.database import ArApReconciliationPolicy, database
+
+    payload = request.get_json(silent=True) or {}
+    mode = str(payload.get("mode") or "strict").strip().lower()
+    if mode not in {"strict", "warn", "log"}:
+        return jsonify({"error": _("La política debe ser strict, warn o log.")}), 400
+    try:
+        tolerance = Decimal(str(payload.get("tolerance", "0.01")))
+    except Exception:  # noqa: BLE001
+        return jsonify({"error": _("La tolerancia debe ser decimal.")}), 400
+    if not tolerance.is_finite() or tolerance < 0:
+        return jsonify({"error": _("La tolerancia debe ser finita y no negativa.")}), 400
+    row = database.session.execute(
+        database.select(ArApReconciliationPolicy).where(ArApReconciliationPolicy.company == company)
+    ).scalar_one_or_none()
+    if row is None:
+        row = ArApReconciliationPolicy(company=company)
+        database.session.add(row)
+    row.mode = mode
+    row.tolerance = tolerance
+    row.enabled = bool(payload.get("enabled", True))
+    database.session.commit()
+    return jsonify({"company": company, "mode": row.mode, "tolerance": str(row.tolerance), "enabled": row.enabled})
+
+
+def _get_arap_reconciliation_status(company: str):
+    """Obtiene los saldos AR/AP y GL para una compañía y fecha de corte."""
     from cacao_accounting.contabilidad.arap_gl_reconciliation import ARAPGLReconciliationError, reconcile_arap_to_gl
 
     try:
@@ -1271,10 +1593,12 @@ def api_document_flow_create_target():
     try:
         payload = request.get_json(silent=True) or {}
         _require_flow_company_access(payload, "crear")
+        _require_flow_target_access(payload, "crear")
+        _require_flow_source_lines_access(payload, "crear")
         result = create_target_document(payload)
     except DocumentFlowError as exc:
         abort(exc.status_code)
-    except KeyError:
+    except (KeyError, ValueError):
         abort(400)
     return jsonify(result), 201
 
@@ -1337,15 +1661,12 @@ def api_document_flow_tree():
         direction       ``all`` (defecto), ``upstream`` o ``downstream``.
         max_depth       Profundidad máxima (defecto 10).
         max_nodes       Número máximo de nodos (defecto 100).
-        legacy          Si ``1``, usa el formato plano original de document_flow_tree.
     """
     document_type = request.args.get("document_type", "")
     document_id = request.args.get("document_id", "")
     if not document_type or not document_id:
         abort(400)
     _require_document_read_access(document_type, document_id)
-    if (request.args.get("legacy") or "").lower() in {"1", "true"}:
-        return jsonify(document_flow_tree(document_type, document_id))
     direction = request.args.get("direction", "all")
     if direction not in {"all", "upstream", "downstream"}:
         abort(400)

@@ -6,7 +6,7 @@
 from cacao_accounting.i18n import _l
 from flask_wtf import FlaskForm
 from wtforms import BooleanField, SelectField, StringField, TextAreaField
-from wtforms.validators import DataRequired, Optional
+from wtforms.validators import DataRequired, Length, Optional
 
 _LABEL_COMPANY = _l("Compañía")
 
@@ -14,8 +14,17 @@ _LABEL_COMPANY = _l("Compañía")
 class FormularioBanco(FlaskForm):
     """Formulario para crear o editar un banco."""
 
-    name = StringField(_l("Nombre"), validators=[DataRequired()])
-    swift_code = StringField(_l("Código SWIFT"))
+    name = StringField(
+        _l("Nombre"),
+        validators=[DataRequired(message=_l("Este campo es obligatorio."))],
+    )
+    swift_code = StringField(
+        _l("Código SWIFT"),
+        validators=[
+            Optional(),
+            Length(max=20, message=_l("El código SWIFT no puede superar los 20 caracteres.")),
+        ],
+    )
 
 
 class FormularioCuentaBancaria(FlaskForm):
@@ -23,9 +32,21 @@ class FormularioCuentaBancaria(FlaskForm):
 
     bank_id = SelectField(_l("Banco"), choices=[], validators=[DataRequired()])
     company = SelectField(_LABEL_COMPANY, choices=[], validators=[DataRequired()])
-    account_name = StringField(_l("Nombre de Cuenta"), validators=[DataRequired()])
-    account_no = StringField(_l("Número de Cuenta"))
-    iban = StringField(_l("IBAN"))
+    account_name = StringField(
+        _l("Nombre de Cuenta"),
+        validators=[
+            DataRequired(message=_l("Este campo es obligatorio.")),
+            Length(max=150, message=_l("El nombre de la cuenta no puede superar los 150 caracteres.")),
+        ],
+    )
+    account_no = StringField(
+        _l("Número de Cuenta"),
+        validators=[Optional(), Length(max=50, message=_l("El número de cuenta no puede superar los 50 caracteres."))],
+    )
+    iban = StringField(
+        _l("IBAN"),
+        validators=[Optional(), Length(max=50, message=_l("El IBAN no puede superar los 50 caracteres."))],
+    )
     currency = SelectField(_l("Moneda"), choices=[])
     gl_account_id = SelectField(_l("Cuenta contable bancaria"), choices=[], validators=[Optional()])
     default_naming_series_id = SelectField(_l("Serie interna para pagos"), choices=[], validators=[Optional()])
@@ -78,38 +99,3 @@ class FormularioPettyCashExpense(FlaskForm):
     unit_code = SelectField(_l("Unidad de negocio"), choices=[], validators=[Optional()])
     project_code = SelectField(_l("Proyecto"), choices=[], validators=[Optional()])
     remarks = TextAreaField(_l("Observaciones"), validators=[Optional()])
-
-
-class FormularioPago(FlaskForm):
-    """Formulario para crear una entrada de pago."""
-
-    payment_type = SelectField(
-        _l("Tipo de Pago"),
-        choices=[
-            ("receive", _l("Cobro")),
-            ("pay", _l("Pago")),
-            ("internal_transfer", _l("Transferencia Interna")),
-        ],
-    )
-    company = SelectField(_LABEL_COMPANY, choices=[])
-    naming_series = SelectField(_l("Serie"), choices=[])
-    posting_date = StringField(_l("Fecha"))
-    bank_account_id = SelectField(_l("Cuenta Bancaria"), choices=[])
-    party_type = SelectField(
-        _l("Tipo de Tercero"),
-        choices=[("customer", _l("Cliente")), ("supplier", _l("Proveedor"))],
-    )
-    party_id = SelectField(_l("Tercero"), choices=[])
-    paid_amount = StringField(_l("Monto Pagado"))
-    remarks = TextAreaField(_l("Observaciones"))
-    # Contador externo — opcional. Si se selecciona, se asigna el numero externo al pago.
-    external_counter_id = SelectField(
-        _l("Contador Externo (Cheque / Número Fiscal)"),
-        choices=[],
-        validators=[Optional()],
-    )
-    # Numero externo: si se deja vacio, el sistema usa el siguiente sugerido por el contador.
-    external_number = StringField(
-        _l("Número Externo"),
-        validators=[Optional()],
-    )

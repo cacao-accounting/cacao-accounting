@@ -5,15 +5,18 @@
 
 from datetime import date, timedelta
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import json
 
 from typing import Any, TypedDict, cast
 
-from cacao_accounting.exceptions import flash_error
+from sqlalchemy.orm import aliased
 
-from flask import Blueprint, abort, flash, redirect, request, url_for
+from cacao_accounting.exceptions import flash_error
+from cacao_accounting.default_scope import lock_default_scope
+
+from flask import Blueprint, flash, redirect, request, url_for
 
 
 from flask_login import current_user
@@ -31,9 +34,11 @@ from cacao_accounting.bancos.statement_service import (
 from cacao_accounting.database import (
     BankAccount,
     Accounts,
+    Bank,
     BankAccountNumberingConfig,
     BankTransaction,
     ComprobanteContable,
+    CostCenter,
     Currency,
     DocumentRelation,
     Entity,
@@ -47,6 +52,7 @@ from cacao_accounting.database import (
     PettyCashReconciliation,
     PettyCashReplenishment,
     PettyCashVoucher,
+    Project,
     PurchaseInvoice,
     PurchaseOrder,
     PurchaseReconciliation,
@@ -55,6 +61,7 @@ from cacao_accounting.database import (
     SalesOrder,
     SalesInvoice,
     SeriesExternalCounterMap,
+    Unit,
     User,
     database,
 )
@@ -236,6 +243,40 @@ def _validate_bank_account_numbering_defaults(
     return naming_series_id, external_counter_id
 
 
+def _validate_bank_account_references(
+    *,
+    company: str | None,
+    bank_id: str | None,
+    currency: str | None,
+    gl_account_id: str | None,
+) -> None:
+    """Verifica que las referencias de una cuenta bancaria estén vigentes.
+
+    Las choices del formulario solo ofrecen registros activos; esta guardia
+    cubre además la desactivación concurrente entre el GET y el POST.
+    """
+    bank = database.session.get(Bank, bank_id) if bank_id else None
+    if not bank or not bank.is_active:
+        raise IdentifierConfigurationError(_("Seleccione un banco activo."))
+    if currency:
+        moneda = database.session.execute(database.select(Currency).filter_by(code=currency)).scalar_one_or_none()
+        if not moneda or not moneda.active:
+            raise IdentifierConfigurationError(_("La moneda seleccionada no está activa."))
+    if gl_account_id:
+        account = database.session.get(Accounts, gl_account_id)
+        if (
+            not account
+            or account.entity != company
+            or account.account_type != "bank"
+            or not account.active
+            or not account.enabled
+            or account.group
+        ):
+            raise IdentifierConfigurationError(
+                _("Seleccione una cuenta contable de tipo banco, activa y habilitada, para la compañía indicada.")
+            )
+
+
 def _ensure_bank_account_counter_mapping(bank_account: BankAccount) -> None:
     """Vincula la serie compartida con la chequera usando la cuenta como contexto."""
     if not bank_account.default_naming_series_id or not bank_account.default_external_counter_id:
@@ -295,11 +336,6 @@ def _payment_type_to_entity_type(payment_type: str) -> str:
     return PAYMENT_TYPE_TO_ENTITY_TYPE.get(payment_type, "payment_entry")
 
 
-def _get_default_entity_type_for_payment_type() -> dict[str, str]:
-    """Retorna el mapeo de payment_type a entity_type."""
-    return dict(PAYMENT_TYPE_TO_ENTITY_TYPE)
-
-
 def _ensure_bank_account_numbering_config(bank_account: BankAccount) -> None:
     """Crea configuraciones predeterminadas de numeracion para cada tipo de transaccion.
 
@@ -346,15 +382,31 @@ def petty_cash_ledger_balance(petty_cash: PettyCashAccount, as_of_date: date | N
     """Devuelve el saldo contable de una caja chica derivado del GL a una fecha.
 
     El saldo no se almacena; se calcula como ``SUM(debit - credit)`` sobre la
-    cuenta contable asociada (patron de partida doble). Cuando se indica una
-    fecha de corte, excluye movimientos posteriores para conservar la
-    consistencia histórica de conciliaciones y reportes.
+    cuenta contable asociada (patrón de partida doble), sobre el libro activo
+    protagonista de lectura: el poste contable publica una fila ``GLEntry`` por
+    cada libro activo, de modo que no filtrar por libro consolidaría el saldo
+    multiplicado por la cantidad de libros. Cuando se indica una fecha de
+    corte, excluye movimientos posteriores para conservar la consistencia
+    histórica de conciliaciones y reportes.
     """
     if not petty_cash.account_id:
         return Decimal("0")
-    query = database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).filter_by(
-        account_id=petty_cash.account_id, company=petty_cash.company
+    cancelled_source = aliased(GLEntry)
+    same_period_cancellation = database.exists(
+        database.select(cancelled_source.id).where(
+            cancelled_source.id == GLEntry.reversal_of,
+            cancelled_source.is_cancelled.is_(True),
+        )
     )
+    query = database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+        GLEntry.account_id == petty_cash.account_id,
+        GLEntry.company == petty_cash.company,
+        GLEntry.is_cancelled.is_(False),
+        database.or_(GLEntry.is_reversal.is_(False), ~same_period_cancellation),
+    )
+    ledger_id = primary_ledger_id(str(petty_cash.company))
+    if ledger_id:
+        query = query.where(GLEntry.ledger_id == ledger_id)
     if as_of_date is not None:
         query = query.filter(GLEntry.posting_date <= as_of_date)
     result = database.session.execute(query).scalar()
@@ -383,14 +435,6 @@ def petty_cash_pending_replenishment_total(petty_cash: PettyCashAccount, as_of_d
         query = query.filter(PettyCashExpense.posting_date <= as_of_date)
     result = database.session.execute(query).scalar()
     return Decimal(str(result or 0))
-
-
-def petty_cash_account_choices(company: str) -> list[tuple[str, str]]:
-    """Cuentas contables de tipo ``petty_cash`` disponibles para asignar a una caja."""
-    rows = database.session.execute(
-        database.select(Accounts).filter_by(entity=company, account_type="petty_cash", group=False).order_by(Accounts.code)
-    ).scalars()
-    return [(str(account.id), f"{account.code} - {account.name}") for account in rows]
 
 
 def _validate_petty_cash_account(company: str, account_id: str | None) -> Accounts | None:
@@ -501,6 +545,9 @@ def update_petty_cash_account(
     account = database.session.get(Accounts, petty_cash.account_id)
     if account_id:
         account = _validate_petty_cash_account(petty_cash.company, account_id)
+        assert account is not None
+        if currency is None:
+            _validate_petty_cash_currency(petty_cash.company, petty_cash.currency or None, account)
         petty_cash.account_id = account_id
     if float_amount is not None:
         if float_amount < 0:
@@ -521,6 +568,7 @@ def update_petty_cash_account(
 
 def set_petty_cash_default(petty_cash: PettyCashAccount) -> None:
     """Marca una caja chica como predeterminada (unica por compania)."""
+    lock_default_scope("petty_cash_account", petty_cash.company)
     _clear_default_petty_cash(petty_cash.company)
     petty_cash.is_default = True
     database.session.commit()
@@ -528,11 +576,16 @@ def set_petty_cash_default(petty_cash: PettyCashAccount) -> None:
 
 def _clear_default_petty_cash(company: str) -> None:
     """Quita la marca de predeterminada a las demas cajas de la compania."""
+    lock_default_scope("petty_cash_account", company)
     defaults = database.session.execute(
-        database.select(PettyCashAccount).filter_by(company=company, is_default=True)
+        database.select(PettyCashAccount)
+        .filter_by(company=company, is_default=True)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalars()
     for registro in defaults:
         registro.is_default = False
+    database.session.flush()
 
 
 def toggle_petty_cash_active(petty_cash: PettyCashAccount) -> None:
@@ -549,8 +602,12 @@ def create_default_petty_cash(company: str, custodian_id: str | None = None) -> 
     administrador). Es idempotente: si la compania ya tiene una caja chica
     predeterminada, no crea otra.
     """
+    lock_default_scope("petty_cash_account", company)
     existing = database.session.execute(
-        database.select(PettyCashAccount).filter_by(company=company, is_default=True)
+        database.select(PettyCashAccount)
+        .filter_by(company=company, is_default=True)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalar_one_or_none()
     if existing:
         return existing
@@ -636,6 +693,26 @@ def _validate_petty_cash_fund(petty_cash_id: str, company: str | None = None) ->
     return fund
 
 
+def _validate_petty_cash_dimensions(
+    company: str,
+    cost_center_code: str | None,
+    unit_code: str | None,
+    project_code: str | None,
+) -> None:
+    """Exige que las dimensiones analíticas pertenezcan a la compañía."""
+    checks = (
+        (CostCenter, cost_center_code, _("centro de costo")),
+        (Unit, unit_code, _("unidad de negocio")),
+        (Project, project_code, _("proyecto")),
+    )
+    for model, code, label in checks:
+        if not code:
+            continue
+        exists = database.session.execute(database.select(model.id).filter_by(code=code, entity=company)).scalar_one_or_none()
+        if exists is None:
+            raise ValueError(_("La dimensión %(label)s no pertenece a la compañía del documento.") % {"label": label})
+
+
 def create_petty_cash_voucher(
     *,
     company: str,
@@ -656,6 +733,7 @@ def create_petty_cash_voucher(
         raise ValueError(_("El concepto del vale es obligatorio."))
     if amount is None or amount <= 0:
         raise ValueError(_("El importe del vale debe ser mayor a cero."))
+    _validate_petty_cash_dimensions(company, cost_center_code, unit_code, project_code)
 
     voucher = PettyCashVoucher(
         company=company,
@@ -689,30 +767,6 @@ def create_petty_cash_voucher(
     return voucher
 
 
-def update_petty_cash_voucher(
-    voucher: PettyCashVoucher,
-    *,
-    concept: str | None = None,
-    amount: Decimal | None = None,
-    delivered_to: str | None = None,
-) -> PettyCashVoucher:
-    """Actualiza un vale de caja chica en estado borrador."""
-    if voucher.voucher_status != "borrador":
-        raise ValueError(_("Solo se pueden editar vales en estado borrador."))
-    if concept is not None:
-        if not concept.strip():
-            raise ValueError(_("El concepto del vale es obligatorio."))
-        voucher.concept = concept.strip()
-    if amount is not None:
-        if amount <= 0:
-            raise ValueError(_("El importe del vale debe ser mayor a cero."))
-        voucher.amount = amount
-    if delivered_to is not None:
-        voucher.delivered_to = delivered_to or None
-    database.session.commit()
-    return voucher
-
-
 _PETTY_CASH_VOUCHER_STATUS_FLOW = {
     "borrador": {"entregado", "cancelado"},
     "entregado": {"liquidado", "cancelado"},
@@ -724,15 +778,23 @@ _PETTY_CASH_VOUCHER_STATUS_FLOW = {
 def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str) -> PettyCashVoucher:
     """Transiciona el estado de un vale (borrador -> entregado -> liquidado | cancelado)."""
     new_status = (new_status or "").strip().lower()
+    try:
+        _begin_sqlite_write_transaction()
+        voucher = cast(PettyCashVoucher, _lock_row_for_transition(PettyCashVoucher, voucher.id))
+    except Exception:
+        database.session.rollback()
+        raise
     current = voucher.voucher_status or "borrador"
     allowed = _PETTY_CASH_VOUCHER_STATUS_FLOW.get(current, set())
     if new_status not in allowed:
+        database.session.rollback()
         raise ValueError(
             _("Transición de estado no válida: %(current)s -> %(new_status)s") % {"current": current, "new_status": new_status}
         )
     if new_status == "liquidado":
         expense = database.session.get(PettyCashExpense, voucher.expense_id) if voucher.expense_id else None
         if expense is None or expense.voucher_id != voucher.id or expense.docstatus != 1 or not expense.journal_id:
+            database.session.rollback()
             raise ValueError(_("Un vale solo puede liquidarse mediante un gasto contabilizado."))
         journal = database.session.get(ComprobanteContable, expense.journal_id)
         has_active_gl = database.session.execute(
@@ -745,7 +807,13 @@ def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str) ->
             .limit(1)
         ).scalar_one_or_none()
         if journal is None or journal.status != "submitted" or not has_active_gl:
+            database.session.rollback()
             raise ValueError(_("Un vale solo puede liquidarse mediante un gasto con asiento GL activo."))
+    if new_status == "cancelado" and voucher.expense_id:
+        expense = database.session.get(PettyCashExpense, voucher.expense_id)
+        if expense and expense.docstatus == 1:
+            database.session.rollback()
+            raise ValueError(_("No se puede cancelar un vale con un gasto contabilizado activo."))
     voucher.voucher_status = new_status
     if new_status == "cancelado":
         voucher.docstatus = 2
@@ -812,8 +880,9 @@ def post_petty_cash_expense_journal(
     posted_date,
     actor_id: str | None = None,
     reference: str | None = None,
+    commit: bool = True,
 ) -> "ComprobanteContable":
-    """Genera y postea el asiento contable del gasto (Dr Gasto / Cr Caja Chica)."""
+    """Genera y postea el asiento, permitiendo integrarlo en una transacción mayor."""
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, create_journal_draft, submit_journal
 
     if not _active_book(company):
@@ -849,8 +918,8 @@ def post_petty_cash_expense_journal(
         ],
     }
     try:
-        journal = create_journal_draft(payload, user_id=actor_id or "")
-        submit_journal(journal.id, user_id=actor_id or "")
+        journal = create_journal_draft(payload, user_id=actor_id or "", commit=commit)
+        submit_journal(journal.id, user_id=actor_id or "", commit=commit)
     except JournalValidationError as exc:
         raise ValueError(str(exc)) from exc
     return journal
@@ -873,74 +942,117 @@ def create_petty_cash_expense(
     actor_id: str | None = None,
 ) -> PettyCashExpense:
     """Crea y postea un gasto de caja chica (Dr Gasto / Cr Caja Chica)."""
+    from cacao_accounting.approval_preflight import ensure_approval_flow_supported
+
+    ensure_approval_flow_supported(company)
     if posted_date is None:
         from datetime import date as _date
 
         posted_date = _date.today()
     fund = _validate_petty_cash_fund(petty_cash_id, company)
+    _validate_petty_cash_expense_request(
+        company=company,
+        expense_account_code=expense_account_code,
+        concept=concept,
+        amount=amount,
+        cost_center_code=cost_center_code,
+        unit_code=unit_code,
+        project_code=project_code,
+    )
+    voucher = _lock_and_validate_petty_cash_voucher(voucher_id, company, petty_cash_id, amount)
+
+    try:
+        journal = post_petty_cash_expense_journal(
+            company=company,
+            petty_cash=fund,
+            expense_account_code=expense_account_code,
+            concept=concept,
+            amount=amount,
+            cost_center_code=cost_center_code,
+            posted_date=posted_date,
+            actor_id=actor_id,
+            reference="",
+            commit=False,
+        )
+
+        expense = PettyCashExpense(
+            company=company,
+            petty_cash_id=petty_cash_id,
+            voucher_id=voucher_id or None,
+            beneficiary=beneficiary or None,
+            concept=concept.strip(),
+            expense_account_code=expense_account_code,
+            amount=amount,
+            cost_center_code=cost_center_code or None,
+            unit_code=unit_code or None,
+            project_code=project_code or None,
+            remarks=remarks or None,
+            posting_date=posted_date,
+            transaction_currency=fund.currency or _company_currency(company),
+            journal_id=str(journal.id),
+            docstatus=1,
+        )
+        database.session.add(expense)
+        database.session.flush()
+        try:
+            assign_document_identifier(
+                document=expense,
+                entity_type="petty_cash_expense",
+                posting_date_raw=posted_date,
+                naming_series_id=None,
+            )
+        except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
+            pass
+        if voucher is not None:
+            voucher.voucher_status = "liquidado"
+            voucher.expense_id = expense.id
+        database.session.commit()
+    except Exception:
+        database.session.rollback()
+        raise
+    return expense
+
+
+def _validate_petty_cash_expense_request(
+    *,
+    company: str,
+    expense_account_code: str,
+    concept: str,
+    amount: Decimal,
+    cost_center_code: str,
+    unit_code: str | None,
+    project_code: str | None,
+) -> None:
+    """Validate required expense fields, company dimensions, and posting account."""
     if not concept.strip():
         raise ValueError(_("El concepto del gasto es obligatorio."))
     if amount is None or amount <= 0:
         raise ValueError(_("El importe del gasto debe ser mayor a cero."))
     if not cost_center_code:
         raise ValueError(_("El gasto de caja chica requiere un centro de costo."))
+    _validate_petty_cash_dimensions(company, cost_center_code, unit_code, project_code)
+    _validate_petty_cash_expense_account(company, expense_account_code)
 
-    if voucher_id:
-        voucher = database.session.get(PettyCashVoucher, voucher_id)
-        if not voucher or voucher.company != company or voucher.petty_cash_id != petty_cash_id:
+
+def _lock_and_validate_petty_cash_voucher(
+    voucher_id: str | None, company: str, petty_cash_id: str, amount: Decimal
+) -> PettyCashVoucher | None:
+    """Lock a voucher and ensure it can settle exactly this petty cash expense."""
+    if not voucher_id:
+        return None
+    try:
+        _begin_sqlite_write_transaction()
+        voucher = cast(PettyCashVoucher, _lock_row_for_transition(PettyCashVoucher, voucher_id))
+        if voucher.company != company or voucher.petty_cash_id != petty_cash_id:
             raise ValueError(_("El vale origen no pertenece a la caja chica seleccionada."))
         if voucher.voucher_status != "entregado" or voucher.expense_id:
             raise ValueError(_("El vale origen no esta disponible para liquidarse."))
         if amount != voucher.amount:
             raise ValueError(_("El importe del gasto debe coincidir con el importe del vale."))
-    _validate_petty_cash_expense_account(company, expense_account_code)
-
-    journal = post_petty_cash_expense_journal(
-        company=company,
-        petty_cash=fund,
-        expense_account_code=expense_account_code,
-        concept=concept,
-        amount=amount,
-        cost_center_code=cost_center_code,
-        posted_date=posted_date,
-        actor_id=actor_id,
-        reference="",
-    )
-
-    expense = PettyCashExpense(
-        company=company,
-        petty_cash_id=petty_cash_id,
-        voucher_id=voucher_id or None,
-        beneficiary=beneficiary or None,
-        concept=concept.strip(),
-        expense_account_code=expense_account_code,
-        amount=amount,
-        cost_center_code=cost_center_code or None,
-        unit_code=unit_code or None,
-        project_code=project_code or None,
-        remarks=remarks or None,
-        posting_date=posted_date,
-        transaction_currency=fund.currency or _company_currency(company),
-        journal_id=str(journal.id),
-        docstatus=1,
-    )
-    database.session.add(expense)
-    database.session.flush()
-    try:
-        assign_document_identifier(
-            document=expense,
-            entity_type="petty_cash_expense",
-            posting_date_raw=posted_date,
-            naming_series_id=None,
-        )
-    except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
-        pass
-    if voucher_id:
-        assert voucher is not None  # narrowed by the checks above; mypy can not see the raise
-        voucher.voucher_status = "liquidado"
-        voucher.expense_id = expense.id
-    database.session.commit()
-    return expense
+        return voucher
+    except Exception:
+        database.session.rollback()
+        raise
 
 
 def create_petty_cash_expense_from_voucher(
@@ -953,28 +1065,34 @@ def create_petty_cash_expense_from_voucher(
     actor_id: str | None = None,
 ) -> PettyCashExpense:
     """Liquida un vale entregado convirtiendolo en gasto y posteando al GL."""
-    if (voucher.voucher_status or "borrador") != "entregado":
-        raise ValueError(_("Solo se puede liquidar un vale en estado entregado."))
-    if voucher.expense_id:
-        raise ValueError(_("El vale ya fue liquidado."))
-    expense = create_petty_cash_expense(
-        company=voucher.company or "",
-        petty_cash_id=voucher.petty_cash_id,
-        expense_account_code=expense_account_code,
-        concept=voucher.concept or "",
-        amount=voucher.amount,
-        cost_center_code=cost_center_code,
-        beneficiary=voucher.delivered_to or None,
-        unit_code=voucher.unit_code,
-        project_code=voucher.project_code,
-        posted_date=posted_date,
-        voucher_id=voucher.id,
-        remarks=remarks or voucher.comments or None,
-        actor_id=actor_id,
-    )
-    voucher.voucher_status = "liquidado"
-    voucher.expense_id = expense.id
-    database.session.commit()
+    try:
+        voucher = cast(PettyCashVoucher, _lock_row_for_transition(PettyCashVoucher, voucher.id))
+        if (voucher.voucher_status or "borrador") != "entregado":
+            raise ValueError(_("Solo se puede liquidar un vale en estado entregado."))
+        if voucher.expense_id:
+            raise ValueError(_("El vale ya fue liquidado."))
+    except Exception:
+        database.session.rollback()
+        raise
+    try:
+        expense = create_petty_cash_expense(
+            company=voucher.company or "",
+            petty_cash_id=voucher.petty_cash_id,
+            expense_account_code=expense_account_code,
+            concept=voucher.concept or "",
+            amount=voucher.amount,
+            cost_center_code=cost_center_code,
+            beneficiary=voucher.delivered_to or None,
+            unit_code=voucher.unit_code,
+            project_code=voucher.project_code,
+            posted_date=posted_date,
+            voucher_id=voucher.id,
+            remarks=remarks or voucher.comments or None,
+            actor_id=actor_id,
+        )
+    except Exception:
+        database.session.rollback()
+        raise
     return expense
 
 
@@ -988,42 +1106,51 @@ def cancel_petty_cash_expense(
     """Anula un gasto de caja chica, revirtiendo su asiento contable (append-only)."""
     from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
 
-    if expense.docstatus != 1:
-        raise ValueError(_("Solo se puede anular un gasto ya posteado."))
-    if expense.replenishment_id:
-        replenishment = database.session.get(PettyCashReplenishment, expense.replenishment_id)
-        if replenishment and replenishment.status == "reembolsado":
-            raise ValueError(_("No se puede anular un gasto después de reponer la Caja Chica."))
-        raise ValueError(_("No se puede anular un gasto reservado en una reposición de Caja Chica."))
-    if cancellation_date is not None and hasattr(expense, "posting_date"):
-        from cacao_accounting.database import AccountingPeriod
+    try:
+        _begin_sqlite_write_transaction()
+        expense = cast(PettyCashExpense, _lock_row_for_transition(PettyCashExpense, expense.id))
+        if expense.docstatus != 1:
+            raise ValueError(_("Solo se puede anular un gasto ya posteado."))
+        if expense.replenishment_id:
+            replenishment = database.session.get(PettyCashReplenishment, expense.replenishment_id)
+            if replenishment and replenishment.status == "reembolsado":
+                raise ValueError(_("No se puede anular un gasto después de reponer la Caja Chica."))
+            raise ValueError(_("No se puede anular un gasto reservado en una reposición de Caja Chica."))
+        if cancellation_date is not None and hasattr(expense, "posting_date"):
+            from cacao_accounting.database import AccountingPeriod
 
-        period = (
-            database.session.query(AccountingPeriod)
-            .filter(AccountingPeriod.entity == expense.company)
-            .filter(AccountingPeriod.start <= expense.posting_date)
-            .filter(AccountingPeriod.end >= expense.posting_date)
-            .first()
-        )
-        if period and not (period.start <= cancellation_date <= period.end):
-            raise ValueError(_("La anulación de un gasto solo se permite en el mismo periodo contable."))
-    if expense.journal_id:
-        journal = database.session.get(ComprobanteContable, expense.journal_id)
-        if journal is not None:
-            cancel_submitted_journal(
-                str(journal.id),
-                user_id=actor_id,
-                reason=reason or "Anulacion de gasto de caja chica",
+            period = (
+                database.session.query(AccountingPeriod)
+                .filter(AccountingPeriod.entity == expense.company)
+                .filter(AccountingPeriod.start <= expense.posting_date)
+                .filter(AccountingPeriod.end >= expense.posting_date)
+                .first()
             )
-    expense.docstatus = 2
-    expense.cancel_reason = reason or None
-    if expense.voucher_id:
-        voucher = database.session.get(PettyCashVoucher, expense.voucher_id)
-        if voucher is not None and voucher.expense_id == expense.id:
-            voucher.voucher_status = "entregado"
-            voucher.expense_id = None
-    database.session.commit()
-    return expense
+            if period and not (period.start <= cancellation_date <= period.end):
+                raise ValueError(_("La anulación de un gasto solo se permite en el mismo periodo contable."))
+        journal = database.session.get(ComprobanteContable, expense.journal_id) if expense.journal_id else None
+        if journal is None:
+            raise ValueError(_("No se puede anular un gasto posteado sin un comprobante contable asociado."))
+        # RELEASE of an outermost SQLite SAVEPOINT commits immediately.
+        # This transaction must also contain the subledger update below.
+        cancel_submitted_journal(
+            str(journal.id),
+            user_id=actor_id,
+            reason=reason or "Anulacion de gasto de caja chica",
+            commit=False,
+        )
+        expense.docstatus = 2
+        expense.cancel_reason = reason or None
+        if expense.voucher_id:
+            voucher = database.session.get(PettyCashVoucher, expense.voucher_id)
+            if voucher is not None and voucher.expense_id == expense.id:
+                voucher.voucher_status = "entregado"
+                voucher.expense_id = None
+        database.session.commit()
+        return expense
+    except Exception:
+        database.session.rollback()
+        raise
 
 
 # --------------------------------------------------------------------------------------------- #
@@ -1032,15 +1159,19 @@ def cancel_petty_cash_expense(
 def _petty_cash_reconciliation_derived_values(fund, as_of_date) -> dict[str, Decimal]:
     """Calcula los campos derivados de una conciliacion para una fecha de corte.
 
-    ``ledger_balance`` refleja el saldo contable del fondo, ``open_vouchers`` el
-    efectivo entregado en vales aun no liquidados y ``pending_expenses`` los
-    gastos posteados aun no repuestos. El efectivo esperado en caja respeta la
-    relacion ``ledger_balance + pending_expenses - open_vouchers``.
+    ``ledger_balance`` refleja el saldo contable del fondo y ya incluye el
+    crédito ``Cr Caja Chica`` de cada gasto postea (`Dr Gasto / Cr Caja
+    Chica` es el único camino que produce gastos con ``docstatus=1``). Por
+    eso el efectivo esperado en caja es ``ledger_balance - open_vouchers``:
+    los vales entregados (aún sin asiento) salen físicamente de la caja,
+    los gastos poster ya salieron por el GL. Volver a sumar
+    ``pending_expenses`` duplicaría la descarga del gasto y fabricaría un
+    faltante fantasma en cajas físicamente cuadradas.
     """
     ledger_balance = petty_cash_ledger_balance(fund, as_of_date=as_of_date)
     open_vouchers = petty_cash_open_vouchers_total(fund, as_of_date)
     pending_expenses = petty_cash_pending_replenishment_total(fund, as_of_date)
-    expected_cash = ledger_balance + pending_expenses - open_vouchers
+    expected_cash = ledger_balance - open_vouchers
     return {
         "ledger_balance": ledger_balance,
         "open_vouchers": open_vouchers,
@@ -1070,9 +1201,8 @@ def create_petty_cash_reconciliation(
         raise ValueError(_("Ya existe una conciliación para esa caja y fecha."))
     derived = _petty_cash_reconciliation_derived_values(fund, reconciliation_date)
     open_vouchers = derived["open_vouchers"]
-    pending_expenses = derived["pending_expenses"]
     expected_cash = derived["expected_cash"]
-    explained_amount = counted_cash + open_vouchers - pending_expenses
+    explained_amount = counted_cash + open_vouchers
     reconciliation = PettyCashReconciliation(
         company=company,
         petty_cash_id=petty_cash_id,
@@ -1134,9 +1264,8 @@ def update_petty_cash_reconciliation(
         raise ValueError(_("Ya existe una conciliación para esa caja y fecha."))
     derived = _petty_cash_reconciliation_derived_values(fund, reconciliation_date)
     open_vouchers = derived["open_vouchers"]
-    pending_expenses = derived["pending_expenses"]
     expected_cash = derived["expected_cash"]
-    explained_amount = counted_cash + open_vouchers - pending_expenses
+    explained_amount = counted_cash + open_vouchers
     reconciliation.posting_date = reconciliation_date
     reconciliation.reconciliation_date = reconciliation_date
     reconciliation.ledger_balance = derived["ledger_balance"]
@@ -1150,8 +1279,58 @@ def update_petty_cash_reconciliation(
     return reconciliation
 
 
+def _lock_row_for_transition(model: Any, record_id: str) -> Any:
+    """Bloquea y refresca una fila persistida antes de validar su transicion de estado.
+
+    Aplica el mismo patron de ``_lock_document_for_transition`` (posting_service):
+    en PostgreSQL y MySQL ``FOR UPDATE`` serializa escritores concurrentes; SQLite
+    ignora la clausula y conserva la semantica de un usuario en modo desktop.
+    ``populate_existing`` obliga a reflcar la fila comprometida para que la
+    guardia posterior sea una transicion condicional real y no lea el estado
+    obsoleto de una instancia ya presente en el identity map.
+    """
+    locked = database.session.execute(
+        database.select(model).where(model.id == record_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if locked is None:
+        raise ValueError(_("El documento no existe."))
+    return locked
+
+
+def _authorize_petty_cash_replenishment(
+    replenishment: PettyCashReplenishment,
+    actor_id: str | None,
+) -> None:
+    """Require company approval authority and configured separation of duties."""
+    from cacao_accounting.approval_engine import ApprovalEngine
+    from cacao_accounting.approval_policy import authorized
+    from cacao_accounting.database import User
+
+    company = replenishment.company or ""
+    actor = database.session.get(User, actor_id) if actor_id else None
+    if not actor or not authorized(actor, company, "cash", action="approve"):
+        raise ValueError(_("Se requiere autorización de Caja Chica para aprobar la reposición."))
+
+    if not ApprovalEngine.requires_different_approver(company):
+        return
+    if not replenishment.requested_by:
+        raise ValueError(_("La solicitud no identifica quién la preparó para aplicar la separación de funciones."))
+    if str(replenishment.requested_by) == str(actor.id):
+        raise ValueError(_("La reposición requiere aprobación de una persona distinta de quien la solicitó."))
+
+
+def _begin_sqlite_write_transaction() -> None:
+    """Reserve SQLite's writer before a serialized cash transition reads state."""
+    if database.engine.dialect.name == "sqlite":
+        connection = database.session.connection()
+        raw_connection = connection.connection.driver_connection
+        if raw_connection is not None and not raw_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
 def reconcile_petty_cash(reconciliation: PettyCashReconciliation, *, actor_id: str | None = None):
     """Marca una conciliacion como conciliada conservando sus cifras originales."""
+    reconciliation = cast(PettyCashReconciliation, _lock_row_for_transition(PettyCashReconciliation, reconciliation.id))
     if reconciliation.status != "borrador":
         raise ValueError(_("Solo se puede conciliar un documento en borrador."))
     if reconciliation.difference and not (reconciliation.explanation or "").strip():
@@ -1164,6 +1343,30 @@ def reconcile_petty_cash(reconciliation: PettyCashReconciliation, *, actor_id: s
 
 
 def post_petty_cash_reconciliation_adjustment(
+    reconciliation: PettyCashReconciliation,
+    *,
+    adjustment_account_code: str,
+    cost_center_code: str | None = None,
+    actor_id: str | None = None,
+) -> ComprobanteContable:
+    """Postea un ajuste y revierte la transacción ante cualquier error."""
+    try:
+        _begin_sqlite_write_transaction()
+        locked_reconciliation = cast(
+            PettyCashReconciliation, _lock_row_for_transition(PettyCashReconciliation, reconciliation.id)
+        )
+        return _post_locked_petty_cash_reconciliation_adjustment(
+            locked_reconciliation,
+            adjustment_account_code=adjustment_account_code,
+            cost_center_code=cost_center_code,
+            actor_id=actor_id,
+        )
+    except Exception:
+        database.session.rollback()
+        raise
+
+
+def _post_locked_petty_cash_reconciliation_adjustment(
     reconciliation: PettyCashReconciliation,
     *,
     adjustment_account_code: str,
@@ -1207,6 +1410,7 @@ def post_petty_cash_reconciliation_adjustment(
             {
                 "order": 2,
                 "account": credit_code,
+                "cost_center": cost_center_code or "",
                 "debit": "",
                 "credit": str(amount),
                 "remarks": "Diferencia de Caja Chica",
@@ -1214,13 +1418,31 @@ def post_petty_cash_reconciliation_adjustment(
         ],
     }
     try:
-        journal = create_journal_draft(payload, user_id=actor_id or "")
-        submit_journal(journal.id, user_id=actor_id or "")
+        journal = create_journal_draft(payload, user_id=actor_id or "", commit=False)
+        submit_journal(journal.id, commit=False, user_id=actor_id or "")
+        # Reserva condicional: solo el primer escritor publica el ajuste.
+        resultado = database.session.execute(
+            database.update(PettyCashReconciliation)
+            .where(
+                PettyCashReconciliation.id == reconciliation.id,
+                PettyCashReconciliation.adjustment_journal_id.is_(None),
+            )
+            .values(adjustment_account_id=account.id, adjustment_journal_id=str(journal.id))
+        )
+        actualizado = int(getattr(resultado, "rowcount", 0) or 0)
+        if actualizado != 1:
+            database.session.rollback()
+            raise ValueError(_("La diferencia de esta conciliación ya fue ajustada."))
+        database.session.commit()
     except JournalValidationError as exc:
+        database.session.rollback()
         raise ValueError(str(exc)) from exc
-    reconciliation.adjustment_account_id = account.id
-    reconciliation.adjustment_journal_id = str(journal.id)
-    database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        raise
+    except Exception:
+        database.session.rollback()
+        raise
     return journal
 
 
@@ -1259,7 +1481,16 @@ def create_petty_cash_replenishment(
     ids = list(dict.fromkeys(str(item) for item in expense_ids if item))
     if not ids:
         raise ValueError(_("Seleccione al menos un gasto para reponer."))
-    expenses = list(database.session.execute(database.select(PettyCashExpense).filter(PettyCashExpense.id.in_(ids))).scalars())
+    _begin_sqlite_write_transaction()
+    expenses = list(
+        database.session.execute(
+            database.select(PettyCashExpense)
+            .filter(PettyCashExpense.id.in_(ids))
+            .order_by(PettyCashExpense.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalars()
+    )
     if len(expenses) != len(ids) or any(
         expense.company != company
         or expense.petty_cash_id != petty_cash_id
@@ -1303,13 +1534,16 @@ def set_petty_cash_replenishment_status(
     replenishment: PettyCashReplenishment, new_status: str, *, actor_id: str | None = None
 ) -> PettyCashReplenishment:
     """Avanza una solicitud de reposicion sin contabilizarla prematuramente."""
+    replenishment = cast(PettyCashReplenishment, _lock_row_for_transition(PettyCashReplenishment, replenishment.id))
     current = replenishment.status or "borrador"
-    transitions = {"borrador": {"solicitado"}, "solicitado": {"aprobado"}, "aprobado": {"reembolsado"}}
+    transitions = {"borrador": {"solicitado"}, "solicitado": {"aprobado"}}
     if new_status not in transitions.get(current, set()):
         raise ValueError(
             _("Transición de reposición no válida: %(current)s -> %(new_status)s")
             % {"current": current, "new_status": new_status}
         )
+    if new_status == "aprobado":
+        _authorize_petty_cash_replenishment(replenishment, actor_id)
     replenishment.status = new_status
     if new_status == "solicitado":
         replenishment.docstatus = 1
@@ -1326,6 +1560,8 @@ def replenish_petty_cash(
     actor_id: str | None = None,
 ) -> PettyCashReplenishment:
     """Crea la Nota de Debito bancaria que repone el fondo seleccionado."""
+    _begin_sqlite_write_transaction()
+    replenishment = cast(PettyCashReplenishment, _lock_row_for_transition(PettyCashReplenishment, replenishment.id))
     if replenishment.status != "aprobado":
         raise ValueError(_("Solo se puede reponer una solicitud aprobada."))
     if replenishment.bank_debit_note_id:
@@ -1463,6 +1699,26 @@ def _apply_cash_company_scope(base_query: Any, model: Any) -> Any:
         if not companies:
             return base_query.where(database.false())
         return base_query.where(model.company.in_(companies))
+    if hasattr(model, "bank_account_id"):
+        # #1320: la compañía del movimiento bancario vive en la cuenta; el
+        # alcance se resuelve por la cuenta en lugar de devolver la consulta
+        # sin restricción.
+        from cacao_accounting.database import BankAccount
+
+        company_arg = request.args.get("company")
+        if company_arg:
+            exige_acceso_compania("cash", company_arg, "consultar")
+            return base_query.where(
+                model.bank_account_id.in_(database.select(BankAccount.id).where(BankAccount.company == company_arg))
+            )
+        if getattr(current_user, "classification", None) == "admin":
+            return base_query
+        companies = _cash_authorized_companies()
+        if not companies:
+            return base_query.where(database.false())
+        return base_query.where(
+            model.bank_account_id.in_(database.select(BankAccount.id).where(BankAccount.company.in_(companies)))
+        )
     return base_query
 
 
@@ -1508,19 +1764,6 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
     )
     attach_period_picker(paginated, model, "cash", current_user=current_user)
     return paginated
-
-
-def _bank_account_for_note(bank_account_id: str, company: str | None, amount: Decimal) -> BankAccount:
-    """Obtiene la cuenta bancaria de una nota y valida su pertenencia."""
-    if amount <= 0:
-        abort(409)
-
-    bank_account = database.session.get(BankAccount, bank_account_id)
-    if not bank_account:
-        abort(400)
-    if company and bank_account.company != company:
-        abort(409)
-    return bank_account
 
 
 def _bank_reconciliation_allocated_amount(transaction: BankTransaction) -> Decimal | None:
@@ -1640,6 +1883,32 @@ def _post_bank_difference_adjustment(
     transaction.is_reconciled = True
 
 
+def _validate_numbering_config_series(bank_account: BankAccount, payment_type: str, naming_series_id: str | None) -> None:
+    """Valida que la serie exista, esté vigente y corresponda al tipo de pago."""
+    if not naming_series_id:
+        return
+    series = database.session.get(NamingSeries, naming_series_id)
+    if not series or series.company not in (None, bank_account.company):
+        raise IdentifierConfigurationError(_("La serie de numeración no pertenece a la compañía de la cuenta bancaria."))
+    if not series.is_active:
+        raise IdentifierConfigurationError(_("La serie de numeración seleccionada no está activa."))
+    if series.entity_type != PAYMENT_TYPE_TO_ENTITY_TYPE.get(payment_type, "payment_entry"):
+        raise IdentifierConfigurationError(_("La serie de numeración no corresponde al tipo de pago."))
+
+
+def _validate_numbering_config_counter(bank_account: BankAccount, external_counter_id: str | None) -> None:
+    """Valida que el contador externo sea una chequera vigente de la compañía."""
+    if not external_counter_id:
+        return
+    counter = database.session.get(ExternalCounter, external_counter_id)
+    if not counter or counter.company != bank_account.company:
+        raise IdentifierConfigurationError(_("La chequera no pertenece a la compañía de la cuenta bancaria."))
+    if not counter.is_active:
+        raise IdentifierConfigurationError(_("La chequera seleccionada no está activa."))
+    if counter.counter_type != "checkbook":
+        raise IdentifierConfigurationError(_("El contador externo seleccionado debe ser una chequera."))
+
+
 def _validate_numbering_config_entry(
     bank_account: BankAccount, entry: Any
 ) -> tuple[dict[str, Any], str | None, str | None] | None:
@@ -1651,14 +1920,9 @@ def _validate_numbering_config_entry(
         return None
     naming_series_id = entry.get("naming_series_id") or None
     external_counter_id = entry.get("external_counter_id") or None
-    if naming_series_id:
-        series = database.session.get(NamingSeries, naming_series_id)
-        if not series or series.company not in (None, bank_account.company):
-            raise IdentifierConfigurationError(_("La serie de numeración no pertenece a la compañía de la cuenta bancaria."))
-    if entry.get("use_external_counter") and external_counter_id:
-        counter = database.session.get(ExternalCounter, external_counter_id)
-        if not counter or counter.company != bank_account.company:
-            raise IdentifierConfigurationError(_("La chequera no pertenece a la compañía de la cuenta bancaria."))
+    _validate_numbering_config_series(bank_account, payment_type, naming_series_id)
+    if entry.get("use_external_counter"):
+        _validate_numbering_config_counter(bank_account, external_counter_id)
     return entry, naming_series_id, external_counter_id
 
 
@@ -1743,9 +2007,16 @@ def _build_single_config_entry(
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
-    """Convierte un valor de formulario a Decimal."""
+    """Convierte un valor finito de formulario a Decimal o falla de forma controlada."""
     value = request.form.get(field_name)
-    return Decimal(str(value if value not in (None, "") else default))
+    raw = value if value not in (None, "") else default
+    try:
+        number = Decimal(str(raw))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(_("El campo %(field)s debe ser un número válido.") % {"field": field_name}) from exc
+    if not number.is_finite():
+        raise ValueError(_("El campo %(field)s debe ser un número finito.") % {"field": field_name})
+    return number
 
 
 def _invoice_outstanding(invoice) -> Decimal:
@@ -1844,7 +2115,7 @@ def _validate_payment_reference_document(
     if getattr(document, "docstatus", 0) != 1:
         raise ValueError(_("El documento referenciado debe estar aprobado."))
     _block_disputed_purchase_reconciliation(document)
-    if payment.company and document.company and payment.company != document.company:
+    if not payment.company or not document.company or payment.company != document.company:
         from werkzeug.exceptions import Conflict
 
         raise Conflict(_("El documento referenciado no pertenece a la misma compañía."))
@@ -2600,6 +2871,8 @@ def _finalize_and_commit_payment(
 
 def _create_payment_from_request():
     """Create a payment from the submitted request payload."""
+    from werkzeug.exceptions import HTTPException
+
     try:
         payload = _payment_payload_from_request()
         payment, amount, mode_of_payment = _build_payment_from_payload(payload)
@@ -2616,17 +2889,15 @@ def _create_payment_from_request():
             external_context=_payment_identifier_context(payment, mode_of_payment),
         )
         return _finalize_and_commit_payment(payment, payload, amount)
+    except HTTPException:
+        database.session.rollback()
+        raise
     except (ValueError, ArithmeticError) as exc:
         database.session.rollback()
         flash_error(exc)
-    except Exception as exc:  # noqa: BLE001
-        from werkzeug.exceptions import HTTPException
-
+    except Exception:
         database.session.rollback()
-        if isinstance(exc, HTTPException):
-            flash(exc.description or str(exc), "danger")
-        else:
-            raise
+        raise
     return None
 
 
@@ -2634,7 +2905,12 @@ def _payment_payload_from_request() -> PaymentPayload:
     """Return the payment payload from the request body or form fields."""
     payload_raw = request.form.get("payment_payload")
     if payload_raw:
-        return cast(PaymentPayload, json.loads(payload_raw))
+        payload = _validate_payment_payload_structure(json.loads(payload_raw))
+        if not payload.get("reference_no") and payload.get("external_number"):
+            # Compatibilidad con el nombre anterior del campo: la referencia
+            # informativa siempre se persiste en ``reference_no``.
+            payload["reference_no"] = payload["external_number"]
+        return payload
     return {
         "payment_type": request.form.get("payment_type"),
         "company": request.form.get("company"),
@@ -2645,13 +2921,58 @@ def _payment_payload_from_request() -> PaymentPayload:
         "party_type": request.form.get("party_type"),
         "naming_series_id": request.form.get("naming_series"),
         "external_counter_id": request.form.get("external_counter_id"),
-        "external_number": request.form.get("external_number"),
+        "reference_no": request.form.get("reference_no") or request.form.get("external_number"),
         "target_bank_account_id": request.form.get("target_bank_account_id"),
         "mode_of_payment": request.form.get("mode_of_payment"),
         "cost_center_code": request.form.get("cost_center_code"),
         "unit_code": request.form.get("unit_code"),
         "project_code": request.form.get("project_code"),
     }
+
+
+def _validate_payment_payload_structure(payload: Any) -> PaymentPayload:
+    """Validate JSON container and string field types before payment processing."""
+    if not isinstance(payload, dict):
+        raise ValueError(_("La estructura del pago no es válida."))
+
+    string_fields = (
+        "payment_type",
+        "company",
+        "bank_account_id",
+        "posting_date",
+        "party_id",
+        "party_type",
+        "naming_series_id",
+        "external_counter_id",
+        "external_number",
+        "target_bank_account_id",
+        "mode_of_payment",
+        "cost_center_code",
+        "unit_code",
+        "project_code",
+        "paid_from_account_id",
+        "paid_to_account_id",
+        "reference_date",
+        "party_name",
+        "reference_no",
+        "remarks",
+    )
+    if any(payload.get(field) is not None and not isinstance(payload[field], str) for field in string_fields):
+        raise ValueError(_("La estructura del pago no es válida."))
+    advance_mode = payload.get("advance_mode")
+    if advance_mode is not None and not isinstance(advance_mode, bool):
+        raise ValueError(_("La estructura del pago no es válida."))
+
+    lines = payload.get("lines")
+    if lines is not None and (not isinstance(lines, list) or any(not isinstance(line, dict) for line in lines)):
+        raise ValueError(_("La estructura del pago no es válida."))
+    line_string_fields = ("reference_id", "flow_source_type", "notes")
+    for line in lines or []:
+        if "reference_type" in line and not isinstance(line["reference_type"], str):
+            raise ValueError(_("La estructura del pago no es válida."))
+        if any(line.get(field) is not None and not isinstance(line[field], str) for field in line_string_fields):
+            raise ValueError(_("La estructura del pago no es válida."))
+    return cast(PaymentPayload, payload)
 
 
 def _resolve_payment_exchange_rate(payload: PaymentPayload, payment_currency: str, company: str | None) -> Decimal:
@@ -2801,6 +3122,8 @@ def _validate_payment_gl_accounts(
         account = database.session.get(Accounts, account_id)
         if account is None or account.entity != company:
             raise ValueError(_("La cuenta GL del pago debe pertenecer a la compañía del documento."))
+        if not account.active or not account.enabled or account.group:
+            raise ValueError(_("La cuenta GL del pago debe estar activa, habilitada y ser una cuenta hoja."))
 
     if payment_type != "internal_transfer":
         return
@@ -2904,21 +3227,6 @@ def _update_payment_amounts(payment: PaymentEntry, payment_type: str, amount: De
         payment.base_received_amount = (amount * rate).quantize(Decimal("0.0001"))
 
 
-def _payment_identifier_inputs(
-    *,
-    payload: dict[str, object | None],
-    mode_of_payment: str,
-    default_series_id: str | None,
-    default_counter_id: str | None,
-) -> tuple[str | None, str | None]:
-    """Resolve numbering inputs for the payment identifier."""
-    naming_series_id = cast(str | None, payload.get("naming_series_id") or default_series_id)
-    external_counter_id = None
-    if mode_of_payment == "check":
-        external_counter_id = cast(str | None, payload.get("external_counter_id") or default_counter_id)
-    return naming_series_id, external_counter_id
-
-
 def _payment_identifier_context(payment: PaymentEntry, mode_of_payment: str) -> dict[str, str]:
     """Build the external context for payment numbering."""
     context = {
@@ -2961,15 +3269,16 @@ def _payment_withholding_total(payment_id: str) -> Decimal:
 
 def _payment_source_rows_from_request() -> list[dict[str, object]]:
     """Load payment source rows from the current request."""
+    source_values = request.args if request.method == "GET" else request.form
     return _payment_source_rows(
-        request.values.getlist("from_purchase_invoice"),
-        request.values.getlist("from_sales_invoice"),
-        request.values.getlist("from_purchase_order"),
-        request.values.getlist("from_sales_order"),
-        request.values.getlist("from_purchase_credit_note"),
-        request.values.getlist("from_purchase_debit_note"),
-        request.values.getlist("from_sales_credit_note"),
-        request.values.getlist("from_sales_debit_note"),
+        source_values.getlist("from_purchase_invoice"),
+        source_values.getlist("from_sales_invoice"),
+        source_values.getlist("from_purchase_order"),
+        source_values.getlist("from_sales_order"),
+        source_values.getlist("from_purchase_credit_note"),
+        source_values.getlist("from_purchase_debit_note"),
+        source_values.getlist("from_sales_credit_note"),
+        source_values.getlist("from_sales_debit_note"),
     )
 
 

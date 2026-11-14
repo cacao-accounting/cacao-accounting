@@ -12,6 +12,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import login_required
 
+from cacao_accounting.database import database
 from cacao_accounting.setup.forms import (
     SetupCompanyForm,
     SetupLanguageForm,
@@ -25,6 +26,7 @@ from cacao_accounting.setup.service import (
     available_currencies,
     finalize_setup,
     get_setup_configuration,
+    is_setup_complete,
     save_language,
     save_regional_settings,
 )
@@ -43,7 +45,18 @@ SETUP_ROUTE = "setup.setup"
 @setup_.route("/", methods=["GET", "POST"])
 @login_required
 def setup():
-    """Configuración inicial."""
+    """Configuración inicial.
+
+    El asistente pertenece a la primera instalación: solo la administración
+    del sistema puede ejecutarlo y queda sellado una vez marcado
+    ``SETUP_COMPLETE``, dejando la creación de compañías en el módulo
+    de administración.
+    """
+    if is_setup_complete():
+        return redirect(url_for("cacao_app.pagina_inicio"))
+    from cacao_accounting.admin.services import _require_system_admin  # noqa: PLC0415
+
+    _require_system_admin()
     step = int(session.get("setup_step", 1))
     setup_data = get_setup_configuration()
     language = setup_data.get("idioma", "es")
@@ -130,13 +143,18 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
         flash(texts["catalog_required"], "danger")
         return None
 
-    finalize_setup(
-        company_data,
-        catalogo_tipo,
-        setup_data.get("pais", "NI"),
-        setup_data.get("idioma", "es"),
-        catalogo_archivo,
-    )
+    try:
+        finalize_setup(
+            company_data,
+            catalogo_tipo,
+            setup_data.get("pais", "NI"),
+            setup_data.get("idioma", "es"),
+            catalogo_archivo,
+        )
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc) or texts["invalid_company"], "danger")
+        return None
     session.pop("setup_step", None)
     flash(texts["setup_complete"], "success")
     return redirect(url_for("cacao_app.pagina_inicio"))
@@ -151,6 +169,7 @@ def _build_company_data(form: SetupCompanyForm, setup_data: dict[str, str]) -> d
         "id_fiscal": form.id_fiscal.data,
         "tipo_entidad": form.tipo_entidad.data,
         "moneda": setup_data.get("moneda"),
+        "pais": setup_data.get("pais"),
         "inicio_anio_fiscal": form.inicio_anio_fiscal.data,
         "fin_anio_fiscal": form.fin_anio_fiscal.data,
     }

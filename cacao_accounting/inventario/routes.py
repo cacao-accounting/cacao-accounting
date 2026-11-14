@@ -5,8 +5,8 @@
 
 import logging
 
-
 from decimal import Decimal
+from typing import Any
 
 
 from cacao_accounting.exceptions import flash_error
@@ -21,6 +21,7 @@ from cacao_accounting.database import (
     Batch,
     Item,
     ItemCategory,
+    ItemUOMConversion,
     StockEntry,
     StockEntryItem,
     StockLedgerEntry,
@@ -56,12 +57,14 @@ from cacao_accounting.inventario.service import (
     batch_balance_rows,
     create_batch,
     create_item_with_uoms,
-    list_item_account_rows,
+    list_item_account_rows_editable,
+    list_item_account_rows_visible,
     list_item_uom_conversions,
 )
 
 from cacao_accounting.inventario.services import (
     _inventory_company_scoped_select,
+    _inventory_authorized_companies,
     _paginate_list,
     _series_choices,
     _item_params_from_form,
@@ -92,6 +95,56 @@ from cacao_accounting.i18n import _
 logger = logging.getLogger(__name__)
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
+
+
+def _stock_entry_item_choices() -> list[dict[str, Any]]:
+    """Build the item catalog with its configured UOMs and base factors."""
+    items = database.session.execute(database.select(Item)).scalars().all()
+    item_codes = [item.code for item in items]
+    conversions = (
+        database.session.execute(database.select(ItemUOMConversion).where(ItemUOMConversion.item_code.in_(item_codes)))
+        .scalars()
+        .all()
+        if item_codes
+        else []
+    )
+    conversions_by_item: dict[str, list[ItemUOMConversion]] = {}
+    for conversion in conversions:
+        conversions_by_item.setdefault(conversion.item_code, []).append(conversion)
+
+    choices = []
+    for item in items:
+        item_conversions = conversions_by_item.get(item.code, [])
+        factors = {item.default_uom: "1"} if item.default_uom else {}
+        for conversion in item_conversions:
+            factors[conversion.from_uom] = str(conversion.conversion_factor)
+        choices.append(
+            {
+                "code": item.code,
+                "name": item.name,
+                "uom": item.default_uom,
+                "allowed_uoms": list(factors),
+                "uom_factors": factors,
+                "has_batch": item.has_batch,
+                "has_serial_no": item.has_serial_no,
+                "has_expiry_date": item.has_expiry_date,
+            }
+        )
+    return choices
+
+
+def _submit_stock_entry_edit(registro: StockEntry, formulario: Any):
+    """Submit a stock entry edit or flash validation errors for in-place correction."""
+    if formulario.validate():
+        return _handle_stock_entry_edit_post(registro)
+    for field_name, errors in formulario.errors.items():
+        label = getattr(formulario, field_name).label.text
+        for error in errors:
+            flash(f"{label}: {error}", "danger")
+    if not formulario.errors:
+        flash(_("Revise los datos de la entrada de almacén."), "danger")
+    return None
+
 
 INVENTARIO_INVENTARIO_ENTRADA_NUEVO = "inventario.inventario_entrada_nuevo"
 
@@ -132,13 +185,22 @@ def inventario_articulo_lista():
         max_per_page=10,
         count=True,
     )
+    categorias = {
+        categoria.id: categoria.name for categoria in database.session.execute(database.select(ItemCategory)).scalars().all()
+    }
     titulo = _("Listado de Artículos") + " - " + APPNAME
-    return render_template("inventario/articulo_lista.html", consulta=consulta, titulo=titulo)
+    return render_template(
+        "inventario/articulo_lista.html",
+        consulta=consulta,
+        categorias=categorias,
+        titulo=titulo,
+    )
 
 
 @inventario.route("/uom/list")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_uom_lista():
     """Listado de unidades de medida."""
     consulta = database.paginate(
@@ -349,6 +411,8 @@ def inventario_articulo_nuevo():
 
     formulario = FormularioArticulo()
     formulario.default_uom.choices = _uom_choices()
+    formulario.purchase_uom.choices = _uom_choices()
+    formulario.sale_uom.choices = _uom_choices()
     formulario.item_category_id.choices = _item_category_choices()
     formulario.currency.choices = _currency_choices()
     titulo = _("Nuevo Artículo") + " - " + APPNAME
@@ -405,6 +469,8 @@ def inventario_articulo_editar(item_id):
 
     formulario = FormularioArticulo(obj=item)
     formulario.default_uom.choices = _uom_choices()
+    formulario.purchase_uom.choices = _uom_choices()
+    formulario.sale_uom.choices = _uom_choices()
     formulario.item_category_id.choices = _item_category_choices()
     formulario.currency.choices = _currency_choices()
     titulo = _("Editar") + f" {item.name} - " + APPNAME
@@ -421,7 +487,7 @@ def inventario_articulo_editar(item_id):
             "stock_adjustment_account_id": a.stock_adjustment_account_id or "",
             "cost_center_code": a.cost_center_code or "",
         }
-        for a in list_item_account_rows(item.code)
+        for a in list_item_account_rows_editable(item.code)
     ] or [
         {
             "company": "",
@@ -460,13 +526,22 @@ def inventario_articulo_editar(item_id):
     )
 
 
+def _bodega_predeterminada_visible(default_warehouse) -> Any:
+    """Oculta la bodega predeterminada del detalle si su compañía no es consultable."""
+    if default_warehouse is None:
+        return None
+    authorized = _inventory_authorized_companies()
+    if getattr(default_warehouse, "company", None) in authorized:
+        return default_warehouse
+    logger.info("Detalle de artículo oculta bodega de compañía no autorizada: %s", default_warehouse.code)
+    return None
+
+
 @inventario.route("/item/<item_id>")
 @modulo_activo("inventory")
 @login_required
 def inventario_articulo(item_id):
     """Detalle de artículo."""
-    from flask import abort
-
     registro = database.session.execute(database.select(Item).filter_by(code=item_id)).first()
     if not registro:
         abort(404)
@@ -490,10 +565,10 @@ def inventario_articulo(item_id):
         registro=item,
         titulo=titulo,
         item_category=item_category,
-        default_warehouse=default_warehouse,
+        default_warehouse=_bodega_predeterminada_visible(default_warehouse),
         default_supplier=default_supplier,
         uom_conversions=list_item_uom_conversions(item.code),
-        item_accounts=list_item_account_rows(item.code),
+        item_accounts=list_item_account_rows_visible(item.code),
     )
 
 
@@ -507,10 +582,10 @@ def inventario_uom_nuevo():
 
     formulario = FormularioUOM()
     titulo = _("Nueva Unidad de Medida") + " - " + APPNAME
-    if formulario.validate_on_submit() or request.method == "POST":
+    if formulario.validate_on_submit():
         uom = UOM(
-            code=request.form.get("code"),
-            name=request.form.get("name"),
+            code=formulario.code.data,
+            name=formulario.name.data,
         )
         database.session.add(uom)
         database.session.commit()
@@ -521,6 +596,7 @@ def inventario_uom_nuevo():
 @inventario.route("/uom/<uom_id>")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_uom(uom_id):
     """Detalle de unidad de medida."""
     from flask import abort
@@ -543,7 +619,7 @@ def inventario_bodega_nuevo():
     formulario = FormularioBodega()
     titulo = _("Nueva Bodega") + " - " + APPNAME
     warehouse_company_rows = [{"company": "", "company_label": "", "inventory_account_id": "", "inventory_account_label": ""}]
-    if formulario.validate_on_submit() or request.method == "POST":
+    if formulario.validate_on_submit():
         warehouse_company_rows = _warehouse_company_rows_for_template(request.form)
         company_rows = [row for row in warehouse_company_rows if row["company"]]
         try:
@@ -616,11 +692,16 @@ def inventario_bodega(warehouse_id):
 @inventario.route("/batch/list")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_lote_lista():
     """Listado de lotes de inventario."""
+    companies = _inventory_authorized_companies()
+    batch_ids = database.select(StockLedgerEntry.batch_id).where(
+        StockLedgerEntry.company.in_(companies), StockLedgerEntry.batch_id.is_not(None)
+    )
     consulta = database.paginate(
         apply_list_filters(
-            database.select(Batch),
+            database.select(Batch).where(Batch.id.in_(batch_ids)),
             Batch,
             (Batch.batch_no, Batch.item_code),
             include_status=False,
@@ -672,17 +753,34 @@ def inventario_lote_nuevo():
 @inventario.route("/batch/<batch_id>")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_lote(batch_id):
     """Detalle de lote con saldo por bodega y movimientos."""
+    companies = _inventory_authorized_companies()
+    if not companies:
+        abort(404)
     registro = database.session.get(Batch, batch_id)
     if not registro:
         abort(404)
+    has_authorized_activity = database.session.execute(
+        database.select(StockLedgerEntry.id)
+        .where(
+            StockLedgerEntry.batch_id == registro.id,
+            StockLedgerEntry.company.in_(companies),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if has_authorized_activity is None:
+        abort(404)
     item = database.session.execute(database.select(Item).filter_by(code=registro.item_code)).scalars().first()
-    balances = batch_balance_rows(registro.id)
+    balances = batch_balance_rows(registro.id, companies=companies)
     movimientos = (
         database.session.execute(
             database.select(StockLedgerEntry)
-            .filter_by(batch_id=registro.id)
+            .where(
+                StockLedgerEntry.batch_id == registro.id,
+                StockLedgerEntry.company.in_(companies),
+            )
             .order_by(StockLedgerEntry.posting_date.desc(), StockLedgerEntry.created.desc(), StockLedgerEntry.id.desc())
             .limit(50)
         )
@@ -715,12 +813,18 @@ def inventario_entrada_nuevo():
     """Formulario para crear una entrada de almacén."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
+    from cacao_accounting.inventario.services import _validate_stock_entry_company
 
     formulario = FormularioEntradaAlmacen()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )
+    # #1173: el GET consulta y renderiza bodegas antes del POST; una
+    # compañía pedida explícitamente exige permiso de consulta en
+    # inventario (la selección por defecto se valida en el POST).
+    if request.values.get("company"):
+        _validate_stock_entry_company(selected_company, "consultar")
     formulario.naming_series.choices = _series_choices("stock_entry", selected_company)
     # INV-03: Filtrar bodegas por compañía
     warehouse_choices = [("", "")] + [
@@ -729,17 +833,7 @@ def inventario_entrada_nuevo():
     ]
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
-    items_disponibles = [
-        {
-            "code": item.code,
-            "name": item.name,
-            "uom": item.default_uom,
-            "has_batch": item.has_batch,
-            "has_serial_no": item.has_serial_no,
-            "has_expiry_date": item.has_expiry_date,
-        }
-        for (item,) in database.session.execute(database.select(Item)).all()
-    ]
+    items_disponibles = _stock_entry_item_choices()
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     purpose = request.args.get("purpose") or _infer_stock_entry_purpose(request.path)
     formulario.purpose.data = purpose or formulario.purpose.data
@@ -760,8 +854,11 @@ def inventario_entrada_nuevo():
     }
     if request.method == "POST":
         if formulario.validate():
-            return _handle_stock_entry_new_post(request.form)
-        flash(_("Revise los datos de la entrada de almacén."), "danger")
+            response = _handle_stock_entry_new_post(request.form)
+            if response is not None:
+                return response
+        else:
+            flash(_("Revise los datos de la entrada de almacén."), "danger")
 
     if purpose == "stock_reconciliation":
         return render_template(
@@ -871,27 +968,17 @@ def inventario_entrada_editar(entry_id: str):
     ]
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
-    items_disponibles = [
-        {
-            "code": item.code,
-            "name": item.name,
-            "uom": item.default_uom,
-            "has_batch": item.has_batch,
-            "has_serial_no": item.has_serial_no,
-            "has_expiry_date": item.has_expiry_date,
-        }
-        for (item,) in database.session.execute(database.select(Item)).all()
-    ]
+    items_disponibles = _stock_entry_item_choices()
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        if formulario.validate():
-            return _handle_stock_entry_edit_post(registro)
-        flash(_("Revise los datos de la entrada de almacén."), "danger")
+        response = _submit_stock_entry_edit(registro, formulario)
+        if response is not None:
+            return response
 
     if registro.purpose == "stock_reconciliation":
-        return _render_stock_reconciliation_edit_form(registro, items_disponibles, uoms_disponibles)
-    return _render_stock_entry_edit_form(registro, items_disponibles, uoms_disponibles)
+        return _render_stock_reconciliation_edit_form(registro, items_disponibles, uoms_disponibles, formulario)
+    return _render_stock_entry_edit_form(registro, items_disponibles, uoms_disponibles, formulario)
 
 
 @inventario.route("/stock-entry/<entry_id>/duplicate", methods=["POST"])

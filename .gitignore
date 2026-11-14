@@ -279,3 +279,4 @@ cacao_accounting/static/node_modules/*
 uv.lock
 
 .opencode/
+.local/

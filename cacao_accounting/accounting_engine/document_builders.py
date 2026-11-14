@@ -53,7 +53,11 @@ from cacao_accounting.document_flow.service import compute_payment_unallocated_a
 from cacao_accounting.warehouse_accounting import inventory_account_id_for_document_line
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 from cacao_accounting.fiscal_persistence_service import build_tax_rule_contexts_from_snapshot
-from cacao_accounting.tax_rule_service import build_tax_rule_context, build_tax_rule_contexts
+from cacao_accounting.tax_rule_service import (
+    build_tax_rule_context,
+    build_tax_rule_contexts,
+    get_tax_rule,
+)
 
 from cacao_accounting.i18n import _
 
@@ -931,19 +935,40 @@ def _payment_tax_rules(
         at_date=document.posting_date,
         recognition_event=spec.event_type,
     )
-    # A supplier's configured rule is authoritative for withholding at payment
-    # time. Generic company withholding rules do not override that choice.
-    if spec.party_type == "supplier" and spec.event_type == "payment_confirmed" and document.party_id:
-        company_party = database.session.execute(
-            select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
-        ).scalar_one_or_none()
-        configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
-        configured_rule = build_tax_rule_context(configured_rule_id) if configured_rule_id else None
-        if configured_rule and configured_rule.tax_type == "withholding":
-            if configured_rule.recognition_event in {"payment_confirmed", "payment"}:
-                rules = [rule for rule in rules if rule.tax_type != "withholding"]
-                rules.append(configured_rule)
+    configured_rule = _configured_payment_withholding_rule(document, spec, company)
+    if configured_rule is not None:
+        rules = [rule for rule in rules if rule.tax_type != "withholding"]
+        rules.append(configured_rule)
     return sorted(rules, key=lambda rule: rule.order)
+
+
+def _configured_payment_withholding_rule(
+    document: PaymentEntry,
+    spec: PaymentBuildSpec,
+    company: str,
+) -> TaxRuleContext | None:
+    """Return the supplier's configured rule when it applies to this payment.
+
+    A supplier's configured rule is authoritative for withholding at payment
+    time. Generic company withholding rules do not override that choice.
+    """
+    if spec.party_type != "supplier" or spec.event_type != "payment_confirmed" or not document.party_id:
+        return None
+    company_party = database.session.execute(
+        select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
+    ).scalar_one_or_none()
+    configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
+    if not configured_rule_id:
+        return None
+    configured_rule_row = get_tax_rule(configured_rule_id)
+    if configured_rule_row is None or configured_rule_row.company not in (None, company):
+        return None
+    configured_rule = build_tax_rule_context(str(configured_rule_id))
+    if configured_rule is None or configured_rule.tax_type != "withholding":
+        return None
+    if configured_rule.recognition_event not in {"payment_confirmed", "payment"}:
+        return None
+    return configured_rule
 
 
 def _payment_item_context(document: PaymentEntry, document_total: Decimal) -> ItemContext:
@@ -1052,10 +1077,18 @@ def _tax_rules_from_template(
         .scalars()
         .all()
     )
+    items_by_tax: dict[str, list[TaxTemplateItem]] = {}
+    for template_item in template_items:
+        items_by_tax.setdefault(str(template_item.tax_id), []).append(template_item)
+    used_by_tax: dict[str, int] = {}
     rules: list[TaxRuleContext] = []
     for index, tax_line in enumerate(tax_result.lines, start=1):
-        template_item = template_items[index - 1] if index - 1 < len(template_items) else None
-        if rule := _tax_rule_from_template_line(tax_line, template_item, index, event_type):
+        tax_key = str(tax_line.tax_id)
+        candidates = items_by_tax.get(tax_key, [])
+        offset = used_by_tax.get(tax_key, 0)
+        matched_item = candidates[offset] if offset < len(candidates) else None
+        used_by_tax[tax_key] = offset + 1
+        if rule := _tax_rule_from_template_line(tax_line, matched_item, index, event_type):
             rules.append(rule)
     return rules
 

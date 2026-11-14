@@ -400,9 +400,49 @@ msgstr "Item not found."
 msgid "No se seleccionó una imagen."
 msgstr "No image selected."
 
-#: cacao_accounting/attachment_service.py:347
-msgid "Formato de imagen no permitido. Use PNG, JPG, WEBP o GIF."
-msgstr "Image format not allowed. Use PNG, JPG, WEBP or GIF."
+#: cacao_accounting/attachment_service.py
+msgid "Formato de imagen no permitido. Use PNG, JPG o WEBP."
+msgstr "Image format not allowed. Use PNG, JPG or WEBP."
+
+#: cacao_accounting/attachment_service.py
+msgid "Tipo de archivo no permitido."
+msgstr "File type not allowed."
+
+#: cacao_accounting/attachment_service.py
+msgid "El contenido del archivo no corresponde a su extensión."
+msgstr "File content does not match its extension."
+
+#: cacao_accounting/attachment_service.py
+msgid "El archivo supera el tamaño máximo permitido."
+msgstr "The file exceeds the maximum allowed size."
+
+#: cacao_accounting/attachment_service.py
+msgid "El archivo está dañado o no es válido."
+msgstr "The file is corrupt or invalid."
+
+#: cacao_accounting/attachment_service.py
+msgid "Los archivos comprimidos no se permiten como adjuntos."
+msgstr "Compressed archives are not allowed as attachments."
+
+#: cacao_accounting/attachment_service.py
+msgid "El archivo no supera la verificación de integridad."
+msgstr "The file failed the integrity check."
+
+#: cacao_accounting/attachment_service.py
+msgid "No se pudo almacenar el archivo."
+msgstr "The file could not be stored."
+
+#: cacao_accounting/attachment_service.py
+msgid "La evidencia adjunta no puede modificarse en el estado actual del documento."
+msgstr "Attachment evidence cannot be modified in the document's current state."
+
+#: cacao_accounting/api/__init__.py
+msgid "El archivo físico quedó pendiente de limpieza."
+msgstr "The physical file is pending cleanup."
+
+#: cacao_accounting/database/__init__.py
+msgid "El hash SHA-256 de un archivo almacenado es inmutable."
+msgstr "The SHA-256 hash of a stored file is immutable."
 
 #: cacao_accounting/attachment_service.py:353
 msgid "El contenido no corresponde a una imagen válida."
@@ -2006,6 +2046,10 @@ msgstr "User not found."
 msgid "En modo escritorio solo se permite un usuario administrador."
 msgstr "Desktop mode allows only one administrator user."
 
+#: cacao_accounting/admin/services.py:58
+msgid "El sistema debe conservar al menos un administrador activo."
+msgstr "The system must keep at least one active administrator."
+
 #: cacao_accounting/admin/routes.py:225
 msgid "Módulo no encontrado."
 msgstr "Module not found."
@@ -2065,6 +2109,27 @@ msgstr "Email resent successfully."
 #, python-format
 msgid "Error al reintentar envío: %(error)s"
 msgstr "Error retrying delivery: %(error)s"
+
+#: cacao_accounting/messaging/email.py
+#, python-format
+msgid "No se pudo completar la entrega del correo: %(error)s"
+msgstr "The email delivery could not be completed: %(error)s"
+
+#: cacao_accounting/approval_preflight.py
+msgid "Este flujo aún no admite aprobación independiente; no se creó el asiento contable."
+msgstr "This workflow does not yet support independent approval; no journal entry was created."
+
+#: cacao_accounting/bancos/services.py
+msgid "Se requiere autorización de Caja Chica para aprobar la reposición."
+msgstr "Petty cash authorization is required to approve this replenishment."
+
+#: cacao_accounting/bancos/services.py
+msgid "La solicitud no identifica quién la preparó para aplicar la separación de funciones."
+msgstr "The request does not identify its preparer, so separation of duties cannot be enforced."
+
+#: cacao_accounting/bancos/services.py
+msgid "La reposición requiere aprobación de una persona distinta de quien la solicitó."
+msgstr "The replenishment must be approved by someone other than its requester."
 
 #: cacao_accounting/admin/routes.py:424
 msgid "Método de valuacion guardado correctamente."
@@ -2736,7 +2801,7 @@ msgstr ""
 #: cacao_accounting/ventas/forms.py:11
 #: cacao_accounting/ventas/templates/ventas/cliente.html:73
 msgid "Compañía"
-msgstr "Companies"
+msgstr "Company"
 
 #: cacao_accounting/admin/templates/admin/approval_matrix.html:43
 #: cacao_accounting/admin/templates/admin/approval_matrix.html:84
@@ -5188,6 +5253,9 @@ msgstr "Amount fijo"
 msgid "Monto manual"
 msgstr "Amount manual"
 
+msgid "El método de cálculo fiscal no está soportado: %(method)s."
+msgstr "The tax calculation method is not supported: %(method)s."
+
 #: cacao_accounting/admin/templates/admin/tax_rules.html:50
 #: cacao_accounting/bancos/templates/bancos/pago_nuevo.html:1143
 #: cacao_accounting/templates/transaction_form_macros.html:881
@@ -5521,6 +5589,10 @@ msgstr "Manages system users, assigns roles and controls their access status."
 #: cacao_accounting/admin/templates/admin/usuarios.html:28
 msgid "Nuevo Usuario"
 msgstr "New User"
+
+#: cacao_accounting/admin/routes.py:1315
+msgid "Actualizar Usuario"
+msgstr "Update User"
 
 #: cacao_accounting/admin/templates/admin/usuarios.html:44
 msgid "Administración de Usuarios del Sistema"
@@ -5913,6 +5985,14 @@ msgstr "There must be a single importable line sheet."
 msgid "La columna tiene datos pero no tiene encabezado."
 msgstr "The column has data but no header."
 
+#: cacao_accounting/imports/services/import_service.py
+msgid "La fila contiene datos después de la última columna con encabezado."
+msgstr "The row contains data after the last column with a header."
+
+#: cacao_accounting/imports/readers/limits.py
+msgid "El archivo excede los límites de recursos de importación."
+msgstr "The file exceeds the import resource limits."
+
 #: cacao_accounting/api/line_import.py:250
 msgid "La columna no pertenece a la plantilla."
 msgstr "The column does not belong to the template."
@@ -6042,6 +6122,10 @@ msgstr "The cost center does not exist."
 msgid "El proyecto no existe."
 msgstr "The project does not exist."
 
+#: cacao_accounting/api/line_import.py
+msgid "La unidad no existe."
+msgstr "The business unit does not exist."
+
 #: cacao_accounting/api/line_import.py:689
 msgid "La bodega no existe."
 msgstr "The warehouse does not exist."
@@ -6151,6 +6235,10 @@ msgstr "Consolidated view of operations and finances"
 #: cacao_accounting/app/templates/app.html:45
 msgid "Seleccione una compañía"
 msgstr "Select company"
+
+#: cacao_accounting/bancos/templates/bancos/conciliacion_bancaria.html:49
+msgid "Seleccione una compañía para conciliar transacciones."
+msgstr "Select a company to reconcile transactions."
 
 #: cacao_accounting/app/templates/app.html:22
 #: cacao_accounting/reportes/templates/reportes/financial_report.html:32
@@ -7110,6 +7198,38 @@ msgstr "The compared forecasts must belong to the requested company."
 msgid "Código SWIFT"
 msgstr "Code SWIFT"
 
+#: cacao_accounting/bancos/forms.py:19
+msgid "El código SWIFT no puede superar los 20 caracteres."
+msgstr "The SWIFT code cannot exceed 20 characters."
+
+#: cacao_accounting/bancos/forms.py:17
+msgid "Este campo es obligatorio."
+msgstr "This field is required."
+
+#: cacao_accounting/tax_rule_service.py:118
+msgid "El valor de %(field)s no es válido para la regla fiscal."
+msgstr "The value of %(field)s is not valid for the tax rule."
+
+#: cacao_accounting/admin/templates/admin/approval_matrix.html:204
+msgid "Eliminar regla de aprobación"
+msgstr "Delete approval rule"
+
+#: cacao_accounting/admin/templates/admin/approval_matrix.html:204
+msgid "Deshabilitar regla de aprobación"
+msgstr "Disable approval rule"
+
+#: cacao_accounting/admin/templates/admin/approval_matrix.html:204
+msgid "Habilitar regla de aprobación"
+msgstr "Enable approval rule"
+
+#: cacao_accounting/admin/services.py:413
+msgid "Regla de aprobación habilitada."
+msgstr "Approval rule enabled."
+
+#: cacao_accounting/admin/services.py:413
+msgid "Regla de aprobación deshabilitada."
+msgstr "Approval rule disabled."
+
 #: cacao_accounting/bancos/forms.py:24
 #: cacao_accounting/bancos/templates/bancos/banco_cuenta_nuevo.html:28
 #: cacao_accounting/contabilidad/forms.py:41
@@ -8003,6 +8123,10 @@ msgstr "The voucher has already been settled."
 msgid "Solo se puede anular un gasto ya posteado."
 msgstr "Only an already posted expense can be cancelled."
 
+#: cacao_accounting/bancos/services.py
+msgid "No se puede anular un gasto posteado sin un comprobante contable asociado."
+msgstr "A posted expense without an associated accounting voucher cannot be cancelled."
+
 #: cacao_accounting/bancos/services.py:995
 msgid "No se puede anular un gasto después de reponer la Caja Chica."
 msgstr "An expense cannot be cancelled after replenishing the Petty Cash."
@@ -8237,6 +8361,10 @@ msgstr "Bank account is mandatory."
 msgid "La fecha del pago es obligatoria."
 msgstr "The payment date is mandatory."
 
+#: cacao_accounting/ventas/services.py:1008
+msgid "La fecha de conversión es obligatoria."
+msgstr "The conversion date is required."
+
 #: cacao_accounting/bancos/services.py:2341
 msgid "La cuenta bancaria no pertenece a la misma compañía del pago."
 msgstr "The bank account does not belong to the same payment company."
@@ -8315,6 +8443,9 @@ msgstr "The target GL account must match the target bank account."
 #: cacao_accounting/bancos/services.py:2914
 msgid "El monto aplicado no puede ser mayor al monto total del pago."
 msgstr "The amount applied cannot be greater than the total payment amount."
+
+msgid "La estructura del pago no es válida."
+msgstr "The payment structure is invalid."
 
 #: cacao_accounting/bancos/statement_service.py:142
 #: cacao_accounting/bancos/statement_service.py:315
@@ -8570,6 +8701,14 @@ msgstr "Bank Movement Detail"
 #: cacao_accounting/ventas/templates/ventas/cliente_nuevo.html:8
 msgid "breadcrumb"
 msgstr "breadcrumb"
+
+#: cacao_accounting/bancos/templates/bancos/banco_lista.html:9
+msgid "Ruta de navegación"
+msgstr "Breadcrumb"
+
+#: cacao_accounting/bancos/templates/bancos/banco_lista.html:48
+msgid "No se encontraron bancos para los filtros seleccionados."
+msgstr "No banks were found for the selected filters."
 
 #: cacao_accounting/bancos/templates/bancos/banco.html:24
 #: cacao_accounting/bancos/templates/bancos/banco_cuenta.html:24
@@ -9109,6 +9248,11 @@ msgstr "Posted"
 msgid "Anulado"
 msgstr "Voided"
 
+#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:2
+#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html:2
+msgid "Sin cambios"
+msgstr "No changes"
+
 #: cacao_accounting/bancos/templates/bancos/caja_chica_gasto_lista.html:55
 #: cacao_accounting/bancos/templates/bancos/caja_chica_vale_lista.html:55
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:66
@@ -9404,6 +9548,10 @@ msgstr "Approved"
 #: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:21
 msgid "Cerrado"
 msgstr "Closed"
+
+#: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html:2
+msgid "Archivado"
+msgstr "Archived"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:77
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_entradas.html:72
@@ -13601,6 +13749,10 @@ msgstr ""
 msgid "La confirmación no se encuentra disponible."
 msgstr "The confirmation is not available."
 
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py
+msgid "La invitación no se encuentra disponible."
+msgstr "The invitation is not available."
+
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:554
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:657
 msgid "Esta solicitud de confirmación de saldo ha expirado."
@@ -13812,8 +13964,8 @@ msgid "El usuario que ejecuta la anulación no existe."
 msgstr "The user performing the cancellation does not exist."
 
 #: cacao_accounting/contabilidad/cancellation_service.py:141
-msgid "La fecha de anulación no puede ser anterior a la fecha original."
-msgstr "The cancellation date cannot be earlier than the original date."
+msgid "La fecha de anulación debe coincidir con la fecha de contabilización del documento."
+msgstr "The cancellation date must match the document posting date."
 
 #: cacao_accounting/contabilidad/cancellation_service.py:153
 msgid ""
@@ -13850,6 +14002,14 @@ msgstr "The document has no posting date defined."
 #: cacao_accounting/contabilidad/journal_service.py:613
 msgid "No existe un periodo contable configurado para la fecha indicada."
 msgstr "There is no accounting period configured for the specified date."
+
+#: cacao_accounting/document_identifiers.py
+msgid "La fecha corresponde a más de un periodo contable."
+msgstr "The date matches more than one accounting period."
+
+#: cacao_accounting/contabilidad/exchange_revaluation_service.py
+msgid "El mes corresponde a más de un periodo contable."
+msgstr "The month matches more than one accounting period."
 
 #: cacao_accounting/contabilidad/currency_guard.py:34
 msgid "La moneda es obligatoria."
@@ -13957,6 +14117,17 @@ msgstr "The accounting period does not belong to the selected company."
 #: cacao_accounting/contabilidad/exchange_revaluation_service.py:438
 msgid "No se puede operar revalorizacion en un periodo cerrado o inexistente."
 msgstr "Revaluation cannot be performed in a closed or non-existent period."
+
+#: cacao_accounting/contabilidad/exchange_revaluation_service.py
+msgid "Otra revalorización está ejecutándose para el período seleccionado. Intente nuevamente."
+msgstr "Another revaluation is running for the selected period. Please try again."
+
+#: cacao_accounting/contabilidad/budget_service.py
+msgid "Otro usuario está modificando este presupuesto. Intente nuevamente."
+msgstr "Another user is modifying this budget. Please try again."
+
+msgid "Otra anulación de revalorización está en curso. Intente nuevamente."
+msgstr "Another revaluation cancellation is in progress. Please try again."
 
 #: cacao_accounting/contabilidad/exchange_revaluation_service.py:164
 msgid "El año y el mes son requeridos para ejecutar la revalorización."
@@ -16301,6 +16472,14 @@ msgstr "AR/AP and inventory subledgers reconciled against {count} book(s)."
 msgid "El cierre mensual requiere un usuario responsable."
 msgstr "The monthly close requires a responsible user."
 
+#: cacao_accounting/contabilidad/services.py
+msgid "Otro cierre mensual está en curso para este período. Intente nuevamente."
+msgstr "Another monthly close is being created for this period. Please try again."
+
+#: cacao_accounting/contabilidad/services.py
+msgid "El período no existe o ya no pertenece a esta compañía."
+msgstr "The period does not exist or no longer belongs to this company."
+
 #: cacao_accounting/contabilidad/services.py:791
 msgid "El periodo del cierre no existe o no pertenece a la compañía."
 msgstr "The closing period does not exist or does not belong to the company."
@@ -17033,7 +17212,7 @@ msgstr "Accounting Period"
 #: cacao_accounting/reportes/templates/reportes/financial_report.html:84
 #: cacao_accounting/reportes/templates/reportes/financial_report.html:113
 msgid "Periodo"
-msgstr "Permission"
+msgstr "Period"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:45
 msgid "Documentos procesados"
@@ -18997,6 +19176,9 @@ msgstr "Sequence with ID '%(sequence)s' not found."
 #: cacao_accounting/database/helpers.py:533
 msgid "CACAO_USER and CACAO_PSWD must be set in environment"
 msgstr "CACAO_USER and CACAO_PSWD must be set in environment"
+
+msgid "Las credenciales predeterminadas CACAO no se permiten fuera de desarrollo."
+msgstr "Default CACAO credentials are not allowed outside development."
 
 #: cacao_accounting/database/helpers.py:545
 msgid "Un registro no puede ser padre de sí mismo."
@@ -21075,6 +21257,14 @@ msgstr "Email sending retry is not available in DESKTOP mode."
 msgid "El registro de correo no existe."
 msgstr "The email log does not exist."
 
+#: cacao_accounting/messaging/email.py
+msgid "Otro envío de correo está en curso. Intente nuevamente."
+msgstr "Another email delivery is in progress. Please try again."
+
+#: cacao_accounting/messaging/email.py
+msgid "Solo se pueden reintentar correos pendientes o fallidos."
+msgstr "Only pending or failed emails can be retried."
+
 #: cacao_accounting/messaging/email.py:281
 msgid ""
 "La capacidad de envío de correos electrónicos no está disponible en modo "
@@ -21429,6 +21619,15 @@ msgstr "Attribute '%(event)s' is not allowed."
 #: cacao_accounting/printing/validators.py:40
 msgid "Dynamic CSS expressions are not allowed."
 msgstr "Dynamic CSS expressions are not allowed."
+
+msgid "El CSS no puede cerrar el elemento <style>."
+msgstr "CSS cannot close the <style> element."
+
+msgid "El elemento HTML '%(element)s' no está permitido."
+msgstr "The HTML element '%(element)s' is not allowed."
+
+msgid "No se permiten URLs con esquemas ejecutables."
+msgstr "Executable URL schemes are not allowed."
 
 #: cacao_accounting/printing/templates/admin/print_template_form.html:6
 msgid "formato de impresión"
@@ -24860,3 +25059,554 @@ msgstr "The base UOM quantity must be finite."
 #, python-format
 msgid "La relación %(relation_id)s no tiene cantidad en la UOM base."
 msgstr "Relation %(relation_id)s has no quantity in the base UOM."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "No se recibieron cuentas para actualizar la clasificación."
+msgstr "No accounts were received to update the classification."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "La clasificación debe enviarse completa para evitar borrados accidentales."
+msgstr "The classification must be submitted in full to avoid accidental deletions."
+
+#: cacao_accounting/ventas/templates/ventas/cotizacion_lista.html
+#: cacao_accounting/ventas/templates/ventas/entrega_lista.html
+#: cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html
+#: cacao_accounting/ventas/templates/ventas/factura_venta_lista.html
+#: cacao_accounting/ventas/templates/ventas/orden_venta_lista.html
+#: cacao_accounting/ventas/templates/ventas/solicitud_venta_lista.html
+msgid "No se encontraron documentos para los filtros seleccionados."
+msgstr "No documents were found for the selected filters."
+
+#: cacao_accounting/ventas/templates/ventas/cliente_lista.html:46
+msgid "No se encontraron clientes para los filtros seleccionados."
+msgstr "No customers were found for the selected filters."
+
+#: cacao_accounting/inventario/templates/inventario/lote_lista.html:45
+msgid "No se encontraron lotes para los filtros seleccionados."
+msgstr "No batches were found for the selected filters."
+
+#: cacao_accounting/inventario/templates/inventario/bodega_lista.html:43
+msgid "No hay bodegas para los filtros o el alcance de compañía actual."
+msgstr "There are no warehouses for the current filters or company scope."
+
+#: cacao_accounting/bancos/services.py
+#, python-format
+msgid "La dimensión %(label)s no pertenece a la compañía del documento."
+msgstr "The %(label)s dimension does not belong to the document company."
+
+#: cacao_accounting/contabilidad/posting_service.py
+#, python-format
+msgid "El %(label)s del documento no pertenece a la compañía."
+msgstr "The document %(label)s does not belong to the company."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La compañía de la regla fiscal no existe."
+msgstr "The tax rule company does not exist."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La cuenta contable de la regla fiscal no existe."
+msgstr "The tax rule account does not exist."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La cuenta contable no pertenece a la compañía de la regla fiscal."
+msgstr "The account does not belong to the tax rule company."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La moneda de la regla fiscal no existe."
+msgstr "The tax rule currency does not exist."
+
+#: cacao_accounting/admin/routes.py
+msgid "No se puede eliminar una regla fiscal en uso."
+msgstr "A tax rule that is in use cannot be deleted."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html
+msgid "Var"
+msgstr "Var"
+
+#: cacao_accounting/imports/adapters/bank_statement.py
+msgid "El monto bancario no puede ser negativo."
+msgstr "The bank amount cannot be negative."
+
+#: cacao_accounting/contabilidad/recurring_journal_service.py
+#, python-format
+msgid "El proyecto %(project)s no pertenece a la compañía de la plantilla."
+msgstr "The project %(project)s does not belong to the template company."
+
+#: cacao_accounting/bancos/services.py
+msgid "Seleccione un banco activo."
+msgstr "Select an active bank."
+
+#: cacao_accounting/bancos/services.py
+msgid "La moneda seleccionada no está activa."
+msgstr "The selected currency is not active."
+
+#: cacao_accounting/bancos/services.py
+msgid "Seleccione una cuenta contable de tipo banco, activa y habilitada, para la compañía indicada."
+msgstr "Select an active and enabled bank-type ledger account for the indicated company."
+
+#: cacao_accounting/bancos/services.py
+msgid "La serie de numeración seleccionada no está activa."
+msgstr "The selected numbering series is not active."
+
+#: cacao_accounting/bancos/services.py
+msgid "La chequera seleccionada no está activa."
+msgstr "The selected checkbook is not active."
+
+#: cacao_accounting/bancos/forms.py
+msgid "El nombre de la cuenta no puede superar los 150 caracteres."
+msgstr "The account name cannot exceed 150 characters."
+
+#: cacao_accounting/bancos/forms.py
+msgid "El número de cuenta no puede superar los 50 caracteres."
+msgstr "The account number cannot exceed 50 characters."
+
+#: cacao_accounting/bancos/forms.py
+msgid "El IBAN no puede superar los 50 caracteres."
+msgstr "The IBAN cannot exceed 50 characters."
+
+#: cacao_accounting/bancos/routes.py
+msgid "Ya existe una cuenta bancaria con ese número para la compañía indicada."
+msgstr "A bank account with that number already exists for the indicated company."
+
+#: cacao_accounting/bancos/services.py
+msgid "La serie de numeración no corresponde al tipo de pago."
+msgstr "The numbering series does not match the payment type."
+
+#: cacao_accounting/bancos/services.py
+msgid "La cuenta GL del pago debe estar activa, habilitada y ser una cuenta hoja."
+msgstr "The payment GL account must be active, enabled, and a leaf account."
+
+#: cacao_accounting/party_management.py
+msgid "El nombre del tercero es obligatorio."
+msgstr "The party name is required."
+
+#: cacao_accounting/party_management.py
+msgid "El correo electrónico del contacto no es válido."
+msgstr "The contact email address is not valid."
+
+#: cacao_accounting/party_settings.py
+msgid "La plantilla de impuestos seleccionada no esta activa."
+msgstr "The selected tax template is not active."
+
+#: cacao_accounting/party_settings.py
+msgid "La plantilla de impuestos no corresponde al tipo de tercero seleccionado."
+msgstr "The tax template does not match the selected party type."
+
+#: cacao_accounting/party_settings.py
+msgid "La regla fiscal de proveedor debe ser una retención."
+msgstr "The supplier tax rule must be a withholding."
+
+#: cacao_accounting/party_settings.py
+msgid "La regla fiscal de proveedor debe reconocerse al pagar."
+msgstr "The supplier tax rule must be recognized on payment."
+
+#: cacao_accounting/party_management.py
+msgid "Ya existe un tercero con ese identificador fiscal."
+msgstr "A party with that tax identifier already exists."
+
+#: cacao_accounting/admin/routes.py
+msgid "El artículo seleccionado no existe."
+msgstr "The selected item does not exist."
+
+#: cacao_accounting/admin/routes.py
+msgid "El artículo seleccionado no está activo."
+msgstr "The selected item is not active."
+
+#: cacao_accounting/admin/routes.py
+msgid "La unidad de medida seleccionada no existe."
+msgstr "The selected unit of measure does not exist."
+
+#: cacao_accounting/admin/routes.py
+msgid "La unidad de medida seleccionada no está activa."
+msgstr "The selected unit of measure is not active."
+
+#: cacao_accounting/admin/routes.py
+msgid "El artículo o la unidad de medida ya no está disponible."
+msgstr "The item or unit of measure is no longer available."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "Ya existe una tasa de cambio para ese par de monedas y fecha."
+msgstr "An exchange rate already exists for that currency pair and date."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "La identificación fiscal y la razón social son obligatorias."
+msgstr "The tax identifier and legal name are required."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "Ya existe otra entidad con esa identificación fiscal o razón social."
+msgstr "Another entity already uses that tax identifier or legal name."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "La eliminación de entidades no está disponible en modo Cloud; utilice Inactivar."
+msgstr "Entity deletion is not available in Cloud mode; use Deactivate instead."
+
+#: cacao_accounting/database/helpers.py
+msgid "El registro padre seleccionado no existe."
+msgstr "The selected parent record does not exist."
+
+msgid "Los registros de una jerarquía deben pertenecer a la misma compañía."
+msgstr "Records in a hierarchy must belong to the same company."
+
+msgid "No se pudo guardar porque los datos entran en conflicto con otro registro. Revise el código y las referencias."
+msgstr "Could not save because the data conflicts with another record. Review the code and references."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "No se puede quitar la condición de grupo porque la cuenta tiene cuentas hijas."
+msgstr "The group flag cannot be removed while the account has child accounts."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "No se puede quitar la condición de grupo porque el centro de costos tiene centros hijos."
+msgstr "The group flag cannot be removed while the cost center has child centers."
+
+msgid "No se puede cambiar la compañía de un centro de costos porque tiene centros hijos."
+msgstr "The company of a cost center cannot be changed while it has child centers."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "No se puede eliminar el centro de costos porque tiene centros hijos."
+msgstr "The cost center cannot be deleted while it has child centers."
+
+#: cacao_accounting/admin/services.py
+#, python-format
+msgid "El campo %(field)s debe ser un número válido."
+msgstr "The %(field)s field must be a valid number."
+
+#: cacao_accounting/admin/services.py
+#, python-format
+msgid "El campo %(field)s debe ser una fecha válida."
+msgstr "The %(field)s field must be a valid date."
+
+#: cacao_accounting/admin/services.py
+msgid "El rol seleccionado no existe."
+msgstr "The selected role does not exist."
+
+#: cacao_accounting/admin/services.py
+msgid "El usuario seleccionado no existe."
+msgstr "The selected user does not exist."
+
+#: cacao_accounting/admin/services.py
+msgid "Seleccione un rol o un usuario para la regla de aprobación."
+msgstr "Select a role or user for the approval rule."
+
+#: cacao_accounting/contabilidad/forms.py
+msgid "La fecha final no puede ser anterior a la fecha de inicio."
+msgstr "The end date cannot be earlier than the start date."
+
+#: cacao_accounting/inventario/services.py
+msgid "La cuenta de inventario debe estar activa, habilitada y ser una cuenta hoja."
+msgstr "The inventory account must be active, enabled, and a leaf account."
+
+#: cacao_accounting/inventario/service.py
+msgid "El número de serie ya está registrado para otro artículo."
+msgstr "The serial number is already registered for another item."
+
+#: cacao_accounting/admin/routes.py
+msgid "La secuencia debe ser un número entero."
+msgstr "The sequence must be an integer."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "El orden de la línea debe ser un número entero."
+msgstr "The line order must be an integer."
+
+#: cacao_accounting/admin/services.py
+msgid "El servidor SMTP es obligatorio."
+msgstr "The SMTP server is required."
+
+#: cacao_accounting/admin/services.py
+msgid "El puerto SMTP debe ser un número entero entre 1 y 65535."
+msgstr "The SMTP port must be an integer between 1 and 65535."
+
+#: cacao_accounting/admin/services.py
+msgid "El correo remitente SMTP no es válido."
+msgstr "The SMTP sender email address is not valid."
+
+#: cacao_accounting/bancos/cash_forecast.py
+msgid "La periodicidad debe ser semanal o mensual."
+msgstr "The periodicity must be weekly or monthly."
+
+#: cacao_accounting/bancos/services.py
+msgid "La moneda de la caja chica debe coincidir con la moneda de su cuenta contable."
+msgstr "The petty cash currency must match the currency of its ledger account."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_nuevo.html
+msgid "Guardar plantilla"
+msgstr "Save template"
+
+#: cacao_accounting/printing/admin_routes.py
+msgid "No se pudo duplicar la plantilla porque el código ya existe."
+msgstr "The template could not be duplicated because the code already exists."
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Aprobado por"
+msgstr "Approved by"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Base imponible"
+msgstr "Tax base"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Cantidad de saldo"
+msgstr "Balance quantity"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Cantidad entrante"
+msgstr "Incoming quantity"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Cantidad saliente"
+msgstr "Outgoing quantity"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Certificado"
+msgstr "Certificate"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Cobros"
+msgstr "Receipts"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Concepto de retención"
+msgstr "Withholding concept"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Ejecución de anulación"
+msgstr "Cancellation executed at"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Es reversa"
+msgstr "Is reversal"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Fecha de anulación"
+msgstr "Cancellation date"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Fecha de aprobación"
+msgstr "Approval date"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Fecha de creación"
+msgstr "Creation date"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Fecha de modificación"
+msgstr "Modification date"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Identificación fiscal del proveedor"
+msgstr "Supplier tax ID"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe entrante"
+msgstr "Incoming amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe original"
+msgstr "Original amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe pagado"
+msgstr "Paid amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe retenido"
+msgstr "Withheld amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Importe saliente"
+msgstr "Outgoing amount"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Modificado por"
+msgstr "Modified by"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Motivo de anulación"
+msgstr "Cancellation reason"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Nombre de la cuenta"
+msgstr "Account name"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Nombre del artículo"
+msgstr "Item name"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Pagos"
+msgstr "Payments"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Primer movimiento"
+msgstr "First movement"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Responsable de anulación"
+msgstr "Cancellation actor"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Reversa de"
+msgstr "Reversal of"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Saldo final"
+msgstr "Final balance"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Saldo inicial"
+msgstr "Opening balance"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Sección"
+msgstr "Section"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Solicitud de anulación"
+msgstr "Cancellation requested at"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Tipo de cuenta"
+msgstr "Account type"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Tramo"
+msgstr "Bucket"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Unidad"
+msgstr "Unit"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Variación de valor"
+msgstr "Value change"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Último movimiento"
+msgstr "Last movement"
+
+#: cacao_accounting/bancos/services.py
+#, python-format
+msgid "El campo %(field)s debe ser un número válido."
+msgstr "The %(field)s field must be a valid number."
+
+#: cacao_accounting/bancos/services.py
+#, python-format
+msgid "El campo %(field)s debe ser un número finito."
+msgstr "The %(field)s field must be a finite number."
+
+#: cacao_accounting/bancos/templates/bancos/caja_chica_reposicion_lista.html
+msgid "Seleccione una cuenta bancaria"
+msgstr "Select a bank account"
+
+#: cacao_accounting/printing/admin_routes.py
+msgid "Copia de"
+msgstr "Copy of"
+
+#: cacao_accounting/printing/admin_routes.py
+#, python-format
+msgid "No se pudo duplicar la plantilla: %(error)s"
+msgstr "Could not duplicate the template: %(error)s"
+
+#: cacao_accounting/printing/validators.py
+msgid "Las secciones CDATA no están permitidas en plantillas HTML."
+msgstr "CDATA sections are not allowed in HTML templates."
+
+#: cacao_accounting/printing/validators.py
+msgid "Los delimitadores de comentario HTML ambiguos no están permitidos."
+msgstr "Ambiguous HTML comment delimiters are not allowed."
+
+#: cacao_accounting/printing/admin_routes.py
+#, python-format
+msgid "Error al generar la vista previa: %(error)s"
+msgstr "Error rendering preview: %(error)s"
+
+#: cacao_accounting/printing/routes.py
+msgid "Validación no disponible"
+msgstr "Validation unavailable"
+
+#: cacao_accounting/printing/routes.py
+msgid "Documento no encontrado o validación no disponible"
+msgstr "Document not found or validation unavailable"
+
+#: cacao_accounting/printing/templates/admin/print_template_list.html
+msgid "Publicada"
+msgstr "Published"
+
+#: cacao_accounting/printing/templates/admin/print_template_list.html
+msgid "Archivada"
+msgstr "Archived"
+
+#: cacao_accounting/admin/routes.py
+msgid "El mínimo de ofertas debe ser un número entero."
+msgstr "The minimum number of offers must be an integer."
+
+#: cacao_accounting/auth/__init__.py
+msgid "La verificación requiere una SECRET_KEY estable configurada por el administrador."
+msgstr "Device verification requires a stable SECRET_KEY configured by the administrator."
+
+#: cacao_accounting/auth/__init__.py
+msgid "La recuperación requiere una SECRET_KEY estable configurada por el administrador."
+msgstr "Password recovery requires a stable SECRET_KEY configured by the administrator."
+
+#: cacao_accounting/auth/__init__.py
+msgid "La verificación en dos pasos está activada, pero el correo no está disponible. Contacte al administrador."
+msgstr "Two-step verification is enabled, but email is unavailable. Contact the administrator."
+
+#: cacao_accounting/auth/__init__.py
+msgid "No se pudo enviar el código de verificación. Intente más tarde o contacte al administrador."
+msgstr "The verification code could not be sent. Try again later or contact the administrator."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "La reversión debe conservar la identidad de cada línea de origen."
+msgstr "The reversal must preserve the identity of each source line."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "No se puede editar una reversión sin identidad única por línea."
+msgstr "A reversal cannot be edited without a unique identity for each line."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "No se puede cambiar la cantidad de líneas de una reversión."
+msgstr "The number of lines in a reversal cannot be changed."
+
+#: cacao_accounting/contabilidad/journal_service.py
+msgid "No se puede cambiar la identidad de las líneas de una reversión."
+msgstr "The identity of a reversal's lines cannot be changed."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "La línea de reversión no conserva su identidad contable de origen."
+msgstr "The reversal line does not preserve its source accounting identity."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "No se encontró una línea GL de origen única para la reversión."
+msgstr "A unique source GL line for the reversal could not be found."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "La línea de reversión no coincide con su línea GL de origen."
+msgstr "The reversal line does not match its source GL line."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "La reversión debe incluir cada libro contable de la línea de origen."
+msgstr "The reversal must include every ledger of the source line."
+
+#: cacao_accounting/api/line_import.py
+msgid "La cuenta bancaria no existe o no pertenece a la compañía."
+msgstr "The bank account does not exist or does not belong to the company."
+
+#: cacao_accounting/contabilidad/journal_service.py cacao_accounting/contabilidad/posting_service.py
+msgid "La cuenta bancaria no existe o no pertenece a la compañía del comprobante."
+msgstr "The bank account does not exist or does not belong to the journal's company."
+
+#: cacao_accounting/document_flow/payment.py
+msgid "La cuenta bancaria debe pertenecer a la compañía del pago."
+msgstr "The bank account must belong to the payment's company."
+
+#: cacao_accounting/contabilidad/journal_service.py cacao_accounting/contabilidad/posting_service.py
+msgid "La unidad no existe o no pertenece a la compañía del comprobante."
+msgstr "The business unit does not exist or does not belong to the journal's company."
+
+#: cacao_accounting/contabilidad/journal_service.py cacao_accounting/contabilidad/posting_service.py
+msgid "El proyecto no existe o no pertenece a la compañía del comprobante."
+msgstr "The project does not exist or does not belong to the journal's company."
+
+#: cacao_accounting/database/helpers.py
+msgid "No se puede aplicar la unicidad de cierres mensuales: hay varias corridas para compañía %(company)s y período %(period)s. Los registros existentes se conservaron."
+msgstr "Monthly close uniqueness cannot be applied: multiple runs exist for company %(company)s and period %(period)s. Existing records were preserved."

@@ -795,13 +795,6 @@ def _compatible_group(groups: dict, line: Any) -> Any | None:
     return None
 
 
-def _group_lines_by_item_and_uom(lines: list[Any]) -> dict[tuple[str, str | None, str | None], list[Any]]:
-    grouped: dict[tuple[str, str | None, str | None], list[Any]] = defaultdict(list)
-    for line in lines:
-        grouped[_line_key(line)].append(line)
-    return grouped
-
-
 def _aggregate_lines_by_item_and_uom(
     lines: list[Any],
 ) -> dict[tuple[str, str | None, str | None], _AggregatedLines]:
@@ -820,34 +813,6 @@ def _apply_config_snapshot(reconciliation: PurchaseReconciliation, config: Match
     reconciliation.price_tolerance_value = config.price_tolerance_value
     reconciliation.qty_tolerance_type = config.qty_tolerance_type
     reconciliation.qty_tolerance_value = config.qty_tolerance_value
-
-
-def _find_receipt_item_for_invoice_line(
-    receipt_items: list[PurchaseReceiptItem],
-    invoice_item: PurchaseInvoiceItem,
-) -> PurchaseReceiptItem:
-    candidates = [
-        ri
-        for ri in receipt_items
-        if _line_key(ri)[:2] == _line_key(invoice_item)[:2]
-        and (invoice_item.warehouse is None or ri.warehouse == invoice_item.warehouse)
-    ]
-    if not candidates:
-        raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
-    if len(candidates) > 1 and invoice_item.warehouse is None:
-        raise PurchaseReconciliationError(_("La línea de factura requiere almacén para conciliar sin ambigüedad."))
-    return candidates[0]
-
-
-def _find_order_item_for_invoice_line(order_items: list[Any], invoice_item: PurchaseInvoiceItem) -> Any:
-    candidates = [order_item for order_item in order_items if _line_key(order_item)[:2] == _line_key(invoice_item)[:2]]
-    if not candidates:
-        raise PurchaseReconciliationError(
-            _("No existe línea de OC compatible para el ítem %(item_code)s.") % {"item_code": invoice_item.item_code}
-        )
-    if len(candidates) > 1:
-        raise PurchaseReconciliationError(_("La línea de factura requiere una OC sin líneas duplicadas ambiguas."))
-    return candidates[0]
 
 
 def _available_line_slices(

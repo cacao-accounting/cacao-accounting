@@ -6,7 +6,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/entrada_lista.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventario") }}</a></li>
@@ -41,7 +41,7 @@
         <td>{{ item.purpose }}</td>
         <td>{{ macros.document_status_for("stock_entry", item) }}</td>
         <td>{{ item.posting_date or "" }}</td>
-        <td>{{ item.total_amount or "" }}</td>
+        <td>{{ format_money_with_currency(item.total_amount, document_currency_code(item)) }}</td>
       </tr>
       {%- endfor %}
     </tbody>

@@ -5,13 +5,14 @@
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
 
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from cacao_accounting.contabilidad.default_accounts import DefaultAccountError, validate_gl_account_usage
 from cacao_accounting.database import (
@@ -32,7 +33,11 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
-from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+from cacao_accounting.document_identifiers import (
+    IdentifierConfigurationError,
+    assign_document_identifier,
+    resolve_accounting_period,
+)
 from cacao_accounting.audit_trail_service import log_cancel, log_create, log_submit
 
 from cacao_accounting.i18n import _
@@ -93,6 +98,7 @@ class ExchangeRevaluationService:
     ) -> ExchangeRevaluation:
         """Ejecuta una revalorizacion para compania y periodo."""
         period, year, month = self._resolve_period(company, year, month, period_id)
+        period = self._lock_period_for_run(period)
         defaults = self._validated_defaults(company)
         ledgers = self._active_ledgers(company)
         summary_ledger = self._summary_ledger(company, ledgers)
@@ -103,6 +109,8 @@ class ExchangeRevaluationService:
                 .filter_by(company=company, year=year, month=month)
                 .where(ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED)
                 .order_by(ExchangeRevaluation.run_date.desc(), ExchangeRevaluation.created.desc())
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
             .scalars()
             .all()
@@ -125,6 +133,7 @@ class ExchangeRevaluationService:
             drafts = self._calculate_lines(candidates, ledgers, period.end)
             affected = [draft for draft in drafts if draft.exchange_difference != 0]
             if not affected:
+                run.docstatus = 1
                 database.session.commit()
                 return run
 
@@ -136,6 +145,9 @@ class ExchangeRevaluationService:
             run.journal_entry_id = journal.id
             run.affected_documents_count = len(affected)
             self._compute_run_totals(run, entries, summary_ledger, defaults, period.end)
+            # La corrida se marca posteada al final: el guard de controles
+            # internos solo admite mutaciones sobre borradores.
+            run.docstatus = 1
             log_submit(run)
             database.session.commit()
             return run
@@ -152,17 +164,65 @@ class ExchangeRevaluationService:
     ) -> tuple[AccountingPeriod, int, int]:
         """Resuelve el periodo contable objetivo y su ano/mes normalizados."""
         if period_id:
-            period = database.session.get(AccountingPeriod, period_id)
+            period = database.session.execute(
+                select(AccountingPeriod)
+                .where(AccountingPeriod.id == period_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ).scalar_one_or_none()
             if period is None:
                 raise ExchangeRevaluationError(_("No existe el periodo contable seleccionado."))
             if period.entity != company:
                 raise ExchangeRevaluationError(_("El periodo contable no pertenece a la compañía seleccionada."))
-            if period.is_closed:
+            if period.is_closed or not period.enabled:
                 raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
             return period, period.end.year, period.end.month
         if year is None or month is None:
             raise ExchangeRevaluationError(_("El año y el mes son requeridos para ejecutar la revalorización."))
         return self._period_for(company, year, month), year, month
+
+    def _lock_period_for_run(self, period: AccountingPeriod) -> AccountingPeriod:
+        """Serializa corridas concurrentes por periodo con la fila del agregado.
+
+        La fila de ``AccountingPeriod`` es el recurso compartido real de la
+        revaluacion (misma empresa y mismo periodo): bloquearla antes de leer
+        corridas previas evita que dos ejecuciones intercalen la lectura y
+        dupliquen asientos en el GL. SQLite ignora ``FOR UPDATE``, por lo que
+        reserva el turno de escritura con ``BEGIN IMMEDIATE`` antes de esa
+        lectura; la reserva se mantiene hasta confirmar o revertir la corrida.
+        """
+        if database.engine.dialect.name == "sqlite":
+            self._reserve_sqlite_writer(
+                _("Otra revalorización está ejecutándose para el período seleccionado. Intente nuevamente.")
+            )
+        locked = database.session.execute(
+            select(AccountingPeriod)
+            .where(AccountingPeriod.id == period.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if locked is None or locked.is_closed or not locked.enabled:
+            raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
+        return locked
+
+    def _reserve_sqlite_writer(self, message: str) -> None:
+        """Acquire SQLite's write reservation with a short, restored busy wait."""
+        connection = database.session.connection()
+        original_timeout = int(connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one())
+        connection.exec_driver_sql("PRAGMA busy_timeout=1000")
+        busy_error: OperationalError | None = None
+        try:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+        except OperationalError as exc:
+            error_code = getattr(exc.orig, "sqlite_errorcode", None)
+            if error_code is None or error_code & 0xFF not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+                raise
+            busy_error = exc
+        finally:
+            connection.exec_driver_sql(f"PRAGMA busy_timeout={original_timeout}")
+        if busy_error is not None:
+            database.session.rollback()
+            raise ExchangeRevaluationError(message) from busy_error
 
     def _void_previous_runs(
         self,
@@ -178,6 +238,8 @@ class ExchangeRevaluationService:
                 user_id=user_id,
                 reason="Reejecucion de revalorizacion del periodo",
                 commit=False,
+                _period_locked=True,
+                _known_run=previous_run,
             )
         self._reverse_prior_period_runs(company, period.start, user_id)
 
@@ -201,7 +263,7 @@ class ExchangeRevaluationService:
             year=year,
             month=month,
             status=EXCHANGE_REVALUATION_STATUS_NO_CHANGES,
-            docstatus=1,
+            docstatus=0,
             created_by=user_id,
             processed_documents_count=len(candidates),
             affected_documents_count=0,
@@ -280,11 +342,8 @@ class ExchangeRevaluationService:
         return total_gain, total_loss
 
     def _converted_amount(self, amount: Decimal, origin: str, destination: str, period_end: date) -> Decimal:
-        """Convierte un monto ignorando los que no tienen tasa de cierre disponible."""
-        try:
-            rate = self._closing_rate(origin, destination, period_end)
-        except ExchangeRevaluationError:
-            return Decimal("0")
+        """Convierte un monto y bloquea la corrida si falta la tasa de cierre."""
+        rate = self._closing_rate(origin, destination, period_end)
         return (amount * rate).quantize(Decimal("0.0001"))
 
     def void(
@@ -295,15 +354,37 @@ class ExchangeRevaluationService:
         reason: str | None = None,
         commit: bool = True,
         reversal_date: date | None = None,
+        _period_locked: bool = False,
+        _known_run: ExchangeRevaluation | None = None,
     ) -> ExchangeRevaluation:
         """Anula una revalorizacion contabilizada mediante reversos GL."""
-        run = database.session.get(ExchangeRevaluation, run_id)
+        # La ruta puede haber abierto un snapshot antes de entrar al servicio.
+        # La lectura inicial obtiene la fecha para bloquear primero el periodo,
+        # en el mismo orden que run(); despues se relee y bloquea la corrida.
+        run = (
+            _known_run
+            or database.session.execute(
+                select(ExchangeRevaluation).where(ExchangeRevaluation.id == run_id)
+            ).scalar_one_or_none()
+        )
+        if run is None:
+            raise ExchangeRevaluationError(_("La revalorizacion indicada no existe."))
+        effective_reversal_date = reversal_date or self._date_for(run)
+        if not _period_locked:
+            if database.engine.dialect.name == "sqlite":
+                self._reserve_sqlite_writer(_("Otra anulación de revalorización está en curso. Intente nuevamente."))
+            self._ensure_period_open(str(run.company), effective_reversal_date)
+
+        run = database.session.execute(
+            select(ExchangeRevaluation)
+            .where(ExchangeRevaluation.id == run_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
         if run is None:
             raise ExchangeRevaluationError(_("La revalorizacion indicada no existe."))
         if run.status != EXCHANGE_REVALUATION_STATUS_POSTED:
             raise ExchangeRevaluationError(_("Solo se puede anular una revalorizacion contabilizada."))
-        effective_reversal_date = reversal_date or self._date_for(run)
-        self._ensure_period_open(str(run.company), effective_reversal_date)
 
         journal = self._create_journal(run, user_id, reversal=True, posting_date=effective_reversal_date)
         originals = self._active_run_entries(run.id)
@@ -371,15 +452,28 @@ class ExchangeRevaluationService:
                 ExchangeRevaluation.run_date < reversal_date,
             )
             .order_by(ExchangeRevaluation.run_date, ExchangeRevaluation.created)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         ).scalars()
-        for prior_run in prior_runs:
-            self.void(
-                run_id=str(prior_run.id),
-                user_id=user_id,
-                reason="Reversa automática al inicio del siguiente período de revaluación",
-                commit=False,
-                reversal_date=reversal_date,
-            )
+        for prior_run in list(prior_runs):
+            try:
+                self.void(
+                    run_id=str(prior_run.id),
+                    user_id=user_id,
+                    reason="Reversa automática al inicio del siguiente período de revaluación",
+                    commit=False,
+                    reversal_date=reversal_date,
+                    _period_locked=True,
+                    _known_run=prior_run,
+                )
+            except ExchangeRevaluationError:
+                # Otra transaccion ya anulo la corrida (post-lock re-lectura): la
+                # reversa automatica es idempotente y no debe abortar la corrida nueva.
+                current = database.session.execute(
+                    select(ExchangeRevaluation.status).where(ExchangeRevaluation.id == prior_run.id).with_for_update()
+                ).scalar_one_or_none()
+                if current != EXCHANGE_REVALUATION_STATUS_VOIDED:
+                    raise
 
     def list_runs(self) -> list[ExchangeRevaluation]:
         """Lista ejecuciones recientes de revalorizacion."""
@@ -408,33 +502,37 @@ class ExchangeRevaluationService:
         )
 
     def _period_for(self, company: str, year: int, month: int) -> AccountingPeriod:
-        period = (
+        periods = (
             database.session.execute(
                 select(AccountingPeriod)
-                .filter_by(entity=company, is_closed=False)
+                .filter_by(entity=company, is_closed=False, enabled=True)
                 .where(AccountingPeriod.start <= date(year, month, 28))
                 .where(AccountingPeriod.end >= date(year, month, 1))
                 .order_by(AccountingPeriod.start)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
             .scalars()
-            .first()
+            .all()
         )
-        if period is None:
+        if not periods:
             raise ExchangeRevaluationError(_("No existe un periodo contable abierto para la compañía, mes y anio."))
-        return period
+        if len(periods) != 1:
+            raise ExchangeRevaluationError(_("El mes corresponde a más de un periodo contable."))
+        return periods[0]
 
     def _ensure_period_open(self, company: str, posting_date: date) -> None:
-        period = (
-            database.session.execute(
-                select(AccountingPeriod)
-                .filter_by(entity=company)
-                .where(AccountingPeriod.start <= posting_date)
-                .where(AccountingPeriod.end >= posting_date)
-            )
-            .scalars()
-            .first()
-        )
-        if period is None or period.is_closed:
+        try:
+            resolved_period = resolve_accounting_period(company, posting_date)
+        except IdentifierConfigurationError as exc:
+            raise ExchangeRevaluationError(str(exc)) from exc
+        period = database.session.execute(
+            select(AccountingPeriod)
+            .where(AccountingPeriod.id == resolved_period.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if period is None or period.is_closed or not period.enabled:
             raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
 
     def _validated_defaults(self, company: str) -> CompanyDefaultAccount:
@@ -834,7 +932,7 @@ class ExchangeRevaluationService:
         return balance
 
     def _active_revaluation_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal:
-        rows = database.session.execute(
+        query = (
             select(ExchangeRevaluationItem, GLEntry)
             .join(ExchangeRevaluation, ExchangeRevaluation.id == ExchangeRevaluationItem.revaluation_id)
             .join(GLEntry, GLEntry.id == ExchangeRevaluationItem.journal_line_id)
@@ -844,7 +942,12 @@ class ExchangeRevaluationService:
             .filter(ExchangeRevaluationItem.account_id == candidate.account_id)
             .filter(ExchangeRevaluationItem.ledger_id == ledger.id)
             .filter(GLEntry.is_cancelled.is_(False))
-        ).all()
+        )
+        if candidate.as_of_date is not None:
+            query = query.filter(
+                database.func.coalesce(ExchangeRevaluation.run_date, ExchangeRevaluation.posting_date) <= candidate.as_of_date
+            )
+        rows = database.session.execute(query.with_for_update().execution_options(populate_existing=True)).all()
         balance = Decimal("0")
         for item, entry in rows:
             item_balance = self._normal_balance([entry], candidate.normal_balance)
@@ -982,19 +1085,13 @@ class ExchangeRevaluationService:
         account = database.session.get(Accounts, account_id)
         return str(account.code) if account and account.code else None
 
-    def _period_ids(self, company: str, posting_date: date) -> tuple[str | None, str | None]:
-        period = (
-            database.session.execute(
-                select(AccountingPeriod)
-                .filter_by(entity=company, enabled=True)
-                .where(AccountingPeriod.start <= posting_date)
-                .where(AccountingPeriod.end >= posting_date)
-            )
-            .scalars()
-            .first()
-        )
-        if period is None:
-            return None, None
+    def _period_ids(self, company: str, posting_date: date) -> tuple[str, str | None]:
+        try:
+            period = resolve_accounting_period(company, posting_date)
+        except IdentifierConfigurationError as exc:
+            raise ExchangeRevaluationError(str(exc)) from exc
+        if not period.enabled or period.is_closed:
+            raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
         return period.id, period.fiscal_year_id
 
     def _create_journal(
@@ -1049,6 +1146,8 @@ class ExchangeRevaluationService:
                     is_cancelled=False,
                 )
                 .order_by(GLEntry.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
             .scalars()
             .all()

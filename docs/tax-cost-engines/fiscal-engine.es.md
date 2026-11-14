@@ -7,7 +7,7 @@ El Motor fiscal es responsable de calcular todos los impuestos, retenciones y ca
 El motor sigue un proceso paso a paso:
 1. **Ordenar reglas**: Las reglas se ordenan por su propiedad `order`.
 2. **Determinar la base**: Según `base_mode`, el motor utiliza el total de bienes o un subtotal acumulado.
-3. **Aplicar método**: Calcula el monto según `percentage`, `fixed` o `quantity`.
+3. **Aplicar método**: Calcula el monto según `percentage`, `fixed` o `manual`.
 4. **Redondeo**: Aplica la política de redondeo configurada (HALF_UP, Bankers, etc.).
 5. **Descomposición de impuestos**: Para los impuestos incluidos en el precio, el motor usa descomposición algebraica para resolver el monto neto cuando múltiples impuestos aplican al mismo nivel.
 6. **Actualizar acumuladores**: Si la regla `participates_in_next_base`, su resultado se suma al subtotal para las reglas siguientes.

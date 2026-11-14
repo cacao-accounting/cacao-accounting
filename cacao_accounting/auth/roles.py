@@ -19,15 +19,6 @@ from cacao_accounting.logs import log
 
 from cacao_accounting.i18n import _
 
-
-class RegistroRol:
-    """Adminisración de Roles de Usuario."""
-
-
-class RegistroRolUsuario:
-    """Administración de roles de usuario."""
-
-
 ADMINISTRADOR = {
     "name": "admin",
     "detalle": "Administrador del Sistema",
@@ -161,7 +152,7 @@ def tiene_rol(user_id: str, role_name: str) -> bool:
     res = database.session.execute(
         database.select(RolesUser.id)
         .join(Roles, Roles.id == RolesUser.role_id)
-        .filter(RolesUser.user_id == user_id, Roles.name == role_name, RolesUser.active.is_not(False))
+        .filter(RolesUser.user_id == user_id, Roles.name == role_name, RolesUser.active.is_(True))
     ).scalar_one_or_none()
     return res is not None
 

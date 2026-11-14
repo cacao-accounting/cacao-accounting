@@ -22,6 +22,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import generate_identifier, get_active_naming_series
+from cacao_accounting.default_scope import lock_default_scope
 
 
 from cacao_accounting.i18n import _
@@ -65,13 +66,21 @@ def parse_posting_date(posting_date_raw: date | str | None) -> date:
         raise IdentifierConfigurationError(_("La fecha de contabilizacion es inválida.")) from exc
 
 
-def validate_accounting_period(company: str | None, posting_date: date, allow_closing: bool = False) -> None:
-    """Aplica el cierre operativo y su excepción exclusiva para cierres contables.
+def validate_accounting_period(
+    company: str | None,
+    posting_date: date,
+    allow_closing: bool = False,
+    allow_fiscal_year_closing: bool = False,
+) -> None:
+    """Aplica el cierre contable y sus dos excepciones exclusivas de cierre.
 
     Compras, ventas, bancos e inventario deben postear con ``allow_closing=False`` y
-    quedan bloqueados cuando el periodo está cerrado o deshabilitado. Solo un
-    comprobante de diario marcado como cierre puede usar ``allow_closing=True`` para
-    completar el cierre. Si el año fiscal está cerrado, no se permite ningún movimiento.
+    quedan bloqueados cuando el período está cerrado o deshabilitado, así como en
+    un año fiscal cerrado. ``allow_closing=True`` desbloquea únicamente los
+    períodos cerrados o deshabilitados para los comprobantes de cierre operativo.
+    El asiento de cierre de año fiscal (``is_fiscal_year_closing``, creado
+    exclusivamente por el servicio de cierre) usa ``allow_fiscal_year_closing=True``
+    para numerar y postear dentro del propio año que cierra.
     """
     if not company:
         raise IdentifierConfigurationError(_("Debe indicar la compañía del documento."))
@@ -83,26 +92,36 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
         .where(FiscalYear.year_end_date >= posting_date)
     ).scalar_one_or_none()
 
-    if closed_fiscal_year and not allow_closing:
+    if closed_fiscal_year and not allow_fiscal_year_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un año fiscal cerrado."))
 
-    period = (
-        database.session.execute(
-            database.select(AccountingPeriod)
-            .filter_by(entity=company)
-            .where(AccountingPeriod.start <= posting_date)
-            .where(AccountingPeriod.end >= posting_date)
-            .order_by(AccountingPeriod.start.desc())
-        )
-        .scalars()
-        .first()
-    )
+    period = resolve_accounting_period(company, posting_date)
 
     if period and bool(period.is_closed) and not allow_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un periodo contable cerrado."))
 
     if period and not bool(period.enabled) and not allow_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un periodo contable deshabilitado."))
+
+
+def resolve_accounting_period(company: str, posting_date: date) -> AccountingPeriod:
+    """Resuelve el único período que cubre una fecha para la compañía."""
+    periods = (
+        database.session.execute(
+            database.select(AccountingPeriod)
+            .filter_by(entity=company)
+            .where(AccountingPeriod.start <= posting_date)
+            .where(AccountingPeriod.end >= posting_date)
+            .order_by(AccountingPeriod.start.desc(), AccountingPeriod.id)
+        )
+        .scalars()
+        .all()
+    )
+    if not periods:
+        raise IdentifierConfigurationError(_("No existe un periodo contable configurado para la fecha indicada."))
+    if len(periods) > 1:
+        raise IdentifierConfigurationError(_("La fecha corresponde a más de un periodo contable."))
+    return periods[0]
 
 
 def enforce_single_default_series(entity_type: str, company: str | None, exclude_id: str | None = None) -> None:
@@ -116,6 +135,7 @@ def enforce_single_default_series(entity_type: str, company: str | None, exclude
         company: Codigo de compania o None para series globales
         exclude_id: ID de la serie que se quiere mantener como predeterminada (se excluye del reset)
     """
+    lock_default_scope("naming_series", entity_type, company)
     query = database.select(NamingSeries).filter(
         NamingSeries.entity_type == entity_type,
         NamingSeries.is_default.is_(True),
@@ -126,6 +146,7 @@ def enforce_single_default_series(entity_type: str, company: str | None, exclude
     else:
         query = query.filter(NamingSeries.company.is_(None))
 
+    query = query.with_for_update().execution_options(populate_existing=True)
     existing_defaults = database.session.execute(query).scalars().all()
     for series in existing_defaults:
         if series.id != exclude_id:
@@ -223,8 +244,12 @@ def ensure_global_naming_series(entity_types: list[str] | None = None) -> None:
     if entity_types is None:
         entity_types = ["customer", "supplier", "item"]
     for entity_type in entity_types:
+        lock_default_scope("naming_series", entity_type, None)
         existing = database.session.execute(
-            database.select(NamingSeries).filter_by(entity_type=entity_type, company=None, is_default=True)
+            database.select(NamingSeries)
+            .filter_by(entity_type=entity_type, company=None, is_default=True)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         ).scalar_one_or_none()
         if existing:
             continue
@@ -336,6 +361,18 @@ def _create_default_series(entity_type: str, company: str | None) -> NamingSerie
     La serie creada automaticamente se marca como predeterminada (is_default=True)
     ya que es la primera y unica para esta combinacion.
     """
+    lock_default_scope("naming_series", entity_type, company)
+    existing = database.session.execute(
+        database.select(NamingSeries)
+        .filter_by(entity_type=entity_type, company=company, is_default=True)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if existing:
+        if existing.is_active:
+            return existing
+        raise IdentifierConfigurationError(_("La serie seleccionada no existe o está inactiva."))
+
     code = _default_entity_code(entity_type)
     prefix_template = f"*COMP*-{code}-*YYYY*-*MM*-"
     sequence = Sequence(
@@ -531,6 +568,7 @@ def assign_document_identifier(
     external_number: str | None = None,
     external_context: dict | None = None,
     allow_closing: bool = False,
+    allow_fiscal_year_closing: bool = False,
 ) -> None:
     """Asigna document_no, naming_series_id y (opcionalmente) external_number a un documento.
 
@@ -559,13 +597,20 @@ def assign_document_identifier(
         external_number: Numero externo fisico a usar (o None para usar el sugerido por el contador)
         external_context: Contexto adicional para seleccion contextual de contador (payment_method, etc.)
         allow_closing: Permite asignar identificador en periodos cerrados si es comprobante de cierre.
+        allow_fiscal_year_closing: Exclusivo del asiento de cierre de año fiscal: permite
+            asignar identificador dentro del propio año fiscal que se cierra.
     """
     if str(getattr(document, "document_no", "") or "").strip():
         return
 
     posting_date = parse_posting_date(posting_date_raw)
     company = getattr(document, "company", None)
-    validate_accounting_period(company=company, posting_date=posting_date, allow_closing=allow_closing)
+    validate_accounting_period(
+        company=company,
+        posting_date=posting_date,
+        allow_closing=allow_closing,
+        allow_fiscal_year_closing=allow_fiscal_year_closing,
+    )
     company_code = cast(str, company)
 
     # 1. Identificador interno
@@ -670,54 +715,6 @@ def _validate_and_register_external_number(
 # -------------------------------------------------------------------------------------
 # External Counter Services (ajuste manual con auditoria)
 # -------------------------------------------------------------------------------------
-
-
-def suggest_next_external_number(external_counter_id: str) -> str:
-    """Devuelve el siguiente numero externo sugerido para un contador externo.
-
-    Args:
-        external_counter_id: ID del ExternalCounter
-
-    Returns:
-        Cadena con el numero sugerido (prefijo + numero formateado con padding)
-
-    Raises:
-        IdentifierConfigurationError: Si el contador no existe o esta inactivo
-    """
-    counter = database.session.get(ExternalCounter, external_counter_id)
-    if not counter:
-        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
-    if not counter.is_active:
-        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
-    return counter.next_suggested_formatted
-
-
-def record_external_number_used(
-    *,
-    external_counter_id: str,
-    number_used: int,
-    changed_by: str | None = None,
-) -> None:
-    """Registra el uso de un numero externo incrementando last_used si corresponde.
-
-    Actualiza last_used solo si number_used es mayor al valor actual.
-
-    Args:
-        external_counter_id: ID del ExternalCounter
-        number_used: Numero externo utilizado en el documento
-        changed_by: ID del usuario que realiza el registro
-    """
-    counter = database.session.get(ExternalCounter, external_counter_id)
-    if not counter:
-        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
-    if not counter.is_active:
-        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
-    if number_used < 0:
-        raise IdentifierConfigurationError(_("El número externo usado no puede ser negativo."))
-
-    if number_used > (counter.last_used or 0):
-        counter.last_used = number_used
-        database.session.flush()
 
 
 def adjust_external_counter(

@@ -6,8 +6,8 @@
 from datetime import date
 from decimal import Decimal
 import json
-from typing import Any, Dict, List, Sequence
-from sqlalchemy import or_, select
+from typing import Any, Dict, List
+from sqlalchemy import select
 from cacao_accounting.audit_trail_service import log_create, log_submit
 from cacao_accounting.database import (
     Accounts,
@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     ComprobanteContable,
     ComprobanteContableDetalle,
     Entity,
+    Project,
 )
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
@@ -40,6 +41,7 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
     """Crea una nueva plantilla de comprobante recurrente."""
     validate_template_balance(items)
     company = data["company"]
+    _validate_template_projects(company, items)
     books = _authorized_template_books(company, data.get("books"), user_id, "crear")
     primary_book = _book_for_reference(company, books[0]) if books else None
 
@@ -131,27 +133,6 @@ def cancel_recurring_template(template_id: str, reason: str, user_id: str):
     template.cancelled_at = database.func.now()
     template.cancel_reason = reason
     database.session.commit()
-
-
-def get_applicable_templates(company: str, ledger_id: str, period_date: date) -> Sequence[RecurringJournalTemplate]:
-    """Obtiene las plantillas aplicables para un periodo."""
-    # Filtros: compañía, ledger, rango de fechas, estado aprobado, no completado
-    book = _book_for_reference(company, ledger_id)
-    if book is None:
-        return []
-    stmt = select(RecurringJournalTemplate).where(
-        RecurringJournalTemplate.company == company,
-        or_(
-            RecurringJournalTemplate.ledger_id == book.id,
-            RecurringJournalTemplate.ledger_id == book.code,  # Backward compatibility with legacy code values
-            RecurringJournalTemplate.book_codes.contains(f'"{book.code}"'),
-        ),
-        RecurringJournalTemplate.start_date <= period_date,
-        RecurringJournalTemplate.end_date >= period_date,
-        RecurringJournalTemplate.status == "approved",
-        RecurringJournalTemplate.is_completed.is_(False),
-    )
-    return database.session.execute(stmt).scalars().all()
 
 
 def apply_recurring_template(
@@ -266,6 +247,21 @@ def apply_recurring_template(
     return application
 
 
+def _validate_template_projects(company: str, items: List[Dict[str, Any]]) -> None:
+    """Rechaza proyectos que no pertenecen a la compañía de la plantilla."""
+    for item in items:
+        project_code = str(item.get("project") or "").strip()
+        if not project_code:
+            continue
+        exists = database.session.execute(
+            database.select(Project.id).filter_by(entity=company, code=project_code)
+        ).scalar_one_or_none()
+        if exists is None:
+            raise RecurringJournalError(
+                _("El proyecto %(project)s no pertenece a la compañía de la plantilla.") % {"project": project_code}
+            )
+
+
 def _normalize_account_code(company: str, account_value: Any) -> str:
     """Normaliza una cuenta recibida por id o por código hacia código contable."""
     account_text = str(account_value or "").strip()
@@ -377,28 +373,6 @@ def accessible_recurring_template_ids(user_id: str) -> list[str]:
             continue
         accessible.append(str(template.id))
     return accessible
-
-
-def _canonical_book_reference(company: str, value: Any) -> str | None:
-    """Convierte id o código de libro a su código canónico."""
-    if not value:
-        return None
-    book = database.session.execute(
-        database.select(Book).where(Book.entity == company).where((Book.id == str(value)) | (Book.code == str(value)))
-    ).scalar_one_or_none()
-    return book.code if book else str(value)
-
-
-def _normalize_ledger_id_for_validation(company: str, ledger_id: Any) -> list[str]:
-    """Convierte ledger_id (UUID o código legacy) a una lista canónica de referencias."""
-    if not ledger_id:
-        return []
-    # Resolve the book regardless of whether ledger_id is UUID or code
-    book = _book_for_reference(company, ledger_id)
-    if book:
-        return [book.code, book.id]  # Include both code and UUID for matching
-    # If book not found, return the value as-is for error reporting
-    return [str(ledger_id)]
 
 
 def _book_for_reference(company: str, value: Any) -> Book | None:

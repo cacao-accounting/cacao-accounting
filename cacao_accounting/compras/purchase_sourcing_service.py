@@ -87,7 +87,11 @@ def is_purchase_manager(user_id: str | None) -> bool:
     role_ids = database.select(Roles.id).where((Roles.name == "Gerente de Compras") | (Roles.note == "Gerente de Compras"))
     return (
         database.session.execute(
-            database.select(RolesUser).where(RolesUser.user_id == user_id, RolesUser.role_id.in_(role_ids))
+            database.select(RolesUser).where(
+                RolesUser.user_id == user_id,
+                RolesUser.role_id.in_(role_ids),
+                RolesUser.active.is_(True) | RolesUser.active.is_(None),
+            )
         ).scalar_one_or_none()
         is not None
     )

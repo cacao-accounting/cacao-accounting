@@ -1853,21 +1853,26 @@ def _create_advance_settlement_lines(
         )
 
 
-def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
+def _create_payment_target(payload: dict[str, Any], *, commit: bool = True) -> dict[str, Any]:
     """Crea un pago generico desde facturas fuente."""
     company = payload.get("company") or payload.get("company_id")
     from cacao_accounting.decorators import exige_acceso_compania
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError, parse_posting_date
 
     # La autorización del documento origen no concede por sí sola permiso
     # para crear documentos del módulo bancario.
     exige_acceso_compania("cash", company, "crear", allow_unauthenticated=True)
-    posting_date = payload.get("posting_date")
+    try:
+        posting_date = parse_posting_date(payload.get("posting_date"))
+    except IdentifierConfigurationError as exc:
+        raise _document_flow_error(str(exc), 400) from exc
     bank_account = _load_payment_bank_account(payload)
     payment = _build_payment_target_payment(company, posting_date, payload)
     assign_payment_identifier(payment, bank_account, posting_date, payload)
     total = _apply_payment_target_lines(payment, company, payload)
     _update_payment_target_amounts(payment, total)
-    database.session.commit()
+    if commit:
+        database.session.commit()
     return _payment_target_result(payment)
 
 
@@ -1912,20 +1917,21 @@ def _resolve_payment_target_gl_accounts(company: str | None, payload: dict[str, 
     aplicar aquí la misma garantía: cada pata usa la cuenta GL de su cuenta
     bancaria y ambas cuentas pertenecen a la compañía del pago.
     """
-    if str(payload.get("payment_type") or "") != "internal_transfer":
+    payment_type = str(payload.get("payment_type") or "")
+    source_id = payload.get("bank_account_id")
+    source_bank = _load_payment_target_bank_account(company, source_id)
+    if payment_type != "internal_transfer":
         return None, None
 
     from cacao_accounting.database import BankAccount
 
-    source_id = payload.get("bank_account_id")
     target_id = payload.get("target_bank_account_id")
-    source_bank = database.session.get(BankAccount, source_id) if source_id else None
     target_bank = database.session.get(BankAccount, target_id) if target_id else None
     if not source_bank or not target_bank:
         raise _document_flow_error(_("La transferencia interna requiere cuentas bancarias válidas."), 409)
     if source_bank.id == target_bank.id:
         raise _document_flow_error(_("La cuenta bancaria de origen y destino deben ser distintas."), 409)
-    if company and (source_bank.company != company or target_bank.company != company):
+    if company and target_bank.company != company:
         raise _document_flow_error(_("Las cuentas bancarias deben pertenecer a la compañía del pago."), 409)
 
     source_account_id = payload.get("paid_from_account_id") or source_bank.gl_account_id
@@ -1937,6 +1943,18 @@ def _resolve_payment_target_gl_accounts(company: str | None, payload: dict[str, 
     if payload.get("paid_to_account_id") and payload["paid_to_account_id"] != target_bank.gl_account_id:
         raise _document_flow_error(_("La cuenta contable de destino no coincide con la cuenta bancaria."), 409)
     return str(source_account_id), str(target_account_id)
+
+
+def _load_payment_target_bank_account(company: str | None, bank_account_id: Any) -> Any:
+    """Load an optional payment account and verify its company ownership."""
+    from cacao_accounting.database import BankAccount
+
+    if not bank_account_id:
+        return None
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if not bank_account or not company or bank_account.company != company:
+        raise _document_flow_error(_("La cuenta bancaria debe pertenecer a la compañía del pago."), 409)
+    return bank_account
 
 
 def assign_payment_identifier(
@@ -2025,7 +2043,7 @@ def _apply_payment_target_line(
     outstanding = compute_outstanding_amount(invoice)
     _validate_payment_target_allocation(allocated, outstanding)
     _persist_payment_target_allocation(payment, reference_type, reference_id, invoice, allocated, outstanding, effective_rate)
-    return allocated
+    return (allocated * effective_rate).quantize(Decimal("0.0001"))
 
 
 def _validate_payment_target_allocation(allocated: Decimal, outstanding: Decimal) -> None:
@@ -2046,18 +2064,36 @@ def _persist_payment_target_allocation(
     exchange_rate: Decimal = Decimal("1"),
 ) -> None:
     """Persist the payment reference and document relation for an allocation."""
+    document_currency = _document_transaction_currency(invoice) or getattr(payment, "currency", None)
+    payment_currency = getattr(payment, "currency", None) or document_currency
+    payment_amount = (allocated * exchange_rate).quantize(Decimal("0.0001"))
+    document_rate = _document_exchange_rate(invoice)
+    payment_rate = _document_exchange_rate(payment)
+    base_allocated_amount = (allocated * document_rate).quantize(Decimal("0.0001"))
+    base_payment_amount = (payment_amount * payment_rate).quantize(Decimal("0.0001"))
     reference = PaymentReference(
         payment_id=payment.id,
-        reference_type=reference_type,
+        reference_type=_payment_candidate_physical_type(reference_type),
+        flow_source_type=reference_type,
         reference_id=reference_id,
+        reference_document_no=getattr(invoice, "document_no", None) or reference_id,
+        reference_date=_payment_candidate_date(invoice),
+        party_type=payment.party_type,
+        party_id=payment.party_id,
+        company=getattr(payment, "company", None),
+        currency=document_currency,
         total_amount=getattr(invoice, "grand_total", None),
         outstanding_amount=outstanding,
+        outstanding_amount_after=outstanding - allocated,
         allocated_amount=allocated,
-        payment_currency=getattr(payment, "currency", None),
-        payment_amount=allocated * exchange_rate,
+        payment_currency=payment_currency,
+        payment_amount=payment_amount,
         payment_exchange_rate=exchange_rate,
+        base_allocated_amount=base_allocated_amount,
+        base_payment_amount=base_payment_amount,
+        fx_difference_amount=base_allocated_amount - base_payment_amount,
         allocation_date=payment.posting_date,
-        exchange_rate=getattr(payment, "exchange_rate", None),
+        exchange_rate=document_rate,
         discount_amount=getattr(payment, "discount_amount", None),
         gain_loss_amount=getattr(payment, "gain_loss_amount", None),
         difference_amount=None,
@@ -2087,7 +2123,7 @@ def _persist_payment_target_allocation(
             payment,
             invoice,
             document_amount=allocated,
-            payment_amount=allocated * exchange_rate,
+            payment_amount=payment_amount,
             allocation_date=getattr(payment, "posting_date", None) or date.today(),
             reference_type=reference_type,
         )

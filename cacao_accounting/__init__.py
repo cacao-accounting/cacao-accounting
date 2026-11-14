@@ -43,6 +43,7 @@ from cacao_accounting.config import (
 from cacao_accounting.contabilidad import contabilidad
 from cacao_accounting.database import database
 from cacao_accounting.database.helpers import (
+    batch_number,
     entidades_creadas,
     obtener_id_modulo_por_nombre,
 )
@@ -206,6 +207,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(is_cloud_mode=is_cloud_mode)
             app.jinja_env.globals.update(can_send_transaction_emails=can_send_transaction_emails)
             app.jinja_env.globals.update(force_single_entity=force_single_entity)
+            app.jinja_env.globals.update(batch_number=batch_number)
             app.jinja_env.globals.update(TESTING=TESTING_MODE)
             # En las plantillas no se utiliza el termino permiso para evitar un conflicto de nombre
             # se utiliza "acceso", para ello al inicio de cada plantilla se debe establecer el
@@ -223,6 +225,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
             app.jinja_env.globals.update(document_currency_code=document_currency_code)
             app.jinja_env.globals.update(format_money_with_currency=format_money_with_currency)
+            app.jinja_env.filters.update(format_currency=format_money_with_currency)
             app.jinja_env.globals.update(format_quantity=format_quantity)
             app.jinja_env.globals.update(module_badge=module_badge)
             app.jinja_env.globals.update(collaboration_active_users=collaboration_active_users)
@@ -236,17 +239,21 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(transaction_form_i18n=_transaction_form_i18n_labels)
 
             def get_balance_confirmations_history(party_id: str, party_type: str, company: str | None = None):
+                from cacao_accounting.company_context import authorized_company_codes
                 from cacao_accounting.database import BalanceConfirmation, database
                 from sqlalchemy import select
 
-                if not company:
+                authorized = set(authorized_company_codes())
+                if company:
+                    authorized &= {company}
+                if not authorized:
                     return []
                 stmt = (
                     select(BalanceConfirmation)
                     .where(
                         BalanceConfirmation.party_id == party_id,
                         BalanceConfirmation.party_type == party_type,
-                        BalanceConfirmation.company == company,
+                        BalanceConfirmation.company.in_(authorized),
                     )
                     .order_by(BalanceConfirmation.created.desc())
                 )
@@ -313,12 +320,16 @@ def format_quantity(value: object | None) -> str:
 
 
 def collaboration_active_users() -> list:
-    """Return active users for collaboration widgets."""
+    """Active users scoped to the current viewer's authorized companies (#1598)."""
     if not is_cloud_mode():
         return []
     from cacao_accounting.collaboration_service import active_users
+    from cacao_accounting.company_context import authorized_company_codes
 
-    return active_users()
+    alcance = authorized_company_codes()
+    if not alcance:
+        return []
+    return active_users(companies=alcance)
 
 
 def document_collaboration_tasks(document_type: str, document_id: str) -> list:
@@ -340,23 +351,24 @@ def current_user_open_task_count() -> int:
 
 
 def pending_approval_count() -> int:
-    """Return count of pending approval requests for the current user."""
+    """Return count of pending approval requests visible to the current user."""
     if not is_cloud_mode() or not current_user or not current_user.is_authenticated:
         return 0
+    from cacao_accounting.company_context import authorized_company_codes
     from cacao_accounting.database import ApprovalRequest
-    from sqlalchemy import select
+    from sqlalchemy import func, select
 
+    authorized = authorized_company_codes()
+    if not authorized:
+        return 0
     try:
-        count = (
-            database.session.execute(
-                select(ApprovalRequest).filter(
-                    ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
-                )
+        count = database.session.execute(
+            select(func.count(ApprovalRequest.id)).where(
+                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
+                ApprovalRequest.company_id.in_(authorized),
             )
-            .scalars()
-            .all()
-        )
-        return len(count)
+        ).scalar_one()
+        return int(count or 0)
     except SQLAlchemyError:
         return 0
 
@@ -416,6 +428,31 @@ def _transaction_form_i18n_labels() -> dict[str, str]:
     }
 
 
+def _align_attachment_request_limit(app: Flask) -> None:
+    """Normaliza el límite de adjuntos y eleva el tope global de la petición.
+
+    Un adjunto de 25 MB no cabe en el ``MAX_CONTENT_LENGTH`` histórico de
+    16 MB. El límite por archivo sigue siendo configurable; el tope global se
+    ajusta para no rechazar la petición antes de que el servicio valide el
+    tamaño real del archivo.
+    """
+    raw_limit = app.config.get("ATTACHMENT_MAX_FILE_SIZE")
+    attachment_limit = 25 * 1024 * 1024
+    if raw_limit is not None:
+        try:
+            attachment_limit = int(raw_limit)
+        except (TypeError, ValueError):
+            attachment_limit = 25 * 1024 * 1024
+    if attachment_limit <= 0:
+        attachment_limit = 25 * 1024 * 1024
+    app.config["ATTACHMENT_MAX_FILE_SIZE"] = attachment_limit
+    try:
+        request_limit = int(app.config.get("MAX_CONTENT_LENGTH") or 0)
+    except (TypeError, ValueError):
+        request_limit = 0
+    app.config["MAX_CONTENT_LENGTH"] = max(request_limit, attachment_limit)
+
+
 def create_app(ajustes: dict | None = None) -> Flask:
     """Aplication factory."""
     cacao_app = Flask(
@@ -426,6 +463,7 @@ def create_app(ajustes: dict | None = None) -> Flask:
 
     # Configurar límites por defecto
     cacao_app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+    cacao_app.config["ATTACHMENT_MAX_FILE_SIZE"] = 25 * 1024 * 1024
 
     # Configurar cookies de sesión
     cacao_app.config["SESSION_COOKIE_SECURE"] = _session_cookie_secure_default()
@@ -438,6 +476,8 @@ def create_app(ajustes: dict | None = None) -> Flask:
     if ajustes:
         cacao_app.config.from_mapping(ajustes)
 
+    _align_attachment_request_limit(cacao_app)
+
     _configure_app_secret_key(cacao_app)
     _register_app_hooks(cacao_app)
 
@@ -447,7 +487,17 @@ def create_app(ajustes: dict | None = None) -> Flask:
     registrar_rutas_predeterminadas(app=cacao_app)
 
     with cacao_app.app_context():
+        from cacao_accounting.database.helpers import (
+            _ensure_monthly_close_run_unique_constraint,
+            _ensure_user_email_identity_column,
+        )
+
+        _ensure_user_email_identity_column()
+        _ensure_monthly_close_run_unique_constraint()
         try:
+            from cacao_accounting.database.helpers import _ensure_file_sha256_column
+
+            _ensure_file_sha256_column()
             recover_crashed_batches()
         except SQLAlchemyError as e:
             log.error("Error al recuperar lotes de importación: {}", e)
@@ -468,13 +518,16 @@ def _csrf_ssl_strict_default() -> bool:
 
 
 def _configure_app_secret_key(app: Flask) -> None:
-    """Configure a deterministic test secret or a random production key."""
+    """Configure the application key and record whether it is stable across processes."""
     if app.config.get("SECRET_KEY"):
+        app.config["AUTH_TOKEN_KEY_STABLE"] = True
         return
     if app.config.get("TESTING"):
         app.config["SECRET_KEY"] = "-".join(("test", "secret", "key"))
+        app.config["AUTH_TOKEN_KEY_STABLE"] = True
         return
     app.config["SECRET_KEY"] = token_urlsafe(32)
+    app.config["AUTH_TOKEN_KEY_STABLE"] = False
 
 
 def _register_app_hooks(app: Flask) -> None:

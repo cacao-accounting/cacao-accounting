@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 {% import "macros.html" as macros %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div
@@ -9,7 +9,7 @@
 </div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
           class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
@@ -30,14 +30,6 @@
     ) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
-      <div class="col-md-6">
-        <label class="form-label" for="company">{{ _('Compañía') }} <span class="text-danger">*</span></label>
-        {{ form.company(class="form-select") }}
-      </div>
-      <div class="col-md-6">
-        <label class="form-label" for="posting_date">{{ _('Fecha de Contabilización') }} <span class="text-danger">*</span></label>
-        <input type="date" class="form-control" id="posting_date" name="posting_date" value="{{ request.form.get('posting_date', '') }}">
-      </div>
       <div class="col-md-6">
         <label class="form-label" for="allocation_method">{{ _('Método de Prorrateo') }}</label>
         {{ form.allocation_method(class="form-select") }}

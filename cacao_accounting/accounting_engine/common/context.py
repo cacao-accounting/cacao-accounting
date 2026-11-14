@@ -39,7 +39,7 @@ class TaxRuleContext:
     name: str
     concept: str
     tax_type: str  # tax, charge, withholding, deduction
-    calculation_method: str  # percentage, fixed, manual, quantity
+    calculation_method: str  # percentage, fixed, manual
     rate: Decimal = Decimal("0")
     amount: Decimal = Decimal("0")
     base_mode: str = "goods"  # goods, accumulated

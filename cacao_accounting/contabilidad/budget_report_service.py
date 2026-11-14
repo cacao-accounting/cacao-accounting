@@ -56,6 +56,8 @@ class BudgetReportService:
         budget = database.session.get(Budget, budget_id)
         if not budget:
             return self._empty_report()
+        if budget.status != "approved":
+            return self._empty_report()
         if not company or not fiscal_year_id or not ledger_id or not budget_id:
             return self._empty_report()
         if not self._validate_budget_access(budget, company, ledger_id, fiscal_year_id):

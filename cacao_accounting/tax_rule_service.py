@@ -5,14 +5,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import or_, select
 
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
-from cacao_accounting.database import TaxRule, database
+from cacao_accounting.accounting_engine.common.fiscal import SUPPORTED_TAX_CALCULATION_METHODS
+from cacao_accounting.database import Accounts, Currency, Entity, TaxRule, database
 
 
 from cacao_accounting.i18n import _
@@ -89,6 +90,74 @@ def build_tax_rule_context(rule_id: str) -> TaxRuleContext | None:
     return _to_context(rule)
 
 
+def _validate_tax_rule_references(company: str | None, account_id: str | None, currency: str | None) -> None:
+    """Valida compañía, moneda y cuenta antes de persistir la regla."""
+    if company:
+        exists = database.session.execute(select(Entity.id).filter_by(code=company)).scalar_one_or_none()
+        if exists is None:
+            raise TaxRuleServiceError(_("La compañía de la regla fiscal no existe."))
+    account_code = _clean_text(account_id)
+    if account_code:
+        account = database.session.get(Accounts, account_code)
+        if account is None:
+            raise TaxRuleServiceError(_("La cuenta contable de la regla fiscal no existe."))
+        if company and account.entity != company:
+            raise TaxRuleServiceError(_("La cuenta contable no pertenece a la compañía de la regla fiscal."))
+    currency_code = _clean_text(currency)
+    if currency_code:
+        exists = database.session.execute(select(Currency.code).filter_by(code=currency_code)).scalar_one_or_none()
+        if exists is None:
+            raise TaxRuleServiceError(_("La moneda de la regla fiscal no existe."))
+
+
+RECOGNITION_EVENTS: frozenset[str] = frozenset(
+    {
+        "invoice",
+        "payment",
+        "payment_confirmed",
+        "collection",
+        "collection_confirmed",
+        "refund_confirmed",
+        "settlement",
+        "reversal",
+        "purchase_request_confirmed",
+        "purchase_order_confirmed",
+        "purchase_receipt_confirmed",
+        "purchase_invoice_confirmed",
+        "purchase_credit_note_confirmed",
+        "import_landed_cost_confirmed",
+        "sales_request_confirmed",
+        "sales_order_confirmed",
+        "delivery_note_confirmed",
+        "sales_invoice_confirmed",
+        "sales_credit_note_confirmed",
+        "stock_entry_confirmed",
+        "bank_transfer_confirmed",
+    }
+)
+
+TAX_RULE_ENUMS: dict[str, tuple[Set[str], str]] = {
+    "applies_to": ({"both", "purchase", "sales"}, "both"),
+    "level": ({"item", "party", "transaction", "company"}, "transaction"),
+    "tax_type": ({"tax", "withholding", "charge", "deduction"}, "tax"),
+    "calculation_method": (SUPPORTED_TAX_CALCULATION_METHODS, "percentage"),
+    "base_mode": ({"goods", "accumulated"}, "goods"),
+    "accounting_treatment": ({"separate_tax_account", "capitalizable_inventory_cost"}, "separate_tax_account"),
+    "recognition_event": (RECOGNITION_EVENTS, "invoice"),
+}
+
+
+def _validated_enum(values: Mapping[str, str | None], field: str) -> str:
+    """Valida un campo enumerado y aplica su default cuando llega vacío."""
+    allowed, default = TAX_RULE_ENUMS[field]
+    raw = _clean_text(values.get(field))
+    if not raw:
+        return default
+    if raw not in allowed:
+        raise TaxRuleServiceError(_("El valor de %(field)s no es válido para la regla fiscal.") % {"field": field})
+    return raw
+
+
 def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> None:
     """Aplica datos validados a una regla fiscal ORM."""
     name = (values.get("name") or "").strip()
@@ -97,21 +166,30 @@ def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> N
         raise TaxRuleServiceError(_("El nombre de la regla fiscal es obligatorio."))
     if not concept:
         raise TaxRuleServiceError(_("El concepto fiscal es obligatorio."))
-    rule.company = _clean_text(values.get("company"))
+    company = _clean_text(values.get("company"))
+    _validate_tax_rule_references(company, values.get("account_id"), values.get("currency"))
+    applies_to = _validated_enum(values, "applies_to")
+    level = _validated_enum(values, "level")
+    tax_type = _validated_enum(values, "tax_type")
+    calculation_method = _validated_enum(values, "calculation_method")
+    base_mode = _validated_enum(values, "base_mode")
+    accounting_treatment = _validated_enum(values, "accounting_treatment")
+    recognition_event = _validated_enum(values, "recognition_event")
+    rule.company = company
     rule.name = name
-    rule.applies_to = _clean_text(values.get("applies_to")) or "both"
-    rule.level = _clean_text(values.get("level")) or "transaction"
+    rule.applies_to = applies_to
+    rule.level = level
     rule.concept = concept
-    rule.tax_type = _clean_text(values.get("tax_type")) or "tax"
-    rule.calculation_method = _clean_text(values.get("calculation_method")) or "percentage"
+    rule.tax_type = tax_type
+    rule.calculation_method = calculation_method
     rule.rate = _decimal_value(values.get("rate"), default="0")
     rule.amount = _decimal_value(values.get("amount"), default="0")
-    rule.base_mode = _clean_text(values.get("base_mode")) or "goods"
+    rule.base_mode = base_mode
     rule.include_concepts = _normalized_csv(values.get("include_concepts"))
     rule.exclude_concepts = _normalized_csv(values.get("exclude_concepts"))
     rule.sequence = _int_value(values.get("sequence"), default=10)
-    rule.accounting_treatment = _clean_text(values.get("accounting_treatment")) or "separate_tax_account"
-    rule.recognition_event = _clean_text(values.get("recognition_event")) or "invoice"
+    rule.accounting_treatment = accounting_treatment
+    rule.recognition_event = recognition_event
     rule.account_id = _clean_text(values.get("account_id"))
     rule.affects_inventory = values.get("affects_inventory") is not None
     rule.affects_cost = values.get("affects_cost") is not None

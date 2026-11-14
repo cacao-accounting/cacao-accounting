@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import date
 from typing import Any, Mapping, Sequence
 
+from flask_login import current_user
 from sqlalchemy import func, select
 
 from cacao_accounting.database import (
@@ -44,11 +45,13 @@ from cacao_accounting.database import (
     Warehouse,
     obtiene_texto_unico,
 )
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 from cacao_accounting.decorators import exige_acceso_compania
 
 
 from cacao_accounting.i18n import _
+from cacao_accounting.auth.permisos import Permisos
 
 
 class InventoryServiceError(ValueError):
@@ -196,7 +199,7 @@ def create_batch(params: BatchParams) -> Batch:
     return batch
 
 
-def batch_balance_rows(batch_id: str) -> list[dict[str, Any]]:
+def batch_balance_rows(batch_id: str, companies: list[str] | None = None) -> list[dict[str, Any]]:
     """Devuelve el saldo de un lote por bodega desde el ledger físico.
 
     Usa el predicado compartido que excluye los pares de anulación del mismo
@@ -205,19 +208,30 @@ def batch_balance_rows(batch_id: str) -> list[dict[str, Any]]:
     """
     from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
 
-    rows = database.session.execute(
-        exclude_cancelled_stock_entries(
-            select(
-                StockLedgerEntry.warehouse,
-                func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
-                func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
-            ).where(StockLedgerEntry.batch_id == batch_id)
-        ).group_by(StockLedgerEntry.warehouse)
-    ).all()
+    query = select(
+        StockLedgerEntry.warehouse,
+        func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
+        func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
+    ).where(StockLedgerEntry.batch_id == batch_id)
+    if companies is not None:
+        query = query.where(StockLedgerEntry.company.in_(companies)) if companies else query.where(database.false())
+    rows = database.session.execute(exclude_cancelled_stock_entries(query).group_by(StockLedgerEntry.warehouse)).all()
     return [
         {"warehouse": warehouse, "balance_qty": _decimal_value(qty), "stock_value": _decimal_value(value)}
         for warehouse, qty, value in rows
     ]
+
+
+def _factor_conversion_uom(factor: Decimal) -> Decimal:
+    """Guarda común de conversión UOM: el factor debe ser positivo y finito.
+
+    Un factor cero anula cantidades y un factor negativo invierte el signo
+    del saldo; la misma guarda aplica a la conversión directa y a la
+    inversa porque los registros pueden venir de migración o API.
+    """
+    if not factor.is_finite() or factor <= 0:
+        raise InventoryServiceError(_("La conversión de UOM requiere un factor positivo."))
+    return factor
 
 
 def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -> Decimal:
@@ -230,16 +244,14 @@ def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -
         .first()
     )
     if conversion:
-        return qty * _decimal_value(conversion.conversion_factor)
+        return qty * _factor_conversion_uom(_decimal_value(conversion.conversion_factor))
     inverse = (
         database.session.execute(select(ItemUOMConversion).filter_by(item_code=item_code, from_uom=to_uom, to_uom=from_uom))
         .scalars()
         .first()
     )
     if inverse:
-        factor = _decimal_value(inverse.conversion_factor)
-        if factor == 0:
-            raise InventoryServiceError(_("La conversion de UOM no puede tener factor cero."))
+        factor = _factor_conversion_uom(_decimal_value(inverse.conversion_factor))
         return qty / factor
     raise InventoryServiceError(_("No existe conversion UOM para el item."))
 
@@ -361,9 +373,9 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False,
     quantity = _decimal_value(raw_quantity) if raw_quantity is not None else Decimal("1")
     if quantity != Decimal("1"):
         raise InventoryServiceError(_("Cada linea de un item serializado debe mover exactamente una unidad."))
-    serial = database.session.execute(
-        select(SerialNumber).filter_by(item_code=item.code, serial_no=serial_no)
-    ).scalar_one_or_none()
+    serial = database.session.execute(select(SerialNumber).filter_by(serial_no=serial_no)).scalar_one_or_none()
+    if serial is not None and serial.item_code != item.code:
+        raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
     if outgoing:
         _validate_outgoing_serial(serial, warehouse)
     else:
@@ -424,12 +436,13 @@ def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> 
     serial_no = getattr(line, "serial_no", None)
     if not serial_no:
         return
-    serial = database.session.execute(
-        select(SerialNumber).filter_by(item_code=getattr(line, "item_code", None), serial_no=serial_no)
-    ).scalar_one_or_none()
+    item_code = getattr(line, "item_code", None)
+    serial = database.session.execute(select(SerialNumber).filter_by(serial_no=serial_no)).scalar_one_or_none()
+    if serial is not None and serial.item_code != item_code:
+        raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
     if not serial:
         serial = SerialNumber(
-            item_code=getattr(line, "item_code", None),
+            item_code=item_code,
             serial_no=serial_no,
             serial_status="available",
             warehouse=warehouse,
@@ -437,53 +450,6 @@ def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> 
         database.session.add(serial)
     serial.serial_status = "delivered" if outgoing else "available"
     serial.warehouse = None if outgoing else warehouse
-
-
-def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: str | None = None) -> StockRebuildResult:
-    """Reconstruye StockBin desde el ledger físico completo.
-
-    El cálculo suma tanto los movimientos originales como sus contramovimientos
-    de cancelación para obtener el neto algebraico real del inventario.
-    """
-    query = select(StockLedgerEntry.company, StockLedgerEntry.item_code, StockLedgerEntry.warehouse).filter_by(company=company)
-    if item_code:
-        query = query.filter_by(item_code=item_code)
-    if warehouse:
-        query = query.filter_by(warehouse=warehouse)
-    groups = database.session.execute(query.distinct()).all()
-    rebuilt = 0
-    inconsistencies: list[str] = []
-    for group_company, group_item, group_warehouse in groups:
-        totals = database.session.execute(
-            select(
-                func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
-                func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
-            ).filter_by(company=group_company, item_code=group_item, warehouse=group_warehouse)
-        ).one()
-        qty = _decimal_value(totals[0])
-        value = _decimal_value(totals[1])
-        valuation_rate = value / qty if qty else Decimal("0")
-        bin_row = database.session.execute(
-            select(StockBin).filter_by(company=group_company, item_code=group_item, warehouse=group_warehouse)
-        ).scalar_one_or_none()
-        reserved_qty = Decimal("0")
-        if not bin_row:
-            bin_row = StockBin(company=group_company, item_code=group_item, warehouse=group_warehouse)
-            database.session.add(bin_row)
-        else:
-            reserved_qty = _decimal_value(bin_row.reserved_qty)
-        old_qty = _decimal_value(bin_row.actual_qty)
-        if old_qty != qty:
-            inconsistencies.append(f"{group_item}/{group_warehouse}: {old_qty} -> {qty}")
-        bin_row.actual_qty = qty
-        bin_row.reserved_qty = reserved_qty
-        bin_row.stock_value = value
-        bin_row.valuation_rate = valuation_rate
-        rebuilt += 1
-    layers_result = rebuild_stock_valuation_layers(company=company, item_code=item_code, warehouse=warehouse)
-    return StockRebuildResult(
-        rebuilt_bins=rebuilt, rebuilt_layers=layers_result.rebuilt_layers, inconsistencies=inconsistencies
-    )
 
 
 def _valuation_group_key(layer: Any) -> tuple[str, str, str, str]:
@@ -691,6 +657,26 @@ def rebuild_stock_valuation_layers(
     return StockRebuildResult(rebuilt_bins=0, rebuilt_layers=len(final_layers))
 
 
+def _inventory_editable_companies() -> set[str] | None:
+    """Compañías cuyas filas contables de item puede editar el usuario.
+
+    ``None`` significa sin restricción (administrador o tarea interna sin
+    sesión de usuario): el reemplazo completo conserva su semántica.
+    """
+    try:
+        autenticado = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        return None
+    if not autenticado:
+        return None
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("inventory"), usuario=current_user.id)
+    if permissions.administrador:
+        return None
+    if not permissions.editar:
+        return set()
+    return set(str(company) for company in permissions.obtener_companias_autorizadas())
+
+
 def update_item_with_uoms(
     item_code: str,
     params: ItemParams,
@@ -710,14 +696,7 @@ def update_item_with_uoms(
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
     validate_default_warehouse(params.default_warehouse_id, action="editar")
-    if _item_has_records(item_code) and any(
-        (
-            item.is_stock_item != resolved_stock_flag,
-            item.has_batch != params.has_batch,
-            item.has_serial_no != params.has_serial_no,
-            item.has_expiry_date != params.has_expiry_date,
-        )
-    ):
+    if _item_has_records(item_code) and _controles_de_inventario_cambiaron(item, resolved_stock_flag, params):
         raise InventoryServiceError(_("No se pueden cambiar los controles de inventario después de usar el item."))
     validate_item_account_rows(
         resolved_item_type,
@@ -725,6 +704,27 @@ def update_item_with_uoms(
         resolved_account_rows,
         action="editar",
     )
+    _aplica_campos_item(item, params, resolved_item_type, resolved_stock_flag)
+    database.session.flush()
+    _reemplaza_conversiones_uom(item, resolved_uom_rows, params.default_uom)
+    _reemplaza_cuentas_contables(item, resolved_account_rows)
+    return item
+
+
+def _controles_de_inventario_cambiaron(item: Item, resolved_stock_flag: bool, params: ItemParams) -> bool:
+    """Detecta si al menos un control de inventario cambia siendo el item ya usado."""
+    return any(
+        (
+            item.is_stock_item != resolved_stock_flag,
+            item.has_batch != params.has_batch,
+            item.has_serial_no != params.has_serial_no,
+            item.has_expiry_date != params.has_expiry_date,
+        )
+    )
+
+
+def _aplica_campos_item(item: Item, params: ItemParams, resolved_item_type: str, resolved_stock_flag: bool) -> None:
+    """Escribe los campos de maestro del item y refresca la sesión."""
     item.name = params.name
     item.description = params.description
     item.item_type = resolved_item_type
@@ -751,24 +751,76 @@ def update_item_with_uoms(
     item.has_serial_no = params.has_serial_no
     item.has_expiry_date = params.has_expiry_date
     database.session.flush()
-    for old in database.session.execute(select(ItemUOMConversion).filter_by(item_code=item_code)).scalars():
+
+
+def _reemplaza_conversiones_uom(item: Item, resolved_uom_rows: list[ItemUOMRow], default_uom: str) -> None:
+    """Reemplaza por completo las conversiones UOM del item."""
+    for old in database.session.execute(select(ItemUOMConversion).filter_by(item_code=item.code)).scalars():
         database.session.delete(old)
     for uom_row in resolved_uom_rows:
         database.session.add(
             ItemUOMConversion(
                 item_code=item.code,
                 from_uom=uom_row.uom_code,
-                to_uom=params.default_uom,
+                to_uom=default_uom,
                 conversion_factor=uom_row.conversion_factor,
             )
         )
-    for old_account in database.session.execute(select(ItemAccount).filter_by(item_code=item_code)).scalars():
-        database.session.delete(old_account)
+
+
+def _reemplaza_cuentas_contables(item: Item, resolved_account_rows: list[ItemAccountRow]) -> None:
+    """Reemplaza la configuracion contable por compania (#1418/#1542).
+
+    El reemplazo completo solo toca las filas de compañías editables por el
+    usuario; las compañías ajenas se conservan intactas.
+    """
+    editable_companies = _inventory_editable_companies()
+    persistidas = list(database.session.execute(select(ItemAccount).filter_by(item_code=item.code)).scalars())
+    companies_editadas = _actualiza_cuentas_persistidas(persistidas, resolved_account_rows, editable_companies)
+    _inserta_cuentas_nuevas(item, resolved_account_rows, editable_companies, companies_editadas)
+
+
+def _actualiza_cuentas_persistidas(
+    persistidas: list[ItemAccount],
+    resolved_account_rows: list[ItemAccountRow],
+    editable_companies: set[str] | None,
+) -> set[str]:
+    """Actualiza/borra filas persistidas editables; devuelve las compañías procesadas."""
+    companies_editadas: set[str] = set()
+    for old_account in persistidas:
+        company_code = str(old_account.company)
+        if editable_companies is not None and company_code not in editable_companies:
+            continue
+        target_row = next((row for row in resolved_account_rows if str(row.company or "").strip() == company_code), None)
+        if target_row is not None:
+            companies_editadas.add(company_code)
+            old_account.expense_account_id = target_row.expense_account_id
+            old_account.income_account_id = target_row.income_account_id
+            old_account.cogs_account_id = target_row.cogs_account_id
+            old_account.stock_adjustment_account_id = target_row.stock_adjustment_account_id
+            old_account.cost_center_code = target_row.cost_center_code
+        else:
+            database.session.delete(old_account)
+    return companies_editadas
+
+
+def _inserta_cuentas_nuevas(
+    item: Item,
+    resolved_account_rows: list[ItemAccountRow],
+    editable_companies: set[str] | None,
+    companies_editadas: set[str],
+) -> None:
+    """Inserta filas contables nuevas de compañías dentro del alcance editable."""
     for account_row in resolved_account_rows:
+        company_code = str(account_row.company or "").strip()
+        if not company_code or company_code in companies_editadas:
+            continue
+        if editable_companies is not None and company_code not in editable_companies:
+            continue
         database.session.add(
             ItemAccount(
                 item_code=item.code,
-                company=account_row.company,
+                company=company_code,
                 expense_account_id=account_row.expense_account_id,
                 income_account_id=account_row.income_account_id,
                 cogs_account_id=account_row.cogs_account_id,
@@ -776,7 +828,6 @@ def update_item_with_uoms(
                 cost_center_code=account_row.cost_center_code,
             )
         )
-    return item
 
 
 def list_item_uom_conversions(item_code: str) -> list[ItemUOMConversion]:
@@ -909,6 +960,39 @@ def list_item_account_rows(item_code: str) -> list[ItemAccount]:
     return list(database.session.execute(query).scalars().all())
 
 
+def _item_accounts_para(alcanze_editable: bool, item_code: str) -> list[ItemAccount]:
+    """Acota las filas contables de un item al alcance del usuario actual.
+
+    ``alcanze_editable=True`` exige además el permiso de edición (usado
+    por el formulario para no exponer filas que su reenvío anularía).
+    """
+    try:
+        autenticado = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        return []
+    if not autenticado:
+        return []
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("inventory"), usuario=current_user.id)
+    if permissions.administrador:
+        return list_item_account_rows(item_code)
+    if alcanze_editable and not permissions.editar:
+        return []
+    if not permissions.consultar and not permissions.editar:
+        return []
+    autorizadas = set(str(company) for company in permissions.obtener_companias_autorizadas())
+    return [row for row in list_item_account_rows(item_code) if str(row.company) in autorizadas]
+
+
+def list_item_account_rows_visible(item_code: str) -> list[ItemAccount]:
+    """Filas contables del item visibles por consulta para el usuario actual."""
+    return _item_accounts_para(False, item_code)
+
+
+def list_item_account_rows_editable(item_code: str) -> list[ItemAccount]:
+    """Filas contables del item que el usuario puede editar."""
+    return _item_accounts_para(True, item_code)
+
+
 def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
     """Convierte filas contables por compania enviadas por formulario en objetos tipados."""
     companies = _request_values(form, "account_company")
@@ -1002,11 +1086,11 @@ def _validate_item_account(company: str, account_id: str | None, expected_type: 
         raise InventoryServiceError(_("La cuenta de %(label)s no pertenece a la compañia seleccionada.") % {"label": label})
     account_type = (account.account_type or "").strip().lower()
     expected_aliases = {
-        "expense": {"expense", "cogs"},
+        "expense": {"expense", "cogs", "cost_of_goods_sold"},
         "income": {"income"},
-        "cogs": {"cogs", "expense"},
+        "cogs": {"cogs", "cost_of_goods_sold", "expense"},
         "inventory": {"inventory", "current_asset"},
-        "stock_adjustment": {"expense", "income"},
+        "stock_adjustment": {"expense", "income", "inventory_adjustment"},
     }[expected_type]
     if account_type not in expected_aliases:
         raise InventoryServiceError(

@@ -49,7 +49,14 @@ def pagina_inicio():
         if authorized_codes
         else []
     )
-    periodos = database.session.query(AccountingPeriod).order_by(AccountingPeriod.start.desc()).all()
+    periodos = (
+        database.session.query(AccountingPeriod)
+        .filter(AccountingPeriod.entity.in_(authorized_codes))
+        .order_by(AccountingPeriod.start.desc())
+        .all()
+        if authorized_codes
+        else []
+    )
     dashboard_entities = [
         {"id": entity.id, "code": entity.code, "name": entity.name or entity.company_name} for entity in entidades
     ]
@@ -121,7 +128,9 @@ def informacion_para_desarrolladores():
         if (
             admin_role
             and database.session.execute(
-                database.select(RolesUser).filter_by(user_id=current_user.id, role_id=admin_role.id)
+                database.select(RolesUser)
+                .filter_by(user_id=current_user.id, role_id=admin_role.id)
+                .where(RolesUser.active.is_(True))
             ).scalar_one_or_none()
         ):
             is_admin = True

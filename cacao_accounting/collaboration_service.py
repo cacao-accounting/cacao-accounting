@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import Any, NoReturn
+from typing import Any, NoReturn, Sequence
 
 from flask import abort, url_for
 from werkzeug.routing import BuildError
@@ -104,19 +104,32 @@ def create_document_task(
 
 
 def update_task_status(task_id: str, status: str, user_id: str) -> DocumentTask:
-    """Update a task status and audit the related document."""
+    """Update a task status and audit the related document.
+
+    #1328/#1467: la mutación exige ser el asignado o quien creó la tarea;
+    el acceso de lectura al documento solo concede consulta, no gestión.
+    """
     _ensure_cloud_mode()
     normalized_status = _validate_status(status)
     task = database.session.get(DocumentTask, task_id)
     if task is None:
-        raise CollaborationError(_("Tarea no encontrada."), 404)
-    document = _document_for_collaboration(task.document_type, task.document_id, user_id)
+        raise CollaborationError(_("Tarea no encontrado."), 404)
+    if str(task.assigned_to or "") != str(user_id) and str(task.assigned_by or "") != str(user_id):
+        # Solo el asignado o el creador gestionan el ciclo de la tarea.
+        raise CollaborationError(_("Solo el asignado o quien asignó la tarea puede cambiar su estado."), 403)
+    try:
+        document = _document_for_collaboration(task.document_type, task.document_id, user_id)
+    except CollaborationError as exc:
+        if exc.status_code != 404:
+            raise
+        document = None
 
     previous_status = task.status
     task.status = normalized_status
     task.completed_at = datetime.now(UTC) if normalized_status == "completed" else None
     action = _audit_action_for_status(normalized_status, previous_status)
-    log_task_event(document, action, f"Tarea '{task.title}' cambió de {previous_status} a {normalized_status}.")
+    if document is not None:
+        log_task_event(document, action, f"Tarea '{task.title}' cambió de {previous_status} a {normalized_status}.")
     database.session.commit()
     return task
 
@@ -135,6 +148,24 @@ def list_document_tasks(document_type: str, document_id: str) -> list[DocumentTa
     )
 
 
+def _task_company_scope() -> tuple[list[str], Any]:
+    """Return the authorized companies and the SQL scope for assigned tasks.
+
+    A task belongs to a company; when the user loses access to that company the
+    task must disappear from both the inbox and the navigation badge, while
+    tasks without a company stay visible.
+    """
+    from sqlalchemy import or_
+
+    from cacao_accounting.company_context import authorized_company_codes
+
+    authorized = authorized_company_codes()
+    conditions = [DocumentTask.company.is_(None)]
+    if authorized:
+        conditions.append(DocumentTask.company.in_(authorized))
+    return authorized, or_(*conditions)
+
+
 def list_user_tasks(
     user_id: str,
     status: str | None = None,
@@ -142,9 +173,21 @@ def list_user_tasks(
     due_date_from: date | None = None,
     due_date_to: date | None = None,
     company: str | None = None,
+    *,
+    restrict_by_access: bool = True,
 ) -> list[DocumentTask]:
-    """List tasks assigned to a user with optional filters."""
+    """List tasks assigned to a user with optional filters.
+
+    #1595/#1572: la bandeja solo muestra tareas cuya compañía sigue en el
+    alcance vigente del usuario (o tareas sin compañía asociada); un filtro
+    explícito de compañía también exige autorización.
+    """
     query = database.select(DocumentTask).where(DocumentTask.assigned_to == user_id)
+    if restrict_by_access:
+        authorized, scope = _task_company_scope()
+        query = query.where(scope)
+        if company and company not in authorized:
+            return []
     if status:
         query = query.where(DocumentTask.status == _validate_status(status))
     if priority:
@@ -158,21 +201,33 @@ def list_user_tasks(
     return list(database.session.execute(query.order_by(DocumentTask.created_at.desc())).scalars().all())
 
 
-def active_users() -> list[User]:
-    """Return active users available for task assignment."""
-    return list(database.session.execute(database.select(User).filter_by(active=True).order_by(User.user)).scalars().all())
+def active_users(companies: Sequence[str] | None = None) -> list[User]:
+    """Usuarios activos disponibles para asignaciones (#1598).
+
+    Con ``companies`` el directorio se limita a los usuarios con alcance
+    explícito en esas compañías: el selector de asignaciones no revela el
+    directorio global de usuarios.
+    """
+    query = database.select(User).filter_by(active=True).order_by(User.user)
+    if companies:
+        from sqlalchemy import select as _select
+        from cacao_accounting.database import UserCompanyAccess
+
+        authorized_users = _select(UserCompanyAccess.user_id).where(UserCompanyAccess.company_code.in_(list(companies)))
+        query = query.where(User.id.in_(authorized_users))
+    return list(database.session.execute(query).scalars().all())
 
 
 def open_task_count(user_id: str) -> int:
-    """Return the count of not-completed tasks assigned to a user."""
-    return int(
-        database.session.execute(
-            database.select(database.func.count(DocumentTask.id))
-            .where(DocumentTask.assigned_to == user_id)
-            .where(DocumentTask.status.in_(("open", "in_progress")))
-        ).scalar()
-        or 0
+    """Return the count of not-completed tasks visible in the user's scope."""
+    _, scope = _task_company_scope()
+    query = (
+        database.select(database.func.count(DocumentTask.id))
+        .where(DocumentTask.assigned_to == user_id)
+        .where(DocumentTask.status.in_(("open", "in_progress")))
+        .where(scope)
     )
+    return int(database.session.execute(query).scalar() or 0)
 
 
 def document_url(task: DocumentTask) -> str | None:

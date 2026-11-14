@@ -17,6 +17,7 @@ from flask.helpers import url_for
 from flask_login import current_user, login_required
 
 from sqlalchemy import false, or_
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.contabilidad.services import (
     _company_label,
@@ -29,6 +30,9 @@ from cacao_accounting.contabilidad.services import (
     _build_account_edit_form,
     _resolve_cost_center_parent,
     _validate_cost_center_parent,
+    _lock_cost_center,
+    _lock_cost_center_companies,
+    _cost_center_has_children,
     _validate_project_creation_form,
     _populate_project_edit_form,
     _validate_project_edit_form,
@@ -36,6 +40,8 @@ from cacao_accounting.contabilidad.services import (
     _render_project_edit_form,
     _resolve_project_budget_currency,
     _update_project_from_form,
+    hierarchy_parent_choices,
+    commit_hierarchy_change,
     _get_templates_and_applied_ids,
     _get_period_close_checks,
     _monthly_ledger_source_entries,
@@ -44,6 +50,7 @@ from cacao_accounting.contabilidad.services import (
     _record_check_result,
     PeriodCloseError,
     COMPLETED_MONTHLY_CLOSE_STATUSES,
+    create_monthly_close_run,
     finalize_monthly_close,
     reopen_accounting_period,
     _handle_exchange_revaluation_post,
@@ -53,6 +60,7 @@ from cacao_accounting.contabilidad.services import (
     _update_series_sequence,
     _update_counter_from_form,
     _sync_counter_naming_series_map,
+    enforce_close_and_recurring_company_access,
 )
 
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
@@ -97,8 +105,6 @@ from cacao_accounting.setup.service import (
     create_company,
 )
 
-
-from cacao_accounting.contabilidad.gl import gl
 
 from cacao_accounting.audit_trail_service import format_document_timeline
 
@@ -200,7 +206,10 @@ def _journal_list_period_values(
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 
-contabilidad.register_blueprint(gl, url_prefix="/gl")
+# El guard debe colgar del blueprint que la aplicación registra. El blueprint
+# homónimo de ``services`` no se registra, por lo que adjuntarlo allí deja las
+# rutas de cierre, recurrentes y revalorización sin aislamiento por compañía.
+contabilidad.before_request(enforce_close_and_recurring_company_access)
 
 contabilidad.register_blueprint(presupuestos, url_prefix="/presupuestos")
 
@@ -323,7 +332,7 @@ def monedas():
 @contabilidad.route("/currency/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nueva_moneda():
     """Formulario para crear una nueva moneda."""
     from cacao_accounting.contabilidad.forms import FormularioMoneda
@@ -337,12 +346,19 @@ def nueva_moneda():
             code=formulario.code.data,
             name=formulario.name.data,
             decimals=formulario.decimals.data,
-            active=bool(formulario.active.data),
-            default=bool(formulario.default.data),
         )
-        database.session.add(DATA)
-        database.session.commit()
-        return redirect(url_for(CONTABILIDAD_MONEDAS))
+        try:
+            CurrencyGuard().apply_currency_create(
+                DATA,
+                active=bool(formulario.active.data),
+                default=bool(formulario.default.data),
+            )
+        except CurrencyGuardError as error:
+            flash_error(error)
+        else:
+            database.session.add(DATA)
+            database.session.commit()
+            return redirect(url_for(CONTABILIDAD_MONEDAS))
 
     return render_template(
         CONTABILIDAD_MONEDA_CREAR_TEMPLATE,
@@ -374,7 +390,7 @@ def moneda(code):
 @contabilidad.route("/currency/<code>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_moneda(code):
     """Edita una moneda."""
     from cacao_accounting.contabilidad.forms import FormularioMoneda
@@ -520,7 +536,7 @@ def entidad(entidad_id):
 @contabilidad.route("/entity/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nueva_entidad():
     """Formulario para crear una nueva entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
@@ -578,32 +594,78 @@ def nueva_entidad():
     )
 
 
+def _entity_identity_error(entity: object, tax_id: str, company_name: str) -> str | None:
+    """Valida identidad mínima y unicidad de la entidad antes de persistir."""
+    from cacao_accounting.database import Entity
+
+    if not tax_id or not company_name:
+        return _("La identificación fiscal y la razón social son obligatorias.")
+    conflict = database.session.execute(
+        database.select(Entity.code).where(
+            database.or_(Entity.tax_id == tax_id, Entity.company_name == company_name),
+            Entity.code != getattr(entity, "code"),
+        )
+    ).scalar_one_or_none()
+    if conflict is not None:
+        return _("Ya existe otra entidad con esa identificación fiscal o razón social.")
+    return None
+
+
 @contabilidad.route("/entity/edit/<id_entidad>", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_entidad(id_entidad):
     """Formulario para editar una entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
     from cacao_accounting.database import Entity
 
-    ENTIDAD = database.session.execute(database.select(Entity).filter_by(code=id_entidad)).first()
-    ENTIDAD = ENTIDAD[0]
+    ENTIDAD = database.session.execute(database.select(Entity).filter_by(code=id_entidad)).scalar_one_or_none()
+    if ENTIDAD is None:
+        abort(404)
     formulario = FormularioEntidad()
     formulario.moneda.choices = obtener_lista_monedas()
 
     if request.method == "POST":
-        ENTIDAD.tax_id = request.form.get("id_fiscal", None)
+        tax_id = (request.form.get("id_fiscal") or "").strip()
+        company_name = (request.form.get("razon_social") or "").strip()
+        identity_error = _entity_identity_error(ENTIDAD, tax_id, company_name)
+        if identity_error:
+            flash(identity_error, "danger")
+            return render_template(
+                "contabilidad/entidad_editar.html",
+                entidad=ENTIDAD,
+                form=formulario,
+                titulo=_("Contabilidad | Editar Entidad") + f" {ENTIDAD.code} - " + APPNAME,
+            )
+        habilitado = bool(request.form.get("habilitado"))
+        if ENTIDAD.enabled and not habilitado:
+            try:
+                _validate_entity_can_be_deactivated(ENTIDAD.code)
+            except ValueError as error:
+                flash_error(error, "warning")
+                return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=ENTIDAD.code))
+        ENTIDAD.tax_id = tax_id
         ENTIDAD.name = request.form.get("nombre_comercial", None)
-        ENTIDAD.company_name = request.form.get("razon_social", None)
+        ENTIDAD.company_name = company_name
         ENTIDAD.phone1 = request.form.get("telefono1", None)
         ENTIDAD.phone2 = request.form.get("telefono2", None)
         ENTIDAD.e_mail = request.form.get("correo_electronico", None)
         ENTIDAD.fax = request.form.get("fax", None)
         ENTIDAD.web = request.form.get("web", None)
-        ENTIDAD.enabled = bool(request.form.get("habilitado"))
+        ENTIDAD.enabled = habilitado
         database.session.add(ENTIDAD)
-        database.session.commit()
+        try:
+            database.session.commit()
+        except IntegrityError:
+            database.session.rollback()
+            flash(_("Ya existe otra entidad con esa identificación fiscal o razón social."), "danger")
+            return render_template(
+                "contabilidad/entidad_editar.html",
+                entidad=ENTIDAD,
+                form=formulario,
+                titulo=_("Contabilidad | Editar Entidad") + f" {ENTIDAD.code} - " + APPNAME,
+            )
         invalidate_cache("companies")
         invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=ENTIDAD.code))
@@ -674,7 +736,15 @@ def eliminar_entidad(id_entidad):
     ):
         return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=company))
     database.session.delete(ENTIDAD[0])
-    database.session.commit()
+    try:
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        flash(
+            _("La eliminación de entidades no está disponible en modo Cloud; utilice Inactivar."),
+            "danger",
+        )
+        return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=company))
     invalidate_cache("companies")
     invalidate_cache("smart-select-master-data")
 
@@ -735,15 +805,18 @@ def predeterminar_entidad(id_entidad):
     """Establece una entidad como predeterminada."""
     from cacao_accounting.database import Entity
 
-    # Establece cualquier entidad establecida como predeterminada a falso
-    ENTIDAD_PREDETERMINADA = database.session.execute(database.select(Entity).filter_by(default=True)).all()
-
-    if ENTIDAD_PREDETERMINADA:
-        for e in ENTIDAD_PREDETERMINADA:
-            e[0].default = False
-
-    ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
-    ENTIDAD[0].default = True
+    # Serializa la transición entre escritores concurrentes en PostgreSQL;
+    # SQLite la ignora y conserva el modo desktop de un solo usuario.
+    entidades = database.session.execute(database.select(Entity).with_for_update()).scalars().all()
+    objetivo = next((entidad for entidad in entidades if entidad.id == id_entidad), None)
+    if objetivo is None:
+        abort(404)
+    for entidad in entidades:
+        entidad.default = entidad.id == id_entidad
+        if entidad.id == id_entidad:
+            entidad.status = "default"
+        elif entidad.status == "default":
+            entidad.status = "activo"
     database.session.commit()
     invalidate_cache("companies")
     invalidate_cache("smart-select-master-data")
@@ -778,6 +851,37 @@ def unidades():
     )
 
 
+@contabilidad.route("/hierarchy/<node_type>/parents")
+@login_required
+@modulo_activo("accounting")
+def hierarchy_parent_options(node_type: str):
+    """Load parent choices only for a company the user can operate in."""
+    from cacao_accounting.database import Unit
+
+    models: dict[str, Any] = {"unit": Unit, "project": Project}
+    model = models.get(node_type)
+    if model is None:
+        abort(404)
+
+    entity = request.args.get("entity")
+    action = request.args.get("action")
+    if not entity or action not in {"crear", "editar"}:
+        abort(400)
+    exige_acceso_compania("accounting", entity, action)
+
+    exclude_ids: set[str] = set()
+    exclude_id = request.args.get("exclude_id")
+    if exclude_id:
+        excluded_node_id = database.session.execute(
+            database.select(model.id).where(model.id == exclude_id, model.entity == entity)
+        ).scalar_one_or_none()
+        if excluded_node_id is not None:
+            exclude_ids = {excluded_node_id, *get_descendant_ids(model, excluded_node_id)}
+
+    choices = hierarchy_parent_choices(model, entity, exclude_ids)
+    return jsonify([{"value": value, "label": label} for value, label in choices])
+
+
 @contabilidad.route("/unit/<id_unidad>")
 @login_required
 @modulo_activo("accounting")
@@ -787,6 +891,8 @@ def unidad(id_unidad):
     from cacao_accounting.database import Unit
 
     REGISTRO = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).first()
+    if REGISTRO is None:
+        abort(404)
     return render_template(
         "contabilidad/unidad.html",
         registro=REGISTRO[0],
@@ -828,7 +934,7 @@ def eliminar_unidad(id_unidad):
 @contabilidad.route("/unit/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nueva_unidad():
     """Formulario para crear una nueva unidad de negocios."""
     from cacao_accounting.contabilidad.forms import FormularioUnidad
@@ -836,17 +942,13 @@ def nueva_unidad():
 
     formulario = FormularioUnidad()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.parent_id.choices = [("", "— Ninguna —")] + [
-        (u.id, f"{u.code} - {u.name}")
-        for u in database.session.execute(database.select(Unit).order_by(Unit.code)).scalars().all()
-    ]
+    formulario.parent_id.choices = [("", "— Ninguna —")] + hierarchy_parent_choices(Unit, formulario.entidad.data)
     TITULO = _("Contabilidad | Nueva Unidad de Negocio") + " - " + APPNAME
-    if formulario.validate_on_submit() or request.method == "POST":
+    if formulario.validate_on_submit():
         try:
-            _validate_active_entity_submission(request.form.get("entidad", ""))
-            parent_id = request.form.get("parent_id") or None
-            if parent_id:
-                check_hierarchy_cycle(Unit, None, parent_id)
+            _validate_active_entity_submission(formulario.entidad.data or "")
+            parent_id = formulario.parent_id.data or None
+            check_hierarchy_cycle(Unit, None, parent_id, entity=formulario.entidad.data or "")
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -855,17 +957,23 @@ def nueva_unidad():
                 form=formulario,
             )
         DATA = Unit(
-            code=request.form.get("id", None),
-            name=request.form.get("nombre", None),
-            entity=request.form.get("entidad", None),
+            code=formulario.id.data,
+            name=formulario.nombre.data,
+            entity=formulario.entidad.data,
             status="activo",
             enabled=bool(formulario.habilitado.data),
             parent_id=parent_id,
         )
         database.session.add(DATA)
-        database.session.flush()
-        update_hierarchy_attributes(DATA)
-        database.session.commit()
+        if not commit_hierarchy_change(lambda: update_hierarchy_attributes(DATA)):
+            flash(
+                _(
+                    "No se pudo guardar porque los datos entran en conflicto "
+                    "con otro registro. Revise el código y las referencias."
+                ),
+                "danger",
+            )
+            return render_template(_TPL_UNIDAD_CREAR, titulo=TITULO, form=formulario)
         invalidate_cache("smart-select-master-data")
 
         return redirect(url_for(CONTABILIDAD_UNIDADES))
@@ -879,7 +987,7 @@ def nueva_unidad():
 @contabilidad.route("/unit/<id_unidad>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_unidad(id_unidad):
     """Editar una unidad de negocios."""
     from cacao_accounting.contabilidad.forms import FormularioUnidad
@@ -892,12 +1000,7 @@ def editar_unidad(id_unidad):
     exclude_ids = {registro.id, *get_descendant_ids(Unit, registro.id)}
     formulario = FormularioUnidad(obj=registro)
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.parent_id.choices = [("", "— Ninguna —")] + [
-        (u.id, f"{u.code} - {u.name}")
-        for u in database.session.execute(database.select(Unit).where(Unit.id.notin_(exclude_ids)).order_by(Unit.code))
-        .scalars()
-        .all()
-    ]
+    formulario.parent_id.choices = [("", "— Ninguna —")] + hierarchy_parent_choices(Unit, formulario.entidad.data, exclude_ids)
     formulario.id.data = registro.code
     if request.method != "POST":
         formulario.nombre.data = registro.name
@@ -909,9 +1012,8 @@ def editar_unidad(id_unidad):
     if formulario.validate_on_submit():
         try:
             _validate_active_entity_submission(formulario.entidad.data)
-            parent_id = request.form.get("parent_id") or None
-            if parent_id:
-                check_hierarchy_cycle(Unit, registro.id, parent_id)
+            parent_id = formulario.parent_id.data or None
+            check_hierarchy_cycle(Unit, registro.id, parent_id, entity=formulario.entidad.data or "")
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -920,13 +1022,28 @@ def editar_unidad(id_unidad):
                 form=formulario,
                 edit=True,
                 entity_initial_label=entity_initial_label,
+                parent_exclude_id=registro.id,
             )
         registro.name = formulario.nombre.data
         registro.entity = formulario.entidad.data
         registro.enabled = bool(formulario.habilitado.data)
         registro.parent_id = parent_id
-        update_hierarchy_attributes(registro)
-        database.session.commit()
+        if not commit_hierarchy_change(lambda: update_hierarchy_attributes(registro)):
+            flash(
+                _(
+                    "No se pudo guardar porque los datos entran en conflicto "
+                    "con otro registro. Revise el código y las referencias."
+                ),
+                "danger",
+            )
+            return render_template(
+                _TPL_UNIDAD_CREAR,
+                titulo=_("Editar Unidad de Negocio") + " - " + APPNAME,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+                parent_exclude_id=registro.id,
+            )
         invalidate_cache("smart-select-master-data")
         return redirect(url_for("contabilidad.unidad", id_unidad=registro.code))
 
@@ -936,6 +1053,7 @@ def editar_unidad(id_unidad):
         form=formulario,
         edit=True,
         entity_initial_label=entity_initial_label,
+        parent_exclude_id=registro.id,
     )
 
 
@@ -1037,7 +1155,7 @@ def eliminar_libro(id_unidad):
 @contabilidad.route("/book/edit/<id_libro>", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_libro(id_libro):
     """Editar un libro de contabilidad."""
     from cacao_accounting.contabilidad.forms import FormularioLibro
@@ -1151,7 +1269,7 @@ def editar_libro(id_libro):
 @contabilidad.route("/book/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nuevo_libro():
     """Formulario para crear un nuevo libro de contabilidad."""
     from cacao_accounting.contabilidad.forms import FormularioLibro
@@ -1300,7 +1418,7 @@ def cuenta(entity, id_cta):
 @contabilidad.route("/account/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nueva_cuenta():
     """Formulario para crear una nueva cuenta contable."""
     from cacao_accounting.contabilidad.forms import FormularioCuenta
@@ -1373,7 +1491,7 @@ def nueva_cuenta():
 @contabilidad.route("/account/<entity>/<id_cta>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_cuenta(entity, id_cta):
     """Formulario para editar una cuenta contable existente."""
     from cacao_accounting.database import Accounts
@@ -1427,6 +1545,18 @@ def editar_cuenta(entity, id_cta):
             entity_initial_label=entity_initial_label,
             parent_initial_label=parent_initial_label,
         )
+    from cacao_accounting.contabilidad.services import _account_descendant_codes
+
+    if registro.group and not bool(formulario.grupo.data) and _account_descendant_codes(registro.entity, registro.code):
+        flash_error(_("No se puede quitar la condición de grupo porque la cuenta tiene cuentas hijas."))
+        return render_template(
+            _TPL_CUENTA_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
     registro.name = formulario.name.data
     registro.group = bool(formulario.grupo.data)
     registro.parent = parent_code
@@ -1470,7 +1600,7 @@ def ccostos():
 @contabilidad.route("/costs_center/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nuevo_centro_costo():
     """Formulario para crear un nuevo centro de costos."""
     from cacao_accounting.contabilidad.forms import FormularioCentroCosto
@@ -1542,12 +1672,17 @@ def nuevo_centro_costo():
 @contabilidad.route("/costs_center/<id_cc>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_centro_costo(id_cc):
     """Editar un centro de costos existente."""
     from cacao_accounting.database import CostCenter
 
     registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalar_one_or_none()
+    if registro is None:
+        return redirect(url_for(CONTABILIDAD_CCOSTOS))
+    requested_entity = request.form.get("entidad") if request.method == "POST" else None
+    _lock_cost_center_companies((registro.entity, requested_entity or registro.entity))
+    registro = _lock_cost_center(registro.entity, registro.code)
     if registro is None:
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
@@ -1585,6 +1720,25 @@ def editar_centro_costo(id_cc):
         )
     except ValueError as error:
         flash_error(error)
+        return render_template(
+            _TPL_CENTRO_COSTO_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            parent_initial_label=parent_initial_label,
+        )
+    hierarchy_change = entity != registro.entity or (registro.group and not bool(formulario.grupo.data))
+    if hierarchy_change and _cost_center_has_children(registro.entity, registro.code):
+        if entity != registro.entity:
+            hierarchy_error = ValueError(
+                _("No se puede cambiar la compañía de un centro de costos porque tiene centros hijos.")
+            )
+        else:
+            hierarchy_error = ValueError(
+                _("No se puede quitar la condición de grupo porque el centro de costos tiene centros hijos.")
+            )
+        flash_error(hierarchy_error)
         return render_template(
             _TPL_CENTRO_COSTO_CREAR,
             titulo=TITULO,
@@ -1636,6 +1790,12 @@ def eliminar_centro_costo(id_cc):
 
     registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalar_one_or_none()
     if registro:
+        registro = _lock_cost_center(registro.entity, registro.code)
+        if registro is None:
+            return redirect(url_for(CONTABILIDAD_CCOSTOS))
+        if _cost_center_has_children(registro.entity, registro.code):
+            flash_error(ValueError(_("No se puede eliminar el centro de costos porque tiene centros hijos.")))
+            return redirect(url_for(CONTABILIDAD_CCOSTOS))
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
         if _reject_delete_with_dependencies(
@@ -1684,17 +1844,14 @@ def proyectos():
 @contabilidad.route("/project/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nuevo_proyecto():
     """Formulario para crear un nuevo proyecto."""
     from cacao_accounting.contabilidad.forms import FormularioProyecto
 
     formulario = FormularioProyecto()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
-    formulario.parent_id.choices = [("", "— Ninguno —")] + [
-        (p.id, f"{p.code} - {p.name}")
-        for p in database.session.execute(database.select(Project).order_by(Project.code)).scalars().all()
-    ]
+    formulario.parent_id.choices = [("", "— Ninguno —")] + hierarchy_parent_choices(Project, formulario.entidad.data)
     formulario.capitalization_account_id.choices = [("", "— Seleccionar Cuenta —")] + [
         (a.id, f"{a.code} - {a.name}")
         for a in database.session.execute(database.select(Accounts).order_by(Accounts.code)).scalars().all()
@@ -1740,9 +1897,20 @@ def nuevo_proyecto():
             capitalization_account_id=capitalization_account_id,
         )
         database.session.add(DATA)
-        database.session.flush()
-        update_hierarchy_attributes(DATA)
-        database.session.commit()
+        if not commit_hierarchy_change(lambda: update_hierarchy_attributes(DATA)):
+            flash(
+                _(
+                    "No se pudo guardar porque los datos entran en conflicto "
+                    "con otro registro. Revise el código y las referencias."
+                ),
+                "danger",
+            )
+            return render_template(
+                _TPL_PROYECTO_CREAR,
+                titulo=TITULO,
+                form=formulario,
+                budget_currency_code="",
+            )
         invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
@@ -1776,7 +1944,7 @@ def proyecto(project_id):
 @contabilidad.route("/project/<project_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_proyecto(project_id):
     """Editar un proyecto existente."""
     from cacao_accounting.contabilidad.forms import FormularioProyecto
@@ -1807,7 +1975,15 @@ def editar_proyecto(project_id):
             flash_error(error)
             return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
         _update_project_from_form(proyecto, formulario, budget_amount, budget_currency)
-        database.session.commit()
+        if not commit_hierarchy_change(lambda: update_hierarchy_attributes(proyecto)):
+            flash(
+                _(
+                    "No se pudo guardar porque los datos entran en conflicto "
+                    "con otro registro. Revise el código y las referencias."
+                ),
+                "danger",
+            )
+            return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
         invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
@@ -1875,7 +2051,7 @@ def fiscal_year_list():
 @contabilidad.route("/fiscal_year/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def fiscal_year_new():
     """Crear un nuevo año fiscal."""
     from cacao_accounting.contabilidad.forms import FormularioFiscalYear
@@ -1908,7 +2084,7 @@ def fiscal_year_new():
 @contabilidad.route("/fiscal_year/<fy_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def fiscal_year_edit(fy_id):
     """Editar un año fiscal."""
     from cacao_accounting.contabilidad.forms import FormularioFiscalYear
@@ -1991,7 +2167,7 @@ def fiscal_year_detail(fy_id):
 @login_required
 @modulo_activo("accounting")
 @verifica_permiso("accounting", "eliminar")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "anular")
 def fiscal_year_delete(fy_id):
     """Elimina un año fiscal."""
     from cacao_accounting.database import AccountingPeriod, Budget, CashForecast, ComprobanteContable, FiscalYear, GLEntry
@@ -2023,7 +2199,7 @@ def fiscal_year_delete(fy_id):
 @contabilidad.route("/accounting_period/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def accounting_period_new():
     """Crear un nuevo período contable."""
     from cacao_accounting.contabilidad.forms import FormularioAccountingPeriod
@@ -2082,7 +2258,7 @@ def accounting_period_new():
 @contabilidad.route("/accounting_period/<period_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def accounting_period_edit(period_id):
     """Editar un período contable."""
     from cacao_accounting.contabilidad.forms import FormularioAccountingPeriod
@@ -2191,7 +2367,7 @@ def accounting_period_reopen(period_id: str):
 @login_required
 @modulo_activo("accounting")
 @verifica_permiso("accounting", "eliminar")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "anular")
 def accounting_period_delete(period_id):
     """Elimina un período contable."""
     from cacao_accounting.database import AccountingPeriod, BudgetLine, ComprobanteContable, GLEntry, PeriodCloseRun
@@ -2330,15 +2506,27 @@ def nueva_tasa_cambio():
                 monedas=monedas_choices,
             )
         assert rate is not None
-        DATA = ExchangeRate(
-            origin=formulario.origin.data,
-            destination=formulario.destination.data,
-            rate=rate,
-            date=formulario.date.data,
-        )
-        database.session.add(DATA)
-        database.session.commit()
-        return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
+        if _exchange_rate_conflicts(formulario.origin.data, formulario.destination.data, formulario.date.data):
+            flash(_("Ya existe una tasa de cambio para ese par de monedas y fecha."), "danger")
+        else:
+            DATA = ExchangeRate(
+                origin=formulario.origin.data,
+                destination=formulario.destination.data,
+                rate=rate,
+                date=formulario.date.data,
+            )
+            database.session.add(DATA)
+            try:
+                database.session.commit()
+            except IntegrityError as error:
+                _handle_exchange_rate_integrity_error(
+                    error,
+                    formulario.origin.data,
+                    formulario.destination.data,
+                    formulario.date.data,
+                )
+            else:
+                return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
 
     return render_template(
         _TPL_TC_CREAR,
@@ -2368,6 +2556,35 @@ def tipo_cambio(rate_id):
     )
 
 
+def _exchange_rate_conflicts(origin: str, destination: str, rate_date: object, exclude_id: str | None = None) -> bool:
+    """Indica si otro registro ya ocupa el mismo par de monedas y fecha."""
+    from cacao_accounting.database import ExchangeRate
+
+    query = database.select(ExchangeRate.id).where(
+        ExchangeRate.origin == origin,
+        ExchangeRate.destination == destination,
+        ExchangeRate.date == rate_date,
+    )
+    if exclude_id is not None:
+        query = query.where(ExchangeRate.id != exclude_id)
+    return database.session.execute(query.limit(1)).scalar_one_or_none() is not None
+
+
+def _handle_exchange_rate_integrity_error(
+    error: IntegrityError,
+    origin: str,
+    destination: str,
+    rate_date: object,
+    exclude_id: str | None = None,
+) -> None:
+    """Distinguish a concurrent duplicate rate from another persistence failure."""
+    database.session.rollback()
+    if _exchange_rate_conflicts(origin, destination, rate_date, exclude_id):
+        flash(_("Ya existe una tasa de cambio para ese par de monedas y fecha."), "danger")
+    else:
+        flash_error(error)
+
+
 @contabilidad.route("/exchange/<rate_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -2382,6 +2599,7 @@ def editar_tasa_cambio(rate_id):
     if registro is None:
         flash(_("La tasa de cambio indicada no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
+    registro_id = registro.id
 
     formulario = FormularioTasaCambio(obj=registro)
     monedas_choices = obtener_lista_monedas_activas()
@@ -2425,13 +2643,30 @@ def editar_tasa_cambio(rate_id):
                     ),
                     "danger",
                 )
+            elif _exchange_rate_conflicts(
+                formulario.origin.data,
+                formulario.destination.data,
+                formulario.date.data,
+                registro_id,
+            ):
+                flash(_("Ya existe una tasa de cambio para ese par de monedas y fecha."), "danger")
             else:
                 registro.origin = formulario.origin.data
                 registro.destination = formulario.destination.data
                 registro.rate = rate
                 registro.date = formulario.date.data
-                database.session.commit()
-                return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro.id))
+                try:
+                    database.session.commit()
+                except IntegrityError as error:
+                    _handle_exchange_rate_integrity_error(
+                        error,
+                        formulario.origin.data,
+                        formulario.destination.data,
+                        formulario.date.data,
+                        registro_id,
+                    )
+                else:
+                    return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro_id))
 
     return render_template(
         _TPL_TC_CREAR,
@@ -2785,7 +3020,7 @@ def asistente_cierre_mensual():
 @verifica_acceso("accounting")
 def nuevo_cierre_mensual():
     """Crea un registro de cierre mensual para un periodo."""
-    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+    from cacao_accounting.database import AccountingPeriod
 
     period_id = request.form.get("period_id")
     period = database.session.get(AccountingPeriod, period_id)
@@ -2794,15 +3029,17 @@ def nuevo_cierre_mensual():
         return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
     exige_acceso_compania("accounting", period.entity, "autorizar")
 
-    existing = database.session.execute(
-        database.select(PeriodCloseRun).filter_by(company=period.entity, period_id=period.id)
-    ).scalar_one_or_none()
-    if existing:
-        flash(_("Ya existe un cierre mensual para ese periodo."), "warning")
-        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=existing.id))
+    try:
+        close_run, created = create_monthly_close_run(period.entity, period.id)
+    except PeriodCloseError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
 
-    close_run = PeriodCloseRun(company=period.entity, period_id=period.id, run_status="open")
-    database.session.add(close_run)
+    if not created:
+        flash(_("Ya existe un cierre mensual para ese periodo."), "warning")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
     database.session.commit()
     flash(_("Cierre mensual creado."), "success")
     return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
@@ -3066,9 +3303,6 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
 @verifica_acceso("accounting")
 def revalorizaciones_cambiarias():
     """Listado de revalorizaciones cambiarias."""
-    from cacao_accounting.database import Entity
-
-    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     query = database.select(ExchangeRevaluation).order_by(
         ExchangeRevaluation.run_date.desc(), ExchangeRevaluation.created.desc(), ExchangeRevaluation.id.desc()
     )
@@ -3092,7 +3326,6 @@ def revalorizaciones_cambiarias():
             max_per_page=10,
             count=True,
         ),
-        companies=companies,
     )
 
 
@@ -3102,18 +3335,14 @@ def revalorizaciones_cambiarias():
 @verifica_acceso("accounting")
 def nueva_revalorizacion_cambiaria():
     """Formulario minimo para ejecutar una revalorizacion cambiaria."""
-    from cacao_accounting.database import Entity
-
     if request.method == "POST":
         result = _handle_exchange_revaluation_post()
         if result:
             return result
 
-    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     return render_template(
         "contabilidad/exchange_revaluation_nueva.html",
         titulo=_("Nueva revalorizacion cambiaria") + " - " + APPNAME,
-        companies=companies,
     )
 
 
@@ -3683,6 +3912,7 @@ def naming_series_edit(series_id: str):
     from cacao_accounting.contabilidad.forms import FormularioNamingSeries
     from cacao_accounting.database import Entity, NamingSeries, Sequence, SeriesSequenceMap
     from cacao_accounting.document_identifiers import enforce_single_default_series
+    from cacao_accounting.default_scope import lock_default_scopes
 
     serie = database.session.get(NamingSeries, series_id)
     if serie is None:
@@ -3711,6 +3941,10 @@ def naming_series_edit(series_id: str):
 
     company = form.company.data or None
     if form.is_default.data:
+        lock_default_scopes(
+            "naming_series",
+            [(serie.entity_type, serie.company), (form.entity_type.data, company)],
+        )
         enforce_single_default_series(
             entity_type=form.entity_type.data,
             company=company,
@@ -4147,12 +4381,19 @@ def cash_flow_config(company):
             valid_sections=list(VALID_SECTIONS),
         )
 
-    exige_acceso_compania("accounting", selected_company, "consultar")
+    action = "editar" if request.method == "POST" else "consultar"
+    exige_acceso_compania("accounting", selected_company, action)
 
     if request.method == "POST":
-        overrides = {
-            account_id: request.form.get(f"section_{account_id}") for account_id in request.form.getlist("account_ids")
-        }
+        account_ids = request.form.getlist("account_ids")
+        if not account_ids:
+            flash(_("No se recibieron cuentas para actualizar la clasificación."), "danger")
+            return redirect(url_for("contabilidad.cash_flow_config", company=selected_company))
+        expected_ids = {str(row["id"]) for row in get_cash_flow_config_overview(selected_company)["rows"]}
+        if set(account_ids) != expected_ids:
+            flash(_("La clasificación debe enviarse completa para evitar borrados accidentales."), "danger")
+            return redirect(url_for("contabilidad.cash_flow_config", company=selected_company))
+        overrides = {account_id: request.form.get(f"section_{account_id}") for account_id in account_ids}
         try:
             save_cash_flow_mappings(selected_company, overrides)
             database.session.commit()

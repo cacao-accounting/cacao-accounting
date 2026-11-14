@@ -12,7 +12,7 @@ from typing import Any
 
 from sqlalchemy import case, select
 
-from cacao_accounting.database import ItemPrice, PriceList, Tax, TaxTemplate, TaxTemplateItem, database
+from cacao_accounting.database import ItemPrice, Tax, TaxTemplate, TaxTemplateItem, database
 
 
 from cacao_accounting.i18n import _
@@ -55,27 +55,6 @@ class _TaxTotals:
     additive_total: Decimal = Decimal("0")
     deductive_total: Decimal = Decimal("0")
     inclusive_total: Decimal = Decimal("0")
-
-
-@dataclass(frozen=True)
-class PriceSuggestion:
-    """Precio sugerido para un item."""
-
-    item_code: str
-    price_list_id: str
-    price: Decimal
-    currency: str | None
-    uom: str | None
-
-
-@dataclass(frozen=True)
-class PriceToleranceResult:
-    """Resultado de validacion de tolerancia de precio."""
-
-    allowed: bool
-    suggested_price: Decimal | None
-    variance_percentage: Decimal
-    message: str | None = None
 
 
 def _decimal_value(value: Any) -> Decimal:
@@ -246,43 +225,3 @@ def resolve_item_price_record(
     if price is not None and not _decimal_value(price.price).is_finite():
         return None
     return price
-
-
-def get_item_price(
-    item_code: str,
-    price_list_id: str,
-    qty: Decimal,
-    uom: str | None,
-    posting_date: date,
-) -> PriceSuggestion:
-    """Obtiene el precio vigente mas especifico de una lista de precios."""
-    price_list = database.session.get(PriceList, price_list_id)
-    if not price_list or not price_list.is_active:
-        raise TaxPricingError(_("La lista de precios no existe o esta inactiva."))
-
-    price = resolve_item_price_record(item_code, price_list_id, qty, uom, posting_date)
-    if not price:
-        raise TaxPricingError(_("No existe precio vigente para el item en la lista indicada."))
-    return PriceSuggestion(
-        item_code=item_code,
-        price_list_id=price_list_id,
-        price=_decimal_value(price.price),
-        currency=price_list.currency,
-        uom=price.uom,
-    )
-
-
-def validate_price_tolerance(document_type: str, line: Any, user_id: str | None = None) -> PriceToleranceResult:
-    """Valida tolerancia de precio con politica conservadora del 10%."""
-    del user_id
-    suggested = getattr(line, "suggested_rate", None)
-    if suggested is None:
-        return PriceToleranceResult(True, None, Decimal("0"), None)
-    suggested_price = _decimal_value(suggested)
-    actual = _decimal_value(getattr(line, "rate", None))
-    if suggested_price <= 0:
-        return PriceToleranceResult(True, suggested_price, Decimal("0"), None)
-    variance = abs(actual - suggested_price) / suggested_price * Decimal("100")
-    allowed = variance <= Decimal("10")
-    message = None if allowed else f"El precio excede la tolerancia permitida para {document_type}."
-    return PriceToleranceResult(allowed, suggested_price, variance, message)

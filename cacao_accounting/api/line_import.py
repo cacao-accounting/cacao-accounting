@@ -23,6 +23,7 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import (
     ARAPOpenItem,
     Accounts,
+    BankAccount,
     Book,
     CompanyParty,
     CostCenter,
@@ -35,6 +36,7 @@ from cacao_accounting.database import (
     Project,
     SalesInvoice,
     UOM,
+    Unit,
     Warehouse,
     database,
 )
@@ -125,15 +127,7 @@ def get_open_items() -> ResponseReturnValue:
     company = (request.args.get("company") or "").strip()
     party_type = (request.args.get("party_type") or "").strip().lower()
     party = (request.args.get("party") or "").strip()
-    reference_type = (request.args.get("reference_type") or "").strip()
-    reference_type = {
-        "invoice": "sales_invoice" if party_type == "customer" else "purchase_invoice",
-        "debit_note": "sales_debit_note" if party_type == "customer" else "purchase_debit_note",
-        "credit_note": "sales_credit_note" if party_type == "customer" else "purchase_credit_note",
-        "payment": "payment_entry",
-        "payment_entry": "payment_entry",
-        "journal_entry": "journal_entry",
-    }.get(reference_type, reference_type)
+    reference_type = _normalize_open_item_reference_type((request.args.get("reference_type") or "").strip(), party_type)
     query_text = (request.args.get("q") or "").strip().casefold()
     if not company or party_type not in {"customer", "supplier"} or not party:
         return jsonify({"results": []})
@@ -145,6 +139,25 @@ def get_open_items() -> ResponseReturnValue:
     items = list_cached_open_items(company=company, party_type=party_type, party_id=party)
     if not items:
         items = list_open_items(company=company, party_type=party_type, party_id=party)
+    return jsonify({"results": _filter_open_item_results(items, reference_type, query_text)})
+
+
+def _normalize_open_item_reference_type(reference_type: str, party_type: str) -> str:
+    """Map selector aliases to the document types stored by the ledger."""
+    sales = party_type == "customer"
+    reference_aliases = {
+        "invoice": "sales_invoice" if sales else "purchase_invoice",
+        "debit_note": "sales_debit_note" if sales else "purchase_debit_note",
+        "credit_note": "sales_credit_note" if sales else "purchase_credit_note",
+        "payment": "payment_entry",
+        "payment_entry": "payment_entry",
+        "journal_entry": "journal_entry",
+    }
+    return reference_aliases.get(reference_type, reference_type)
+
+
+def _filter_open_item_results(items: tuple[Any, ...], reference_type: str, query_text: str) -> list[dict[str, Any]]:
+    """Filter open documents and shape the bounded response used by the selector."""
     results = []
     for item in items:
         if reference_type and item.document_type != reference_type:
@@ -168,7 +181,7 @@ def get_open_items() -> ResponseReturnValue:
                 "line_number": item.line_number,
             }
         )
-    return jsonify({"results": results[:100]})
+    return results[:100]
 
 
 def _normalize_header(value: Any) -> str:
@@ -604,8 +617,10 @@ def _enrich_and_validate_master_data(
     _validate_item_reference(row, validated_row, row_no, errors)
     _validate_uom_reference(row, row_no, errors)
     _validate_account_reference(row, validated_row, row_no, company_id, errors)
+    _validate_bank_account_reference(row, validated_row, row_no, company_id, errors)
     _validate_cost_center_reference(row, row_no, company_id, errors)
     _validate_project_reference(row, row_no, company_id, errors)
+    _validate_unit_reference(row, row_no, company_id, errors)
     _validate_warehouse_reference(row, row_no, company_id, errors)
     if row.get("book"):
         _validate_book_reference(row, validated_row, row_no, company_id, errors)
@@ -613,6 +628,30 @@ def _enrich_and_validate_master_data(
         _validate_currency_reference(row, validated_row, row_no, errors)
     _validate_party_reference(row, validated_row, row_no, company_id, errors)
     _validate_open_item_reference(row, validated_row, row_no, company_id, errors)
+
+
+def _validate_bank_account_reference(
+    row: dict[str, Any],
+    validated_row: dict[str, Any],
+    row_no: int,
+    company_id: str,
+    errors: list[dict[str, Any]],
+) -> None:
+    """Validate and canonicalize a bank account reference for its company."""
+    bank_account_id = str(row.get("bank_account") or "").strip()
+    if not bank_account_id:
+        return
+    bank_account = database.session.get(BankAccount, bank_account_id)
+    if bank_account is None or bank_account.company != company_id:
+        errors.append(
+            {
+                "row": row_no,
+                "field": "bank_account",
+                "message": _("La cuenta bancaria no existe o no pertenece a la compañía."),
+            }
+        )
+        return
+    validated_row["bank_account"] = str(bank_account.id)
 
 
 def _validate_item_reference(
@@ -680,6 +719,18 @@ def _validate_project_reference(
     """Validate a project reference scoped by company."""
     if row.get("project") and not database.session.query(Project).filter_by(code=row["project"], entity=company_id).first():
         errors.append({"row": row_no, "field": "project", "message": _("El proyecto no existe.")})
+
+
+def _validate_unit_reference(
+    row: dict[str, Any],
+    row_no: int,
+    company_id: str,
+    errors: list[dict[str, Any]],
+) -> None:
+    """Validate a business unit reference scoped by company."""
+    unit = row.get("unit")
+    if unit and not database.session.query(Unit).filter_by(code=unit, entity=company_id).first():
+        errors.append({"row": row_no, "field": "unit", "message": _("La unidad no existe.")})
 
 
 def _validate_warehouse_reference(

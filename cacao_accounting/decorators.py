@@ -43,8 +43,13 @@ def modulo_activo(modulo):  # pragma: no cover
     return decorator_modulo_activo
 
 
-def verifica_acceso(modulo):  # pragma: no cover
-    """Comprueba si un usuario tiene acceso a un recurso determinado."""
+def verifica_acceso(modulo, accion=None):  # pragma: no cover
+    """Comprueba si un usuario tiene acceso a un recurso determinado.
+
+    Con ``accion`` (crear/editar/anular) exige además el permiso de
+    acción correspondiente: el acceso sencillo no concede escrituras
+    (#1601).
+    """
 
     def decorator_verifica_acceso(func):
         @wraps(func)
@@ -54,7 +59,7 @@ def verifica_acceso(modulo):  # pragma: no cover
                 return abort(403)
             module_id = obtener_id_modulo_por_nombre(modulo)
             permisos = Permisos(modulo=module_id, usuario=current_user.id)
-            if permisos.autorizado:
+            if permisos.autorizado and (accion is None or getattr(permisos, accion, False)):
                 return func(*args, **kwargs)
             else:
                 flash(_("No se encuentra autorizado a acceder al recurso solicitado."))

@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+SUPPORTED_TAX_CALCULATION_METHODS = frozenset({"percentage", "fixed", "manual"})
+
 
 def affects_inventory_from_treatment(accounting_treatment: str | None) -> bool:
     """Return whether a fiscal component is capitalized into inventory."""

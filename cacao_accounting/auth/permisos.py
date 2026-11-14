@@ -29,10 +29,6 @@ from cacao_accounting.logs import log
 MODULOS: list = ["accounting", "cash", "purchases", "inventory", "sales", "imports"]
 
 
-class RegistroPermisosRol:
-    """Administracion de Permisos por rol."""
-
-
 class Permisos:
     """
     Administración de Permisos.
@@ -107,7 +103,7 @@ class Permisos:
         self.libro = libro
         self.__init_valido = bool(self.valida_modulo(modulo) and usuario)
         self.usuario_model = database.session.get(User, usuario) if usuario else None
-        if self.usuario_model is None or self.usuario_model.active is False:
+        if self.usuario_model is None or self.usuario_model.active is not True:
             self.__init_valido = False
         self.roles: list[str] = []
         self.permisos_usuario: list[RolesAccess] = []
@@ -158,7 +154,7 @@ class Permisos:
 
     def obtener_roles_de_usuario(self) -> list[str]:
         """Devuelve una lista con los roles del usuario."""
-        return [rol.role_id for rol in RolesUser.query.filter_by(user_id=self.usuario).filter(RolesUser.active.is_not(False))]
+        return [rol.role_id for rol in RolesUser.query.filter_by(user_id=self.usuario).filter(RolesUser.active.is_(True))]
 
     def obtener_id_rol_administrador(self) -> str | None:
         """Devuelve el UUID asignado al rol administrador."""
@@ -174,9 +170,7 @@ class Permisos:
         if not admin_role_id or not self.usuario:
             return False
         return (
-            RolesUser.query.filter_by(role_id=admin_role_id, user_id=self.usuario)
-            .filter(RolesUser.active.is_not(False))
-            .first()
+            RolesUser.query.filter_by(role_id=admin_role_id, user_id=self.usuario).filter(RolesUser.active.is_(True)).first()
             is not None
         )
 

@@ -73,6 +73,8 @@ from cacao_accounting.party_settings import (
 
 from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
+    exigir_companias_tercero,
+    requiere_edicion_tercero,
     apply_party_profile,
     build_party_detail_context,
     create_party_address,
@@ -93,6 +95,7 @@ from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 
 from cacao_accounting.ventas.services import (
+    _authorized_companies,
     _sales_logistics_values,
     _copy_sales_logistics,
     _parse_date,
@@ -121,6 +124,7 @@ from cacao_accounting.ventas.services import (
     _validate_sales_invoice_line_amounts,
     _validate_sales_source_link,
     _validate_sales_order_requirement,
+    _validated_customer,
     _sales_order_initial_source_type,
     _build_sales_order_transaction_config,
     _handle_sales_order_new_post,
@@ -197,9 +201,16 @@ class _DeliveryNoteNewContext:
 
 
 def _load_delivery_note_sources(from_order_id: str | None, from_note_id: str | None) -> tuple[Any, Any]:
-    """Load optional sales-order and delivery-note sources for the new form."""
+    """Load optional sales-order and delivery-note sources for the new form.
+
+    El origen aporta compañía, cliente y logística al formulario; se autoriza
+    antes de exponer esos metadatos, no solo al confirmar el POST.
+    """
     order_source = database.session.get(SalesOrder, from_order_id) if from_order_id else None
     delivery_source = database.session.get(DeliveryNote, from_note_id) if from_note_id else None
+    for source in (order_source, delivery_source):
+        if source is not None:
+            _require_sales_document_access(source, "consultar")
     return order_source, delivery_source
 
 
@@ -448,7 +459,7 @@ def ventas_pedido_venta_nuevo():
     if request.method == "POST":
         try:
             customer_id = request.form.get("customer_id") or None
-            customer = database.session.get(Party, customer_id) if customer_id else None
+            customer = _validated_customer(customer_id)
             posting_date = _parse_date(request.form.get("posting_date"))
             company, transaction_currency = validate_immutable_header(
                 None,
@@ -767,6 +778,8 @@ def ventas_factura_venta_nota_debito_lista():
         new_button_label=_("Nueva Nota de Débito"),
         page_caption=_("Listado de notas de débito de venta."),
         new_document_type="sales_debit_note",
+        document_type="sales_debit_note",
+        list_endpoint="ventas.ventas_factura_venta_nota_debito_lista",
     )
 
 
@@ -789,6 +802,8 @@ def ventas_factura_venta_devolucion_lista():
         new_button_label=_("Nueva Devolución"),
         page_caption=_("Listado de devoluciones y notas de crédito de venta."),
         new_document_type="sales_return",
+        document_type="sales_credit_note",
+        list_endpoint="ventas.ventas_factura_venta_devolucion_lista",
     )
 
 
@@ -813,10 +828,15 @@ def ventas_factura_venta_devolucion_nueva():
 @login_required
 def ventas_cliente_lista():
     """Listado de clientes."""
+    from cacao_accounting.party_management import filtrar_parties_por_companias
+
     consulta = _paginate_list(
         Party,
         (Party.code, Party.name, Party.comercial_name, Party.tax_id),
-        database.select(Party).filter(Party.is_customer.is_(True)),
+        filtrar_parties_por_companias(
+            database.select(Party).filter(Party.is_customer.is_(True)),
+            _authorized_companies(("sales",)),
+        ),
         include_status=False,
     )
     titulo = _("Listado de Clientes") + " - " + APPNAME
@@ -854,11 +874,17 @@ def ventas_cliente_nuevo():
 @login_required
 def ventas_cliente(customer_id):
     """Detalle de cliente."""
+    from cacao_accounting.party_management import tercero_tiene_vinculo_autorizado
+
     registro = database.session.execute(
         database.select(Party).filter_by(id=customer_id).filter(Party.is_customer.is_(True))
     ).first()
     if not registro:
         abort(404)
+    # #1525: el detalle solo se muestra si el usuario consulta ventas en una
+    # de las compañías vinculadas al tercero.
+    if not tercero_tiene_vinculo_autorizado(registro[0].id, _authorized_companies(("sales",))):
+        abort(403)
     titulo = registro[0].name + " - " + APPNAME
     detail = build_party_detail_context(registro[0])
     return render_template(
@@ -881,6 +907,9 @@ def ventas_cliente_configuracion_compania(customer_id: str):
     ).scalar_one_or_none()
     if not registro:
         abort(404)
+    # #1280: el POST procesa compañías presentes y elimina las omitidas;
+    # ambas listas exigen permiso de edición por compañía antes de mutar.
+    exigir_companias_tercero(registro.id, "sales", request.form.getlist("company"))
     try:
         upsert_party_company_settings_rows(customer_id, "customer", request.form)
         database.session.commit()
@@ -931,6 +960,7 @@ def ventas_cliente_editar(customer_id: str):
 def ventas_cliente_contacto_crear(customer_id: str):
     """Crea un contacto para un cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         create_party_contact(customer_id, request.form)
         database.session.commit()
@@ -947,6 +977,7 @@ def ventas_cliente_contacto_crear(customer_id: str):
 def ventas_cliente_contacto_editar(customer_id: str, link_id: str):
     """Edita un contacto de cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         update_party_contact(customer_id, link_id, request.form)
         database.session.commit()
@@ -963,8 +994,12 @@ def ventas_cliente_contacto_editar(customer_id: str, link_id: str):
 def ventas_cliente_contacto_desactivar(customer_id: str, link_id: str):
     """Desactiva un contacto de cliente."""
     _party_or_404(customer_id, "customer")
-    deactivate_party_contact(customer_id, link_id)
-    database.session.commit()
+    try:
+        deactivate_party_contact(customer_id, link_id)
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        abort(404)
     flash(_("Contacto desactivado correctamente."), "success")
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
@@ -975,6 +1010,7 @@ def ventas_cliente_contacto_desactivar(customer_id: str, link_id: str):
 def ventas_cliente_direccion_crear(customer_id: str):
     """Crea una direccion para un cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         create_party_address(customer_id, request.form)
         database.session.commit()
@@ -991,6 +1027,7 @@ def ventas_cliente_direccion_crear(customer_id: str):
 def ventas_cliente_direccion_editar(customer_id: str, link_id: str):
     """Edita una direccion de cliente."""
     _party_or_404(customer_id, "customer")
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         update_party_address(customer_id, link_id, request.form)
         database.session.commit()
@@ -1007,8 +1044,12 @@ def ventas_cliente_direccion_editar(customer_id: str, link_id: str):
 def ventas_cliente_direccion_desactivar(customer_id: str, link_id: str):
     """Desactiva una direccion de cliente."""
     _party_or_404(customer_id, "customer")
-    deactivate_party_address(customer_id, link_id)
-    database.session.commit()
+    try:
+        deactivate_party_address(customer_id, link_id)
+        database.session.commit()
+    except ValueError:
+        database.session.rollback()
+        abort(404)
     flash(_("Dirección desactivada correctamente."), "success")
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
@@ -1038,6 +1079,9 @@ def ventas_orden_venta_nuevo():
     orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
     solicitud_origen = database.session.get(SalesRequest, from_request_id) if from_request_id else None
     cotizacion_origen = database.session.get(SalesQuotation, from_quotation_id) if from_quotation_id else None
+    for origen in (orden_origen, solicitud_origen, cotizacion_origen):
+        if origen is not None:
+            _require_sales_document_access(origen, "consultar")
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
@@ -1076,6 +1120,21 @@ def ventas_orden_venta_nuevo():
     )
 
 
+def _sales_detail_permissions() -> dict[str, bool]:
+    """Devuelve las acciones de venta que el usuario puede ejecutar."""
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("sales"), usuario=current_user.id)
+    return {
+        "editar": bool(permisos.editar),
+        "crear": bool(permisos.crear),
+        "autorizar": bool(permisos.autorizar),
+        "anular": bool(permisos.anular),
+        "cerrar": bool(permisos.cerrar),
+    }
+
+
 @ventas.route("/sales-order/<order_id>")
 @modulo_activo("sales")
 @login_required
@@ -1088,14 +1147,19 @@ def ventas_orden_venta(order_id):
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=order_id)).all()
     titulo = (registro.document_no or order_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("sales_order", registro.id)
-    can_close = registro.docstatus == 1 and registro.status != "closed" and sales_order_is_ready_to_close(registro)
+    puede_cerrar = registro.docstatus == 1 and registro.status != "closed" and sales_order_is_ready_to_close(registro)
+    permisos = _sales_detail_permissions()
     return render_template(
         "ventas/orden_venta.html",
         registro=registro,
         items=items,
         titulo=titulo,
         audit_timeline=audit_timeline,
-        can_close=can_close,
+        can_close=puede_cerrar and permisos["cerrar"],
+        can_edit=permisos["editar"],
+        can_create=permisos["crear"],
+        can_approve=permisos["autorizar"],
+        can_cancel=permisos["anular"],
     )
 
 
@@ -1343,6 +1407,8 @@ def ventas_cotizacion_nueva():
     ]
     from_request_id = request.args.get("from_request") or request.form.get("from_request")
     solicitud_origen = database.session.get(SalesRequest, from_request_id) if from_request_id else None
+    if solicitud_origen:
+        _require_sales_document_access(solicitud_origen, "consultar")
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
@@ -1389,6 +1455,8 @@ def ventas_cotizacion_nueva():
 @login_required
 def ventas_cotizacion(quotation_id: str):
     """Detalle de cotización de venta."""
+    from cacao_accounting.document_flow.status import calculate_document_status
+
     registro = database.session.get(SalesQuotation, quotation_id)
     if not registro:
         abort(404)
@@ -1397,7 +1465,12 @@ def ventas_cotizacion(quotation_id: str):
     titulo = (registro.document_no or quotation_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("sales_quotation", registro.id)
     return render_template(
-        "ventas/cotizacion.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+        "ventas/cotizacion.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        audit_timeline=audit_timeline,
+        document_status=calculate_document_status("sales_quotation", registro),
     )
 
 
@@ -1746,6 +1819,7 @@ def ventas_orden_venta_close(order_id: str):
 @modulo_activo("inventory")
 @login_required
 @verifica_permiso("inventory", "crear")
+@verifica_permiso("sales", "crear")
 def ventas_entrega_nuevo():
     """Formulario para crear una nota de entrega."""
     context = _build_delivery_note_new_context()
@@ -2150,8 +2224,17 @@ def ventas_factura_venta(invoice_id):
     items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice_id)).all()
     titulo = (registro.document_no or invoice_id) + " - " + APPNAME
     audit_timeline = format_document_timeline(registro.document_type or "sales_invoice", registro.id)
+    permisos = _sales_detail_permissions()
     return render_template(
-        "ventas/factura_venta.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+        "ventas/factura_venta.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        audit_timeline=audit_timeline,
+        can_edit=permisos["editar"],
+        can_create=permisos["crear"],
+        can_approve=permisos["autorizar"],
+        can_cancel=permisos["anular"],
     )
 
 
@@ -2457,7 +2540,6 @@ def ventas_factura_venta_cancel(invoice_id: str):
             registro,
             reason=reason,
             actor_user_id=str(current_user.id),
-            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
         )
         cancel_document(
             registro,
@@ -2489,6 +2571,8 @@ def ventas_factura_venta_cancel(invoice_id: str):
 @login_required
 def ventas_cliente_habilitar_proveedor(customer_id: str):
     """Habilita un cliente como proveedor."""
+    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         toggle_party_supplier_role(customer_id, enable=True, user_id=current_user.id)
         database.session.commit()
@@ -2505,6 +2589,8 @@ def ventas_cliente_habilitar_proveedor(customer_id: str):
 @login_required
 def ventas_cliente_deshabilitar_proveedor(customer_id: str):
     """Deshabilita el rol de proveedor de un cliente."""
+    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
+    requiere_edicion_tercero(customer_id, "sales")
     try:
         toggle_party_supplier_role(customer_id, enable=False, user_id=current_user.id)
         database.session.commit()

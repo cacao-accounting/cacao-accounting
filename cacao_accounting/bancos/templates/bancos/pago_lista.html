@@ -6,7 +6,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/pago_lista.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
@@ -44,15 +44,22 @@
       {% for item in consulta.items -%}
       <tr>
         <td><a href="{{ url_for('bancos.bancos_pago', payment_id=item.id) }}">{{ item.document_no or item.id }}</a></td>
-        <td>{{ item.payment_type }}</td>
+        <td>{{ {'pay': _('Pagar'), 'receive': _('Recibir'), 'credit_note': _('Nota de crédito'), 'debit_note': _('Nota de débito'), 'internal_transfer': _('Transferencia interna')}.get(item.payment_type, item.payment_type) }}</td>
         <td>{{ macros.document_status_for("payment_entry", item) }}</td>
         <td>{{ item.party_name or "" }}</td>
-        <td>{{ item.paid_amount or "" }}</td>
+        {% set monto = item.received_amount if item.payment_type in ['receive', 'credit_note'] else item.paid_amount %}
+        <td>{{ monto or "" }}{% if monto and item.transaction_currency %} {{ item.transaction_currency }}{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="text-center text-muted py-4" role="status">
+          {{ _('No se encontraron documentos para los filtros seleccionados.') }}
+        </td>
       </tr>
       {%- endfor %}
     </tbody>
   </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="bancos.bancos_pago_lista", extra_params=consulta.period_extra_params) }}</div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista=list_endpoint or 'bancos.bancos_pago_lista', extra_params=consulta.period_extra_params) }}</div>
 </div>
 
 {% endblock %}

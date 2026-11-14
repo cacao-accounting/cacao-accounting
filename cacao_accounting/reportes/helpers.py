@@ -116,85 +116,85 @@ def _write_report_pdf(
 
 
 _COLUMN_LABELS = {
-    "posting_date": "Posting Date",
-    "accounting_period": "Period",
-    "document_no": "Voucher",
-    "voucher_type": "Type",
-    "account_code": "Account",
-    "account_name": "Account Name",
-    "account_type": "Account Type",
-    "classification": "Section",
-    "debit": "Debit",
-    "credit": "Credit",
-    "running_balance": "Final Balance",
-    "currency": "Currency",
-    "ledger": "Ledger",
-    "company": "Company",
-    "opening_balance": "Opening Balance",
-    "ending_balance": "Final Balance",
-    "cost_center": "Cost Center",
-    "unit": "Unit",
-    "project": "Project",
-    "party_type": "Party Type",
-    "party_id": "Party",
+    "posting_date": "Fecha de contabilización",
+    "accounting_period": "Período",
+    "document_no": "Comprobante",
+    "voucher_type": "Tipo",
+    "account_code": "Cuenta",
+    "account_name": "Nombre de la cuenta",
+    "account_type": "Tipo de cuenta",
+    "classification": "Sección",
+    "debit": "Debe",
+    "credit": "Haber",
+    "running_balance": "Saldo final",
+    "currency": "Moneda",
+    "ledger": "Libro",
+    "company": "Compañía",
+    "opening_balance": "Saldo inicial",
+    "ending_balance": "Saldo final",
+    "cost_center": "Centro de costo",
+    "unit": "Unidad",
+    "project": "Proyecto",
+    "party_type": "Tipo de tercero",
+    "party_id": "Tercero",
     "created_by": "Creado por",
-    "created": "Creation Date",
+    "created": "Fecha de creación",
     "created_at": "Fecha de creación",
     "approved_by": "Aprobado por",
     "approved_at": "Fecha de aprobación",
     "modified_by": "Modificado por",
     "modified_at": "Fecha de modificación",
-    "movement_count": "Movements",
-    "first_movement": "First Movement",
-    "last_movement": "Last Movement",
-    "line_comment": "Reference",
-    "reference_type": "Reference Type",
-    "is_reversal": "Is Reversal",
-    "reversal_of": "Reversal Of",
-    "status": "Status",
-    "voucher_status": "Status",
-    "is_cancelled": "Cancelled",
-    "cancellation_date": "Cancellation Date",
-    "cancellation_requested_at": "Cancellation Requested At",
-    "cancellation_executed_at": "Cancellation Executed At",
-    "cancellation_actor": "Cancellation Actor",
-    "cancellation_reason": "Cancellation Reason",
-    "section": "Section",
-    "amount": "Amount",
-    "bank_account": "Bank Account",
-    "party_name": "Party",
-    "certificate_no": "Certificate",
-    "payment_no": "Payment",
-    "supplier_name": "Supplier",
-    "supplier_tax_id": "Supplier Tax ID",
-    "concept": "Withholding Concept",
-    "base_amount": "Tax Base",
-    "rate": "Rate",
-    "withheld_amount": "Withheld Amount",
-    "payment_type": "Payment Type",
-    "incoming_amount": "Incoming Amount",
-    "outgoing_amount": "Outgoing Amount",
-    "receipts_amount": "Receipts",
-    "payments_amount": "Payments",
-    "account_no": "Account Number",
-    "item_name": "Item Name",
-    "item_code": "Item",
-    "warehouse": "Warehouse",
-    "batch_no": "Batch",
-    "serial_no": "Serial",
-    "expiry_date": "Expiry Date",
-    "manufacturing_date": "Manufacturing Date",
-    "is_active": "Active",
-    "balance_qty": "Balance Qty",
-    "incoming_qty": "Incoming Qty",
-    "outgoing_qty": "Outgoing Qty",
-    "value_change": "Value Change",
-    "original_amount": "Original Amount",
-    "paid_amount": "Paid Amount",
-    "outstanding_amount": "Outstanding Amount",
-    "days": "Days",
-    "bucket": "Bucket",
-    "remarks": "Remarks",
+    "movement_count": "Movimientos",
+    "first_movement": "Primer movimiento",
+    "last_movement": "Último movimiento",
+    "line_comment": "Referencia",
+    "reference_type": "Tipo de referencia",
+    "is_reversal": "Es reversa",
+    "reversal_of": "Reversa de",
+    "status": "Estado",
+    "voucher_status": "Estado",
+    "is_cancelled": "Anulado",
+    "cancellation_date": "Fecha de anulación",
+    "cancellation_requested_at": "Solicitud de anulación",
+    "cancellation_executed_at": "Ejecución de anulación",
+    "cancellation_actor": "Responsable de anulación",
+    "cancellation_reason": "Motivo de anulación",
+    "section": "Sección",
+    "amount": "Importe",
+    "bank_account": "Cuenta bancaria",
+    "party_name": "Tercero",
+    "certificate_no": "Certificado",
+    "payment_no": "Pago",
+    "supplier_name": "Proveedor",
+    "supplier_tax_id": "Identificación fiscal del proveedor",
+    "concept": "Concepto de retención",
+    "base_amount": "Base imponible",
+    "rate": "Tasa",
+    "withheld_amount": "Importe retenido",
+    "payment_type": "Tipo de pago",
+    "incoming_amount": "Importe entrante",
+    "outgoing_amount": "Importe saliente",
+    "receipts_amount": "Cobros",
+    "payments_amount": "Pagos",
+    "account_no": "Número de cuenta",
+    "item_name": "Nombre del artículo",
+    "item_code": "Artículo",
+    "warehouse": "Bodega",
+    "batch_no": "Lote",
+    "serial_no": "Serie",
+    "expiry_date": "Fecha de vencimiento",
+    "manufacturing_date": "Fecha de fabricación",
+    "is_active": "Activo",
+    "balance_qty": "Cantidad de saldo",
+    "incoming_qty": "Cantidad entrante",
+    "outgoing_qty": "Cantidad saliente",
+    "value_change": "Variación de valor",
+    "original_amount": "Importe original",
+    "paid_amount": "Importe pagado",
+    "outstanding_amount": "Saldo pendiente",
+    "days": "Días",
+    "bucket": "Tramo",
+    "remarks": "Observaciones",
 }
 _MONEY_COLUMNS = {
     "debit",
@@ -405,43 +405,8 @@ def _build_unclassified_warning(count: int) -> str | None:
         return message
 
 
-def _report_form_key(report_code: str) -> str:
-    return f"reports.financial.{report_code}"
-
-
 def _load_report_view_options(report_code: str) -> list[str]:
     return ["default"]
-
-
-def _extract_filter_payload() -> dict[str, str]:
-    payload: dict[str, str] = {}
-    for key in _FINANCIAL_FILTER_FIELDS:
-        value = request.args.get(key)
-        if value:
-            payload[key] = value
-    visible_columns = request.args.getlist("visible_columns")
-    if visible_columns:
-        payload["visible_columns"] = ",".join(visible_columns)
-    return payload
-
-
-def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str, view_key: str) -> FinancialReportFilters:
-    return filters
-
-
-def _safe_page_size(raw: object, default: int) -> int:
-    try:
-        if raw is None or isinstance(raw, str):
-            value = default
-        else:
-            value = int(raw)  # type: ignore[call-overload]
-        return max(value, 1)
-    except (TypeError, ValueError):
-        return max(default, 1)
-
-
-def _str_or_none(value: object) -> str | None:
-    return str(value or "") or None
 
 
 def _handle_saved_view_action(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str]:
@@ -534,7 +499,12 @@ def _default_period_for_company(company_code: str, target_date: date | None = No
 
 
 def _build_drill_down_url(
-    values: dict[str, object], company: str, ledger: str | None, period: str | None = None
+    values: dict[str, object],
+    company: str,
+    ledger: str | None,
+    period: str | None = None,
+    period_from: str | None = None,
+    period_to: str | None = None,
 ) -> str | None:
     account_code = values.get("account_code")
     if account_code in (None, "", _EMPTY_CELL_VALUE):
@@ -544,6 +514,10 @@ def _build_drill_down_url(
         kwargs["ledger"] = ledger
     if period:
         kwargs["accounting_period"] = period
+    if period_from:
+        kwargs["accounting_period_from"] = period_from
+    if period_to:
+        kwargs["accounting_period_to"] = period_to
     return url_for("reportes.account_movement", company=company, account_code=str(account_code), **kwargs)
 
 
@@ -985,8 +959,10 @@ def _report_to_matrix(report) -> tuple[list[str], list[list[object]]]:
 
 def _spreadsheet_value(value: object) -> object:
     """Export user-controlled text literally rather than as a spreadsheet formula."""
-    if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
-        return "'" + value
+    if isinstance(value, str):
+        candidate = value.lstrip("\x00\t\n\r\v\f \u00a0\ufeff")
+        if candidate.startswith(("=", "+", "-", "@")):
+            return "'" + value
     return value
 
 
@@ -1256,7 +1232,12 @@ def _build_row_metadata(
                 "has_children": bool(child_counts.get(account_code)),
                 "level": _resolve_row_level(row, account_code),
                 "drilldown_url": _build_drill_down_url(
-                    row, report_filters.company, report_filters.ledger, report_filters.accounting_period
+                    row,
+                    report_filters.company,
+                    report_filters.ledger,
+                    report_filters.accounting_period,
+                    report_filters.period_from,
+                    report_filters.period_to,
                 ),
                 "voucher_url": _build_voucher_url(row),
                 "is_group": bool(row.get("is_group")),
@@ -1525,6 +1506,7 @@ def _render_operational_report(report_name: str, report, modulo: str = "accounti
         period_to=period_picker["period_to"],
         period_from_label=period_picker["period_from_label"],
         period_to_label=period_picker["period_to_label"],
+        company=company,
     )
 
 

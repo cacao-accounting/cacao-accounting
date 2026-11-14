@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a>
@@ -35,27 +35,32 @@
   <div class="col-lg-5">
     <div class="ca-card">
       <div class="ca-card-header">
-        <h6 class="ca-card-title mb-0"><i class="bi bi-sliders me-1"></i>{{ _("Nueva configuración") }}</h6>
+        <h6 class="ca-card-title mb-0"><i class="bi bi-sliders me-1"></i>{{ _("Editar configuración") if selected_config else _("Nueva configuración") }}</h6>
       </div>
       <div class="p-3">
+        <form method="get" class="mb-3">
+          <label class="form-label fw-semibold" for="sales-config-company">{{ _("Compañía") }}</label>
+          <select name="company" id="sales-config-company" class="form-select" onchange="this.form.submit()">
+            <option value="">— {{ _("Seleccionar") }} —</option>
+            {% for company in companies %}
+            <option value="{{ company.code }}" {% if company.code == selected_company %}selected{% endif %}>{{ company.code }} – {{ company.name }}</option>
+            {% endfor %}
+          </select>
+        </form>
+
+        {% set matching_type = selected_config.matching_type if selected_config else '3-way' %}
+        {% set price_tolerance_type = selected_config.price_tolerance_type if selected_config else 'percentage' %}
+        {% set price_tolerance_value = selected_config.price_tolerance_value if selected_config else 0 %}
+
         <form method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">{{ _("Compañía") }}</label>
-            <select name="company" class="form-select" required>
-              <option value="">— {{ _("Seleccionar") }} —</option>
-              {% for company in companies %}
-              <option value="{{ company.code }}">{{ company.code }} – {{ company.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
+          <input type="hidden" name="company" value="{{ selected_company }}">
 
           <div class="mb-3">
             <label class="form-label fw-semibold">{{ _("Tipo de Matching") }}</label>
             <select name="matching_type" class="form-select">
-              <option value="3-way">{{ _("3-way — OV + Nota de Entrega + Factura (recomendado)") }}</option>
-              <option value="2-way">{{ _("2-way — OV + Factura") }}</option>
+              <option value="3-way" {% if matching_type == '3-way' %}selected{% endif %}>{{ _("3-way — OV + Nota de Entrega + Factura (recomendado)") }}</option>
+              <option value="2-way" {% if matching_type == '2-way' %}selected{% endif %}>{{ _("2-way — OV + Factura") }}</option>
             </select>
             <div class="form-text">{{ _("El modo 3-way valida precio contra la Orden de Venta y la Nota de Entrega.") }}</div>
           </div>
@@ -64,23 +69,23 @@
             <div class="col-6">
               <label class="form-label fw-semibold">{{ _("Tipo tolerancia precio") }}</label>
               <select name="price_tolerance_type" class="form-select">
-                <option value="percentage">%</option>
-                <option value="absolute">{{ _("Absoluto") }}</option>
+                <option value="percentage" {% if price_tolerance_type == 'percentage' %}selected{% endif %}>%</option>
+                <option value="absolute" {% if price_tolerance_type == 'absolute' %}selected{% endif %}>{{ _("Absoluto") }}</option>
               </select>
             </div>
             <div class="col-6">
               <label class="form-label fw-semibold">{{ _("Valor tolerancia precio") }}</label>
-              <input type="number" name="price_tolerance_value" class="form-control" value="0" min="0" step="0.0001">
+              <input type="number" name="price_tolerance_value" class="form-control" value="{{ price_tolerance_value }}" min="0" step="0.0001">
             </div>
           </div>
 
           <div class="mb-2">
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="require_sales_order" id="req_so" checked>
+              <input class="form-check-input" type="checkbox" name="require_sales_order" id="req_so" {% if not selected_config or selected_config.require_sales_order %}checked{% endif %}>
               <label class="form-check-label" for="req_so">{{ _("Requerir Orden de Venta para facturar") }}</label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="allow_price_difference" id="allow_price">
+              <input class="form-check-input" type="checkbox" name="allow_price_difference" id="allow_price" {% if selected_config and selected_config.allow_price_difference %}checked{% endif %}>
               <label class="form-check-label" for="allow_price">{{ _("Permitir diferencias de precio (solo advertencia)") }}</label>
             </div>
           </div>

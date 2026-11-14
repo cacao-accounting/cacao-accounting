@@ -70,7 +70,19 @@ def enforce_budget_company_access():
     if budget is not None:
         action = "consultar"
         if request.method == "POST":
-            action = "editar" if "/edit" in request.path else "crear"
+            path = request.path.rstrip("/")
+            if path.endswith("/approve"):
+                action = "autorizar"
+            elif path.endswith("/close"):
+                action = "cerrar"
+            elif path.endswith("/import"):
+                action = "importar"
+            elif path.endswith("/delete"):
+                action = "eliminar"
+            elif "/edit" in path:
+                action = "editar"
+            else:
+                action = "crear"
         _enforce_budget_company_access(budget.company, action)
 
 
@@ -103,7 +115,7 @@ def listar():
 @presupuestos.route("/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nuevo():
     """Nuevo presupuesto."""
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
@@ -178,7 +190,7 @@ def detalle(budget_id):
 @presupuestos.route("/<budget_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar(budget_id):
     """Editar encabezado de presupuesto."""
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
@@ -214,7 +226,7 @@ def editar(budget_id):
 @presupuestos.route("/<budget_id>/line/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "crear")
 def nueva_linea(budget_id):
     """Agregar línea manual."""
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
@@ -270,7 +282,7 @@ def nueva_linea(budget_id):
 @presupuestos.route("/line/<line_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
-@verifica_acceso("accounting")
+@verifica_acceso("accounting", "editar")
 def editar_linea(line_id):
     """Editar línea manual."""
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)

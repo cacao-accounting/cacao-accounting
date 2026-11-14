@@ -4,7 +4,7 @@
 <form method="post" class="mb-4">
   <div class="row g-2">
     <div class="col-md-3"><select class="form-select" name="tax_id">{% for tax in taxes %}<option value="{{ tax.id }}">{{ tax.name }}</option>{% endfor %}</select></div>
-    <div class="col-md-1"><input class="form-control" name="sequence" value="10"></div>
+    <div class="col-md-1"><input class="form-control" type="number" step="1" name="sequence" value="10"></div>
     <div class="col-md-2"><select class="form-select" name="calculation_base"><option value="net_document">{{ _("Documento neto") }}</option><option value="previous_total">{{ _("Total previo") }}</option></select></div>
     <div class="col-md-2"><select class="form-select" name="behavior"><option value="additive">{{ _("Aditivo") }}</option><option value="deductive">{{ _("Deductivo") }}</option></select></div>
     <div class="col-md-2 form-check"><input class="form-check-input" type="checkbox" name="is_inclusive" id="inclusive"><label class="form-check-label" for="inclusive">{{ _("Incluido") }}</label></div>
@@ -13,5 +13,5 @@
 </form>
 <table class="table table-sm">
   <caption>{{ _("Líneas que componen la plantilla de impuestos") }}</caption>
-  <thead><tr><th>{{ _("Secuencia") }}</th><th>{{ _("Impuesto") }}</th><th>{{ _("Base") }}</th><th>{{ _("Comportamiento") }}</th></tr></thead><tbody>{% for item in items %}<tr><td>{{ item.sequence }}</td><td>{{ item.tax_id }}</td><td>{{ item.calculation_base }}</td><td>{{ item.behavior }}</td></tr>{% endfor %}</tbody></table>
+  <thead><tr><th>{{ _("Secuencia") }}</th><th>{{ _("Impuesto") }}</th><th>{{ _("Base") }}</th><th>{{ _("Comportamiento") }}</th></tr></thead><tbody>{% set base_labels = {'net_document': _('Documento neto'), 'previous_total': _('Total previo')} %}{% set behavior_labels = {'additive': _('Aditivo'), 'deductive': _('Deductivo')} %}{% for item in items %}<tr><td>{{ item.sequence }}</td><td>{{ tax_labels.get(item.tax_id, item.tax_id) }}</td><td>{{ base_labels.get(item.calculation_base, item.calculation_base) }}</td><td>{{ behavior_labels.get(item.behavior, item.behavior) }}</td></tr>{% endfor %}</tbody></table>
 {% endblock %}

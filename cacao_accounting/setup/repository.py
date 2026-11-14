@@ -379,11 +379,6 @@ def create_default_accounting_period(entity: Entity, fiscal_year: "FiscalYear") 
     return first_period
 
 
-def get_default_entity() -> Entity | None:
-    """Recupera la entidad predeterminada si existe."""
-    return database.session.execute(database.select(Entity).filter_by(status="default")).scalar_one_or_none()
-
-
 _PARTY_GROUP_CATALOG: dict[str, dict[str, list[dict[str, str]]]] = {
     "es": {
         "customer": [

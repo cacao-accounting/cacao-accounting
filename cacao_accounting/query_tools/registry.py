@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
+from dataclasses import replace
 from typing import Any
 
 from cacao_accounting.i18n import _
@@ -50,7 +52,11 @@ class Registry:
                 code=ErrorCode.TOOL_NOT_FOUND,
                 message=_("Herramienta '%(name)s' no encontrada.") % {"name": name},
             )
-        return tool
+        return replace(
+            tool,
+            parameters_schema=deepcopy(tool.parameters_schema),
+            response_schema=deepcopy(tool.response_schema),
+        )
 
     def list_tools(self) -> dict[str, QueryTool]:
         """Devuelve una copia del diccionario con todas las herramientas registradas."""

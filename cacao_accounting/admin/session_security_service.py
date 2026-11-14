@@ -37,15 +37,6 @@ def set_session_security_enabled(enabled: bool) -> None:
     database.session.flush()
 
 
-def listar_dispositivos_usuario(user_id: str) -> list[RecognizedDevice]:
-    """Lista dispositivos reconocidos de un usuario específico."""
-    return list(
-        database.session.scalars(
-            select(RecognizedDevice).filter_by(user_id=user_id).order_by(RecognizedDevice.created.desc())
-        ).all()
-    )
-
-
 def listar_todos_dispositivos() -> list[tuple[RecognizedDevice, str]]:
     """Lista todos los dispositivos reconocidos con el nombre del usuario."""
     rows = database.session.execute(
@@ -71,6 +62,14 @@ def usuario_actual_ip() -> str:
     if request and request.remote_addr:
         return request.remote_addr
     return "unknown"
+
+
+def lockout_minutes_remaining(seconds: int | None) -> int:
+    """Redondea hacia arriba los segundos de lockout, con mínimo 1 si sigue activo."""
+    value = int(seconds or 0)
+    if value <= 0:
+        return 0
+    return (value + 59) // 60
 
 
 def listar_cuentas_bloqueadas() -> list[tuple[User, int]]:

@@ -6,7 +6,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/lote_lista.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventario") }}</a></li>
@@ -38,6 +38,12 @@
         <td>{{ item.item_code }}</td>
         <td>{{ item.expiry_date or "—" }}</td>
         <td>{{ _("Sí") if item.is_active else _("No") }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" class="text-center text-muted py-4" role="status">
+          {{ _('No se encontraron lotes para los filtros seleccionados.') }}
+        </td>
       </tr>
       {%- endfor %}
     </tbody>

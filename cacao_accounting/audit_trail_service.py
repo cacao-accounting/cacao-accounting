@@ -36,7 +36,13 @@ ALLOWED_ACTIONS = {
     "closed",
     "reopened",
     "commented",
+    "uploaded",
+    "downloaded",
+    "deleted",
+    "download_attempted",
     "delete_attempted",
+    "update_attempted",
+    "cleanup_failed",
     "task_created",
     "task_completed",
     "task_cancelled",
@@ -229,11 +235,6 @@ def log_cancel(document: Any) -> AuditTrail:
     return _log("cancelled", document, after=document)
 
 
-def log_reverse(document: Any) -> AuditTrail:
-    """Log that a document was reversed."""
-    return _log("reversed", document, after=document)
-
-
 def log_reject(document: Any) -> AuditTrail:
     """Log that a document was rejected."""
     return _log("rejected", document, after=document)
@@ -242,11 +243,6 @@ def log_reject(document: Any) -> AuditTrail:
 def log_reversal_draft_created(document: Any) -> AuditTrail:
     """Log that a reversal draft was created from a document."""
     return _log("reversal_draft_created", document, after=document)
-
-
-def log_delete_attempt(document: Any) -> AuditTrail:
-    """Log an attempted document deletion."""
-    return _log("delete_attempted", document, after=document)
 
 
 def log_comment(document: Any, comment: str) -> AuditTrail:
@@ -273,6 +269,23 @@ def log_email_sent(
 def log_task_event(document: Any, action: str, comment: str) -> AuditTrail:
     """Log a lightweight task event against a document."""
     return _log(action, document, after=document, comment=comment)
+
+
+def log_attachment_event(
+    document: Any,
+    action: str,
+    *,
+    before: Any = None,
+    after: Any = None,
+    comment: str | None = None,
+) -> AuditTrail:
+    """Registra un evento append-only de adjuntos contra su documento.
+
+    El payload ``before``/``after`` incluye archivo, hash, tamaño, referencia y
+    resultado. El actor, la compañía y el timestamp los resuelve la bitácora
+    central a partir del documento relacionado y del request autenticado.
+    """
+    return _log(action, document, before=before, after=after, comment=comment)
 
 
 def _document_timeline_filters(document_type: str, document_id: str, company: str | None) -> list[Any]:

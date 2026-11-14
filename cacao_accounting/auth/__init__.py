@@ -11,15 +11,17 @@ from typing import Any
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from argon2 import PasswordHasher
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, has_request_context, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
-from flask_login import LoginManager, current_user, login_required, login_user, logout_user
+from flask_login import LoginManager, current_user, login_required, login_user, logout_user, user_logged_in
+from sqlalchemy.exc import IntegrityError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth import helpers
 from cacao_accounting.database import User, database
+from cacao_accounting.email_identity import normalize_user_email
 from cacao_accounting.i18n import _
 from cacao_accounting.limiter import limiter
 
@@ -35,17 +37,25 @@ INICIO_SESION = redirect("/login")
 PROFILE_HTML = "profile.html"
 
 
+def _store_session_auth_version(sender: Any, user: User, **extra: Any) -> None:
+    """Bind a Flask session to the user's credential version at login."""
+    session["_auth_version"] = user.auth_version
+
+
+user_logged_in.connect(_store_session_auth_version, weak=False)
+
+
 @administrador_sesion.user_loader
 def cargar_sesion(identidad):  # pragma: no cover
     """Devuelve la entrada correspondiente al usuario que inicio sesión."""
-    if identidad is not None:
-        QUERY = database.session.execute(database.select(User).filter_by(id=identidad)).first()
-        try:
-            return QUERY[0]
-        except TypeError:
-            return None
-    else:
+    if identidad is None:
         return None
+    user = database.session.execute(database.select(User).filter_by(id=identidad, active=True)).scalar_one_or_none()
+    if user is None:
+        return None
+    if has_request_context() and session.get("_auth_version", 0) != user.auth_version:
+        return None
+    return user
 
 
 @administrador_sesion.unauthorized_handler
@@ -66,14 +76,60 @@ def validar_acceso(usuario, clave) -> bool:
     return helpers.validar_acceso(usuario, clave)
 
 
-def _session_security_is_active() -> bool:
-    """Return True when origin protection is enabled and SMTP is ready."""
-    from cacao_accounting.admin.session_security_service import (
-        is_session_security_enabled,
-        smtp_is_configured,
-    )
+def _session_security_is_enabled() -> bool:
+    """Return whether origin protection is persistently enabled."""
+    from cacao_accounting.admin.session_security_service import is_session_security_enabled
 
-    return is_session_security_enabled() and smtp_is_configured()
+    return is_session_security_enabled()
+
+
+def _handle_session_security_login(identidad: User) -> ResponseReturnValue:
+    """Authenticate a known device or complete a new device's OTP challenge."""
+    from cacao_accounting.auth.device_verification import usuario_tiene_email
+    from cacao_accounting.admin.session_security_service import smtp_is_configured, usuario_actual_ip
+
+    if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+        flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."))
+        return INICIO_SESION
+
+    device_token = request.cookies.get("__Secure-device-id") or request.cookies.get("device-id")
+    from cacao_accounting.auth.device_verification import verificar_cookie_dispositivo
+
+    if device_token and verificar_cookie_dispositivo(identidad.id, device_token):
+        helpers.asignar_token_para_usuario(identidad)
+        login_user(identidad)
+        return helpers.redireccion_despues_de_login()
+
+    if not smtp_is_configured():
+        current_app.logger.error("Session security is enabled but SMTP is not configured; OTP login denied")
+        flash(
+            _("La verificación en dos pasos está activada, pero el correo no está disponible. " "Contacte al administrador.")
+        )
+        return INICIO_SESION
+
+    if not usuario_tiene_email(identidad):
+        flash(_("Su cuenta no tiene un correo electrónico configurado. Contacte al administrador."))
+        return INICIO_SESION
+
+    from cacao_accounting.auth.device_verification import enviar_otp_por_email, generar_otp
+
+    otp_user_id = identidad.id
+    database.session.rollback()
+    otp_code = generar_otp(otp_user_id, purpose="device_verification")
+    session["otp_user_id"] = otp_user_id
+    session["otp_ip"] = usuario_actual_ip()
+    session["otp_user_agent"] = (request.user_agent.string or "")[:255]
+    if not enviar_otp_por_email(identidad, otp_code):
+        database.session.rollback()
+        session.pop("otp_user_id", None)
+        session.pop("otp_ip", None)
+        session.pop("otp_user_agent", None)
+        flash(_("No se pudo enviar el código de verificación. Intente más tarde o contacte al administrador."))
+        return INICIO_SESION
+
+    database.session.commit()
+    flash(_("Se envió un código de verificación a su correo electrónico."))
+    return redirect(url_for("login.verify_otp"))
 
 
 @login.route("/login", methods=["GET", "POST"])
@@ -121,32 +177,8 @@ def inicio_sesion():  # pragma: no cover
         flash(_("Solo un usuario administrador puede iniciar sesion."))
         return INICIO_SESION
 
-    if _session_security_is_active():
-        from cacao_accounting.auth.device_verification import usuario_tiene_email
-        from cacao_accounting.admin.session_security_service import usuario_actual_ip
-
-        device_token = request.cookies.get("__Secure-device-id") or request.cookies.get("device-id")
-        from cacao_accounting.auth.device_verification import verificar_cookie_dispositivo
-
-        if device_token and verificar_cookie_dispositivo(identidad.id, device_token):
-            helpers.asignar_token_para_usuario(identidad)
-            login_user(identidad)
-            return helpers.redireccion_despues_de_login()
-
-        if not usuario_tiene_email(identidad):
-            flash(_("Su cuenta no tiene un correo electrónico configurado. Contacte al administrador."))
-            return INICIO_SESION
-
-        from cacao_accounting.auth.device_verification import enviar_otp_por_email, generar_otp
-
-        otp_code = generar_otp(identidad.id, purpose="device_verification")
-        session["otp_user_id"] = identidad.id
-        session["otp_ip"] = usuario_actual_ip()
-        session["otp_user_agent"] = (request.user_agent.string or "")[:255]
-        enviar_otp_por_email(identidad, otp_code)
-        database.session.commit()
-        flash(_("Se envió un código de verificación a su correo electrónico."))
-        return redirect(url_for("login.verify_otp"))
+    if _session_security_is_enabled():
+        return _handle_session_security_login(identidad)
 
     helpers.asignar_token_para_usuario(identidad)
     login_user(identidad)
@@ -158,6 +190,10 @@ def inicio_sesion():  # pragma: no cover
 def verify_otp():  # pragma: no cover
     """Verificación de OTP para dispositivos no reconocidos."""
     from cacao_accounting.auth.forms import OtpVerificationForm
+
+    if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+        flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."))
+        return INICIO_SESION
 
     user_id = session.get("otp_user_id")
     if not user_id:
@@ -190,7 +226,7 @@ def verify_otp():  # pragma: no cover
             session.pop("otp_user_agent", None)
             database.session.commit()
 
-            response = redirect(helpers.redireccion_despues_de_login())
+            response = helpers.redireccion_despues_de_login()
             cookie_name = "__Secure-device-id" if request.is_secure else "device-id"
             response.set_cookie(
                 cookie_name,
@@ -202,6 +238,7 @@ def verify_otp():  # pragma: no cover
             )
             return response
 
+        database.session.commit()
         flash(_("Código de verificación incorrecto o expirado."))
 
     return render_template(
@@ -224,13 +261,27 @@ def forgot_password():  # pragma: no cover
 
     form = ForgotPasswordForm()
     if request.method == "POST" and form.validate_on_submit():
-        email = form.email.data.strip().lower()
-        user = database.session.execute(database.select(User).filter(User.e_mail.ilike(email))).scalar_one_or_none()
+        email = normalize_user_email(form.email.data)
+        matching_user_ids = (
+            database.session.execute(database.select(User.id).where(User.email_identity == email).limit(2)).scalars().all()
+            if email
+            else []
+        )
+        user = database.session.get(User, matching_user_ids[0]) if len(matching_user_ids) == 1 else None
 
         if user and user.active and usuario_tiene_email(user):
-            token = generar_token_recuperacion(user.id)
-            enviar_token_recuperacion_email(user, token)
-            database.session.commit()
+            if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+                current_app.logger.error("Password recovery requires a stable SECRET_KEY configuration")
+            else:
+                user_id = user.id
+                database.session.rollback()
+                token = generar_token_recuperacion(user_id)
+                if enviar_token_recuperacion_email(user, token):
+                    database.session.commit()
+                else:
+                    # La entrega falló: no se consume el enlace previo ni queda
+                    # activo un token que la persona nunca recibió.
+                    database.session.rollback()
 
         flash(_("Si el correo electrónico está registrado, recibirá un enlace de recuperación."))
         return redirect(url_for("login.forgot_password"))
@@ -250,6 +301,11 @@ def reset_password(token: str):  # pragma: no cover
     from cacao_accounting.auth.device_verification import validar_token_recuperacion
     from cacao_accounting.auth.forms import ResetPasswordForm
     from cacao_accounting.auth.helpers import validar_clave_segura
+
+    if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
+        current_app.logger.error("Password reset validation requires a stable SECRET_KEY configuration")
+        flash(_("La recuperación requiere una SECRET_KEY estable configurada por el administrador."))
+        return redirect(url_for("login.forgot_password"))
 
     user = validar_token_recuperacion(token, consumir=False)
     if user is None:
@@ -275,7 +331,9 @@ def reset_password(token: str):  # pragma: no cover
             return redirect(url_for("login.forgot_password"))
 
         user.password = _proteger_passwd(form.new_password.data)
+        user.auth_version = User.auth_version + 1
         database.session.commit()
+        user.token = None
         flash(_("Contraseña actualizada correctamente. Puede iniciar sesión."))
         return redirect(url_for("login.inicio_sesion"))
 
@@ -287,11 +345,11 @@ def reset_password(token: str):  # pragma: no cover
     )
 
 
-@login.route("/exit")
-@login.route("/logout")
-@login.route("/salir")
+@login.route("/exit", methods=["POST"])
+@login.route("/logout", methods=["POST"])
+@login.route("/salir", methods=["POST"])
 def cerrar_sesion():  # pragma: no cover
-    """Finaliza la sesion actual."""
+    """Finaliza la sesion actual con una solicitud protegida por CSRF."""
     if current_user and current_user.is_authenticated:
         current_user.token = None
     logout_user()
@@ -327,9 +385,9 @@ def test_roles():  # pragma: no cover
     """Verifica los permisos del usuario actual."""
     from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.auth.roles import obtener_roles_por_usuario
-    from cacao_accounting.database import Modulos
+    from cacao_accounting.database import Modules
 
-    MODULOS = Modulos.query.all()
+    MODULOS = Modules.query.all()
 
     return render_template(
         "test_roles.html",
@@ -369,23 +427,37 @@ def _handle_profile_update(profile_form: Any, password_form: Any) -> ResponseRet
     if not profile_form.guardar_perfil.data or not profile_form.validate():
         return None
 
-    email = profile_form.e_mail.data or None
-    if email and _profile_email_exists_for_another_user(email):
+    email = normalize_user_email(profile_form.e_mail.data)
+    current_email = normalize_user_email(current_user.e_mail)
+    email_changed = bool(email and email != current_email)
+    if email_changed and _profile_email_exists_for_another_user(email):
         flash(_("El correo electrónico ya está en uso por otro usuario."))
         return _render_profile(profile_form, password_form)
 
     _apply_profile_form(profile_form, email)
-    database.session.commit()
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        if not email_changed or not _profile_email_exists_for_another_user(email):
+            raise
+        flash(_("El correo electrónico ya está en uso por otro usuario."))
+        return _render_profile(profile_form, password_form)
     flash(_("Información de perfil actualizada correctamente."))
     return redirect(url_for("login.profile"))
 
 
-def _profile_email_exists_for_another_user(email: str) -> bool:
+def _profile_email_exists_for_another_user(email: str | None) -> bool:
     """Return whether another user already owns the email address."""
-    existing_user = database.session.execute(
-        database.select(User).filter(User.e_mail == email, User.id != current_user.id)
-    ).first()
-    return existing_user is not None
+    normalized_email = normalize_user_email(email)
+    if normalized_email is None:
+        return False
+    return (
+        database.session.execute(
+            database.select(User.id).where(User.email_identity == normalized_email, User.id != current_user.id).limit(1)
+        ).first()
+        is not None
+    )
 
 
 def _apply_profile_form(profile_form: Any, email: str | None) -> None:
@@ -394,7 +466,8 @@ def _apply_profile_form(profile_form: Any, email: str | None) -> None:
     current_user.name2 = profile_form.name2.data
     current_user.last_name = profile_form.last_name.data
     current_user.last_name2 = profile_form.last_name2.data
-    current_user.e_mail = email
+    if normalize_user_email(current_user.e_mail) != email:
+        current_user.e_mail = email
     current_user.phone = profile_form.phone.data
     current_user.language = profile_form.language.data or None
 

@@ -5,7 +5,7 @@
 {% if TESTING %}<div
   data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/ventas/templates/ventas/solicitud_venta.html">
 </div>{% endif %}
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
           class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
@@ -38,7 +38,7 @@
 {{ macros.detail_nav_buttons(
             url_for('ventas.ventas_pedido_venta_lista'),
             url_for('ventas.ventas_pedido_venta_nuevo')) }}
-{{ macros.document_print_button("sales_request", registro.id) }}
+{{ macros.document_print_button("sales_request", registro.id, company=registro.company) }}
 {{ macros.document_create_actions("sales_request", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}

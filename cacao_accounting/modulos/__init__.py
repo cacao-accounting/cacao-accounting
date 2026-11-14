@@ -225,16 +225,3 @@ def registrar_modulos_adicionales(flaskapp: Flask) -> None:
     else:
         modulos_extra = None
     flaskapp.jinja_env.globals["modulos_extra"] = modulos_extra
-
-
-def lista_tipos_documentos() -> list:
-    """Devuelve listado de documentos."""
-    DOCUMENTOS = [
-        ("journal", "Comprobante de Diario"),
-        ("sales-invoice", "Factura de Venta"),
-        ("purchase-invoice", "Factura de Compra"),
-    ]
-
-    # Pendiente logica para cargar documentos de modulos adicionales
-
-    return DOCUMENTOS
