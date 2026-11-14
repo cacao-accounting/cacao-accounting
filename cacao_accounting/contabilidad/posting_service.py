@@ -19,7 +19,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.database import (
     Accounts,
-    AccountingPeriod,
     BankTransaction,
     BankAccount,
     Book,
@@ -72,7 +71,7 @@ from cacao_accounting.contabilidad.cancellation_service import (
     resolve_cancellation,
 )
 
-from cacao_accounting.document_identifiers import validate_accounting_period
+from cacao_accounting.document_identifiers import resolve_accounting_period, validate_accounting_period
 
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 
@@ -229,18 +228,7 @@ def _get_voucher_id(document: Any) -> str:
 
 
 def _find_period_ids(company: str, posting_date: Any) -> tuple[str | None, str | None]:
-    period = (
-        database.session.execute(
-            select(AccountingPeriod)
-            .filter_by(entity=company, enabled=True)
-            .where(AccountingPeriod.start <= posting_date)
-            .where(AccountingPeriod.end >= posting_date)
-        )
-        .scalars()
-        .first()
-    )
-    if not period:
-        return None, None
+    period = resolve_accounting_period(company, posting_date)
     return period.id, period.fiscal_year_id
 
 

@@ -1179,19 +1179,21 @@ def _resolve_period_from_date(company: str, year: str, month: str) -> tuple[str,
         period_date = date(int(year), int(month), 1)
     except ValueError:
         return "", ""
-    period = (
+    periods = (
         database.session.execute(
             database.select(AccountingPeriod)
-            .filter_by(entity=company, enabled=True)
-            .where(AccountingPeriod.start <= period_date)
+            .filter_by(entity=company, enabled=True, is_closed=False)
+            .where(AccountingPeriod.start <= date(period_date.year, period_date.month, 28))
             .where(AccountingPeriod.end >= period_date)
+            .order_by(AccountingPeriod.start, AccountingPeriod.id)
         )
         .scalars()
-        .first()
+        .all()
     )
-    if period:
-        return period.fiscal_year_id or "", period.id
-    return "", ""
+    if len(periods) != 1:
+        return "", ""
+    period = periods[0]
+    return period.fiscal_year_id or "", period.id
 
 
 def _validate_exchange_revaluation_period(company: str, fiscal_year_id: str, period_id: str):

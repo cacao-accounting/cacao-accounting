@@ -13999,6 +13999,14 @@ msgstr "The document has no posting date defined."
 msgid "No existe un periodo contable configurado para la fecha indicada."
 msgstr "There is no accounting period configured for the specified date."
 
+#: cacao_accounting/document_identifiers.py
+msgid "La fecha corresponde a más de un periodo contable."
+msgstr "The date matches more than one accounting period."
+
+#: cacao_accounting/contabilidad/exchange_revaluation_service.py
+msgid "El mes corresponde a más de un periodo contable."
+msgstr "The month matches more than one accounting period."
+
 #: cacao_accounting/contabilidad/currency_guard.py:34
 msgid "La moneda es obligatoria."
 msgstr "Currency is required."

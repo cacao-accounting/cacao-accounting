@@ -33,7 +33,11 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
-from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+from cacao_accounting.document_identifiers import (
+    IdentifierConfigurationError,
+    assign_document_identifier,
+    resolve_accounting_period,
+)
 from cacao_accounting.audit_trail_service import log_cancel, log_create, log_submit
 
 from cacao_accounting.i18n import _
@@ -170,7 +174,7 @@ class ExchangeRevaluationService:
                 raise ExchangeRevaluationError(_("No existe el periodo contable seleccionado."))
             if period.entity != company:
                 raise ExchangeRevaluationError(_("El periodo contable no pertenece a la compañía seleccionada."))
-            if period.is_closed:
+            if period.is_closed or not period.enabled:
                 raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
             return period, period.end.year, period.end.month
         if year is None or month is None:
@@ -197,7 +201,7 @@ class ExchangeRevaluationService:
             .with_for_update()
             .execution_options(populate_existing=True)
         ).scalar_one_or_none()
-        if locked is None or locked.is_closed:
+        if locked is None or locked.is_closed or not locked.enabled:
             raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
         return locked
 
@@ -498,10 +502,10 @@ class ExchangeRevaluationService:
         )
 
     def _period_for(self, company: str, year: int, month: int) -> AccountingPeriod:
-        period = (
+        periods = (
             database.session.execute(
                 select(AccountingPeriod)
-                .filter_by(entity=company, is_closed=False)
+                .filter_by(entity=company, is_closed=False, enabled=True)
                 .where(AccountingPeriod.start <= date(year, month, 28))
                 .where(AccountingPeriod.end >= date(year, month, 1))
                 .order_by(AccountingPeriod.start)
@@ -509,26 +513,26 @@ class ExchangeRevaluationService:
                 .execution_options(populate_existing=True)
             )
             .scalars()
-            .first()
+            .all()
         )
-        if period is None:
+        if not periods:
             raise ExchangeRevaluationError(_("No existe un periodo contable abierto para la compañía, mes y anio."))
-        return period
+        if len(periods) != 1:
+            raise ExchangeRevaluationError(_("El mes corresponde a más de un periodo contable."))
+        return periods[0]
 
     def _ensure_period_open(self, company: str, posting_date: date) -> None:
-        period = (
-            database.session.execute(
-                select(AccountingPeriod)
-                .filter_by(entity=company)
-                .where(AccountingPeriod.start <= posting_date)
-                .where(AccountingPeriod.end >= posting_date)
-                .with_for_update()
-                .execution_options(populate_existing=True)
-            )
-            .scalars()
-            .first()
-        )
-        if period is None or period.is_closed:
+        try:
+            resolved_period = resolve_accounting_period(company, posting_date)
+        except IdentifierConfigurationError as exc:
+            raise ExchangeRevaluationError(str(exc)) from exc
+        period = database.session.execute(
+            select(AccountingPeriod)
+            .where(AccountingPeriod.id == resolved_period.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if period is None or period.is_closed or not period.enabled:
             raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
 
     def _validated_defaults(self, company: str) -> CompanyDefaultAccount:
@@ -1081,19 +1085,13 @@ class ExchangeRevaluationService:
         account = database.session.get(Accounts, account_id)
         return str(account.code) if account and account.code else None
 
-    def _period_ids(self, company: str, posting_date: date) -> tuple[str | None, str | None]:
-        period = (
-            database.session.execute(
-                select(AccountingPeriod)
-                .filter_by(entity=company, enabled=True)
-                .where(AccountingPeriod.start <= posting_date)
-                .where(AccountingPeriod.end >= posting_date)
-            )
-            .scalars()
-            .first()
-        )
-        if period is None:
-            return None, None
+    def _period_ids(self, company: str, posting_date: date) -> tuple[str, str | None]:
+        try:
+            period = resolve_accounting_period(company, posting_date)
+        except IdentifierConfigurationError as exc:
+            raise ExchangeRevaluationError(str(exc)) from exc
+        if not period.enabled or period.is_closed:
+            raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
         return period.id, period.fiscal_year_id
 
     def _create_journal(

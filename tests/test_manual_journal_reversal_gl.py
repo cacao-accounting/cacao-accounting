@@ -181,7 +181,6 @@ def test_reversion_manual_enlaza_cada_linea_gl_de_origen(app, entorno_contable):
         with audit_actor(actor_id, "Administrador"):
             with pytest.raises(PostingError):
                 post_comprobante_contable(reversal)
-
         invalid_reversal = create_journal_draft(
             {
                 "company": "cacao",
@@ -211,4 +210,33 @@ def test_reversion_manual_enlaza_cada_linea_gl_de_origen(app, entorno_contable):
         assert (
             database.session.execute(select(GLEntry.id).where(GLEntry.voucher_id == invalid_reversal.id)).scalar_one_or_none()
             is None
+        )
+
+
+def test_asiento_manual_sin_periodo_no_se_contabiliza(app, entorno_contable):
+    """A balanced journal outside configured periods remains a draft without GL rows."""
+    with app.app_context():
+        actor_id = database.session.execute(select(User.id).where(User.user == "admin")).scalar_one()
+        journal = create_journal_draft(
+            {
+                "company": "cacao",
+                "posting_date": "2027-01-15",
+                "books": ["DEFAULT_BOOK"],
+                "transaction_currency": "NIO",
+                "lines": [
+                    {"order": 1, "account": "5101", "debit": "100", "credit": "", "cost_center": "MAIN"},
+                    {"order": 2, "account": "1101", "debit": "", "credit": "100"},
+                ],
+            },
+            user_id=actor_id,
+            assign_identifier=False,
+        )
+
+        with pytest.raises(JournalValidationError, match="No existe un periodo contable configurado"):
+            submit_journal(journal.id, user_id=actor_id)
+
+        database.session.refresh(journal)
+        assert journal.status == "draft"
+        assert (
+            database.session.execute(select(GLEntry.id).where(GLEntry.voucher_id == journal.id)).scalar_one_or_none() is None
         )

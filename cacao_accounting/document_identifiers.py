@@ -95,23 +95,33 @@ def validate_accounting_period(
     if closed_fiscal_year and not allow_fiscal_year_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un año fiscal cerrado."))
 
-    period = (
-        database.session.execute(
-            database.select(AccountingPeriod)
-            .filter_by(entity=company)
-            .where(AccountingPeriod.start <= posting_date)
-            .where(AccountingPeriod.end >= posting_date)
-            .order_by(AccountingPeriod.start.desc())
-        )
-        .scalars()
-        .first()
-    )
+    period = resolve_accounting_period(company, posting_date)
 
     if period and bool(period.is_closed) and not allow_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un periodo contable cerrado."))
 
     if period and not bool(period.enabled) and not allow_closing:
         raise IdentifierConfigurationError(_("No puede registrar documentos en un periodo contable deshabilitado."))
+
+
+def resolve_accounting_period(company: str, posting_date: date) -> AccountingPeriod:
+    """Resuelve el único período que cubre una fecha para la compañía."""
+    periods = (
+        database.session.execute(
+            database.select(AccountingPeriod)
+            .filter_by(entity=company)
+            .where(AccountingPeriod.start <= posting_date)
+            .where(AccountingPeriod.end >= posting_date)
+            .order_by(AccountingPeriod.start.desc(), AccountingPeriod.id)
+        )
+        .scalars()
+        .all()
+    )
+    if not periods:
+        raise IdentifierConfigurationError(_("No existe un periodo contable configurado para la fecha indicada."))
+    if len(periods) > 1:
+        raise IdentifierConfigurationError(_("La fecha corresponde a más de un periodo contable."))
+    return periods[0]
 
 
 def enforce_single_default_series(entity_type: str, company: str | None, exclude_id: str | None = None) -> None:

@@ -20,6 +20,7 @@ from cacao_accounting import create_app
 from cacao_accounting.audit_chain import verify_audit_trail_chain
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationError, ExchangeRevaluationService
+from cacao_accounting.contabilidad.services import _resolve_period_from_date
 from cacao_accounting.database import (
     Accounts,
     AccountingPeriod,
@@ -38,7 +39,6 @@ from cacao_accounting.database import (
     User,
     database,
 )
-
 
 pytestmark = pytest.mark.database
 
@@ -259,6 +259,86 @@ def _seed_bank_exposure(company: str) -> tuple[str, int, int, str]:
     )
     database.session.commit()
     return company, closing_year, closing_month, prior_period.id, period.id, following_period.id, following_start
+
+
+def test_revaluation_rejects_disabled_period_without_creating_run(business_app):
+    """A disabled accounting period cannot create a run or GL evidence."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, _year, _month, _prior_id, period_id, _following_id, _following_start = _seed_bank_exposure(company)
+        period = database.session.get(AccountingPeriod, period_id)
+        assert period is not None
+        period.enabled = False
+        database.session.commit()
+
+        with pytest.raises(ExchangeRevaluationError, match="periodo cerrado o inexistente"):
+            ExchangeRevaluationService().run(company=company, period_id=period_id)
+
+        assert database.session.execute(database.select(ExchangeRevaluation).filter_by(company=company)).scalars().all() == []
+        assert (
+            database.session.execute(database.select(GLEntry).filter_by(company=company, voucher_type="exchange_revaluation"))
+            .scalars()
+            .all()
+            == []
+        )
+
+
+def test_revaluation_form_does_not_choose_between_overlapping_periods(business_app):
+    """Year/month form resolution rejects ambiguous accounting periods."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, year, month, _prior_id, period_id, _following_id, _following_start = _seed_bank_exposure(company)
+        period = database.session.get(AccountingPeriod, period_id)
+        assert period is not None
+        database.session.add(
+            AccountingPeriod(
+                entity=company,
+                fiscal_year_id=period.fiscal_year_id,
+                name=f"Duplicado {period.name}",
+                start=period.start,
+                end=period.end,
+                enabled=True,
+                is_closed=False,
+                status="open",
+            )
+        )
+        database.session.flush()
+
+        assert _resolve_period_from_date(company, str(year), str(month)) == ("", "")
+        with pytest.raises(ExchangeRevaluationError, match="más de un periodo contable"):
+            ExchangeRevaluationService().run(company=company, year=year, month=month)
+
+
+def test_revaluation_void_rejects_disabled_period_without_reversal(business_app):
+    """A posted run remains intact when its reversal period is disabled."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, _year, _month, _prior_id, period_id, _following_id, _following_start = _seed_bank_exposure(company)
+        actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
+        run_id = str(run.id)
+        period = database.session.get(AccountingPeriod, period_id)
+        assert period is not None
+        period.enabled = False
+        database.session.commit()
+
+        with pytest.raises(ExchangeRevaluationError, match="periodo cerrado o inexistente"):
+            ExchangeRevaluationService().void(run_id=run_id)
+
+        assert database.session.get(ExchangeRevaluation, run_id).status == "posted"
+        entries = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=run_id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert entries
+        assert all(not entry.is_reversal for entry in entries)
 
 
 def test_concurrent_revaluations_preserve_one_active_period_result(business_app):
