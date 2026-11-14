@@ -1184,7 +1184,10 @@ def post_payment_application_ar_ap(
     consumed = _decimal(payment_amount)
     if amount <= 0 or consumed <= 0:
         raise ValueError(_("La aplicación AP/AR requiere importes positivos."))
-    _lock_payment_application_headers(payment, document)
+    locked_payment = _lock_payment_application_headers(payment, document)
+    if locked_payment is None or getattr(locked_payment, "docstatus", 0) != 1:
+        raise ValueError(_("El pago/anticipo debe estar aprobado."))
+    payment = locked_payment
     company = str(getattr(payment, "company", None) or getattr(document, "company", None) or "")
     party_type = str(getattr(payment, "party_type", None) or "").lower()
     party_id = str(getattr(payment, "party_id", None) or "")
@@ -1391,15 +1394,19 @@ def _lock_source_document_headers(targets: Iterable[ARAPOpenItem], reversal_of: 
         ).scalars().all()
 
 
-def _lock_payment_application_headers(payment: PaymentEntry, document: Any) -> None:
-    """Lock payment then target headers, matching payment-flow lock order."""
+def _lock_payment_application_headers(payment: PaymentEntry, document: Any) -> PaymentEntry | None:
+    """Lock payment then target headers, returning its refreshed session instance."""
+    locked_payment = None
     for source in (payment, document):
         if not getattr(source, "id", None):
             continue
         model = type(source)
-        database.session.execute(
+        locked_source = database.session.execute(
             select(model).where(model.id == source.id).with_for_update().execution_options(populate_existing=True)
         ).scalar_one_or_none()
+        if source is payment:
+            locked_payment = locked_source
+    return locked_payment
 
 
 def lock_journal_open_item_references(document: ComprobanteContable) -> None:

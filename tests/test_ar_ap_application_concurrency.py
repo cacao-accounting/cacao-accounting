@@ -10,7 +10,8 @@ from threading import Barrier, Event, current_thread
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import Session
 
 
 from cacao_accounting import create_app
@@ -574,7 +575,7 @@ def test_payment_applications_cannot_consume_shared_balance_twice(arap_applicati
 
         def synchronize_before_header_locks(payment, document):
             header_barrier.wait(timeout=10)
-            lock_headers(payment, document)
+            return lock_headers(payment, document)
 
         monkeypatch.setattr(arap_ledger_service, "_lock_payment_application_headers", synchronize_before_header_locks)
 
@@ -944,11 +945,12 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
     cancellation_thread_name = None
 
     def pause_after_payment_header_lock(payment, document):
-        original_header_lock(payment, document)
+        locked_payment = original_header_lock(payment, document)
         if payment.id == payment_id:
             application_locked.set()
             if not release_application.wait(timeout=10):
                 raise TimeoutError("No se liberó la aplicación para completar la carrera de anulación.")
+        return locked_payment
 
     def signal_payment_cancellation_lock(document):
         if document.id == payment_id:
@@ -1033,6 +1035,64 @@ def test_payment_cancellation_waits_for_application_and_reverses_both_ledgers(ar
         )
         assert all(item.document_type != "payment_entry" or item.document_id != payment_id for item in cached_items)
         assert all(item.document_type != "payment_entry" or item.document_id != payment_id for item in ledger_items)
+
+
+def test_cancelled_payment_without_open_item_cannot_be_applied(arap_application):
+    """A stale payment instance cannot recreate an allocatable balance after cancellation."""
+    application, seed = arap_application
+    seed = _seed_payment_application_business_data(application, seed, "customer")
+    invoice_id = seed["invoices"][0]
+
+    with application.app_context():
+        invoice = database.session.get(SalesInvoice, invoice_id)
+        assert invoice is not None
+        cancelled_payment = PaymentEntry(
+            company=seed["company"],
+            posting_date=seed["today"],
+            docstatus=1,
+            document_no=f"CANCELLED-{uuid4().hex[:8]}",
+            payment_type="receive",
+            party_type="customer",
+            party_id=seed["customer_id"],
+            party_name="Cliente de prueba",
+            currency=seed["currency"],
+            exchange_rate=Decimal("1"),
+            received_amount=Decimal("60"),
+            base_received_amount=Decimal("60"),
+            unallocated_amount=Decimal("0"),
+        )
+        database.session.add(cancelled_payment)
+        database.session.commit()
+        payment_id = str(cancelled_payment.id)
+        database.session.expunge(cancelled_payment)
+
+        with Session(database.engine) as cancellation_session:
+            cancellation_session.execute(update(PaymentEntry).where(PaymentEntry.id == payment_id).values(docstatus=2))
+            cancellation_session.commit()
+
+        assert cancelled_payment.docstatus == 1
+
+        with pytest.raises(ValueError, match="El pago/anticipo debe estar aprobado"):
+            post_payment_application_ar_ap(
+                cancelled_payment,
+                invoice,
+                document_amount=Decimal("40"),
+                payment_amount=Decimal("40"),
+                allocation_date=seed["today"],
+            )
+
+        assert ARAPLedgerEntry.document_balance("payment_entry", payment_id) == Decimal("0")
+        assert cancelled_payment.docstatus == 1
+        assert (
+            database.session.execute(
+                select(ARAPOpenItem).filter_by(document_type="payment_entry", document_id=payment_id)
+            ).scalar_one_or_none()
+            is None
+        )
+        invoice_cache = database.session.execute(
+            select(ARAPOpenItem).filter_by(document_type="sales_invoice", document_id=invoice_id)
+        ).scalar_one()
+        assert invoice_cache.unallocated_amount == Decimal("60.0000")
 
 
 def test_cancel_partially_paid_invoice_closes_its_open_item_cache(arap_application):
