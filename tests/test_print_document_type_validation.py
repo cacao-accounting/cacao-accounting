@@ -38,6 +38,7 @@ def test_preview_de_tipo_no_registrado_responde_404_y_registra_fallo(app, authen
     response = client.get("/print/not-registered/audit-document/preview")
 
     assert response.status_code == 404
+    assert b"not-registered" not in response.data
     job = _last_print_job(app, "not-registered")
     assert job is not None
     assert job.success is False
@@ -52,6 +53,7 @@ def test_pdf_de_tipo_no_registrado_responde_404_y_registra_fallo(app, authentica
     response = client.get("/print/not-registered/audit-document/pdf")
 
     assert response.status_code == 404
+    assert b"not-registered" not in response.data
     job = _last_print_job(app, "not-registered")
     assert job is not None
     assert job.success is False

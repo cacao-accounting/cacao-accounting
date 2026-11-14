@@ -62,14 +62,14 @@ def preview_document(document_type: str, document_id: str) -> str:
             return_url=return_url,
             export_url=export_url,
         )
-    except PrintingError as exc:
+    except PrintingError:
         log.exception(
             "Error generando vista previa de impresión: type={} id={} company={}",
             document_type,
             document_id,
             company,
         )
-        abort(404, str(exc))
+        abort(404)
         raise RuntimeError(_("Flask abort returned unexpectedly"))
 
 
@@ -87,14 +87,14 @@ def document_pdf(document_type: str, document_id: str) -> Response:
             company_code=company,
             template_id=template_id,
         )
-    except PrintingError as exc:
+    except PrintingError:
         log.exception(
             "Error generando PDF de impresión: type={} id={} company={}",
             document_type,
             document_id,
             company,
         )
-        abort(404, str(exc))
+        abort(404)
     return Response(pdf, mimetype="application/pdf")
 
 
