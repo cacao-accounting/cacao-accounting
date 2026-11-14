@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
 
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 
 from cacao_accounting.contabilidad.journal_repository import (
     add_journal,
@@ -480,7 +481,12 @@ def duplicate_journal_as_reversal_draft(
     reason: str | None = None,
 ) -> ComprobanteContable:
     """Genera borrador de reversión invirtiendo debe/haber del comprobante origen."""
-    source = get_journal(journal_id)
+    source = database.session.execute(
+        select(ComprobanteContable)
+        .where(ComprobanteContable.id == journal_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if source is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if source.status != JOURNAL_STATUS_SUBMITTED:
@@ -522,34 +528,56 @@ def duplicate_journal_as_reversal_draft(
     payload["reversal_of"] = source.id
     payload["lines"] = _reversed_payload_lines(payload.get("lines", []))
 
-    reversed_draft = create_journal_draft(
-        payload,
-        user_id=user_id,
-        assign_identifier=False,
-        source_economic_line_ids=[str(line.economic_line_id or line.id) for line in source_lines],
-    )
-    reversed_draft.status = JOURNAL_STATUS_DRAFT
-    reversed_draft.reversal_of = source.id
-    _assign_identifier_if_needed(reversed_draft, source.naming_series_id or reversed_draft.naming_series_id)
-    database.session.add(reversed_draft)
-    database.session.flush()
-    database.session.add(
-        DocumentTransition(
-            source_type=JOURNAL_TRANSACTION_TYPE,
-            source_id=source.id,
-            target_type=JOURNAL_TRANSACTION_TYPE,
-            target_id=reversed_draft.id,
-            transition_type="reversal",
-            company=source.entity,
-            posting_date=reversal_date,
-            accounting_period_id=reversal_period.id,
-            actor_user_id=user_id,
-            reason=normalized_reason,
+    try:
+        reversed_draft = create_journal_draft(
+            payload,
+            user_id=user_id,
+            assign_identifier=False,
+            commit=False,
+            source_economic_line_ids=[str(line.economic_line_id or line.id) for line in source_lines],
         )
-    )
-    log_reversal_draft_created(reversed_draft)
-    database.session.commit()
+        reversed_draft.status = JOURNAL_STATUS_DRAFT
+        reversed_draft.reversal_of = source.id
+        _assign_identifier_if_needed(reversed_draft, source.naming_series_id or reversed_draft.naming_series_id)
+        database.session.add(reversed_draft)
+        database.session.flush()
+        database.session.add(
+            DocumentTransition(
+                source_type=JOURNAL_TRANSACTION_TYPE,
+                source_id=source.id,
+                target_type=JOURNAL_TRANSACTION_TYPE,
+                target_id=reversed_draft.id,
+                transition_type="reversal",
+                company=source.entity,
+                posting_date=reversal_date,
+                accounting_period_id=reversal_period.id,
+                actor_user_id=user_id,
+                reason=normalized_reason,
+            )
+        )
+        log_reversal_draft_created(reversed_draft)
+        database.session.commit()
+    except DBAPIError as exc:
+        database.session.rollback()
+        if _journal_reversal_transition_exists(source.id):
+            raise JournalValidationError(_("El comprobante ya tiene una reversión registrada.")) from exc
+        raise
+    except Exception:
+        database.session.rollback()
+        raise
     return reversed_draft
+
+
+def _journal_reversal_transition_exists(source_id: str) -> bool:
+    """Check whether the source journal acquired a reversal after a write conflict."""
+    transition_id = database.session.execute(
+        select(DocumentTransition.id).where(
+            DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
+            DocumentTransition.source_id == source_id,
+            DocumentTransition.transition_type == "reversal",
+        )
+    ).scalar_one_or_none()
+    return transition_id is not None
 
 
 def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str) -> ComprobanteContable:
