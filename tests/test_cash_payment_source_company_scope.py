@@ -261,3 +261,43 @@ def test_payment_post_rejects_unscoped_source_without_persisting(app, entorno_co
         assert database.session.query(PaymentEntry).count() == payment_count_before
         assert database.session.query(PaymentReference).count() == reference_count_before
         assert database.session.query(DocumentRelation).filter_by(target_type="payment_entry").count() == relation_count_before
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        None,
+        "payment",
+        {"lines": {}},
+        {"lines": [None]},
+        {"lines": ["invalid-line"]},
+        {"lines": [1]},
+        {"company": []},
+        {"reference_date": []},
+        {"advance_mode": "false"},
+        {"lines": [{"reference_type": []}]},
+        {"lines": [{"reference_type": None}]},
+        {"lines": [{"reference_id": []}]},
+        {"lines": [{"flow_source_type": []}]},
+        {"lines": [{"notes": []}]},
+    ],
+)
+def test_payment_post_rejects_invalid_payload_shapes_without_persisting(app, authenticated_client, payload):
+    """Malformed JSON roots and reference rows produce a controlled response without writes."""
+    with app.app_context():
+        payment_count_before = database.session.query(PaymentEntry).count()
+        reference_count_before = database.session.query(PaymentReference).count()
+        relation_count_before = database.session.query(DocumentRelation).filter_by(target_type="payment_entry").count()
+
+    response = authenticated_client("admin").post(
+        "/cash_management/payment/new",
+        data={"payment_payload": json.dumps(payload)},
+    )
+
+    assert response.status_code == 200
+    assert "La estructura del pago no es válida." in response.get_data(as_text=True)
+    with app.app_context():
+        assert database.session.query(PaymentEntry).count() == payment_count_before
+        assert database.session.query(PaymentReference).count() == reference_count_before
+        assert database.session.query(DocumentRelation).filter_by(target_type="payment_entry").count() == relation_count_before

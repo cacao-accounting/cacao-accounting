@@ -8432,6 +8432,9 @@ msgstr "The target GL account must match the target bank account."
 msgid "El monto aplicado no puede ser mayor al monto total del pago."
 msgstr "The amount applied cannot be greater than the total payment amount."
 
+msgid "La estructura del pago no es válida."
+msgstr "The payment structure is invalid."
+
 #: cacao_accounting/bancos/statement_service.py:142
 #: cacao_accounting/bancos/statement_service.py:315
 msgid "La cuenta bancaria no existe."

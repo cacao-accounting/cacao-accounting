@@ -2901,7 +2901,7 @@ def _payment_payload_from_request() -> PaymentPayload:
     """Return the payment payload from the request body or form fields."""
     payload_raw = request.form.get("payment_payload")
     if payload_raw:
-        payload = cast(PaymentPayload, json.loads(payload_raw))
+        payload = _validate_payment_payload_structure(json.loads(payload_raw))
         if not payload.get("reference_no") and payload.get("external_number"):
             # Compatibilidad con el nombre anterior del campo: la referencia
             # informativa siempre se persiste en ``reference_no``.
@@ -2924,6 +2924,51 @@ def _payment_payload_from_request() -> PaymentPayload:
         "unit_code": request.form.get("unit_code"),
         "project_code": request.form.get("project_code"),
     }
+
+
+def _validate_payment_payload_structure(payload: Any) -> PaymentPayload:
+    """Validate JSON container and string field types before payment processing."""
+    if not isinstance(payload, dict):
+        raise ValueError(_("La estructura del pago no es válida."))
+
+    string_fields = (
+        "payment_type",
+        "company",
+        "bank_account_id",
+        "posting_date",
+        "party_id",
+        "party_type",
+        "naming_series_id",
+        "external_counter_id",
+        "external_number",
+        "target_bank_account_id",
+        "mode_of_payment",
+        "cost_center_code",
+        "unit_code",
+        "project_code",
+        "paid_from_account_id",
+        "paid_to_account_id",
+        "reference_date",
+        "party_name",
+        "reference_no",
+        "remarks",
+    )
+    if any(payload.get(field) is not None and not isinstance(payload[field], str) for field in string_fields):
+        raise ValueError(_("La estructura del pago no es válida."))
+    advance_mode = payload.get("advance_mode")
+    if advance_mode is not None and not isinstance(advance_mode, bool):
+        raise ValueError(_("La estructura del pago no es válida."))
+
+    lines = payload.get("lines")
+    if lines is not None and (not isinstance(lines, list) or any(not isinstance(line, dict) for line in lines)):
+        raise ValueError(_("La estructura del pago no es válida."))
+    line_string_fields = ("reference_id", "flow_source_type", "notes")
+    for line in lines or []:
+        if "reference_type" in line and not isinstance(line["reference_type"], str):
+            raise ValueError(_("La estructura del pago no es válida."))
+        if any(line.get(field) is not None and not isinstance(line[field], str) for field in line_string_fields):
+            raise ValueError(_("La estructura del pago no es válida."))
+    return cast(PaymentPayload, payload)
 
 
 def _resolve_payment_exchange_rate(payload: PaymentPayload, payment_currency: str, company: str | None) -> Decimal:
