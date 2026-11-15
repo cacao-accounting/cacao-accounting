@@ -358,6 +358,28 @@ def cash_flow():
     )
 
 
+def _parse_fiscal_month(month_value: str) -> tuple[int, int]:
+    """Interpreta el filtro ``AAAA-MM`` del reporte mensual de retenciones.
+
+    Un valor no interpretable o fuera del calendario se rechaza con HTTP 400.
+    Antes la ruta sustituía el período solicitado por el mes actual, de modo
+    que un filtro inválido devolvía 200 con datos de otro período.
+    """
+    try:
+        year_text, month_text = month_value.split("-", 1)
+        year, month = int(year_text), int(month_text)
+    except (TypeError, ValueError):
+        abort(400, description=_("El período fiscal solicitado no es válido; use el formato AAAA-MM."))
+    if month < 1 or month > 12:
+        abort(400, description=_("El mes fiscal debe estar entre 1 y 12."))
+    try:
+        date(year, month, 1)
+        date(year + (month == 12), 1 if month == 12 else month + 1, 1)
+    except ValueError:
+        abort(400, description=_("El período fiscal solicitado no es válido; use el formato AAAA-MM."))
+    return year, month
+
+
 @reportes.route("/reports/withholdings/monthly")
 @login_required
 @modulo_activo("purchases")
@@ -366,13 +388,8 @@ def monthly_withholdings():
     company = _resolve_company(request.args.get("company"), "purchases")
     exige_acceso_compania("purchases", company, "consultar")
     month_value = request.args.get("month") or date.today().strftime("%Y-%m")
-    try:
-        year, month = (int(part) for part in month_value.split("-", 1))
-        report = get_monthly_withholding_report(company, year, month)
-    except (TypeError, ValueError):
-        year, month = date.today().year, date.today().month
-        month_value = date.today().strftime("%Y-%m")
-        report = get_monthly_withholding_report(company, year, month)
+    year, month = _parse_fiscal_month(month_value)
+    report = get_monthly_withholding_report(company, year, month)
     return _render_operational_framework(
         "withholdings-monthly",
         _("Reporte fiscal mensual de retenciones aplicadas"),

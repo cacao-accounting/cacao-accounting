@@ -325,6 +325,7 @@ def _format_cell(column: str, value: object, ledger_currency: str | None) -> str
             "gross_profit": _("UTILIDAD BRUTA"),
             "net_profit": _("UTILIDAD NETA"),
             "unclassified": _("SIN CLASIFICACIÓN"),
+            "operating": _("Operación"),
             "operating_adjustments": _("AJUSTES AL RESULTADO"),
             "total_operating": _("TOTAL ACTIVIDADES DE OPERACIÓN"),
             "investing": _("ACTIVIDADES DE INVERSIÓN"),
@@ -1313,21 +1314,32 @@ def _group_rows_by_field(
     group_by: str,
     ledger_currency: str | None,
 ) -> list[dict[str, object]]:
+    """Agrupa el detalle en un bloque único por valor de agrupación.
+
+    El detalle se ordena por su criterio primario (normalmente la fecha) y el
+    agrupador es independiente. Agrupar solo las filas consecutivas fragmenta
+    el subtotal cuando dos valores se intercalan (A, B, A); por eso cada valor
+    se consolida en un único bloque. Los bloques conservan el orden de primera
+    aparición y las filas mantienen su orden relativo dentro del grupo.
+    """
     grouped_rows: list[dict[str, object]] = []
-    current_group: str | None = None
-    group_index = -1
+    group_positions: dict[str, int] = {}
+    ordered_rows: list[tuple[int, int, str, dict[str, object]]] = []
+    for index, row in enumerate(display_rows):
+        group_value = _format_cell(group_by, source_rows[index].get(group_by), ledger_currency)
+        group_index = group_positions.setdefault(group_value, len(group_positions))
+        ordered_rows.append((group_index, index, group_value, row))
+    ordered_rows.sort(key=lambda item: (item[0], item[1]))
+    current_group: int | None = None
     group_debit = Decimal("0")
     group_credit = Decimal("0")
-    for index, row in enumerate(display_rows):
-        raw_group_value = source_rows[index].get(group_by)
-        group_value = _format_cell(group_by, raw_group_value, ledger_currency)
-        if group_value != current_group:
+    for group_index, _position, group_value, row in ordered_rows:
+        if group_index != current_group:
             if current_group is not None:
                 grouped_rows.append(_build_group_subtotal_row(group_debit, group_credit, ledger_currency))
             group_title = _(group_by.replace("_", " ").title())
-            group_index += 1
             grouped_rows.append({"__row_type": "group", "__group_title": f"{group_title}: {group_value}"})
-            current_group = group_value
+            current_group = group_index
             group_debit = Decimal("0")
             group_credit = Decimal("0")
         group_debit = _add_to_decimal_or_zero(group_debit, row.get("debit"))

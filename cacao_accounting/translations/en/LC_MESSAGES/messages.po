@@ -25622,3 +25622,7 @@ msgstr "The selected ledger does not exist, is inactive, or does not belong to t
 #: cacao_accounting/reportes/helpers.py
 msgid "El formato de exportación solicitado no es válido."
 msgstr "The requested export format is not valid."
+
+#: cacao_accounting/reportes/routes.py
+msgid "El período fiscal solicitado no es válido; use el formato AAAA-MM."
+msgstr "The requested fiscal period is not valid; use the YYYY-MM format."
