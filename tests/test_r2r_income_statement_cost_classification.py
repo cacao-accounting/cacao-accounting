@@ -24,7 +24,7 @@ from sqlalchemy import select
 
 from cacao_accounting.contabilidad.budget_report_service import BudgetReportService
 from cacao_accounting.contabilidad.budget_service import BudgetService
-from cacao_accounting.database import Accounts, Book, GLEntry, database
+from cacao_accounting.database import AccountingPeriod, Accounts, Book, FiscalYear, GLEntry, database
 from cacao_accounting.api.dashboard import _accounting_monthly_result, _income_expense_balances
 from cacao_accounting.reportes.analytics import get_kpi_snapshot, metric_value
 from cacao_accounting.reportes.services import (
@@ -38,8 +38,9 @@ from cacao_accounting.reportes.services import (
 
 CATALOG_DIRECTORY = Path(__file__).resolve().parents[1] / "cacao_accounting" / "contabilidad" / "ctas" / "catalogos"
 VOUCHER_PREFIX = "IS-COST-2191"
-POSTING_DATE = date(2026, 5, 20)
-PERIOD_ID = "P2026-05"
+POSTING_DATE = date(2091, 5, 20)
+PERIOD_ID = "P2191-05"
+FISCAL_YEAR_ID = "FY2191"
 COMPANY = "cacao"
 
 
@@ -70,7 +71,7 @@ def _post_entries(app, scenario: dict, entries: list[tuple[str, str, str, str]])
                     credit=Decimal(credit),
                     voucher_type="journal_entry",
                     voucher_id=f"{VOUCHER_PREFIX}-{suffix}",
-                    fiscal_year_id="FY2026",
+                    fiscal_year_id=FISCAL_YEAR_ID,
                     accounting_period_id=PERIOD_ID,
                 )
             )
@@ -108,7 +109,36 @@ def cost_accounts(app, entorno_contable):
                     )
                 )
         database.session.commit()
+        fiscal_year = database.session.get(FiscalYear, FISCAL_YEAR_ID)
+        if fiscal_year is None:
+            database.session.add(
+                FiscalYear(
+                    id=FISCAL_YEAR_ID,
+                    entity=COMPANY,
+                    name="2091",
+                    year_start_date=date(2091, 1, 1),
+                    year_end_date=date(2091, 12, 31),
+                    is_closed=False,
+                )
+            )
+            database.session.flush()
+        period = database.session.get(AccountingPeriod, PERIOD_ID)
+        if period is None:
+            database.session.add(
+                AccountingPeriod(
+                    id=PERIOD_ID,
+                    entity=COMPANY,
+                    fiscal_year_id=FISCAL_YEAR_ID,
+                    name="Mayo 2091 costos",
+                    start=date(2091, 5, 1),
+                    end=date(2091, 5, 31),
+                    status="open",
+                    enabled=True,
+                    is_closed=False,
+                )
+            )
         book_id = database.session.execute(select(Book.id).where(Book.code == "DEFAULT_BOOK")).scalar_one()
+        database.session.commit()
 
     scenario = {
         "book_id": book_id,
@@ -121,6 +151,8 @@ def cost_accounts(app, entorno_contable):
         database.session.execute(
             database.delete(Accounts).where(Accounts.entity == COMPANY, Accounts.code.in_(list(scenario["codes"].values())))
         )
+        database.session.execute(database.delete(AccountingPeriod).where(AccountingPeriod.id == PERIOD_ID))
+        database.session.execute(database.delete(FiscalYear).where(FiscalYear.id == FISCAL_YEAR_ID))
         database.session.commit()
 
 

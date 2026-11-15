@@ -35,7 +35,19 @@ def opening_balance_scenario(app, entorno_contable):
     """Publica apertura en abril, movimiento en mayo y actividad futura en junio."""
     with app.app_context():
         fiscal_year_id = database.session.execute(select(FiscalYear.id).where(FiscalYear.id == "FY2026")).scalar_one()
-        book_id = database.session.execute(select(Book.id).where(Book.code == "DEFAULT_BOOK")).scalar_one()
+        book = database.session.execute(select(Book).where(Book.code == "TB2190")).scalar_one_or_none()
+        if book is None:
+            book = Book(
+                entity="cacao",
+                code="TB2190",
+                name="Libro de prueba de apertura",
+                status="activo",
+                is_primary=False,
+                currency="NIO",
+            )
+            database.session.add(book)
+            database.session.flush()
+        book_id = book.id
         accounts = {
             code: database.session.execute(
                 select(Accounts).where(Accounts.entity == "cacao", Accounts.code == code)
@@ -92,13 +104,14 @@ def opening_balance_scenario(app, entorno_contable):
     with app.app_context():
         database.session.execute(database.delete(GLEntry).where(GLEntry.voucher_id.like(f"{VOUCHER_PREFIX}%")))
         database.session.execute(database.delete(AccountingPeriod).where(AccountingPeriod.id == "P2026-04-TB"))
+        database.session.execute(database.delete(Book).where(Book.code == "TB2190"))
         database.session.commit()
 
 
 def _report_filters() -> FinancialReportFilters:
     return FinancialReportFilters(
         company="cacao",
-        ledger="DEFAULT_BOOK",
+        ledger="TB2190",
         accounting_period="P2026-05",
     )
 
@@ -153,7 +166,7 @@ def test_sabana_conserva_apertura_y_limita_el_conteo_de_movimientos(opening_bala
 
 def test_balanza_sin_periodo_suma_toda_la_actividad(opening_balance_scenario, app):
     """Sin período seleccionado todo el historial es movimiento y no hay apertura."""
-    filters = FinancialReportFilters(company="cacao", ledger="DEFAULT_BOOK")
+    filters = FinancialReportFilters(company="cacao", ledger="TB2190")
     with app.app_context():
         report = get_trial_balance_report(filters)
     rows = {row.values["account_code"]: row.values for row in report.rows}

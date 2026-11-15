@@ -112,3 +112,19 @@ QA1. La corrección mantiene los invariantes de lectura histórica: no modifica
 cuentas, importes ni asientos. No identifico defectos bloqueantes ni riesgo
 pendiente que impida aceptar el cambio. Esta revisión fue estática; no ejecuté
 pruebas ni linters. No cambié etiquetas o estado de GitHub.
+
+## QA de aislamiento de pruebas — Refs: #2190 #2191
+
+### Dictámenes
+
+- QA1 aprueba estáticamente el aislamiento de los escenarios.
+- QA2 aprueba de forma independiente; no encontró defectos bloqueantes.
+
+### Evidencia
+
+- #2190 usa el libro dedicado `TB2190`; la balanza y la sábana ya no suman GL ajeno publicado en `DEFAULT_BOOK`.
+- #2191 usa `FY2191`/`P2191-05` y fecha de posteo en 2091. El estado de resultados filtra por período propio y las consultas de dashboard/margen bruto filtran por fecha propia. Conserva el libro primario que esas consultas requieren.
+- Los fixtures eliminan primero sus asientos y luego sus períodos, año fiscal o libro, respetando las claves foráneas. Las fórmulas contables verificadas no cambian.
+- QA2 observó que el cleanup de identificadores dedicados es incondicional; no lo considera riesgo bloqueante en la base aislada por worker.
+
+La revisión fue estática. No se modificaron etiquetas ni estado de GitHub.
