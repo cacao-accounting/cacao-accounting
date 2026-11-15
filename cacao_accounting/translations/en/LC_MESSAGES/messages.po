@@ -261,6 +261,9 @@ msgid ""
 "permanece en borrador."
 msgstr "No approval rule covers this amount. The document remains in draft."
 
+msgid "No existe una regla de aprobación para el cierre fiscal; no se creó el asiento contable."
+msgstr "No approval rule exists for the fiscal close; no journal entry was created."
+
 #: cacao_accounting/approval_engine.py:235
 msgid "Aprobado por el remitente"
 msgstr "Approved by the submitter"
@@ -14329,6 +14332,10 @@ msgid "Costo de ventas"
 msgstr "Cost of Goods Sold"
 
 #: cacao_accounting/contabilidad/forms.py:46
+msgid "Costo de servicios"
+msgstr "Cost of services"
+
+#: cacao_accounting/contabilidad/forms.py:47
 msgid "Ajuste de inventario"
 msgstr "Inventory Adjustment"
 
@@ -25626,3 +25633,7 @@ msgstr "The requested export format is not valid."
 #: cacao_accounting/reportes/routes.py
 msgid "El período fiscal solicitado no es válido; use el formato AAAA-MM."
 msgstr "The requested fiscal period is not valid; use the YYYY-MM format."
+
+#: cacao_accounting/contabilidad/fiscal_year_closing.py
+msgid "El borrador del cierre fiscal no coincide con los saldos calculados; no se envió para aprobación."
+msgstr "The fiscal close draft does not match calculated balances; it was not submitted for approval."

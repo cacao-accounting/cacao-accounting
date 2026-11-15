@@ -44,6 +44,7 @@ from cacao_accounting.database import (
     DocumentRelation,
     Entity,
     FiscalYear,
+    GLEntry,
     NamingSeries,
     Party,
     Project,
@@ -209,7 +210,44 @@ def _validate_fiscal_year_closing(journal: ComprobanteContable) -> FiscalYear | 
         raise JournalValidationError(_("El año fiscal del cierre no es válido o no está cerrado administrativamente."))
     if fiscal_year.financial_closed and fiscal_year.closing_voucher_id != journal.id:
         raise JournalValidationError(_("El año fiscal ya tiene un cierre contable."))
+    from cacao_accounting.contabilidad.fiscal_year_closing import _cross_year_reversal_pairs
+
+    reversal_pairs = _cross_year_reversal_pairs(journal.entity, fiscal_year)
+    if reversal_pairs:
+        details = ", ".join(f"{original} → {reversal}" for original, reversal in reversal_pairs)
+        raise JournalValidationError(
+            _("No se puede cerrar el año fiscal: existen reversas publicadas posteriormente (%(details)s).")
+            % {"details": details}
+        )
     return fiscal_year
+
+
+def _lock_reversal_origin_fiscal_year(journal: ComprobanteContable) -> None:
+    """Serialize reversals against approval of a fiscal-year close."""
+    if not journal.reversal_of:
+        return
+
+    source = database.session.execute(
+        select(ComprobanteContable)
+        .where(ComprobanteContable.id == journal.reversal_of)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if source is None:
+        return
+
+    fiscal_year_id = source.fiscal_year_id
+    if not fiscal_year_id:
+        fiscal_year_id = database.session.execute(
+            select(GLEntry.fiscal_year_id).where(GLEntry.voucher_id == source.id, GLEntry.fiscal_year_id.is_not(None)).limit(1)
+        ).scalar_one_or_none()
+    if fiscal_year_id:
+        database.session.execute(
+            select(FiscalYear.id)
+            .where(FiscalYear.id == fiscal_year_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
 
 
 def _post_and_sync_journal(journal: ComprobanteContable, commit: bool) -> list[Any]:
@@ -280,6 +318,7 @@ def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = N
 
     lock_journal_open_item_references(journal)
     with audit_actor(str(actor_id), actor_name):
+        _lock_reversal_origin_fiscal_year(journal)
         fiscal_year = _validate_fiscal_year_closing(journal)
 
         if not journal.document_no:
@@ -654,6 +693,12 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError(_("Solo se puede editar un comprobante en borrador."))
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(journal)
+    except ValueError as exc:
+        raise JournalValidationError(str(exc)) from exc
 
     before = serialize_journal_for_form(journal)
     previous_posting_date = journal.date

@@ -3747,6 +3747,12 @@ def editar_comprobante(identifier: str):
     if journal.status != "draft":
         flash(_("Solo se puede editar un comprobante en borrador."), "warning")
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(journal)
+    except ValueError:
+        abort(409)
 
     if request.method == "POST":
         try:
@@ -4307,8 +4313,26 @@ def fiscal_year_closing_new():
         fiscal_year_id = request.form.get("fiscal_year_id")
         exige_acceso_compania("accounting", company, "autorizar")
         try:
-            create_fiscal_year_closing_voucher(company, fiscal_year_id, user_id=str(current_user.id))
-            flash(_("Cierre de año fiscal ejecutado correctamente."), "success")
+            journal = create_fiscal_year_closing_voucher(company, fiscal_year_id, user_id=str(current_user.id))
+            if journal.status == "submitted":
+                flash(_("Cierre de año fiscal ejecutado correctamente."), "success")
+            else:
+                from cacao_accounting.database import ApprovalRequest
+
+                has_pending_request = database.session.execute(
+                    database.select(ApprovalRequest.id).where(
+                        ApprovalRequest.document_type == "journal_entry",
+                        ApprovalRequest.document_id == journal.id,
+                        ApprovalRequest.status == "Pending Approval",
+                    )
+                ).first()
+                if has_pending_request:
+                    flash(_("Comprobante contable enviado para aprobación (Pendiente de Aprobación)."), "info")
+                else:
+                    flash(
+                        _("No existe una regla de aprobación que cubra este monto. El documento permanece en borrador."),
+                        "warning",
+                    )
             return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
         except FiscalYearClosingError as exc:
             flash_error(exc)

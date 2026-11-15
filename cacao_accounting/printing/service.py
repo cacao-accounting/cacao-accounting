@@ -12,8 +12,6 @@ from urllib.parse import SplitResult, unquote, urlsplit
 
 from flask import abort, current_app, has_request_context, request
 from werkzeug.exceptions import HTTPException
-from weasyprint import HTML
-from weasyprint.urls import URLFetcher, URLFetcherResponse, path2url
 from jinja2 import BaseLoader, StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
 from sqlalchemy import select
@@ -40,27 +38,30 @@ from cacao_accounting.printing.validators import validate_css_safety, validate_t
 from cacao_accounting.i18n import _
 
 
-class _PrintPDFURLFetcher(URLFetcher):
+class _PrintPDFURLFetcher:
     """Fetch inline data and app-owned static files, never network resources."""
 
     def __init__(self, base_url: str, static_folder: str | None) -> None:
-        super().__init__(allowed_protocols={"data"})
+        from weasyprint.urls import URLFetcher, path2url
+
+        self._data_fetcher = URLFetcher(allowed_protocols={"data"})
         self.base = urlsplit(base_url)
         self.static_root = Path(static_folder).resolve() if static_folder else None
         self.file_fetcher = URLFetcher(allowed_protocols={"file"})
+        self._path2url = path2url
 
-    def __call__(self, url: str) -> URLFetcherResponse:
+    def __call__(self, url: str) -> Any:
         """Resolve an approved resource or reject the request before I/O."""
         parts = urlsplit(url)
         if parts.scheme.lower() == "data":
-            return super().__call__(url)
+            return self._data_fetcher(url)
         if not self._has_application_origin(parts):
             raise ValueError("PDF resource is outside the application static assets")
 
         static_path = self._static_path(parts.path)
         if static_path is None:
             raise ValueError("PDF resource is outside the application static assets")
-        return self.file_fetcher(path2url(str(static_path)))
+        return self.file_fetcher(self._path2url(str(static_path)))
 
     def _has_application_origin(self, parts: SplitResult) -> bool:
         """Return whether a resource URL shares the request origin."""
@@ -690,6 +691,8 @@ class PrintService:
 
     def _render_pdf_document(self, html_string: str) -> bytes:
         """Render a PDF without allowing WeasyPrint to make network requests."""
+        from weasyprint import HTML
+
         base_url = self._base_url()
         fetcher = _PrintPDFURLFetcher(base_url, current_app.static_folder)
         return bytes(HTML(string=html_string, base_url=base_url, url_fetcher=fetcher).write_pdf())

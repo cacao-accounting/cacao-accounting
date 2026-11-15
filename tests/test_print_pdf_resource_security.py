@@ -16,6 +16,15 @@ DATA_SVG_URI = (
     "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjwvc3ZnPg=="
 )
 
+try:
+    from weasyprint.urls import URLFetcher
+except (ImportError, OSError):
+    _WEASYPRINT_AVAILABLE = False
+else:
+    _WEASYPRINT_AVAILABLE = URLFetcher is not None
+
+pytestmark = pytest.mark.skipif(not _WEASYPRINT_AVAILABLE, reason="WeasyPrint native runtime is unavailable.")
+
 
 def test_pdf_rechaza_http_y_conserva_static_local(app):
     """El PDF usa logo estático local y no contacta una URL controlada por plantilla."""
