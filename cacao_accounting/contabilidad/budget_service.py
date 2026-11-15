@@ -483,9 +483,13 @@ class BudgetService:
     ) -> Decimal:
         """Calcula el monto comprometido a partir de asientos contables reales."""
         from cacao_accounting.database import Accounts, GLEntry
+        from cacao_accounting.reportes.services import (
+            account_classification_is_debit_positive,
+            normalize_account_classification,
+        )
 
         gl_query = (
-            database.session.query(GLEntry.debit, GLEntry.credit, Accounts.classification)
+            database.session.query(GLEntry.debit, GLEntry.credit, Accounts.classification, Accounts.account_type)
             .join(Accounts, GLEntry.account_id == Accounts.id)
             .filter(
                 GLEntry.company == company,
@@ -507,8 +511,8 @@ class BudgetService:
 
         committed = Decimal("0")
         for entry in gl_query.all():
-            classif = (entry.classification or "").lower()
-            if classif in ("gastos", "activo", "expense", "asset"):
+            classification = normalize_account_classification(entry.classification, entry.account_type)
+            if account_classification_is_debit_positive(classification):
                 committed += entry.debit - entry.credit
             else:
                 committed += entry.credit - entry.debit

@@ -43,6 +43,7 @@ ACCOUNT_TYPE_CHOICES = [
     ("payable", _l("Cuentas por Pagar")),
     ("inventory", _l("Inventario")),
     ("cost_of_goods_sold", _l("Costo de ventas")),
+    ("cost_of_service", _l("Costo de servicios")),
     ("inventory_adjustment", _l("Ajuste de inventario")),
     ("bridge", _l("Cuenta puente")),
     ("customer_advance", _l("Anticipo de clientes")),

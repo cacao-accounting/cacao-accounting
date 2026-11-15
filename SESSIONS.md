@@ -215,3 +215,39 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
 - `docs/tax-cost-engines/`: motor fiscal, retenciones, landed cost y auditoría.
 - `docs/redis_data_cache.md`: contrato de caché.
 - `docs/precision_contract.md`: contrato de precisión decimal.
+
+## Refs: #2191 — Estado de resultados y costos
+
+- **Causa raíz**: el Estado de Resultados usaba solo `classification`, aunque
+  `base_es.csv` y `base_en.csv` marcaban 51.01 como `Expense` y a la vez como
+  `account_type=cost_of_goods_sold`. Los costos terminaban como gasto operativo;
+  utilidad bruta y margen quedaban incorrectos.
+- **Contrato aplicado**: `normalize_account_classification` normaliza primero
+  la clasificación y reconoce `cost_of_goods_sold` y `cost_of_service` como
+  `cost`. El tipo solo corrige la presentación; no reescribe cuentas ni GL
+  históricos. Los catálogos base clasifican 51.01 como `Cost`.
+- **Consumidores**: Estado de Resultados, margen bruto, KPIs, dashboard y reales
+  de presupuesto usan la normalización compartida. `gross_margin` conserva el
+  importe existente y se expone `gross_margin_percentage` para la proporción.
+- **Regresión**: el caso 1,000 de ingresos, 400 de costo y 100 de gastos debe
+  producir utilidad bruta 600, margen bruto 60% y utilidad neta 500. Se cubren
+  catálogos ES/EN, NIIF Pymes, US GAAP, costos de bienes/servicios, gastos,
+  catálogos históricos inconsistentes y reportes/KPIs/dashboard.
+- **Compatibilidad relacionada**: #684 ya excluía cierres fiscales y normalizaba
+  clasificaciones en el margen bruto; #982 normalizaba equivalencias en KPIs.
+  Estas reglas se conservan y la normalización se amplía por tipo de cuenta.
+- **Límites de verificación**: no se migran datos maestros ni asientos. En este
+  Windows, pruebas existentes que requieren `tmp_path` fallaron por acceso
+  denegado a temporales; controles estáticos y regresiones dirigidas quedan
+  registrados en el resultado de esta sesión.
+- **Verificación dirigida**: 46 pruebas pasaron entre la regresión #2191,
+  agrupación/exportación financiera y permisos del dashboard. Black, Ruff,
+  Flake8, mypy, pydocstyle y complexipy en los archivos productivos cambiados
+  pasaron; `pylint` no está instalado en `.venv` y no forma parte del workflow.
+- **QA**: QA1 aprobó como `fix-proposed` y QA2 como `fix-confirmed` tras revisar
+  independientemente el filtro SQL del dashboard corregido. El issue recibió
+  la etiqueta `fix-confirmed` con justificación en un comentario; permanece
+  abierto y no se marcó `fixed`. No se hizo commit, push ni cierre.
+- **Riesgo residual**: el porcentaje usa cero cuando el ingreso es cero. La
+  interpretación cuando los ingresos netos son negativos no se especifica en
+  los requisitos actuales.

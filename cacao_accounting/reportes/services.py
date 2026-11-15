@@ -277,6 +277,13 @@ KNOWN_ACCOUNT_CLASSIFICATIONS = frozenset(
     }
 )
 
+#: Tipos de cuenta que identifican un costo de ventas o de servicio aunque la
+#: clasificación histórica del catálogo los haya registrado como gasto.
+COST_ACCOUNT_TYPES = frozenset({"cost_of_goods_sold", "cost_of_service"})
+
+#: Clasificaciones cuyo saldo natural es deudor.
+DEBIT_POSITIVE_CLASSIFICATIONS = frozenset({"activo", "asset", "costo", "cost", "gasto", "expense"})
+
 
 def normalize_account_classification_value(value: str | None) -> str | None:
     """Normaliza un valor de clasificación al token canónico reconocido.
@@ -296,10 +303,38 @@ def account_classification_is_known(value: str | None) -> bool:
     return normalize_account_classification_value(value) in KNOWN_ACCOUNT_CLASSIFICATIONS
 
 
+def normalize_account_classification(classification: str | None, account_type: str | None = None) -> str:
+    """Resuelve la clasificación contable que usan los reportes financieros.
+
+    Los tipos de cuenta de costo de ventas y costo de servicio prevalecen sobre
+    la clasificación histórica, de modo que los catálogos que registraron esas
+    cuentas como ``Expense`` se presenten en la sección de costos sin modificar
+    los datos maestros ni los asientos ya publicados. En los demás casos se usa
+    la clasificación normalizada y, si no existe, se devuelve una cadena vacía.
+    """
+    normalized_type = (account_type or "").strip().lower()
+    if normalized_type in COST_ACCOUNT_TYPES:
+        return "cost"
+    return normalize_account_classification_value(classification) or ""
+
+
+def account_classification_is_debit_positive(value: str | None) -> bool:
+    """Indica si una clasificación acumula su saldo natural en el debe."""
+    return normalize_account_classification_value(value) in DEBIT_POSITIVE_CLASSIFICATIONS
+
+
+def calculate_gross_margin_percentage(income: Decimal, cost: Decimal) -> Decimal:
+    """Calcula el margen bruto porcentual; sin ingresos devuelve cero."""
+    if income == 0:
+        return Decimal("0")
+    return (income - cost) / income * Decimal("100")
+
+
 def _normalize_account_classification(account: Accounts | None) -> str:
-    """Normaliza aliases de clasificaciones de cuentas para reportes financieros."""
-    raw_classification = (account.classification or "").strip().lower() if account else ""
-    return _CLASSIFICATION_ALIASES.get(raw_classification, raw_classification)
+    """Normaliza clasificación y tipo de cuenta para reportes financieros."""
+    if account is None:
+        return ""
+    return normalize_account_classification(account.classification, account.account_type)
 
 
 def _payment_allocations(document: Any, as_of_date: date | None) -> Decimal:
@@ -3173,13 +3208,14 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
         Accounts.code.label("account_code"),
         Accounts.name.label("account_name"),
         Accounts.classification.label("classification"),
+        Accounts.account_type.label("account_type"),
         func.coalesce(func.sum(GLEntry.debit), 0).label("debit"),
         func.coalesce(func.sum(GLEntry.credit), 0).label("credit"),
     ).join(Accounts, Accounts.id == GLEntry.account_id)
     base_query = _apply_gl_filters(base_query, filters, period_start, period_end, period_ids).where(
         GLEntry.ledger_id == selected_ledger.id
     )
-    base_query = base_query.group_by(Accounts.code, Accounts.name, Accounts.classification)
+    base_query = base_query.group_by(Accounts.code, Accounts.name, Accounts.classification, Accounts.account_type)
     summary: dict[str, Decimal] = {
         "income": Decimal("0"),
         "cost": Decimal("0"),
@@ -3188,9 +3224,7 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
     account_summary: dict[str, dict[str, Any]] = {}
     unclassified: dict[str, dict[str, Any]] = {}
     for row in database.session.execute(base_query).all():
-        classification = _CLASSIFICATION_ALIASES.get(
-            (row.classification or "").strip().lower(), (row.classification or "").strip().lower()
-        )
+        classification = normalize_account_classification(row.classification, row.account_type)
         debit = _decimal_value(row.debit)
         credit = _decimal_value(row.credit)
         account_code = row.account_code or ""
@@ -3623,9 +3657,24 @@ def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
         elif classification in {"ingreso", "income"}:
             income += _decimal_value(entry.credit) - _decimal_value(entry.debit)
     margin = income - cogs
+    margin_percentage = calculate_gross_margin_percentage(income, cogs)
     return PaginatedReport(
-        rows=[ReportRow({"income": income, "cogs": cogs, "gross_margin": margin})],
-        totals={"income": income, "cogs": cogs, "gross_margin": margin},
+        rows=[
+            ReportRow(
+                {
+                    "income": income,
+                    "cogs": cogs,
+                    "gross_margin": margin,
+                    "gross_margin_percentage": margin_percentage,
+                }
+            )
+        ],
+        totals={
+            "income": income,
+            "cogs": cogs,
+            "gross_margin": margin,
+            "gross_margin_percentage": margin_percentage,
+        },
     )
 
 

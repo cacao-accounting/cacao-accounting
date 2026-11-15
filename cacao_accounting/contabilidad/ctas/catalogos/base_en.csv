@@ -120,7 +120,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 42.03,Unrealized Foreign Exchange Gain,42,0,Income,,unrealized_exchange_gain
 42.04,Purchase Discounts,42,0,Income,,payment_discount
 51,Cost of Sales,5,1,Expense,,
-51.01,Cost of Goods Sold,51,0,Expense,,cost_of_goods_sold
+51.01,Cost of Goods Sold,51,0,Cost,,cost_of_goods_sold
 51.02,Expenses Included in Asset Valuation,51,0,Expense,,
 51.03,Inventory Adjustments,51,0,Expense,,inventory_adjustment
 52,Operating Expenses,5,1,Expense,,

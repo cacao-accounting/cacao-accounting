@@ -48,7 +48,7 @@
         <tr>
           {% if rows %}
             {% for key in rows[0].values.keys() %}
-            <th scope="col">{{ key }}</th>
+            <th scope="col">{{ column_labels.get(key, key) }}</th>
             {% endfor %}
           {% else %}
             <th scope="col">{{ _("Sin datos") }}</th>
@@ -70,7 +70,7 @@
 
     <div class="mt-3">
       {% for key, value in totals.items() %}
-      <span class="badge bg-secondary me-2">{{ key }}: {{ value }}</span>
+      <span class="badge bg-secondary me-2">{{ column_labels.get(key, key) }}: {{ value }}</span>
       {% endfor %}
     </div>
   </div>

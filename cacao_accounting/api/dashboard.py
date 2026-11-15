@@ -10,7 +10,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
-from sqlalchemy import case, extract, func
+from sqlalchemy import case, extract, func, or_
 
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import (
@@ -47,6 +47,7 @@ from cacao_accounting.ledger_queries import (
     exclude_cancelled_stock_entries,
     primary_ledger_id,
 )
+from cacao_accounting.reportes.services import COST_ACCOUNT_TYPES, normalize_account_classification
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
@@ -456,10 +457,19 @@ def _income_expense_balances(
 ) -> dict[str, Decimal]:
     """Calcula ingresos y gastos por clasificación de cuenta."""
     query = (
-        database.session.query(Accounts.classification, func.sum(GLEntry.debit - GLEntry.credit).label("balance"))
+        database.session.query(
+            Accounts.classification,
+            Accounts.account_type,
+            func.sum(GLEntry.debit - GLEntry.credit).label("balance"),
+        )
         .join(GLEntry, Accounts.id == GLEntry.account_id)
         .filter(GLEntry.company == company, Accounts.entity == company)
-        .filter(func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
+        .filter(
+            or_(
+                func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS),
+                func.lower(Accounts.account_type).in_(COST_ACCOUNT_TYPES),
+            )
+        )
     )
     query = exclude_cancelled_gl_entries(query)
     ledger_id = primary_ledger_id(company)
@@ -467,15 +477,15 @@ def _income_expense_balances(
         query = query.filter(GLEntry.ledger_id == ledger_id)
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
-    results = query.group_by(Accounts.classification).all()
+    results = query.group_by(Accounts.classification, Accounts.account_type).all()
     income = Decimal("0")
     expenses = Decimal("0")
     for result in results:
         balance = Decimal(result.balance or 0)
-        classification = (result.classification or "").lower()
-        if classification in INCOME_CLASSIFICATIONS:
+        classification = normalize_account_classification(result.classification, result.account_type)
+        if classification in {"income", "ingreso"}:
             income += -balance
-        elif classification in EXPENSE_CLASSIFICATIONS:
+        elif classification in {"cost", "costo", "expense", "gasto"}:
             expenses += balance
     return {"income": income, "expenses": expenses}
 
@@ -490,11 +500,17 @@ def _accounting_monthly_result(
         database.session.query(
             extract("month", GLEntry.posting_date).label("month"),
             Accounts.classification,
+            Accounts.account_type,
             func.sum(GLEntry.debit - GLEntry.credit).label("balance"),
         )
         .join(Accounts, Accounts.id == GLEntry.account_id)
         .filter(GLEntry.company == company, Accounts.entity == company)
-        .filter(func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
+        .filter(
+            or_(
+                func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS),
+                func.lower(Accounts.account_type).in_(COST_ACCOUNT_TYPES),
+            )
+        )
     )
     query = exclude_cancelled_gl_entries(query)
     ledger_id = primary_ledger_id(company)
@@ -502,7 +518,7 @@ def _accounting_monthly_result(
         query = query.filter(GLEntry.ledger_id == ledger_id)
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
-    rows = query.group_by("month", Accounts.classification).order_by("month").all()
+    rows = query.group_by("month", Accounts.classification, Accounts.account_type).order_by("month").all()
     months: dict[int, dict[str, str | int]] = {}
     for row in rows:
         if row.month is None:
@@ -513,10 +529,10 @@ def _accounting_monthly_result(
             continue
         payload = months.setdefault(month, {"month": month, "income": "0", "expenses": "0"})
         balance = Decimal(str(row.balance or 0))
-        classification = (row.classification or "").lower()
-        if classification in INCOME_CLASSIFICATIONS:
+        classification = normalize_account_classification(row.classification, row.account_type)
+        if classification in {"income", "ingreso"}:
             payload["income"] = _numeric(Decimal(str(payload["income"])) - balance)
-        elif classification in EXPENSE_CLASSIFICATIONS:
+        elif classification in {"cost", "costo", "expense", "gasto"}:
             payload["expenses"] = _numeric(Decimal(str(payload["expenses"])) + balance)
     return list(months.values())
 

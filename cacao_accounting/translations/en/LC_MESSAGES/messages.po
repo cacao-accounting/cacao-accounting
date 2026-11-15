@@ -22342,6 +22342,9 @@ msgstr "Sales by Item"
 msgid "Margen Bruto"
 msgstr "Gross Margin"
 
+msgid "Margen bruto (%)"
+msgstr "Gross margin (%)"
+
 #: cacao_accounting/reportes/routes.py:852
 msgid "Stock Balance"
 msgstr "Stock Balance"
