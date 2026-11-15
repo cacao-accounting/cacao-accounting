@@ -469,6 +469,33 @@ def _default_ledger_for_company(company_code: str) -> str | None:
     )
 
 
+def _validate_requested_ledger(company_code: str, ledger: str) -> None:
+    """Rechaza un libro explícito que no sea fuente válida del reporte.
+
+    Un libro inexistente, inactivo o de otra compañía resolvía un reporte
+    vacío con HTTP 200, indistinguible de un período sin movimientos. El
+    contrato del reporte exige fallar de forma controlada para no presentar
+    un resultado ambiguo.
+    """
+    exists = database.session.execute(
+        database.select(Book.id)
+        .where(
+            Book.entity == company_code,
+            Book.status == "activo",
+        )
+        .where((Book.id == ledger) | (Book.code == ledger))
+    ).first()
+    if exists is None:
+        abort(400, description=_("El libro seleccionado no existe, está inactivo o no pertenece a la compañía."))
+
+
+def _validate_requested_export() -> None:
+    """Rechaza un formato de exportación fuera del contrato del reporte."""
+    requested_export = request.args.get("export")
+    if requested_export and requested_export not in _SUPPORTED_EXPORT_FORMATS:
+        abort(400, description=_("El formato de exportación solicitado no es válido."))
+
+
 def _default_period_for_company(company_code: str, target_date: date | None = None) -> str | None:
     effective_date = target_date or date.today()
     period_name = (
@@ -909,7 +936,11 @@ def _financial_filters() -> FinancialReportFilters:
     show_cancellations = _bool_arg("show_cancellations")
     requested_status = request.args.get("status") or "submitted"
     status = None if show_cancellations else requested_status
-    ledger = request.args.get("ledger") or _default_ledger_for_company(company_code)
+    requested_ledger = request.args.get("ledger") or None
+    if requested_ledger:
+        _validate_requested_ledger(company_code, requested_ledger)
+    ledger = requested_ledger or _default_ledger_for_company(company_code)
+    _validate_requested_export()
     accounting_period, period_from, period_to = _financial_period_filters(company_code)
     return FinancialReportFilters(
         company=company_code,

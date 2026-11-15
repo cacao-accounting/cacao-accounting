@@ -25614,3 +25614,11 @@ msgstr "The project does not exist or does not belong to the journal's company."
 #: cacao_accounting/database/helpers.py
 msgid "No se puede aplicar la unicidad de cierres mensuales: hay varias corridas para compañía %(company)s y período %(period)s. Los registros existentes se conservaron."
 msgstr "Monthly close uniqueness cannot be applied: multiple runs exist for company %(company)s and period %(period)s. Existing records were preserved."
+
+#: cacao_accounting/reportes/helpers.py
+msgid "El libro seleccionado no existe, está inactivo o no pertenece a la compañía."
+msgstr "The selected ledger does not exist, is inactive, or does not belong to the company."
+
+#: cacao_accounting/reportes/helpers.py
+msgid "El formato de exportación solicitado no es válido."
+msgstr "The requested export format is not valid."

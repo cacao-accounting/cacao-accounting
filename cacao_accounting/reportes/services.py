@@ -2842,6 +2842,45 @@ def get_budget_variance(filters: FinancialReportFilters) -> PaginatedReport:
     )
 
 
+def _grouped_movement_condition(
+    period_start: date | None,
+    period_end: date | None,
+    period_ids: list[str],
+) -> Any:
+    """Predicado del movimiento del período consultado.
+
+    La identidad dimensional (``accounting_period_id``) tiene prioridad; las
+    fechas solo completan el rango cuando no hay período resuelto o para los
+    asientos heredados sin período asignado.
+    """
+    dimension_clause = _period_dimension_clause(period_ids, period_start, period_end)
+    if dimension_clause is not None:
+        return dimension_clause
+    date_conditions = []
+    if period_start is not None:
+        date_conditions.append(GLEntry.posting_date >= period_start)
+    if period_end is not None:
+        date_conditions.append(GLEntry.posting_date <= period_end)
+    return and_(*date_conditions) if date_conditions else literal(True)
+
+
+def _grouped_opening_condition(period_start: date | None, period_ids: list[str]) -> Any:
+    """Predicado de la apertura: filas anteriores que no son movimiento.
+
+    Excluye las filas que el predicado dimensional clasifica como movimiento
+    para un asiento fechado antes del período pero asignado al período
+    seleccionado, evitando contarlo dos veces.
+    """
+    if period_start is None:
+        return literal(False)
+    if not period_ids:
+        return GLEntry.posting_date < period_start
+    return and_(
+        GLEntry.posting_date < period_start,
+        or_(GLEntry.accounting_period_id.is_(None), ~GLEntry.accounting_period_id.in_(period_ids)),
+    )
+
+
 def _grouped_account_gl_query(
     filters: FinancialReportFilters,
     period_start: date | None,
@@ -2853,22 +2892,15 @@ def _grouped_account_gl_query(
 
     La ventana de movimiento se acota por la dimensión ``accounting_period_id``
     (identidad del período), mientras que el saldo inicial conserva su
-    acumulado anterior a la ventana mediante ``period_start``.
+    acumulado anterior a la ventana mediante ``period_start``. La consulta no
+    se acota por período en el ``WHERE``: la apertura necesita ver filas de
+    períodos previos y la clasificación movimiento/apertura se resuelve con
+    los ``CASE`` siguientes. Los grupos sin apertura ni movimiento se
+    descartan para no mostrar cuentas ajenas a la ventana consultada.
     """
     account_code = func.coalesce(GLEntry.account_code, Accounts.code, "")
-    dimension_clause = _period_dimension_clause(period_ids, period_start, period_end)
-    movement_condition = dimension_clause if dimension_clause is not None else literal(True)
-    # El saldo inicial usa la frontera temporal, pero excluye cualquier fila
-    # que el mismo predicado dimensional clasifica como movimiento. Así un
-    # asiento fechado antes del período, pero asignado al período seleccionado,
-    # no se cuenta dos veces.
-    if period_start and period_ids:
-        opening_condition = and_(
-            GLEntry.posting_date < period_start,
-            or_(GLEntry.accounting_period_id.is_(None), ~GLEntry.accounting_period_id.in_(period_ids)),
-        )
-    else:
-        opening_condition = GLEntry.posting_date < period_start if period_start else literal(False)
+    movement_condition = _grouped_movement_condition(period_start, period_end, period_ids)
+    opening_condition = _grouped_opening_condition(period_start, period_ids)
     opening_value = case((opening_condition, GLEntry.debit - GLEntry.credit), else_=0)
     movement_debit = case((movement_condition, GLEntry.debit), else_=0)
     movement_credit = case((movement_condition, GLEntry.credit), else_=0)
@@ -2886,8 +2918,15 @@ def _grouped_account_gl_query(
         func.min(case((movement_condition, GLEntry.posting_date), else_=None)).label("first_movement"),
         func.max(case((movement_condition, GLEntry.posting_date), else_=None)).label("last_movement"),
     ).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-    query = _apply_gl_filters(query, filters, None, None, period_ids).where(GLEntry.ledger_id == ledger_id)
-    return query.group_by(account_code, Accounts.name, Accounts.account_type, Accounts.classification, Accounts.currency)
+    query = _apply_gl_filters(query, filters, None, None, None).where(GLEntry.ledger_id == ledger_id)
+    query = query.group_by(account_code, Accounts.name, Accounts.account_type, Accounts.classification, Accounts.currency)
+    return query.having(
+        or_(
+            func.sum(opening_value) != 0,
+            func.sum(movement_debit) != 0,
+            func.sum(movement_credit) != 0,
+        )
+    )
 
 
 def _account_code_level(account_code: str) -> int:
