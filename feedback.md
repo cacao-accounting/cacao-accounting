@@ -111,3 +111,17 @@ linters, conforme al rol de revisión estática.
 
 QA1 aprueba estáticamente el cambio actualizado y recomienda `fix-proposed`.
 No ejecuté pruebas ni linters y no realicé cambios de estado en GitHub.
+
+## QA1 - Refs: #1170 - revisión del fallo de CI
+
+### Dictamen
+
+QA1 aprueba estáticamente los dos ajustes y recomienda `fix-proposed`.
+
+### Evidencia
+
+- `_PrintPDFURLFetcher` declara `_fail_on_errors = False`, el atributo que WeasyPrint 70 consulta al envolver errores del `url_fetcher`. La validación de origen, esquema y ruta ocurre antes de delegar en los fetchers permitidos; una URL remota sigue rechazada y su recurso omitido no detiene el PDF.
+- El fixture de cierre crea solamente el período 2025-12. El asiento de evidencia y el borrador de origen ahora usan 2025-12-31, fecha incluida en ese período. El caso de serialización conserva la reversa en enero de 2026.
+- No observo cambios al flujo de negocio; los cambios ajustan el adaptador de WeasyPrint y la coherencia temporal del fixture.
+
+La revisión fue estática. No ejecuté pruebas ni linters.

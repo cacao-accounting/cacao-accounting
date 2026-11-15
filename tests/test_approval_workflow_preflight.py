@@ -212,7 +212,7 @@ def _create_fiscal_year_closing_case(company: str) -> dict[str, str]:
         [
             CompanyDefaultAccount(company=company, retained_earnings_account_id=retained_earnings.id),
             GLEntry(
-                posting_date=date(2025, 6, 30),
+                posting_date=date(2025, 12, 31),
                 company=company,
                 ledger_id=book.id,
                 account_id=income.id,
@@ -405,7 +405,7 @@ def test_reversal_submission_waits_for_fiscal_year_close_lock(cloud_app):
         source = create_journal_draft(
             {
                 "company": case["company"],
-                "posting_date": "2025-06-30",
+                "posting_date": "2025-12-31",
                 "books": [book.code],
                 "transaction_currency": book.currency,
                 "base_currency": book.currency,

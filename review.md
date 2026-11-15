@@ -128,3 +128,27 @@ pruebas ni linters. No cambié etiquetas o estado de GitHub.
 - QA2 observó que el cleanup de identificadores dedicados es incondicional; no lo considera riesgo bloqueante en la base aislada por worker.
 
 La revisión fue estática. No se modificaron etiquetas ni estado de GitHub.
+
+## QA2 — Correcciones de CI — Refs: #1170
+
+### Dictamen
+
+Apruebo estáticamente los dos ajustes del árbol de trabajo como correctos para
+los fallos observados. La aceptación del objetivo de CI verde queda pendiente
+del resultado de una nueva ejecución en GitHub.
+
+### Evidencia revisada
+
+- `_PrintPDFURLFetcher` expone `_fail_on_errors = False`, propiedad que
+  WeasyPrint 70 consulta al envolver errores de `url_fetcher`. La clase sigue
+  rechazando esquemas, hosts y rutas fuera de `static`; el error no fatal hace
+  que un recurso remoto rechazado no interrumpa el renderizado. La regresión
+  existente comprueba que la solicitud HTTP no llega al servidor y que el PDF
+  conserva el recurso estático local.
+- El fixture de cierre usaba una única ventana contable de diciembre mientras
+  insertaba el asiento fuente y creaba el borrador en junio. Ambas fechas ahora
+  son 31 de diciembre, dentro del período configurado, sin cambiar las reglas
+  de cierre ni el escenario de reversión al período siguiente.
+- No encontré cambios en la lógica de publicación contable ni en la política de
+  seguridad del fetcher. Esta revisión fue estática; no ejecuté pruebas ni
+  linters. El estado final del workflow aún debe comprobarse en GitHub.

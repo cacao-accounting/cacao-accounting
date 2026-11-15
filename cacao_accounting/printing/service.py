@@ -41,6 +41,10 @@ from cacao_accounting.i18n import _
 class _PrintPDFURLFetcher:
     """Fetch inline data and app-owned static files, never network resources."""
 
+    # WeasyPrint 70 reads this flag when its URL wrapper handles fetch errors.
+    # Errors stay non-fatal so rejected remote assets cannot break PDF output.
+    _fail_on_errors = False
+
     def __init__(self, base_url: str, static_folder: str | None) -> None:
         from weasyprint.urls import URLFetcher, path2url
 
