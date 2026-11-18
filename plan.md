@@ -65,6 +65,7 @@ QA1, QA2, QA3 o al administrador.
 | #2013 redondeo del lockout sin minuto extra | Implementado con regresión | `e9b32f49` | `tests/test_session_security_lockout_minutes.py` |
 | #2060 insignia de aprobaciones acotada por compañía | Implementado con regresión | `29fe2836` | `tests/test_approval_count_scope.py` |
 | #1466 cierre de flujo confirmado antes de responder | Implementado con regresión | `4078e439` | `tests/test_document_flow_close_persistence.py` |
+| #1000 consumo atómico del OTP (coordinado con #1696) | Verificado con regresión concurrente | `474684ec` | `tests/test_otp_atomic_verification.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -370,7 +371,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #909 | Consumidor | Implementación (`needs-work`) | fix(search-select): ORDER BY invalido con DISTINCT en PostgreSQL |
 | #923 | #1706 | Implementación (`needs-work`) | [HIGH][S2P][O2C][Append-only] DocumentRelation y conciliaciones permiten reescritura sin auditoría |
 | #925 | #1706 | Implementación (`needs-work`) | [MEDIUM][Append-only][Accounting] Impedir reactivar asientos mediante is_cancelled=False |
-| #1000 | #1653 | Implementación (`needs-work`) | OTP: hacer atómico el consumo de códigos de un solo uso |
+| #1000 | #1653 | ✅ Coordinado; cubierto por la regresión de #1696 en `474684ec` (etiqueta sin cambio) | OTP: hacer atómico el consumo de códigos de un solo uso |
 | #1002 | #1706 | Implementación (`needs-work`) | Audit: impedir borrar la cadena en modo Desktop |
 | #1076 | #1653 | Implementación (`needs-work`) | Validar factura al reproducir una clave de idempotencia |
 | #1093 | #1653 | Implementación (`needs-work`) | Serializar la reposición concurrente de Caja Chica |
