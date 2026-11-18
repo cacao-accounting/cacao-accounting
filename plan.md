@@ -69,6 +69,7 @@ QA1, QA2, QA3 o al administrador.
 | #1076 replay de idempotencia ligado a su factura | Implementado con regresión | `7e06776a` | `tests/test_purchase_reconciliation_idempotency_scope.py` |
 | #925 cancelación monotónica del ledger | Implementado con regresión | `4af51ebf` | `tests/test_ledger_cancellation_monotonic.py` |
 | #1002 inmutabilidad de la evidencia de auditoría en Desktop | Implementado con regresión | `39113652` | `tests/test_structural_integrity_guards.py` |
+| #1294 retiro de la mutación de contador externo sin auditoría | Verificado por inspección | `2d9d8848` | grep sin referencias |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -388,7 +389,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1187 | #1653 | Implementación (`needs-work`) | Serializa la liquidación concurrente de vales |
 | #1266 | #1653 | Implementación (`needs-work`) | Evita liquidar dos veces un vale de caja |
 | #1271 | #1653 | Implementación (`needs-work`) | Evita ajustes duplicados en conciliación de caja chica |
-| #1294 | #1658 | Implementación (`needs-work`) | Retira la mutación de contador externo sin auditoría |
+| #1294 | #1658 | ✅ Código retirado en `2d9d8848`; sin referencias (etiqueta sin cambio) | Retira la mutación de contador externo sin auditoría |
 | #1306 | #1653 | Implementación (`needs-work`) | Bloquea el serial antes de validar salidas concurrentes |
 | #1318 | #1658 | Implementación (`needs-work`) | Integra o backfill bancario o elimina |
 | #1319 | #1653 | Implementación (`needs-work`) | Evita duplicados en importaciones bancarias concurrentes |
