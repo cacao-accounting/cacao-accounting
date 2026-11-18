@@ -179,3 +179,17 @@ def test_batch_report_keeps_cancelled_evidence_with_zero_balance(batch_report_sc
     assert rows_by_batch[ids["alpha_batch_no"]]["balance_qty"] == Decimal("5")
     assert report.totals["count"] == Decimal("2")
     assert report.totals["stock_value"] == Decimal("50")
+
+
+def test_batch_report_for_beta_excludes_alpha_evidence(batch_report_scenario):
+    """The isolation is symmetric: Beta's report excludes Alpha-only batches (#1120)."""
+    app, ids = batch_report_scenario
+
+    with app.app_context():
+        report = get_batch_report(OperationalReportFilters(company=ids["company_beta"]))
+
+    batch_numbers = {row.values["batch_no"] for row in report.rows}
+    assert batch_numbers == {ids["beta_batch_no"]}
+    assert ids["alpha_batch_no"] not in batch_numbers
+    assert ids["cancelled_batch_no"] not in batch_numbers
+    assert ids["empty_batch_no"] not in batch_numbers
