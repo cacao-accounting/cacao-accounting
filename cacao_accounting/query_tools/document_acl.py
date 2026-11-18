@@ -13,7 +13,9 @@ from __future__ import annotations
 from typing import Any
 
 from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.database import Modules
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.database import database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
 from cacao_accounting.document_flow.repository import document_matches_type, get_document, get_document_company
 from cacao_accounting.query_tools.context import QueryContext
@@ -43,8 +45,19 @@ def read_modules_for(document_type: str) -> tuple[str, ...]:
     return (module,)
 
 
+def _module_enabled(module: str) -> bool:
+    """Indica si el módulo existe y está habilitado."""
+    module_id = obtener_id_modulo_por_nombre(module)
+    if not module_id:
+        return False
+    record = database.session.get(Modules, module_id)
+    return bool(record and record.enabled)
+
+
 def _module_allowed(context: QueryContext, module: str, company_id: str) -> bool:
     """Evalúa el permiso de consulta del módulo para el actor y la compañía."""
+    if not _module_enabled(module):
+        return False
     if context.is_service_principal:
         return f"{module}.reports.read" in context.permissions
     module_id = obtener_id_modulo_por_nombre(module)

@@ -244,3 +244,17 @@ def test_document_tools_enforce_company_scope(document_acl_scenario):
                 context=context, company_id="alpha", document_type="sales_invoice", document_id=ids["sale"]
             )
         )
+
+
+def test_disabled_module_is_excluded_for_service_principals(document_acl_scenario):
+    """Keeping the scope is not enough when the module is disabled."""
+    app, _ids = document_acl_scenario
+    context = _context({"documents.reports.read", "sales.reports.read", "cash.reports.read"})
+
+    with app.app_context():
+        sales = database.session.execute(database.select(Modules).filter_by(module="sales")).scalar_one()
+        sales.enabled = False
+        database.session.commit()
+        items = search_document_relations.handler(context=context, company_id="alpha")["items"]
+
+    assert items == []
