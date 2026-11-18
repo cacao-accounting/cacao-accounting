@@ -72,6 +72,9 @@ class Permisos:
         "reportes": "report",
         "solicitar": "request",
         "validar": "validate",
+        # El modelo solo tiene el campo `validate`; el diagnóstico documenta
+        # ambos nombres y deben reflejar el mismo permiso (#1576).
+        "validar_solicitud": "validate",
     }
 
     access: bool
@@ -90,6 +93,7 @@ class Permisos:
     reportes: bool
     solicitar: bool
     validar: bool
+    validar_solicitud: bool
 
     def __init__(
         self,
