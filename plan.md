@@ -37,6 +37,8 @@ QA1, QA2, QA3 o al administrador.
 | #1169 listado de cierres fiscales por compañía | Implementado con regresión | `a87db51f` | `tests/test_fiscal_year_closing_company_scope.py` |
 | #1261 reglas de matching acotadas a su cuenta | Implementado con regresión | `f79c5da7` | `tests/test_bank_matching_rule_account_scope.py` |
 | #1120 reporte de lotes aislado por compañía | Implementado con regresión | `b0d9003a` + `f995e0e0` | `tests/test_report_batch_company_evidence.py` |
+| #1576 validar_solicitud en permisos calculados | Implementado con regresión | `353bee41` | `tests/test_permissions_validate_request.py` |
+| #1515 fuentes documentales restringidas al módulo origen | Implementado con regresión | `9567dcdf` (prueba) | `tests/test_document_flow_read_access.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -302,7 +304,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1467 | #1649 | Implementación (`needs-work`) | Un usuario de solo lectura puede modificar tareas ajenas |
 | #1488 | #1649 | Implementación (`needs-work`) | Vincula el lote de importación al presupuesto autorizado |
 | #1511 | #1649 | Implementación (`needs-work`) | Restringir el precargado de pagos por compañía |
-| #1515 | #1649 | Implementación (`needs-work`) | Restringir fuentes documentales al módulo de origen |
+| #1515 | #1649 | ✅ Implementado; regresión local en `8aa8a94c` (etiqueta sin cambio) | Restringir fuentes documentales al módulo de origen |
 | #1524 | #1649 | ✅ Implementado; regresión local en `1be22360` (etiqueta sin cambio) | Customer and supplier management bypass permissions |
 | #1525 | #1649 | ✅ Implementado; regresión local en `1be22360` (etiqueta sin cambio) | Customer and supplier listings expose data without access checks |
 | #1526 | #1649 | ✅ Implementado; regresión local en `ea3d7dfc` (etiqueta sin cambio) | Bank master creation bypasses cash permissions |
@@ -314,7 +316,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1558 | #1649 | Implementación (`needs-work`) | La portada expone períodos de compañías no autorizadas |
 | #1562 | #1649 | Implementación (`needs-work`) | El portal puede imprimir documentos de otra compañía |
 | #1572 | #1649 | ✅ Implementado; regresión local en `584253c4` (etiqueta sin cambio) | Filtra tareas por el acceso vigente al documento |
-| #1576 | #1658 | Implementación (`needs-work`) | Incluye validar_solicitud en los permisos calculados |
+| #1576 | #1658 | ✅ Implementado; regresión local en `353bee41` (etiqueta sin cambio) | Incluye validar_solicitud en los permisos calculados |
 | #1590 | #1649 | ✅ Implementado; regresión local en `b0d9003a` (etiqueta sin cambio) | Filtra lotes sin evidencia de la compañía en el reporte |
 | #1595 | #1649 | ✅ Implementado; regresión local en `8badc192` (etiqueta sin cambio) | La bandeja de tareas muestra documentos tras revocar acceso |
 | #1598 | #1649 | ✅ Implementado; regresión local en `636a37b8` (etiqueta sin cambio) | El selector de tareas expone usuarios ajenos a la compañía |
