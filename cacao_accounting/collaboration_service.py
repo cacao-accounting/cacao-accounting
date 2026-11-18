@@ -167,7 +167,9 @@ def _task_company_scope() -> tuple[list[str], Any]:
     return authorized, or_(*conditions)
 
 
-def _task_document_visible(task: DocumentTask, authorized: Sequence[str], module_cache: dict[str, bool]) -> bool:
+def _task_document_visible(
+    document_type: str | None, company: str | None, authorized: Sequence[str], module_cache: dict[str, bool]
+) -> bool:
     """Indica si el usuario conserva acceso de consulta al documento de la tarea.
 
     El alcance por compañía ya se aplicó en la consulta; aquí se revalida el
@@ -182,11 +184,11 @@ def _task_document_visible(task: DocumentTask, authorized: Sequence[str], module
         return True
     if not authenticated:
         return True
-    if task.company is None:
+    if company is None:
         return True
-    if str(task.company) not in authorized:
+    if str(company) not in authorized:
         return False
-    spec = DOCUMENT_TYPES.get(normalize_doctype(task.document_type))
+    spec = DOCUMENT_TYPES.get(normalize_doctype(document_type or ""))
     if spec is None:
         return True
     module = spec.permission_module or spec.module
@@ -215,6 +217,7 @@ def list_user_tasks(
     explícito de compañía también exige autorización.
     """
     query = database.select(DocumentTask).where(DocumentTask.assigned_to == user_id)
+    authorized: list[str] = []
     if restrict_by_access:
         authorized, scope = _task_company_scope()
         query = query.where(scope)
@@ -233,9 +236,8 @@ def list_user_tasks(
     tasks = list(database.session.execute(query.order_by(DocumentTask.created_at.desc())).scalars().all())
     if not restrict_by_access:
         return tasks
-    authorized, _scope = _task_company_scope()
     module_cache: dict[str, bool] = {}
-    return [task for task in tasks if _task_document_visible(task, authorized, module_cache)]
+    return [task for task in tasks if _task_document_visible(task.document_type, task.company, authorized, module_cache)]
 
 
 def active_users(companies: Sequence[str] | None = None, module: str | None = None) -> list[User]:
@@ -272,14 +274,16 @@ def open_task_count(user_id: str) -> int:
     """
     authorized, scope = _task_company_scope()
     query = (
-        database.select(DocumentTask)
+        database.select(DocumentTask.document_type, DocumentTask.company)
         .where(DocumentTask.assigned_to == user_id)
         .where(DocumentTask.status.in_(("open", "in_progress")))
         .where(scope)
     )
-    tasks = list(database.session.execute(query).scalars().all())
+    rows = database.session.execute(query).all()
     module_cache: dict[str, bool] = {}
-    return sum(1 for task in tasks if _task_document_visible(task, authorized, module_cache))
+    return sum(
+        1 for document_type, company in rows if _task_document_visible(document_type, company, authorized, module_cache)
+    )
 
 
 def document_url(task: DocumentTask) -> str | None:
