@@ -855,7 +855,7 @@ def api_search_select():
     _require_search_select_company_access(filters)
     company_scope = _search_select_company_scope(doctype, filters)
     company_scope = _restrict_company_scope_for_action(doctype, company_scope, scope_module, scope_action)
-    if not _catalogo_permitido(doctype, filters.get("company", [None])[0] if filters.get("company") else None):
+    if not all(_catalogo_permitido(doctype, company) for company in (filters.get("company") or [None])):
         return jsonify({"error": _("No se encuentra autorizado para consultar este catálogo.")}), 403
     try:
         payload = _search_select_payload(doctype, query, filters, raw_limit, company_scope)
