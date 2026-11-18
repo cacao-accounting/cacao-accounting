@@ -435,7 +435,7 @@ def _handle_budget_import_post(budget: Budget, budget_id: str):
     import_id = request.form.get("import_id")
     if import_id:
         try:
-            BudgetImportService().insert_lines(import_id, str(current_user.id))
+            BudgetImportService().insert_lines(import_id, str(current_user.id), budget_id=budget_id)
             flash(_("Importación completada exitosamente."), "success")
             return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
         except (BudgetError, SQLAlchemyError) as e:

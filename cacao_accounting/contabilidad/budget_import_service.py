@@ -393,11 +393,18 @@ class BudgetImportService:
             query = query.limit(limit)
         return query.all()
 
-    def insert_lines(self, import_id: str, user_id: str):
-        """Transfiere líneas de staging a BudgetLine atómicamente."""
+    def insert_lines(self, import_id: str, user_id: str, *, budget_id: str | None = None):
+        """Transfiere líneas de staging a BudgetLine atómicamente.
+
+        Cuando se indica ``budget_id`` el lote debe pertenecer a ese presupuesto;
+        así la autorización verificada sobre el presupuesto de la ruta no puede
+        reutilizarse para insertar en otro (#1488).
+        """
         batch = database.session.get(BudgetImport, import_id)
         if not batch or batch.status != "validated":
             raise BudgetError(_("Lote de importación no válido o ya procesado."))
+        if budget_id is not None and str(batch.budget_id) != str(budget_id):
+            raise BudgetError(_("El lote de importación no pertenece al presupuesto indicado."))
 
         processing = False
         try:
