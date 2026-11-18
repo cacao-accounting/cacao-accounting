@@ -89,6 +89,9 @@ QA1, QA2, QA3 o al administrador.
 | #1051 identidad fiscal global normalizada y única | Implementado con regresión | `b4aac8b5` | `tests/test_party_tax_id_uniqueness.py` |
 | #1048 grupo y clasificación en importación de terceros | Implementado con regresión | `acafcce7` | `tests/test_party_import_group_classification.py` |
 | #2254/#2255 subtipo lógico en creación, listas y colaboración | Implementado con regresión | `de32b583` | `tests/test_document_subtype_creation_and_lists.py` |
+| #1061 serial de artículo separado de la serie de numeración | Implementado con regresión | `d807ed6f` | `tests/test_import_template_serial_column.py` |
+| #1064 tarifas negativas rechazadas en prevalidación | Implementado con regresión | `8fbe9f1d` | `tests/test_import_negative_rates.py` |
+| Retornos QA2: ledger Core, tareas sin compañía, módulo activo y replay | Implementado con regresión | `c6eff9bf`, `3201a6a3`, `232d26c2`, `44f91ef2`, `e07b4fef` | `tests/test_ledger_cancellation_monotonic.py`, `tests/test_collaboration_task_company_revocation.py`, `tests/test_query_tools_document_acl.py`, `tests/test_party_tax_id_uniqueness.py`, `tests/test_purchase_reconciliation_idempotency_scope.py` |
 | #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
@@ -110,12 +113,15 @@ QA1, QA2, QA3 o al administrador.
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 | Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
 
-**Última suite completa:** Cloud **960 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **955 passed, 99 skipped**; 0 fallos (HEAD `9f9ad0f9`).
+**Última suite completa:** Cloud **987 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **982 passed, 99 skipped**; 0 fallos (HEAD `e07b4fef`).
+**Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
+localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
+`needs-work` (reabierto o pendiente de revisión). El estado de GitHub es la fuente para el cierre.
 Rondas ejecutadas tras el umbral de 50 commits desde `ded995a4`, que cubren #1254,
 #1354/#1355/#1110, #1467, #1253, #997, #998, #1357/#1283, #1488, #1019, #911,
 #1562, #1641, #1695, #1696, #2013, #2060, #1000, #1466, #1076, #925, #1002, #1294,
-#1669, #1144, #950, #1601, #1778, #1031, #1065, #1033, #1049, #1050, #1052, #1055, #1046, #1021, #1697, #1682/#2006, #1299, #2252, #2253 y los seguimientos QA2 B4/B8/B11/B14.
+#1669, #1144, #950, #1601, #1778, #1031, #1065, #1033, #1049, #1050, #1052, #1055, #1061, #1064, #1048, #1046, #1021, #1697, #1682/#2006, #1299, #2252/#2253, #2254/#2255, #925, #1076 y los seguimientos QA2 B4/B8/B11/B14.
 Black en verde en `cacao_accounting/` (alcance del workflow de lint); 4 archivos de prueba preexistentes
 de `8f341b3e` requieren reformato de black fuera de ese alcance. Ruff, flake8, mypy y Bandit sin hallazgos bloqueantes. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
 Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados.
@@ -322,7 +328,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1019 | #1649 | ✅ Implementado; regresión local en `38fd869f` (etiqueta sin cambio) | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
 | #1021 | #1649 | ✅ Implementado; regresión local en `03dfc484` (etiqueta sin cambio) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1104 | #1649 | ✅ Implementado; regresión local en `4d94544b` (etiqueta sin cambio) | Exige permiso de Caja al listar candidatos de pago |
-| #1110 | #1710 | ✅ Implementado; regresión local en `9032d7a4` (etiqueta sin cambio) | fix: bloquea reenvíos de confirmación expirada |
+| #1110 | #1710 | ⚠️ Implementado; regresión local en `9032d7a4` (etiqueta sin cambio); GitHub: needs-work | fix: bloquea reenvíos de confirmación expirada |
 | #1120 | #1649 | ✅ Implementado; regresión local en `f995e0e0` (etiqueta sin cambio) | fix: limita el reporte de lotes a la compañía |
 | #1130 | #1649 | ✅ Implementado; regresión local en `c4b36226` (etiqueta sin cambio) | fix: valida libro de KPI contra su compañía |
 | #1169 | #1649 | ✅ Implementado; regresión local en `a87db51f` (etiqueta sin cambio) | Aplica alcance de compañía al listado de cierres |
@@ -330,12 +336,12 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1175 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Limita lotes y movimientos al alcance de compañía |
 | #1176 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Valida company explícita en listado de inventario |
 | #1181 | #1649 | ✅ Implementado; regresión local en `771d4e15` (etiqueta sin cambio) | Restringe detalle de artículos a compañías autorizadas |
-| #1253 | #1649 | ✅ Implementado; evidencia y regresión en `b0d9003a`, `f995e0e0` (etiqueta sin cambio) | Define el alcance de lotes entre compañías |
+| #1253 | #1649 | ⚠️ Implementado; evidencia y regresión en `b0d9003a`, `f995e0e0` (etiqueta sin cambio); GitHub: needs-work | Define el alcance de lotes entre compañías |
 | #1254 | #1649 | ✅ Implementado; regresión local en `274c1869` (etiqueta sin cambio) | Restringe pendientes de compras en consulta bancaria |
 | #1261 | Consumidor | ✅ Implementado; regresión local en `f79c5da7` (etiqueta sin cambio) | Respeta alcance de cuenta en reglas bancarias |
 | #1280 | #1649 | ✅ Implementado; regresión local en `039e582a` (etiqueta sin cambio) | Autoriza cambios de configuración de terceros por compañía |
 | #1282 | #1649 | ✅ Implementado; regresión local en `ff54d165` (etiqueta sin cambio) | Protege la edición de contactos y roles de terceros |
-| #1283 | #1658 | ✅ Helpers retirados en `d1649c9a`; sin referencias (etiqueta sin cambio) | Elimina helpers de terceros sin llamadores |
+| #1283 | #1658 | ⚠️ Helpers retirados en `d1649c9a`; sin referencias (etiqueta sin cambio); GitHub: needs-work | Elimina helpers de terceros sin llamadores |
 | #1284 | #1649 | ✅ Implementado; regresión local en `9cd29cc2` (etiqueta sin cambio) | Aísla adjuntos de terceros entre compañías |
 | #1286 | #1649 | ✅ Coordinación cubierta; regresión en `f0ec7506` (etiqueta sin cambio) | Seguimiento: autorización por compañía de terceros |
 | #1299 | #1658 | ✅ Implementado; regresión local en `8c4fdec4` (etiqueta sin cambio) | Retira o integra preferencias CompanyParty sin consumidores |
@@ -344,12 +350,12 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1321 | #1649 | ✅ Implementado; regresión local en `b649bbdf` (etiqueta sin cambio) | Limita el catálogo de usuarios por compañía |
 | #1322 | #1649 | ✅ Implementado; regresión local en `d1979066` (etiqueta sin cambio) | Filtra gastos de reposición por compañía autorizada |
 | #1327 | #1649 | ✅ Implementado; regresión local en `dbaede68` (etiqueta sin cambio) | Exige permiso de módulo en catálogos del selector |
-| #1329 | #1649 | ✅ Implementado; regresión local en `ecac5587` (etiqueta sin cambio) | Revoca tareas cuando se pierde acceso a la compañía |
+| #1329 | #1649 | ⚠️ Implementado; regresión local en `ecac5587` (etiqueta sin cambio); GitHub: needs-work | Revoca tareas cuando se pierde acceso a la compañía |
 | #1332 | #1649 | ✅ Implementado; regresión local en `ba3a7f08` (etiqueta sin cambio) | Alinea permisos de líneas en flujos de inventario |
 | #1338 | #1649 | ✅ Implementado; regresión local en `cbac6457` (etiqueta sin cambio) | Rechaza compañías deshabilitadas en query tools |
-| #1354 | #1710 | ✅ Implementado; regresión local en `de6f005c` (etiqueta sin cambio) | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
-| #1355 | #1710 | ✅ Implementado; regresión local en `6ebf42a5` (etiqueta sin cambio) | [Seguridad] Revoca accesos existentes al restablecer contraseña |
-| #1357 | #1658 | ✅ Código retirado en `a93657fa`; `admin/services.py` sin `Blueprint` (etiqueta sin cambio) | [Auditoría] Elimina el blueprint admin sin rutas |
+| #1354 | #1710 | ⚠️ Implementado; regresión local en `de6f005c` (etiqueta sin cambio); GitHub: needs-work | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
+| #1355 | #1710 | ⚠️ Implementado; regresión local en `6ebf42a5` (etiqueta sin cambio); GitHub: needs-work | [Seguridad] Revoca accesos existentes al restablecer contraseña |
+| #1357 | #1658 | ⚠️ Código retirado en `a93657fa`; `admin/services.py` sin `Blueprint` (etiqueta sin cambio); GitHub: needs-work | [Auditoría] Elimina el blueprint admin sin rutas |
 | #1388 | #1649 | ✅ Implementado; regresión local en `872008d3` (etiqueta sin cambio) | Valida el cliente al crear relaciones O2C por línea |
 | #1399 | #1649 | ✅ Implementado; regresión local en `1afff009` (etiqueta sin cambio) | Valida el tercero seleccionado en importación de pagos |
 | #1407 | #1649 | ✅ Implementado; regresión local en `a43e6117` (etiqueta sin cambio) | Aplica permisos por módulo a cada nodo del árbol documental |
@@ -373,13 +379,13 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1543 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Filtro de compañía expone movimientos de inventario |
 | #1558 | #1649 | ✅ Implementado; regresión local en `7b7f1de0` (etiqueta sin cambio) | La portada expone períodos de compañías no autorizadas |
 | #1562 | #1649 | ✅ Implementado; regresión local en `5fbd7027` (etiqueta sin cambio) | El portal puede imprimir documentos de otra compañía |
-| #1572 | #1649 | ✅ Implementado; regresión local en `584253c4` (etiqueta sin cambio) | Filtra tareas por el acceso vigente al documento |
+| #1572 | #1649 | ⚠️ Implementado; regresión local en `584253c4` (etiqueta sin cambio); GitHub: needs-work | Filtra tareas por el acceso vigente al documento |
 | #1576 | #1658 | ✅ Implementado; regresión local en `353bee41` (etiqueta sin cambio) | Incluye validar_solicitud en los permisos calculados |
 | #1590 | #1649 | ✅ Implementado; regresión local en `b0d9003a` (etiqueta sin cambio) | Filtra lotes sin evidencia de la compañía en el reporte |
-| #1595 | #1649 | ✅ Implementado; regresión local en `8badc192` (etiqueta sin cambio) | La bandeja de tareas muestra documentos tras revocar acceso |
+| #1595 | #1649 | ⚠️ Implementado; regresión local en `8badc192` (etiqueta sin cambio); GitHub: needs-work | La bandeja de tareas muestra documentos tras revocar acceso |
 | #1598 | #1649 | ✅ Implementado; regresión local en `636a37b8` (etiqueta sin cambio) | El selector de tareas expone usuarios ajenos a la compañía |
 | #1600 | #1649 | ✅ Implementado; regresión local en `19610192` (etiqueta sin cambio) | El dashboard expone datos sin permiso de consulta |
-| #1601 | #1649 | ✅ Implementado; regresión local en `19610192` (etiqueta sin cambio) | Rutas contables permiten crear sin permiso de acción |
+| #1601 | #1649 | ⚠️ Implementado; regresión local en `19610192` (etiqueta sin cambio); GitHub: needs-work | Rutas contables permiten crear sin permiso de acción |
 | #1602 | #1710 | ✅ Implementado; regresión local en `3821674c` (etiqueta sin cambio) | El inicio como módulo crea credenciales admin predeterminadas |
 | #1640 | #1649 | ✅ Implementado; regresión local en `13dddd6c` (etiqueta sin cambio) | Ignora roles de ventas desactivados al editar precios |
 | #1641 | #1710 | ✅ Implementado; regresión local en `62e6c02c` (etiqueta sin cambio) | El endpoint de desarrollo acepta roles admin inactivos |
@@ -396,10 +402,10 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #759 | #1706 | Implementación (`needs-work`) | HIGH: Extend append-only guarantees beyond GL and stock ledgers |
 | #909 | Consumidor | Implementación (`needs-work`) | fix(search-select): ORDER BY invalido con DISTINCT en PostgreSQL |
 | #923 | #1706 | Implementación (`needs-work`) | [HIGH][S2P][O2C][Append-only] DocumentRelation y conciliaciones permiten reescritura sin auditoría |
-| #925 | #1706 | ✅ Implementado; regresión local en `4af51ebf` (etiqueta sin cambio) | [MEDIUM][Append-only][Accounting] Impedir reactivar asientos mediante is_cancelled=False |
-| #1000 | #1653 | ✅ Coordinado; cubierto por la regresión de #1696 en `474684ec` (etiqueta sin cambio) | OTP: hacer atómico el consumo de códigos de un solo uso |
+| #925 | #1706 | ⚠️ Implementado; regresión local en `4af51ebf` (etiqueta sin cambio); GitHub: needs-work | [MEDIUM][Append-only][Accounting] Impedir reactivar asientos mediante is_cancelled=False |
+| #1000 | #1653 | ⚠️ Coordinado; cubierto por la regresión de #1696 en `474684ec` (etiqueta sin cambio); GitHub: needs-work | OTP: hacer atómico el consumo de códigos de un solo uso |
 | #1002 | #1706 | ✅ Implementado; regresión local en `39113652` (etiqueta sin cambio) | Audit: impedir borrar la cadena en modo Desktop |
-| #1076 | #1653 | ✅ Implementado; regresión local en `7e06776a` (etiqueta sin cambio) | Validar factura al reproducir una clave de idempotencia |
+| #1076 | #1653 | ⚠️ Implementado; regresión local en `7e06776a` (etiqueta sin cambio); GitHub: needs-work | Validar factura al reproducir una clave de idempotencia |
 | #1093 | #1653 | Implementación (`needs-work`) | Serializar la reposición concurrente de Caja Chica |
 | #1094 | #1653 | Implementación (`needs-work`) | Reservar gastos de reposición bajo bloqueo |
 | #1139 | #1653 | Implementación (`needs-work`) | fix: serializa asignaciones de factura a recepción |
@@ -411,7 +417,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1187 | #1653 | Implementación (`needs-work`) | Serializa la liquidación concurrente de vales |
 | #1266 | #1653 | Implementación (`needs-work`) | Evita liquidar dos veces un vale de caja |
 | #1271 | #1653 | Implementación (`needs-work`) | Evita ajustes duplicados en conciliación de caja chica |
-| #1294 | #1658 | ✅ Código retirado en `2d9d8848`; sin referencias (etiqueta sin cambio) | Retira la mutación de contador externo sin auditoría |
+| #1294 | #1658 | ⚠️ Código retirado en `2d9d8848`; sin referencias (etiqueta sin cambio); GitHub: needs-work | Retira la mutación de contador externo sin auditoría |
 | #1306 | #1653 | Implementación (`needs-work`) | Bloquea el serial antes de validar salidas concurrentes |
 | #1318 | #1658 | Implementación (`needs-work`) | Integra o backfill bancario o elimina |
 | #1319 | #1653 | Implementación (`needs-work`) | Evita duplicados en importaciones bancarias concurrentes |
@@ -436,22 +442,22 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1031 | #1652 | ✅ Implementado; regresión local en `4ac988a1` (etiqueta sin cambio) | Importación: un lector que lanza excepción deja el lote zombi en estado 4 y la recuperación ignora started_at NULL |
 | #1032 | #1652 | Implementación (`needs-work`) | Importación: la cancelación de un lote en ejecución queda sobrescrita (estado 8 se reescribe a 5/6) |
 | #1033 | #1652 | ✅ Implementado; regresión local en `0baa66b1` (etiqueta sin cambio) | Importación: celdas XLSX/ODS vacías persisten el literal 'None' (descripción, referencia y moneda) en transacciones y pronósticos |
-| #1046 | #1658 | ✅ Retirado en `a0d0f698`; sin referencias (etiqueta sin cambio) | Extractos: retirar el importador CSV sin ruta productiva |
-| #1048 | #1652 | ✅ Implementado; regresión local en `acafcce7` (etiqueta sin cambio) | Importación de terceros descarta grupo y clasificación |
+| #1046 | #1658 | ⚠️ Retirado en `a0d0f698`; sin referencias (etiqueta sin cambio); GitHub: needs-work | Extractos: retirar el importador CSV sin ruta productiva |
+| #1048 | #1652 | 🧪 Implementado; regresión local en `acafcce7` (etiqueta sin cambio); GitHub: fix-proposed | Importación de terceros descarta grupo y clasificación |
 | #1049 | #1652 | ✅ Implementado; regresión local en `903cdf8b` (etiqueta sin cambio) | Importación modifica pronósticos de caja aprobados |
 | #1050 | #1652 | ✅ Implementado; regresión local en `63934c23` (etiqueta sin cambio) | Importación admite montos no positivos en pronósticos de caja |
-| #1051 | #1652 | ✅ Implementado; regresión local en `b4aac8b5` (etiqueta sin cambio) | Importación de terceros duplica identidades ya registradas |
+| #1051 | #1652 | 🧪 Implementado; regresión local en `b4aac8b5` (etiqueta sin cambio); GitHub: fix-proposed | Importación de terceros duplica identidades ya registradas |
 | #1052 | #1652 | ✅ Implementado; regresión local en `f24b6b6a` (etiqueta sin cambio) | Importación contable acepta campos requeridos en blanco |
 | #1053 | #1652 | Implementación (`needs-work`) | Importación: preservar relaciones por línea origen |
 | #1054 | #1652 | Implementación (`needs-work`) | Importación: validar campos de cabecera agrupados |
-| #1055 | #1652 | ✅ Implementado; regresión local en `70095718` (etiqueta sin cambio) | Importación: normalizar fechas Excel antes de validar |
+| #1055 | #1652 | 🧪 Implementado; regresión local en `70095718` (etiqueta sin cambio); GitHub: fix-proposed | Importación: normalizar fechas Excel antes de validar |
 | #1057 | #1652 | Implementación (`needs-work`) | Importación de órdenes: validar el tipo del proveedor |
 | #1059 | #1652 | Implementación (`needs-work`) | Importación de órdenes: definir tratamiento de impuesto |
 | #1060 | #1652 | Implementación (`needs-work`) | Importación de ventas: validar artículos habilitados |
-| #1061 | #1652 | Implementación (`needs-work`) | Importación transaccional: plantilla incluye columna prohibida |
+| #1061 | #1652 | 🧪 Implementado localmente; GitHub fix-proposed (QA2 pendiente) | Importación transaccional: plantilla incluye columna prohibida |
 | #1062 | #1658 | Implementación (`needs-work`) | Importación: lotes fallidos quedan sin recuperación |
 | #1063 | #1652 | Implementación (`needs-work`) | Importación contable: validar cuenta padre |
-| #1064 | #1652 | Implementación (`needs-work`) | Importación transaccional: validar tarifas negativas |
+| #1064 | #1652 | 🧪 Implementado localmente; GitHub fix-proposed (QA2 pendiente) | Importación transaccional: validar tarifas negativas |
 | #1065 | #1652 | ✅ Implementado; regresión local en `88964495` (etiqueta sin cambio) | Importación: rechazar archivos sin filas de datos |
 | #1072 | #1650 | Implementación (`needs-work`) | Rechazar factores UOM no finitos |
 | #1087 | #1650 | Implementación (`needs-work`) | Normalizar precisión antes de detectar extractos repetidos |
