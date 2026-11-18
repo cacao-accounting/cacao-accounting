@@ -283,3 +283,12 @@ def test_stock_entry_new_form_rejects_foreign_company_parameter(stock_entry_scop
     response = client.get(f"{NEW_ENTRY_PATH}?company={ids['company_beta']}")
 
     assert response.status_code == 403
+
+
+def test_inventory_lists_require_consult_permission(stock_entry_scope_scenario):
+    """The item and stock-entry listings require inventory read permission."""
+    app, ids = stock_entry_scope_scenario
+    client = _authenticated_client(app, ids["denied_id"])
+
+    assert client.get("/inventory/item/list").status_code == 403
+    assert client.get(LIST_PATH).status_code == 403

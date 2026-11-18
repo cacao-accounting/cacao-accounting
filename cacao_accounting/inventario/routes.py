@@ -175,6 +175,7 @@ def inventario_():
 @inventario.route("/item/list")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_articulo_lista():
     """Listado de articulos con busqueda."""
     consulta = database.paginate(
@@ -233,6 +234,7 @@ def inventario_bodega_lista():
 @inventario.route("/stock-entry/list")
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "consultar")
 def inventario_entrada_lista():
     """Listado de entradas de almacen."""
     consulta = _paginate_list(StockEntry, (StockEntry.document_no,))
