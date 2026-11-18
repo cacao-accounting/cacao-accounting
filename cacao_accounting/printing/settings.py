@@ -45,8 +45,6 @@ def _get_config_value(key: str) -> str | None:
 
 
 def _set_config_value(key: str, value: str) -> None:
-    record = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).scalar_one_or_none()
-    if record is None:
-        database.session.add(CacaoConfig(key=key, value=value))
-        return
-    record.value = value
+    from cacao_accounting.config_values import set_config_value
+
+    set_config_value(key, value)

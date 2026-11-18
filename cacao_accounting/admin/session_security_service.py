@@ -28,12 +28,9 @@ def is_session_security_enabled() -> bool:
 
 def set_session_security_enabled(enabled: bool) -> None:
     """Activa o desactiva la protección de orígenes."""
-    valor = "true" if enabled else "false"
-    registro = database.session.execute(select(CacaoConfig).filter_by(key=SESSION_SECURITY_KEY)).scalar_one_or_none()
-    if registro:
-        registro.value = valor
-    else:
-        database.session.add(CacaoConfig(key=SESSION_SECURITY_KEY, value=valor))
+    from cacao_accounting.config_values import set_config_value
+
+    set_config_value(SESSION_SECURITY_KEY, "true" if enabled else "false")
     database.session.flush()
 
 

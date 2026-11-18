@@ -72,12 +72,10 @@ def set_purchase_sourcing_config(require_comparison: bool, minimum_offers: int) 
         REQUIRE_COMPARISON_KEY: "1" if require_comparison else "0",
         MINIMUM_OFFERS_KEY: str(minimum_offers),
     }
+    from cacao_accounting.config_values import set_config_value
+
     for key, value in values.items():
-        row = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).scalar_one_or_none()
-        if row:
-            row.value = value
-        else:
-            database.session.add(CacaoConfig(key=key, value=value))
+        set_config_value(key, value)
 
 
 def is_purchase_manager(user_id: str | None) -> bool:

@@ -181,6 +181,8 @@ def obtiene_texto_unico() -> str:
 class CacaoConfig(database.Model):  # type: ignore[name-defined]
     """Key / Value config."""
 
+    __table_args__ = (database.UniqueConstraint("key", name="uq_cacao_config_key"),)
+
     id = database.Column(
         database.String(26),
         primary_key=True,

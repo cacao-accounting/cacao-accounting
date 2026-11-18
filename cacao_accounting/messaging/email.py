@@ -140,13 +140,11 @@ def get_smtp_setting(key: str, default: str | None = None) -> str | None:
 
 def set_smtp_setting(key: str, value: str) -> None:
     """Guarda un parámetro de configuración SMTP en la base de datos (con cifrado para la contraseña)."""
+    from cacao_accounting.config_values import set_config_value
+
     if key == "smtp_password":
         value = encrypt_smtp_pass(value)
-    record = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).scalar_one_or_none()
-    if record is None:
-        database.session.add(CacaoConfig(key=key, value=value))
-    else:
-        record.value = value
+    set_config_value(key, value)
 
 
 def _build_message(to_email: str, subject: str, body: str, from_email: str, is_html: bool) -> str:

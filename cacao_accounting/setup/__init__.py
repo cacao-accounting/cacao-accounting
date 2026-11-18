@@ -24,6 +24,7 @@ from cacao_accounting.setup.catalogs import (
 )
 from cacao_accounting.setup.service import (
     available_currencies,
+    SetupAlreadyComplete,
     finalize_setup,
     get_setup_configuration,
     is_setup_complete,
@@ -57,7 +58,7 @@ def setup():
     from cacao_accounting.admin.services import _require_system_admin  # noqa: PLC0415
 
     _require_system_admin()
-    step = int(session.get("setup_step", 1))
+    step = _current_setup_step()
     setup_data = get_setup_configuration()
     language = setup_data.get("idioma", "es")
 
@@ -77,6 +78,16 @@ def setup():
         currencies=available_currencies(),
         **template_context,
     )
+
+
+def _current_setup_step() -> int:
+    """Devuelve el paso vigente del asistente, tolerando una sesión corrupta."""
+    raw_step = session.get("setup_step", 1)
+    try:
+        step = int(raw_step)
+    except (TypeError, ValueError):
+        return 1
+    return step if step in {1, 2, 3} else 1
 
 
 def _handle_setup_post(step: int, setup_data: dict[str, str]) -> object | None:
@@ -151,6 +162,11 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
             setup_data.get("idioma", "es"),
             catalogo_archivo,
         )
+    except SetupAlreadyComplete:
+        database.session.rollback()
+        session.pop("setup_step", None)
+        flash(texts["setup_complete"], "success")
+        return redirect(url_for("cacao_app.pagina_inicio"))
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc) or texts["invalid_company"], "danger")

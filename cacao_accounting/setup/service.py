@@ -22,7 +22,7 @@ from cacao_accounting.contabilidad.ctas import (
     base_es,
     cargar_catalogos,
 )
-from cacao_accounting.database import Entity, database
+from cacao_accounting.database import CacaoConfig, Entity, database
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company, ensure_global_naming_series
 from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.setup.catalogs import normalize_language
@@ -212,6 +212,28 @@ def _activate_and_set_default_currency(currency_code: str) -> None:
         currency.default = is_selected
 
 
+class SetupAlreadyComplete(RuntimeError):
+    """La instalación ya completó el asistente inicial."""
+
+
+def claim_setup_completion() -> None:
+    """Reclama de forma atómica la finalización única del asistente (#1021).
+
+    La clave ``SETUP_COMPLETE`` es única. El primer proceso que la inserta
+    continúa con la creación de la compañía; un segundo proceso concurrente
+    recibe el conflicto, revierte su transacción y trata la instalación como
+    ya completada, sin duplicar la compañía ni sus libros.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    database.session.add(CacaoConfig(key=SETUP_COMPLETED, value="True"))
+    try:
+        database.session.flush()
+    except IntegrityError as exc:
+        database.session.rollback()
+        raise SetupAlreadyComplete(_("La configuración inicial ya fue completada.")) from exc
+
+
 def finalize_setup(
     company_data: dict,
     catalogo_tipo: str,
@@ -220,18 +242,22 @@ def finalize_setup(
     catalogo_archivo: str | None = None,
 ) -> None:
     """Completa el proceso de configuración inicial y crea la entidad por defecto."""
-    is_initial_entity = (database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0) == 0
-    create_company(
-        company_data,
-        catalogo_tipo=catalogo_tipo,
-        country=country,
-        idioma=idioma,
-        catalogo_archivo=catalogo_archivo,
-        status="default" if is_initial_entity else "activo",
-        default=is_initial_entity,
-    )
-    _activate_and_set_default_currency(company_data.get("moneda", ""))
-    create_default_party_groups(idioma)
-    save_company_details(company_data)
-    mark_setup_complete()
-    database.session.commit()
+    claim_setup_completion()
+    try:
+        is_initial_entity = (database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0) == 0
+        create_company(
+            company_data,
+            catalogo_tipo=catalogo_tipo,
+            country=country,
+            idioma=idioma,
+            catalogo_archivo=catalogo_archivo,
+            status="default" if is_initial_entity else "activo",
+            default=is_initial_entity,
+        )
+        _activate_and_set_default_currency(company_data.get("moneda", ""))
+        create_default_party_groups(idioma)
+        save_company_details(company_data)
+        database.session.commit()
+    except Exception:
+        database.session.rollback()
+        raise

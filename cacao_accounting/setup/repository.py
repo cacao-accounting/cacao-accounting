@@ -36,14 +36,10 @@ def get_setup_value(key: str, default: Any = None) -> Any:
 
 
 def set_setup_value(key: str, value: str) -> None:
-    """Establece o crea un valor de configuración."""
-    record = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).first()
-    if record:
-        config = record[0]
-        config.value = value
-    else:
-        config = CacaoConfig(key=key, value=value)
-        database.session.add(config)
+    """Establece o crea un valor de configuración de forma atómica (#1697)."""
+    from cacao_accounting.config_values import set_config_value
+
+    set_config_value(key, value)
 
 
 def create_default_entity(data: dict, status: str = "default", default: bool = True) -> Entity:
