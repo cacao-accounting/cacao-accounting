@@ -4391,8 +4391,11 @@ def fiscal_year_closing_list():
     from cacao_accounting.database import FiscalYear
 
     company_filter = request.args.get("company", type=str)
-    query = database.select(FiscalYear)
+    # #1169: el listado de cierres usa el mismo alcance de compañía que el
+    # resto del módulo contable, incluido el selector de entidades.
+    query = _accounting_company_scope(database.select(FiscalYear), FiscalYear.entity)
     if company_filter:
+        exige_acceso_compania("accounting", company_filter)
         query = query.filter_by(entity=company_filter)
 
     consulta = database.paginate(
@@ -4404,7 +4407,7 @@ def fiscal_year_closing_list():
 
     from cacao_accounting.database import Entity
 
-    entidades = database.session.execute(database.select(Entity)).scalars().all()
+    entidades = database.session.execute(_accounting_company_scope(database.select(Entity), Entity.code)).scalars().all()
 
     return render_template(
         "contabilidad/fiscal_year_closing_lista.html",
