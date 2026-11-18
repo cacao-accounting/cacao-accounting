@@ -81,6 +81,8 @@ def receipt_source_scenario():
                     docstatus=1,
                     document_no="PO-ALPHA",
                     supplier_name="Proveedor Alpha",
+                    transaction_currency="NIO",
+                    base_currency="NIO",
                 ),
                 PurchaseOrder(
                     company="beta",
@@ -88,6 +90,8 @@ def receipt_source_scenario():
                     docstatus=1,
                     document_no="PO-BETA",
                     supplier_name="Proveedor Confidencial Beta",
+                    transaction_currency="NIO",
+                    base_currency="NIO",
                 ),
                 PurchaseReceipt(
                     company="beta",
@@ -153,3 +157,57 @@ def test_recepcion_no_carga_catalogo_de_compania_no_autorizada(receipt_source_sc
 
     assert response.status_code == 403
     assert "Bodega Confidencial Beta" not in response.get_data(as_text=True)
+
+
+def test_recepcion_carga_lineas_con_permiso_de_inventario(receipt_source_scenario):
+    """Inventory-only users can request pending lines of a purchase order (#1332)."""
+    app, ids = receipt_source_scenario
+    client = _authenticated_client(app)
+
+    response = client.get(
+        "/api/document-flow/pending-lines",
+        query_string={
+            "source_type": "purchase_order",
+            "target_type": "purchase_receipt",
+            "source_document_ids[]": ids["order_alpha"],
+            "company": "alpha",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["target_type"] == "purchase_receipt"
+
+
+def test_recepcion_rechaza_lineas_de_orden_ajena(receipt_source_scenario):
+    """The same endpoint keeps denying a foreign source document."""
+    app, ids = receipt_source_scenario
+    client = _authenticated_client(app)
+
+    response = client.get(
+        "/api/document-flow/pending-lines",
+        query_string={
+            "source_type": "purchase_order",
+            "target_type": "purchase_receipt",
+            "source_document_ids[]": ids["order_beta"],
+            "company": "beta",
+        },
+    )
+
+    assert response.status_code == 403
+
+
+def test_recepcion_post_usa_el_permiso_de_inventario(receipt_source_scenario):
+    """The receipt POST does not demand purchases.create from an inventory user (#1332)."""
+    app, ids = receipt_source_scenario
+    client = _authenticated_client(app)
+
+    response = client.post(
+        "/buying/purchase-receipt/new",
+        data={
+            "company": "alpha",
+            "posting_date": "2026-10-20",
+            "from_order": ids["order_alpha"],
+        },
+    )
+
+    assert response.status_code != 403

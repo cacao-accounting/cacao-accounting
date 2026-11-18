@@ -1858,7 +1858,9 @@ def _create_purchase_receipt_from_form():
         company, transaction_currency = _validate_purchase_flow_header(source)
         supplier_id = supplier_id or getattr(source, "supplier_id", None)
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
-        exige_acceso_compania("purchases", company, "crear")
+        # #1332: el alta de recepción es una operación de Inventario; la ruta
+        # autoriza `inventory.crear` y el servicio debe exigir el mismo módulo.
+        exige_acceso_compania("inventory", company, "crear")
         _validate_supplier_company_membership(supplier_id, company)
         receipt = PurchaseReceipt(
             supplier_id=supplier_id,
