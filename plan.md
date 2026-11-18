@@ -80,6 +80,7 @@ QA1, QA2, QA3 o al administrador.
 | QA2 B-1: guards únicos instalados en bases existentes | Implementado con regresión | `43db7563` | `tests/test_schema_guards_existing_databases.py` |
 | #1065 rechazo de archivos de importación sin filas | Implementado con regresión | `88964495` | `tests/test_import_empty_file_rejected.py` |
 | #1033 celdas vacías normalizadas en extractos y pronósticos | Implementado con regresión | `0baa66b1` | `tests/test_import_empty_cells_normalized.py` |
+| #1049 importación bloqueada en pronósticos no borrador | Implementado con regresión | `903cdf8b` | `tests/test_cash_forecast_import_status.py` |
 | #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
@@ -429,7 +430,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1033 | #1652 | ✅ Implementado; regresión local en `0baa66b1` (etiqueta sin cambio) | Importación: celdas XLSX/ODS vacías persisten el literal 'None' (descripción, referencia y moneda) en transacciones y pronósticos |
 | #1046 | #1658 | Implementación (`needs-work`) | Extractos: retirar el importador CSV sin ruta productiva |
 | #1048 | #1652 | Implementación (`needs-work`) | Importación de terceros descarta grupo y clasificación |
-| #1049 | #1652 | Implementación (`needs-work`) | Importación modifica pronósticos de caja aprobados |
+| #1049 | #1652 | ✅ Implementado; regresión local en `903cdf8b` (etiqueta sin cambio) | Importación modifica pronósticos de caja aprobados |
 | #1050 | #1652 | Implementación (`needs-work`) | Importación admite montos no positivos en pronósticos de caja |
 | #1051 | #1652 | Implementación (`needs-work`) | Importación de terceros duplica identidades ya registradas |
 | #1052 | #1652 | Implementación (`needs-work`) | Importación contable acepta campos requeridos en blanco |
