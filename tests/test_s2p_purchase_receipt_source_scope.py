@@ -13,6 +13,7 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predete
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
+    DocumentRelation,
     Entity,
     Modules,
     PurchaseOrder,
@@ -100,6 +101,13 @@ def receipt_source_scenario():
                     document_no="PR-BETA",
                     supplier_name="Proveedor Confidencial Beta",
                 ),
+                PurchaseReceipt(
+                    company="alpha",
+                    posting_date=date(2026, 10, 20),
+                    docstatus=1,
+                    document_no="PR-ALPHA",
+                    supplier_name="Proveedor Alpha",
+                ),
                 Warehouse(code="BETA-WH", name="Bodega Confidencial Beta", company="beta"),
             ]
         )
@@ -108,9 +116,24 @@ def receipt_source_scenario():
         cargar_permisos_predeterminados()
         asigna_rol_a_usuario("receipt_user", "inventory_auxiliar")
         database.session.commit()
+        order_alpha_id = database.session.query(PurchaseOrder.id).filter_by(company="alpha").scalar()
+        receipt_alpha_id = database.session.query(PurchaseReceipt.id).filter_by(document_no="PR-ALPHA").scalar()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_receipt",
+                source_id=receipt_alpha_id,
+                target_type="purchase_order",
+                target_id=order_alpha_id,
+                company="alpha",
+                qty=1,
+                relation_type="purchase_receipt",
+            )
+        )
+        database.session.commit()
         ids = {
-            "order_alpha": database.session.query(PurchaseOrder.id).filter_by(company="alpha").scalar(),
+            "order_alpha": order_alpha_id,
             "order_beta": database.session.query(PurchaseOrder.id).filter_by(company="beta").scalar(),
+            "receipt_alpha": receipt_alpha_id,
             "receipt_beta": database.session.query(PurchaseReceipt.id).filter_by(company="beta").scalar(),
         }
     yield app, ids
@@ -211,3 +234,22 @@ def test_recepcion_post_usa_el_permiso_de_inventario(receipt_source_scenario):
     )
 
     assert response.status_code != 403
+
+
+def test_lista_relacionada_respeta_el_acceso_de_inventario(receipt_source_scenario):
+    """A warehouse user sees related purchase orders despite lacking Purchases (#1411)."""
+    app, ids = receipt_source_scenario
+    client = _authenticated_client(app)
+
+    response = client.get(
+        "/document-flow/list/purchase_order",
+        query_string={
+            "doctype": "purchase_order",
+            "related_doctype": "purchase_receipt",
+            "related_id": ids["receipt_alpha"],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "PO-ALPHA" in body

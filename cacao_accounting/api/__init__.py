@@ -34,7 +34,7 @@ from cacao_accounting.attachment_service import (
 )
 from jwt import decode
 from jwt.exceptions import PyJWTError
-from werkzeug.exceptions import Forbidden, HTTPException
+from werkzeug.exceptions import HTTPException
 from werkzeug.routing import RequestRedirect
 
 # ---------------------------------------------------------------------------------------
@@ -1781,18 +1781,18 @@ def _fetch_documents_by_ids(spec: DocumentType, target_ids: list[str]) -> list[A
 
 
 def _filter_authorized_documents(documents: list[Any], doctype_key: str) -> list[Any]:
-    """Filter out documents the user cannot access (company-scoped)."""
-    module = _module_for_document_type(doctype_key)
-    if not module:
+    """Filter out documents the user cannot access (company-scoped).
+
+    Usa la misma política de módulos alternativos que `_require_document_read_access`
+    (#1411): una orden o recepción de compra es legible desde Compras o
+    Inventario, y una nota de entrega desde Ventas o Inventario.
+    """
+    modules = _document_read_access_modules(doctype_key)
+    if not modules:
         return documents
-    authorized: list[Any] = []
-    for document in documents:
-        try:
-            exige_acceso_compania(module, getattr(document, "company", None), "consultar")
-            authorized.append(document)
-        except Forbidden:
-            pass
-    return authorized
+    return [
+        document for document in documents if _puede_leer_documento_compania(doctype_key, getattr(document, "company", None))
+    ]
 
 
 def _require_hierarchy_company_access(node: Any) -> None:
