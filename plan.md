@@ -45,6 +45,7 @@ QA1, QA2, QA3 o al administrador.
 | #1511 precargado de pagos acotado por compañía | Implementado con regresión | `147b367d` (prueba) | `tests/test_payment_preload_company_scope.py` |
 | #1104 permiso de Caja en candidatos de conciliación | Implementado con regresión | `4d94544b` | `tests/test_payment_reconciliation_candidates_scope.py` |
 | #1558 períodos de la portada acotados por compañía | Implementado con regresión | `26ab8aaf` (prueba) | `tests/test_home_company_periods_scope.py` |
+| #2011 rol de ventas vigente en listas de precios | Implementado con regresión | `4b25e21f` | `tests/test_price_list_revoked_role.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -333,7 +334,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1641 | #1710 | Implementación (`needs-work`) | El endpoint de desarrollo acepta roles admin inactivos |
 | #1695 | #1710 | Implementación (`needs-work`) | No guardes secretos de recuperación en texto plano |
 | #1696 | #1710 | Implementación (`needs-work`) | Hace atómicos los intentos de verificación OTP |
-| #2011 | Consumidor | Implementación (`needs-work`) | Price Lists: una asignación revocada conserva acceso |
+| #2011 | Consumidor | ✅ Implementado; regresión local en `4b25e21f` (etiqueta sin cambio) | Price Lists: una asignación revocada conserva acceso |
 | #2013 | Consumidor | Implementación (`needs-work`) | [LOW][Auth] Evita sumar un minuto extra al lockout |
 | #2060 | Consumidor | Implementación (`needs-work`) | [AUDIT][Auth] El contador de aprobaciones ignora el alcance de empresa |
 
