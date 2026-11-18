@@ -804,6 +804,7 @@ def bancos_transferencia_nueva():
 @bancos.route("/bank/new", methods=["GET", "POST"])
 @modulo_activo("cash")
 @login_required
+@verifica_permiso("cash", "crear")
 def bancos_banco_nuevo():
     """Formulario para crear un nuevo banco."""
     from cacao_accounting.bancos.forms import FormularioBanco
