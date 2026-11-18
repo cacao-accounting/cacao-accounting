@@ -515,6 +515,7 @@ def create_app(ajustes: dict | None = None) -> Flask:
         from cacao_accounting.database.helpers import (
             _ensure_cacao_config_key_unique,
             _ensure_monthly_close_run_unique_constraint,
+            _ensure_party_tax_id_key_column,
             _ensure_roles_user_unique,
             _ensure_user_email_identity_column,
         )
@@ -523,6 +524,7 @@ def create_app(ajustes: dict | None = None) -> Flask:
         _ensure_monthly_close_run_unique_constraint()
         _ensure_cacao_config_key_unique()
         _ensure_roles_user_unique()
+        _ensure_party_tax_id_key_column()
         try:
             from cacao_accounting.database.helpers import _ensure_file_sha256_column
 

@@ -136,6 +136,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_monthly_close_run_unique_constraint()
             _ensure_cacao_config_key_unique()
             _ensure_roles_user_unique()
+            _ensure_party_tax_id_key_column()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -956,6 +957,57 @@ def _create_monthly_close_unique_guard(connection: Connection) -> None:
     Index(index_name, PeriodCloseRun.company, PeriodCloseRun.period_id, unique=True).create(
         bind=connection,
         checkfirst=False,
+    )
+
+
+def _ensure_party_tax_id_key_column() -> None:
+    """Instala y rellena la clave fiscal normalizada en esquemas existentes.
+
+    Los duplicados históricos no se fusionan: se dejan con clave nula y se
+    registran sus IDs para resolución manual; el índice único protege las
+    identidades que sí quedan determinadas (#1051).
+    """
+    from cacao_accounting.database import Party
+
+    engine = database.engine
+    inspector = sa_inspect(engine)
+    if not inspector.has_table(Party.__tablename__):
+        return
+    columns = {column["name"] for column in inspector.get_columns(Party.__tablename__)}
+    if "tax_id_key" not in columns:
+        try:
+            database.session.execute(database.text("ALTER TABLE party ADD COLUMN tax_id_key VARCHAR(50)"))
+            database.session.commit()
+        except SQLAlchemyError:
+            database.session.rollback()
+            if "tax_id_key" not in {column["name"] for column in sa_inspect(engine).get_columns(Party.__tablename__)}:
+                raise
+
+    from cacao_accounting.party_identity import normalize_tax_id
+
+    with engine.begin() as connection:
+        rows = connection.execute(select(Party.id, Party.tax_id)).all()
+        grouped: dict[str, list[str]] = {}
+        for party_id, tax_id in rows:
+            key = normalize_tax_id(tax_id)
+            if key:
+                grouped.setdefault(key, []).append(str(party_id))
+        for key, ids in grouped.items():
+            if len(ids) == 1:
+                connection.execute(Party.__table__.update().where(Party.id == ids[0]).values(tax_id_key=key))
+            else:
+                connection.execute(Party.__table__.update().where(Party.id.in_(ids)).values(tax_id_key=None))
+                log.warning(
+                    "Identidad fiscal {} duplicada en party; se dejan sin clave para revisión: {}",
+                    key,
+                    ", ".join(sorted(ids)),
+                )
+
+    _ensure_unique_index(
+        table=Party.__table__,
+        index_name="uq_party_tax_id_key",
+        column_names=("tax_id_key",),
+        deduplicate=lambda connection, table, column_names: None,
     )
 
 

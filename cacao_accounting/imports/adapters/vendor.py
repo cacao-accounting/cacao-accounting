@@ -7,6 +7,7 @@ from typing import List, Dict, Any
 from ulid import ULID
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import Party, database, CompanyParty
+from cacao_accounting.party_identity import find_party_by_tax_id, normalize_tax_id
 
 
 class VendorAdapter(BaseImportAdapter):
@@ -14,6 +15,14 @@ class VendorAdapter(BaseImportAdapter):
 
     columns = ["nombre", "nombre_comercial", "identificacion_fiscal", "clasificacion", "grupo"]
     required_columns = ["nombre"]
+
+    def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
+        """Rechaza una identificación fiscal ya registrada (#1051)."""
+        errors = super().validate_row(row_data)
+        tax_id = row_data.get("identificacion_fiscal")
+        if normalize_tax_id(tax_id) and find_party_by_tax_id(tax_id) is not None:
+            errors.append(f"La identificación fiscal {tax_id} ya está registrada para otro tercero.")
+        return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
         """Construye un objeto Party de tipo proveedor."""
@@ -32,6 +41,8 @@ class VendorAdapter(BaseImportAdapter):
         """Guarda el proveedor y lo vincula a la compañía."""
         proveedor = document["party"]
         company_id = document["company_id"]
+        if find_party_by_tax_id(proveedor.tax_id) is not None:
+            raise ValueError(f"La identificación fiscal {proveedor.tax_id} ya está registrada para otro tercero.")
         database.session.add(proveedor)
         database.session.flush()
         from cacao_accounting.party_management import generate_party_code

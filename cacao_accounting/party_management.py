@@ -363,13 +363,12 @@ def validated_party_name(values: Mapping[str, str | None]) -> str:
 
 def validated_party_tax_id(values: Mapping[str, str | None], *, exclude_party_id: str | None = None) -> str | None:
     """Devuelve la identificación fiscal o falla si ya pertenece a otro tercero."""
+    from cacao_accounting.party_identity import find_party_by_tax_id
+
     tax_id = (values.get("tax_id") or "").strip()
     if not tax_id:
         return None
-    query = database.select(Party.id).where(Party.tax_id == tax_id)
-    if exclude_party_id:
-        query = query.where(Party.id != exclude_party_id)
-    if database.session.execute(query).first() is not None:
+    if find_party_by_tax_id(tax_id, exclude_party_id=exclude_party_id) is not None:
         raise ValueError(_("Ya existe un tercero con ese identificador fiscal."))
     return tax_id
 

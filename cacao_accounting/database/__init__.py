@@ -1118,6 +1118,9 @@ class Party(database.Model, BaseTabla):  # type: ignore[name-defined]
     comercial_name = database.Column(database.String(150), nullable=True)
     fiscal_name = database.Column(database.String(150), nullable=True)
     tax_id = database.Column(database.String(50), nullable=True, index=True)
+    # Clave fiscal normalizada y única globalmente (#1051). `tax_id` conserva
+    # la representación capturada.
+    tax_id_key = database.Column(database.String(50), nullable=True, unique=True, index=True)
     nationality_type = database.Column(database.String(20), nullable=True)
     person_type = database.Column(database.String(20), nullable=True)
     primary_phone = database.Column(database.String(50), nullable=True)
@@ -1227,6 +1230,15 @@ class PaymentTerms(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 PAYMENT_TERMS_ID = "payment_terms.id"
+
+
+@event.listens_for(Party, "before_insert")
+@event.listens_for(Party, "before_update")
+def _set_party_tax_id_key(mapper, connection, target: Party) -> None:
+    """Mantiene sincronizada la clave fiscal normalizada."""
+    from cacao_accounting.party_identity import normalize_tax_id
+
+    target.tax_id_key = normalize_tax_id(target.tax_id)
 
 
 class CompanyParty(database.Model, BaseTabla):  # type: ignore[name-defined]
