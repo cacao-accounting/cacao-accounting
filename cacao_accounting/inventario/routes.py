@@ -539,6 +539,33 @@ def _bodega_predeterminada_visible(default_warehouse) -> Any:
     return None
 
 
+def _proveedor_predeterminado_visible(default_supplier) -> Any:
+    """Oculta el proveedor predeterminado si no está activo en una compañía consultable.
+
+    El tercero es global y su vínculo con la compañía vive en ``CompanyParty``,
+    así que se exige una activación en el alcance de Inventario del usuario
+    antes de mostrarlo en el detalle (#1181).
+    """
+    if default_supplier is None:
+        return None
+    from cacao_accounting.database import CompanyParty
+
+    authorized = _inventory_authorized_companies()
+    if authorized:
+        vinculo = database.session.execute(
+            database.select(CompanyParty.id)
+            .where(
+                CompanyParty.party_id == default_supplier.id,
+                CompanyParty.company.in_(authorized),
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if vinculo is not None:
+            return default_supplier
+    logger.info("Detalle de artículo oculta proveedor de compañía no autorizada: %s", default_supplier.code)
+    return None
+
+
 @inventario.route("/item/<item_id>")
 @modulo_activo("inventory")
 @login_required
@@ -569,7 +596,7 @@ def inventario_articulo(item_id):
         titulo=titulo,
         item_category=item_category,
         default_warehouse=_bodega_predeterminada_visible(default_warehouse),
-        default_supplier=default_supplier,
+        default_supplier=_proveedor_predeterminado_visible(default_supplier),
         uom_conversions=list_item_uom_conversions(item.code),
         item_accounts=list_item_account_rows_visible(item.code),
     )

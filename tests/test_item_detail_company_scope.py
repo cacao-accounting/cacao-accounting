@@ -19,11 +19,13 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Accounts,
+    CompanyParty,
     Currency,
     Entity,
     Item,
     ItemAccount,
     Modules,
+    Party,
     Roles,
     RolesAccess,
     RolesUser,
@@ -126,18 +128,26 @@ def item_detail_scope_scenario():
         secret_account = Accounts(
             entity=secret_company, code=f"EXP-S-{suffix}", name="Gasto secreto", classification="expense"
         )
+        local_supplier = Party(code=f"SUP-L-{suffix}", name=f"Proveedor Local {suffix}", is_supplier=True)
+        secret_supplier = Party(code=f"SUP-S-{suffix}", name=f"Proveedor Secreto {suffix}", is_supplier=True)
         database.session.add_all(
             [
                 UserCompanyAccess(user_id=reader_id, company_code=local_company),
                 UserCompanyAccess(user_id=no_permission_id, company_code=local_company),
                 local_account,
                 secret_account,
+                local_supplier,
+                secret_supplier,
                 Item(code=item_code, name="Artículo compartido", item_type="goods", is_stock_item=True, default_uom="EA"),
             ]
         )
         database.session.flush()
+        item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one()
+        item.default_supplier_id = secret_supplier.id
         database.session.add_all(
             [
+                CompanyParty(company=local_company, party_id=local_supplier.id),
+                CompanyParty(company=secret_company, party_id=secret_supplier.id),
                 ItemAccount(item_code=item_code, company=local_company, expense_account_id=local_account.id),
                 ItemAccount(item_code=item_code, company=secret_company, expense_account_id=secret_account.id),
             ]
@@ -149,6 +159,9 @@ def item_detail_scope_scenario():
             "secret_company": secret_company,
             "local_account": local_account.id,
             "secret_account": secret_account.id,
+            "local_supplier": local_supplier.id,
+            "local_supplier_name": local_supplier.name,
+            "secret_supplier_name": secret_supplier.name,
             "reader_id": reader_id,
             "no_permission_id": no_permission_id,
             "no_grants_id": no_grants_id,
@@ -206,3 +219,32 @@ def test_item_detail_hides_accounts_when_user_has_no_company_grants(item_detail_
     assert ids["local_account"] not in body
     assert ids["secret_account"] not in body
     assert ids["secret_company"] not in body
+
+
+def test_item_detail_hides_default_supplier_from_foreign_company(item_detail_scope_scenario):
+    """The default supplier only appears when it is active in an authorized company (#1181)."""
+    app, ids = item_detail_scope_scenario
+    client = _authenticated_client(app, ids["reader_id"])
+
+    response = client.get(f"/inventory/item/{ids['item_code']}")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert ids["secret_supplier_name"] not in body
+
+
+def test_item_detail_shows_default_supplier_of_authorized_company(item_detail_scope_scenario):
+    """A supplier activated in the reader's company remains visible."""
+    app, ids = item_detail_scope_scenario
+    with app.app_context():
+        item = database.session.execute(database.select(Item).filter_by(code=ids["item_code"])).scalar_one()
+        item.default_supplier_id = ids["local_supplier"]
+        database.session.commit()
+    client = _authenticated_client(app, ids["reader_id"])
+
+    response = client.get(f"/inventory/item/{ids['item_code']}")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert ids["local_supplier_name"] in body
+    assert ids["secret_supplier_name"] not in body

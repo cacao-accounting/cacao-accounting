@@ -243,3 +243,17 @@ def test_item_edit_rejects_payload_with_foreign_company_row(item_edit_scope_scen
     with app.app_context():
         item = database.session.execute(database.select(Item).filter_by(code=ids["item_code"])).scalar_one()
         assert item.name == "Artículo compartido"
+
+
+def test_item_edit_form_does_not_render_foreign_company_rows(item_edit_scope_scenario):
+    """The edit form only embeds accounting rows of companies the user may edit (#1181)."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+
+    response = client.get(f"/inventory/item/{ids['item_code']}/edit")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert ids["local_account"] in body
+    assert ids["secret_account"] not in body
+    assert ids["secret_company"] not in body
