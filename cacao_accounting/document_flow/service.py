@@ -24,6 +24,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.registry import (
     ALLOWED_FLOWS,
+    DOCUMENT_TYPES,
     get_document_type,
     get_flow,
     is_allowed_flow,
@@ -288,6 +289,46 @@ def pending_qty(
     return pending if pending > 0 else Decimal("0")
 
 
+_SALES_PARTY_TYPES = frozenset(
+    {
+        "sales_request",
+        "sales_quotation",
+        "sales_order",
+        "delivery_note",
+        "sales_invoice",
+        "sales_return",
+        "sales_credit_note",
+        "sales_debit_note",
+    }
+)
+
+
+def _document_party_id(document_type: str, document_id: str) -> str | None:
+    """Devuelve el tercero del documento según su spec, si lo declara."""
+    spec = DOCUMENT_TYPES.get(document_type)
+    if spec is None or not spec.party_field:
+        return None
+    document = get_document(document_type, document_id)
+    if document is None:
+        return None
+    return str(getattr(document, spec.party_field, None) or "") or None
+
+
+def _assert_same_sales_party(source_type: str, source_id: str, target_type: str, target_id: str) -> None:
+    """Rechaza relaciones O2C entre documentos de clientes distintos (#1388).
+
+    Aplica a la creación manual por línea y al endpoint genérico porque ambos
+    pasan por `create_document_relation`. Si alguno de los documentos no expone
+    cliente, la validación se omite para no bloquear datos históricos.
+    """
+    if source_type not in _SALES_PARTY_TYPES or target_type not in _SALES_PARTY_TYPES:
+        return
+    source_party = _document_party_id(source_type, source_id)
+    target_party = _document_party_id(target_type, target_id)
+    if source_party and target_party and source_party != target_party:
+        raise DocumentFlowError(_("El documento destino pertenece a otro cliente."), 409)
+
+
 def _assert_same_company(source_type: str, source_id: str, target_type: str, target_id: str) -> None:
     """Valida aislamiento por compania."""
     source_company = get_document_company(source_type, source_id)
@@ -486,6 +527,7 @@ def create_document_relation(
         source_key, source_id, source_item_id, target_key, target_id, target_item_id
     )
     _assert_same_company(source_key, source_id, target_key, target_id)
+    _assert_same_sales_party(source_key, source_id, target_key, target_id)
     _validate_relation_status(source_key, source_id, target_key, target_id)
     qty_decimal = decimal_or_zero(qty)
     if qty_decimal <= 0:
