@@ -234,3 +234,16 @@ def test_admin_user_list_keeps_system_admin_guard(user_catalog_scenario):
     response = client.get("/settings/users")
 
     assert response.status_code == 403
+
+
+def test_user_catalog_company_filter_returns_only_that_company(user_catalog_scenario):
+    """El filtro explícito devuelve solo usuarios vinculados a la compañía pedida."""
+    app, ids = user_catalog_scenario
+    client = _authenticated_client(app, ids["requester"])
+
+    response = client.get(f"/api/search-select?doctype=user&company={ids['company_alpha']}")
+
+    assert response.status_code == 200
+    values = {option["value"] for option in response.get_json()["results"]}
+    assert values == {ids["requester"], ids["alpha_coworker"], ids["alpha_cross"], ids["no_grants"]}
+    assert ids["beta_only"] not in values

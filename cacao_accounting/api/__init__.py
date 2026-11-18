@@ -837,14 +837,30 @@ def _puede_consultar_modulo_compania(modulo: str, company: str | None) -> bool:
     return bool(permisos.tiene_acceso_compania(company))
 
 
+def _company_code_for_permission(company: str | None) -> str | None:
+    """Resuelve el código de compañía cuando el cliente envía el ULID.
+
+    ``_require_search_select_company_access`` acepta código o ID; el permiso
+    del módulo se evalúa siempre por código para no rechazar un filtro legítimo
+    enviado con el identificador (feedback QA1 #1327).
+    """
+    if not company:
+        return company
+    entity = database.session.execute(
+        database.select(Entity.code).where((Entity.code == company) | (Entity.id == company))
+    ).scalar_one_or_none()
+    return str(entity) if entity else company
+
+
 def _catalogo_permitido(doctype: str, company: str | None) -> bool:
     """Exige el permiso de consulta del módulo dueño de los datos del catálogo."""
     dueño = _SEARCH_SELECT_MODULE.get(doctype)
     if dueño is None:
         return True
+    company_code = _company_code_for_permission(company)
     if isinstance(dueño, str):
-        return _puede_consultar_modulo_compania(dueño, company)
-    return any(_puede_consultar_modulo_compania(modulo, company) for modulo in dueño)
+        return _puede_consultar_modulo_compania(dueño, company_code)
+    return any(_puede_consultar_modulo_compania(modulo, company_code) for modulo in dueño)
 
 
 @api.route("/api/search-select")

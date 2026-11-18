@@ -133,6 +133,9 @@ def selector_module_scenario():
         database.session.commit()
         ids = {
             "company_alpha": company_alpha,
+            "company_alpha_id": str(
+                database.session.execute(database.select(Entity.id).filter_by(code=company_alpha)).scalar_one()
+            ),
             "company_beta": company_beta,
             "alpha_account": f"1100{suffix}",
             "beta_account": f"1200{suffix}",
@@ -209,3 +212,15 @@ def test_selector_validates_every_repeated_company_for_module_permission(selecto
     )
 
     assert response.status_code == 403
+
+
+def test_selector_accepts_company_ulid_for_module_permission(selector_module_scenario):
+    """El filtro por ULID de compañía no se rechaza si el usuario está autorizado."""
+    app, ids = selector_module_scenario
+    client = _authenticated_client(app, ids["accounting_reader"])
+
+    response = client.get(f"/api/search-select?doctype=account&company={ids['company_alpha_id']}")
+
+    assert response.status_code == 200
+    labels = " ".join(option["label"] for option in response.get_json()["results"])
+    assert ids["alpha_account"] in labels
