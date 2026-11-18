@@ -2419,9 +2419,12 @@ def _validate_duplicate_supplier_invoice(
     if supplier is None:
         raise ValueError(_("El proveedor indicado no existe."))
 
+    # #1433: la unicidad de la base es global por proveedor y número
+    # normalizado (`supplier_invoice_key`); el precheck debe comparar la misma
+    # clave y no el valor original, para no diferir de la restricción.
     stmt = database.select(PurchaseInvoice).filter(
         PurchaseInvoice.supplier_id == supplier_id,
-        PurchaseInvoice.supplier_invoice_no == supplier_invoice_no_cleaned,
+        PurchaseInvoice.supplier_invoice_key == supplier_invoice_no_cleaned,
         PurchaseInvoice.docstatus != 2,
     )
     if exclude_id:
