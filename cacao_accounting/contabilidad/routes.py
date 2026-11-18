@@ -188,6 +188,41 @@ def _resolve_catalog_company(requested: str | None) -> tuple[str, Any]:
     return companias[0], obtener_entidad(ent=companias[0])
 
 
+def _get_cost_center_for_company(cost_center_code: str):
+    """Devuelve un centro de costos de una compañía autorizada.
+
+    El código de centro de costos no es único entre compañías, así que la
+    consulta se limita a las compañías autorizadas antes de elegir el registro.
+    Un código que solo existe en otra compañía se rechaza con 403 para no
+    confirmar su existencia ni entregar sus datos (#1546).
+
+    Args:
+        cost_center_code: Código del centro de costos solicitado.
+
+    Returns:
+        El centro de costos visible para el usuario, o ``None`` si no existe.
+    """
+    from cacao_accounting.database import CostCenter
+
+    companias = authorized_company_codes("accounting")
+    if not companias:
+        abort(403)
+    registro = (
+        database.session.execute(
+            database.select(CostCenter).where(
+                CostCenter.code == cost_center_code,
+                CostCenter.entity.in_(companias),
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if registro is None:
+        if database.session.execute(database.select(CostCenter.id).where(CostCenter.code == cost_center_code)).first():
+            abort(403)
+    return registro
+
+
 def _journal_list_scope(
     query: Any,
     period_from: str | None,
@@ -861,8 +896,8 @@ def predeterminar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def unidades():
     """Listado de unidades de negocios."""
-    entidad_arg = request.args.get("entidad", None)
-    arbol = obtener_arbol_unidades(entidad_=entidad_arg)
+    entidad_actual_code, entidad_actual = _resolve_catalog_company(request.args.get("entidad"))
+    arbol = obtener_arbol_unidades(entidad_=entidad_actual_code)
     tree_roots, tree_all = build_tree_data(
         arbol,
         parent_field="parent_id",
@@ -877,7 +912,7 @@ def unidades():
         tree_roots=tree_roots,
         tree_all=tree_all,
         entidades=obtener_entidades(),
-        entidad=obtener_entidad(ent=entidad_arg),
+        entidad=entidad_actual,
         statusweb=STATUS,
     )
 
@@ -924,6 +959,7 @@ def unidad(id_unidad):
     REGISTRO = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).first()
     if REGISTRO is None:
         abort(404)
+    exige_acceso_compania("accounting", REGISTRO[0].entity)
     return render_template(
         "contabilidad/unidad.html",
         registro=REGISTRO[0],
@@ -941,6 +977,7 @@ def eliminar_unidad(id_unidad):
 
     unidad = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
     if unidad:
+        exige_acceso_compania("accounting", unidad.entity)
         if len(unidad.children) > 0:
             flash(_("No se puede eliminar la unidad porque tiene unidades hijas asignadas (RN-006)."), "danger")
             return redirect(url_for(CONTABILIDAD_UNIDADES))
@@ -1027,6 +1064,7 @@ def editar_unidad(id_unidad):
     registro = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
     if registro is None:
         return redirect(url_for(CONTABILIDAD_UNIDADES))
+    exige_acceso_compania("accounting", registro.entity)
 
     exclude_ids = {registro.id, *get_descendant_ids(Unit, registro.id)}
     formulario = FormularioUnidad(obj=registro)
@@ -1042,6 +1080,7 @@ def editar_unidad(id_unidad):
 
     if formulario.validate_on_submit():
         try:
+            exige_acceso_compania("accounting", formulario.entidad.data or "")
             _validate_active_entity_submission(formulario.entidad.data)
             parent_id = formulario.parent_id.data or None
             check_hierarchy_cycle(Unit, registro.id, parent_id, entity=formulario.entidad.data or "")
@@ -1403,8 +1442,8 @@ def cuentas():
     """Catalogo de cuentas contables."""
     TITULO = _("Catalogo de Cuentas Contables") + " - " + APPNAME
 
-    entidad_arg = request.args.get("entidad", None)
-    arbol = obtener_arbol_cuentas(entidad_=entidad_arg)
+    entidad_actual_code, entidad_actual = _resolve_catalog_company(request.args.get("entidad"))
+    arbol = obtener_arbol_cuentas(entidad_=entidad_actual_code)
     tree_roots, tree_all = build_tree_data(
         arbol,
         parent_field="parent",
@@ -1413,12 +1452,12 @@ def cuentas():
     )
     return render_template(
         "contabilidad/cuenta_lista.html",
-        base_cuentas=obtener_catalogo_base(entidad_=entidad_arg),
-        cuentas=obtener_catalogo(entidad_=entidad_arg),
+        base_cuentas=obtener_catalogo_base(entidad_=entidad_actual_code),
+        cuentas=obtener_catalogo(entidad_=entidad_actual_code),
         tree_roots=tree_roots,
         tree_all=tree_all,
         entidades=obtener_entidades(),
-        entidad=obtener_entidad(ent=entidad_arg),
+        entidad=entidad_actual,
         titulo=TITULO,
     )
 
@@ -1431,6 +1470,7 @@ def cuenta(entity, id_cta):
     """Cuenta Contable."""
     from cacao_accounting.database import Accounts
 
+    exige_acceso_compania("accounting", entity)
     registro = database.session.execute(
         database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
     ).scalar_one_or_none()
@@ -1527,6 +1567,7 @@ def editar_cuenta(entity, id_cta):
     """Formulario para editar una cuenta contable existente."""
     from cacao_accounting.database import Accounts
 
+    exige_acceso_compania("accounting", entity)
     registro = database.session.execute(
         database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
     ).scalar_one_or_none()
@@ -1608,8 +1649,8 @@ def ccostos():
     """Catalogo de centros de costos."""
     TITULO = _("Catalogo de Centros de Costos") + " - " + APPNAME
 
-    entidad_arg = request.args.get("entidad", None)
-    arbol = obtener_arbol_ccostos(entidad_=entidad_arg)
+    entidad_actual_code, entidad_actual = _resolve_catalog_company(request.args.get("entidad"))
+    arbol = obtener_arbol_ccostos(entidad_=entidad_actual_code)
     tree_roots, tree_all = build_tree_data(
         arbol,
         parent_field="parent",
@@ -1618,12 +1659,12 @@ def ccostos():
     )
     return render_template(
         "contabilidad/centro-costo_lista.html",
-        base_centro_costos=obtener_catalogo_centros_costo_base(entidad_=entidad_arg),
-        ccostos=obtener_centros_costos(entidad_=entidad_arg),
+        base_centro_costos=obtener_catalogo_centros_costo_base(entidad_=entidad_actual_code),
+        ccostos=obtener_centros_costos(entidad_=entidad_actual_code),
         tree_roots=tree_roots,
         tree_all=tree_all,
         entidades=obtener_entidades(),
-        entidad=obtener_entidad(ent=entidad_arg),
+        entidad=entidad_actual,
         titulo=TITULO,
     )
 
@@ -1706,12 +1747,12 @@ def nuevo_centro_costo():
 @verifica_acceso("accounting", "editar")
 def editar_centro_costo(id_cc):
     """Editar un centro de costos existente."""
-    from cacao_accounting.database import CostCenter
-
-    registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalar_one_or_none()
+    registro = _get_cost_center_for_company(id_cc)
     if registro is None:
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
     requested_entity = request.form.get("entidad") if request.method == "POST" else None
+    if requested_entity:
+        exige_acceso_compania("accounting", requested_entity)
     _lock_cost_center_companies((registro.entity, requested_entity or registro.entity))
     registro = _lock_cost_center(registro.entity, registro.code)
     if registro is None:
@@ -1796,9 +1837,7 @@ def editar_centro_costo(id_cc):
 @verifica_acceso("accounting")
 def centro_costo(id_cc: str):
     """Detalle de un centro de costos."""
-    from cacao_accounting.database import CostCenter
-
-    registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalars().first()
+    registro = _get_cost_center_for_company(id_cc)
     if registro is None:
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
@@ -1817,9 +1856,7 @@ def centro_costo(id_cc: str):
 @verifica_acceso("accounting")
 def eliminar_centro_costo(id_cc):
     """Elimina un centro de costos."""
-    from cacao_accounting.database import CostCenter
-
-    registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalar_one_or_none()
+    registro = _get_cost_center_for_company(id_cc)
     if registro:
         registro = _lock_cost_center(registro.entity, registro.code)
         if registro is None:

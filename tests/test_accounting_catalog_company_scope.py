@@ -3,10 +3,10 @@
 
 """#1546: el catálogo contable solo expone la compañía autorizada.
 
-El listado y el detalle de proyectos, su formulario de edición y su borrado,
-más el selector de compañía del árbol, deben exigir acceso a la compañía dueña
+Los listados, detalles, formularios de edición y borrados de proyectos, cuentas,
+centros de costo y unidades de negocio deben exigir acceso a la compañía dueña
 del registro. Una compañía ajena no aparece como opción ni entrega datos aunque
-se fuerce su código en la URL.
+se fuerce su código en la URL o se repita su código entre compañías.
 """
 
 from __future__ import annotations
@@ -23,12 +23,15 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predete
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.auxiliares import obtener_entidades
 from cacao_accounting.database import (
+    Accounts,
+    CostCenter,
     Currency,
     Entity,
     Modules,
     Project,
     Roles,
     RolesAccess,
+    Unit,
     User,
     UserCompanyAccess,
     database,
@@ -47,10 +50,42 @@ LOCAL_PROJECT_NAME = "Proyecto Local Cacao"
 FOREIGN_PROJECT_CODE = "P-PRIVATE"
 FOREIGN_PROJECT_NAME = "Proyecto Privado Alpha"
 
+LOCAL_ACCOUNT_CODE = "1100"
+LOCAL_ACCOUNT_NAME = "Cuenta Local Cacao"
+FOREIGN_ACCOUNT_CODE = "SECRET"
+FOREIGN_ACCOUNT_NAME = "B_PRIVATE_AR"
+
+LOCAL_UNIT_CODE = "ULOCAL"
+LOCAL_UNIT_NAME = "Unidad Local Cacao"
+FOREIGN_UNIT_CODE = "USECRET"
+FOREIGN_UNIT_NAME = "Unidad Privada Alpha"
+
+LOCAL_COST_CENTER_CODE = "CCLOCAL"
+LOCAL_COST_CENTER_NAME = "Centro Local Cacao"
+FOREIGN_COST_CENTER_CODE = "CCSECRET"
+FOREIGN_COST_CENTER_NAME = "Centro Privado Alpha"
+DUPLICATED_COST_CENTER_CODE = "CC-DUP"
+LOCAL_DUPLICATED_NAME = "Centro Duplicado Local"
+FOREIGN_DUPLICATED_NAME = "Centro Duplicado Privado"
+
 LIST_PATH = "/accounting/project/list"
 DETAIL_PATH = "/accounting/project/{code}"
 EDIT_PATH = "/accounting/project/{code}/edit"
 DELETE_PATH = "/accounting/project/{code}/delete"
+
+UNIT_LIST_PATH = "/accounting/unit/list"
+UNIT_DETAIL_PATH = "/accounting/unit/{code}"
+UNIT_EDIT_PATH = "/accounting/unit/{code}/edit"
+UNIT_DELETE_PATH = "/accounting/unit/delete/{code}"
+
+ACCOUNT_LIST_PATH = "/accounting/accounts"
+ACCOUNT_DETAIL_PATH = "/accounting/account/{entity}/{code}"
+ACCOUNT_EDIT_PATH = "/accounting/account/{entity}/{code}/edit"
+
+COST_CENTER_LIST_PATH = "/accounting/costs_center"
+COST_CENTER_DETAIL_PATH = "/accounting/costs_center/{code}"
+COST_CENTER_EDIT_PATH = "/accounting/costs_center/{code}/edit"
+COST_CENTER_DELETE_PATH = "/accounting/costs_center/{code}/delete"
 
 
 @pytest.fixture
@@ -90,6 +125,11 @@ def catalog_scope_app():
                     currency="USD",
                     enabled=True,
                 ),
+            ]
+        )
+        database.session.commit()
+        database.session.add_all(
+            [
                 User(
                     id="catalog_reader",
                     user="catalog_reader",
@@ -127,6 +167,14 @@ def catalog_scope_app():
                 UserCompanyAccess(user_id="catalog_deleter", company_code=LOCAL_COMPANY_CODE),
                 Project(code=LOCAL_PROJECT_CODE, name=LOCAL_PROJECT_NAME, entity=LOCAL_COMPANY_CODE, enabled=True),
                 Project(code=FOREIGN_PROJECT_CODE, name=FOREIGN_PROJECT_NAME, entity=FOREIGN_COMPANY_CODE, enabled=True),
+                Accounts(entity=LOCAL_COMPANY_CODE, code="1100", name=LOCAL_ACCOUNT_NAME, classification="asset"),
+                Accounts(entity=FOREIGN_COMPANY_CODE, code="SECRET", name=FOREIGN_ACCOUNT_NAME, classification="asset"),
+                Unit(code=LOCAL_UNIT_CODE, name=LOCAL_UNIT_NAME, entity=LOCAL_COMPANY_CODE, enabled=True),
+                Unit(code=FOREIGN_UNIT_CODE, name=FOREIGN_UNIT_NAME, entity=FOREIGN_COMPANY_CODE, enabled=True),
+                CostCenter(code=LOCAL_COST_CENTER_CODE, name=LOCAL_COST_CENTER_NAME, entity=LOCAL_COMPANY_CODE),
+                CostCenter(code=FOREIGN_COST_CENTER_CODE, name=FOREIGN_COST_CENTER_NAME, entity=FOREIGN_COMPANY_CODE),
+                CostCenter(code=DUPLICATED_COST_CENTER_CODE, name=LOCAL_DUPLICATED_NAME, entity=LOCAL_COMPANY_CODE),
+                CostCenter(code=DUPLICATED_COST_CENTER_CODE, name=FOREIGN_DUPLICATED_NAME, entity=FOREIGN_COMPANY_CODE),
             ]
         )
         database.session.commit()
@@ -297,4 +345,210 @@ def test_project_delete_requires_company_access(catalog_scope_app):
     with app.app_context():
         assert (
             database.session.execute(database.select(Project).filter_by(code=LOCAL_PROJECT_CODE)).scalar_one_or_none() is None
+        )
+
+
+def test_unit_list_and_detail_require_company_access(catalog_scope_app):
+    """The unit catalogue and its detail only expose the authorized company."""
+    client = _authenticated_client(catalog_scope_app, "catalog_reader")
+
+    listing = client.get(UNIT_LIST_PATH)
+    assert listing.status_code == 200
+    body = listing.get_data(as_text=True)
+    assert LOCAL_UNIT_NAME in body
+    assert FOREIGN_UNIT_NAME not in body
+    assert FOREIGN_UNIT_CODE not in body
+    assert FOREIGN_COMPANY_NAME not in body
+
+    forced = client.get(f"{UNIT_LIST_PATH}?entidad={FOREIGN_COMPANY_CODE}")
+    assert forced.status_code == 403
+    assert FOREIGN_UNIT_NAME not in forced.get_data(as_text=True)
+
+    own_detail = client.get(UNIT_DETAIL_PATH.format(code=LOCAL_UNIT_CODE))
+    assert own_detail.status_code == 200
+    assert LOCAL_UNIT_NAME in own_detail.get_data(as_text=True)
+
+    foreign_detail = client.get(UNIT_DETAIL_PATH.format(code=FOREIGN_UNIT_CODE))
+    assert foreign_detail.status_code == 403
+    body = foreign_detail.get_data(as_text=True)
+    assert FOREIGN_UNIT_NAME not in body
+    assert FOREIGN_COMPANY_NAME not in body
+
+
+def test_unit_list_uses_authorized_company_instead_of_foreign_default(catalog_scope_app):
+    """A user granted only a non-default company never receives the default catalogue."""
+    client = _authenticated_client(catalog_scope_app, "catalog_alpha_only")
+
+    response = client.get(UNIT_LIST_PATH)
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert FOREIGN_UNIT_NAME in body
+    assert LOCAL_UNIT_NAME not in body
+    assert LOCAL_UNIT_CODE not in body
+    assert LOCAL_COMPANY_NAME not in body
+
+
+def test_unit_edit_and_delete_require_company_access(catalog_scope_app):
+    """Editing or deleting a unit demands access to its owning company."""
+    app = catalog_scope_app
+    deleter = _authenticated_client(app, "catalog_deleter")
+    reader = _authenticated_client(app, "catalog_reader")
+
+    assert deleter.get(UNIT_EDIT_PATH.format(code=LOCAL_UNIT_CODE)).status_code == 200
+    assert deleter.get(UNIT_EDIT_PATH.format(code=FOREIGN_UNIT_CODE)).status_code == 403
+
+    forged = deleter.post(
+        UNIT_EDIT_PATH.format(code=FOREIGN_UNIT_CODE),
+        data={"id": FOREIGN_UNIT_CODE, "nombre": "Unidad alterada", "entidad": LOCAL_COMPANY_CODE, "habilitado": "y"},
+    )
+    assert forged.status_code == 403
+    with app.app_context():
+        unit = database.session.execute(database.select(Unit).filter_by(code=FOREIGN_UNIT_CODE)).scalar_one()
+        assert unit.name == FOREIGN_UNIT_NAME
+        assert unit.entity == FOREIGN_COMPANY_CODE
+
+    cross_move = reader.post(
+        UNIT_EDIT_PATH.format(code=LOCAL_UNIT_CODE),
+        data={"id": LOCAL_UNIT_CODE, "nombre": LOCAL_UNIT_NAME, "entidad": FOREIGN_COMPANY_CODE, "habilitado": "y"},
+    )
+    assert cross_move.status_code == 200
+    with app.app_context():
+        unit = database.session.execute(database.select(Unit).filter_by(code=LOCAL_UNIT_CODE)).scalar_one()
+        assert unit.entity == LOCAL_COMPANY_CODE
+
+    denied = deleter.post(UNIT_DELETE_PATH.format(code=FOREIGN_UNIT_CODE))
+    assert denied.status_code == 403
+    with app.app_context():
+        assert (
+            database.session.execute(database.select(Unit).filter_by(code=FOREIGN_UNIT_CODE)).scalar_one_or_none() is not None
+        )
+
+    allowed = deleter.post(UNIT_DELETE_PATH.format(code=LOCAL_UNIT_CODE))
+    assert allowed.status_code == 302
+    with app.app_context():
+        assert database.session.execute(database.select(Unit).filter_by(code=LOCAL_UNIT_CODE)).scalar_one_or_none() is None
+
+
+def test_account_list_detail_and_edit_require_company_access(catalog_scope_app):
+    """The account catalogue, its detail and edit form are company scoped."""
+    client = _authenticated_client(catalog_scope_app, "catalog_reader")
+    without_grants = _authenticated_client(catalog_scope_app, "catalog_no_grants")
+
+    listing = client.get(ACCOUNT_LIST_PATH)
+    assert listing.status_code == 200
+    body = listing.get_data(as_text=True)
+    assert LOCAL_ACCOUNT_NAME in body
+    assert FOREIGN_ACCOUNT_NAME not in body
+    assert FOREIGN_COMPANY_NAME not in body
+
+    forced = client.get(f"{ACCOUNT_LIST_PATH}?entidad={FOREIGN_COMPANY_CODE}")
+    assert forced.status_code == 403
+    assert FOREIGN_ACCOUNT_NAME not in forced.get_data(as_text=True)
+
+    assert without_grants.get(ACCOUNT_LIST_PATH).status_code == 403
+
+    own_detail = client.get(ACCOUNT_DETAIL_PATH.format(entity=LOCAL_COMPANY_CODE, code=LOCAL_ACCOUNT_CODE))
+    assert own_detail.status_code == 200
+    assert LOCAL_ACCOUNT_NAME in own_detail.get_data(as_text=True)
+
+    foreign_detail = client.get(ACCOUNT_DETAIL_PATH.format(entity=FOREIGN_COMPANY_CODE, code=FOREIGN_ACCOUNT_CODE))
+    assert foreign_detail.status_code == 403
+    body = foreign_detail.get_data(as_text=True)
+    assert FOREIGN_ACCOUNT_NAME not in body
+    assert FOREIGN_COMPANY_NAME not in body
+
+    own_form = client.get(ACCOUNT_EDIT_PATH.format(entity=LOCAL_COMPANY_CODE, code=LOCAL_ACCOUNT_CODE))
+    assert own_form.status_code == 200
+    assert LOCAL_ACCOUNT_NAME in own_form.get_data(as_text=True)
+
+    foreign_form = client.get(ACCOUNT_EDIT_PATH.format(entity=FOREIGN_COMPANY_CODE, code=FOREIGN_ACCOUNT_CODE))
+    assert foreign_form.status_code == 403
+    assert FOREIGN_ACCOUNT_NAME not in foreign_form.get_data(as_text=True)
+
+
+def test_cost_center_list_detail_and_edit_require_company_access(catalog_scope_app):
+    """The cost center catalogue, detail and edit form are company scoped."""
+    client = _authenticated_client(catalog_scope_app, "catalog_reader")
+    without_grants = _authenticated_client(catalog_scope_app, "catalog_no_grants")
+
+    listing = client.get(COST_CENTER_LIST_PATH)
+    assert listing.status_code == 200
+    body = listing.get_data(as_text=True)
+    assert LOCAL_COST_CENTER_NAME in body
+    assert FOREIGN_COST_CENTER_NAME not in body
+    assert FOREIGN_COMPANY_NAME not in body
+
+    assert without_grants.get(COST_CENTER_LIST_PATH).status_code == 403
+    assert without_grants.get(COST_CENTER_DETAIL_PATH.format(code=LOCAL_COST_CENTER_CODE)).status_code == 403
+
+    forced = client.get(f"{COST_CENTER_LIST_PATH}?entidad={FOREIGN_COMPANY_CODE}")
+    assert forced.status_code == 403
+    assert FOREIGN_COST_CENTER_NAME not in forced.get_data(as_text=True)
+
+    own_detail = client.get(COST_CENTER_DETAIL_PATH.format(code=LOCAL_COST_CENTER_CODE))
+    assert own_detail.status_code == 200
+    assert LOCAL_COST_CENTER_NAME in own_detail.get_data(as_text=True)
+
+    foreign_detail = client.get(COST_CENTER_DETAIL_PATH.format(code=FOREIGN_COST_CENTER_CODE))
+    assert foreign_detail.status_code == 403
+    body = foreign_detail.get_data(as_text=True)
+    assert FOREIGN_COST_CENTER_NAME not in body
+    assert FOREIGN_COMPANY_NAME not in body
+
+    own_form = client.get(COST_CENTER_EDIT_PATH.format(code=LOCAL_COST_CENTER_CODE))
+    assert own_form.status_code == 200
+    assert LOCAL_COST_CENTER_NAME in own_form.get_data(as_text=True)
+
+    foreign_form = client.get(COST_CENTER_EDIT_PATH.format(code=FOREIGN_COST_CENTER_CODE))
+    assert foreign_form.status_code == 403
+    assert FOREIGN_COST_CENTER_NAME not in foreign_form.get_data(as_text=True)
+
+    missing = client.get(COST_CENTER_DETAIL_PATH.format(code="CC-DOES-NOT-EXIST"))
+    assert missing.status_code == 302
+    assert missing.headers["Location"].endswith(COST_CENTER_LIST_PATH)
+
+
+def test_cost_center_duplicate_code_resolves_inside_authorized_company(catalog_scope_app):
+    """A code repeated in two companies resolves to the authorized company row."""
+    client = _authenticated_client(catalog_scope_app, "catalog_reader")
+
+    response = client.get(COST_CENTER_DETAIL_PATH.format(code=DUPLICATED_COST_CENTER_CODE))
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert LOCAL_DUPLICATED_NAME in body
+    assert FOREIGN_DUPLICATED_NAME not in body
+
+
+def test_cost_center_edit_and_delete_reject_foreign_company(catalog_scope_app):
+    """A forged company change is rejected and a foreign center cannot be deleted."""
+    app = catalog_scope_app
+    reader = _authenticated_client(app, "catalog_reader")
+    deleter = _authenticated_client(app, "catalog_deleter")
+
+    forged = reader.post(
+        COST_CENTER_EDIT_PATH.format(code=LOCAL_COST_CENTER_CODE),
+        data={"id": LOCAL_COST_CENTER_CODE, "nombre": "Centro alterado", "entidad": FOREIGN_COMPANY_CODE},
+    )
+    assert forged.status_code == 403
+    with app.app_context():
+        center = database.session.execute(database.select(CostCenter).filter_by(code=LOCAL_COST_CENTER_CODE)).scalar_one()
+        assert center.name == LOCAL_COST_CENTER_NAME
+        assert center.entity == LOCAL_COMPANY_CODE
+
+    denied = deleter.post(COST_CENTER_DELETE_PATH.format(code=FOREIGN_COST_CENTER_CODE))
+    assert denied.status_code == 403
+    with app.app_context():
+        assert (
+            database.session.execute(database.select(CostCenter).filter_by(code=FOREIGN_COST_CENTER_CODE)).scalar_one_or_none()
+            is not None
+        )
+
+    allowed = deleter.post(COST_CENTER_DELETE_PATH.format(code=LOCAL_COST_CENTER_CODE))
+    assert allowed.status_code == 302
+    with app.app_context():
+        assert (
+            database.session.execute(database.select(CostCenter).filter_by(code=LOCAL_COST_CENTER_CODE)).scalar_one_or_none()
+            is None
         )
