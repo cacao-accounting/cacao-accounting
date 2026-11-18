@@ -3757,6 +3757,11 @@ def get_batch_report(filters: OperationalReportFilters) -> PaginatedReport:
     cero cuando la compañía tiene evidencia del lote pero no movimientos vigentes.
     """
     query = select(Batch)
+    evidence = select(StockLedgerEntry.batch_id).where(
+        StockLedgerEntry.batch_id.isnot(None),
+        StockLedgerEntry.company == filters.company,
+    )
+    query = query.where(Batch.id.in_(evidence))
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     batches = database.session.execute(query.order_by(Batch.item_code, Batch.batch_no)).scalars().all()
