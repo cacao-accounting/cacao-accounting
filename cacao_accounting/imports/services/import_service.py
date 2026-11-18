@@ -136,6 +136,9 @@ class ImportService:
             if structural_errors:
                 self._commit_structural_errors(batch, batch_id, structural_errors)
                 return True
+            if not table.rows:
+                self._commit_empty_file_error(batch, batch_id)
+                return True
 
             normalized_rows = self._normalize_rows(table.columns, table.rows)
             docs = self._group_by_reference(table.columns, normalized_rows)
@@ -309,6 +312,19 @@ class ImportService:
                 )
         return errors_count
 
+    def _commit_empty_file_error(self, batch: ImportBatch, batch_id: str) -> None:
+        """Marca un archivo con encabezados pero sin filas como inválido (#1065)."""
+        database.session.add(
+            ImportBatchError(
+                batch_id=batch_id,
+                error_type="NO_DATA_ROWS",
+                message=_("El archivo no contiene filas de datos."),
+            )
+        )
+        batch.import_status = 7
+        batch.started_at = None
+        database.session.commit()
+
     def _handle_validation_error(self, batch: ImportBatch, batch_id: str, e: Exception) -> None:
         """Registra fallos de validación y evita dejar el lote procesando."""
         error_type = "RESOURCE_LIMIT" if isinstance(e, ImportReadLimitError) else "SYSTEM_ERROR"
@@ -384,6 +400,9 @@ class ImportService:
             table = reader.read(batch.source_path)
         except Exception as exc:
             self._handle_execution_error(batch_id, exc)
+            return True
+        if not table.rows:
+            self._handle_execution_error(batch_id, ValueError(_("El archivo no contiene filas de datos.")))
             return True
 
         if len(table.rows) > IMPORT_SYNC_MAX_ROWS:
