@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, Sequence
 
-from sqlalchemy import ColumnElement, Select, and_, case, cast, func, literal, or_, select, true
+from sqlalchemy import ColumnElement, Select, and_, case, cast, false, func, literal, or_, select, true
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 from cacao_accounting.database import (
@@ -41,6 +41,7 @@ from cacao_accounting.database import (
     Unit,
     UOM,
     User,
+    UserCompanyAccess,
     Warehouse,
     GLEntry,
     database,
@@ -633,7 +634,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("user", "name", "last_name"),
         value_field="id",
         label_builder=_user_label,
-        allowed_filters={"active": "active"},
+        allowed_filters={"active": "active", "company": "company"},
         default_filters={"active": True},
     ),
     "external_counter": SearchSelectSpec(
@@ -689,6 +690,15 @@ def _build_base_query(spec: SearchSelectSpec, normalized_filters: dict[str, Any]
     statement = select(spec.model)
     if spec.model is Entity and company_scope is not None:
         statement = statement.where(Entity.code.in_(sorted(company_scope)))
+    if spec.model is User and company_scope is not None:
+        # #1321: el directorio de usuarios se limita a quienes pertenecen o
+        # tienen acceso explícito a las compañías del solicitante.
+        scopes = sorted(company_scope)
+        if not scopes:
+            statement = statement.where(false())
+        else:
+            scoped_user_ids = select(UserCompanyAccess.user_id).where(UserCompanyAccess.company_code.in_(scopes))
+            statement = statement.where(or_(User.company.in_(scopes), User.id.in_(scoped_user_ids)))
     if spec.model is Party and (normalized_filters.get("company") or company_scope is not None):
         target_companies: set[str] | None = None
         if normalized_filters.get("company"):
@@ -706,7 +716,7 @@ def _build_base_query(spec: SearchSelectSpec, normalized_filters: dict[str, Any]
         # tercero por cada compania coincidente; DISTINCT no es opcion porque
         # invalida el ORDER BY por relevancia en PostgreSQL.
         statement = statement.where(Party.id.in_(cp_scope))
-    elif company_scope is not None and spec.model is not Item and "company" in spec.allowed_filters:
+    elif company_scope is not None and spec.model is not Item and spec.model is not User and "company" in spec.allowed_filters:
         statement = statement.where(_column_for(spec.model, spec.allowed_filters["company"]).in_(sorted(company_scope)))
     return statement
 
