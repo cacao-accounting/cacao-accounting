@@ -29,6 +29,7 @@ QA1, QA2, QA3 o al administrador.
 | #1322 gastos de reposición de caja chica por alcance | Implementado con regresión | `d1979066` | `tests/test_petty_cash_fund_scope.py` |
 | #1329 revocación de tareas y badge al perder compañía | Implementado con regresión | `ecac5587` | `tests/test_collaboration_task_company_revocation.py` |
 | #1595 tareas ocultas al perder el permiso del documento | Implementado con regresión | `8badc192` | `tests/test_collaboration_task_company_revocation.py` |
+| #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
 | #1282 contactos, direcciones y roles cruzados de terceros | Implementado con regresión | `ff54d165` | `tests/test_party_management_company_scope.py` |
 | #1284 adjuntos de terceros por activación y permiso | Implementado con regresión | `9cd29cc2` | `tests/test_party_attachment_company_scope.py` |
@@ -299,7 +300,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1543 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Filtro de compañía expone movimientos de inventario |
 | #1558 | #1649 | Implementación (`needs-work`) | La portada expone períodos de compañías no autorizadas |
 | #1562 | #1649 | Implementación (`needs-work`) | El portal puede imprimir documentos de otra compañía |
-| #1572 | #1649 | Implementación (`needs-work`) | Filtra tareas por el acceso vigente al documento |
+| #1572 | #1649 | ✅ Implementado; regresión local en `584253c4` (etiqueta sin cambio) | Filtra tareas por el acceso vigente al documento |
 | #1576 | #1658 | Implementación (`needs-work`) | Incluye validar_solicitud en los permisos calculados |
 | #1590 | #1649 | ✅ Implementado; regresión local en `b0d9003a` (etiqueta sin cambio) | Filtra lotes sin evidencia de la compañía en el reporte |
 | #1595 | #1649 | ✅ Implementado; regresión local en `8badc192` (etiqueta sin cambio) | La bandeja de tareas muestra documentos tras revocar acceso |
