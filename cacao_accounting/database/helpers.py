@@ -13,7 +13,7 @@ from typing import Optional
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask import Flask, g, has_request_context
-from sqlalchemy import Index, func, inspect as sa_inspect, select
+from sqlalchemy import Index, delete, func, inspect as sa_inspect, select
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import InternalError, InterfaceError, OperationalError, ProgrammingError, SQLAlchemyError
 
@@ -134,6 +134,8 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_audit_trail_hash_version_column()
             _ensure_file_sha256_column()
             _ensure_monthly_close_run_unique_constraint()
+            _ensure_cacao_config_key_unique()
+            _ensure_roles_user_unique()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -955,6 +957,141 @@ def _create_monthly_close_unique_guard(connection: Connection) -> None:
         bind=connection,
         checkfirst=False,
     )
+
+
+def _ensure_cacao_config_key_unique() -> None:
+    """Instala la unicidad de `CacaoConfig.key` en esquemas existentes.
+
+    Las bases nuevas reciben el constraint desde el modelo. En bases creadas
+    antes, el upsert de configuración necesita un índice único equivalente;
+    los duplicados históricos se consolidan conservando la fila de ULID mayor
+    (la más reciente) y se registra la intervención (#1697, QA2 B-1).
+    """
+    from cacao_accounting.database import CacaoConfig
+
+    _ensure_unique_index(
+        table=CacaoConfig.__table__,
+        index_name="uq_cacao_config_key",
+        column_names=("key",),
+        deduplicate=_dedupe_cacao_config_keys,
+    )
+
+
+def _ensure_roles_user_unique() -> None:
+    """Instala la unicidad de `(user_id, role_id)` en esquemas existentes.
+
+    Conserva la asignación activa cuando existe y consolida las filas
+    duplicadas con el ULID mayor; registra la intervención (#1682, QA2 B-1).
+    """
+    from cacao_accounting.database import RolesUser
+
+    _ensure_unique_index(
+        table=RolesUser.__table__,
+        index_name="uq_roles_user",
+        column_names=("user_id", "role_id"),
+        deduplicate=_dedupe_roles_user_assignments,
+    )
+
+
+def _unique_index_exists(bind: Engine | Connection, table_name: str, index_name: str, column_names: tuple[str, ...]) -> bool:
+    """Comprueba que el índice único canónico existe con sus columnas."""
+    inspector = sa_inspect(bind)
+    if not inspector.has_table(table_name):
+        return False
+    expected = list(column_names)
+    for constraint in inspector.get_unique_constraints(table_name):
+        if constraint.get("name") == index_name:
+            if constraint.get("column_names") == expected:
+                return True
+            raise RuntimeError(f"El constraint {index_name} no protege {', '.join(expected)}.")
+    for index in inspector.get_indexes(table_name):
+        if index.get("name") == index_name:
+            if index.get("unique") and index.get("column_names") == expected:
+                return True
+            raise RuntimeError(f"El índice {index_name} no protege {', '.join(expected)} de forma única.")
+    return False
+
+
+def _ensure_unique_index(
+    *,
+    table,
+    index_name: str,
+    column_names: tuple[str, ...],
+    deduplicate,
+) -> None:
+    """Crea un índice único idempotente tras consolidar duplicados históricos."""
+    engine = database.engine
+    if not sa_inspect(engine).has_table(table.name):
+        return
+
+    if engine.dialect.name == "sqlite":
+        with engine.connect() as connection:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            try:
+                if not _unique_index_exists(connection, table.name, index_name, column_names):
+                    deduplicate(connection, table, column_names)
+                    _create_unique_index_sql(connection, table, index_name, column_names)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return
+
+    try:
+        with engine.begin() as connection:
+            if not _unique_index_exists(connection, table.name, index_name, column_names):
+                deduplicate(connection, table, column_names)
+                _create_unique_index_sql(connection, table, index_name, column_names)
+    except SQLAlchemyError:
+        if _unique_index_exists(engine, table.name, index_name, column_names):
+            return
+        raise
+
+
+def _create_unique_index_sql(connection: Connection, table, index_name: str, column_names: tuple[str, ...]) -> None:
+    """Crea el índice con DDL sin mutar el metadata global de SQLAlchemy."""
+    preparer = connection.dialect.identifier_preparer
+    quoted_table = preparer.format_table(table)
+    quoted_index = preparer.quote(index_name)
+    quoted_columns = ", ".join(preparer.quote(name) for name in column_names)
+    connection.exec_driver_sql(f"CREATE UNIQUE INDEX {quoted_index} ON {quoted_table} ({quoted_columns})")
+
+
+def _dedupe_cacao_config_keys(connection: Connection, table, column_names: tuple[str, ...]) -> None:
+    """Conserva una fila por clave y elimina el resto, dejando registro."""
+    key_column = table.c[column_names[0]]
+    rows = connection.execute(select(table.c.id, key_column).order_by(table.c.id)).all()
+    keep: dict[str, str] = {}
+    for row in rows:
+        keep[str(row[1])] = str(row[0])
+    removed = [str(row[0]) for row in rows if str(row[0]) != keep.get(str(row[1]))]
+    if removed:
+        connection.execute(delete(table).where(table.c.id.in_(removed)))
+        log.warning(
+            "Se consolidaron {} filas duplicadas de cacao_config conservando la más reciente.",
+            len(removed),
+        )
+
+
+def _dedupe_roles_user_assignments(connection: Connection, table, column_names: tuple[str, ...]) -> None:
+    """Conserva una asignación por usuario/rol, prefiriendo la activa."""
+    user_column = table.c[column_names[0]]
+    role_column = table.c[column_names[1]]
+    rows = connection.execute(select(table.c.id, user_column, role_column, table.c.active).order_by(table.c.id)).all()
+    groups: dict[tuple[str, str], list] = {}
+    for row in rows:
+        groups.setdefault((str(row[1]), str(row[2])), []).append(row)
+    removed: list[str] = []
+    for group in groups.values():
+        active_rows = [row for row in group if bool(row[3])]
+        keep_row = max(active_rows or group, key=lambda row: str(row[0]))
+        removed.extend(str(row[0]) for row in group if str(row[0]) != str(keep_row[0]))
+    if removed:
+        connection.execute(delete(table).where(table.c.id.in_(removed)))
+        log.warning(
+            "Se consolidaron {} asignaciones duplicadas de roles_user.",
+            len(removed),
+        )
 
 
 def _ensure_audit_trail_hash_version_column() -> None:
