@@ -52,6 +52,7 @@ QA1, QA2, QA3 o al administrador.
 | #1354/#1355/#1110 revocación de credenciales y confirmaciones vencidas | Implementado con regresión | `de6f005c`, `6ebf42a5`, `9032d7a4` | `tests/test_token_requerido.py`, `tests/test_password_reset_revokes_sessions.py`, `tests/test_balance_confirmation_delivery_failures.py` |
 | #1467 propiedad al cambiar estado de tareas | Implementado con regresión | `5848ee8e` (prueba) | `tests/test_task_status_authorization.py` |
 | #1253 lotes visibles solo con evidencia de la compañía | Implementado con regresión | `b0d9003a`, `f995e0e0` | `tests/test_report_batch_company_evidence.py` |
+| #997 alias fiscales de cobro/pago con acceso a compañía | Implementado con regresión | `43108a06` | `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -273,7 +274,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
 | #911 | Consumidor | Implementación (`needs-work`) | fix(reportes): exige company en cloud sin fallback y propaga la compania activa |
-| #997 | #1649 | Implementación (`needs-work`) | API fiscal: validar compañía para aliases de cobro y pago |
+| #997 | #1649 | ✅ Implementado; regresión local en `43108a06` (etiqueta sin cambio) | API fiscal: validar compañía para aliases de cobro y pago |
 | #998 | #1649 | Implementación (`needs-work`) | API: validar permisos en alias de notas documentales |
 | #1019 | #1649 | Implementación (`needs-work`) | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
 | #1021 | #1649 | Implementación (`needs-work`) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
