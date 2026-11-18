@@ -20,6 +20,8 @@ def _finite_amount(value: Any) -> Decimal:
         raise ValueError(_("Monto inválido: %(value)s") % {"value": value}) from exc
     if not amount.is_finite():
         raise ValueError(_("El monto debe ser finito."))
+    if amount <= 0:
+        raise ValueError(_("El monto debe ser mayor que cero."))
     return amount
 
 
@@ -131,6 +133,10 @@ class CashForecastEntryAdapter(BaseImportAdapter):
             # pronóstico pudo aprobarse después de la validación del lote.
             if str(forecast.status or "") != "Draft":
                 raise ValueError(_("El pronóstico %(forecast)s no está en estado Borrador.") % {"forecast": forecast.id})
+            # #1050: la regla amount > 0 también se aplica al persistir, por si
+            # el documento se construyó fuera del flujo de validación.
+            if _finite_amount(entry_data.get("amount")) <= 0:
+                raise ValueError(_("El monto debe ser mayor que cero."))
             entry = CashForecastEntry(
                 forecast_id=entry_data["forecast_id"],
                 type=entry_data["type"],
