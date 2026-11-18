@@ -41,6 +41,8 @@ QA1, QA2, QA3 o al administrador.
 | #1515 fuentes documentales restringidas al módulo origen | Implementado con regresión | `9567dcdf` (prueba) | `tests/test_document_flow_read_access.py` |
 | #1640 rol de ventas desactivado en edición de precios | Implementado con regresión | `13dddd6c` | `tests/test_sales_price_editor_active_role.py` |
 | #1602 credenciales iniciales en el entrypoint del módulo | Implementado con regresión | `3821674c` | `tests/test_module_entrypoint_credentials.py` |
+| #1130 libro de KPI validado contra su compañía | Implementado con regresión | `c4b36226` | `tests/test_kpi_snapshot_ledger_scope.py` |
+| #1511 precargado de pagos acotado por compañía | Implementado con regresión | `147b367d` (prueba) | `tests/test_payment_preload_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -268,7 +270,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1104 | #1649 | Implementación (`needs-work`) | Exige permiso de Caja al listar candidatos de pago |
 | #1110 | #1710 | Implementación (`needs-work`) | fix: bloquea reenvíos de confirmación expirada |
 | #1120 | #1649 | ✅ Implementado; regresión local en `f995e0e0` (etiqueta sin cambio) | fix: limita el reporte de lotes a la compañía |
-| #1130 | #1649 | Implementación (`needs-work`) | fix: valida libro de KPI contra su compañía |
+| #1130 | #1649 | ✅ Implementado; regresión local en `c4b36226` (etiqueta sin cambio) | fix: valida libro de KPI contra su compañía |
 | #1169 | #1649 | ✅ Implementado; regresión local en `a87db51f` (etiqueta sin cambio) | Aplica alcance de compañía al listado de cierres |
 | #1173 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Filtra bodegas por acceso de compañía en inventario |
 | #1175 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Limita lotes y movimientos al alcance de compañía |
@@ -305,7 +307,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1433 | #1649 | Implementación (`needs-work`) | Valida facturas duplicadas entre compañías |
 | #1467 | #1649 | Implementación (`needs-work`) | Un usuario de solo lectura puede modificar tareas ajenas |
 | #1488 | #1649 | Implementación (`needs-work`) | Vincula el lote de importación al presupuesto autorizado |
-| #1511 | #1649 | Implementación (`needs-work`) | Restringir el precargado de pagos por compañía |
+| #1511 | #1649 | ✅ Implementado; regresión local en `1b0ed7f4` (etiqueta sin cambio) | Restringir el precargado de pagos por compañía |
 | #1515 | #1649 | ✅ Implementado; regresión local en `8aa8a94c` (etiqueta sin cambio) | Restringir fuentes documentales al módulo de origen |
 | #1524 | #1649 | ✅ Implementado; regresión local en `1be22360` (etiqueta sin cambio) | Customer and supplier management bypass permissions |
 | #1525 | #1649 | ✅ Implementado; regresión local en `1be22360` (etiqueta sin cambio) | Customer and supplier listings expose data without access checks |
