@@ -216,6 +216,32 @@ def _get_cost_center_by_id(cost_center_id: str):
     return registro
 
 
+def _get_account_by_id(account_id: str):
+    """Devuelve una cuenta contable identificada por su ULID.
+
+    La URL de detalle y edición usa el ``id`` de la cuenta para identificar una
+    sola fila sin depender del par compañía/código. El registro de una compañía
+    no autorizada se rechaza con 403 (#1546).
+
+    Args:
+        account_id: ULID de la cuenta contable solicitada.
+
+    Returns:
+        La cuenta visible para el usuario, o ``None`` si no existe.
+    """
+    from cacao_accounting.database import Accounts
+
+    companias = authorized_company_codes("accounting")
+    if not companias:
+        abort(403)
+    registro = database.session.get(Accounts, account_id)
+    if registro is None:
+        return None
+    if registro.entity not in companias:
+        abort(403)
+    return registro
+
+
 def _journal_list_scope(
     query: Any,
     period_from: str | None,
@@ -1442,7 +1468,7 @@ def cuentas():
         arbol,
         parent_field="parent",
         id_field="code",
-        get_url_func=lambda n: url_for("contabilidad.cuenta", entity=n.entity, id_cta=n.code),
+        get_url_func=lambda n: url_for("contabilidad.cuenta", id_cta=n.id),
     )
     return render_template(
         "contabilidad/cuenta_lista.html",
@@ -1457,18 +1483,13 @@ def cuentas():
     )
 
 
-@contabilidad.route("/account/<entity>/<id_cta>")
+@contabilidad.route("/account/<id_cta>")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
-def cuenta(entity, id_cta):
+def cuenta(id_cta):
     """Cuenta Contable."""
-    from cacao_accounting.database import Accounts
-
-    exige_acceso_compania("accounting", entity)
-    registro = database.session.execute(
-        database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
-    ).scalar_one_or_none()
+    registro = _get_account_by_id(id_cta)
     if registro is None:
         flash(_("La cuenta contable no existe"), "warning")
         return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
@@ -1554,23 +1575,18 @@ def nueva_cuenta():
     )
 
 
-@contabilidad.route("/account/<entity>/<id_cta>/edit", methods=["GET", "POST"])
+@contabilidad.route("/account/<id_cta>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting", "editar")
-def editar_cuenta(entity, id_cta):
+def editar_cuenta(id_cta):
     """Formulario para editar una cuenta contable existente."""
-    from cacao_accounting.database import Accounts
-
-    exige_acceso_compania("accounting", entity)
-    registro = database.session.execute(
-        database.select(Accounts).filter(Accounts.code == id_cta, Accounts.entity == entity)
-    ).scalar_one_or_none()
-
+    registro = _get_account_by_id(id_cta)
     if registro is None:
         flash(_("La cuenta contable indicada no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
 
+    entity = registro.entity
     formulario, entity_initial_label, parent_initial_label = _build_account_edit_form(registro, entity)
     TITULO = _("Contabilidad | Editar Cuenta Contable") + " - " + APPNAME
 
@@ -1633,7 +1649,7 @@ def editar_cuenta(entity, id_cta):
     registro.enabled = bool(formulario.activo.data)
     database.session.commit()
     invalidate_cache("smart-select-master-data")
-    return redirect(url_for("contabilidad.cuenta", entity=entity, id_cta=registro.code))
+    return redirect(url_for("contabilidad.cuenta", id_cta=registro.id))
 
 
 @contabilidad.route("/costs_center", methods=["GET", "POST"])

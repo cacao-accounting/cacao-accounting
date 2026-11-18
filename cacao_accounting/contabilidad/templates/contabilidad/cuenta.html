@@ -51,7 +51,7 @@
     </h5>
     <div class="d-flex gap-2">
       <a href="{{ url_for('contabilidad.cuentas') }}" class="btn btn-outline-secondary btn-sm">{{ _('Volver al Listado') }}</a>
-      <a href="{{ url_for('contabilidad.editar_cuenta', entity=registro.entity, id_cta=registro.code) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
+      <a href="{{ url_for('contabilidad.editar_cuenta', id_cta=registro.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
     </div>
   </div>
   <div class="p-4">

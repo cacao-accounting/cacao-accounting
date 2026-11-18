@@ -80,8 +80,8 @@ UNIT_EDIT_PATH = "/accounting/unit/{code}/edit"
 UNIT_DELETE_PATH = "/accounting/unit/delete/{code}"
 
 ACCOUNT_LIST_PATH = "/accounting/accounts"
-ACCOUNT_DETAIL_PATH = "/accounting/account/{entity}/{code}"
-ACCOUNT_EDIT_PATH = "/accounting/account/{entity}/{code}/edit"
+ACCOUNT_DETAIL_PATH = "/accounting/account/{account_id}"
+ACCOUNT_EDIT_PATH = "/accounting/account/{account_id}/edit"
 
 COST_CENTER_LIST_PATH = "/accounting/costs_center"
 COST_CENTER_DETAIL_PATH = "/accounting/costs_center/{cost_center_id}"
@@ -216,6 +216,16 @@ def _authenticated_client(app: Flask, user_id: str) -> FlaskClient:
         session["_user_id"] = user_id
         session["_fresh"] = True
     return client
+
+
+def _account_id(app: Flask, code: str, entity: str) -> str:
+    """Return the ULID that identifies one company's accounting account."""
+    with app.app_context():
+        return str(
+            database.session.execute(
+                database.select(Accounts.id).where(Accounts.code == code, Accounts.entity == entity)
+            ).scalar_one()
+        )
 
 
 def _cost_center_id(app: Flask, code: str, entity: str) -> str:
@@ -445,6 +455,8 @@ def test_account_list_detail_and_edit_require_company_access(catalog_scope_app):
     """The account catalogue, its detail and edit form are company scoped."""
     client = _authenticated_client(catalog_scope_app, "catalog_reader")
     without_grants = _authenticated_client(catalog_scope_app, "catalog_no_grants")
+    local_id = _account_id(catalog_scope_app, LOCAL_ACCOUNT_CODE, LOCAL_COMPANY_CODE)
+    foreign_id = _account_id(catalog_scope_app, FOREIGN_ACCOUNT_CODE, FOREIGN_COMPANY_CODE)
 
     listing = client.get(ACCOUNT_LIST_PATH)
     assert listing.status_code == 200
@@ -452,30 +464,37 @@ def test_account_list_detail_and_edit_require_company_access(catalog_scope_app):
     assert LOCAL_ACCOUNT_NAME in body
     assert FOREIGN_ACCOUNT_NAME not in body
     assert FOREIGN_COMPANY_NAME not in body
+    assert f"/accounting/account/{local_id}" in body
+    assert f"/accounting/account/{LOCAL_COMPANY_CODE}/{LOCAL_ACCOUNT_CODE}" not in body
 
     forced = client.get(f"{ACCOUNT_LIST_PATH}?entidad={FOREIGN_COMPANY_CODE}")
     assert forced.status_code == 403
     assert FOREIGN_ACCOUNT_NAME not in forced.get_data(as_text=True)
 
     assert without_grants.get(ACCOUNT_LIST_PATH).status_code == 403
+    assert without_grants.get(ACCOUNT_DETAIL_PATH.format(account_id=local_id)).status_code == 403
 
-    own_detail = client.get(ACCOUNT_DETAIL_PATH.format(entity=LOCAL_COMPANY_CODE, code=LOCAL_ACCOUNT_CODE))
+    own_detail = client.get(ACCOUNT_DETAIL_PATH.format(account_id=local_id))
     assert own_detail.status_code == 200
     assert LOCAL_ACCOUNT_NAME in own_detail.get_data(as_text=True)
 
-    foreign_detail = client.get(ACCOUNT_DETAIL_PATH.format(entity=FOREIGN_COMPANY_CODE, code=FOREIGN_ACCOUNT_CODE))
+    foreign_detail = client.get(ACCOUNT_DETAIL_PATH.format(account_id=foreign_id))
     assert foreign_detail.status_code == 403
     body = foreign_detail.get_data(as_text=True)
     assert FOREIGN_ACCOUNT_NAME not in body
     assert FOREIGN_COMPANY_NAME not in body
 
-    own_form = client.get(ACCOUNT_EDIT_PATH.format(entity=LOCAL_COMPANY_CODE, code=LOCAL_ACCOUNT_CODE))
+    own_form = client.get(ACCOUNT_EDIT_PATH.format(account_id=local_id))
     assert own_form.status_code == 200
     assert LOCAL_ACCOUNT_NAME in own_form.get_data(as_text=True)
 
-    foreign_form = client.get(ACCOUNT_EDIT_PATH.format(entity=FOREIGN_COMPANY_CODE, code=FOREIGN_ACCOUNT_CODE))
+    foreign_form = client.get(ACCOUNT_EDIT_PATH.format(account_id=foreign_id))
     assert foreign_form.status_code == 403
     assert FOREIGN_ACCOUNT_NAME not in foreign_form.get_data(as_text=True)
+
+    missing = client.get(ACCOUNT_DETAIL_PATH.format(account_id="01MISSING00000000000000000"))
+    assert missing.status_code == 302
+    assert missing.headers["Location"].endswith(ACCOUNT_LIST_PATH)
 
 
 def test_cost_center_list_detail_and_edit_require_company_access(catalog_scope_app):
