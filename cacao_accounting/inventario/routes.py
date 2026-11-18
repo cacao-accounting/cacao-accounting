@@ -66,6 +66,7 @@ from cacao_accounting.inventario.service import (
 from cacao_accounting.inventario.services import (
     _inventory_company_scoped_select,
     _inventory_authorized_companies,
+    _inventory_company_choices,
     _paginate_list,
     _series_choices,
     _item_params_from_form,
@@ -831,12 +832,11 @@ def inventario_lote(batch_id):
 @verifica_permiso("inventory", "crear")
 def inventario_entrada_nuevo():
     """Formulario para crear una entrada de almacén."""
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
     from cacao_accounting.inventario.services import _validate_stock_entry_company
 
     formulario = FormularioEntradaAlmacen()
-    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.company.choices = _inventory_company_choices()
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
     )

@@ -165,6 +165,33 @@ def _inventory_authorized_companies() -> list[str]:
     return list(permissions.obtener_companias_autorizadas()) if permissions.consultar else []
 
 
+def _inventory_company_choices() -> list[tuple[str, str]]:
+    """Compañías habilitadas sobre las que el usuario actúa en Inventario.
+
+    El selector y la validación del formulario de movimientos deben usar el
+    alcance del propio módulo; el helper contable no refleja esos permisos
+    (#1173). Se incluyen las compañías con consulta o alta para que un
+    operador de bodega sin rol contable pueda registrar movimientos y para
+    que el POST de una compañía ajena conserve la validación del servicio.
+
+    Returns:
+        Pares ``(código, nombre)`` ordenados por código; vacío sin permiso.
+    """
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("inventory"),
+        usuario=current_user.id,
+    )
+    if not (permissions.consultar or permissions.crear):
+        return []
+    companies = list(permissions.obtener_companias_autorizadas())
+    if not companies:
+        return []
+    entities = database.session.execute(
+        database.select(Entity).where(Entity.code.in_(companies), Entity.enabled.is_(True)).order_by(Entity.code)
+    ).scalars()
+    return [(entity.code, entity.name or entity.company_name) for entity in entities]
+
+
 def _apply_inventory_company_scope(base_query: Any, model: type[Any]) -> Any:
     """Apply explicit or authorized company scope to an inventory list query."""
     if not hasattr(model, "company"):
