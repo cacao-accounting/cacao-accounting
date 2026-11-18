@@ -74,6 +74,8 @@ QA1, QA2, QA3 o al administrador.
 | #1144 claves repetidas rechazadas en el plan AR/AP | Implementado con regresión | `0e3f790b` | `tests/test_arap_allocation_idempotency.py` |
 | #950 rechazo de números no finitos en importaciones | Implementado con regresión | `135b3b5e` | `tests/test_import_non_finite_validation.py` |
 | #1007/#1010 rechazo de valores fiscales no finitos | Implementado con regresión | `481470f7` | `tests/test_fiscal_non_finite_validation.py`, `tests/test_admin_tax_rule_form.py` |
+| #1021/#1697 setup único y claves de configuración únicas | Implementado con regresión | `03dfc484` | `tests/test_setup_finalize_once.py`, `tests/test_config_key_uniqueness.py` |
+| #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
@@ -304,7 +306,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #997 | #1649 | ✅ Implementado; regresión local en `43108a06` (etiqueta sin cambio) | API fiscal: validar compañía para aliases de cobro y pago |
 | #998 | #1649 | ✅ Implementado; regresión local en `4bc2dc7e` (etiqueta sin cambio) | API: validar permisos en alias de notas documentales |
 | #1019 | #1649 | ✅ Implementado; regresión local en `38fd869f` (etiqueta sin cambio) | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
-| #1021 | #1649 | Implementación (`needs-work`) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
+| #1021 | #1649 | ✅ Implementado; regresión local en `03dfc484` (etiqueta sin cambio) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1104 | #1649 | ✅ Implementado; regresión local en `4d94544b` (etiqueta sin cambio) | Exige permiso de Caja al listar candidatos de pago |
 | #1110 | #1710 | ✅ Implementado; regresión local en `9032d7a4` (etiqueta sin cambio) | fix: bloquea reenvíos de confirmación expirada |
 | #1120 | #1649 | ✅ Implementado; regresión local en `f995e0e0` (etiqueta sin cambio) | fix: limita el reporte de lotes a la compañía |
@@ -322,7 +324,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1283 | #1658 | ✅ Helpers retirados en `d1649c9a`; sin referencias (etiqueta sin cambio) | Elimina helpers de terceros sin llamadores |
 | #1284 | #1649 | ✅ Implementado; regresión local en `9cd29cc2` (etiqueta sin cambio) | Aísla adjuntos de terceros entre compañías |
 | #1286 | #1649 | ✅ Coordinación cubierta; regresión en `f0ec7506` (etiqueta sin cambio) | Seguimiento: autorización por compañía de terceros |
-| #1299 | #1658 | Implementación (`needs-work`) | Retira o integra preferencias CompanyParty sin consumidores |
+| #1299 | #1658 | ✅ Implementado; regresión local en `8c4fdec4` (etiqueta sin cambio) | Retira o integra preferencias CompanyParty sin consumidores |
 | #1301 | #1649 | ✅ Implementado; regresión local en `8fe99bdc` (etiqueta sin cambio) | Exige alcance de compañía para imágenes globales de artículos |
 | #1320 | #1649 | ✅ Implementado; regresión local en `74db370b` (etiqueta sin cambio) | Limita el listado de transacciones bancarias |
 | #1321 | #1649 | ✅ Implementado; regresión local en `b649bbdf` (etiqueta sin cambio) | Limita el catálogo de usuarios por compañía |
@@ -401,11 +403,11 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1319 | #1653 | Implementación (`needs-work`) | Evita duplicados en importaciones bancarias concurrentes |
 | #1466 | #1653 | ✅ Implementado; regresión local en `4078e439` (etiqueta sin cambio) | API de cierre de flujo responde 200 sin persistir cambios |
 | #1669 | #1653 | ✅ Implementado; regresión local en `ba0e0252` (etiqueta sin cambio) | [Imports] Recuperación duplica errores de timeout |
-| #1682 | #1653 | Implementación (`needs-work`) | [Audit][Auth] Evita roles duplicados por usuario |
+| #1682 | #1653 | ✅ Implementado; regresión local en `8c4fdec4` (etiqueta sin cambio) | [Audit][Auth] Evita roles duplicados por usuario |
 | #1683 | #1658 | Implementación (`needs-work`) | [Audit][Database] Elimina columnas muertas de BaseTransaccion |
 | #1684 | #1658 | Implementación (`needs-work`) | [Audit][Database] Retira aliases de compatibilidad sin uso |
 | #1689 | #1653 | Implementación (`needs-work`) | Evita sobreasignar factura concurrentemente |
-| #1697 | #1653 | Implementación (`needs-work`) | Evita duplicar claves de configuración |
+| #1697 | #1653 | ✅ Implementado; regresión local en `03dfc484` (etiqueta sin cambio) | Evita duplicar claves de configuración |
 | #1853 | Consumidor | Implementación (`needs-work`) | [AUDIT][REFACTOR] Config mypy diverge: .mypy.ini sombreado por pyproject.toml |
 
 ### Fase 3 — Entradas, maestros y contratos de API
