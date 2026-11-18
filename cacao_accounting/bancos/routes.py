@@ -744,6 +744,8 @@ def bancos_regla_matching_ejecutar(rule_id: str):
                 raise BankStatementError(_("La cuenta bancaria indicada no existe."))
             if bank_account.company != rule.company:
                 raise BankStatementError(_("La cuenta bancaria no pertenece a la compañía de la regla."))
+            if rule.bank_account_id and str(rule.bank_account_id) != str(bank_account.id):
+                raise BankStatementError(_("La regla de matching está configurada para otra cuenta bancaria."))
         date_from = date.fromisoformat(request.form.get("date_from") or date.today().isoformat())
         date_to = date.fromisoformat(request.form.get("date_to") or date.today().isoformat())
         result = apply_bank_matching_rule(rule_id, bank_account_id, (date_from, date_to))
