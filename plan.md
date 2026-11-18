@@ -28,6 +28,7 @@ QA1, QA2, QA3 o al administrador.
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
 | #1282 contactos, direcciones y roles cruzados de terceros | Implementado con regresión | `ff54d165` | `tests/test_party_management_company_scope.py` |
 | #1284 adjuntos de terceros por activación y permiso | Implementado con regresión | `9cd29cc2` | `tests/test_party_attachment_company_scope.py` |
+| #1286 seguimiento de autorización de terceros (política común) | Coordinación cubierta con regresión | `f0ec7506` | `tests/test_party_read_company_scope.py`, `tests/test_party_management_company_scope.py` |
 | #1280 configuración de terceros por compañía | Implementado con regresión | `039e582a` | `tests/test_party_management_company_scope.py` |
 | #1590 reporte de lotes con evidencia de compañía | Implementado con regresión | `b0d9003a` | `tests/test_report_batch_company_evidence.py` |
 | #1600/#1601 dashboard y permisos de acción contable | Implementado con regresión | `19610192` | `tests/test_dashboard_consult_permission.py`, `tests/test_accounting_action_permission.py` |
@@ -40,7 +41,8 @@ QA1, QA2, QA3 o al administrador.
 | #1321 catálogo de usuarios por compañía | Implementado con regresión | `b649bbdf` | `tests/test_search_select_user_company_scope.py` |
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 
-**Última validación local:** `pytest -n auto --full` → **646 passed, 94 skipped**, 0 fallos (HEAD `9cd29cc2`).
+**Última suite completa:** `pytest -n auto --full` → **646 passed, 94 skipped**, 0 fallos (HEAD `9cd29cc2`).
+Los commits posteriores se validaron con pruebas dirigidas y linters; la próxima ronda completa corresponde al umbral de 50 commits o antes de un push.
 Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archivos tocados.
 
 **Controles pendientes:**
@@ -257,7 +259,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1282 | #1649 | ✅ Implementado; regresión local en `ff54d165` (etiqueta sin cambio) | Protege la edición de contactos y roles de terceros |
 | #1283 | #1658 | Implementación (`needs-work`) | Elimina helpers de terceros sin llamadores |
 | #1284 | #1649 | ✅ Implementado; regresión local en `9cd29cc2` (etiqueta sin cambio) | Aísla adjuntos de terceros entre compañías |
-| #1286 | #1649 | Implementación (`needs-work`) | Seguimiento: autorización por compañía de terceros |
+| #1286 | #1649 | ✅ Coordinación cubierta; regresión en `f0ec7506` (etiqueta sin cambio) | Seguimiento: autorización por compañía de terceros |
 | #1299 | #1658 | Implementación (`needs-work`) | Retira o integra preferencias CompanyParty sin consumidores |
 | #1301 | #1649 | ✅ Implementado; regresión local en `8fe99bdc` (etiqueta sin cambio) | Exige alcance de compañía para imágenes globales de artículos |
 | #1320 | #1649 | Implementación (`needs-work`) | Limita el listado de transacciones bancarias |
