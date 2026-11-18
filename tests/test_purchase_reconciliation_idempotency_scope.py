@@ -137,3 +137,32 @@ def test_replay_for_another_invoice_is_a_conflict(reconciliation_idempotency_sce
             ).scalar_one_or_none()
             is None
         )
+
+
+def test_replay_lookup_runs_after_locking_the_invoice(reconciliation_idempotency_scenario, monkeypatch):
+    """The replay waits for the invoice lock before resolving the key (#1076)."""
+    app, ids = reconciliation_idempotency_scenario
+    from cacao_accounting.compras import purchase_reconciliation_service as service
+
+    from cacao_accounting.database import database
+
+    order: list[str] = []
+    original_find = service._find_reconciliation_by_idempotency_key
+    original_get = type(database.session).get
+
+    def spy_find(key: str):
+        order.append("find")
+        return original_find(key)
+
+    def spy_get(self, entity, ident, **kwargs):
+        order.append("get")
+        return original_get(self, entity, ident, **kwargs)
+
+    monkeypatch.setattr(service, "_find_reconciliation_by_idempotency_key", spy_find)
+    monkeypatch.setattr(type(database.session), "get", spy_get)
+
+    with app.app_context():
+        result = service.reconcile_purchase_invoice(ids["invoice_a"], ids["key"])
+
+    assert result.reconciliation_id == ids["reconciliation"]
+    assert order[:2] == ["get", "find"]

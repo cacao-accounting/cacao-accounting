@@ -1127,23 +1127,19 @@ def reconcile_purchase_invoice(
     reenviar la misma peticion con la misma clave y obtener el mismo resultado
     sin crear un posting duplicado.
     """
-    # Replay por idempotency key: si la peticion es un retry, devolvemos el
-    # resultado previo sin tocar la base de datos transaccional.
-    if idempotency_key is not None:
-        existing = _find_reconciliation_by_idempotency_key(idempotency_key)
-        if existing is not None:
-            # #1076: la clave es única y pertenece a una sola factura; un
-            # replay de otra factura es un conflicto, no un retry válido.
-            if str(existing.purchase_invoice_id or "") != str(purchase_invoice_id):
-                raise PurchaseReconciliationError(_("La clave de idempotencia ya pertenece a otra factura de compra."))
-            return _result_from_existing_reconciliation(existing)
-
-    # Lock the economic document before checking for an existing reconciliation.
-    # Without this ordering two workers can both observe no row and create a
-    # duplicate reconciliation for the same invoice.
+    # Lock the economic document before resolving the replay. En PostgreSQL el
+    # segundo retry espera el lock y luego observa la conciliación ya creada,
+    # devolviendo el mismo resultado en vez de un conflicto (#1076).
     invoice = database.session.get(PurchaseInvoice, purchase_invoice_id, with_for_update=True)
     if not invoice:
         raise PurchaseReconciliationError(_("La factura de compra no existe."))
+
+    if idempotency_key is not None:
+        existing = _find_reconciliation_by_idempotency_key(idempotency_key)
+        if existing is not None:
+            if str(existing.purchase_invoice_id or "") != str(purchase_invoice_id):
+                raise PurchaseReconciliationError(_("La clave de idempotencia ya pertenece a otra factura de compra."))
+            return _result_from_existing_reconciliation(existing)
 
     duplicate = database.session.execute(
         select(PurchaseReconciliation.id)
