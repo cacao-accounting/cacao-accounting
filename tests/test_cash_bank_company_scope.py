@@ -133,6 +133,7 @@ def bank_company_scope_scenario():
             posting_date=date(2026, 11, 6),
             withdrawal=20,
             description=beta_description,
+            is_reconciled=True,
         )
         database.session.add_all([alpha_transaction, beta_transaction])
 
@@ -293,6 +294,13 @@ def test_cash_listings_require_consult_permission(bank_company_scope_scenario):
         "/cash_management/bank-account/list",
         "/cash_management/payment/list",
         "/cash_management/transfer/list",
+        "/cash_management/payment/debit-note/list",
+        "/cash_management/payment/credit-note/list",
+        "/cash_management/petty-cash/list",
+        "/cash_management/petty-cash-voucher/list",
+        "/cash_management/petty-cash-expense/list",
+        "/cash_management/petty-cash-reconciliation/list",
+        "/cash_management/petty-cash-replenishment/list",
     ):
         assert client.get(path).status_code == 403, path
 

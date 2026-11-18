@@ -357,6 +357,7 @@ def bancos_transferencia_lista():
 @bancos.route("/payment/debit-note/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def bancos_nota_debito_lista():
     """Listado de notas de débito bancario (retiros)."""
     consulta = _paginate_list(
@@ -378,6 +379,7 @@ def bancos_nota_debito_lista():
 @bancos.route("/payment/credit-note/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def bancos_nota_credito_lista():
     """Listado de notas de crédito bancario (depósitos)."""
     consulta = _paginate_list(
@@ -428,8 +430,6 @@ def bancos_transaccion_reconciliar():
     )
     if not transactions:
         abort(404)
-    if any(transaction.is_reconciled for transaction in transactions):
-        abort(409)
 
     company = None
     for transaction in transactions:
@@ -439,6 +439,8 @@ def bancos_transaccion_reconciliar():
         # #1320/#feedback: cada transacción se autoriza antes de seguir
         # leyendo estado de conciliación o duplicados.
         exige_acceso_compania("cash", bank_account.company or "", "editar")
+        if transaction.is_reconciled:
+            abort(409)
         if company is None:
             company = bank_account.company
         elif bank_account.company != company:
@@ -1065,6 +1067,7 @@ def bancos_cuenta_bancaria_numbering_config(account_id: str) -> ResponseReturnVa
 @bancos.route("/petty-cash/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def caja_chica_lista():
     """Listado de cajas chicas."""
     companies = _cash_company_codes()
@@ -1252,6 +1255,7 @@ def _cash_company_codes() -> list[str]:
 @bancos.route("/petty-cash-voucher/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def caja_chica_vale_lista():
     """Listado de vales de caja chica."""
     companies = _cash_company_codes()
@@ -1376,6 +1380,7 @@ def caja_chica_vale_liquidar(v_id):
 @bancos.route("/petty-cash-expense/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def caja_chica_gasto_lista():
     """Listado de gastos de caja chica."""
     companies = _cash_company_codes()
@@ -1467,6 +1472,7 @@ def _submit_petty_cash_expense_form(formulario, funds, title):
 @bancos.route("/petty-cash-reconciliation/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def caja_chica_conciliacion_lista():
     """Lista las conciliaciones de caja chica visibles para el usuario."""
     query = database.select(PettyCashReconciliation).order_by(PettyCashReconciliation.reconciliation_date.desc())
@@ -1593,6 +1599,7 @@ def caja_chica_conciliacion_ajustar(r_id):
 @bancos.route("/petty-cash-replenishment/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def caja_chica_reposicion_lista():
     """Lista solicitudes de reposicion de caja chica."""
     query = database.select(PettyCashReplenishment).order_by(PettyCashReplenishment.request_date.desc())
