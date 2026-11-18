@@ -4,12 +4,23 @@
 """Adaptador para importación de entradas de pronóstico de caja."""
 
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 
 from cacao_accounting.database import CashForecast, CashForecastEntry, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.i18n import _
+
+
+def _finite_amount(value: Any) -> Decimal:
+    """Convierte el monto del pronóstico y rechaza valores no finitos."""
+    try:
+        amount = Decimal(str(value if value not in (None, "") else "0"))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ValueError(_("Monto inválido: %(value)s") % {"value": value}) from exc
+    if not amount.is_finite():
+        raise ValueError(_("El monto debe ser finito."))
+    return amount
 
 
 class CashForecastEntryAdapter(BaseImportAdapter):
@@ -35,9 +46,9 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         if self._normalize_entry_type(row_data.get("type")) is None:
             errors.append(_("El tipo debe ser Income o Expense."))
         try:
-            Decimal(str(row_data.get("amount") or 0))
-        except (ValueError, TypeError):
-            errors.append(f"Monto inválido: {row_data.get('amount')}")
+            _finite_amount(row_data.get("amount"))
+        except ValueError as exc:
+            errors.append(str(exc))
         try:
             if isinstance(row_data.get("estimated_date"), str):
                 date.fromisoformat(row_data["estimated_date"])
@@ -83,7 +94,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
                     "type": entry_type,
                     "concept": str(row.get("concept", "")).strip(),
                     "currency": str(row.get("currency", "NIO")).strip(),
-                    "amount": Decimal(str(row.get("amount", 0))),
+                    "amount": _finite_amount(row.get("amount")),
                     "estimated_date": estimated_date,
                     "notes": str(row.get("notes", "")).strip(),
                     "created_by": context.get("created_by"),

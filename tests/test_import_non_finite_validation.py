@@ -121,3 +121,60 @@ def test_statement_service_rejects_non_finite_decimals(value):
     """The statement parser rejects a non-finite Decimal before persisting."""
     with pytest.raises(BankStatementError):
         _decimal_value(value)
+
+
+def test_purchase_order_adapter_rejects_non_finite_quantity_and_price(non_finite_scenario):
+    """The purchase-order importer does not persist NaN or Infinity lines."""
+    from cacao_accounting.imports.adapters.purchase_order import PurchaseOrderAdapter
+
+    app = non_finite_scenario
+    row = {"document_ref": "PO-1", "fecha": "2026-05-10", "proveedor": "SUP-1", "producto": "ITEM-1"}
+    with app.app_context():
+        errors_qty = PurchaseOrderAdapter().validate_document([{**row, "cantidad": "NaN", "precio_unitario": "1"}])
+        errors_price = PurchaseOrderAdapter().validate_document([{**row, "cantidad": "1", "precio_unitario": "Infinity"}])
+
+    assert any("finito" in error for error in errors_qty)
+    assert any("finito" in error for error in errors_price)
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
+def test_purchase_order_adapter_rejects_non_finite_exchange_rate(non_finite_scenario, value):
+    """An imported purchase order cannot carry a non-finite exchange rate."""
+    from cacao_accounting.imports.adapters.purchase_order import PurchaseOrderAdapter
+
+    app = non_finite_scenario
+    row = {
+        "document_ref": "PO-1",
+        "fecha": "2026-05-10",
+        "proveedor": "SUP-1",
+        "producto": "ITEM-1",
+        "cantidad": "1",
+        "precio_unitario": "1",
+        "moneda": "USD",
+        "tipo_cambio": value,
+    }
+    with app.app_context():
+        with pytest.raises(ValueError):
+            PurchaseOrderAdapter._currency_and_rate(row, "alpha", date(2026, 5, 10))
+
+
+def test_cash_forecast_adapter_rejects_non_finite_amount(non_finite_scenario):
+    """Cash forecast rows and documents reject non-finite amounts."""
+    from cacao_accounting.imports.adapters.cash_forecast_entry import CashForecastEntryAdapter
+
+    app = non_finite_scenario
+    adapter = CashForecastEntryAdapter()
+    row = {
+        "forecast_id": "FC-1",
+        "type": "Income",
+        "concept": "Venta",
+        "currency": "NIO",
+        "amount": "NaN",
+        "estimated_date": "2026-05-10",
+    }
+    with app.app_context():
+        errors = adapter.validate_row(row)
+        with pytest.raises(ValueError):
+            adapter.build_document([{**row, "amount": "Infinity"}], {"company_id": "alpha"})
+
+    assert any("finito" in error for error in errors)
