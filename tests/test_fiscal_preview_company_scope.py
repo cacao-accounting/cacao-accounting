@@ -163,3 +163,16 @@ def test_authorized_company_reaches_the_fiscal_calculation(fiscal_preview_scope_
     response = client.post(PREVIEW_URL, json=_payload("collection_entry", "alpha"))
 
     assert response.status_code != 403
+
+
+def test_every_fiscal_profile_has_an_explicit_company_policy():
+    """Un perfil nuevo no puede quedar bloqueado por el fail-closed (QA2 B14)."""
+    from cacao_accounting.api import (
+        _FISCAL_PREVIEW_MODULES,
+        _FISCAL_PREVIEW_SHARED_MODULES,
+    )
+    from cacao_accounting.fiscal_preview_service import _FISCAL_MATRIX
+
+    policies = set(_FISCAL_PREVIEW_MODULES) | set(_FISCAL_PREVIEW_SHARED_MODULES)
+
+    assert set(_FISCAL_MATRIX) <= policies
