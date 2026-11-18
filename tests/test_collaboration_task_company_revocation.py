@@ -258,3 +258,29 @@ def test_revoking_module_role_hides_document_tasks(task_revocation_scenario):
 
         login_user(database.session.get(User, ids["assignee"]))
         assert open_task_count(ids["assignee"]) == 1
+
+
+def test_task_filters_do_not_reintroduce_revoked_tasks(task_revocation_scenario):
+    """Los filtros de la bandeja tampoco devuelven tareas fuera de alcance (#1572).
+
+    El scoping se aplica antes de los filtros opcionales; probar `status`,
+    `priority` y `company` evita que una combinación de query string vuelva a
+    exponer el título o la referencia de una tarea revocada.
+    """
+    app, ids = task_revocation_scenario
+    _revoke_alpha_access(app, ids["assignee"])
+    client = _authenticated_client(app, ids["assignee"])
+
+    for query in (
+        "status=open",
+        "priority=normal",
+        f"company={ids['company_alpha']}&status=open",
+    ):
+        response = client.get(f"/tasks/my?{query}")
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert ids["alpha"] not in body
+        assert ids["beta"] not in body
+
+    filtered_company = client.get(f"/tasks/my?company={ids['company_alpha']}")
+    assert ids["none"] not in filtered_company.get_data(as_text=True)
