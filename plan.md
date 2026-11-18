@@ -31,6 +31,7 @@ QA1, QA2, QA3 o al administrador.
 | #1595 tareas ocultas al perder el permiso del documento | Implementado con regresión | `8badc192` | `tests/test_collaboration_task_company_revocation.py` |
 | #1411 listas relacionadas con módulos alternativos | Implementado con regresión | `1a58f880` (scoping y filtro) / `4e18de70` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1407 cada nodo del árbol documental por módulo | Implementado con regresión | `a43e6117` | `tests/test_document_tree_node_permissions.py` |
+| #1410 líneas de entrega consultables desde Ventas | Implementado con regresión | `54bb39a1` | `tests/test_document_flow_delivery_note_lines.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -287,7 +288,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1388 | #1649 | Implementación (`needs-work`) | Valida el cliente al crear relaciones O2C por línea |
 | #1399 | #1649 | Implementación (`needs-work`) | Valida el tercero seleccionado en importación de pagos |
 | #1407 | #1649 | ✅ Implementado; regresión local en `a43e6117` (etiqueta sin cambio) | Aplica permisos por módulo a cada nodo del árbol documental |
-| #1410 | #1649 | Implementación (`needs-work`) | Permite consultar líneas de entrega desde ventas |
+| #1410 | #1649 | ✅ Implementado; regresión local en `54bb39a1` (etiqueta sin cambio) | Permite consultar líneas de entrega desde ventas |
 | #1411 | #1649 | ✅ Implementado; regresión local en `4e18de70` (etiqueta sin cambio) | Respeta acceso de inventario en lista de órdenes relacionadas |
 | #1416 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | El listado de movimientos filtra por compañías sin autorización |
 | #1417 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Detalle de lote expone movimientos de otras compañías |
