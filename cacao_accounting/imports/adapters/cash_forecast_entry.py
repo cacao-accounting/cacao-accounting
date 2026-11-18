@@ -27,8 +27,8 @@ def _text(value: Any, default: str = "") -> str:
     """Normaliza celdas vacías de XLSX/ODS sin convertirlas en "None"."""
     if value is None:
         return default
-    text = str(value).strip()
-    return text or default
+    text = str(value)
+    return text if text.strip() else default
 
 
 class CashForecastEntryAdapter(BaseImportAdapter):
