@@ -3360,6 +3360,7 @@ def aplicar_recurrentes_cierre(identifier: str):
 @contabilidad.route("/period-close/monthly/<identifier>/exchange-revaluation", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "crear")
 @verifica_acceso("accounting")
 def ejecutar_revalorizacion_cierre(identifier: str) -> "Any":
     """Ejecuta revalorizacion cambiaria desde el asistente de cierre mensual."""
@@ -3480,6 +3481,7 @@ def revalorizaciones_cambiarias():
 @contabilidad.route("/exchange-revaluation/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "crear")
 @verifica_acceso("accounting")
 def nueva_revalorizacion_cambiaria():
     """Formulario minimo para ejecutar una revalorizacion cambiaria."""
@@ -3586,6 +3588,7 @@ def anular_revalorizacion_cambiaria(identifier: str):
 @contabilidad.route("/journal/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "crear")
 @verifica_acceso("accounting")
 def nuevo_comprobante():
     """Nuevo comprobante contable."""
@@ -4536,6 +4539,7 @@ def fiscal_year_closing_reverse(fy_id):
 @contabilidad.route("/cash-flow-config/<company>", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "configurar")
 @verifica_acceso("accounting")
 def cash_flow_config(company):
     """Vista dedicada de clasificación NIC 7 de cuentas para el EFE.

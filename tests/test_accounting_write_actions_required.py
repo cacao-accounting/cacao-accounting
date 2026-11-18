@@ -44,6 +44,11 @@ WRITE_REQUESTS = (
     ("post", "/accounting/period-close/monthly/MISSING/close"),
     ("post", "/accounting/exchange-revaluation/MISSING/void"),
     ("get", "/accounting/entity/set_active/MISSING"),
+    ("get", "/accounting/journal/new"),
+    ("post", "/accounting/period-close/monthly/MISSING/exchange-revaluation"),
+    ("get", "/accounting/exchange-revaluation/new"),
+    ("post", "/accounting/cash-flow-config"),
+    ("get", "/accounting/balance-confirmations/new"),
 )
 
 FULL_PERMISSIONS = {
@@ -56,6 +61,8 @@ FULL_PERMISSIONS = {
     "approve": True,
     "set_null": True,
     "close": True,
+    "request": True,
+    "setup": True,
 }
 
 

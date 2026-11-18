@@ -23,7 +23,7 @@ from cacao_accounting.database import (
     PartyContact,
 )
 from cacao_accounting.runtime_mode import is_desktop_mode
-from cacao_accounting.decorators import modulo_activo, exige_acceso_compania
+from cacao_accounting.decorators import verifica_permiso, modulo_activo, exige_acceso_compania
 from cacao_accounting.contabilidad.balance_confirmation import (
     create_balance_confirmation,
     generate_invitation_credentials,
@@ -265,6 +265,7 @@ def _handle_confirmation_creation(party_id: str, party_type: str):
 @balance_confirmations_bp.route("/accounting/balance-confirmations/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "solicitar")
 def crear_confirmacion_form():
     """Formulario para solicitar una nueva confirmación de saldo."""
     party_id = request.args.get("party_id")

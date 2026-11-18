@@ -23,7 +23,6 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.imports.adapters.cash_forecast_entry import CashForecastEntryAdapter
 
-
 pytestmark = pytest.mark.database
 
 
@@ -88,6 +87,7 @@ def test_cash_forecast_import_rejects_unknown_currency_without_orphan(forecast_i
             company=company.code,
             version="base",
             periodicity="monthly",
+            status="Draft",
         )
         database.session.add(forecast)
         database.session.flush()
