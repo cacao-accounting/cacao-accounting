@@ -1507,6 +1507,11 @@ def api_document_flow_payment_reconciliation_candidates():
     party_type = request.args.get("party_type") or ""
     party_id = request.args.get("party_id") or request.args.get("party") or None
     currency = request.args.get("currency") or None
+    if not company:
+        return jsonify({"error": _("La compañía es obligatoria.")}), 400
+    # #1104: los candidatos exponen IDs y saldos de pagos; Caja debe autorizar
+    # la consulta además del módulo comercial del tercero.
+    exige_acceso_compania("cash", company, "consultar")
     module = {"supplier": "purchases", "customer": "sales"}.get(party_type)
     if module:
         exige_acceso_compania(module, company, "consultar")
