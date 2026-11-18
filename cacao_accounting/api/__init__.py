@@ -86,7 +86,7 @@ from cacao_accounting.document_flow.service import get_source_items
 from cacao_accounting.i18n import _
 from cacao_accounting.document_flow.status import document_status_payload
 from cacao_accounting.document_flow.tree import build_document_flow_tree
-from cacao_accounting.fiscal_preview_service import fiscal_preview
+from cacao_accounting.fiscal_preview_service import fiscal_preview, get_fiscal_document_profile
 from cacao_accounting.cache import user_scoped_cache
 from cacao_accounting.search_select import SearchSelectError, search_select
 from cacao_accounting.party_management import companias_autorizadas_por_accion
@@ -305,6 +305,9 @@ def _require_source_item_access(
         exige_acceso_compania(module, company, action)
 
 
+# #997: las claves son los perfiles fiscales resueltos, no los alias de
+# entrada. Todos los perfiles aceptados por `get_fiscal_document_profile`
+# deben tener política explícita; un perfil sin política no continúa.
 _FISCAL_PREVIEW_MODULES = {
     "sales_request": "sales",
     "sales_order": "sales",
@@ -317,6 +320,10 @@ _FISCAL_PREVIEW_MODULES = {
     "import_landed_cost": "purchases",
     "stock_entry": "inventory",
     "payment_entry": "cash",
+    "collection_entry": "cash",
+    "bank_debit_note": "cash",
+    "bank_credit_note": "cash",
+    "bank_transfer": "cash",
 }
 
 _FISCAL_PREVIEW_SHARED_MODULES = {
@@ -329,14 +336,28 @@ _FISCAL_PREVIEW_SHARED_MODULES = {
 def _require_fiscal_preview_company_access(payload: dict[str, Any]) -> None:
     """Require access to the company whose persisted fiscal rules are previewed."""
     company = str(payload.get("company") or "").strip()
-    document_type = str(payload.get("document_type") or "").strip().lower()
-    shared_modules = _FISCAL_PREVIEW_SHARED_MODULES.get(document_type)
-    if company and shared_modules:
+    if not company:
+        # La ausencia de compañía la reporta el servicio con su propio mensaje.
+        return
+    document_type = str(payload.get("document_type") or "").strip()
+    payment_type = str(payload.get("payment_type") or "").strip()
+    try:
+        profile = get_fiscal_document_profile(document_type, payment_type)
+    except ValueError:
+        # El tipo no soportado se responde como error de validación en la
+        # vista; aquí no hay compañía cuyas reglas se puedan exponer.
+        return
+    profile_type = profile.document_type
+    shared_modules = _FISCAL_PREVIEW_SHARED_MODULES.get(profile_type)
+    if shared_modules:
         exige_acceso_compania_cualquiera(shared_modules, company, "consultar")
         return
-    module = _FISCAL_PREVIEW_MODULES.get(document_type)
-    if company and module:
-        exige_acceso_compania(module, company, "consultar")
+    module = _FISCAL_PREVIEW_MODULES.get(profile_type)
+    if module is None:
+        # Fail closed: un perfil aceptado sin política de compañía no expone
+        # reglas fiscales.
+        abort(403)
+    exige_acceso_compania(module, company, "consultar")
 
 
 @api.route("/api/sales/catalog-price")
