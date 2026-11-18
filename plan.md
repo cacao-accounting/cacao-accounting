@@ -51,6 +51,7 @@ QA1, QA2, QA3 o al administrador.
 | #1254 pendientes de compras ocultos en banca | Implementado con regresión | `274c1869` | `tests/test_query_tools_banking_purchase_scope.py` |
 | #1354/#1355/#1110 revocación de credenciales y confirmaciones vencidas | Implementado con regresión | `de6f005c`, `6ebf42a5`, `9032d7a4` | `tests/test_token_requerido.py`, `tests/test_password_reset_revokes_sessions.py`, `tests/test_balance_confirmation_delivery_failures.py` |
 | #1467 propiedad al cambiar estado de tareas | Implementado con regresión | `5848ee8e` (prueba) | `tests/test_task_status_authorization.py` |
+| #1253 lotes visibles solo con evidencia de la compañía | Implementado con regresión | `b0d9003a`, `f995e0e0` | `tests/test_report_batch_company_evidence.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -285,7 +286,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1175 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Limita lotes y movimientos al alcance de compañía |
 | #1176 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Valida company explícita en listado de inventario |
 | #1181 | #1649 | ✅ Implementado; regresión local en `771d4e15` (etiqueta sin cambio) | Restringe detalle de artículos a compañías autorizadas |
-| #1253 | #1649 | Implementación (`needs-work`) | Define el alcance de lotes entre compañías |
+| #1253 | #1649 | ✅ Implementado; evidencia y regresión en `b0d9003a`, `f995e0e0` (etiqueta sin cambio) | Define el alcance de lotes entre compañías |
 | #1254 | #1649 | ✅ Implementado; regresión local en `274c1869` (etiqueta sin cambio) | Restringe pendientes de compras en consulta bancaria |
 | #1261 | Consumidor | ✅ Implementado; regresión local en `f79c5da7` (etiqueta sin cambio) | Respeta alcance de cuenta en reglas bancarias |
 | #1280 | #1649 | ✅ Implementado; regresión local en `039e582a` (etiqueta sin cambio) | Autoriza cambios de configuración de terceros por compañía |
