@@ -58,6 +58,7 @@ QA1, QA2, QA3 o al administrador.
 | #1488 lote de importación ligado a su presupuesto | Implementado con regresión | `76d28dc8` | `tests/test_r2r_budget_import_owner_scope.py` |
 | #1019 cierre de saldo ligado al documento autorizado | Implementado con regresión | `38fd869f` | `tests/test_document_flow_close_line_scope.py` |
 | #911 compañía obligatoria en Cloud sin fallback | Implementado con regresión | `da5cb0c4` | `tests/test_report_company_required.py` |
+| #1562 impresión de portal acotada a la compañía del usuario | Implementado con regresión | `5fbd7027` | `tests/test_portal_print_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -337,7 +338,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1542 | #1649 | ✅ Implementado; regresión local en `42786767` (etiqueta sin cambio) | Editar artículo borra cuentas de compañías omitidas |
 | #1543 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Filtro de compañía expone movimientos de inventario |
 | #1558 | #1649 | ✅ Implementado; regresión local en `7b7f1de0` (etiqueta sin cambio) | La portada expone períodos de compañías no autorizadas |
-| #1562 | #1649 | Implementación (`needs-work`) | El portal puede imprimir documentos de otra compañía |
+| #1562 | #1649 | ✅ Implementado; regresión local en `5fbd7027` (etiqueta sin cambio) | El portal puede imprimir documentos de otra compañía |
 | #1572 | #1649 | ✅ Implementado; regresión local en `584253c4` (etiqueta sin cambio) | Filtra tareas por el acceso vigente al documento |
 | #1576 | #1658 | ✅ Implementado; regresión local en `353bee41` (etiqueta sin cambio) | Incluye validar_solicitud en los permisos calculados |
 | #1590 | #1649 | ✅ Implementado; regresión local en `b0d9003a` (etiqueta sin cambio) | Filtra lotes sin evidencia de la compañía en el reporte |
