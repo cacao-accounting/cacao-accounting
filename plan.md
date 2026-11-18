@@ -26,6 +26,7 @@ QA1, QA2, QA3 o al administrador.
 | #1173/#1416/#1176/#1543 listado y formulario de movimientos; #1175/#1540/#1417 lotes (cobertura) | Implementado con regresión | `04b2e32b`, `b4451169` | `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_inventory_batch_company_scope.py` |
 | #1526/#1527 bancos: permiso de alta y alcance por cuenta | Implementado con regresión | `ea3d7dfc` | `tests/test_cash_bank_company_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
+| #1282 contactos, direcciones y roles cruzados de terceros | Implementado con regresión | `ff54d165` | `tests/test_party_management_company_scope.py` |
 | #1280 configuración de terceros por compañía | Implementado con regresión | `039e582a` | `tests/test_party_management_company_scope.py` |
 | #1590 reporte de lotes con evidencia de compañía | Implementado con regresión | `b0d9003a` | `tests/test_report_batch_company_evidence.py` |
 | #1600/#1601 dashboard y permisos de acción contable | Implementado con regresión | `19610192` | `tests/test_dashboard_consult_permission.py`, `tests/test_accounting_action_permission.py` |
@@ -38,7 +39,7 @@ QA1, QA2, QA3 o al administrador.
 | #1321 catálogo de usuarios por compañía | Implementado con regresión | `b649bbdf` | `tests/test_search_select_user_company_scope.py` |
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 
-**Última validación local:** `pytest -n auto --full` → **632 passed, 94 skipped**, 0 fallos (HEAD `039e582a`).
+**Última validación local:** `pytest -n auto --full` → **637 passed, 94 skipped**, 0 fallos (HEAD `ff54d165`).
 Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archivos tocados.
 
 **Controles pendientes:**
@@ -252,7 +253,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1254 | #1649 | Implementación (`needs-work`) | Restringe pendientes de compras en consulta bancaria |
 | #1261 | Consumidor | Implementación (`needs-work`) | Respeta alcance de cuenta en reglas bancarias |
 | #1280 | #1649 | ✅ Implementado; regresión local en `039e582a` (etiqueta sin cambio) | Autoriza cambios de configuración de terceros por compañía |
-| #1282 | #1649 | Implementación (`needs-work`) | Protege la edición de contactos y roles de terceros |
+| #1282 | #1649 | ✅ Implementado; regresión local en `ff54d165` (etiqueta sin cambio) | Protege la edición de contactos y roles de terceros |
 | #1283 | #1658 | Implementación (`needs-work`) | Elimina helpers de terceros sin llamadores |
 | #1284 | #1649 | Implementación (`needs-work`) | Aísla adjuntos de terceros entre compañías |
 | #1286 | #1649 | Implementación (`needs-work`) | Seguimiento: autorización por compañía de terceros |
