@@ -43,7 +43,7 @@ from cacao_accounting.document_flow import (
 
 from cacao_accounting.document_identifiers import assign_document_identifier
 
-from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
+from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_acceso, verifica_permiso
 from cacao_accounting.runtime_mode import is_cloud_mode
 
 from cacao_accounting.list_filters import apply_list_filters
@@ -541,6 +541,7 @@ def _bodega_predeterminada_visible(default_warehouse) -> Any:
 @inventario.route("/item/<item_id>")
 @modulo_activo("inventory")
 @login_required
+@verifica_acceso("inventory")
 def inventario_articulo(item_id):
     """Detalle de artículo."""
     registro = database.session.execute(database.select(Item).filter_by(code=item_id)).first()
