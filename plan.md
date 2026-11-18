@@ -46,6 +46,7 @@ QA1, QA2, QA3 o al administrador.
 | #1104 permiso de Caja en candidatos de conciliación | Implementado con regresión | `4d94544b` | `tests/test_payment_reconciliation_candidates_scope.py` |
 | #1558 períodos de la portada acotados por compañía | Implementado con regresión | `26ab8aaf` (prueba) | `tests/test_home_company_periods_scope.py` |
 | #2011 rol de ventas vigente en listas de precios | Implementado con regresión | `4b25e21f` | `tests/test_price_list_revoked_role.py` |
+| #1433 factura duplicada validada con clave normalizada | Implementado con regresión | `c3d268ff` (fix/pruebas) | `tests/test_purchase_invoice_duplicate_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -307,7 +308,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1416 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | El listado de movimientos filtra por compañías sin autorización |
 | #1417 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Detalle de lote expone movimientos de otras compañías |
 | #1418 | #1649 | ✅ Implementado; regresión local en `42786767` (etiqueta sin cambio) | Editar artículo permite borrar cuentas de otras compañías |
-| #1433 | #1649 | Implementación (`needs-work`) | Valida facturas duplicadas entre compañías |
+| #1433 | #1649 | ✅ Implementado; regresión local en `0b0b6d54` (etiqueta sin cambio) | Valida facturas duplicadas entre compañías |
 | #1467 | #1649 | Implementación (`needs-work`) | Un usuario de solo lectura puede modificar tareas ajenas |
 | #1488 | #1649 | Implementación (`needs-work`) | Vincula el lote de importación al presupuesto autorizado |
 | #1511 | #1649 | ✅ Implementado; regresión local en `1b0ed7f4` (etiqueta sin cambio) | Restringir el precargado de pagos por compañía |
