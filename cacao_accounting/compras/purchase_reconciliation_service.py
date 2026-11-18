@@ -1132,6 +1132,10 @@ def reconcile_purchase_invoice(
     if idempotency_key is not None:
         existing = _find_reconciliation_by_idempotency_key(idempotency_key)
         if existing is not None:
+            # #1076: la clave es única y pertenece a una sola factura; un
+            # replay de otra factura es un conflicto, no un retry válido.
+            if str(existing.purchase_invoice_id or "") != str(purchase_invoice_id):
+                raise PurchaseReconciliationError(_("La clave de idempotencia ya pertenece a otra factura de compra."))
             return _result_from_existing_reconciliation(existing)
 
     # Lock the economic document before checking for an existing reconciliation.
