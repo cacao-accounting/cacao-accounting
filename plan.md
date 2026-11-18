@@ -48,6 +48,7 @@ QA1, QA2, QA3 o al administrador.
 | #2011 rol de ventas vigente en listas de precios | Implementado con regresión | `4b25e21f` | `tests/test_price_list_revoked_role.py` |
 | #1433 factura duplicada validada con clave normalizada | Implementado con regresión | `c3d268ff` (fix/pruebas) | `tests/test_purchase_invoice_duplicate_scope.py` |
 | QA2: nodos `journal_entry`, ledger del KPI y compañía de cuenta en matching | Implementado con regresión | `79e40e5f`, `5a2594b9`, `2ee07d67` | `tests/test_document_tree_node_permissions.py`, `tests/test_kpi_snapshot_ledger_scope.py`, `tests/test_bank_matching_rule_account_scope.py` |
+| #1254 pendientes de compras ocultos en banca | Implementado con regresión | `274c1869` | `tests/test_query_tools_banking_purchase_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -283,7 +284,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1176 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Valida company explícita en listado de inventario |
 | #1181 | #1649 | ✅ Implementado; regresión local en `771d4e15` (etiqueta sin cambio) | Restringe detalle de artículos a compañías autorizadas |
 | #1253 | #1649 | Implementación (`needs-work`) | Define el alcance de lotes entre compañías |
-| #1254 | #1649 | Implementación (`needs-work`) | Restringe pendientes de compras en consulta bancaria |
+| #1254 | #1649 | ✅ Implementado; regresión local en `274c1869` (etiqueta sin cambio) | Restringe pendientes de compras en consulta bancaria |
 | #1261 | Consumidor | ✅ Implementado; regresión local en `f79c5da7` (etiqueta sin cambio) | Respeta alcance de cuenta en reglas bancarias |
 | #1280 | #1649 | ✅ Implementado; regresión local en `039e582a` (etiqueta sin cambio) | Autoriza cambios de configuración de terceros por compañía |
 | #1282 | #1649 | ✅ Implementado; regresión local en `ff54d165` (etiqueta sin cambio) | Protege la edición de contactos y roles de terceros |
