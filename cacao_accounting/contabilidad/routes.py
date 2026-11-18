@@ -242,6 +242,58 @@ def _get_account_by_id(account_id: str):
     return registro
 
 
+def _get_unit_by_id(unit_id: str):
+    """Devuelve una unidad de negocio identificada por su ULID.
+
+    El código de unidad es único por compañía, no entre compañías, así que la
+    URL de detalle, edición y borrado usa el ``id`` del registro. Un registro
+    de una compañía no autorizada se rechaza con 403 (#1546).
+
+    Args:
+        unit_id: ULID de la unidad de negocio solicitada.
+
+    Returns:
+        La unidad visible para el usuario, o ``None`` si no existe.
+    """
+    from cacao_accounting.database import Unit
+
+    companias = authorized_company_codes("accounting")
+    if not companias:
+        abort(403)
+    registro = database.session.get(Unit, unit_id)
+    if registro is None:
+        return None
+    if registro.entity not in companias:
+        abort(403)
+    return registro
+
+
+def _get_project_by_id(project_id: str):
+    """Devuelve un proyecto identificado por su ULID.
+
+    El código de proyecto es único por compañía, no entre compañías, así que la
+    URL de detalle, edición y borrado usa el ``id`` del registro. Un registro
+    de una compañía no autorizada se rechaza con 403 (#1546).
+
+    Args:
+        project_id: ULID del proyecto solicitado.
+
+    Returns:
+        El proyecto visible para el usuario, o ``None`` si no existe.
+    """
+    from cacao_accounting.database import Project
+
+    companias = authorized_company_codes("accounting")
+    if not companias:
+        abort(403)
+    registro = database.session.get(Project, project_id)
+    if registro is None:
+        return None
+    if registro.entity not in companias:
+        abort(403)
+    return registro
+
+
 def _journal_list_scope(
     query: Any,
     period_from: str | None,
@@ -921,7 +973,7 @@ def unidades():
         arbol,
         parent_field="parent_id",
         id_field="id",
-        get_url_func=lambda n: url_for("contabilidad.unidad", id_unidad=n.code),
+        get_url_func=lambda n: url_for("contabilidad.unidad", id_unidad=n.id),
     )
 
     TITULO = _("Contabilidad | Unidades de Negocio") + " - " + APPNAME
@@ -974,16 +1026,13 @@ def hierarchy_parent_options(node_type: str):
 @verifica_acceso("accounting")
 def unidad(id_unidad):
     """Unidad de negocios."""
-    from cacao_accounting.database import Unit
-
-    REGISTRO = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).first()
-    if REGISTRO is None:
+    registro = _get_unit_by_id(id_unidad)
+    if registro is None:
         abort(404)
-    exige_acceso_compania("accounting", REGISTRO[0].entity)
     return render_template(
         "contabilidad/unidad.html",
-        registro=REGISTRO[0],
-        titulo=_("Contabilidad | Unidad") + f" {REGISTRO[0].code} - " + APPNAME,
+        registro=registro,
+        titulo=_("Contabilidad | Unidad") + f" {registro.code} - " + APPNAME,
     )
 
 
@@ -993,18 +1042,15 @@ def unidad(id_unidad):
 @verifica_permiso("accounting", "eliminar")
 def eliminar_unidad(id_unidad):
     """Elimina una unidad de negocios de la base de datos."""
-    from cacao_accounting.database import Unit
-
-    unidad = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
+    unidad = _get_unit_by_id(id_unidad)
     if unidad:
-        exige_acceso_compania("accounting", unidad.entity)
         if len(unidad.children) > 0:
             flash(_("No se puede eliminar la unidad porque tiene unidades hijas asignadas (RN-006)."), "danger")
             return redirect(url_for(CONTABILIDAD_UNIDADES))
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
         if _reject_delete_with_dependencies(
-            f"la unidad {id_unidad}",
+            f"la unidad {unidad.code}",
             [
                 ("presupuestos", database.select(BudgetLine.id).filter_by(business_unit_id=unidad.id)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(unit_code=unidad.code)),
@@ -1081,10 +1127,9 @@ def editar_unidad(id_unidad):
     from cacao_accounting.contabilidad.forms import FormularioUnidad
     from cacao_accounting.database import Unit
 
-    registro = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
+    registro = _get_unit_by_id(id_unidad)
     if registro is None:
         return redirect(url_for(CONTABILIDAD_UNIDADES))
-    exige_acceso_compania("accounting", registro.entity)
 
     exclude_ids = {registro.id, *get_descendant_ids(Unit, registro.id)}
     formulario = FormularioUnidad(obj=registro)
@@ -1135,7 +1180,7 @@ def editar_unidad(id_unidad):
                 parent_exclude_id=registro.id,
             )
         invalidate_cache("smart-select-master-data")
-        return redirect(url_for("contabilidad.unidad", id_unidad=registro.code))
+        return redirect(url_for("contabilidad.unidad", id_unidad=registro.id))
 
     return render_template(
         _TPL_UNIDAD_CREAR,
@@ -1906,7 +1951,7 @@ def proyectos():
         arbol,
         parent_field="parent_id",
         id_field="id",
-        get_url_func=lambda n: url_for("contabilidad.proyecto", project_id=n.code),
+        get_url_func=lambda n: url_for("contabilidad.proyecto", project_id=n.id),
         get_badges_func=lambda n: [{"class": "bg-success", "label": _("Capitalizable")}] if n.capitalizable else [],
     )
 
@@ -2016,11 +2061,10 @@ def nuevo_proyecto():
 @verifica_acceso("accounting")
 def proyecto(project_id):
     """Vista de un proyecto."""
-    registro = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
+    registro = _get_project_by_id(project_id)
     if registro is None:
         flash(_("El proyecto indicado no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
-    exige_acceso_compania("accounting", registro.entity)
 
     return render_template(
         "contabilidad/proyecto.html",
@@ -2038,10 +2082,9 @@ def editar_proyecto(project_id):
     """Editar un proyecto existente."""
     from cacao_accounting.contabilidad.forms import FormularioProyecto
 
-    proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
+    proyecto = _get_project_by_id(project_id)
     if proyecto is None:
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
-    exige_acceso_compania("accounting", proyecto.entity)
 
     formulario = FormularioProyecto(obj=proyecto)
     _setup_project_edit_form(formulario, proyecto)
@@ -2087,16 +2130,15 @@ def editar_proyecto(project_id):
 @verifica_acceso("accounting")
 def eliminar_proyecto(project_id):
     """Elimina un proyecto."""
-    proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
+    proyecto = _get_project_by_id(project_id)
     if proyecto:
-        exige_acceso_compania("accounting", proyecto.entity)
         if len(proyecto.children) > 0:
             flash(_("No se puede eliminar el proyecto porque tiene proyectos hijos asignados (RN-006)."), "danger")
             return redirect(url_for(CONTABILIDAD_PROYECTOS))
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
         if _reject_delete_with_dependencies(
-            f"el proyecto {project_id}",
+            f"el proyecto {proyecto.code}",
             [
                 ("presupuestos", database.select(BudgetLine.id).filter_by(project_id=proyecto.id)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(project_code=proyecto.code)),

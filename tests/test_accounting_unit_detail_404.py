@@ -26,8 +26,9 @@ def unidad_qa(app):
     with app.app_context():
         database.session.add(Unit(code=codigo, name="Unidad de detalle QA", entity="cacao", enabled=True))
         database.session.commit()
+        unidad_id = str(database.session.execute(database.select(Unit.id).filter_by(code=codigo)).scalar_one())
 
-    yield codigo
+    yield codigo, unidad_id
 
     with app.app_context():
         unidad = database.session.execute(database.select(Unit).filter_by(code=codigo)).scalar_one_or_none()
@@ -47,9 +48,10 @@ def test_unidad_inexistente_responde_404_y_nunca_500(authenticated_client):
 
 def test_unidad_existente_renderiza_su_detalle(authenticated_client, unidad_qa):
     """GET de una unidad vigente responde 200 y muestra su código y nombre."""
-    response = authenticated_client().get(f"/accounting/unit/{unidad_qa}")
+    codigo, unidad_id = unidad_qa
+    response = authenticated_client().get(f"/accounting/unit/{unidad_id}")
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert unidad_qa in html
+    assert codigo in html
     assert "Unidad de detalle QA" in html

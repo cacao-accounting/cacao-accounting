@@ -163,7 +163,7 @@ def test_edit_rejects_foreign_parent_without_mutating_existing_node(
         "status": "open",
     }
 
-    response = authenticated_client().post(f"{path}/{codes[child_key]}/edit", data=data)
+    response = authenticated_client().post(f"{path}/{ids[child_key]}/edit", data=data)
 
     assert response.status_code == 200
     with app.app_context():
@@ -185,7 +185,7 @@ def test_parent_cannot_change_company_while_children_remain(
     authenticated_client, hierarchy_company_scenario, node_type, path, parent_key, child_key
 ):
     """Changing a parent company cannot leave its existing child in another company."""
-    app, codes, _ids = hierarchy_company_scenario
+    app, codes, ids = hierarchy_company_scenario
     data = {
         "id": codes[parent_key],
         "nombre": "Padre conservado",
@@ -195,7 +195,7 @@ def test_parent_cannot_change_company_while_children_remain(
         "status": "open",
     }
 
-    response = authenticated_client().post(f"{path}/{codes[parent_key]}/edit", data=data)
+    response = authenticated_client().post(f"{path}/{ids[parent_key]}/edit", data=data)
 
     assert response.status_code == 200
     with app.app_context():
@@ -229,7 +229,7 @@ def test_leaf_can_move_company_and_use_destination_parent(
         "status": "open",
     }
 
-    response = authenticated_client().post(f"{path}/{codes[child_key]}/edit", data=data)
+    response = authenticated_client().post(f"{path}/{ids[child_key]}/edit", data=data)
 
     assert response.status_code == 302
     with app.app_context():

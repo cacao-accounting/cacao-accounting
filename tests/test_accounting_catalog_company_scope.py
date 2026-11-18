@@ -70,14 +70,14 @@ LOCAL_DUPLICATED_NAME = "Centro Duplicado Local"
 FOREIGN_DUPLICATED_NAME = "Centro Duplicado Privado"
 
 LIST_PATH = "/accounting/project/list"
-DETAIL_PATH = "/accounting/project/{code}"
-EDIT_PATH = "/accounting/project/{code}/edit"
-DELETE_PATH = "/accounting/project/{code}/delete"
+DETAIL_PATH = "/accounting/project/{project_id}"
+EDIT_PATH = "/accounting/project/{project_id}/edit"
+DELETE_PATH = "/accounting/project/{project_id}/delete"
 
 UNIT_LIST_PATH = "/accounting/unit/list"
-UNIT_DETAIL_PATH = "/accounting/unit/{code}"
-UNIT_EDIT_PATH = "/accounting/unit/{code}/edit"
-UNIT_DELETE_PATH = "/accounting/unit/delete/{code}"
+UNIT_DETAIL_PATH = "/accounting/unit/{unit_id}"
+UNIT_EDIT_PATH = "/accounting/unit/{unit_id}/edit"
+UNIT_DELETE_PATH = "/accounting/unit/delete/{unit_id}"
 
 ACCOUNT_LIST_PATH = "/accounting/accounts"
 ACCOUNT_DETAIL_PATH = "/accounting/account/{account_id}"
@@ -228,6 +228,24 @@ def _account_id(app: Flask, code: str, entity: str) -> str:
         )
 
 
+def _project_id(app: Flask, code: str, entity: str) -> str:
+    """Return the ULID that identifies one company's project."""
+    with app.app_context():
+        return str(
+            database.session.execute(
+                database.select(Project.id).where(Project.code == code, Project.entity == entity)
+            ).scalar_one()
+        )
+
+
+def _unit_id(app: Flask, code: str, entity: str) -> str:
+    """Return the ULID that identifies one company's business unit."""
+    with app.app_context():
+        return str(
+            database.session.execute(database.select(Unit.id).where(Unit.code == code, Unit.entity == entity)).scalar_one()
+        )
+
+
 def _cost_center_id(app: Flask, code: str, entity: str) -> str:
     """Return the ULID that identifies one company's cost center."""
     with app.app_context():
@@ -241,6 +259,7 @@ def _cost_center_id(app: Flask, code: str, entity: str) -> str:
 def test_project_list_hides_foreign_company_data_and_selector_option(catalog_scope_app):
     """The tree and its company selector only contain authorized companies."""
     client = _authenticated_client(catalog_scope_app, "catalog_reader")
+    local_id = _project_id(catalog_scope_app, LOCAL_PROJECT_CODE, LOCAL_COMPANY_CODE)
 
     response = client.get(LIST_PATH)
 
@@ -251,6 +270,7 @@ def test_project_list_hides_foreign_company_data_and_selector_option(catalog_sco
     assert FOREIGN_PROJECT_NAME not in body
     assert FOREIGN_PROJECT_CODE not in body
     assert FOREIGN_COMPANY_NAME not in body
+    assert f"/accounting/project/{local_id}" in body
 
 
 def test_project_list_uses_authorized_company_instead_of_foreign_default(catalog_scope_app):
@@ -292,14 +312,16 @@ def test_project_list_accepts_own_company_and_requires_any_grant(catalog_scope_a
 
 
 def test_project_detail_requires_company_access(catalog_scope_app):
-    """Detail by code exposes its own company and denies a foreign project."""
+    """Detail by ULID exposes its own company and denies a foreign project."""
     client = _authenticated_client(catalog_scope_app, "catalog_reader")
+    local_id = _project_id(catalog_scope_app, LOCAL_PROJECT_CODE, LOCAL_COMPANY_CODE)
+    foreign_id = _project_id(catalog_scope_app, FOREIGN_PROJECT_CODE, FOREIGN_COMPANY_CODE)
 
-    own_project = client.get(DETAIL_PATH.format(code=LOCAL_PROJECT_CODE))
+    own_project = client.get(DETAIL_PATH.format(project_id=local_id))
     assert own_project.status_code == 200
     assert LOCAL_PROJECT_NAME in own_project.get_data(as_text=True)
 
-    foreign_project = client.get(DETAIL_PATH.format(code=FOREIGN_PROJECT_CODE))
+    foreign_project = client.get(DETAIL_PATH.format(project_id=foreign_id))
     assert foreign_project.status_code == 403
     body = foreign_project.get_data(as_text=True)
     assert FOREIGN_PROJECT_NAME not in body
@@ -310,7 +332,7 @@ def test_project_detail_unknown_code_keeps_not_found_behavior(catalog_scope_app)
     """A missing project redirects to the listing without revealing other companies."""
     client = _authenticated_client(catalog_scope_app, "catalog_reader")
 
-    response = client.get(DETAIL_PATH.format(code="P-DOES-NOT-EXIST"))
+    response = client.get(DETAIL_PATH.format(project_id="P-DOES-NOT-EXIST"))
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith(LIST_PATH)
@@ -320,15 +342,17 @@ def test_project_edit_form_requires_company_access(catalog_scope_app):
     """The edit form neither renders nor accepts a project from another company."""
     app = catalog_scope_app
     client = _authenticated_client(app, "catalog_reader")
+    local_id = _project_id(app, LOCAL_PROJECT_CODE, LOCAL_COMPANY_CODE)
+    foreign_id = _project_id(app, FOREIGN_PROJECT_CODE, FOREIGN_COMPANY_CODE)
 
-    own_form = client.get(EDIT_PATH.format(code=LOCAL_PROJECT_CODE))
+    own_form = client.get(EDIT_PATH.format(project_id=local_id))
     assert own_form.status_code == 200
     assert LOCAL_PROJECT_NAME in own_form.get_data(as_text=True)
 
-    assert client.get(EDIT_PATH.format(code=FOREIGN_PROJECT_CODE)).status_code == 403
+    assert client.get(EDIT_PATH.format(project_id=foreign_id)).status_code == 403
 
     forged_update = client.post(
-        EDIT_PATH.format(code=FOREIGN_PROJECT_CODE),
+        EDIT_PATH.format(project_id=foreign_id),
         data={"id": FOREIGN_PROJECT_CODE, "nombre": "Nombre alterado", "entidad": LOCAL_COMPANY_CODE},
     )
     assert forged_update.status_code == 403
@@ -352,8 +376,10 @@ def test_project_delete_requires_company_access(catalog_scope_app):
     """Deleting a foreign project is denied while an authorized project is removed."""
     app = catalog_scope_app
     client = _authenticated_client(app, "catalog_deleter")
+    local_id = _project_id(app, LOCAL_PROJECT_CODE, LOCAL_COMPANY_CODE)
+    foreign_id = _project_id(app, FOREIGN_PROJECT_CODE, FOREIGN_COMPANY_CODE)
 
-    denied = client.post(DELETE_PATH.format(code=FOREIGN_PROJECT_CODE))
+    denied = client.post(DELETE_PATH.format(project_id=foreign_id))
     assert denied.status_code == 403
     with app.app_context():
         assert (
@@ -361,7 +387,7 @@ def test_project_delete_requires_company_access(catalog_scope_app):
             is not None
         )
 
-    allowed = client.post(DELETE_PATH.format(code=LOCAL_PROJECT_CODE))
+    allowed = client.post(DELETE_PATH.format(project_id=local_id))
     assert allowed.status_code == 302
     with app.app_context():
         assert (
@@ -372,6 +398,8 @@ def test_project_delete_requires_company_access(catalog_scope_app):
 def test_unit_list_and_detail_require_company_access(catalog_scope_app):
     """The unit catalogue and its detail only expose the authorized company."""
     client = _authenticated_client(catalog_scope_app, "catalog_reader")
+    local_id = _unit_id(catalog_scope_app, LOCAL_UNIT_CODE, LOCAL_COMPANY_CODE)
+    foreign_id = _unit_id(catalog_scope_app, FOREIGN_UNIT_CODE, FOREIGN_COMPANY_CODE)
 
     listing = client.get(UNIT_LIST_PATH)
     assert listing.status_code == 200
@@ -380,16 +408,17 @@ def test_unit_list_and_detail_require_company_access(catalog_scope_app):
     assert FOREIGN_UNIT_NAME not in body
     assert FOREIGN_UNIT_CODE not in body
     assert FOREIGN_COMPANY_NAME not in body
+    assert f"/accounting/unit/{local_id}" in body
 
     forced = client.get(f"{UNIT_LIST_PATH}?entidad={FOREIGN_COMPANY_CODE}")
     assert forced.status_code == 403
     assert FOREIGN_UNIT_NAME not in forced.get_data(as_text=True)
 
-    own_detail = client.get(UNIT_DETAIL_PATH.format(code=LOCAL_UNIT_CODE))
+    own_detail = client.get(UNIT_DETAIL_PATH.format(unit_id=local_id))
     assert own_detail.status_code == 200
     assert LOCAL_UNIT_NAME in own_detail.get_data(as_text=True)
 
-    foreign_detail = client.get(UNIT_DETAIL_PATH.format(code=FOREIGN_UNIT_CODE))
+    foreign_detail = client.get(UNIT_DETAIL_PATH.format(unit_id=foreign_id))
     assert foreign_detail.status_code == 403
     body = foreign_detail.get_data(as_text=True)
     assert FOREIGN_UNIT_NAME not in body
@@ -399,6 +428,7 @@ def test_unit_list_and_detail_require_company_access(catalog_scope_app):
 def test_unit_list_uses_authorized_company_instead_of_foreign_default(catalog_scope_app):
     """A user granted only a non-default company never receives the default catalogue."""
     client = _authenticated_client(catalog_scope_app, "catalog_alpha_only")
+    foreign_id = _unit_id(catalog_scope_app, FOREIGN_UNIT_CODE, FOREIGN_COMPANY_CODE)
 
     response = client.get(UNIT_LIST_PATH)
 
@@ -408,6 +438,7 @@ def test_unit_list_uses_authorized_company_instead_of_foreign_default(catalog_sc
     assert LOCAL_UNIT_NAME not in body
     assert LOCAL_UNIT_CODE not in body
     assert LOCAL_COMPANY_NAME not in body
+    assert f"/accounting/unit/{foreign_id}" in body
 
 
 def test_unit_edit_and_delete_require_company_access(catalog_scope_app):
@@ -415,12 +446,14 @@ def test_unit_edit_and_delete_require_company_access(catalog_scope_app):
     app = catalog_scope_app
     deleter = _authenticated_client(app, "catalog_deleter")
     reader = _authenticated_client(app, "catalog_reader")
+    local_id = _unit_id(app, LOCAL_UNIT_CODE, LOCAL_COMPANY_CODE)
+    foreign_id = _unit_id(app, FOREIGN_UNIT_CODE, FOREIGN_COMPANY_CODE)
 
-    assert deleter.get(UNIT_EDIT_PATH.format(code=LOCAL_UNIT_CODE)).status_code == 200
-    assert deleter.get(UNIT_EDIT_PATH.format(code=FOREIGN_UNIT_CODE)).status_code == 403
+    assert deleter.get(UNIT_EDIT_PATH.format(unit_id=local_id)).status_code == 200
+    assert deleter.get(UNIT_EDIT_PATH.format(unit_id=foreign_id)).status_code == 403
 
     forged = deleter.post(
-        UNIT_EDIT_PATH.format(code=FOREIGN_UNIT_CODE),
+        UNIT_EDIT_PATH.format(unit_id=foreign_id),
         data={"id": FOREIGN_UNIT_CODE, "nombre": "Unidad alterada", "entidad": LOCAL_COMPANY_CODE, "habilitado": "y"},
     )
     assert forged.status_code == 403
@@ -430,7 +463,7 @@ def test_unit_edit_and_delete_require_company_access(catalog_scope_app):
         assert unit.entity == FOREIGN_COMPANY_CODE
 
     cross_move = reader.post(
-        UNIT_EDIT_PATH.format(code=LOCAL_UNIT_CODE),
+        UNIT_EDIT_PATH.format(unit_id=local_id),
         data={"id": LOCAL_UNIT_CODE, "nombre": LOCAL_UNIT_NAME, "entidad": FOREIGN_COMPANY_CODE, "habilitado": "y"},
     )
     assert cross_move.status_code == 200
@@ -438,14 +471,14 @@ def test_unit_edit_and_delete_require_company_access(catalog_scope_app):
         unit = database.session.execute(database.select(Unit).filter_by(code=LOCAL_UNIT_CODE)).scalar_one()
         assert unit.entity == LOCAL_COMPANY_CODE
 
-    denied = deleter.post(UNIT_DELETE_PATH.format(code=FOREIGN_UNIT_CODE))
+    denied = deleter.post(UNIT_DELETE_PATH.format(unit_id=foreign_id))
     assert denied.status_code == 403
     with app.app_context():
         assert (
             database.session.execute(database.select(Unit).filter_by(code=FOREIGN_UNIT_CODE)).scalar_one_or_none() is not None
         )
 
-    allowed = deleter.post(UNIT_DELETE_PATH.format(code=LOCAL_UNIT_CODE))
+    allowed = deleter.post(UNIT_DELETE_PATH.format(unit_id=local_id))
     assert allowed.status_code == 302
     with app.app_context():
         assert database.session.execute(database.select(Unit).filter_by(code=LOCAL_UNIT_CODE)).scalar_one_or_none() is None
