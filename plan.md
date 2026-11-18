@@ -55,6 +55,7 @@ QA1, QA2, QA3 o al administrador.
 | #997 alias fiscales de cobro/pago con acceso a compañía | Implementado con regresión | `43108a06` | `tests/test_fiscal_preview_company_scope.py` |
 | #998 alias documentales con permiso y subtipo validados | Implementado con regresión | `4bc2dc7e` | `tests/test_document_alias_subtype_access.py` |
 | #1357/#1283 retiro de código sin consumidores | Verificado por inspección y suite relacionada | `a93657fa`, `d1649c9a` | grep sin referencias; 41 passed |
+| #1488 lote de importación ligado a su presupuesto | Implementado con regresión | `76d28dc8` | `tests/test_r2r_budget_import_owner_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -319,7 +320,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1418 | #1649 | ✅ Implementado; regresión local en `42786767` (etiqueta sin cambio) | Editar artículo permite borrar cuentas de otras compañías |
 | #1433 | #1649 | ✅ Implementado; regresión local en `0b0b6d54` (etiqueta sin cambio) | Valida facturas duplicadas entre compañías |
 | #1467 | #1649 | ✅ Implementado; regresión local en `5848ee8e` (etiqueta sin cambio) | Un usuario de solo lectura puede modificar tareas ajenas |
-| #1488 | #1649 | Implementación (`needs-work`) | Vincula el lote de importación al presupuesto autorizado |
+| #1488 | #1649 | ✅ Implementado; regresión local en `76d28dc8` (etiqueta sin cambio) | Vincula el lote de importación al presupuesto autorizado |
 | #1511 | #1649 | ✅ Implementado; regresión local en `1b0ed7f4` (etiqueta sin cambio) | Restringir el precargado de pagos por compañía |
 | #1515 | #1649 | ✅ Implementado; regresión local en `8aa8a94c` (etiqueta sin cambio) | Restringir fuentes documentales al módulo de origen |
 | #1524 | #1649 | ✅ Implementado; regresión local en `1be22360` (etiqueta sin cambio) | Customer and supplier management bypass permissions |
