@@ -71,6 +71,7 @@ QA1, QA2, QA3 o al administrador.
 | #1002 inmutabilidad de la evidencia de auditoría en Desktop | Implementado con regresión | `39113652` | `tests/test_structural_integrity_guards.py` |
 | #1294 retiro de la mutación de contador externo sin auditoría | Verificado por inspección | `2d9d8848` | grep sin referencias |
 | #1669 claim atómico de la recuperación de importaciones | Implementado con regresión | `ba0e0252` | `tests/test_import_recovery_atomic_claim.py` |
+| QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -99,7 +100,7 @@ y #1669.
 Black en verde en `cacao_accounting/` (alcance del workflow de lint); 4 archivos de prueba preexistentes
 de `8f341b3e` requieren reformato de black fuera de ese alcance. Ruff, flake8, mypy y Bandit sin hallazgos bloqueantes. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
 Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados.
-Ronda QA2: A1–A3 y B1–B3 resueltos; B4 (302 vs 404), B5 (N+1 de destinatarios) y B7 (fixture de entregas) quedan como deuda no bloqueante.
+Ronda QA2: A1–A3, B1–B4, B8, B11 y B14 resueltos; B5 (N+1 de destinatarios), B7 (fixture de entregas), B9 (backfill de clave heredada), B10 (nombre del guard), B12 (filas legacy sin subtipo) y B15–B17 quedan como deuda no bloqueante.
 La próxima ronda completa corresponde al siguiente umbral de 50 commits o antes de un push.
 Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archivos tocados.
 
