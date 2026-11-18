@@ -690,7 +690,12 @@ def _restrict_company_scope_for_action(
 
 
 def _require_search_select_company_access(filters: dict[str, list[str]]) -> None:
-    """Reject explicit company filters outside the current user's RBAC scope."""
+    """Reject explicit company filters outside the current user's RBAC scope.
+
+    En Cloud el alcance es la concesión explícita por compañía, la misma que
+    aplica el filtrado posterior. Aceptar aquí una compañía sin concesión
+    devolvería un catálogo vacío en lugar del 403 esperado (#2198).
+    """
     requested_companies = {str(value) for value in filters.get("company", []) if str(value).strip()}
     if not requested_companies:
         return
@@ -704,7 +709,14 @@ def _require_search_select_company_access(filters: dict[str, list[str]]) -> None
     all_known = all(
         any(str(company.code) == value or str(company.id) == value for company in companies) for value in requested_companies
     )
-    if not all_known or any(not user_can_access_company(current_user, company) for company in companies):
+    if not all_known:
+        abort(403)
+    if not is_desktop_mode():
+        granted = _explicit_company_grants()
+        if any(str(company.code) not in granted for company in companies):
+            abort(403)
+        return
+    if any(not user_can_access_company(current_user, company) for company in companies):
         abort(403)
 
 
