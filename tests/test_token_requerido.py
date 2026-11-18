@@ -253,3 +253,20 @@ def test_editar_usuario_revoca_jwt_y_sesion_tras_reactivacion(api_con_usuarios):
     new_token = _token_persistido(application, "vendedor")
     assert new_token is not None and new_token != token
     assert _llamar_api_test(fresh_client, new_token) == 200
+
+
+def test_jwt_without_auth_version_claim_is_rejected(api_con_usuarios):
+    """A legacy JWT without the version claim cannot authorize (#1355)."""
+    application, client = api_con_usuarios
+    payload = b'{"user_id":"vendedor"}'
+    token = _firmar_jwt_payload(application.config["SECRET_KEY"], payload)
+    with application.app_context():
+        from cacao_accounting.database import User as Usuario
+
+        identidad = database.session.execute(database.select(Usuario).filter_by(user="vendedor")).scalar_one()
+        identidad.token = token
+        database.session.commit()
+
+    response = client.get("/api/test", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401

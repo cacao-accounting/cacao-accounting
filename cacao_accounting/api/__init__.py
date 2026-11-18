@@ -631,12 +631,11 @@ def _identity_for_api_token(token: str):
     from cacao_accounting.database import User, database
 
     identidad = database.session.get(User, user_id)
-    if (
-        not identidad
-        or identidad.token != token
-        or not identidad.active
-        or data.get("auth_version", 0) != identidad.auth_version
-    ):
+    if not identidad or identidad.token != token or not identidad.active:
+        return None
+    # #1355: no se aceptan JWT legacy sin la claim de versión; de otro modo un
+    # token anterior a la revocación seguiría coincidiendo con auth_version 0.
+    if "auth_version" not in data or data["auth_version"] != identidad.auth_version:
         return None
     return identidad
 
