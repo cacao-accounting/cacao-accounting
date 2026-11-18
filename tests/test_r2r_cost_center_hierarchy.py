@@ -54,12 +54,12 @@ def cost_center_hierarchy(app):
             was_enabled = accounting_module.enabled
             accounting_module.enabled = True
         database.session.commit()
-        scenario = (parent.code, child.code, parent.id, was_enabled)
+        scenario = (parent.code, child.code, parent.id, child.id, was_enabled)
 
     yield scenario
 
     with app.app_context():
-        parent_code, child_code, _parent_id, was_enabled = scenario
+        parent_code, child_code, _parent_id, _child_id, was_enabled = scenario
         accounting_module = database.session.execute(
             database.select(Modules).filter_by(module="accounting")
         ).scalar_one_or_none()
@@ -80,11 +80,11 @@ def cost_center_hierarchy(app):
 
 def test_parent_hierarchy_changes_are_rejected_and_child_remains_editable(app, authenticated_client, cost_center_hierarchy):
     """Reject invalid parent changes, then allow normal edits to the child."""
-    parent_code, child_code, parent_id, _was_enabled = cost_center_hierarchy
+    parent_code, child_code, parent_id, child_id, _was_enabled = cost_center_hierarchy
     client = authenticated_client()
 
     response = client.post(
-        f"/accounting/costs_center/{parent_code}/edit",
+        f"/accounting/costs_center/{parent_id}/edit",
         data={"id": parent_code, "nombre": "Grupo de gastos", "entidad": "cacao", "activo": "y"},
     )
 
@@ -94,7 +94,7 @@ def test_parent_hierarchy_changes_are_rejected_and_child_remains_editable(app, a
         assert parent.group is True
 
     company_response = client.post(
-        f"/accounting/costs_center/{parent_code}/edit",
+        f"/accounting/costs_center/{parent_id}/edit",
         data={
             "id": parent_code,
             "nombre": "Grupo de gastos",
@@ -111,7 +111,7 @@ def test_parent_hierarchy_changes_are_rejected_and_child_remains_editable(app, a
         assert parent.entity == "cacao"
 
     child_response = client.post(
-        f"/accounting/costs_center/{child_code}/edit",
+        f"/accounting/costs_center/{child_id}/edit",
         data={
             "id": child_code,
             "nombre": "Centro operativo actualizado",
@@ -130,8 +130,8 @@ def test_parent_hierarchy_changes_are_rejected_and_child_remains_editable(app, a
 
 def test_cost_center_with_children_cannot_be_deleted(app, authenticated_client, cost_center_hierarchy):
     """Keep the parent row while child centers still reference its code."""
-    parent_code, child_code, _parent_id, _was_enabled = cost_center_hierarchy
-    response = authenticated_client().post(f"/accounting/costs_center/{parent_code}/delete")
+    parent_code, child_code, parent_id, _child_id, _was_enabled = cost_center_hierarchy
+    response = authenticated_client().post(f"/accounting/costs_center/{parent_id}/delete")
 
     assert response.status_code == 302, response.get_data(as_text=True)
     with app.app_context():

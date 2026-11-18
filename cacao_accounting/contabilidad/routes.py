@@ -188,16 +188,17 @@ def _resolve_catalog_company(requested: str | None) -> tuple[str, Any]:
     return companias[0], obtener_entidad(ent=companias[0])
 
 
-def _get_cost_center_for_company(cost_center_code: str):
-    """Devuelve un centro de costos de una compañía autorizada.
+def _get_cost_center_by_id(cost_center_id: str):
+    """Devuelve un centro de costos identificado por su ULID.
 
-    El código de centro de costos no es único entre compañías, así que la
-    consulta se limita a las compañías autorizadas antes de elegir el registro.
-    Un código que solo existe en otra compañía se rechaza con 403 para no
-    confirmar su existencia ni entregar sus datos (#1546).
+    El código de centro de costos no es único entre compañías, así que la URL
+    de detalle, edición y borrado usa el ``id`` (ULID) del registro. Así una
+    compañía no puede resolver el centro de otra por coincidencia de código y
+    el enlace identifica una sola fila. El registro de una compañía no
+    autorizada se rechaza con 403 para no entregar sus datos (#1546).
 
     Args:
-        cost_center_code: Código del centro de costos solicitado.
+        cost_center_id: ULID del centro de costos solicitado.
 
     Returns:
         El centro de costos visible para el usuario, o ``None`` si no existe.
@@ -207,19 +208,11 @@ def _get_cost_center_for_company(cost_center_code: str):
     companias = authorized_company_codes("accounting")
     if not companias:
         abort(403)
-    registro = (
-        database.session.execute(
-            database.select(CostCenter).where(
-                CostCenter.code == cost_center_code,
-                CostCenter.entity.in_(companias),
-            )
-        )
-        .scalars()
-        .first()
-    )
+    registro = database.session.get(CostCenter, cost_center_id)
     if registro is None:
-        if database.session.execute(database.select(CostCenter.id).where(CostCenter.code == cost_center_code)).first():
-            abort(403)
+        return None
+    if registro.entity not in companias:
+        abort(403)
     return registro
 
 
@@ -1657,7 +1650,7 @@ def ccostos():
         arbol,
         parent_field="parent",
         id_field="code",
-        get_url_func=lambda n: url_for("contabilidad.centro_costo", id_cc=n.code),
+        get_url_func=lambda n: url_for("contabilidad.centro_costo", id_cc=n.id),
     )
     return render_template(
         "contabilidad/centro-costo_lista.html",
@@ -1750,7 +1743,7 @@ def nuevo_centro_costo():
 @verifica_acceso("accounting", "editar")
 def editar_centro_costo(id_cc):
     """Editar un centro de costos existente."""
-    registro = _get_cost_center_for_company(id_cc)
+    registro = _get_cost_center_by_id(id_cc)
     if registro is None:
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
     requested_entity = request.form.get("entidad") if request.method == "POST" else None
@@ -1831,7 +1824,7 @@ def editar_centro_costo(id_cc):
     registro.parent = parent_code
     database.session.commit()
     invalidate_cache("smart-select-master-data")
-    return redirect(url_for("contabilidad.centro_costo", id_cc=registro.code))
+    return redirect(url_for("contabilidad.centro_costo", id_cc=registro.id))
 
 
 @contabilidad.route("/costs_center/<id_cc>")
@@ -1840,7 +1833,7 @@ def editar_centro_costo(id_cc):
 @verifica_acceso("accounting")
 def centro_costo(id_cc: str):
     """Detalle de un centro de costos."""
-    registro = _get_cost_center_for_company(id_cc)
+    registro = _get_cost_center_by_id(id_cc)
     if registro is None:
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
@@ -1859,7 +1852,7 @@ def centro_costo(id_cc: str):
 @verifica_acceso("accounting")
 def eliminar_centro_costo(id_cc):
     """Elimina un centro de costos."""
-    registro = _get_cost_center_for_company(id_cc)
+    registro = _get_cost_center_by_id(id_cc)
     if registro:
         registro = _lock_cost_center(registro.entity, registro.code)
         if registro is None:
@@ -1870,7 +1863,7 @@ def eliminar_centro_costo(id_cc):
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
         if _reject_delete_with_dependencies(
-            f"el centro de costo {id_cc}",
+            f"el centro de costo {registro.code}",
             [
                 ("presupuestos", database.select(BudgetLine.id).filter_by(cost_center_id=registro.id)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(cost_center_code=registro.code)),

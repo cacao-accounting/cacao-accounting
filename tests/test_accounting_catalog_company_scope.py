@@ -6,7 +6,8 @@
 Los listados, detalles, formularios de edición y borrados de proyectos, cuentas,
 centros de costo y unidades de negocio deben exigir acceso a la compañía dueña
 del registro. Una compañía ajena no aparece como opción ni entrega datos aunque
-se fuerce su código en la URL o se repita su código entre compañías.
+se fuerce su código en la URL o se repita su código entre compañías. Los centros
+de costo se identifican por ULID, porque su código no es único entre compañías.
 """
 
 from __future__ import annotations
@@ -83,9 +84,9 @@ ACCOUNT_DETAIL_PATH = "/accounting/account/{entity}/{code}"
 ACCOUNT_EDIT_PATH = "/accounting/account/{entity}/{code}/edit"
 
 COST_CENTER_LIST_PATH = "/accounting/costs_center"
-COST_CENTER_DETAIL_PATH = "/accounting/costs_center/{code}"
-COST_CENTER_EDIT_PATH = "/accounting/costs_center/{code}/edit"
-COST_CENTER_DELETE_PATH = "/accounting/costs_center/{code}/delete"
+COST_CENTER_DETAIL_PATH = "/accounting/costs_center/{cost_center_id}"
+COST_CENTER_EDIT_PATH = "/accounting/costs_center/{cost_center_id}/edit"
+COST_CENTER_DELETE_PATH = "/accounting/costs_center/{cost_center_id}/delete"
 
 
 @pytest.fixture
@@ -215,6 +216,16 @@ def _authenticated_client(app: Flask, user_id: str) -> FlaskClient:
         session["_user_id"] = user_id
         session["_fresh"] = True
     return client
+
+
+def _cost_center_id(app: Flask, code: str, entity: str) -> str:
+    """Return the ULID that identifies one company's cost center."""
+    with app.app_context():
+        return str(
+            database.session.execute(
+                database.select(CostCenter.id).where(CostCenter.code == code, CostCenter.entity == entity)
+            ).scalar_one()
+        )
 
 
 def test_project_list_hides_foreign_company_data_and_selector_option(catalog_scope_app):
@@ -471,6 +482,8 @@ def test_cost_center_list_detail_and_edit_require_company_access(catalog_scope_a
     """The cost center catalogue, detail and edit form are company scoped."""
     client = _authenticated_client(catalog_scope_app, "catalog_reader")
     without_grants = _authenticated_client(catalog_scope_app, "catalog_no_grants")
+    local_id = _cost_center_id(catalog_scope_app, LOCAL_COST_CENTER_CODE, LOCAL_COMPANY_CODE)
+    foreign_id = _cost_center_id(catalog_scope_app, FOREIGN_COST_CENTER_CODE, FOREIGN_COMPANY_CODE)
 
     listing = client.get(COST_CENTER_LIST_PATH)
     assert listing.status_code == 200
@@ -478,47 +491,56 @@ def test_cost_center_list_detail_and_edit_require_company_access(catalog_scope_a
     assert LOCAL_COST_CENTER_NAME in body
     assert FOREIGN_COST_CENTER_NAME not in body
     assert FOREIGN_COMPANY_NAME not in body
+    assert f"/accounting/costs_center/{local_id}" in body
+    assert f"/accounting/costs_center/{LOCAL_COST_CENTER_CODE}" not in body
 
     assert without_grants.get(COST_CENTER_LIST_PATH).status_code == 403
-    assert without_grants.get(COST_CENTER_DETAIL_PATH.format(code=LOCAL_COST_CENTER_CODE)).status_code == 403
+    assert without_grants.get(COST_CENTER_DETAIL_PATH.format(cost_center_id=local_id)).status_code == 403
 
     forced = client.get(f"{COST_CENTER_LIST_PATH}?entidad={FOREIGN_COMPANY_CODE}")
     assert forced.status_code == 403
     assert FOREIGN_COST_CENTER_NAME not in forced.get_data(as_text=True)
 
-    own_detail = client.get(COST_CENTER_DETAIL_PATH.format(code=LOCAL_COST_CENTER_CODE))
+    own_detail = client.get(COST_CENTER_DETAIL_PATH.format(cost_center_id=local_id))
     assert own_detail.status_code == 200
     assert LOCAL_COST_CENTER_NAME in own_detail.get_data(as_text=True)
 
-    foreign_detail = client.get(COST_CENTER_DETAIL_PATH.format(code=FOREIGN_COST_CENTER_CODE))
+    foreign_detail = client.get(COST_CENTER_DETAIL_PATH.format(cost_center_id=foreign_id))
     assert foreign_detail.status_code == 403
     body = foreign_detail.get_data(as_text=True)
     assert FOREIGN_COST_CENTER_NAME not in body
     assert FOREIGN_COMPANY_NAME not in body
 
-    own_form = client.get(COST_CENTER_EDIT_PATH.format(code=LOCAL_COST_CENTER_CODE))
+    own_form = client.get(COST_CENTER_EDIT_PATH.format(cost_center_id=local_id))
     assert own_form.status_code == 200
     assert LOCAL_COST_CENTER_NAME in own_form.get_data(as_text=True)
 
-    foreign_form = client.get(COST_CENTER_EDIT_PATH.format(code=FOREIGN_COST_CENTER_CODE))
+    foreign_form = client.get(COST_CENTER_EDIT_PATH.format(cost_center_id=foreign_id))
     assert foreign_form.status_code == 403
     assert FOREIGN_COST_CENTER_NAME not in foreign_form.get_data(as_text=True)
 
-    missing = client.get(COST_CENTER_DETAIL_PATH.format(code="CC-DOES-NOT-EXIST"))
+    missing = client.get(COST_CENTER_DETAIL_PATH.format(cost_center_id="01MISSING00000000000000000"))
     assert missing.status_code == 302
     assert missing.headers["Location"].endswith(COST_CENTER_LIST_PATH)
 
 
 def test_cost_center_duplicate_code_resolves_inside_authorized_company(catalog_scope_app):
-    """A code repeated in two companies resolves to the authorized company row."""
+    """A code repeated in two companies resolves by ULID to the authorized row."""
     client = _authenticated_client(catalog_scope_app, "catalog_reader")
+    local_id = _cost_center_id(catalog_scope_app, DUPLICATED_COST_CENTER_CODE, LOCAL_COMPANY_CODE)
+    foreign_id = _cost_center_id(catalog_scope_app, DUPLICATED_COST_CENTER_CODE, FOREIGN_COMPANY_CODE)
 
-    response = client.get(COST_CENTER_DETAIL_PATH.format(code=DUPLICATED_COST_CENTER_CODE))
+    response = client.get(COST_CENTER_DETAIL_PATH.format(cost_center_id=local_id))
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert LOCAL_DUPLICATED_NAME in body
     assert FOREIGN_DUPLICATED_NAME not in body
+
+    foreign_response = client.get(COST_CENTER_DETAIL_PATH.format(cost_center_id=foreign_id))
+
+    assert foreign_response.status_code == 403
+    assert FOREIGN_DUPLICATED_NAME not in foreign_response.get_data(as_text=True)
 
 
 def test_cost_center_edit_and_delete_reject_foreign_company(catalog_scope_app):
@@ -526,9 +548,11 @@ def test_cost_center_edit_and_delete_reject_foreign_company(catalog_scope_app):
     app = catalog_scope_app
     reader = _authenticated_client(app, "catalog_reader")
     deleter = _authenticated_client(app, "catalog_deleter")
+    local_id = _cost_center_id(app, LOCAL_COST_CENTER_CODE, LOCAL_COMPANY_CODE)
+    foreign_id = _cost_center_id(app, FOREIGN_COST_CENTER_CODE, FOREIGN_COMPANY_CODE)
 
     forged = reader.post(
-        COST_CENTER_EDIT_PATH.format(code=LOCAL_COST_CENTER_CODE),
+        COST_CENTER_EDIT_PATH.format(cost_center_id=local_id),
         data={"id": LOCAL_COST_CENTER_CODE, "nombre": "Centro alterado", "entidad": FOREIGN_COMPANY_CODE},
     )
     assert forged.status_code == 403
@@ -537,7 +561,7 @@ def test_cost_center_edit_and_delete_reject_foreign_company(catalog_scope_app):
         assert center.name == LOCAL_COST_CENTER_NAME
         assert center.entity == LOCAL_COMPANY_CODE
 
-    denied = deleter.post(COST_CENTER_DELETE_PATH.format(code=FOREIGN_COST_CENTER_CODE))
+    denied = deleter.post(COST_CENTER_DELETE_PATH.format(cost_center_id=foreign_id))
     assert denied.status_code == 403
     with app.app_context():
         assert (
@@ -545,7 +569,7 @@ def test_cost_center_edit_and_delete_reject_foreign_company(catalog_scope_app):
             is not None
         )
 
-    allowed = deleter.post(COST_CENTER_DELETE_PATH.format(code=LOCAL_COST_CENTER_CODE))
+    allowed = deleter.post(COST_CENTER_DELETE_PATH.format(cost_center_id=local_id))
     assert allowed.status_code == 302
     with app.app_context():
         assert (
