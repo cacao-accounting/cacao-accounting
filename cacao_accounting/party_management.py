@@ -109,7 +109,20 @@ def exigir_companias_tercero(party_id: str, module: str, submitted: Iterable[str
     from flask import abort as _abort
 
     presentes = [str(company).strip() for company in submitted if str(company).strip()]
-    restantes = list(database.session.execute(database.select(CompanyParty.company).filter_by(party_id=party_id)).scalars())
+    # Solo cuentan como "omitidas" las asociaciones vigentes: un vínculo
+    # inactivo o de una entidad deshabilitada no debe bloquear la limpieza
+    # con un 403 falso positivo (feedback QA1 #1280).
+    restantes = list(
+        database.session.execute(
+            database.select(CompanyParty.company)
+            .join(Entity, Entity.code == CompanyParty.company)
+            .where(
+                CompanyParty.party_id == party_id,
+                CompanyParty.is_active.is_(True),
+                Entity.enabled.is_(True),
+            )
+        ).scalars()
+    )
     objetivo = list(dict.fromkeys(presentes + [company for company in restantes if company not in presentes]))
     autorizadas = set(companias_autorizadas_por_accion(module, action))
     if any(company not in autorizadas for company in objetivo):

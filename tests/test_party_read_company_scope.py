@@ -562,3 +562,15 @@ def test_generic_party_catalog_applies_module_and_company_scope(party_read_scope
 
     no_access = _authenticated_client(app, "party_no_access")
     assert no_access.get("/api/search-select?doctype=party").status_code == 403
+
+
+def test_party_group_catalog_is_global_but_requires_module(party_read_scope_app):
+    """Los grupos de terceros son globales y exigen Ventas o Compras (#1286)."""
+    app, _ids = party_read_scope_app
+    sales_reader = _authenticated_client(app, "party_sales_reader")
+    no_access = _authenticated_client(app, "party_no_access")
+
+    response = sales_reader.get("/api/search-select?doctype=party_group")
+
+    assert response.status_code == 200
+    assert no_access.get("/api/search-select?doctype=party_group").status_code == 403

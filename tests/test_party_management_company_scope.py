@@ -92,9 +92,20 @@ def party_scope_scenario():
         supplier_shared = Party(
             code=f"SUP-SH-{suffix}", name=f"Proveedor Compartido {suffix}", is_supplier=True, is_active=True
         )
+        supplier_stale = Party(
+            code=f"SUP-ST-{suffix}", name=f"Proveedor Vínculo Inactivo {suffix}", is_supplier=True, is_active=True
+        )
         customer_shared = Party(code=f"CUS-SH-{suffix}", name=f"Cliente Compartido {suffix}", is_customer=True, is_active=True)
         database.session.add_all(
-            [supplier_alpha, supplier_beta, customer_alpha, customer_beta, supplier_shared, customer_shared]
+            [
+                supplier_alpha,
+                supplier_beta,
+                customer_alpha,
+                customer_beta,
+                supplier_shared,
+                customer_shared,
+                supplier_stale,
+            ]
         )
         database.session.flush()
         database.session.add_all(
@@ -105,6 +116,8 @@ def party_scope_scenario():
                 CompanyParty(company=company_beta, party_id=customer_beta.id, is_active=True),
                 CompanyParty(company=company_alpha, party_id=supplier_shared.id, is_active=True),
                 CompanyParty(company=company_beta, party_id=supplier_shared.id, is_active=True),
+                CompanyParty(company=company_alpha, party_id=supplier_stale.id, is_active=True),
+                CompanyParty(company=company_beta, party_id=supplier_stale.id, is_active=False),
                 CompanyParty(company=company_alpha, party_id=customer_shared.id, is_active=True),
                 CompanyParty(company=company_beta, party_id=customer_shared.id, is_active=True),
             ]
@@ -193,6 +206,7 @@ def party_scope_scenario():
             "customer_beta": customer_beta.id,
             "customer_beta_name": customer_beta_name,
             "supplier_shared": supplier_shared.id,
+            "supplier_stale": supplier_stale.id,
             "customer_shared": customer_shared.id,
             "purchases_viewer": f"purchases-viewer-{suffix}",
             "purchases_editor": f"purchases-editor-{suffix}",
@@ -584,3 +598,23 @@ def test_customer_address_edit_and_deactivate_require_edit(party_scope_scenario)
         address = database.session.get(Address, address_id)
         assert address.address_line1 == "Calle Editable 1"
         assert address.is_active is True
+
+
+def test_supplier_settings_ignore_inactive_foreign_link(party_scope_scenario):
+    """An inactive foreign link does not cause a false 403 when editing own settings."""
+    app, ids = party_scope_scenario
+    client = _authenticated_client(app, ids["purchases_editor"])
+
+    response = client.post(
+        f"/buying/supplier/{ids['supplier_stale']}/company-settings",
+        data={"company": ids["company_alpha"], "company_is_active": "on"},
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        active_companies = set(
+            database.session.execute(
+                database.select(CompanyParty.company).filter_by(party_id=ids["supplier_stale"], is_active=True)
+            ).scalars()
+        )
+        assert active_companies == {ids["company_alpha"]}
