@@ -319,8 +319,14 @@ def format_quantity(value: object | None) -> str:
     return f"{_decimal_for_display(value):,.4f}"
 
 
-def collaboration_active_users() -> list:
-    """Active users scoped to the current viewer's authorized companies (#1598)."""
+def collaboration_active_users(document_type: str | None = None, company: str | None = None) -> list:
+    """Active users scoped to the document's company and module (#1598).
+
+    El selector de asignaciones de un documento debe ofrecer únicamente
+    destinatarios con acceso a la compañía del documento y permiso de consulta
+    en su módulo dueño. Sin ``document_type`` se conserva el alcance general
+    por compañías del usuario.
+    """
     if not is_cloud_mode():
         return []
     from cacao_accounting.collaboration_service import active_users
@@ -329,7 +335,26 @@ def collaboration_active_users() -> list:
     alcance = authorized_company_codes()
     if not alcance:
         return []
-    return active_users(companies=alcance)
+    if company is not None and company not in alcance:
+        return []
+    target_companies = [company] if company else alcance
+    module = _collaboration_module_for_document(document_type)
+    return active_users(companies=target_companies, module=module)
+
+
+def _collaboration_module_for_document(document_type: str | None) -> str | None:
+    """Devuelve el módulo dueño del documento, si lo declara."""
+    if not document_type:
+        return None
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    spec = DOCUMENT_TYPES.get(document_type)
+    if spec is None:
+        return None
+    module = spec.permission_module or spec.module
+    if not module or module == "general":
+        return None
+    return module
 
 
 def document_collaboration_tasks(document_type: str, document_id: str) -> list:

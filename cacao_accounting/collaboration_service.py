@@ -201,12 +201,14 @@ def list_user_tasks(
     return list(database.session.execute(query.order_by(DocumentTask.created_at.desc())).scalars().all())
 
 
-def active_users(companies: Sequence[str] | None = None) -> list[User]:
+def active_users(companies: Sequence[str] | None = None, module: str | None = None) -> list[User]:
     """Usuarios activos disponibles para asignaciones (#1598).
 
     Con ``companies`` el directorio se limita a los usuarios con alcance
     explícito en esas compañías: el selector de asignaciones no revela el
-    directorio global de usuarios.
+    directorio global. Con ``module`` también se exige permiso de consulta en
+    el módulo dueño del documento, de modo que un usuario con acceso a la
+    compañía pero sin el módulo no aparece como destinatario elegible.
     """
     query = database.select(User).filter_by(active=True).order_by(User.user)
     if companies:
@@ -215,7 +217,14 @@ def active_users(companies: Sequence[str] | None = None) -> list[User]:
 
         authorized_users = _select(UserCompanyAccess.user_id).where(UserCompanyAccess.company_code.in_(list(companies)))
         query = query.where(User.id.in_(authorized_users))
-    return list(database.session.execute(query).scalars().all())
+    users = list(database.session.execute(query).scalars().all())
+    if module:
+        from cacao_accounting.auth.permisos import Permisos
+        from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+        module_id = obtener_id_modulo_por_nombre(module)
+        users = [user for user in users if Permisos(modulo=module_id, usuario=user.id).consultar]
+    return users
 
 
 def open_task_count(user_id: str) -> int:
