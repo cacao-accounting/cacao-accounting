@@ -20,7 +20,7 @@ from cacao_accounting.auth.permisos import Permisos
 
 from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
-from cacao_accounting.document_flow.repository import get_document
+from cacao_accounting.document_flow.repository import get_document, get_document_company
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.document_flow.status import document_status_payload
 
@@ -62,7 +62,9 @@ def _node_readable(document_type: str, document_id: str) -> bool:
     document = get_document(doctype, document_id)
     if document is None:
         return False
-    company = getattr(document, "company", None)
+    # El comprobante contable guarda la compañía en `entity`; el helper cubre
+    # ambos atributos (#1407, QA2 A1).
+    company = get_document_company(doctype, document_id)
     spec = DOCUMENT_TYPES.get(doctype)
     if spec is None:
         return True
@@ -72,11 +74,33 @@ def _node_readable(document_type: str, document_id: str) -> bool:
         if not module or module == "general":
             return True
         modules = (module,)
-    for module in modules:
-        permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
-        if permissions.consultar and permissions.tiene_acceso_compania(company):
-            return True
-    return False
+    return any(_node_module_access(module, company) for module in modules)
+
+
+def _node_module_access(module: str, company: str | None) -> bool:
+    """Resuelve consulta del módulo y compañía una vez por petición (#1407).
+
+    El árbol puede visitar hasta ``max_nodes`` documentos; cachear por
+    ``(módulo, compañía)`` evita instanciar `Permisos` y repetir la consulta de
+    acceso para cada nodo del mismo tipo.
+    """
+    from flask import g, has_request_context
+
+    cache: dict[tuple[str, str], bool] | None = None
+    if has_request_context():
+        cache = getattr(g, "_document_tree_permissions", None)
+        if cache is None:
+            cache = {}
+            g._document_tree_permissions = cache
+        key = (module, str(company or ""))
+        if key in cache:
+            return cache[key]
+
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+    allowed = bool(permissions.consultar and permissions.tiene_acceso_compania(company))
+    if cache is not None:
+        cache[(module, str(company or ""))] = allowed
+    return allowed
 
 
 def get_document_node(

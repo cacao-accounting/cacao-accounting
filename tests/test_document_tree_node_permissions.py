@@ -19,6 +19,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    ComprobanteContable,
     Currency,
     DocumentRelation,
     Entity,
@@ -56,6 +57,7 @@ def document_tree_scope_scenario():
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="sales", default=False, enabled=True),
                 Modules(module="cash", default=False, enabled=True),
+                Modules(module="accounting", default=False, enabled=True),
                 Entity(
                     code="alpha",
                     name="Alpha",
@@ -86,18 +88,35 @@ def document_tree_scope_scenario():
             posting_date=date(2026, 5, 11),
             docstatus=1,
         )
-        database.session.add_all([invoice, payment])
+        journal = ComprobanteContable(
+            entity="alpha",
+            document_no="JE-1",
+            date=date(2026, 5, 10),
+            reference="Factura INV1",
+        )
+        database.session.add_all([invoice, payment, journal])
         database.session.flush()
-        database.session.add(
-            DocumentRelation(
-                source_type="sales_invoice",
-                source_id=invoice.id,
-                target_type="payment_entry",
-                target_id=payment.id,
-                company="alpha",
-                qty=1,
-                relation_type="payment",
-            )
+        database.session.add_all(
+            [
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    target_type="payment_entry",
+                    target_id=payment.id,
+                    company="alpha",
+                    qty=1,
+                    relation_type="payment",
+                ),
+                DocumentRelation(
+                    source_type="journal_entry",
+                    source_id=journal.id,
+                    target_type="sales_invoice",
+                    target_id=invoice.id,
+                    company="alpha",
+                    qty=1,
+                    relation_type="accounting",
+                ),
+            ]
         )
         database.session.add_all(
             [
@@ -112,7 +131,15 @@ def document_tree_scope_scenario():
                 User(
                     id=f"sales-cash-{suffix}",
                     user=f"sales-cash-{suffix}",
-                    name="Ventas y Caja",
+                    name="Ventas, Caja y Contabilidad",
+                    password=b"unused",
+                    active=True,
+                    company="alpha",
+                ),
+                User(
+                    id=f"sales-only-{suffix}",
+                    user=f"sales-only-{suffix}",
+                    name="Solo Ventas",
                     password=b"unused",
                     active=True,
                     company="alpha",
@@ -122,19 +149,25 @@ def document_tree_scope_scenario():
         database.session.flush()
         sales_module = database.session.execute(database.select(Modules.id).filter_by(module="sales")).scalar_one()
         cash_module = database.session.execute(database.select(Modules.id).filter_by(module="cash")).scalar_one()
+        accounting_module = database.session.execute(database.select(Modules.id).filter_by(module="accounting")).scalar_one()
         sales_role = Roles(name=f"tree-sales-{suffix}", note="Consulta de ventas")
         cash_role = Roles(name=f"tree-cash-{suffix}", note="Consulta de caja")
-        database.session.add_all([sales_role, cash_role])
+        accounting_role = Roles(name=f"tree-accounting-{suffix}", note="Consulta contable")
+        database.session.add_all([sales_role, cash_role, accounting_role])
         database.session.flush()
         database.session.add_all(
             [
                 RolesAccess(rol_id=sales_role.id, module_id=sales_module, access=True, view=True),
                 RolesAccess(rol_id=cash_role.id, module_id=cash_module, access=True, view=True),
+                RolesAccess(rol_id=accounting_role.id, module_id=accounting_module, access=True, view=True),
                 RolesUser(user_id=f"cash-only-{suffix}", role_id=cash_role.id, active=True),
                 RolesUser(user_id=f"sales-cash-{suffix}", role_id=sales_role.id, active=True),
                 RolesUser(user_id=f"sales-cash-{suffix}", role_id=cash_role.id, active=True),
+                RolesUser(user_id=f"sales-cash-{suffix}", role_id=accounting_role.id, active=True),
+                RolesUser(user_id=f"sales-only-{suffix}", role_id=sales_role.id, active=True),
                 UserCompanyAccess(user_id=f"cash-only-{suffix}", company_code="alpha"),
                 UserCompanyAccess(user_id=f"sales-cash-{suffix}", company_code="alpha"),
+                UserCompanyAccess(user_id=f"sales-only-{suffix}", company_code="alpha"),
             ]
         )
         database.session.commit()
@@ -143,6 +176,8 @@ def document_tree_scope_scenario():
             "payment": payment.id,
             "cash_only": f"cash-only-{suffix}",
             "sales_cash": f"sales-cash-{suffix}",
+            "sales_only": f"sales-only-{suffix}",
+            "journal": journal.id,
         }
 
     yield app, ids
@@ -193,3 +228,31 @@ def test_tree_shows_invoice_nodes_with_both_modules(document_tree_scope_scenario
     assert invoice_nodes
     assert invoice_nodes[0]["document_id"] == ids["invoice"]
     assert invoice_nodes[0]["party_name"] == "Sensitive Customer"
+
+
+def test_tree_includes_journal_entry_for_accounting_reader(document_tree_scope_scenario):
+    """Un contador con acceso a la compañía ve el asiento enlazado (#1407 QA2)."""
+    app, ids = document_tree_scope_scenario
+    client = _authenticated_client(app, ids["sales_cash"])
+
+    response = client.get(
+        f"/api/document-flow/tree?document_type=sales_invoice&document_id={ids['invoice']}&direction=upstream"
+    )
+
+    assert response.status_code == 200
+    journal_nodes = [node for node in response.get_json()["upstream"] if node.get("document_type") == "journal_entry"]
+    assert journal_nodes
+    assert journal_nodes[0]["document_id"] == ids["journal"]
+
+
+def test_tree_hides_journal_entry_without_accounting(document_tree_scope_scenario):
+    """Un lector de Ventas sin Contabilidad no recibe el asiento."""
+    app, ids = document_tree_scope_scenario
+    client = _authenticated_client(app, ids["sales_only"])
+
+    response = client.get(
+        f"/api/document-flow/tree?document_type=sales_invoice&document_id={ids['invoice']}&direction=upstream"
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["upstream"] == []
