@@ -57,6 +57,7 @@ QA1, QA2, QA3 o al administrador.
 | #1357/#1283 retiro de código sin consumidores | Verificado por inspección y suite relacionada | `a93657fa`, `d1649c9a` | grep sin referencias; 41 passed |
 | #1488 lote de importación ligado a su presupuesto | Implementado con regresión | `76d28dc8` | `tests/test_r2r_budget_import_owner_scope.py` |
 | #1019 cierre de saldo ligado al documento autorizado | Implementado con regresión | `38fd869f` | `tests/test_document_flow_close_line_scope.py` |
+| #911 compañía obligatoria en Cloud sin fallback | Implementado con regresión | `da5cb0c4` | `tests/test_report_company_required.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -76,8 +77,8 @@ QA1, QA2, QA3 o al administrador.
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 | Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
 
-**Última suite completa (ronda de 50 commits):** Cloud **739 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **734 passed, 99 skipped**; 0 fallos (HEAD `d8fc9336`).
+**Última suite completa:** Cloud **750 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **745 passed, 99 skipped**; 0 fallos (HEAD `da5cb0c4`).
 Ronda ejecutada tras 51 commits desde `ded995a4`, que cubre #1254, #1354/#1355/#1110, #1467,
 #1253, #997, #998, #1357/#1283, #1488 y #1019.
 Black en verde en `cacao_accounting/` (alcance del workflow de lint); 4 archivos de prueba preexistentes
@@ -280,7 +281,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
-| #911 | Consumidor | Implementación (`needs-work`) | fix(reportes): exige company en cloud sin fallback y propaga la compania activa |
+| #911 | Consumidor | ✅ Implementado; regresión local en `da5cb0c4` (etiqueta sin cambio) | fix(reportes): exige company en cloud sin fallback y propaga la compania activa |
 | #997 | #1649 | ✅ Implementado; regresión local en `43108a06` (etiqueta sin cambio) | API fiscal: validar compañía para aliases de cobro y pago |
 | #998 | #1649 | ✅ Implementado; regresión local en `4bc2dc7e` (etiqueta sin cambio) | API: validar permisos en alias de notas documentales |
 | #1019 | #1649 | ✅ Implementado; regresión local en `38fd869f` (etiqueta sin cambio) | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
