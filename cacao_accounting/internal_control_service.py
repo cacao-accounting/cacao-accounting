@@ -1111,8 +1111,9 @@ def _guard_ledger_statement(clause: Any, multiparams: Any, params: Any) -> None:
         raise ValueError(_("Las líneas del ledger son inmutables; use una reversa append-only."))
     if {key for key in changed if key != "is_cancelled"}:
         raise ValueError(_("Las líneas del ledger son inmutables; use una reversa append-only."))
-    if not changed["is_cancelled"]:
-        raise ValueError(_("Una línea del ledger cancelada no se reactiva; registre una nueva línea."))
+    # #925: la cancelación Core/bulk no ejecuta la auditoría del mapper ni
+    # exige actor/motivo; debe pasar por el servicio auditado.
+    raise ValueError(_("La cancelación del ledger debe realizarse mediante el servicio auditado."))
 
 
 PROTECTED_REQUEST_FIELDS = frozenset(

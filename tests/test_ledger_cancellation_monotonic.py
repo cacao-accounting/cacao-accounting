@@ -40,6 +40,7 @@ def ledger_cancellation_scenario():
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
             "MODO_ESCRITORIO": False,
+            "INTERNAL_CONTROLS_ENFORCE": True,
         }
     )
     suffix = uuid4().hex[:6]
@@ -177,3 +178,16 @@ def test_reactivating_a_cancelled_ar_ap_entry_is_rejected(ledger_cancellation_sc
     _try_reactivation(app, ARAPLedgerEntry, ids["arap"], value)
 
     assert _is_cancelled(app, ARAPLedgerEntry, ids["arap"]) is True
+
+
+def test_core_bulk_cancellation_is_rejected(ledger_cancellation_scenario):
+    """A Core UPDATE cannot cancel evidence without the audited path."""
+    app, ids = ledger_cancellation_scenario
+
+    with app.app_context():
+        with pytest.raises(ValueError):
+            database.session.execute(database.update(GLEntry).where(GLEntry.id == ids["gl"]).values(is_cancelled=True))
+            database.session.commit()
+        database.session.rollback()
+
+    assert _is_cancelled(app, GLEntry, ids["gl"]) is False
