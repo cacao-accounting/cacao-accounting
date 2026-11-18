@@ -86,7 +86,13 @@ def party_scope_scenario():
         supplier_beta = Party(code=f"SUP-B-{suffix}", name=supplier_beta_name, is_supplier=True, is_active=True)
         customer_alpha = Party(code=f"CUS-A-{suffix}", name=customer_alpha_name, is_customer=True, is_active=True)
         customer_beta = Party(code=f"CUS-B-{suffix}", name=customer_beta_name, is_customer=True, is_active=True)
-        database.session.add_all([supplier_alpha, supplier_beta, customer_alpha, customer_beta])
+        supplier_shared = Party(
+            code=f"SUP-SH-{suffix}", name=f"Proveedor Compartido {suffix}", is_supplier=True, is_active=True
+        )
+        customer_shared = Party(code=f"CUS-SH-{suffix}", name=f"Cliente Compartido {suffix}", is_customer=True, is_active=True)
+        database.session.add_all(
+            [supplier_alpha, supplier_beta, customer_alpha, customer_beta, supplier_shared, customer_shared]
+        )
         database.session.flush()
         database.session.add_all(
             [
@@ -94,6 +100,10 @@ def party_scope_scenario():
                 CompanyParty(company=company_beta, party_id=supplier_beta.id, is_active=True),
                 CompanyParty(company=company_alpha, party_id=customer_alpha.id, is_active=True),
                 CompanyParty(company=company_beta, party_id=customer_beta.id, is_active=True),
+                CompanyParty(company=company_alpha, party_id=supplier_shared.id, is_active=True),
+                CompanyParty(company=company_beta, party_id=supplier_shared.id, is_active=True),
+                CompanyParty(company=company_alpha, party_id=customer_shared.id, is_active=True),
+                CompanyParty(company=company_beta, party_id=customer_shared.id, is_active=True),
             ]
         )
         database.session.add_all(
@@ -123,6 +133,14 @@ def party_scope_scenario():
                     company=company_alpha,
                 ),
                 User(
+                    id=f"sales-editor-{suffix}",
+                    user=f"sales-editor-{suffix}",
+                    name="Edición de Ventas",
+                    password=b"unused",
+                    active=True,
+                    company=company_alpha,
+                ),
+                User(
                     id=f"denied-{suffix}",
                     user=f"denied-{suffix}",
                     name="Sin Roles",
@@ -139,19 +157,23 @@ def party_scope_scenario():
         purchases_viewer_role = Roles(name=f"purchases-viewer-{suffix}", note="Consulta de compras")
         purchases_editor_role = Roles(name=f"purchases-editor-{suffix}", note="Edición de compras")
         sales_viewer_role = Roles(name=f"sales-viewer-{suffix}", note="Consulta de ventas")
-        database.session.add_all([purchases_viewer_role, purchases_editor_role, sales_viewer_role])
+        sales_editor_role = Roles(name=f"sales-editor-{suffix}", note="Edición de ventas")
+        database.session.add_all([purchases_viewer_role, purchases_editor_role, sales_viewer_role, sales_editor_role])
         database.session.flush()
         database.session.add_all(
             [
                 RolesAccess(rol_id=purchases_viewer_role.id, module_id=purchases_module, access=True, view=True),
                 RolesAccess(rol_id=purchases_editor_role.id, module_id=purchases_module, access=True, view=True, edit=True),
                 RolesAccess(rol_id=sales_viewer_role.id, module_id=sales_module, access=True, view=True),
+                RolesAccess(rol_id=sales_editor_role.id, module_id=sales_module, access=True, view=True, edit=True),
                 RolesUser(user_id=f"purchases-viewer-{suffix}", role_id=purchases_viewer_role.id, active=True),
                 RolesUser(user_id=f"purchases-editor-{suffix}", role_id=purchases_editor_role.id, active=True),
                 RolesUser(user_id=f"sales-viewer-{suffix}", role_id=sales_viewer_role.id, active=True),
+                RolesUser(user_id=f"sales-editor-{suffix}", role_id=sales_editor_role.id, active=True),
                 UserCompanyAccess(user_id=f"purchases-viewer-{suffix}", company_code=company_alpha),
                 UserCompanyAccess(user_id=f"purchases-editor-{suffix}", company_code=company_alpha),
                 UserCompanyAccess(user_id=f"sales-viewer-{suffix}", company_code=company_alpha),
+                UserCompanyAccess(user_id=f"sales-editor-{suffix}", company_code=company_alpha),
                 UserCompanyAccess(user_id=f"denied-{suffix}", company_code=company_alpha),
             ]
         )
@@ -167,9 +189,12 @@ def party_scope_scenario():
             "customer_alpha_name": customer_alpha_name,
             "customer_beta": customer_beta.id,
             "customer_beta_name": customer_beta_name,
+            "supplier_shared": supplier_shared.id,
+            "customer_shared": customer_shared.id,
             "purchases_viewer": f"purchases-viewer-{suffix}",
             "purchases_editor": f"purchases-editor-{suffix}",
             "sales_viewer": f"sales-viewer-{suffix}",
+            "sales_editor": f"sales-editor-{suffix}",
             "denied": f"denied-{suffix}",
         }
 
@@ -331,3 +356,93 @@ def test_supplier_edit_rejects_foreign_company_and_requires_edit(party_scope_sce
             database.session.execute(database.select(CompanyParty.company).filter_by(party_id=ids["supplier_alpha"])).scalars()
         )
         assert companies == {ids["company_alpha"]}
+
+
+def _linked_companies(app, party_id: str) -> set[str]:
+    """Return the companies linked to a party."""
+    with app.app_context():
+        return set(database.session.execute(database.select(CompanyParty.company).filter_by(party_id=party_id)).scalars())
+
+
+def test_supplier_company_settings_reject_foreign_shared_link(party_scope_scenario):
+    """Sending a foreign company for a shared supplier is denied without mutation (#1280)."""
+    app, ids = party_scope_scenario
+    client = _authenticated_client(app, ids["purchases_editor"])
+
+    response = client.post(
+        f"/buying/supplier/{ids['supplier_shared']}/company-settings",
+        data={"company": ids["company_beta"], "company_is_active": "on"},
+    )
+
+    assert response.status_code == 403
+    assert _linked_companies(app, ids["supplier_shared"]) == {ids["company_alpha"], ids["company_beta"]}
+
+
+def test_supplier_company_settings_reject_omitting_foreign_link(party_scope_scenario):
+    """Omitting the foreign link of a shared supplier is denied, not deleted (#1280)."""
+    app, ids = party_scope_scenario
+    client = _authenticated_client(app, ids["purchases_editor"])
+
+    response = client.post(
+        f"/buying/supplier/{ids['supplier_shared']}/company-settings",
+        data={"company": ids["company_alpha"], "company_is_active": "on"},
+    )
+
+    assert response.status_code == 403
+    assert _linked_companies(app, ids["supplier_shared"]) == {ids["company_alpha"], ids["company_beta"]}
+
+
+def test_supplier_company_settings_require_edit_permission(party_scope_scenario):
+    """A purchases reader cannot modify supplier settings."""
+    app, ids = party_scope_scenario
+    client = _authenticated_client(app, ids["purchases_viewer"])
+
+    response = client.post(
+        f"/buying/supplier/{ids['supplier_alpha']}/company-settings",
+        data={"company": ids["company_alpha"], "company_is_active": "on"},
+    )
+
+    assert response.status_code == 403
+    assert _linked_companies(app, ids["supplier_alpha"]) == {ids["company_alpha"]}
+
+
+def test_customer_company_settings_reject_foreign_shared_link(party_scope_scenario):
+    """Sending a foreign company for a shared customer is denied without mutation (#1280)."""
+    app, ids = party_scope_scenario
+    client = _authenticated_client(app, ids["sales_editor"])
+
+    response = client.post(
+        f"/sales/customer/{ids['customer_shared']}/company-settings",
+        data={"company": ids["company_beta"], "company_is_active": "on"},
+    )
+
+    assert response.status_code == 403
+    assert _linked_companies(app, ids["customer_shared"]) == {ids["company_alpha"], ids["company_beta"]}
+
+
+def test_customer_company_settings_reject_omitting_foreign_link(party_scope_scenario):
+    """Omitting the foreign link of a shared customer is denied, not deleted (#1280)."""
+    app, ids = party_scope_scenario
+    client = _authenticated_client(app, ids["sales_editor"])
+
+    response = client.post(
+        f"/sales/customer/{ids['customer_shared']}/company-settings",
+        data={"company": ids["company_alpha"], "company_is_active": "on"},
+    )
+
+    assert response.status_code == 403
+    assert _linked_companies(app, ids["customer_shared"]) == {ids["company_alpha"], ids["company_beta"]}
+
+
+def test_customer_company_settings_require_edit_permission(party_scope_scenario):
+    """A sales reader cannot modify customer settings."""
+    app, ids = party_scope_scenario
+    client = _authenticated_client(app, ids["sales_viewer"])
+
+    response = client.post(
+        f"/sales/customer/{ids['customer_alpha']}/company-settings",
+        data={"company": ids["company_alpha"], "company_is_active": "on"},
+    )
+
+    assert response.status_code == 403
+    assert _linked_companies(app, ids["customer_alpha"]) == {ids["company_alpha"]}
