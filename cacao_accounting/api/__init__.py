@@ -1845,7 +1845,10 @@ def _filter_authorized_documents(documents: list[Any], doctype_key: str) -> list
     if not modules:
         return documents
     return [
-        document for document in documents if _puede_leer_documento_compania(doctype_key, getattr(document, "company", None))
+        document
+        for document in documents
+        if document_matches_type(doctype_key, document)
+        and _puede_leer_documento_compania(doctype_key, getattr(document, "company", None))
     ]
 
 

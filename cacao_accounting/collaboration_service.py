@@ -18,7 +18,7 @@ from cacao_accounting.database import DocumentTask, User, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
-from cacao_accounting.document_flow.repository import get_document
+from cacao_accounting.document_flow.repository import document_matches_type, get_document
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 from cacao_accounting.i18n import _
@@ -370,7 +370,7 @@ def _document_for_collaboration(document_type: str, document_id: str, user_id: s
     if doctype not in DOCUMENT_TYPES:
         raise CollaborationError(_("Tipo documental no encontrado."), 404)
     document = get_document(doctype, document_id)
-    if document is None:
+    if document is None or not document_matches_type(doctype, document):
         raise CollaborationError(_("Documento no encontrado."), 404)
     _require_document_permission(doctype, user_id)
     spec = DOCUMENT_TYPES[doctype]

@@ -937,6 +937,9 @@ def _create_target_header(
         "company": company,
         "posting_date": posting_date,
         "docstatus": 0,
+        # #2254: los alias de nota/devolución comparten modelo con la factura;
+        # el registro debe conservar el subtipo lógico solicitado.
+        "document_type": target_type,
         "purpose": payload.get("purpose") or "receipt",
         "supplier_id": payload.get("supplier_id"),
         "supplier_name": payload.get("supplier_name"),
