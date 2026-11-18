@@ -1704,11 +1704,16 @@ def api_document_flow_close_line():
     """Cierra manualmente el saldo de una linea fuente."""
     payload = request.get_json(silent=True) or request.form.to_dict()
     _require_flow_company_access(payload, "editar")
+    source_type = normalize_doctype(str(payload.get("source_document_type") or payload.get("source_type") or ""))
+    source_id = str(payload.get("source_document_id") or payload.get("source_id") or "")
+    source_item_id = str(payload.get("source_row_id") or payload.get("source_item_id") or "")
+    if source_item_id:
+        _require_source_item_access(source_type, source_item_id, source_id, "editar")
     try:
         state = close_line_balance(
-            source_type=str(payload.get("source_document_type") or payload.get("source_type") or ""),
-            source_id=str(payload.get("source_document_id") or payload.get("source_id") or ""),
-            source_item_id=str(payload.get("source_row_id") or payload.get("source_item_id") or ""),
+            source_type=source_type,
+            source_id=source_id,
+            source_item_id=source_item_id,
             target_type=str(payload.get("target_document_type") or payload.get("target_type") or ""),
             qty=payload.get("qty"),
             uom=str(payload.get("uom") or "") or None,

@@ -769,6 +769,12 @@ def close_line_balance(
     source_item = get_document_item(source_key, source_item_id)
     if source_item is None:
         raise DocumentFlowError(_(_MSG_LINEA_ORIGEN), 404)
+    # #1019: el cierre se autoriza por la cabecera; la línea debe pertenecer a
+    # ese mismo documento y no a otro de la compañía o de otra compañía.
+    if get_item_parent_id(get_document_type(source_key), source_item) != str(source_id):
+        raise DocumentFlowError(_("La línea origen no pertenece al documento indicado."), 400)
+    if get_document(source_key, source_id) is None:
+        raise DocumentFlowError(_("Documento origen no encontrado."), 404)
     available = pending_qty(
         source_key,
         source_id,
