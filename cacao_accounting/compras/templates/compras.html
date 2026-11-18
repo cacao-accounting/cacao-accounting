@@ -163,11 +163,11 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('compras.compras_reconciliation_panel') }}">{{ _('Panel de Conciliaciones') }}</a>
+        <a href="{{ url_for('compras.compras_reconciliation_panel', company=company) }}">{{ _('Panel de Conciliaciones') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('compras.compras_purchase_reconciliation') }}">{{ _('Conciliaciones Pendientes') }}</a>
+        <a href="{{ url_for('compras.compras_purchase_reconciliation', company=company) }}">{{ _('Conciliaciones Pendientes') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       {% else %}
