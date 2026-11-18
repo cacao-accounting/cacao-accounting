@@ -76,6 +76,7 @@ QA1, QA2, QA3 o al administrador.
 | #1007/#1010 rechazo de valores fiscales no finitos | Implementado con regresión | `481470f7` | `tests/test_fiscal_non_finite_validation.py`, `tests/test_admin_tax_rule_form.py` |
 | #1021/#1697 setup único y claves de configuración únicas | Implementado con regresión | `03dfc484` | `tests/test_setup_finalize_once.py`, `tests/test_config_key_uniqueness.py` |
 | #1601 acciones de escritura en rutas de Contabilidad | Implementado con regresión | `6845ff63` | `tests/test_accounting_write_actions_required.py` |
+| #1031 lote corrupto y recuperación con started_at nulo | Implementado con regresión | `4ac988a1` | `tests/test_import_corrupt_reader_recovery.py` |
 | #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
@@ -420,7 +421,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1007 | #1650 | ✅ Implementado; regresión local en `481470f7` (etiqueta sin cambio) | Fiscal: rechazar valores no finitos en líneas manuales |
 | #1010 | #1650 | ✅ Implementado; regresión local en `481470f7` (etiqueta sin cambio) | TaxRule: rechazar tasas e importes no finitos |
 | #1030 | #1652 | Implementación (`needs-work`) | Importación bancaria: '1.000' (miles europeos) se corrompe a 1.000 y '1,000' (miles americanos) se rechaza |
-| #1031 | #1652 | Implementación (`needs-work`) | Importación: un lector que lanza excepción deja el lote zombi en estado 4 y la recuperación ignora started_at NULL |
+| #1031 | #1652 | ✅ Implementado; regresión local en `4ac988a1` (etiqueta sin cambio) | Importación: un lector que lanza excepción deja el lote zombi en estado 4 y la recuperación ignora started_at NULL |
 | #1032 | #1652 | Implementación (`needs-work`) | Importación: la cancelación de un lote en ejecución queda sobrescrita (estado 8 se reescribe a 5/6) |
 | #1033 | #1652 | Implementación (`needs-work`) | Importación: celdas XLSX/ODS vacías persisten el literal 'None' (descripción, referencia y moneda) en transacciones y pronósticos |
 | #1046 | #1658 | Implementación (`needs-work`) | Extractos: retirar el importador CSV sin ruta productiva |
