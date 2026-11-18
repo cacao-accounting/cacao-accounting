@@ -85,6 +85,7 @@ QA1, QA2, QA3 o al administrador.
 | #1046 retiro del importador bancario sin ruta | Verificado por inspección | `a0d0f698` | grep sin referencias; suite de importaciones |
 | #1052 campos requeridos solo con espacios rechazados | Implementado con regresión | `f24b6b6a` | `tests/test_import_required_whitespace.py` |
 | #1055 fechas de Excel normalizadas antes de validar | Implementado con regresión | `70095718` | `tests/test_import_date_normalization.py` |
+| #2252/#2253 ACL documental por módulo en query tools | Implementado con regresión | `9f9ad0f9` | `tests/test_query_tools_document_acl.py` |
 | #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
@@ -106,12 +107,12 @@ QA1, QA2, QA3 o al administrador.
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 | Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
 
-**Última suite completa:** Cloud **940 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **935 passed, 99 skipped**; 0 fallos (HEAD `719b89fb`).
+**Última suite completa:** Cloud **960 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **955 passed, 99 skipped**; 0 fallos (HEAD `9f9ad0f9`).
 Rondas ejecutadas tras el umbral de 50 commits desde `ded995a4`, que cubren #1254,
 #1354/#1355/#1110, #1467, #1253, #997, #998, #1357/#1283, #1488, #1019, #911,
 #1562, #1641, #1695, #1696, #2013, #2060, #1000, #1466, #1076, #925, #1002, #1294,
-#1669, #1144, #950, #1601, #1778, #1031, #1065, #1033, #1049, #1050, #1052, #1046, #1021, #1697, #1682/#2006, #1299 y los seguimientos QA2 B4/B8/B11/B14.
+#1669, #1144, #950, #1601, #1778, #1031, #1065, #1033, #1049, #1050, #1052, #1055, #1046, #1021, #1697, #1682/#2006, #1299, #2252, #2253 y los seguimientos QA2 B4/B8/B11/B14.
 Black en verde en `cacao_accounting/` (alcance del workflow de lint); 4 archivos de prueba preexistentes
 de `8f341b3e` requieren reformato de black fuera de ese alcance. Ruff, flake8, mypy y Bandit sin hallazgos bloqueantes. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
 Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados.
