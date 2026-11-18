@@ -64,6 +64,7 @@ QA1, QA2, QA3 o al administrador.
 | #1696 consumo atómico del OTP en concurrencia | Implementado con regresión | `474684ec` | `tests/test_otp_atomic_verification.py` |
 | #2013 redondeo del lockout sin minuto extra | Implementado con regresión | `e9b32f49` | `tests/test_session_security_lockout_minutes.py` |
 | #2060 insignia de aprobaciones acotada por compañía | Implementado con regresión | `29fe2836` | `tests/test_approval_count_scope.py` |
+| #1466 cierre de flujo confirmado antes de responder | Implementado con regresión | `4078e439` | `tests/test_document_flow_close_persistence.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -387,7 +388,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1306 | #1653 | Implementación (`needs-work`) | Bloquea el serial antes de validar salidas concurrentes |
 | #1318 | #1658 | Implementación (`needs-work`) | Integra o backfill bancario o elimina |
 | #1319 | #1653 | Implementación (`needs-work`) | Evita duplicados en importaciones bancarias concurrentes |
-| #1466 | #1653 | Implementación (`needs-work`) | API de cierre de flujo responde 200 sin persistir cambios |
+| #1466 | #1653 | ✅ Implementado; regresión local en `4078e439` (etiqueta sin cambio) | API de cierre de flujo responde 200 sin persistir cambios |
 | #1669 | #1653 | Implementación (`needs-work`) | [Imports] Recuperación duplica errores de timeout |
 | #1682 | #1653 | Implementación (`needs-work`) | [Audit][Auth] Evita roles duplicados por usuario |
 | #1683 | #1658 | Implementación (`needs-work`) | [Audit][Database] Elimina columnas muertas de BaseTransaccion |
