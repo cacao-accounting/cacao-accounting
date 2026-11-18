@@ -4,8 +4,10 @@
 """Utilidades para el servicio de importación."""
 
 from datetime import datetime, timedelta
+from typing import cast
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select, update
+from sqlalchemy.engine import CursorResult
 
 from cacao_accounting.database import database
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
@@ -17,29 +19,61 @@ def _import_tables_exist() -> bool:
     return inspector.has_table(ImportBatch.__tablename__) and inspector.has_table(ImportBatchError.__tablename__)
 
 
+def _expired_batch_ids(timeout_limit: datetime) -> list[str]:
+    """Devuelve los lotes en proceso que excedieron el tiempo límite."""
+    return list(
+        database.session.execute(
+            select(ImportBatch.id).where(
+                ImportBatch.import_status == 4,
+                (ImportBatch.started_at.is_(None)) | (ImportBatch.started_at < timeout_limit),
+            )
+        ).scalars()
+    )
+
+
+def _claim_expired_batch(batch_id: str, timeout_limit: datetime) -> bool:
+    """Marca el lote como fallido solo si sigue vencido en el momento del claim.
+
+    La actualización condicional evita que dos recuperaciones concurrentes
+    procesen el mismo lote y dupliquen el error ``SYSTEM_TIMEOUT`` (#1669).
+    """
+    claimed = cast(
+        CursorResult,
+        database.session.execute(
+            update(ImportBatch)
+            .where(
+                ImportBatch.id == batch_id,
+                ImportBatch.import_status == 4,
+                (ImportBatch.started_at.is_(None)) | (ImportBatch.started_at < timeout_limit),
+            )
+            .values(import_status=7)
+            .execution_options(synchronize_session=False)
+        ),
+    ).rowcount
+    return bool(claimed)
+
+
 def recover_crashed_batches() -> int:
     """Marca como fallidos los lotes de importación que excedieron el tiempo límite."""
     if not _import_tables_exist():
         return 0
 
     timeout_limit = datetime.now() - timedelta(hours=4)
-
-    batches = ImportBatch.query.filter(
-        ImportBatch.import_status == 4,
-        (ImportBatch.started_at.is_(None)) | (ImportBatch.started_at < timeout_limit),
-    ).all()
-    if not batches:
-        return 0
-
-    for batch in batches:
-        batch.import_status = 7  # Fallido
-        error = ImportBatchError(
-            batch_id=batch.id,
-            error_type="SYSTEM_TIMEOUT",
-            message="El proceso de importación se interrumpió inesperadamente o excedió el tiempo límite (4h).",
+    recovered = 0
+    for batch_id in _expired_batch_ids(timeout_limit):
+        if not _claim_expired_batch(batch_id, timeout_limit):
+            continue
+        database.session.add(
+            ImportBatchError(
+                batch_id=batch_id,
+                error_type="SYSTEM_TIMEOUT",
+                message="El proceso de importación se interrumpió inesperadamente o excedió el tiempo límite (4h).",
+            )
         )
-        database.session.add(error)
-        database.session.add(batch)
+        recovered += 1
 
+    if not recovered:
+        database.session.rollback()
+        return 0
     database.session.commit()
-    return len(batches)
+    return recovered
