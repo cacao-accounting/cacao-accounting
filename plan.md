@@ -54,6 +54,7 @@ QA1, QA2, QA3 o al administrador.
 | #1253 lotes visibles solo con evidencia de la compañía | Implementado con regresión | `b0d9003a`, `f995e0e0` | `tests/test_report_batch_company_evidence.py` |
 | #997 alias fiscales de cobro/pago con acceso a compañía | Implementado con regresión | `43108a06` | `tests/test_fiscal_preview_company_scope.py` |
 | #998 alias documentales con permiso y subtipo validados | Implementado con regresión | `4bc2dc7e` | `tests/test_document_alias_subtype_access.py` |
+| #1357/#1283 retiro de código sin consumidores | Verificado por inspección y suite relacionada | `a93657fa`, `d1649c9a` | grep sin referencias; 41 passed |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -293,7 +294,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1261 | Consumidor | ✅ Implementado; regresión local en `f79c5da7` (etiqueta sin cambio) | Respeta alcance de cuenta en reglas bancarias |
 | #1280 | #1649 | ✅ Implementado; regresión local en `039e582a` (etiqueta sin cambio) | Autoriza cambios de configuración de terceros por compañía |
 | #1282 | #1649 | ✅ Implementado; regresión local en `ff54d165` (etiqueta sin cambio) | Protege la edición de contactos y roles de terceros |
-| #1283 | #1658 | Implementación (`needs-work`) | Elimina helpers de terceros sin llamadores |
+| #1283 | #1658 | ✅ Helpers retirados en `d1649c9a`; sin referencias (etiqueta sin cambio) | Elimina helpers de terceros sin llamadores |
 | #1284 | #1649 | ✅ Implementado; regresión local en `9cd29cc2` (etiqueta sin cambio) | Aísla adjuntos de terceros entre compañías |
 | #1286 | #1649 | ✅ Coordinación cubierta; regresión en `f0ec7506` (etiqueta sin cambio) | Seguimiento: autorización por compañía de terceros |
 | #1299 | #1658 | Implementación (`needs-work`) | Retira o integra preferencias CompanyParty sin consumidores |
@@ -307,7 +308,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1338 | #1649 | ✅ Implementado; regresión local en `cbac6457` (etiqueta sin cambio) | Rechaza compañías deshabilitadas en query tools |
 | #1354 | #1710 | ✅ Implementado; regresión local en `de6f005c` (etiqueta sin cambio) | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
 | #1355 | #1710 | ✅ Implementado; regresión local en `6ebf42a5` (etiqueta sin cambio) | [Seguridad] Revoca accesos existentes al restablecer contraseña |
-| #1357 | #1658 | Implementación (`needs-work`) | [Auditoría] Elimina el blueprint admin sin rutas |
+| #1357 | #1658 | ✅ Código retirado en `a93657fa`; `admin/services.py` sin `Blueprint` (etiqueta sin cambio) | [Auditoría] Elimina el blueprint admin sin rutas |
 | #1388 | #1649 | ✅ Implementado; regresión local en `872008d3` (etiqueta sin cambio) | Valida el cliente al crear relaciones O2C por línea |
 | #1399 | #1649 | ✅ Implementado; regresión local en `1afff009` (etiqueta sin cambio) | Valida el tercero seleccionado en importación de pagos |
 | #1407 | #1649 | ✅ Implementado; regresión local en `a43e6117` (etiqueta sin cambio) | Aplica permisos por módulo a cada nodo del árbol documental |
