@@ -27,6 +27,7 @@ QA1, QA2, QA3 o al administrador.
 | #1526/#1527 bancos: permiso de alta y alcance por cuenta | Implementado con regresión | `ea3d7dfc` | `tests/test_cash_bank_company_scope.py` |
 | #1320 listado de movimientos bancarios exige consulta de Caja | Implementado con regresión | `74db370b` | `tests/test_cash_bank_company_scope.py` |
 | #1322 gastos de reposición de caja chica por alcance | Implementado con regresión | `d1979066` | `tests/test_petty_cash_fund_scope.py` |
+| #1329 revocación de tareas y badge al perder compañía | Implementado con regresión | `ecac5587` | `tests/test_collaboration_task_company_revocation.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
 | #1282 contactos, direcciones y roles cruzados de terceros | Implementado con regresión | `ff54d165` | `tests/test_party_management_company_scope.py` |
 | #1284 adjuntos de terceros por activación y permiso | Implementado con regresión | `9cd29cc2` | `tests/test_party_attachment_company_scope.py` |
@@ -268,7 +269,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1321 | #1649 | ✅ Implementado; regresión local en `b649bbdf` (etiqueta sin cambio) | Limita el catálogo de usuarios por compañía |
 | #1322 | #1649 | ✅ Implementado; regresión local en `d1979066` (etiqueta sin cambio) | Filtra gastos de reposición por compañía autorizada |
 | #1327 | #1649 | ✅ Implementado; regresión local en `dbaede68` (etiqueta sin cambio) | Exige permiso de módulo en catálogos del selector |
-| #1329 | #1649 | Implementación (`needs-work`) | Revoca tareas cuando se pierde acceso a la compañía |
+| #1329 | #1649 | ✅ Implementado; regresión local en `ecac5587` (etiqueta sin cambio) | Revoca tareas cuando se pierde acceso a la compañía |
 | #1332 | #1649 | Implementación (`needs-work`) | Alinea permisos de líneas en flujos de inventario |
 | #1338 | #1649 | ✅ Implementado; regresión local en `cbac6457` (etiqueta sin cambio) | Rechaza compañías deshabilitadas en query tools |
 | #1354 | #1710 | Implementación (`needs-work`) | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
