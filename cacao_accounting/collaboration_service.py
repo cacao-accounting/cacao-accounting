@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime
 from typing import Any, NoReturn, Sequence
 
 from flask import abort, url_for
+from flask_login import current_user
 from werkzeug.routing import BuildError
 
 from cacao_accounting.audit_trail_service import log_comment, log_task_event
@@ -166,6 +167,37 @@ def _task_company_scope() -> tuple[list[str], Any]:
     return authorized, or_(*conditions)
 
 
+def _task_document_visible(task: DocumentTask, authorized: Sequence[str], module_cache: dict[str, bool]) -> bool:
+    """Indica si el usuario conserva acceso de consulta al documento de la tarea.
+
+    El alcance por compañía ya se aplicó en la consulta; aquí se revalida el
+    permiso del módulo dueño del documento, porque revocar el rol de Ventas o
+    Compras no elimina las concesiones de compañía (#1595). Las tareas sin
+    compañía mantienen la política previa y las de tipos no registrados se
+    conservan para no ocultar datos históricos.
+    """
+    try:
+        authenticated = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        return True
+    if not authenticated:
+        return True
+    if task.company is None:
+        return True
+    if str(task.company) not in authorized:
+        return False
+    spec = DOCUMENT_TYPES.get(normalize_doctype(task.document_type))
+    if spec is None:
+        return True
+    module = spec.permission_module or spec.module
+    if not module or module == "general":
+        return True
+    if module not in module_cache:
+        permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+        module_cache[module] = bool(permissions.consultar)
+    return module_cache[module]
+
+
 def list_user_tasks(
     user_id: str,
     status: str | None = None,
@@ -198,7 +230,12 @@ def list_user_tasks(
         query = query.where(DocumentTask.due_date <= due_date_to)
     if company:
         query = query.where(DocumentTask.company == company)
-    return list(database.session.execute(query.order_by(DocumentTask.created_at.desc())).scalars().all())
+    tasks = list(database.session.execute(query.order_by(DocumentTask.created_at.desc())).scalars().all())
+    if not restrict_by_access:
+        return tasks
+    authorized, _scope = _task_company_scope()
+    module_cache: dict[str, bool] = {}
+    return [task for task in tasks if _task_document_visible(task, authorized, module_cache)]
 
 
 def active_users(companies: Sequence[str] | None = None, module: str | None = None) -> list[User]:
@@ -228,15 +265,21 @@ def active_users(companies: Sequence[str] | None = None, module: str | None = No
 
 
 def open_task_count(user_id: str) -> int:
-    """Return the count of not-completed tasks visible in the user's scope."""
-    _, scope = _task_company_scope()
+    """Return the count of not-completed tasks visible in the user's scope.
+
+    Aplica el mismo filtro que la bandeja, incluido el permiso vigente del
+    módulo del documento (#1595).
+    """
+    authorized, scope = _task_company_scope()
     query = (
-        database.select(database.func.count(DocumentTask.id))
+        database.select(DocumentTask)
         .where(DocumentTask.assigned_to == user_id)
         .where(DocumentTask.status.in_(("open", "in_progress")))
         .where(scope)
     )
-    return int(database.session.execute(query).scalar() or 0)
+    tasks = list(database.session.execute(query).scalars().all())
+    module_cache: dict[str, bool] = {}
+    return sum(1 for task in tasks if _task_document_visible(task, authorized, module_cache))
 
 
 def document_url(task: DocumentTask) -> str | None:

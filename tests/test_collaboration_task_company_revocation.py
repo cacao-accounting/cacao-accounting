@@ -144,14 +144,18 @@ def task_revocation_scenario():
                 ),
             ]
         )
-        module_id = database.session.execute(database.select(Modules.id).filter_by(module="sales")).scalar_one()
-        role = Roles(name=f"task-reader-{suffix}", note="Consulta de ventas")
-        database.session.add(role)
+        sales_module = database.session.execute(database.select(Modules.id).filter_by(module="sales")).scalar_one()
+        inventory_module = database.session.execute(database.select(Modules.id).filter_by(module="inventory")).scalar_one()
+        sales_role = Roles(name=f"task-sales-{suffix}", note="Consulta de ventas")
+        inventory_role = Roles(name=f"task-inventory-{suffix}", note="Consulta de inventario")
+        database.session.add_all([sales_role, inventory_role])
         database.session.flush()
         database.session.add_all(
             [
-                RolesAccess(rol_id=role.id, module_id=module_id, access=True, view=True),
-                RolesUser(user_id=assignee, role_id=role.id, active=True),
+                RolesAccess(rol_id=sales_role.id, module_id=sales_module, access=True, view=True),
+                RolesAccess(rol_id=inventory_role.id, module_id=inventory_module, access=True, view=True),
+                RolesUser(user_id=assignee, role_id=sales_role.id, active=True),
+                RolesUser(user_id=assignee, role_id=inventory_role.id, active=True),
                 UserCompanyAccess(user_id=assignee, company_code=company_alpha),
             ]
         )
@@ -225,6 +229,29 @@ def test_revoking_company_access_removes_inbox_and_badge_entries(task_revocation
     filtered_body = filtered.get_data(as_text=True)
     assert ids["alpha"] not in filtered_body
     assert ids["none"] not in filtered_body
+
+    with app.test_request_context("/tasks/my"):
+        from flask_login import login_user
+
+        login_user(database.session.get(User, ids["assignee"]))
+        assert open_task_count(ids["assignee"]) == 1
+
+
+def test_revoking_module_role_hides_document_tasks(task_revocation_scenario):
+    """Losing the document module hides its tasks even with company access (#1595)."""
+    app, ids = task_revocation_scenario
+    with app.app_context():
+        database.session.execute(database.delete(RolesUser).filter_by(user_id=ids["assignee"]))
+        database.session.commit()
+    client = _authenticated_client(app, ids["assignee"])
+
+    response = client.get("/tasks/my")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert ids["alpha"] not in body
+    assert ids["beta"] not in body
+    assert ids["none"] in body
 
     with app.test_request_context("/tasks/my"):
         from flask_login import login_user
