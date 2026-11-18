@@ -1747,8 +1747,15 @@ def _reconciliation_report_rows(query: Any, cancel_dates: dict[str, date], as_of
     return rows
 
 
-def get_reconciliation_report(company: str, as_of_date: date | None = None) -> PaginatedReport:
-    """Devuelve reconciliaciones bancarias y conciliaciones de compras pendientes."""
+def get_reconciliation_report(
+    company: str, as_of_date: date | None = None, *, include_purchase_pending: bool = True
+) -> PaginatedReport:
+    """Devuelve reconciliaciones bancarias y, si se autoriza, pendientes de compras.
+
+    El llamador que solo está autorizado para banca debe pasar
+    ``include_purchase_pending=False`` para no mezclar datos de Compras en la
+    misma respuesta (#1254).
+    """
     query = (
         select(Reconciliation, ReconciliationItem)
         .join(
@@ -1763,7 +1770,9 @@ def get_reconciliation_report(company: str, as_of_date: date | None = None) -> P
     rows = _reconciliation_report_rows(query, _reconciliation_cancel_dates(as_of_date), as_of_date)
 
     bank_total = sum((_decimal_value(row.values["amount"]) for row in rows), Decimal("0"))
-    purchase_pending = get_purchase_reconciliation_pending(company=company, as_of_date=as_of_date)
+    purchase_pending = (
+        get_purchase_reconciliation_pending(company=company, as_of_date=as_of_date) if include_purchase_pending else []
+    )
     for pending in purchase_pending:
         rows.append(
             ReportRow(
