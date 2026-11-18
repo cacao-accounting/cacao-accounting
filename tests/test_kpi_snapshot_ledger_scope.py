@@ -10,13 +10,14 @@ distinta ni devolver métricas aparentemente válidas.
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Book, Currency, Entity, database
+from cacao_accounting.database import Accounts, Book, Currency, Entity, GLEntry, database
 from cacao_accounting.reportes.analytics import get_kpi_snapshot
 
 
@@ -68,6 +69,34 @@ def kpi_ledger_scenario():
             entity="beta", code=f"BETA-{suffix}", name="Libro Beta", status="activo", is_primary=True, currency="USD"
         )
         database.session.add_all([alpha_book, beta_book])
+        database.session.flush()
+        income_account = Accounts(
+            entity="alpha",
+            code=f"4101-{suffix}",
+            name="Ingresos",
+            classification="income",
+            group=False,
+            active=True,
+            enabled=True,
+        )
+        database.session.add(income_account)
+        database.session.flush()
+        database.session.add(
+            GLEntry(
+                company="alpha",
+                account_id=income_account.id,
+                ledger_id=alpha_book.id,
+                account_code=income_account.code,
+                voucher_type="journal_entry",
+                voucher_id=f"JE-{suffix}",
+                posting_date=date(2026, 5, 10),
+                debit=Decimal("0"),
+                credit=Decimal("100"),
+                is_cancelled=False,
+                is_reversal=False,
+                is_fiscal_year_closing=False,
+            )
+        )
         database.session.commit()
         ids = {
             "alpha_book_code": alpha_book.code,
@@ -113,3 +142,5 @@ def test_kpi_snapshot_accepts_own_book_by_code_and_id(kpi_ledger_scenario):
 
     assert by_code["currency"] == "NIO"
     assert by_id["currency"] == "NIO"
+    assert by_code["metrics"]["income"] == Decimal("100")
+    assert by_id["metrics"]["income"] == Decimal("100")
