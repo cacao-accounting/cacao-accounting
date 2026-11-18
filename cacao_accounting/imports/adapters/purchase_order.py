@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any, cast
 from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.imports.utils.dates import parse_import_date
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party, Warehouse, database
 from cacao_accounting.document_flow.context import company_currency
@@ -50,7 +51,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         company_id = (context or {}).get("company_id") or ""
         posting_date = None
         try:
-            posting_date = date.fromisoformat(str(document_data[0].get("fecha")))
+            posting_date = parse_import_date(document_data[0].get("fecha"))
             if not is_period_open(company_id, posting_date):
                 errors.append(f"El periodo contable para la fecha {posting_date} está cerrado o no existe.")
         except (ValueError, TypeError):
@@ -87,7 +88,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
 
         posting_date = None
         try:
-            posting_date = date.fromisoformat(str(first_row.get("fecha")))
+            posting_date = parse_import_date(first_row.get("fecha"))
         except ValueError:
             pass
 

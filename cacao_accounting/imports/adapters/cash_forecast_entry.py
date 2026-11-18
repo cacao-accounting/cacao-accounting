@@ -3,12 +3,12 @@
 
 """Adaptador para importación de entradas de pronóstico de caja."""
 
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 
 from cacao_accounting.database import CashForecast, CashForecastEntry, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
+from cacao_accounting.imports.utils.dates import parse_import_date
 from cacao_accounting.i18n import _
 
 
@@ -62,8 +62,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         except ValueError as exc:
             errors.append(str(exc))
         try:
-            if isinstance(row_data.get("estimated_date"), str):
-                date.fromisoformat(row_data["estimated_date"])
+            parse_import_date(row_data.get("estimated_date"), field="fecha estimada")
         except (ValueError, TypeError):
             errors.append(f"Fecha inválida: {row_data.get('estimated_date')}")
         return errors
@@ -96,9 +95,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         """Build cash forecast entries from the imported data."""
         entries = []
         for row in document_data:
-            estimated_date = row.get("estimated_date")
-            if isinstance(estimated_date, str):
-                estimated_date = date.fromisoformat(estimated_date)
+            estimated_date = parse_import_date(row.get("estimated_date"), field="fecha estimada")
             entry_type = self._normalize_entry_type(row.get("type"))
             if entry_type is None:
                 raise ValueError(_("El tipo debe ser Income o Expense."))

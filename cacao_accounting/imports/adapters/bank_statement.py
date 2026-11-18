@@ -3,12 +3,12 @@
 
 """Adaptador para importación de extractos bancarios."""
 
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 
 from cacao_accounting.database import BankAccount, BankTransaction, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
+from cacao_accounting.imports.utils.dates import parse_import_date
 
 
 from cacao_accounting.i18n import _
@@ -77,11 +77,7 @@ class BankStatementAdapter(BaseImportAdapter):
             errors.append(f"Cuenta bancaria no encontrada: {row_data.get('bank_account_id')}")
         raw_date = row_data.get("posting_date")
         try:
-            if isinstance(raw_date, date):
-                parsed_date = raw_date
-            else:
-                parsed_date = date.fromisoformat(str(raw_date))
-            if not parsed_date:
+            if not parse_import_date(raw_date, field="fecha bancaria"):
                 raise ValueError
         except (TypeError, ValueError):
             errors.append(f"Fecha bancaria inválida: {raw_date}")
@@ -121,8 +117,7 @@ class BankStatementAdapter(BaseImportAdapter):
                     f"{bank_account.company}, no a {company_id}."
                 )
             try:
-                posting_date = row.get("posting_date")
-                posting_date = posting_date if isinstance(posting_date, date) else date.fromisoformat(str(posting_date))
+                posting_date = parse_import_date(row.get("posting_date"), field="fecha bancaria")
             except (TypeError, ValueError):
                 continue
             if not is_period_open(company_id, posting_date):
@@ -134,11 +129,10 @@ class BankStatementAdapter(BaseImportAdapter):
         transactions = []
         for row in document_data:
             posting_date = row.get("posting_date")
-            if isinstance(posting_date, str):
-                try:
-                    posting_date = date.fromisoformat(posting_date)
-                except ValueError as exc:
-                    raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
+            try:
+                posting_date = parse_import_date(posting_date, field="fecha bancaria")
+            except ValueError as exc:
+                raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
             deposit = self._optional_amount(row.get("deposit"))
             withdrawal = self._optional_amount(row.get("withdrawal"))
             if (deposit is not None and deposit < 0) or (withdrawal is not None and withdrawal < 0):

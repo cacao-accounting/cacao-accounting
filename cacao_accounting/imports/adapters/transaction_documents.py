@@ -45,6 +45,7 @@ from cacao_accounting.document_flow.context import company_currency, effective_c
 from cacao_accounting.document_flow.service import qty_in_base_uom
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.imports.utils.dates import parse_import_date
 
 
 from cacao_accounting.i18n import _
@@ -163,7 +164,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         if self.config.party_field and not first_row.get("tercero"):
             errors.append("La columna tercero es obligatoria para este tipo de registro.")
         try:
-            posting_date = date.fromisoformat(str(first_row.get("fecha")))
+            posting_date = parse_import_date(first_row.get("fecha"))
         except (ValueError, TypeError):
             errors.append("La fecha debe usar formato ISO YYYY-MM-DD.")
             return errors
@@ -210,7 +211,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
     def build_document(self, document_data: list[dict[str, Any]], context: dict[str, Any]) -> dict[str, Any]:
         """Construye encabezado e ítems desde las filas del archivo."""
         first_row = document_data[0]
-        posting_date = date.fromisoformat(str(first_row.get("fecha")))
+        posting_date = parse_import_date(first_row.get("fecha"))
         source = self._source_document(first_row.get("documento_origen"))
         company_id = str(context.get("company_id") or "")
         transaction_currency, base_currency, exchange_rate = self._currency_and_rate(
