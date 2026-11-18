@@ -125,6 +125,7 @@ from cacao_accounting.database.helpers import (
     update_hierarchy_attributes,
 )
 
+from cacao_accounting.company_context import authorized_company_codes
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_acceso, verifica_permiso
 
 from cacao_accounting.list_filters import apply_list_filters
@@ -155,6 +156,36 @@ def _accounting_entity_choices(action: str = "consultar") -> list[tuple[str, str
 
     entities = database.session.execute(_accounting_company_scope(database.select(Entity), Entity.code, action)).scalars()
     return [("", "")] + [(entity.code, entity.name) for entity in entities]
+
+
+def _resolve_catalog_company(requested: str | None) -> tuple[str, Any]:
+    """Resuelve la compañía del catálogo contable y exige acceso explícito.
+
+    Una compañía solicitada sin autorización se rechaza con 403 en lugar de caer
+    silenciosamente en otra compañía (#1546), de modo que el catálogo no revela
+    datos ni la existencia de compañías ajenas. Sin parámetro se usa la compañía
+    predeterminada si el usuario tiene acceso a ella; en caso contrario, la
+    primera compañía autorizada.
+
+    Args:
+        requested: Código de compañía recibido en la petición, o ``None``.
+
+    Returns:
+        El código de compañía resuelto y la entidad usada por la barra de
+        herramientas del árbol.
+    """
+    if requested:
+        exige_acceso_compania("accounting", requested)
+        return requested, obtener_entidad(ent=requested)
+
+    companias = authorized_company_codes("accounting")
+    if not companias:
+        abort(403)
+    entidad_predeterminada = obtener_entidad()
+    codigo_predeterminado = entidad_predeterminada[0].code if entidad_predeterminada else None
+    if codigo_predeterminado in companias:
+        return codigo_predeterminado, entidad_predeterminada
+    return companias[0], obtener_entidad(ent=companias[0])
 
 
 def _journal_list_scope(
@@ -1820,8 +1851,8 @@ def eliminar_centro_costo(id_cc):
 @verifica_acceso("accounting")
 def proyectos():
     """Listado de proyectos."""
-    entidad_arg = request.args.get("entidad", None)
-    arbol = obtener_arbol_proyectos(entidad_=entidad_arg)
+    entidad_actual_code, entidad_actual = _resolve_catalog_company(request.args.get("entidad"))
+    arbol = obtener_arbol_proyectos(entidad_=entidad_actual_code)
     tree_roots, tree_all = build_tree_data(
         arbol,
         parent_field="parent_id",
@@ -1835,7 +1866,7 @@ def proyectos():
         tree_roots=tree_roots,
         tree_all=tree_all,
         entidades=obtener_entidades(),
-        entidad=obtener_entidad(ent=entidad_arg),
+        entidad=entidad_actual,
         titulo=_("Listado de Proyectos") + " - " + APPNAME,
         statusweb=STATUS,
     )
@@ -1939,6 +1970,7 @@ def proyecto(project_id):
     if registro is None:
         flash(_("El proyecto indicado no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
+    exige_acceso_compania("accounting", registro.entity)
 
     return render_template(
         "contabilidad/proyecto.html",
@@ -1959,6 +1991,7 @@ def editar_proyecto(project_id):
     proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if proyecto is None:
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
+    exige_acceso_compania("accounting", proyecto.entity)
 
     formulario = FormularioProyecto(obj=proyecto)
     _setup_project_edit_form(formulario, proyecto)
@@ -2006,6 +2039,7 @@ def eliminar_proyecto(project_id):
     """Elimina un proyecto."""
     proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if proyecto:
+        exige_acceso_compania("accounting", proyecto.entity)
         if len(proyecto.children) > 0:
             flash(_("No se puede eliminar el proyecto porque tiene proyectos hijos asignados (RN-006)."), "danger")
             return redirect(url_for(CONTABILIDAD_PROYECTOS))
