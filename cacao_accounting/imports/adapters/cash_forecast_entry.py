@@ -51,6 +51,8 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         forecast = database.session.get(CashForecast, _text(row_data.get("forecast_id")))
         if forecast is None:
             errors.append(f"Pronóstico no encontrado: {row_data.get('forecast_id')}")
+        elif str(forecast.status or "") != "Draft":
+            errors.append(f"El pronóstico {forecast.id} no está en estado Borrador.")
         if self._normalize_entry_type(row_data.get("type")) is None:
             errors.append(_("El tipo debe ser Income o Expense."))
         try:
@@ -84,6 +86,8 @@ class CashForecastEntryAdapter(BaseImportAdapter):
             forecast = checked_forecasts[forecast_id]
             if forecast and forecast.company != company_id:
                 errors.append(f"El pronóstico {forecast_id} pertenece a la compañía {forecast.company}, no a {company_id}.")
+            if forecast and str(forecast.status or "") != "Draft":
+                errors.append(f"El pronóstico {forecast_id} no está en estado Borrador.")
         return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
@@ -123,6 +127,10 @@ class CashForecastEntryAdapter(BaseImportAdapter):
                     _("El pronóstico %(forecast)s pertenece a la compañía %(owner)s, no a %(company)s.")
                     % {"forecast": forecast.id, "owner": forecast.company, "company": company_id}
                 )
+            # #1049: revalidar el estado inmediatamente antes de persistir; el
+            # pronóstico pudo aprobarse después de la validación del lote.
+            if str(forecast.status or "") != "Draft":
+                raise ValueError(_("El pronóstico %(forecast)s no está en estado Borrador.") % {"forecast": forecast.id})
             entry = CashForecastEntry(
                 forecast_id=entry_data["forecast_id"],
                 type=entry_data["type"],
