@@ -402,6 +402,10 @@ def validate_lines() -> ResponseReturnValue:
     if rows_error:
         return rows_error
 
+    party_type, party_id, party_error = _payment_reconciliation_party_context(str(payload.doctype), payload.context)
+    if party_error:
+        return party_error
+
     errors: list[dict[str, Any]] = []
     validated_rows: list[dict[str, Any]] = []
     for row_index, row in enumerate(payload.rows):
@@ -411,6 +415,8 @@ def validate_lines() -> ResponseReturnValue:
             schema=schema,
             doctype=str(payload.doctype),
             company_id=company_id,
+            party_type=party_type,
+            party_id=party_id,
         )
         errors.extend(row_errors)
         validated_rows.append(validated_row)
@@ -523,6 +529,8 @@ def _validate_import_row(
     schema: dict[str, Any],
     doctype: str,
     company_id: str,
+    party_type: str = "",
+    party_id: str = "",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Validate and enrich one imported line."""
     errors: list[dict[str, Any]] = []
@@ -532,7 +540,7 @@ def _validate_import_row(
     if doctype == "journal_entry":
         _validate_journal_entry_row(row, row_no, errors)
     elif doctype == "payment_reconciliation":
-        _validate_payment_reconciliation_row(row, row_no, company_id, errors)
+        _validate_payment_reconciliation_row(row, row_no, company_id, errors, party_type=party_type, party_id=party_id)
     return errors, validated_row
 
 
@@ -1022,6 +1030,29 @@ def _validate_journal_entry_row(row: dict[str, Any], row_no: int, errors: list[d
         )
 
 
+def _payment_reconciliation_party_context(
+    doctype: str, context: dict[str, Any]
+) -> tuple[str, str, ResponseReturnValue | None]:
+    """Lee el tercero seleccionado en la pantalla de conciliación (#1399).
+
+    El frontend envía ``filters.party_type`` y ``filters.party_id`` dentro del
+    contexto. Se validan antes de procesar filas para que una hoja de otro
+    tercero no se muestre como válida y falle al aplicar.
+    """
+    if doctype != "payment_reconciliation":
+        return "", "", None
+    raw_filters = context.get("filters") if isinstance(context, dict) else None
+    if not isinstance(raw_filters, dict):
+        return "", "", None
+    party_type = str(raw_filters.get("party_type") or "").strip()
+    party_id = str(raw_filters.get("party_id") or "").strip()
+    if party_type and party_type not in {"customer", "supplier"}:
+        return "", "", _invalid_payload_response("party_type", _("Tipo de tercero no válido."), 400)
+    if party_id and not party_type:
+        return "", "", _invalid_payload_response("party_type", _("Tipo de tercero no especificado."), 400)
+    return party_type, party_id, None
+
+
 def _append_payment_reconciliation_error(errors: list[dict[str, Any]], row_no: int, field: str, message: str) -> None:
     """Append a normalized payment reconciliation validation error."""
     errors.append({"row": row_no, "field": field, "message": message})
@@ -1112,10 +1143,23 @@ def _validate_payment_reconciliation_amounts(
 
 
 def _validate_payment_reconciliation_row(
-    row: dict[str, Any], row_no: int, company_id: str, errors: list[dict[str, Any]]
+    row: dict[str, Any],
+    row_no: int,
+    company_id: str,
+    errors: list[dict[str, Any]],
+    *,
+    party_type: str = "",
+    party_id: str = "",
 ) -> None:
     """Validate payment/document identity before reconciliation is applied."""
     payment = _get_payment_reconciliation_payment(row, company_id, row_no, errors)
+    if payment is not None and party_id and (payment.party_type != party_type or str(payment.party_id) != str(party_id)):
+        _append_payment_reconciliation_error(
+            errors,
+            row_no,
+            "payment_id",
+            _("El pago no coincide con el tercero seleccionado en la conciliación."),
+        )
     reference, reference_type = _get_payment_reconciliation_reference(row, company_id, row_no, errors)
     if reference is not None and payment is not None:
         _validate_payment_reconciliation_party(payment, reference, reference_type, row_no, errors)

@@ -246,7 +246,7 @@ function paymentReconciliation() {
         const validationResponse = await fetch('/api/line-import/validate', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf ? csrf.value : '' },
           credentials: 'same-origin',
-          body: JSON.stringify({ doctype: 'payment_reconciliation', context: { company_id: this.filters.company }, rows: parsed.rows }),
+          body: JSON.stringify({ doctype: 'payment_reconciliation', context: { company_id: this.filters.company, filters: { party_type: this.filters.party_type, party_id: this.filters.party_id } }, rows: parsed.rows }),
         });
         const validation = await validationResponse.json();
         if (!validationResponse.ok || !validation.valid) {
