@@ -8,7 +8,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from cacao_accounting.auth import proteger_passwd
-from cacao_accounting.database import Roles, RolesAccess, RolesUser, User, UserCompanyAccess, database
+from cacao_accounting.database import Currency, Roles, RolesAccess, RolesUser, User, UserCompanyAccess, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 
@@ -62,29 +62,88 @@ def test_entregas_muestra_periodos_de_compania_autorizada(entorno_contable):
     assert 'initialValue: "alpha"' not in html
 
 
-def test_entregas_no_se_filtran_por_la_compania_del_primer_modulo(entorno_contable):
+def test_entregas_no_se_filtran_por_la_compania_del_primer_modulo():
     """Ventas en una compañía e Inventario en otra no recortan el listado (#2110)."""
     from datetime import date
 
-    from cacao_accounting.database import DeliveryNote, Entity
+    from cacao_accounting import create_app
+    from cacao_accounting.config import configuracion
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        DeliveryNote,
+        Entity,
+        FiscalYear,
+        Modules,
+    )
 
-    app = entorno_contable.app
+    app = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
     suffix = uuid4().hex[:6]
     cacao_document = f"DN-CACAO-{suffix}"
     alpha_document = f"DN-ALPHA-{suffix}"
     with app.app_context():
-        if database.session.execute(database.select(Entity).filter_by(code="alpha")).scalar_one_or_none() is None:
-            database.session.add(
+        database.create_all()
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Modules(module="sales", default=False, enabled=True),
+                Modules(module="inventory", default=False, enabled=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                Entity(
+                    code="cacao",
+                    name="Cacao",
+                    company_name="Cacao Accounting SA",
+                    tax_id="J-CACAO",
+                    currency="NIO",
+                    enabled=True,
+                ),
                 Entity(
                     code="alpha",
                     name="Alpha",
                     company_name="Alpha Company",
-                    tax_id=f"J-ALPHA-{suffix}",
+                    tax_id="J-ALPHA",
                     currency="NIO",
                     enabled=True,
-                )
+                ),
+            ]
+        )
+        database.session.flush()
+        database.session.add(
+            FiscalYear(
+                id="FY2026",
+                entity="cacao",
+                name="2026",
+                year_start_date=date(2026, 1, 1),
+                year_end_date=date(2026, 12, 31),
+                is_closed=False,
             )
-            database.session.flush()
+        )
+        database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                id="P2026-05",
+                entity="cacao",
+                fiscal_year_id="FY2026",
+                name="Mayo 2026",
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+                enabled=True,
+                is_closed=False,
+            )
+        )
+        database.session.flush()
         user = User(
             user=f"mixed-reader-{suffix}",
             name="Consulta mixta Ventas/Inventario",
@@ -146,10 +205,8 @@ def test_entregas_no_se_filtran_por_la_compania_del_primer_modulo(entorno_contab
     assert alpha_document in html
 
     with app.app_context():
-        for document in (cacao_document, alpha_document):
-            note = database.session.execute(database.select(DeliveryNote).filter_by(document_no=document)).scalar_one()
-            database.session.delete(note)
-        database.session.commit()
+        database.session.remove()
+        database.engine.dispose()
 
 
 def test_resolver_de_periodo_usa_la_union_de_los_modulos(entorno_contable, monkeypatch):

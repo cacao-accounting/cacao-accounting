@@ -117,6 +117,24 @@ def _seed_worker_base_data(app: Flask) -> None:
         database.session.commit()
 
 
+@pytest.fixture(autouse=True)
+def contexto_de_aplicacion_por_prueba(app):
+    """Ejecuta cada prueba dentro de su propio contexto de aplicación.
+
+    Varias pruebas abren contextos anidados y dejan ``g`` con el usuario de una
+    sesión anterior; al compartir el contexto, la siguiente prueba puede ver un
+    ``current_user`` ajeno. Un contexto propio por prueba aísla ``g`` y la
+    sesión de SQLAlchemy sin alterar el motor en memoria del worker.
+    """
+    contexto = app.app_context()
+    contexto.push()
+    try:
+        yield
+    finally:
+        database.session.remove()
+        contexto.pop()
+
+
 @pytest.fixture(scope="session")
 def app():
     """App de prueba con SQLite en memoria creada una sola vez por worker."""
