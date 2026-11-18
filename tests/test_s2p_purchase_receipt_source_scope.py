@@ -233,7 +233,7 @@ def test_recepcion_post_usa_el_permiso_de_inventario(receipt_source_scenario):
         },
     )
 
-    assert response.status_code != 403
+    assert response.status_code == 200
 
 
 def test_lista_relacionada_respeta_el_acceso_de_inventario(receipt_source_scenario):
@@ -253,3 +253,5 @@ def test_lista_relacionada_respeta_el_acceso_de_inventario(receipt_source_scenar
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "PO-ALPHA" in body
+    assert "PO-BETA" not in body
+    assert "PR-BETA" not in body
