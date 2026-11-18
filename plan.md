@@ -36,6 +36,7 @@ QA1, QA2, QA3 o al administrador.
 | #1399 tercero seleccionado en importación de conciliaciones | Implementado con regresión | `1afff009` | `tests/test_payment_reconciliation_import_party_scope.py` |
 | #1169 listado de cierres fiscales por compañía | Implementado con regresión | `a87db51f` | `tests/test_fiscal_year_closing_company_scope.py` |
 | #1261 reglas de matching acotadas a su cuenta | Implementado con regresión | `f79c5da7` | `tests/test_bank_matching_rule_account_scope.py` |
+| #1120 reporte de lotes aislado por compañía | Implementado con regresión | `b0d9003a` + `f995e0e0` | `tests/test_report_batch_company_evidence.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -262,7 +263,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1021 | #1649 | Implementación (`needs-work`) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1104 | #1649 | Implementación (`needs-work`) | Exige permiso de Caja al listar candidatos de pago |
 | #1110 | #1710 | Implementación (`needs-work`) | fix: bloquea reenvíos de confirmación expirada |
-| #1120 | #1649 | Implementación (`needs-work`) | fix: limita el reporte de lotes a la compañía |
+| #1120 | #1649 | ✅ Implementado; regresión local en `f995e0e0` (etiqueta sin cambio) | fix: limita el reporte de lotes a la compañía |
 | #1130 | #1649 | Implementación (`needs-work`) | fix: valida libro de KPI contra su compañía |
 | #1169 | #1649 | ✅ Implementado; regresión local en `a87db51f` (etiqueta sin cambio) | Aplica alcance de compañía al listado de cierres |
 | #1173 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Filtra bodegas por acceso de compañía en inventario |
