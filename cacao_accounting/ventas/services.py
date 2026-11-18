@@ -663,17 +663,28 @@ def _apply_company_scope(base_query: Any, model: Any, access_modules: tuple[str,
 
 
 def _period_company_for_query(access_modules: tuple[str, ...]) -> str | None:
-    """Resolve the sole authorized company used by period filters."""
+    """Resolve the sole authorized company across every module of the query.
+
+    El listado de entregas autoriza Ventas e Inventario a la vez. Elegir la
+    compañía del primer módulo con una sola concesión aplicaba un filtro de
+    período que contradecía el alcance combinado: por ejemplo, A para Ventas y
+    B para Inventario terminaba mostrando solo A (#2110). Solo se inyecta una
+    compañía cuando la unión de concesiones tiene exactamente una.
+    """
     period_company = request.args.get("company")
     if period_company or getattr(current_user, "classification", None) == "admin":
         return period_company
+    authorized_companies: set[str] = set()
+    has_read_access = False
     for module in access_modules:
         module_id = obtener_id_modulo_por_nombre(module)
         permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        if permissions.consultar:
-            authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
-            if len(authorized_companies) == 1:
-                return authorized_companies[0]
+        if not permissions.consultar:
+            continue
+        has_read_access = True
+        authorized_companies.update(permissions.obtener_companias_autorizadas())
+    if has_read_access and len(authorized_companies) == 1:
+        return next(iter(authorized_companies))
     return period_company
 
 
