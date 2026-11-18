@@ -24,6 +24,19 @@ def get_document(doctype: str, document_id: str) -> Any | None:
     return database.session.get(spec.header_model, document_id)
 
 
+def document_matches_type(doctype: str, document: Any) -> bool:
+    """Comprueba que el documento cargado pertenezca al tipo lógico solicitado.
+
+    Varios tipos lógicos comparten modelo (notas de crédito/débito y
+    devoluciones usan el modelo de factura); la columna ``document_type``
+    desambigua el subtipo. Los modelos sin esa columna son inequívocos.
+    """
+    actual = getattr(document, "document_type", None)
+    if actual is None:
+        return True
+    return normalize_doctype(str(actual)) == normalize_doctype(doctype)
+
+
 def get_document_company(doctype: str, document_id: str) -> str | None:
     """Obtiene la compania del documento."""
     document = get_document(doctype, document_id)

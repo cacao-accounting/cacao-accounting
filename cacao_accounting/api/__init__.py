@@ -81,7 +81,12 @@ from cacao_accounting.document_flow.registry import (
     get_document_type,
     normalize_doctype,
 )
-from cacao_accounting.document_flow.repository import get_document, get_document_company, get_document_item
+from cacao_accounting.document_flow.repository import (
+    document_matches_type,
+    get_document,
+    get_document_company,
+    get_document_item,
+)
 from cacao_accounting.document_flow.service import get_source_items
 from cacao_accounting.i18n import _
 from cacao_accounting.document_flow.status import document_status_payload
@@ -392,6 +397,9 @@ def _require_document_read_access(document_type: str, document_id: str) -> Any:
         abort(400)
     if not document:
         abort(404)
+    # #998: un alias de nota no debe servir una factura común del mismo modelo.
+    if not document_matches_type(normalized_type, document):
+        abort(404)
     module = _module_for_document_type(normalized_type)
     if module:
         if normalized_type in {"purchase_order", "purchase_receipt", "delivery_note"}:
@@ -411,6 +419,8 @@ def _require_document_send_access(document_type: str, document_id: str) -> Any:
     except (KeyError, ValueError):
         abort(400)
     if not document:
+        abort(404)
+    if not document_matches_type(normalized_type, document):
         abort(404)
 
     module = _module_for_document_type(normalized_type)
@@ -477,6 +487,8 @@ def _require_attachment_reference_access(reference_type: str, reference_id: str,
     except (KeyError, ValueError):
         abort(400)
     if not document:
+        abort(404)
+    if not document_matches_type(normalized_type, document):
         abort(404)
 
     if action == "editar" and not document_allows_attachment_edit(document):
