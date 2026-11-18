@@ -231,16 +231,29 @@ def test_bank_transaction_list_rejects_foreign_company_filter(bank_company_scope
     assert ids["beta_description"] not in response.get_data(as_text=True)
 
 
-def test_bank_transaction_list_hides_everything_without_cash_permission(bank_company_scope_scenario):
-    """A user without cash roles receives no transaction data."""
+def test_bank_transaction_list_requires_cash_permission(bank_company_scope_scenario):
+    """A user without cash consultation permission cannot open the listing (#1320)."""
     app, ids = bank_company_scope_scenario
     client = _authenticated_client(app, ids["denied_id"])
 
     response = client.get(TRANSACTION_LIST_PATH)
 
-    assert response.status_code == 200
+    assert response.status_code == 403
     body = response.get_data(as_text=True)
     assert ids["alpha_description"] not in body
+    assert ids["beta_description"] not in body
+
+
+def test_bank_transaction_list_accepts_authorized_company_filter(bank_company_scope_scenario):
+    """An authorized explicit company narrows the listing without widening it."""
+    app, ids = bank_company_scope_scenario
+    client = _authenticated_client(app, ids["reader_id"])
+
+    response = client.get(f"{TRANSACTION_LIST_PATH}?company={ids['company_alpha']}")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert ids["alpha_description"] in body
     assert ids["beta_description"] not in body
 
 

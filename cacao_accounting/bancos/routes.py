@@ -79,7 +79,13 @@ from cacao_accounting.document_identifiers import (
     IdentifierConfigurationError,
 )
 
-from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, resolve_required_company, verifica_permiso
+from cacao_accounting.decorators import (
+    exige_acceso_compania,
+    modulo_activo,
+    resolve_required_company,
+    verifica_acceso,
+    verifica_permiso,
+)
 
 
 from cacao_accounting.version import APPNAME
@@ -389,6 +395,7 @@ def bancos_nota_credito_lista():
 @bancos.route("/bank-transaction/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def bancos_transaccion_lista():
     """Listado de transacciones bancarias."""
     consulta = _paginate_list(
