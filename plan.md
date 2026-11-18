@@ -73,6 +73,7 @@ QA1, QA2, QA3 o al administrador.
 | #1669 claim atómico de la recuperación de importaciones | Implementado con regresión | `ba0e0252` | `tests/test_import_recovery_atomic_claim.py` |
 | #1144 claves repetidas rechazadas en el plan AR/AP | Implementado con regresión | `0e3f790b` | `tests/test_arap_allocation_idempotency.py` |
 | #950 rechazo de números no finitos en importaciones | Implementado con regresión | `135b3b5e` | `tests/test_import_non_finite_validation.py` |
+| #1007/#1010 rechazo de valores fiscales no finitos | Implementado con regresión | `481470f7` | `tests/test_fiscal_non_finite_validation.py`, `tests/test_admin_tax_rule_form.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
@@ -413,8 +414,8 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 |---|---|---|---|
 | #547 | #1652 | Implementación (`needs-work`) | [AUDIT][Importaciones] Acepta moneda inactiva |
 | #950 | #1650 | ✅ Implementado; regresión local en `135b3b5e` (etiqueta sin cambio) | Importación: validar datos numéricos no finitos |
-| #1007 | #1650 | Implementación (`needs-work`) | Fiscal: rechazar valores no finitos en líneas manuales |
-| #1010 | #1650 | Implementación (`needs-work`) | TaxRule: rechazar tasas e importes no finitos |
+| #1007 | #1650 | ✅ Implementado; regresión local en `481470f7` (etiqueta sin cambio) | Fiscal: rechazar valores no finitos en líneas manuales |
+| #1010 | #1650 | ✅ Implementado; regresión local en `481470f7` (etiqueta sin cambio) | TaxRule: rechazar tasas e importes no finitos |
 | #1030 | #1652 | Implementación (`needs-work`) | Importación bancaria: '1.000' (miles europeos) se corrompe a 1.000 y '1,000' (miles americanos) se rechaza |
 | #1031 | #1652 | Implementación (`needs-work`) | Importación: un lector que lanza excepción deja el lote zombi en estado 4 y la recuperación ignora started_at NULL |
 | #1032 | #1652 | Implementación (`needs-work`) | Importación: la cancelación de un lote en ejecución queda sobrescrita (estado 8 se reescribe a 5/6) |
