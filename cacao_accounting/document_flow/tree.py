@@ -20,7 +20,11 @@ from cacao_accounting.auth.permisos import Permisos
 
 from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
-from cacao_accounting.document_flow.repository import get_document, get_document_company
+from cacao_accounting.document_flow.repository import (
+    document_matches_type,
+    get_document,
+    get_document_company,
+)
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.document_flow.status import document_status_payload
 
@@ -61,6 +65,10 @@ def _node_readable(document_type: str, document_id: str) -> bool:
     doctype = normalize_doctype(document_type)
     document = get_document(doctype, document_id)
     if document is None:
+        return False
+    # #998 QA2 B11: el nodo relacionado también respeta el subtipo lógico; un
+    # alias de nota no puede mostrar una factura común del mismo modelo.
+    if not document_matches_type(doctype, document):
         return False
     # El comprobante contable guarda la compañía en `entity`; el helper cubre
     # ambos atributos (#1407, QA2 A1).
@@ -118,6 +126,10 @@ def get_document_node(
     doctype = normalize_doctype(document_type)
     spec = DOCUMENT_TYPES.get(doctype)
     document = get_document(doctype, document_id)
+    if document is not None and not document_matches_type(doctype, document):
+        # No se presentan metadatos de un subtipo distinto; el nodo queda con
+        # el identificador solicitado y sin datos del documento cargado.
+        document = None
 
     label = spec.label if spec and spec.label else doctype
     detail_url = _build_detail_url(spec, document_id) if spec else None
