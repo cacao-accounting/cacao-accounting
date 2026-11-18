@@ -29,6 +29,7 @@ QA1, QA2, QA3 o al administrador.
 | #1322 gastos de reposición de caja chica por alcance | Implementado con regresión | `d1979066` | `tests/test_petty_cash_fund_scope.py` |
 | #1329 revocación de tareas y badge al perder compañía | Implementado con regresión | `ecac5587` | `tests/test_collaboration_task_company_revocation.py` |
 | #1595 tareas ocultas al perder el permiso del documento | Implementado con regresión | `8badc192` | `tests/test_collaboration_task_company_revocation.py` |
+| #1411 listas relacionadas con módulos alternativos | Implementado con regresión | `1a58f880` (scoping y filtro) / `4e18de70` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -46,8 +47,12 @@ QA1, QA2, QA3 o al administrador.
 | #1598 destinatarios de tareas por compañía/módulo | Implementado con regresión | `636a37b8` | `tests/test_collaboration_task_recipients_scope.py` |
 | #1321 catálogo de usuarios por compañía | Implementado con regresión | `b649bbdf` | `tests/test_search_select_user_company_scope.py` |
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
+| Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
 
-**Última suite completa:** `pytest -n auto --full` → **646 passed, 94 skipped**, 0 fallos (HEAD `9cd29cc2`).
+**Última suite completa (ronda de 50 commits):** Cloud **668 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **663 passed, 99 skipped**; 0 fallos (HEAD `ded995a4`).
+Black, ruff, flake8, mypy y Bandit en verde. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
+Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados. PostgreSQL/MySQL/Redis siguen pendientes de CI.
 Los commits posteriores se validaron con pruebas dirigidas y linters; la próxima ronda completa corresponde al umbral de 50 commits o antes de un push.
 Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archivos tocados.
 
@@ -282,7 +287,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1399 | #1649 | Implementación (`needs-work`) | Valida el tercero seleccionado en importación de pagos |
 | #1407 | #1649 | Implementación (`needs-work`) | Aplica permisos por módulo a cada nodo del árbol documental |
 | #1410 | #1649 | Implementación (`needs-work`) | Permite consultar líneas de entrega desde ventas |
-| #1411 | #1649 | Implementación (`needs-work`) | Respeta acceso de inventario en lista de órdenes relacionadas |
+| #1411 | #1649 | ✅ Implementado; regresión local en `4e18de70` (etiqueta sin cambio) | Respeta acceso de inventario en lista de órdenes relacionadas |
 | #1416 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | El listado de movimientos filtra por compañías sin autorización |
 | #1417 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Detalle de lote expone movimientos de otras compañías |
 | #1418 | #1649 | ✅ Implementado; regresión local en `42786767` (etiqueta sin cambio) | Editar artículo permite borrar cuentas de otras compañías |
