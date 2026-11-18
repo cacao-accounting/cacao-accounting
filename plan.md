@@ -71,6 +71,7 @@ QA1, QA2, QA3 o al administrador.
 | #1002 inmutabilidad de la evidencia de auditoría en Desktop | Implementado con regresión | `39113652` | `tests/test_structural_integrity_guards.py` |
 | #1294 retiro de la mutación de contador externo sin auditoría | Verificado por inspección | `2d9d8848` | grep sin referencias |
 | #1669 claim atómico de la recuperación de importaciones | Implementado con regresión | `ba0e0252` | `tests/test_import_recovery_atomic_claim.py` |
+| #1144 claves repetidas rechazadas en el plan AR/AP | Implementado con regresión | `0e3f790b` | `tests/test_arap_allocation_idempotency.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
@@ -384,7 +385,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1093 | #1653 | Implementación (`needs-work`) | Serializar la reposición concurrente de Caja Chica |
 | #1094 | #1653 | Implementación (`needs-work`) | Reservar gastos de reposición bajo bloqueo |
 | #1139 | #1653 | Implementación (`needs-work`) | fix: serializa asignaciones de factura a recepción |
-| #1144 | #1653 | Implementación (`needs-work`) | fix: valida claves duplicadas en planes AR/AP |
+| #1144 | #1653 | ✅ Implementado; regresión local en `0e3f790b` (etiqueta sin cambio) | fix: valida claves duplicadas en planes AR/AP |
 | #1148 | #1653 | QA2 aprobó; QA3/administrador: `fixed` o retorno a `needs-work` | fix: crea reversos de diarios de forma atómica |
 | #1160 | #1653 | Implementación (`needs-work`) | Evita revalorizaciones duplicadas concurrentes |
 | #1177 | #1653 | Implementación (`needs-work`) | Revisa estado de serie al cancelar entradas |
