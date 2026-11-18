@@ -76,12 +76,15 @@ QA1, QA2, QA3 o al administrador.
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 | Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
 
-**Última suite completa (ronda de 50 commits):** Cloud **668 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **663 passed, 99 skipped**; 0 fallos (HEAD `ded995a4`).
-Black, ruff, flake8, mypy y Bandit en verde. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
-Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados. PostgreSQL/MySQL/Redis siguen pendientes de CI.
+**Última suite completa (ronda de 50 commits):** Cloud **739 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **734 passed, 99 skipped**; 0 fallos (HEAD `d8fc9336`).
+Ronda ejecutada tras 51 commits desde `ded995a4`, que cubre #1254, #1354/#1355/#1110, #1467,
+#1253, #997, #998, #1357/#1283, #1488 y #1019.
+Black en verde en `cacao_accounting/` (alcance del workflow de lint); 4 archivos de prueba preexistentes
+de `8f341b3e` requieren reformato de black fuera de ese alcance. Ruff, flake8, mypy y Bandit sin hallazgos bloqueantes. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
+Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados.
 Ronda QA2: A1–A3 y B1–B3 resueltos; B4 (302 vs 404), B5 (N+1 de destinatarios) y B7 (fixture de entregas) quedan como deuda no bloqueante.
-Los commits posteriores se validaron con pruebas dirigidas y linters; la próxima ronda completa corresponde al umbral de 50 commits o antes de un push.
+La próxima ronda completa corresponde al siguiente umbral de 50 commits o antes de un push.
 Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archivos tocados.
 
 **Controles pendientes:**
