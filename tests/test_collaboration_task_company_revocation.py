@@ -284,3 +284,35 @@ def test_task_filters_do_not_reintroduce_revoked_tasks(task_revocation_scenario)
 
     filtered_company = client.get(f"/tasks/my?company={ids['company_alpha']}")
     assert ids["none"] not in filtered_company.get_data(as_text=True)
+
+
+def test_task_with_a_document_from_another_company_is_hidden(task_revocation_scenario):
+    """A mismatched polymorphic task cannot expose the other company document."""
+    app, ids = task_revocation_scenario
+    title = "Tarea inconsistente de otra compañía"
+    with app.app_context():
+        from cacao_accounting.database import DeliveryNote
+
+        beta = database.session.execute(database.select(DeliveryNote).filter_by(company=ids["company_beta"])).scalar_one()
+        database.session.add(
+            DocumentTask(
+                document_type="delivery_note",
+                document_id=beta.id,
+                document_no=beta.document_no,
+                company=ids["company_alpha"],
+                title=title,
+                assigned_by=ids["assignee"],
+                assigned_to=ids["assignee"],
+            )
+        )
+        database.session.commit()
+
+    client = _authenticated_client(app, ids["assignee"])
+    body = client.get("/tasks/my").get_data(as_text=True)
+
+    assert title not in body
+    with app.test_request_context("/tasks/my"):
+        from flask_login import login_user
+
+        login_user(database.session.get(User, ids["assignee"]))
+        assert open_task_count(ids["assignee"]) == 1

@@ -18,7 +18,7 @@ from cacao_accounting.database import DocumentTask, User, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
-from cacao_accounting.document_flow.repository import document_matches_type, get_document
+from cacao_accounting.document_flow.repository import document_matches_type, get_document, get_document_company
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 from cacao_accounting.i18n import _
@@ -166,7 +166,11 @@ def _task_company_scope() -> tuple[list[str], Any]:
 
 
 def _task_document_visible(
-    document_type: str | None, company: str | None, authorized: Sequence[str], module_cache: dict[str, bool]
+    document_type: str | None,
+    document_id: str | None,
+    company: str | None,
+    authorized: Sequence[str],
+    module_cache: dict[str, bool],
 ) -> bool:
     """Indica si el usuario conserva acceso de consulta al documento de la tarea.
 
@@ -182,13 +186,20 @@ def _task_document_visible(
         return True
     if not authenticated:
         return True
-    if company is None:
+    if company is None or document_id is None:
         return False
     if str(company) not in authorized:
         return False
-    spec = DOCUMENT_TYPES.get(normalize_doctype(document_type or ""))
+    doctype = normalize_doctype(document_type or "")
+    spec = DOCUMENT_TYPES.get(doctype)
     if spec is None:
-        return True
+        return False
+    # El documento polimórfico debe existir y pertenecer a la compañía
+    # guardada en la tarea; si no, la fila es histórica/inconsistente y se
+    # oculta en lugar de exponer sus metadatos (#1329, #1572, #1595).
+    document_company = get_document_company(doctype, str(document_id))
+    if document_company is None or str(document_company) != str(company):
+        return False
     module = spec.permission_module or spec.module
     if not module or module == "general":
         return True
@@ -235,7 +246,11 @@ def list_user_tasks(
     if not restrict_by_access:
         return tasks
     module_cache: dict[str, bool] = {}
-    return [task for task in tasks if _task_document_visible(task.document_type, task.company, authorized, module_cache)]
+    return [
+        task
+        for task in tasks
+        if _task_document_visible(task.document_type, task.document_id, task.company, authorized, module_cache)
+    ]
 
 
 def active_users(companies: Sequence[str] | None = None, module: str | None = None) -> list[User]:
@@ -272,7 +287,7 @@ def open_task_count(user_id: str) -> int:
     """
     authorized, scope = _task_company_scope()
     query = (
-        database.select(DocumentTask.document_type, DocumentTask.company)
+        database.select(DocumentTask.document_type, DocumentTask.document_id, DocumentTask.company)
         .where(DocumentTask.assigned_to == user_id)
         .where(DocumentTask.status.in_(("open", "in_progress")))
         .where(scope)
@@ -280,7 +295,9 @@ def open_task_count(user_id: str) -> int:
     rows = database.session.execute(query).all()
     module_cache: dict[str, bool] = {}
     return sum(
-        1 for document_type, company in rows if _task_document_visible(document_type, company, authorized, module_cache)
+        1
+        for document_type, document_id, company in rows
+        if _task_document_visible(document_type, document_id, company, authorized, module_cache)
     )
 
 
