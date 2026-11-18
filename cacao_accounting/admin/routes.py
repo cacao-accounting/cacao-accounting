@@ -182,7 +182,9 @@ def _can_manage_price_list(price_list: PriceList) -> bool:
     if not price_list.company:
         return False
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre("sales"), usuario=current_user.id)
-    return bool(permissions.tiene_acceso_compania(price_list.company))
+    # #2011: la pertenencia a la compañía no sustituye un rol de ventas
+    # vigente; una asignación revocada no conserva la gestión de precios.
+    return bool(permissions.consultar and permissions.tiene_acceso_compania(price_list.company))
 
 
 def _require_price_list_company_access(price_list: PriceList) -> None:
