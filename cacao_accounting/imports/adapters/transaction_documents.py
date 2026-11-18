@@ -106,6 +106,8 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 continue
             if field == "cantidad" and amount <= 0:
                 errors.append(_("La cantidad debe ser mayor que cero."))
+            if field == "precio_unitario" and amount < 0:
+                errors.append(_("El precio unitario no puede ser negativo."))
         return errors
 
     @staticmethod
@@ -236,6 +238,8 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         for row in document_data:
             qty = self._finite_decimal(row.get("cantidad"), "cantidad")
             rate = self._finite_decimal(row.get("precio_unitario"), "precio_unitario")
+            if rate < 0:
+                raise ValueError(_("El precio unitario no puede ser negativo."))
             amount = qty * rate
             item = self.config.item_model(
                 item_code=row.get("producto"),

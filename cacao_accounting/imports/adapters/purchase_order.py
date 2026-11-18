@@ -66,7 +66,9 @@ class PurchaseOrderAdapter(BaseImportAdapter):
                     errors.append(f"La bodega '{warehouse_code}' no pertenece a la compañía o está inactiva.")
             try:
                 quantity = _finite_decimal(row.get("cantidad"), "cantidad")
-                _finite_decimal(row.get("precio_unitario"), "precio_unitario")
+                rate = _finite_decimal(row.get("precio_unitario"), "precio_unitario")
+                if rate < 0:
+                    raise ValueError(_("El precio unitario no puede ser negativo."))
                 qty_in_base_uom(row.get("producto"), quantity, None)
             except (InvalidOperation, ValueError) as exc:
                 errors.append(str(exc))
@@ -112,6 +114,8 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         for row in document_data:
             qty = _finite_decimal(row.get("cantidad"), "cantidad")
             rate = _finite_decimal(row.get("precio_unitario"), "precio_unitario")
+            if rate < 0:
+                raise ValueError(_("El precio unitario no puede ser negativo."))
             amount = qty * rate
 
             item = PurchaseOrderItem(
