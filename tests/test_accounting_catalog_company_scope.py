@@ -328,14 +328,13 @@ def test_project_detail_requires_company_access(catalog_scope_app):
     assert FOREIGN_COMPANY_NAME not in body
 
 
-def test_project_detail_unknown_code_keeps_not_found_behavior(catalog_scope_app):
-    """A missing project redirects to the listing without revealing other companies."""
+def test_project_detail_unknown_code_returns_404(catalog_scope_app):
+    """A missing project answers 404 without revealing other companies."""
     client = _authenticated_client(catalog_scope_app, "catalog_reader")
 
     response = client.get(DETAIL_PATH.format(project_id="P-DOES-NOT-EXIST"))
 
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith(LIST_PATH)
+    assert response.status_code == 404
 
 
 def test_project_edit_form_requires_company_access(catalog_scope_app):
@@ -526,8 +525,7 @@ def test_account_list_detail_and_edit_require_company_access(catalog_scope_app):
     assert FOREIGN_ACCOUNT_NAME not in foreign_form.get_data(as_text=True)
 
     missing = client.get(ACCOUNT_DETAIL_PATH.format(account_id="01MISSING00000000000000000"))
-    assert missing.status_code == 302
-    assert missing.headers["Location"].endswith(ACCOUNT_LIST_PATH)
+    assert missing.status_code == 404
 
 
 def test_cost_center_list_detail_and_edit_require_company_access(catalog_scope_app):
@@ -572,8 +570,7 @@ def test_cost_center_list_detail_and_edit_require_company_access(catalog_scope_a
     assert FOREIGN_COST_CENTER_NAME not in foreign_form.get_data(as_text=True)
 
     missing = client.get(COST_CENTER_DETAIL_PATH.format(cost_center_id="01MISSING00000000000000000"))
-    assert missing.status_code == 302
-    assert missing.headers["Location"].endswith(COST_CENTER_LIST_PATH)
+    assert missing.status_code == 404
 
 
 def test_cost_center_duplicate_code_resolves_inside_authorized_company(catalog_scope_app):

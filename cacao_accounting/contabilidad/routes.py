@@ -1043,6 +1043,8 @@ def unidad(id_unidad):
 def eliminar_unidad(id_unidad):
     """Elimina una unidad de negocios de la base de datos."""
     unidad = _get_unit_by_id(id_unidad)
+    if unidad is None:
+        abort(404)
     if unidad:
         if len(unidad.children) > 0:
             flash(_("No se puede eliminar la unidad porque tiene unidades hijas asignadas (RN-006)."), "danger")
@@ -1129,7 +1131,7 @@ def editar_unidad(id_unidad):
 
     registro = _get_unit_by_id(id_unidad)
     if registro is None:
-        return redirect(url_for(CONTABILIDAD_UNIDADES))
+        abort(404)
 
     exclude_ids = {registro.id, *get_descendant_ids(Unit, registro.id)}
     formulario = FormularioUnidad(obj=registro)
@@ -1536,8 +1538,7 @@ def cuenta(id_cta):
     """Cuenta Contable."""
     registro = _get_account_by_id(id_cta)
     if registro is None:
-        flash(_("La cuenta contable no existe"), "warning")
-        return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
+        abort(404)
 
     return render_template(
         "contabilidad/cuenta.html",
@@ -1628,8 +1629,7 @@ def editar_cuenta(id_cta):
     """Formulario para editar una cuenta contable existente."""
     registro = _get_account_by_id(id_cta)
     if registro is None:
-        flash(_("La cuenta contable indicada no existe."), "warning")
-        return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
+        abort(404)
 
     entity = registro.entity
     formulario, entity_initial_label, parent_initial_label = _build_account_edit_form(registro, entity)
@@ -1806,14 +1806,14 @@ def editar_centro_costo(id_cc):
     """Editar un centro de costos existente."""
     registro = _get_cost_center_by_id(id_cc)
     if registro is None:
-        return redirect(url_for(CONTABILIDAD_CCOSTOS))
+        abort(404)
     requested_entity = request.form.get("entidad") if request.method == "POST" else None
     if requested_entity:
         exige_acceso_compania("accounting", requested_entity)
     _lock_cost_center_companies((registro.entity, requested_entity or registro.entity))
     registro = _lock_cost_center(registro.entity, registro.code)
     if registro is None:
-        return redirect(url_for(CONTABILIDAD_CCOSTOS))
+        abort(404)
 
     formulario, entity_initial_label, parent_initial_label = _build_cost_center_edit_form(registro)
     TITULO = _("Contabilidad | Editar Centro de Costos") + " - " + APPNAME
@@ -1896,7 +1896,7 @@ def centro_costo(id_cc: str):
     """Detalle de un centro de costos."""
     registro = _get_cost_center_by_id(id_cc)
     if registro is None:
-        return redirect(url_for(CONTABILIDAD_CCOSTOS))
+        abort(404)
 
     return render_template(
         "contabilidad/centro-costo.html",
@@ -1914,10 +1914,12 @@ def centro_costo(id_cc: str):
 def eliminar_centro_costo(id_cc):
     """Elimina un centro de costos."""
     registro = _get_cost_center_by_id(id_cc)
+    if registro is None:
+        abort(404)
     if registro:
         registro = _lock_cost_center(registro.entity, registro.code)
         if registro is None:
-            return redirect(url_for(CONTABILIDAD_CCOSTOS))
+            abort(404)
         if _cost_center_has_children(registro.entity, registro.code):
             flash_error(ValueError(_("No se puede eliminar el centro de costos porque tiene centros hijos.")))
             return redirect(url_for(CONTABILIDAD_CCOSTOS))
@@ -2063,8 +2065,7 @@ def proyecto(project_id):
     """Vista de un proyecto."""
     registro = _get_project_by_id(project_id)
     if registro is None:
-        flash(_("El proyecto indicado no existe."), "warning")
-        return redirect(url_for(CONTABILIDAD_PROYECTOS))
+        abort(404)
 
     return render_template(
         "contabilidad/proyecto.html",
@@ -2084,7 +2085,7 @@ def editar_proyecto(project_id):
 
     proyecto = _get_project_by_id(project_id)
     if proyecto is None:
-        return redirect(url_for(CONTABILIDAD_PROYECTOS))
+        abort(404)
 
     formulario = FormularioProyecto(obj=proyecto)
     _setup_project_edit_form(formulario, proyecto)
@@ -2131,6 +2132,8 @@ def editar_proyecto(project_id):
 def eliminar_proyecto(project_id):
     """Elimina un proyecto."""
     proyecto = _get_project_by_id(project_id)
+    if proyecto is None:
+        abort(404)
     if proyecto:
         if len(proyecto.children) > 0:
             flash(_("No se puede eliminar el proyecto porque tiene proyectos hijos asignados (RN-006)."), "danger")
