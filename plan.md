@@ -35,6 +35,7 @@ QA1, QA2, QA3 o al administrador.
 | #1388 relaciones O2C entre clientes distintos | Implementado con regresión | `872008d3` | `tests/test_o2c_line_relation_party_scope.py` |
 | #1399 tercero seleccionado en importación de conciliaciones | Implementado con regresión | `1afff009` | `tests/test_payment_reconciliation_import_party_scope.py` |
 | #1169 listado de cierres fiscales por compañía | Implementado con regresión | `a87db51f` | `tests/test_fiscal_year_closing_company_scope.py` |
+| #1261 reglas de matching acotadas a su cuenta | Implementado con regresión | `f79c5da7` | `tests/test_bank_matching_rule_account_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -270,7 +271,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1181 | #1649 | ✅ Implementado; regresión local en `771d4e15` (etiqueta sin cambio) | Restringe detalle de artículos a compañías autorizadas |
 | #1253 | #1649 | Implementación (`needs-work`) | Define el alcance de lotes entre compañías |
 | #1254 | #1649 | Implementación (`needs-work`) | Restringe pendientes de compras en consulta bancaria |
-| #1261 | Consumidor | Implementación (`needs-work`) | Respeta alcance de cuenta en reglas bancarias |
+| #1261 | Consumidor | ✅ Implementado; regresión local en `f79c5da7` (etiqueta sin cambio) | Respeta alcance de cuenta en reglas bancarias |
 | #1280 | #1649 | ✅ Implementado; regresión local en `039e582a` (etiqueta sin cambio) | Autoriza cambios de configuración de terceros por compañía |
 | #1282 | #1649 | ✅ Implementado; regresión local en `ff54d165` (etiqueta sin cambio) | Protege la edición de contactos y roles de terceros |
 | #1283 | #1658 | Implementación (`needs-work`) | Elimina helpers de terceros sin llamadores |
