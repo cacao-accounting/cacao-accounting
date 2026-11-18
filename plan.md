@@ -75,6 +75,7 @@ QA1, QA2, QA3 o al administrador.
 | #950 rechazo de números no finitos en importaciones | Implementado con regresión | `135b3b5e` | `tests/test_import_non_finite_validation.py` |
 | #1007/#1010 rechazo de valores fiscales no finitos | Implementado con regresión | `481470f7` | `tests/test_fiscal_non_finite_validation.py`, `tests/test_admin_tax_rule_form.py` |
 | #1021/#1697 setup único y claves de configuración únicas | Implementado con regresión | `03dfc484` | `tests/test_setup_finalize_once.py`, `tests/test_config_key_uniqueness.py` |
+| #1601 acciones de escritura en rutas de Contabilidad | Implementado con regresión | `6845ff63` | `tests/test_accounting_write_actions_required.py` |
 | #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
