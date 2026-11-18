@@ -63,6 +63,7 @@ QA1, QA2, QA3 o al administrador.
 | #1695 secretos de autenticación con HMAC y sin texto plano | Implementado con regresión | `e162b05c` | `tests/test_auth_secret_storage.py` |
 | #1696 consumo atómico del OTP en concurrencia | Implementado con regresión | `474684ec` | `tests/test_otp_atomic_verification.py` |
 | #2013 redondeo del lockout sin minuto extra | Implementado con regresión | `e9b32f49` | `tests/test_session_security_lockout_minutes.py` |
+| #2060 insignia de aprobaciones acotada por compañía | Implementado con regresión | `29fe2836` | `tests/test_approval_count_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -358,7 +359,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1696 | #1710 | ✅ Implementado; regresión local en `474684ec` (etiqueta sin cambio) | Hace atómicos los intentos de verificación OTP |
 | #2011 | Consumidor | ✅ Implementado; regresión local en `4b25e21f` (etiqueta sin cambio) | Price Lists: una asignación revocada conserva acceso |
 | #2013 | Consumidor | ✅ Implementado; regresión local en `e9b32f49` (etiqueta sin cambio) | [LOW][Auth] Evita sumar un minuto extra al lockout |
-| #2060 | Consumidor | Implementación (`needs-work`) | [AUDIT][Auth] El contador de aprobaciones ignora el alcance de empresa |
+| #2060 | Consumidor | ✅ Implementado; regresión local en `29fe2836` (etiqueta sin cambio) | [AUDIT][Auth] El contador de aprobaciones ignora el alcance de empresa |
 
 ### Fase 2 — Persistencia y garantías transversales
 
