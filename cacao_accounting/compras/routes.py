@@ -3621,10 +3621,11 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
 @login_required
 def compras_proveedor_habilitar_cliente(supplier_id: str):
     """Habilita un proveedor como cliente."""
-    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
+    # #1282: el rol concedido pertenece a Ventas; la transición exige
+    # edición del módulo destino, no solo del módulo de origen.
     from cacao_accounting.party_management import requiere_edicion_tercero
 
-    requiere_edicion_tercero(supplier_id, "purchases")
+    requiere_edicion_tercero(supplier_id, "sales")
     try:
         toggle_party_customer_role(supplier_id, enable=True, user_id=current_user.id)
         database.session.commit()
@@ -3641,10 +3642,11 @@ def compras_proveedor_habilitar_cliente(supplier_id: str):
 @login_required
 def compras_proveedor_deshabilitar_cliente(supplier_id: str):
     """Deshabilita el rol de cliente de un proveedor."""
-    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
+    # #1282: el rol concedido pertenece a Ventas; la transición exige
+    # edición del módulo destino, no solo del módulo de origen.
     from cacao_accounting.party_management import requiere_edicion_tercero
 
-    requiere_edicion_tercero(supplier_id, "purchases")
+    requiere_edicion_tercero(supplier_id, "sales")
     try:
         toggle_party_customer_role(supplier_id, enable=False, user_id=current_user.id)
         database.session.commit()

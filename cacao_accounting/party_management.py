@@ -121,6 +121,9 @@ def requiere_edicion_tercero(party_id: str, module: str) -> None:
 
     Exige permiso de edición del módulo y que el tercero tenga vínculo en
     alguna compañía editable (los datos son compartidos entre compañías).
+    Para una transición de rol cruzado, ``module`` es el módulo cuyo rol se
+    concede o retira: Compras al habilitar un proveedor y Ventas al habilitar
+    un cliente.
     """
     from flask import abort as _abort
 

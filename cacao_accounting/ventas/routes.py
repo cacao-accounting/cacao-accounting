@@ -2608,8 +2608,9 @@ def ventas_factura_venta_cancel(invoice_id: str):
 @login_required
 def ventas_cliente_habilitar_proveedor(customer_id: str):
     """Habilita un cliente como proveedor."""
-    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
-    requiere_edicion_tercero(customer_id, "sales")
+    # #1282: el rol concedido pertenece a Compras; la transición exige
+    # edición del módulo destino, no solo del módulo de origen.
+    requiere_edicion_tercero(customer_id, "purchases")
     try:
         toggle_party_supplier_role(customer_id, enable=True, user_id=current_user.id)
         database.session.commit()
@@ -2626,8 +2627,9 @@ def ventas_cliente_habilitar_proveedor(customer_id: str):
 @login_required
 def ventas_cliente_deshabilitar_proveedor(customer_id: str):
     """Deshabilita el rol de proveedor de un cliente."""
-    # #1282: el rol cruzado afecta al tercero compartido; exige edición.
-    requiere_edicion_tercero(customer_id, "sales")
+    # #1282: el rol concedido pertenece a Compras; la transición exige
+    # edición del módulo destino, no solo del módulo de origen.
+    requiere_edicion_tercero(customer_id, "purchases")
     try:
         toggle_party_supplier_role(customer_id, enable=False, user_id=current_user.id)
         database.session.commit()

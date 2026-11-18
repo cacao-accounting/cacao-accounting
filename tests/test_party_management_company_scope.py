@@ -17,12 +17,15 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    Address,
     CompanyParty,
     Contact,
     Currency,
     Entity,
     Modules,
     Party,
+    PartyAddress,
+    PartyContact,
     Roles,
     RolesAccess,
     RolesUser,
@@ -314,21 +317,98 @@ def test_supplier_contacts_require_edit_permission(party_scope_scenario):
         assert database.session.execute(database.select(Contact).filter_by(first_name="Contacto Propio")).first() is not None
 
 
-def test_supplier_customer_role_toggle_requires_edit_permission(party_scope_scenario):
-    """The cross-role toggle mutates the shared party and therefore needs edit."""
+def test_supplier_customer_role_toggle_requires_sales_edit(party_scope_scenario):
+    """Granting the customer role requires edit in Sales, the destination module."""
     app, ids = party_scope_scenario
-    reader = _authenticated_client(app, ids["purchases_viewer"])
-    editor = _authenticated_client(app, ids["purchases_editor"])
+    purchases_editor = _authenticated_client(app, ids["purchases_editor"])
+    sales_editor = _authenticated_client(app, ids["sales_editor"])
 
-    denied = reader.post(f"/buying/supplier/{ids['supplier_alpha']}/habilitar-cliente")
+    denied = purchases_editor.post(f"/buying/supplier/{ids['supplier_alpha']}/habilitar-cliente")
     assert denied.status_code == 403
     with app.app_context():
         assert database.session.get(Party, ids["supplier_alpha"]).is_customer is False
 
-    allowed = editor.post(f"/buying/supplier/{ids['supplier_alpha']}/habilitar-cliente")
+    allowed = sales_editor.post(f"/buying/supplier/{ids['supplier_alpha']}/habilitar-cliente")
     assert allowed.status_code == 302
     with app.app_context():
         assert database.session.get(Party, ids["supplier_alpha"]).is_customer is True
+
+    denied_again = purchases_editor.post(f"/buying/supplier/{ids['supplier_alpha']}/deshabilitar-cliente")
+    assert denied_again.status_code == 403
+    with app.app_context():
+        assert database.session.get(Party, ids["supplier_alpha"]).is_customer is True
+
+
+def test_customer_supplier_role_toggle_requires_purchases_edit(party_scope_scenario):
+    """Granting the supplier role requires edit in Purchases, the destination module."""
+    app, ids = party_scope_scenario
+    sales_editor = _authenticated_client(app, ids["sales_editor"])
+    purchases_editor = _authenticated_client(app, ids["purchases_editor"])
+
+    denied = sales_editor.post(f"/sales/cliente/{ids['customer_alpha']}/habilitar-proveedor")
+    assert denied.status_code == 403
+    with app.app_context():
+        assert database.session.get(Party, ids["customer_alpha"]).is_supplier is False
+
+    allowed = purchases_editor.post(f"/sales/cliente/{ids['customer_alpha']}/habilitar-proveedor")
+    assert allowed.status_code == 302
+    with app.app_context():
+        assert database.session.get(Party, ids["customer_alpha"]).is_supplier is True
+
+
+def test_supplier_contact_and_address_routes_require_authorized_link(party_scope_scenario):
+    """Contacts and addresses cannot mutate a foreign-only supplier or bypass edit."""
+    app, ids = party_scope_scenario
+    editor = _authenticated_client(app, ids["purchases_editor"])
+    reader = _authenticated_client(app, ids["purchases_viewer"])
+
+    foreign_contact = editor.post(
+        f"/buying/supplier/{ids['supplier_beta']}/contacts",
+        data={"first_name": "Contacto Ajeno"},
+    )
+    assert foreign_contact.status_code == 403
+    foreign_address = editor.post(
+        f"/buying/supplier/{ids['supplier_beta']}/addresses",
+        data={"address_line1": "Calle Ajena 1"},
+    )
+    assert foreign_address.status_code == 403
+    with app.app_context():
+        assert database.session.execute(database.select(Contact).filter_by(first_name="Contacto Ajeno")).first() is None
+
+    reader_contact = reader.post(
+        f"/buying/supplier/{ids['supplier_alpha']}/contacts",
+        data={"first_name": "Contacto Lector"},
+    )
+    assert reader_contact.status_code == 403
+    reader_address = reader.post(
+        f"/buying/supplier/{ids['supplier_alpha']}/addresses",
+        data={"address_line1": "Calle Lector 1"},
+    )
+    assert reader_address.status_code == 403
+
+
+def test_customer_contact_and_address_routes_require_authorized_link(party_scope_scenario):
+    """The customer equivalents enforce the same company and edit guards."""
+    app, ids = party_scope_scenario
+    editor = _authenticated_client(app, ids["sales_editor"])
+    reader = _authenticated_client(app, ids["sales_viewer"])
+
+    foreign_contact = editor.post(
+        f"/sales/customer/{ids['customer_beta']}/contacts",
+        data={"first_name": "Contacto Cliente Ajeno"},
+    )
+    assert foreign_contact.status_code == 403
+    reader_address = reader.post(
+        f"/sales/customer/{ids['customer_alpha']}/addresses",
+        data={"address_line1": "Calle Cliente Lector 1"},
+    )
+    assert reader_address.status_code == 403
+
+    allowed = editor.post(
+        f"/sales/customer/{ids['customer_alpha']}/addresses",
+        data={"address_line1": "Calle Cliente Autorizada 1"},
+    )
+    assert allowed.status_code == 302
 
 
 def test_supplier_edit_rejects_foreign_company_and_requires_edit(party_scope_scenario):
@@ -446,3 +526,61 @@ def test_customer_company_settings_require_edit_permission(party_scope_scenario)
 
     assert response.status_code == 403
     assert _linked_companies(app, ids["customer_alpha"]) == {ids["company_alpha"]}
+
+
+def test_supplier_contact_edit_and_deactivate_require_edit(party_scope_scenario):
+    """Editing or deactivating a supplier contact is denied to a reader."""
+    app, ids = party_scope_scenario
+    editor = _authenticated_client(app, ids["purchases_editor"])
+    reader = _authenticated_client(app, ids["purchases_viewer"])
+
+    created = editor.post(
+        f"/buying/supplier/{ids['supplier_alpha']}/contacts",
+        data={"first_name": "Contacto Editable"},
+    )
+    assert created.status_code == 302
+    with app.app_context():
+        contact = database.session.execute(database.select(Contact).filter_by(first_name="Contacto Editable")).scalar_one()
+        link = database.session.execute(database.select(PartyContact).filter_by(contact_id=contact.id)).scalar_one()
+        contact_id, link_id = contact.id, link.id
+
+    denied_edit = reader.post(
+        f"/buying/supplier/{ids['supplier_alpha']}/contacts/{link_id}/edit",
+        data={"first_name": "Nombre Alterado"},
+    )
+    assert denied_edit.status_code == 403
+    denied_deactivate = reader.post(f"/buying/supplier/{ids['supplier_alpha']}/contacts/{link_id}/deactivate")
+    assert denied_deactivate.status_code == 403
+    with app.app_context():
+        contact = database.session.get(Contact, contact_id)
+        assert contact.first_name == "Contacto Editable"
+        assert contact.is_active is True
+
+
+def test_customer_address_edit_and_deactivate_require_edit(party_scope_scenario):
+    """Editing or deactivating a customer address is denied to a reader."""
+    app, ids = party_scope_scenario
+    editor = _authenticated_client(app, ids["sales_editor"])
+    reader = _authenticated_client(app, ids["sales_viewer"])
+
+    created = editor.post(
+        f"/sales/customer/{ids['customer_alpha']}/addresses",
+        data={"address_line1": "Calle Editable 1"},
+    )
+    assert created.status_code == 302
+    with app.app_context():
+        address = database.session.execute(database.select(Address).filter_by(address_line1="Calle Editable 1")).scalar_one()
+        link = database.session.execute(database.select(PartyAddress).filter_by(address_id=address.id)).scalar_one()
+        address_id, link_id = address.id, link.id
+
+    denied_edit = reader.post(
+        f"/sales/customer/{ids['customer_alpha']}/addresses/{link_id}/edit",
+        data={"address_line1": "Calle Alterada 1"},
+    )
+    assert denied_edit.status_code == 403
+    denied_deactivate = reader.post(f"/sales/customer/{ids['customer_alpha']}/addresses/{link_id}/deactivate")
+    assert denied_deactivate.status_code == 403
+    with app.app_context():
+        address = database.session.get(Address, address_id)
+        assert address.address_line1 == "Calle Editable 1"
+        assert address.is_active is True
