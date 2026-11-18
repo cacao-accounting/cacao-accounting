@@ -153,18 +153,16 @@ def _task_company_scope() -> tuple[list[str], Any]:
     """Return the authorized companies and the SQL scope for assigned tasks.
 
     A task belongs to a company; when the user loses access to that company the
-    task must disappear from both the inbox and the navigation badge, while
-    tasks without a company stay visible.
+    task must disappear from both the inbox and the navigation badge. Una tarea
+    sin compañía no es visible: su documento polimórfico no puede validarse y
+    podría exponer datos de otra compañía (#1329, #1572, #1595).
     """
-    from sqlalchemy import or_
-
     from cacao_accounting.company_context import authorized_company_codes
 
     authorized = authorized_company_codes()
-    conditions = [DocumentTask.company.is_(None)]
-    if authorized:
-        conditions.append(DocumentTask.company.in_(authorized))
-    return authorized, or_(*conditions)
+    if not authorized:
+        return authorized, database.false()
+    return authorized, DocumentTask.company.in_(authorized)
 
 
 def _task_document_visible(
@@ -185,7 +183,7 @@ def _task_document_visible(
     if not authenticated:
         return True
     if company is None:
-        return True
+        return False
     if str(company) not in authorized:
         return False
     spec = DOCUMENT_TYPES.get(normalize_doctype(document_type or ""))

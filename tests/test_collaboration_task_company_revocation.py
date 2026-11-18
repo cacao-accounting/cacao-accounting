@@ -200,14 +200,14 @@ def test_inbox_and_badge_count_only_tasks_in_authorized_companies(task_revocatio
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert ids["alpha"] in body
-    assert ids["none"] in body
+    assert ids["none"] not in body
     assert ids["beta"] not in body
 
     with app.test_request_context("/tasks/my"):
         from flask_login import login_user
 
         login_user(database.session.get(User, ids["assignee"]))
-        assert open_task_count(ids["assignee"]) == 2
+        assert open_task_count(ids["assignee"]) == 1
 
 
 def test_revoking_company_access_removes_inbox_and_badge_entries(task_revocation_scenario):
@@ -222,7 +222,7 @@ def test_revoking_company_access_removes_inbox_and_badge_entries(task_revocation
     body = response.get_data(as_text=True)
     assert ids["alpha"] not in body
     assert ids["beta"] not in body
-    assert ids["none"] in body
+    assert ids["none"] not in body
 
     filtered = client.get(f"/tasks/my?company={ids['company_alpha']}")
     assert filtered.status_code == 200
@@ -234,7 +234,7 @@ def test_revoking_company_access_removes_inbox_and_badge_entries(task_revocation
         from flask_login import login_user
 
         login_user(database.session.get(User, ids["assignee"]))
-        assert open_task_count(ids["assignee"]) == 1
+        assert open_task_count(ids["assignee"]) == 0
 
 
 def test_revoking_module_role_hides_document_tasks(task_revocation_scenario):
@@ -251,13 +251,13 @@ def test_revoking_module_role_hides_document_tasks(task_revocation_scenario):
     body = response.get_data(as_text=True)
     assert ids["alpha"] not in body
     assert ids["beta"] not in body
-    assert ids["none"] in body
+    assert ids["none"] not in body
 
     with app.test_request_context("/tasks/my"):
         from flask_login import login_user
 
         login_user(database.session.get(User, ids["assignee"]))
-        assert open_task_count(ids["assignee"]) == 1
+        assert open_task_count(ids["assignee"]) == 0
 
 
 def test_task_filters_do_not_reintroduce_revoked_tasks(task_revocation_scenario):
