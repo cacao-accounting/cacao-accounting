@@ -43,6 +43,7 @@ QA1, QA2, QA3 o al administrador.
 | #1602 credenciales iniciales en el entrypoint del módulo | Implementado con regresión | `3821674c` | `tests/test_module_entrypoint_credentials.py` |
 | #1130 libro de KPI validado contra su compañía | Implementado con regresión | `c4b36226` | `tests/test_kpi_snapshot_ledger_scope.py` |
 | #1511 precargado de pagos acotado por compañía | Implementado con regresión | `147b367d` (prueba) | `tests/test_payment_preload_company_scope.py` |
+| #1104 permiso de Caja en candidatos de conciliación | Implementado con regresión | `4d94544b` | `tests/test_payment_reconciliation_candidates_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -267,7 +268,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #998 | #1649 | Implementación (`needs-work`) | API: validar permisos en alias de notas documentales |
 | #1019 | #1649 | Implementación (`needs-work`) | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
 | #1021 | #1649 | Implementación (`needs-work`) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
-| #1104 | #1649 | Implementación (`needs-work`) | Exige permiso de Caja al listar candidatos de pago |
+| #1104 | #1649 | ✅ Implementado; regresión local en `4d94544b` (etiqueta sin cambio) | Exige permiso de Caja al listar candidatos de pago |
 | #1110 | #1710 | Implementación (`needs-work`) | fix: bloquea reenvíos de confirmación expirada |
 | #1120 | #1649 | ✅ Implementado; regresión local en `f995e0e0` (etiqueta sin cambio) | fix: limita el reporte de lotes a la compañía |
 | #1130 | #1649 | ✅ Implementado; regresión local en `c4b36226` (etiqueta sin cambio) | fix: valida libro de KPI contra su compañía |
