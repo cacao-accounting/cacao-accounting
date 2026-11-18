@@ -56,6 +56,7 @@ QA1, QA2, QA3 o al administrador.
 | #998 alias documentales con permiso y subtipo validados | Implementado con regresión | `4bc2dc7e` | `tests/test_document_alias_subtype_access.py` |
 | #1357/#1283 retiro de código sin consumidores | Verificado por inspección y suite relacionada | `a93657fa`, `d1649c9a` | grep sin referencias; 41 passed |
 | #1488 lote de importación ligado a su presupuesto | Implementado con regresión | `76d28dc8` | `tests/test_r2r_budget_import_owner_scope.py` |
+| #1019 cierre de saldo ligado al documento autorizado | Implementado con regresión | `38fd869f` | `tests/test_document_flow_close_line_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -279,7 +280,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #911 | Consumidor | Implementación (`needs-work`) | fix(reportes): exige company en cloud sin fallback y propaga la compania activa |
 | #997 | #1649 | ✅ Implementado; regresión local en `43108a06` (etiqueta sin cambio) | API fiscal: validar compañía para aliases de cobro y pago |
 | #998 | #1649 | ✅ Implementado; regresión local en `4bc2dc7e` (etiqueta sin cambio) | API: validar permisos en alias de notas documentales |
-| #1019 | #1649 | Implementación (`needs-work`) | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
+| #1019 | #1649 | ✅ Implementado; regresión local en `38fd869f` (etiqueta sin cambio) | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
 | #1021 | #1649 | Implementación (`needs-work`) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1104 | #1649 | ✅ Implementado; regresión local en `4d94544b` (etiqueta sin cambio) | Exige permiso de Caja al listar candidatos de pago |
 | #1110 | #1710 | ✅ Implementado; regresión local en `9032d7a4` (etiqueta sin cambio) | fix: bloquea reenvíos de confirmación expirada |
