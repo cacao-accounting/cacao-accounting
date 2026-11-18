@@ -86,7 +86,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         "precio_unitario",
         "bodega",
         "lote",
-        "serie",
+        "numero_serie",
         "notas",
     ]
     required_columns = ["document_ref", "fecha", "producto", "cantidad", "precio_unitario"]
@@ -416,7 +416,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         if hasattr(item, "batch_id"):
             item.batch_id = self._resolve_batch_id(item.item_code, row.get("lote"))
         if hasattr(item, "serial_no"):
-            item.serial_no = row.get("serie") or None
+            item.serial_no = row.get("numero_serie") or None
 
     def _resolve_batch_id(self, item_code: Any, batch_no: Any) -> str | None:
         """Resuelve el numero de lote del archivo al registro del maestro.
