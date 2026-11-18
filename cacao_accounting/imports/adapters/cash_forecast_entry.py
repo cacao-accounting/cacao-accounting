@@ -23,6 +23,14 @@ def _finite_amount(value: Any) -> Decimal:
     return amount
 
 
+def _text(value: Any, default: str = "") -> str:
+    """Normaliza celdas vacías de XLSX/ODS sin convertirlas en "None"."""
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
+
+
 class CashForecastEntryAdapter(BaseImportAdapter):
     """Adaptador para Entradas de Pronóstico de Caja."""
 
@@ -40,7 +48,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
         """Validate a single cash forecast entry row."""
         errors = super().validate_row(row_data)
-        forecast = database.session.get(CashForecast, str(row_data.get("forecast_id", "")))
+        forecast = database.session.get(CashForecast, _text(row_data.get("forecast_id")))
         if forecast is None:
             errors.append(f"Pronóstico no encontrado: {row_data.get('forecast_id')}")
         if self._normalize_entry_type(row_data.get("type")) is None:
@@ -70,7 +78,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         errors: list[str] = []
         checked_forecasts: dict[str, CashForecast | None] = {}
         for row in document_data:
-            forecast_id = str(row.get("forecast_id", ""))
+            forecast_id = _text(row.get("forecast_id"))
             if forecast_id not in checked_forecasts:
                 checked_forecasts[forecast_id] = database.session.get(CashForecast, forecast_id)
             forecast = checked_forecasts[forecast_id]
@@ -90,13 +98,13 @@ class CashForecastEntryAdapter(BaseImportAdapter):
                 raise ValueError(_("El tipo debe ser Income o Expense."))
             entries.append(
                 {
-                    "forecast_id": str(row.get("forecast_id", "")),
+                    "forecast_id": _text(row.get("forecast_id")),
                     "type": entry_type,
-                    "concept": str(row.get("concept", "")).strip(),
-                    "currency": str(row.get("currency", "NIO")).strip(),
+                    "concept": _text(row.get("concept")),
+                    "currency": _text(row.get("currency"), "NIO"),
                     "amount": _finite_amount(row.get("amount")),
                     "estimated_date": estimated_date,
-                    "notes": str(row.get("notes", "")).strip(),
+                    "notes": _text(row.get("notes")),
                     "created_by": context.get("created_by"),
                     "company_id": context.get("company_id"),
                 }

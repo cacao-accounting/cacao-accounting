@@ -14,6 +14,14 @@ from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.i18n import _
 
 
+def _text(value: Any, default: str = "") -> str:
+    """Normaliza celdas vacías de XLSX/ODS sin convertirlas en "None"."""
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
+
+
 class BankStatementAdapter(BaseImportAdapter):
     """Adaptador para Extractos Bancarios."""
 
@@ -64,7 +72,7 @@ class BankStatementAdapter(BaseImportAdapter):
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
         """Validate a single bank statement row."""
         errors = super().validate_row(row_data)
-        bank_account = database.session.get(BankAccount, str(row_data.get("bank_account_id", "")))
+        bank_account = database.session.get(BankAccount, _text(row_data.get("bank_account_id")))
         if bank_account is None:
             errors.append(f"Cuenta bancaria no encontrada: {row_data.get('bank_account_id')}")
         raw_date = row_data.get("posting_date")
@@ -106,7 +114,7 @@ class BankStatementAdapter(BaseImportAdapter):
         company_id = (context or {}).get("company_id") or ""
         errors: list[str] = []
         for row in document_data:
-            bank_account = database.session.get(BankAccount, str(row.get("bank_account_id", "")))
+            bank_account = database.session.get(BankAccount, _text(row.get("bank_account_id")))
             if bank_account and bank_account.company != company_id:
                 errors.append(
                     f"La cuenta bancaria {bank_account.id} pertenece a la compañía "
@@ -137,11 +145,11 @@ class BankStatementAdapter(BaseImportAdapter):
                 raise ValueError(_("El monto bancario no puede ser negativo."))
             transactions.append(
                 {
-                    "bank_account_id": str(row.get("bank_account_id", "")),
+                    "bank_account_id": _text(row.get("bank_account_id")),
                     "company_id": context.get("company_id"),
                     "posting_date": posting_date,
-                    "reference_number": str(row.get("reference_number", "")),
-                    "description": str(row.get("description", "")),
+                    "reference_number": _text(row.get("reference_number")),
+                    "description": _text(row.get("description")),
                     "deposit": deposit,
                     "withdrawal": withdrawal,
                 }
