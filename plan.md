@@ -39,6 +39,8 @@ QA1, QA2, QA3 o al administrador.
 | #1120 reporte de lotes aislado por compañía | Implementado con regresión | `b0d9003a` + `f995e0e0` | `tests/test_report_batch_company_evidence.py` |
 | #1576 validar_solicitud en permisos calculados | Implementado con regresión | `353bee41` | `tests/test_permissions_validate_request.py` |
 | #1515 fuentes documentales restringidas al módulo origen | Implementado con regresión | `9567dcdf` (prueba) | `tests/test_document_flow_read_access.py` |
+| #1640 rol de ventas desactivado en edición de precios | Implementado con regresión | `13dddd6c` | `tests/test_sales_price_editor_active_role.py` |
+| #1602 credenciales iniciales en el entrypoint del módulo | Implementado con regresión | `3821674c` | `tests/test_module_entrypoint_credentials.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -322,8 +324,8 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1598 | #1649 | ✅ Implementado; regresión local en `636a37b8` (etiqueta sin cambio) | El selector de tareas expone usuarios ajenos a la compañía |
 | #1600 | #1649 | ✅ Implementado; regresión local en `19610192` (etiqueta sin cambio) | El dashboard expone datos sin permiso de consulta |
 | #1601 | #1649 | ✅ Implementado; regresión local en `19610192` (etiqueta sin cambio) | Rutas contables permiten crear sin permiso de acción |
-| #1602 | #1710 | Implementación (`needs-work`) | El inicio como módulo crea credenciales admin predeterminadas |
-| #1640 | #1649 | Implementación (`needs-work`) | Ignora roles de ventas desactivados al editar precios |
+| #1602 | #1710 | ✅ Implementado; regresión local en `3821674c` (etiqueta sin cambio) | El inicio como módulo crea credenciales admin predeterminadas |
+| #1640 | #1649 | ✅ Implementado; regresión local en `13dddd6c` (etiqueta sin cambio) | Ignora roles de ventas desactivados al editar precios |
 | #1641 | #1710 | Implementación (`needs-work`) | El endpoint de desarrollo acepta roles admin inactivos |
 | #1695 | #1710 | Implementación (`needs-work`) | No guardes secretos de recuperación en texto plano |
 | #1696 | #1710 | Implementación (`needs-work`) | Hace atómicos los intentos de verificación OTP |
