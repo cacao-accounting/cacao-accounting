@@ -249,6 +249,7 @@ def bancos_():
 @bancos.route("/bank/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def bancos_banco_lista():
     """Listado de bancos."""
     consulta = _paginate_list(
@@ -263,6 +264,7 @@ def bancos_banco_lista():
 @bancos.route("/bank-account/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def bancos_cuenta_bancaria_lista():
     """Listado de cuentas bancarias."""
     consulta = _paginate_list(
@@ -277,6 +279,7 @@ def bancos_cuenta_bancaria_lista():
 @bancos.route("/payment/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def bancos_pago_lista():
     """Listado de entradas de pago."""
     consulta = _paginate_list(
@@ -333,6 +336,7 @@ def bancos_conciliacion_facturas_pagos():
 @bancos.route("/transfer/list")
 @modulo_activo("cash")
 @login_required
+@verifica_acceso("cash")
 def bancos_transferencia_lista():
     """Listado de transferencias internas."""
     consulta = _paginate_list(
@@ -410,6 +414,7 @@ def bancos_transaccion_lista():
 @bancos.route("/bank-transaction/reconcile", methods=["POST"])
 @modulo_activo("cash")
 @login_required
+@verifica_permiso("cash", "editar")
 def bancos_transaccion_reconciliar():
     """Marca transacciones bancarias seleccionadas como conciliadas."""
     transaction_ids = request.form.getlist("transaction_id")
@@ -431,6 +436,9 @@ def bancos_transaccion_reconciliar():
         bank_account = database.session.get(BankAccount, transaction.bank_account_id)
         if not bank_account:
             abort(404)
+        # #1320/#feedback: cada transacción se autoriza antes de seguir
+        # leyendo estado de conciliación o duplicados.
+        exige_acceso_compania("cash", bank_account.company or "", "editar")
         if company is None:
             company = bank_account.company
         elif bank_account.company != company:

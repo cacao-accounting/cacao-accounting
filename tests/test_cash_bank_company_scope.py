@@ -55,6 +55,7 @@ def bank_company_scope_scenario():
     reader_id = f"reader-{suffix}"
     creator_id = f"creator-{suffix}"
     denied_id = f"denied-{suffix}"
+    editor_id = f"editor-{suffix}"
     admin_id = f"admin-{suffix}"
     alpha_description = f"MOV ALFA {suffix}"
     beta_description = f"MOV BETA {suffix}"
@@ -100,6 +101,14 @@ def bank_company_scope_scenario():
                 ),
                 User(id=denied_id, user=denied_id, name="Sin Caja", password=b"unused", active=True, company=company_alpha),
                 User(
+                    id=editor_id,
+                    user=editor_id,
+                    name="Edición de Caja",
+                    password=b"unused",
+                    active=True,
+                    company=company_alpha,
+                ),
+                User(
                     id=admin_id,
                     user=admin_id,
                     name="Administrador",
@@ -111,38 +120,39 @@ def bank_company_scope_scenario():
             ]
         )
         database.session.flush()
-        database.session.add_all(
-            [
-                BankTransaction(
-                    identity_key=f"ALPHA-{suffix}",
-                    bank_account_id=alpha_account.id,
-                    posting_date=date(2026, 11, 5),
-                    deposit=10,
-                    description=alpha_description,
-                ),
-                BankTransaction(
-                    identity_key=f"BETA-{suffix}",
-                    bank_account_id=beta_account.id,
-                    posting_date=date(2026, 11, 6),
-                    withdrawal=20,
-                    description=beta_description,
-                ),
-            ]
+        alpha_transaction = BankTransaction(
+            identity_key=f"ALPHA-{suffix}",
+            bank_account_id=alpha_account.id,
+            posting_date=date(2026, 11, 5),
+            deposit=10,
+            description=alpha_description,
         )
+        beta_transaction = BankTransaction(
+            identity_key=f"BETA-{suffix}",
+            bank_account_id=beta_account.id,
+            posting_date=date(2026, 11, 6),
+            withdrawal=20,
+            description=beta_description,
+        )
+        database.session.add_all([alpha_transaction, beta_transaction])
 
         module_id = database.session.execute(database.select(Modules.id).filter_by(module="cash")).scalar_one()
         reader_role = Roles(name=f"cash-reader-{suffix}", note="Consulta de caja")
         creator_role = Roles(name=f"cash-creator-{suffix}", note="Alta de caja")
-        database.session.add_all([reader_role, creator_role])
+        editor_role = Roles(name=f"cash-editor-{suffix}", note="Edición de caja")
+        database.session.add_all([reader_role, creator_role, editor_role])
         database.session.flush()
         database.session.add_all(
             [
                 RolesAccess(rol_id=reader_role.id, module_id=module_id, access=True, view=True),
                 RolesAccess(rol_id=creator_role.id, module_id=module_id, access=True, view=True, create=True),
+                RolesAccess(rol_id=editor_role.id, module_id=module_id, access=True, view=True, edit=True),
                 RolesUser(user_id=reader_id, role_id=reader_role.id, active=True),
                 RolesUser(user_id=creator_id, role_id=creator_role.id, active=True),
+                RolesUser(user_id=editor_id, role_id=editor_role.id, active=True),
                 UserCompanyAccess(user_id=reader_id, company_code=company_alpha),
                 UserCompanyAccess(user_id=creator_id, company_code=company_alpha),
+                UserCompanyAccess(user_id=editor_id, company_code=company_alpha),
                 UserCompanyAccess(user_id=denied_id, company_code=company_alpha),
             ]
         )
@@ -155,6 +165,9 @@ def bank_company_scope_scenario():
             "bank_name": bank_name,
             "reader_id": reader_id,
             "creator_id": creator_id,
+            "editor_id": editor_id,
+            "alpha_transaction": alpha_transaction.id,
+            "beta_transaction": beta_transaction.id,
             "denied_id": denied_id,
             "admin_id": admin_id,
         }
@@ -268,3 +281,39 @@ def test_bank_transaction_list_admin_keeps_global_scope(bank_company_scope_scena
     body = response.get_data(as_text=True)
     assert ids["alpha_description"] in body
     assert ids["beta_description"] in body
+
+
+def test_cash_listings_require_consult_permission(bank_company_scope_scenario):
+    """Cash lists return 403 instead of an empty page without cash permission."""
+    app, ids = bank_company_scope_scenario
+    client = _authenticated_client(app, ids["denied_id"])
+
+    for path in (
+        "/cash_management/bank/list",
+        "/cash_management/bank-account/list",
+        "/cash_management/payment/list",
+        "/cash_management/transfer/list",
+    ):
+        assert client.get(path).status_code == 403, path
+
+
+def test_bank_reconciliation_requires_edit_permission_and_company(bank_company_scope_scenario):
+    """Reconciliation demands edit and authorizes each transaction's company first."""
+    app, ids = bank_company_scope_scenario
+    reader = _authenticated_client(app, ids["reader_id"])
+    editor = _authenticated_client(app, ids["editor_id"])
+
+    assert (
+        reader.post(
+            "/cash_management/bank-transaction/reconcile",
+            data={"transaction_id": ids["alpha_transaction"]},
+        ).status_code
+        == 403
+    )
+    assert (
+        editor.post(
+            "/cash_management/bank-transaction/reconcile",
+            data={"transaction_id": ids["beta_transaction"]},
+        ).status_code
+        == 403
+    )
