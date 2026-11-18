@@ -61,6 +61,14 @@ def bank_rule_scope_scenario():
                     enabled=True,
                     status="default",
                 ),
+                Entity(
+                    code="beta",
+                    name="Beta",
+                    company_name=f"Beta {suffix}",
+                    tax_id=f"TAX-B-{suffix}",
+                    currency="NIO",
+                    enabled=True,
+                ),
             ]
         )
         database.session.flush()
@@ -69,7 +77,8 @@ def bank_rule_scope_scenario():
         database.session.flush()
         account_a = BankAccount(bank_id=bank.id, company="alpha", account_name="Cuenta A", account_no="A-1")
         account_b = BankAccount(bank_id=bank.id, company="alpha", account_name="Cuenta B", account_no="B-1")
-        database.session.add_all([account_a, account_b])
+        account_foreign = BankAccount(bank_id=bank.id, company="beta", account_name="Cuenta Beta", account_no="BE-1")
+        database.session.add_all([account_a, account_b, account_foreign])
         database.session.flush()
         scoped_rule = BankMatchingRule(
             company="alpha",
@@ -103,6 +112,7 @@ def bank_rule_scope_scenario():
         ids = {
             "account_a": account_a.id,
             "account_b": account_b.id,
+            "account_foreign": account_foreign.id,
             "scoped_rule": scoped_rule.id,
             "company_rule": company_rule.id,
             "admin": f"admin-{suffix}",
@@ -164,3 +174,12 @@ def test_manual_execution_rejects_another_account(bank_rule_scope_scenario):
     body = response.get_data(as_text=True)
     assert "otra cuenta bancaria" in body
     assert "transacciones evaluadas" not in body
+
+
+def test_service_rejects_account_from_another_company(bank_rule_scope_scenario):
+    """The service itself refuses an account outside the rule's company (QA2 B2)."""
+    app, ids = bank_rule_scope_scenario
+
+    with app.app_context():
+        with pytest.raises(BankStatementError):
+            apply_bank_matching_rule(ids["company_rule"], ids["account_foreign"], (date(2026, 5, 1), date(2026, 5, 31)))

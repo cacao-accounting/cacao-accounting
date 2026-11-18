@@ -260,6 +260,11 @@ def apply_bank_matching_rule(rule_id: str, bank_account_id: str, date_range: tup
     # las reglas con bank_account_id NULL aplican a toda la compañía.
     if rule.bank_account_id and str(rule.bank_account_id) != str(bank_account_id):
         raise BankStatementError(_("La regla de matching está configurada para otra cuenta bancaria."))
+    account = database.session.get(BankAccount, bank_account_id)
+    if account is None:
+        raise BankStatementError(_("La cuenta bancaria indicada no existe."))
+    if account.company != rule.company:
+        raise BankStatementError(_("La cuenta bancaria no pertenece a la compañía de la regla."))
     query = (
         select(BankTransaction)
         .filter_by(bank_account_id=bank_account_id, is_reconciled=False)
