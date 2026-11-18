@@ -375,3 +375,20 @@ def test_pending_lines_rejects_source_outside_requested_company(document_flow_ap
     )
     assert response.status_code == 409
     assert b"ITEM" not in response.data
+
+
+def test_source_picker_hides_sales_order_from_inventory_only_user(document_flow_app, monkeypatch):
+    """Un lector de Inventario no ve fuentes de Ventas para una entrega (#1515)."""
+    _, client, _ = document_flow_app
+    api_module = import_module("cacao_accounting.api")
+    monkeypatch.setattr(
+        api_module,
+        "list_source_documents",
+        lambda **_kwargs: [{"source_type": "sales_order", "company": "cacao", "document_no": "SO-SECRET-88"}],
+    )
+    _login(client, "inventario_solo")
+
+    response = client.get("/api/document-flow/source-documents?target_type=delivery_note&company=cacao")
+
+    assert response.status_code == 200
+    assert response.get_json()["source_documents"] == []
