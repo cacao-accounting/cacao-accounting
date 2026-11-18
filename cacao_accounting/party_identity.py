@@ -32,4 +32,15 @@ def find_party_by_tax_id(tax_id: object, *, exclude_party_id: str | None = None)
     query = database.select(Party).where(Party.tax_id_key == key)
     if exclude_party_id:
         query = query.where(Party.id != exclude_party_id)
-    return database.session.execute(query).scalars().first()
+    party = database.session.execute(query).scalars().first()
+    if party is not None:
+        return party
+    # Los duplicados históricos quedan sin clave tras la auditoría; se
+    # comparan normalizados para bloquear nuevas altas mientras existan.
+    candidates = database.session.execute(
+        database.select(Party).where(Party.tax_id_key.is_(None), Party.tax_id.isnot(None))
+    ).scalars()
+    for candidate in candidates:
+        if normalize_tax_id(candidate.tax_id) == key and str(candidate.id) != str(exclude_party_id or ""):
+            return candidate
+    return None

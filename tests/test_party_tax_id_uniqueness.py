@@ -174,3 +174,30 @@ def test_existing_database_backfills_unique_keys_without_merging(tmp_path):
         assert database.session.execute(database.select(database.func.count(Party.id))).scalar_one() == 3
         database.session.remove()
         database.engine.dispose()
+
+
+def test_legacy_duplicate_without_key_still_blocks_new_imports(tax_id_scenario):
+    """A historic row left with NULL key is still found by normalized value."""
+    app = tax_id_scenario
+    adapter = CustomerAdapter()
+
+    with app.app_context():
+        legacy = Party(
+            code=f"L-{uuid4().hex[:8]}",
+            name="Legacy",
+            tax_id="LEG-777",
+            is_customer=True,
+            is_active=True,
+        )
+        database.session.add(legacy)
+        database.session.commit()
+        database.session.execute(database.update(Party).where(Party.id == legacy.id).values(tax_id_key=None))
+        database.session.commit()
+
+        errors = adapter.validate_row({"nombre": "Nuevo", "identificacion_fiscal": "leg 777"})
+        assert any("ya está registrada" in error for error in errors)
+        with pytest.raises(ValueError):
+            adapter.persist_document(
+                adapter.build_document([{"nombre": "Nuevo", "identificacion_fiscal": "leg 777"}], {"company_id": None})
+            )
+        database.session.rollback()
