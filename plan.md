@@ -50,6 +50,7 @@ QA1, QA2, QA3 o al administrador.
 | QA2: nodos `journal_entry`, ledger del KPI y compañía de cuenta en matching | Implementado con regresión | `79e40e5f`, `5a2594b9`, `2ee07d67` | `tests/test_document_tree_node_permissions.py`, `tests/test_kpi_snapshot_ledger_scope.py`, `tests/test_bank_matching_rule_account_scope.py` |
 | #1254 pendientes de compras ocultos en banca | Implementado con regresión | `274c1869` | `tests/test_query_tools_banking_purchase_scope.py` |
 | #1354/#1355/#1110 revocación de credenciales y confirmaciones vencidas | Implementado con regresión | `de6f005c`, `6ebf42a5`, `9032d7a4` | `tests/test_token_requerido.py`, `tests/test_password_reset_revokes_sessions.py`, `tests/test_balance_confirmation_delivery_failures.py` |
+| #1467 propiedad al cambiar estado de tareas | Implementado con regresión | `5848ee8e` (prueba) | `tests/test_task_status_authorization.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -313,7 +314,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1417 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Detalle de lote expone movimientos de otras compañías |
 | #1418 | #1649 | ✅ Implementado; regresión local en `42786767` (etiqueta sin cambio) | Editar artículo permite borrar cuentas de otras compañías |
 | #1433 | #1649 | ✅ Implementado; regresión local en `0b0b6d54` (etiqueta sin cambio) | Valida facturas duplicadas entre compañías |
-| #1467 | #1649 | Implementación (`needs-work`) | Un usuario de solo lectura puede modificar tareas ajenas |
+| #1467 | #1649 | ✅ Implementado; regresión local en `5848ee8e` (etiqueta sin cambio) | Un usuario de solo lectura puede modificar tareas ajenas |
 | #1488 | #1649 | Implementación (`needs-work`) | Vincula el lote de importación al presupuesto autorizado |
 | #1511 | #1649 | ✅ Implementado; regresión local en `1b0ed7f4` (etiqueta sin cambio) | Restringir el precargado de pagos por compañía |
 | #1515 | #1649 | ✅ Implementado; regresión local en `8aa8a94c` (etiqueta sin cambio) | Restringir fuentes documentales al módulo de origen |
