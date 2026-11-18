@@ -88,6 +88,7 @@ QA1, QA2, QA3 o al administrador.
 | #2252/#2253 ACL documental por módulo en query tools | Implementado con regresión | `9f9ad0f9` | `tests/test_query_tools_document_acl.py` |
 | #1051 identidad fiscal global normalizada y única | Implementado con regresión | `b4aac8b5` | `tests/test_party_tax_id_uniqueness.py` |
 | #1048 grupo y clasificación en importación de terceros | Implementado con regresión | `acafcce7` | `tests/test_party_import_group_classification.py` |
+| #2254/#2255 subtipo lógico en creación, listas y colaboración | Implementado con regresión | `de32b583` | `tests/test_document_subtype_creation_and_lists.py` |
 | #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
