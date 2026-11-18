@@ -1720,7 +1720,11 @@ def api_document_flow_close_line():
             reason=str(payload.get("reason") or ""),
         )
     except DocumentFlowError as exc:
+        database.session.rollback()
         abort(exc.status_code)
+    # #1466: la respuesta de éxito exige el cierre persistido; el teardown de
+    # Flask descarta los cambios si la ruta solo hizo flush.
+    database.session.commit()
     return jsonify({"state": state})
 
 
@@ -1738,7 +1742,9 @@ def api_document_flow_close_document():
             reason=str(payload.get("reason") or ""),
         )
     except DocumentFlowError as exc:
+        database.session.rollback()
         abort(exc.status_code)
+    database.session.commit()
     return jsonify({"states": states})
 
 
