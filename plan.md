@@ -78,6 +78,7 @@ QA1, QA2, QA3 o al administrador.
 | #1601 acciones de escritura en rutas de Contabilidad | Implementado con regresión | `6845ff63` | `tests/test_accounting_write_actions_required.py` |
 | #1031 lote corrupto y recuperación con started_at nulo | Implementado con regresión | `4ac988a1` | `tests/test_import_corrupt_reader_recovery.py` |
 | QA2 B-1: guards únicos instalados en bases existentes | Implementado con regresión | `43db7563` | `tests/test_schema_guards_existing_databases.py` |
+| #1065 rechazo de archivos de importación sin filas | Implementado con regresión | `88964495` | `tests/test_import_empty_file_rejected.py` |
 | #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
@@ -441,7 +442,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1062 | #1658 | Implementación (`needs-work`) | Importación: lotes fallidos quedan sin recuperación |
 | #1063 | #1652 | Implementación (`needs-work`) | Importación contable: validar cuenta padre |
 | #1064 | #1652 | Implementación (`needs-work`) | Importación transaccional: validar tarifas negativas |
-| #1065 | #1652 | Implementación (`needs-work`) | Importación: rechazar archivos sin filas de datos |
+| #1065 | #1652 | ✅ Implementado; regresión local en `88964495` (etiqueta sin cambio) | Importación: rechazar archivos sin filas de datos |
 | #1072 | #1650 | Implementación (`needs-work`) | Rechazar factores UOM no finitos |
 | #1087 | #1650 | Implementación (`needs-work`) | Normalizar precisión antes de detectar extractos repetidos |
 | #1174 | #1650 | Implementación (`needs-work`) | Rechaza factores UOM no finitos |
