@@ -77,6 +77,7 @@ QA1, QA2, QA3 o al administrador.
 | #1021/#1697 setup único y claves de configuración únicas | Implementado con regresión | `03dfc484` | `tests/test_setup_finalize_once.py`, `tests/test_config_key_uniqueness.py` |
 | #1601 acciones de escritura en rutas de Contabilidad | Implementado con regresión | `6845ff63` | `tests/test_accounting_write_actions_required.py` |
 | #1031 lote corrupto y recuperación con started_at nulo | Implementado con regresión | `4ac988a1` | `tests/test_import_corrupt_reader_recovery.py` |
+| QA2 B-1: guards únicos instalados en bases existentes | Implementado con regresión | `43db7563` | `tests/test_schema_guards_existing_databases.py` |
 | #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
@@ -98,8 +99,8 @@ QA1, QA2, QA3 o al administrador.
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 | Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
 
-**Última suite completa:** Cloud **915 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **910 passed, 99 skipped**; 0 fallos (HEAD `df09722b`).
+**Última suite completa:** Cloud **917 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **912 passed, 99 skipped**; 0 fallos (HEAD `43db7563`).
 Rondas ejecutadas tras el umbral de 50 commits desde `ded995a4`, que cubren #1254,
 #1354/#1355/#1110, #1467, #1253, #997, #998, #1357/#1283, #1488, #1019, #911,
 #1562, #1641, #1695, #1696, #2013, #2060, #1000, #1466, #1076, #925, #1002, #1294,
