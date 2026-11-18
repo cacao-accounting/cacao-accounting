@@ -14,6 +14,8 @@
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
+from collections.abc import Iterable
+
 from cacao_accounting.logs import log
 
 
@@ -183,15 +185,59 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
         raise ValueError(_("Usuario o rol no encontrado"))
 
     existing_assignment = database.session.execute(
-        database.select(RolesUser.id).filter_by(user_id=USUARIO.id, role_id=ROL.id)
+        database.select(RolesUser).filter_by(user_id=USUARIO.id, role_id=ROL.id)
     ).scalar_one_or_none()
     if existing_assignment is not None:
+        if existing_assignment.active is True:
+            return
+        existing_assignment.active = True
+        database.session.commit()
         return
 
     rol = RolesUser(user_id=USUARIO.id, role_id=ROL.id, active=True)
 
     database.session.add(rol)
     database.session.commit()
+
+
+def replace_user_roles(user_id: str, role_ids: Iterable[str] | None) -> None:
+    """Reemplaza las asignaciones de un usuario sin borrar evidencia.
+
+    La fila del usuario se bloquea antes de leer las asignaciones, de modo que
+    dos administradores concurrentes no mezclan sus selecciones. Los roles
+    retirados quedan con ``active=False`` y se conserva la fila (#1682, #2006).
+    """
+    from cacao_accounting.database import Roles, RolesUser, User, database
+
+    selected = {str(role_id) for role_id in (role_ids or []) if role_id}
+    if database.engine.dialect.name == "sqlite":
+        connection = database.session.connection()
+        raw_connection = connection.connection.driver_connection
+        if raw_connection is not None and not raw_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+    locked = database.session.execute(
+        database.select(User.id).where(User.id == user_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if locked is None:
+        raise ValueError(_("Usuario no encontrado."))
+
+    if selected:
+        existing_role_ids = set(database.session.execute(database.select(Roles.id).where(Roles.id.in_(selected))).scalars())
+        if existing_role_ids != selected:
+            raise ValueError(_("Uno de los roles seleccionados no existe."))
+
+    assignments = list(
+        database.session.execute(
+            database.select(RolesUser).filter_by(user_id=user_id).execution_options(populate_existing=True)
+        ).scalars()
+    )
+    by_role = {assignment.role_id: assignment for assignment in assignments}
+    for role_id, assignment in by_role.items():
+        assignment.active = role_id in selected
+    for role_id in selected.difference(by_role):
+        database.session.add(RolesUser(user_id=user_id, role_id=role_id, active=True))
+    database.session.flush()
 
 
 def obtener_roles_por_usuario(usuario: str):

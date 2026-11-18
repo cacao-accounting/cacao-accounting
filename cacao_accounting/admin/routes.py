@@ -45,7 +45,6 @@ from cacao_accounting.database import (
     PurchaseMatchingConfig,
     Roles,
     RolesAccess,
-    RolesUser,
     SalesMatchingConfig,
     Tax,
     TaxTemplate,
@@ -1545,16 +1544,14 @@ def usuario_roles(user_id: str):
         ):
             flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
             return redirect(url_for(LISTA_USUARIOS))
-        existentes = {
-            assignment.role_id: assignment
-            for assignment in database.session.execute(
-                database.select(RolesUser).where(RolesUser.user_id == usuario.id)
-            ).scalars()
-        }
-        for rol_id, assignment in existentes.items():
-            assignment.active = rol_id in seleccionado
-        for rol_id in seleccionado.difference(existentes):
-            database.session.add(RolesUser(user_id=usuario.id, role_id=rol_id, active=True))
+        from cacao_accounting.auth.roles import replace_user_roles
+
+        try:
+            replace_user_roles(usuario.id, seleccionado)
+        except ValueError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
         database.session.commit()
         flash(_("Roles actualizados correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))

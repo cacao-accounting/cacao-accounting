@@ -54,20 +54,8 @@ class PartyCompanySettings:
     default_price_list_label: str
     allow_purchase_invoice_without_order: bool
     allow_purchase_invoice_without_receipt: bool
-    default_currency: str | None
-    default_income_account_id: str | None = None
-    default_income_account_label: str = ""
-    default_expense_account_id: str | None = None
-    default_expense_account_label: str = ""
-    default_purchase_account_id: str | None = None
-    default_purchase_account_label: str = ""
-    default_advance_account_id: str | None = None
-    default_advance_account_label: str = ""
     default_cost_center: str | None = None
     default_business_unit: str | None = None
-    default_bank_name: str | None = None
-    default_bank_account_no: str | None = None
-    default_bank_iban: str | None = None
     block_overdue: bool = False
 
 
@@ -83,20 +71,8 @@ class PartyCompanySettingsParams:
     default_price_list_id: str | None
     allow_purchase_invoice_without_order: bool
     allow_purchase_invoice_without_receipt: bool
-    default_currency: str | None = None
-    default_income_account_id: str | None = None
-    default_income_account_label: str = ""
-    default_expense_account_id: str | None = None
-    default_expense_account_label: str = ""
-    default_purchase_account_id: str | None = None
-    default_purchase_account_label: str = ""
-    default_advance_account_id: str | None = None
-    default_advance_account_label: str = ""
     default_cost_center: str | None = None
     default_business_unit: str | None = None
-    default_bank_name: str | None = None
-    default_bank_account_no: str | None = None
-    default_bank_iban: str | None = None
     block_overdue: bool = False
 
 
@@ -190,7 +166,6 @@ def _build_settings(
     price_list: PriceList | None,
 ) -> PartyCompanySettings:
     """Construye la configuración completa por compañía."""
-    account_settings = _party_account_settings(company, company_party)
     values = _party_company_values(company_party)
     return PartyCompanySettings(
         company=company,
@@ -208,36 +183,10 @@ def _build_settings(
         default_price_list_label=price_list.name if price_list else "",
         allow_purchase_invoice_without_order=values["allow_purchase_invoice_without_order"],
         allow_purchase_invoice_without_receipt=values["allow_purchase_invoice_without_receipt"],
-        default_currency=values["default_currency"],
-        default_income_account_id=account_settings[0][0],
-        default_income_account_label=account_settings[0][1],
-        default_expense_account_id=account_settings[1][0],
-        default_expense_account_label=account_settings[1][1],
-        default_purchase_account_id=account_settings[2][0],
-        default_purchase_account_label=account_settings[2][1],
-        default_advance_account_id=account_settings[3][0],
-        default_advance_account_label=account_settings[3][1],
         default_cost_center=values["default_cost_center"],
         default_business_unit=values["default_business_unit"],
-        default_bank_name=values["default_bank_name"],
-        default_bank_account_no=values["default_bank_account_no"],
-        default_bank_iban=values["default_bank_iban"],
         block_overdue=values["block_overdue"],
     )
-
-
-def _party_account_settings(company: str, company_party: CompanyParty | None) -> list[tuple[str | None, str]]:
-    """Resuelve las cuentas configuradas por compañía."""
-    ids = [
-        getattr(company_party, field, None) if company_party else None
-        for field in (
-            "default_income_account_id",
-            "default_expense_account_id",
-            "default_purchase_account_id",
-            "default_advance_account_id",
-        )
-    ]
-    return [_settings_for_account_labels(company, account_id) for account_id in ids]
 
 
 def _party_company_values(company_party: CompanyParty | None) -> dict[str, Any]:
@@ -245,12 +194,8 @@ def _party_company_values(company_party: CompanyParty | None) -> dict[str, Any]:
     fields = (
         "tax_template_id",
         "default_tax_rule_id",
-        "default_currency",
         "default_cost_center",
         "default_business_unit",
-        "default_bank_name",
-        "default_bank_account_no",
-        "default_bank_iban",
     )
     values = {field: getattr(company_party, field, None) if company_party else None for field in fields}
     values.update(
@@ -580,10 +525,9 @@ def upsert_party_company_settings(
 ) -> None:
     """Crea o actualiza la configuracion de activacion del tercero por compania.
 
-    Los campos extendidos (moneda, cuentas operativas, centro de costo, datos
-    bancarios y bloqueo por mora) no forman parte del formulario básico; se
-    conservan al actualizar salvo que el llamador pida explícitamente
-    ``update_extended=True``.
+    El centro de costo, la unidad de negocio y el bloqueo por mora no forman
+    parte del formulario básico; se conservan al actualizar salvo que el
+    llamador pida explícitamente ``update_extended=True``.
     """
     receivable_account_id = params.receivable_account_id
     payable_account_id = params.payable_account_id
@@ -617,16 +561,8 @@ def upsert_party_company_settings(
     company_party.allow_purchase_invoice_without_order = params.allow_purchase_invoice_without_order
     company_party.allow_purchase_invoice_without_receipt = params.allow_purchase_invoice_without_receipt
     if is_new or update_extended:
-        company_party.default_currency = params.default_currency
-        company_party.default_income_account_id = params.default_income_account_id
-        company_party.default_expense_account_id = params.default_expense_account_id
-        company_party.default_purchase_account_id = params.default_purchase_account_id
-        company_party.default_advance_account_id = params.default_advance_account_id
         company_party.default_cost_center = params.default_cost_center
         company_party.default_business_unit = params.default_business_unit
-        company_party.default_bank_name = params.default_bank_name
-        company_party.default_bank_account_no = params.default_bank_account_no
-        company_party.default_bank_iban = params.default_bank_iban
         company_party.block_overdue = params.block_overdue
 
     party_account = _party_account_record(party_id, company)

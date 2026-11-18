@@ -295,7 +295,7 @@ class Currency(database.Model, BaseTabla):  # type: ignore[name-defined]
     code = database.Column(database.String(10), index=True, nullable=False, unique=True)
     name = database.Column(database.String(75), nullable=False)
     decimals = database.Column(database.Integer(), nullable=True)
-    active = database.Column(database.Boolean, nullable=True)
+    active = database.Column(database.Boolean, nullable=False, default=True, server_default=database.true())
     default = database.Column(database.Boolean, nullable=True)
 
 
@@ -443,7 +443,10 @@ class RolesAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
 class RolesUser(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Roles dan permisos a los usuarios del sistema."""
 
-    __table_args__ = (database.Index("ix_roles_user_role_user", "role_id", "user_id"),)
+    __table_args__ = (
+        database.Index("ix_roles_user_role_user", "role_id", "user_id"),
+        database.UniqueConstraint("user_id", "role_id", name="uq_roles_user"),
+    )
 
     user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
     role_id = database.Column(
@@ -1272,26 +1275,8 @@ class CompanyParty(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
     allow_purchase_invoice_without_order = database.Column(database.Boolean(), default=False, nullable=False)
     allow_purchase_invoice_without_receipt = database.Column(database.Boolean(), default=False, nullable=False)
-    default_currency = database.Column(
-        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
-    )
-    default_income_account_id = database.Column(
-        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
-    )
-    default_expense_account_id = database.Column(
-        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
-    )
-    default_purchase_account_id = database.Column(
-        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
-    )
-    default_advance_account_id = database.Column(
-        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
-    )
     default_cost_center = database.Column(database.String(10), nullable=True)
     default_business_unit = database.Column(database.String(10), nullable=True)
-    default_bank_name = database.Column(database.String(150), nullable=True)
-    default_bank_account_no = database.Column(database.String(50), nullable=True)
-    default_bank_iban = database.Column(database.String(50), nullable=True)
     block_overdue = database.Column(database.Boolean(), default=False, nullable=False)
 
 

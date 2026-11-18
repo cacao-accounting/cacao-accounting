@@ -88,7 +88,7 @@ def is_purchase_manager(user_id: str | None) -> bool:
             database.select(RolesUser).where(
                 RolesUser.user_id == user_id,
                 RolesUser.role_id.in_(role_ids),
-                RolesUser.active.is_(True) | RolesUser.active.is_(None),
+                RolesUser.active.is_(True),
             )
         ).scalar_one_or_none()
         is not None
