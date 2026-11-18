@@ -534,3 +534,31 @@ def test_party_form_validation_rerenders_keep_company_selector_scope(
         party = database.session.get(Party, ids[party_id_key])
         assert party is not None
         assert party.name in {"Cliente Compartido", "Proveedor Compartido"}
+
+
+def test_generic_party_catalog_applies_module_and_company_scope(party_read_scope_app):
+    """The generic party selector follows the same policy as customer/supplier (#1286).
+
+    Un lector de Ventas obtiene solo terceros vinculados a sus compañías, el
+    filtro de rol acota a proveedores, una compañía ajena explícita responde 403
+    y un usuario sin módulo no accede al catálogo.
+    """
+    app, ids = party_read_scope_app
+    sales_reader = _authenticated_client(app, "party_sales_reader")
+
+    scope_listing = sales_reader.get("/api/search-select?doctype=party")
+    assert scope_listing.status_code == 200
+    scoped_values = {row["value"] for row in scope_listing.get_json()["results"]}
+    assert scoped_values == {ids["customer_shared"], ids["supplier_shared"]}
+    assert ids["customer_private"] not in scoped_values
+    assert ids["supplier_private"] not in scoped_values
+
+    suppliers = sales_reader.get("/api/search-select?doctype=party&party_type=supplier")
+    assert suppliers.status_code == 200
+    assert {row["value"] for row in suppliers.get_json()["results"]} == {ids["supplier_shared"]}
+
+    foreign = sales_reader.get("/api/search-select?doctype=party&company=secreta")
+    assert foreign.status_code == 403
+
+    no_access = _authenticated_client(app, "party_no_access")
+    assert no_access.get("/api/search-select?doctype=party").status_code == 403
