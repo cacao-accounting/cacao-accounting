@@ -234,10 +234,22 @@ def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = 
     base_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
     ledger_currency = base_currency
     if ledger:
-        book = database.session.execute(select(Book).where(Book.entity == company, Book.code == ledger)).scalars().first()
+        # #1130: el libro debe pertenecer a la compañía; no se acepta un ID
+        # ajeno ni un identificador inexistente para etiquetar los KPI con una
+        # moneda que no corresponde a los movimientos consultados.
+        book = (
+            database.session.execute(
+                select(Book).where(
+                    Book.entity == company,
+                    (Book.code == ledger) | (Book.id == ledger),
+                )
+            )
+            .scalars()
+            .first()
+        )
         if book is None:
-            book = database.session.get(Book, ledger)
-        if book is not None and book.currency:
+            raise ValueError(_("El libro indicado no existe para la compañía solicitada."))
+        if book.currency:
             ledger_currency = book.currency
     gl = _gl_totals(company, start, end, ledger_id=ledger)
     _needs_conversion = ledger_currency and base_currency and ledger_currency != base_currency
