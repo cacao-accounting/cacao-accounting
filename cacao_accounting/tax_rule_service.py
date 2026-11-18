@@ -261,15 +261,19 @@ def _int_value(value: str | None, *, default: int) -> int:
 
 
 def _decimal_value(value: object, *, default: str) -> Decimal:
-    """Convierte valores decimales de formulario o BD."""
+    """Convierte valores decimales finitos de formulario o BD."""
     if value in (None, ""):
         return Decimal(default)
     if isinstance(value, Decimal):
-        return value
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError) as exc:
-        raise TaxRuleServiceError(_("La tasa o monto de la regla fiscal es inválido.")) from exc
+        amount = value
+    else:
+        try:
+            amount = Decimal(str(value))
+        except (InvalidOperation, TypeError) as exc:
+            raise TaxRuleServiceError(_("La tasa o monto de la regla fiscal es inválido.")) from exc
+    if not amount.is_finite():
+        raise TaxRuleServiceError(_("La tasa o monto de la regla fiscal debe ser finito."))
+    return amount
 
 
 def _date_value(value: str | None) -> date | None:

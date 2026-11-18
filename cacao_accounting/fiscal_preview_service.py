@@ -495,12 +495,15 @@ def _parse_date(value: Any) -> date:
 
 
 def _decimal_value(value: Any, *, default: str) -> Decimal:
-    """Convierte valores numéricos de payload en Decimal."""
+    """Convierte valores numéricos de payload en Decimal finito."""
     raw = value if value not in (None, "") else default
     try:
-        return Decimal(str(raw))
-    except ArithmeticError:
-        return Decimal(default)
+        amount = Decimal(str(raw))
+    except ArithmeticError as exc:
+        raise ValueError(_("Los valores fiscales deben ser números válidos.")) from exc
+    if not amount.is_finite():
+        raise ValueError(_("Los valores fiscales deben ser finitos."))
+    return amount
 
 
 def _as_list(value: Any) -> list[str]:

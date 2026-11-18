@@ -46,6 +46,8 @@ def calculate_document_total_with_taxes(
         )
         if not _normalize_lines_payload(tax_lines_payload):
             total = _document_total_from_active_rules(document=document, items=items, subtotal=subtotal)
+    if not total.is_finite():
+        raise ValueError(_("El total fiscal debe ser finito."))
     if total < 0:
         raise ValueError(_("El total fiscal no puede ser negativo."))
     return total
@@ -394,6 +396,8 @@ def _canonical_tax_line_payload(
         base_amount = _canonical_tax_rule_base(tax_rule, server_subtotal, concept_amounts, line_payload)
         rate = _to_decimal(tax_rule.rate)
         amount = _canonical_tax_rule_amount(tax_rule, base_amount, rate)
+        if not base_amount.is_finite() or not amount.is_finite():
+            raise ValueError(_("La regla fiscal '%(rule)s' produjo un importe no finito.") % {"rule": tax_rule.id})
         if amount < 0:
             raise ValueError(_("La regla fiscal '%(rule)s' produjo un importe negativo.") % {"rule": tax_rule.id})
         return {
@@ -646,9 +650,12 @@ def _decimal_or_none(value: Any) -> Decimal | None:
     if value in (None, ""):
         return None
     try:
-        return Decimal(str(value))
-    except ArithmeticError:
-        return None
+        amount = Decimal(str(value))
+    except ArithmeticError as exc:
+        raise ValueError(_("Los valores fiscales deben ser números válidos.")) from exc
+    if not amount.is_finite():
+        raise ValueError(_("Los valores fiscales deben ser finitos."))
+    return amount
 
 
 def _clean_optional_id(value: Any) -> str | None:
@@ -658,11 +665,15 @@ def _clean_optional_id(value: Any) -> str | None:
 
 def _to_decimal(value: Any) -> Decimal:
     if isinstance(value, Decimal):
-        return value
-    try:
-        return Decimal(str(value if value not in (None, "") else "0"))
-    except ArithmeticError:
-        return Decimal("0")
+        amount = value
+    else:
+        try:
+            amount = Decimal(str(value if value not in (None, "") else "0"))
+        except ArithmeticError as exc:
+            raise ValueError(_("Los valores fiscales deben ser números válidos.")) from exc
+    if not amount.is_finite():
+        raise ValueError(_("Los valores fiscales deben ser finitos."))
+    return amount
 
 
 def _as_list(value: Any) -> list[str]:

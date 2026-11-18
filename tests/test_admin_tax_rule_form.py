@@ -345,3 +345,68 @@ def test_unsupported_manual_method_preserves_existing_fiscal_snapshot(app, entor
 
         database.session.delete(persisted_summary)
         database.session.commit()
+
+
+def _tax_rule_payload(name: str, **overrides) -> dict[str, str]:
+    """Build a valid administrative tax-rule form payload."""
+    data = {
+        "name": name,
+        "company": "cacao",
+        "concept": "iva",
+        "applies_to": "sales",
+        "level": "transaction",
+        "tax_type": "tax",
+        "calculation_method": "percentage",
+        "rate": "15",
+        "amount": "0",
+        "base_mode": "goods",
+        "accounting_treatment": "separate_tax_account",
+        "recognition_event": "sales_invoice_confirmed",
+        "currency": "NIO",
+        "sequence": "10",
+        "is_active": "on",
+        "affects_document_total": "on",
+    }
+    data.update(overrides)
+    return data
+
+
+@pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])
+def test_tax_rule_creation_rejects_non_finite_rate(app, authenticated_client, entorno_contable, active_admin_module, value):
+    """A non-finite rate is rejected before the rule is persisted (#1010)."""
+    assert entorno_contable.app is app
+    rule_name = f"Regla no finita {uuid4().hex[:8]}"
+
+    response = authenticated_client().post(
+        "/settings/tax-rules",
+        data=_tax_rule_payload(rule_name, rate=value),
+    )
+
+    assert response.status_code == 200
+    assert "finito" in response.get_data(as_text=True).lower()
+    with app.app_context():
+        assert database.session.execute(database.select(TaxRule).filter_by(name=rule_name)).scalar_one_or_none() is None
+
+
+def test_tax_rule_update_rejects_non_finite_amount(app, authenticated_client, entorno_contable, active_admin_module):
+    """Editing with a non-finite amount keeps the stored rule unchanged."""
+    assert entorno_contable.app is app
+    rule_name = f"Regla editable {uuid4().hex[:8]}"
+    client = authenticated_client()
+    assert client.post("/settings/tax-rules", data=_tax_rule_payload(rule_name)).status_code == 302
+    with app.app_context():
+        rule_id = database.session.execute(database.select(TaxRule.id).filter_by(name=rule_name)).scalar_one()
+
+    response = client.post(
+        f"/settings/tax-rules/{rule_id}/edit",
+        data=_tax_rule_payload(rule_name, amount="Infinity", rate="0"),
+    )
+
+    assert response.status_code == 200
+    assert "finito" in response.get_data(as_text=True).lower()
+    with app.app_context():
+        database.session.expire_all()
+        rule = database.session.get(TaxRule, rule_id)
+        assert rule is not None
+        assert rule.amount == Decimal("0")
+        assert rule.rate == Decimal("15")

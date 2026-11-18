@@ -84,6 +84,8 @@ class FiscalEngine:
         context: CalculationContext,
     ) -> FiscalLine:
         """Construyo la línea fiscal y sincronizo los conceptos acumulados."""
+        if not (base_amount.is_finite() and amount.is_finite() and rule.rate.is_finite()):
+            raise ValueError(_("La regla fiscal %(rule)s produjo valores no finitos.") % {"rule": rule.name})
         # Update concept amounts for next rules
         if rule.included_in_price:
             # ``goods`` represents the net merchandise amount once an
