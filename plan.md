@@ -30,6 +30,7 @@ QA1, QA2, QA3 o al administrador.
 | #1329 revocación de tareas y badge al perder compañía | Implementado con regresión | `ecac5587` | `tests/test_collaboration_task_company_revocation.py` |
 | #1595 tareas ocultas al perder el permiso del documento | Implementado con regresión | `8badc192` | `tests/test_collaboration_task_company_revocation.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
+| #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
 | #1282 contactos, direcciones y roles cruzados de terceros | Implementado con regresión | `ff54d165` | `tests/test_party_management_company_scope.py` |
 | #1284 adjuntos de terceros por activación y permiso | Implementado con regresión | `9cd29cc2` | `tests/test_party_attachment_company_scope.py` |
@@ -272,7 +273,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1322 | #1649 | ✅ Implementado; regresión local en `d1979066` (etiqueta sin cambio) | Filtra gastos de reposición por compañía autorizada |
 | #1327 | #1649 | ✅ Implementado; regresión local en `dbaede68` (etiqueta sin cambio) | Exige permiso de módulo en catálogos del selector |
 | #1329 | #1649 | ✅ Implementado; regresión local en `ecac5587` (etiqueta sin cambio) | Revoca tareas cuando se pierde acceso a la compañía |
-| #1332 | #1649 | Implementación (`needs-work`) | Alinea permisos de líneas en flujos de inventario |
+| #1332 | #1649 | ✅ Implementado; regresión local en `ba3a7f08` (etiqueta sin cambio) | Alinea permisos de líneas en flujos de inventario |
 | #1338 | #1649 | ✅ Implementado; regresión local en `cbac6457` (etiqueta sin cambio) | Rechaza compañías deshabilitadas en query tools |
 | #1354 | #1710 | Implementación (`needs-work`) | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
 | #1355 | #1710 | Implementación (`needs-work`) | [Seguridad] Revoca accesos existentes al restablecer contraseña |
