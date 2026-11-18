@@ -84,6 +84,7 @@ QA1, QA2, QA3 o al administrador.
 | #1050 importación con montos positivos en pronósticos | Implementado con regresión | `63934c23` | `tests/test_cash_forecast_import_amount.py` |
 | #1046 retiro del importador bancario sin ruta | Verificado por inspección | `a0d0f698` | grep sin referencias; suite de importaciones |
 | #1052 campos requeridos solo con espacios rechazados | Implementado con regresión | `f24b6b6a` | `tests/test_import_required_whitespace.py` |
+| #1055 fechas de Excel normalizadas antes de validar | Implementado con regresión | `70095718` | `tests/test_import_date_normalization.py` |
 | #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
 | QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
@@ -439,7 +440,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1052 | #1652 | ✅ Implementado; regresión local en `f24b6b6a` (etiqueta sin cambio) | Importación contable acepta campos requeridos en blanco |
 | #1053 | #1652 | Implementación (`needs-work`) | Importación: preservar relaciones por línea origen |
 | #1054 | #1652 | Implementación (`needs-work`) | Importación: validar campos de cabecera agrupados |
-| #1055 | #1652 | Implementación (`needs-work`) | Importación: normalizar fechas Excel antes de validar |
+| #1055 | #1652 | ✅ Implementado; regresión local en `70095718` (etiqueta sin cambio) | Importación: normalizar fechas Excel antes de validar |
 | #1057 | #1652 | Implementación (`needs-work`) | Importación de órdenes: validar el tipo del proveedor |
 | #1059 | #1652 | Implementación (`needs-work`) | Importación de órdenes: definir tratamiento de impuesto |
 | #1060 | #1652 | Implementación (`needs-work`) | Importación de ventas: validar artículos habilitados |
