@@ -44,6 +44,7 @@ QA1, QA2, QA3 o al administrador.
 | #1130 libro de KPI validado contra su compañía | Implementado con regresión | `c4b36226` | `tests/test_kpi_snapshot_ledger_scope.py` |
 | #1511 precargado de pagos acotado por compañía | Implementado con regresión | `147b367d` (prueba) | `tests/test_payment_preload_company_scope.py` |
 | #1104 permiso de Caja en candidatos de conciliación | Implementado con regresión | `4d94544b` | `tests/test_payment_reconciliation_candidates_scope.py` |
+| #1558 períodos de la portada acotados por compañía | Implementado con regresión | `26ab8aaf` (prueba) | `tests/test_home_company_periods_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -318,7 +319,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1541 | #1649 | ✅ Implementado; regresión local en `b3e98f36` (etiqueta sin cambio) | Detalle de artículo revela cuentas de otras compañías |
 | #1542 | #1649 | ✅ Implementado; regresión local en `42786767` (etiqueta sin cambio) | Editar artículo borra cuentas de compañías omitidas |
 | #1543 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Filtro de compañía expone movimientos de inventario |
-| #1558 | #1649 | Implementación (`needs-work`) | La portada expone períodos de compañías no autorizadas |
+| #1558 | #1649 | ✅ Implementado; regresión local en `7b7f1de0` (etiqueta sin cambio) | La portada expone períodos de compañías no autorizadas |
 | #1562 | #1649 | Implementación (`needs-work`) | El portal puede imprimir documentos de otra compañía |
 | #1572 | #1649 | ✅ Implementado; regresión local en `584253c4` (etiqueta sin cambio) | Filtra tareas por el acceso vigente al documento |
 | #1576 | #1658 | ✅ Implementado; regresión local en `353bee41` (etiqueta sin cambio) | Incluye validar_solicitud en los permisos calculados |
