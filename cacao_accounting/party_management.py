@@ -190,6 +190,24 @@ def party_group_label(group_id: str | None) -> str:
     return group.name if group else ""
 
 
+def find_party_group_by_name(name: str | None, role: str) -> PartyGroup | None:
+    """Resuelve un grupo activo por nombre exacto y rol compatible (#1048)."""
+    if role not in ("customer", "supplier"):
+        raise ValueError(_("El rol debe ser 'customer' o 'supplier'."))
+    text = (name or "").strip()
+    if not text:
+        return None
+    return database.session.execute(
+        database.select(PartyGroup).filter_by(group_type=role, name=text, is_active=True)
+    ).scalar_one_or_none()
+
+
+def normalize_person_type(value: str | None) -> str | None:
+    """Normaliza la clasificación de tercero a natural/juridical (#1048)."""
+    text = (value or "").strip().lower()
+    return text or None
+
+
 def validate_party_group(group_id: str | None, role: str) -> PartyGroup | None:
     """Valida que el grupo exista, este activo y corresponda al rol del tercero."""
     if not group_id:
