@@ -68,14 +68,13 @@ from cacao_accounting.database import (
     FileAttachment,
     Party,
     StockBin,
-    UserCompanyAccess,
     database,
 )
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania, exige_acceso_compania_cualquiera
 from cacao_accounting.api.dashboard import user_can_access_company
-from cacao_accounting.company_context import authorized_company_codes
+from cacao_accounting.company_context import authorized_company_codes, explicit_company_grants
 from cacao_accounting.document_flow.registry import (
     DOCUMENT_TYPES,
     DocumentType,
@@ -712,7 +711,7 @@ def _require_search_select_company_access(filters: dict[str, list[str]]) -> None
     if not all_known:
         abort(403)
     if not is_desktop_mode():
-        granted = _explicit_company_grants()
+        granted = explicit_company_grants()
         if any(str(company.code) not in granted for company in companies):
             abort(403)
         return
@@ -720,20 +719,10 @@ def _require_search_select_company_access(filters: dict[str, list[str]]) -> None
         abort(403)
 
 
-def _explicit_company_grants() -> set[str]:
-    """Return enabled company grants without the Cloud administrator bypass."""
-    rows = database.session.execute(
-        database.select(UserCompanyAccess.company_code)
-        .join(Entity, Entity.code == UserCompanyAccess.company_code)
-        .where(UserCompanyAccess.user_id == current_user.id, Entity.enabled.is_(True))
-    ).scalars()
-    return {str(code) for code in rows}
-
-
 def _search_select_company_scope(doctype: str, filters: dict[str, list[str]]) -> set[str]:
     """Build the current user's authorized company scope for the requested catalog."""
     if not is_desktop_mode():
-        granted_company_scope = _explicit_company_grants()
+        granted_company_scope = explicit_company_grants()
         return _filter_company_scope_for_catalog(granted_company_scope, doctype, filters)
 
     scope_entities = database.select(Entity)
