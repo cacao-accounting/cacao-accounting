@@ -128,3 +128,31 @@ def test_banking_report_hides_purchase_pending_when_purchases_module_is_disabled
 
     assert all(item.get("recon_type") != "purchase_reconciliation" for item in result["items"])
     assert Decimal(str(result["summary"]["purchase_pending_amount"])) == Decimal("0")
+
+
+def test_service_default_excludes_purchase_pending(banking_purchase_scope_scenario):
+    """The service default is fail-closed for a new caller (QA2 B8)."""
+    app, _pending = banking_purchase_scope_scenario
+
+    from cacao_accounting.reportes import services as report_services
+
+    with app.app_context():
+        report = report_services.get_reconciliation_report("alpha")
+
+    assert all(row.values["recon_type"] != "purchase_reconciliation" for row in report.rows)
+    assert Decimal(str(report.totals["purchase_pending_amount"])) == Decimal("0")
+
+
+def test_service_explicit_include_keeps_purchase_pending(banking_purchase_scope_scenario):
+    """The accounting caller declares that the report includes Compras."""
+    app, pending = banking_purchase_scope_scenario
+
+    from cacao_accounting.reportes import services as report_services
+
+    with app.app_context():
+        report = report_services.get_reconciliation_report("alpha", include_purchase_pending=True)
+
+    purchase_rows = [row for row in report.rows if row.values["recon_type"] == "purchase_reconciliation"]
+    assert len(purchase_rows) == 1
+    assert purchase_rows[0].values["source_id"] == pending.purchase_receipt_item_id
+    assert Decimal(str(report.totals["purchase_pending_amount"])) == Decimal("75")

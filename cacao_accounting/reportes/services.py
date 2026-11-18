@@ -1748,13 +1748,13 @@ def _reconciliation_report_rows(query: Any, cancel_dates: dict[str, date], as_of
 
 
 def get_reconciliation_report(
-    company: str, as_of_date: date | None = None, *, include_purchase_pending: bool = True
+    company: str, as_of_date: date | None = None, *, include_purchase_pending: bool = False
 ) -> PaginatedReport:
-    """Devuelve reconciliaciones bancarias y, si se autoriza, pendientes de compras.
+    """Devuelve reconciliaciones bancarias y, si se declara, pendientes de compras.
 
-    El llamador que solo está autorizado para banca debe pasar
-    ``include_purchase_pending=False`` para no mezclar datos de Compras en la
-    misma respuesta (#1254).
+    El valor por defecto excluye Compras: cada llamador debe declarar
+    explícitamente que la respuesta incluye pendientes de compras, de modo que
+    un llamador nuevo no pueda exponerlos por omisión (#1254, QA2 B8).
     """
     query = (
         select(Reconciliation, ReconciliationItem)

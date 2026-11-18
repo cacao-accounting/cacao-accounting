@@ -536,6 +536,7 @@ def reconciliations():
     report = get_reconciliation_report(
         company=company,
         as_of_date=_resolve_as_of_date(company),
+        include_purchase_pending=True,
     )
     return _render_operational_report(_("Reconciliaciones"), report)
 
