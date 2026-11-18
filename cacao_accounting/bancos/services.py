@@ -1457,8 +1457,36 @@ def petty_cash_replenishment_expenses(replenishment: PettyCashReplenishment) -> 
     )
 
 
+def _petty_cash_fund_in_cash_scope(petty_cash_id: str) -> bool:
+    """Indica si el fondo pertenece al alcance de Caja del usuario actual.
+
+    El servicio es reutilizable fuera de la ruta de reposición (#1322), por lo
+    que el alcance se valida también aquí. Fuera de una sesión autenticada
+    (scripts o tareas internas) no se restringe.
+    """
+    try:
+        authenticated = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        return True
+    if not authenticated:
+        return True
+    fund = database.session.get(PettyCashAccount, petty_cash_id)
+    if fund is None:
+        return True
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("cash"), usuario=current_user.id)
+    if permissions.administrador:
+        return True
+    return bool(permissions.consultar and permissions.tiene_acceso_compania(fund.company))
+
+
 def petty_cash_expenses_available_for_replenishment(petty_cash_id: str, as_of_date=None) -> list[PettyCashExpense]:
-    """Lista gastos posteados que aun no han sido incluidos en una reposicion."""
+    """Lista gastos posteados que aun no han sido incluidos en una reposicion.
+
+    Un fondo fuera del alcance de Caja devuelve una lista vacía, igual que la
+    ruta de reposición rechaza el identificador antes de renderizar los gastos.
+    """
+    if not _petty_cash_fund_in_cash_scope(petty_cash_id):
+        return []
     query = database.select(PettyCashExpense).filter_by(petty_cash_id=petty_cash_id, docstatus=1, replenishment_id=None)
     if as_of_date is not None:
         query = query.filter(PettyCashExpense.posting_date <= as_of_date)

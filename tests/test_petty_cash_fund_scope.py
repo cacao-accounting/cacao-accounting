@@ -21,7 +21,10 @@ from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
-from cacao_accounting.bancos.services import post_petty_cash_expense_journal
+from cacao_accounting.bancos.services import (
+    petty_cash_expenses_available_for_replenishment,
+    post_petty_cash_expense_journal,
+)
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     AccountingPeriod,
@@ -446,3 +449,26 @@ def test_editar_sin_anular_no_permite_cancelar_gasto(caja_multicompania):
     with application.app_context():
         expense = database.session.get(PettyCashExpense, expense_id)
         assert expense is not None and expense.docstatus == 1
+
+
+def test_servicio_de_gastos_restringe_fondo_fuera_de_alcance(caja_multicompania):
+    """El servicio reutilizable no expone gastos de un fondo ajeno (#1322)."""
+    from flask_login import login_user
+
+    application, ids = caja_multicompania
+    with application.test_request_context("/"):
+        login_user(database.session.get(User, "tesorera"))
+        assert petty_cash_expenses_available_for_replenishment(ids["beta"]) == []
+
+
+def test_servicio_de_gastos_devuelve_fondo_propio(caja_multicompania):
+    """Control positivo: el fondo autorizado conserva sus gastos pendientes."""
+    from flask_login import login_user
+
+    application, ids = caja_multicompania
+    with application.test_request_context("/"):
+        login_user(database.session.get(User, "tesorera"))
+        gastos = petty_cash_expenses_available_for_replenishment(ids["alpha"])
+
+    assert gastos
+    assert all(gasto.petty_cash_id == ids["alpha"] for gasto in gastos)
