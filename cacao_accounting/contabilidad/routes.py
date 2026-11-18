@@ -576,6 +576,7 @@ def editar_moneda(code):
 @contabilidad.route("/currency/<code>/toggle-active", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def currency_toggle_active(code):
     """Habilita o deshabilita una moneda."""
@@ -891,6 +892,7 @@ def eliminar_entidad(id_entidad):
 @contabilidad.route("/entity/set_inactive/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def inactivar_entidad(id_entidad):
     """Estable una entidad como inactiva."""
@@ -916,6 +918,7 @@ def inactivar_entidad(id_entidad):
 @contabilidad.route("/entity/set_active/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def activar_entidad(id_entidad):
     """Estable una entidad como inactiva."""
@@ -937,6 +940,7 @@ def activar_entidad(id_entidad):
 @contabilidad.route("/entity/set_default/<id_entidad>")
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def predeterminar_entidad(id_entidad):
     """Establece una entidad como predeterminada."""
@@ -2593,6 +2597,7 @@ def tasa_cambio():
 @contabilidad.route("/exchange/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "crear")
 @verifica_acceso("accounting")
 def nueva_tasa_cambio():
     """Formulario para crear una nueva tasa de cambio."""
@@ -2724,6 +2729,7 @@ def _handle_exchange_rate_integrity_error(
 @contabilidad.route("/exchange/<rate_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def editar_tasa_cambio(rate_id):
     """Editar una tasa de cambio."""
@@ -2816,6 +2822,7 @@ def editar_tasa_cambio(rate_id):
 @contabilidad.route("/exchange/import", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "importar")
 @verifica_acceso("accounting")
 def importar_tasas_cambio():
     """Importación masiva de tasas de cambio desde hoja de cálculo."""
@@ -2977,6 +2984,7 @@ def comprobantes_recurrentes():
 @contabilidad.route("/journal/recurring/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "crear")
 @verifica_acceso("accounting")
 def nuevo_comprobante_recurrente():
     """Nueva plantilla de comprobante recurrente."""
@@ -3073,6 +3081,7 @@ def ver_plantilla_recurrente(identifier: str):
 @contabilidad.route("/journal/recurring/<identifier>/approve", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "autorizar")
 @verifica_acceso("accounting")
 def aprobar_plantilla_recurrente(identifier: str):
     """Aprueba una plantilla recurrente."""
@@ -3090,6 +3099,7 @@ def aprobar_plantilla_recurrente(identifier: str):
 @contabilidad.route("/journal/recurring/<identifier>/cancel", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "anular")
 @verifica_acceso("accounting")
 def cancelar_plantilla_recurrente(identifier: str):
     """Cancela una plantilla recurrente."""
@@ -3184,6 +3194,7 @@ def nuevo_cierre_mensual():
 @contabilidad.route("/period-close/monthly/<identifier>/project-capitalization", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def ejecutar_capitalizacion_cierre(identifier: str):
     """Ejecuta la capitalización automática de proyectos desde el asistente de cierre mensual."""
@@ -3408,6 +3419,7 @@ def ejecutar_revalorizacion_cierre(identifier: str) -> "Any":
 @contabilidad.route("/period-close/monthly/<identifier>/close", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "cerrar")
 @verifica_acceso("accounting")
 def finalizar_cierre_mensual(identifier: str) -> "Any":
     """Finaliza el cierre mensual después de ejecutar todos sus controles."""
@@ -3547,6 +3559,7 @@ def ver_revalorizacion_cambiaria(identifier: str):
 @contabilidad.route("/exchange-revaluation/<identifier>/void", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "anular")
 @verifica_acceso("accounting")
 def anular_revalorizacion_cambiaria(identifier: str):
     """Anula una revalorizacion cambiaria contabilizada."""
@@ -3957,6 +3970,7 @@ def naming_series_list():
 @contabilidad.route("/naming-series/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "crear")
 @verifica_acceso("accounting")
 def naming_series_new():
     """Nueva serie de numeracion."""
@@ -4021,6 +4035,7 @@ def naming_series_new():
 @contabilidad.route("/naming-series/<series_id>/toggle-default", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def naming_series_toggle_default(series_id: str):
     """Alterna el estado predeterminado de una serie de numeracion."""
@@ -4048,6 +4063,7 @@ def naming_series_toggle_default(series_id: str):
 @contabilidad.route("/naming-series/<series_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def naming_series_edit(series_id: str):
     """Editar una serie de numeracion."""
@@ -4137,6 +4153,7 @@ def naming_series_delete(series_id: str):
 @contabilidad.route("/naming-series/<series_id>/toggle-active", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def naming_series_toggle_active(series_id: str):
     """Activa o desactiva una serie de numeracion."""
@@ -4207,6 +4224,7 @@ def external_counter_list():
 @contabilidad.route("/external-counter/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "crear")
 @verifica_acceso("accounting")
 def external_counter_new():
     """Nuevo contador externo."""
@@ -4261,6 +4279,7 @@ def external_counter_new():
 @contabilidad.route("/external-counter/<counter_id>/adjust", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def external_counter_adjust(counter_id: str):
     """Ajusta el ultimo numero usado de un contador externo con auditoria obligatoria."""
@@ -4334,6 +4353,7 @@ def external_counter_audit_log(counter_id: str):
 @contabilidad.route("/external-counter/<counter_id>/toggle-active", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def external_counter_toggle_active(counter_id: str):
     """Activa o desactiva un contador externo."""
@@ -4349,6 +4369,7 @@ def external_counter_toggle_active(counter_id: str):
 @contabilidad.route("/external-counter/<counter_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "editar")
 @verifica_acceso("accounting")
 def external_counter_edit(counter_id: str):
     """Edita los datos de un contador externo."""
