@@ -47,6 +47,7 @@ QA1, QA2, QA3 o al administrador.
 | #1558 períodos de la portada acotados por compañía | Implementado con regresión | `26ab8aaf` (prueba) | `tests/test_home_company_periods_scope.py` |
 | #2011 rol de ventas vigente en listas de precios | Implementado con regresión | `4b25e21f` | `tests/test_price_list_revoked_role.py` |
 | #1433 factura duplicada validada con clave normalizada | Implementado con regresión | `c3d268ff` (fix/pruebas) | `tests/test_purchase_invoice_duplicate_scope.py` |
+| QA2: nodos `journal_entry`, ledger del KPI y compañía de cuenta en matching | Implementado con regresión | `79e40e5f`, `5a2594b9`, `2ee07d67` | `tests/test_document_tree_node_permissions.py`, `tests/test_kpi_snapshot_ledger_scope.py`, `tests/test_bank_matching_rule_account_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -70,6 +71,7 @@ QA1, QA2, QA3 o al administrador.
 (`CACAO_ACCOUNTING_DESKTOP=True`) **663 passed, 99 skipped**; 0 fallos (HEAD `ded995a4`).
 Black, ruff, flake8, mypy y Bandit en verde. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
 Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados. PostgreSQL/MySQL/Redis siguen pendientes de CI.
+Ronda QA2: A1–A3 y B1–B3 resueltos; B4 (302 vs 404), B5 (N+1 de destinatarios) y B7 (fixture de entregas) quedan como deuda no bloqueante.
 Los commits posteriores se validaron con pruebas dirigidas y linters; la próxima ronda completa corresponde al umbral de 50 commits o antes de un push.
 Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archivos tocados.
 
