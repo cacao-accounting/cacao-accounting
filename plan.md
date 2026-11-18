@@ -49,6 +49,7 @@ QA1, QA2, QA3 o al administrador.
 | #1433 factura duplicada validada con clave normalizada | Implementado con regresión | `c3d268ff` (fix/pruebas) | `tests/test_purchase_invoice_duplicate_scope.py` |
 | QA2: nodos `journal_entry`, ledger del KPI y compañía de cuenta en matching | Implementado con regresión | `79e40e5f`, `5a2594b9`, `2ee07d67` | `tests/test_document_tree_node_permissions.py`, `tests/test_kpi_snapshot_ledger_scope.py`, `tests/test_bank_matching_rule_account_scope.py` |
 | #1254 pendientes de compras ocultos en banca | Implementado con regresión | `274c1869` | `tests/test_query_tools_banking_purchase_scope.py` |
+| #1354/#1355/#1110 revocación de credenciales y confirmaciones vencidas | Implementado con regresión | `de6f005c`, `6ebf42a5`, `9032d7a4` | `tests/test_token_requerido.py`, `tests/test_password_reset_revokes_sessions.py`, `tests/test_balance_confirmation_delivery_failures.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -275,7 +276,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1019 | #1649 | Implementación (`needs-work`) | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
 | #1021 | #1649 | Implementación (`needs-work`) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1104 | #1649 | ✅ Implementado; regresión local en `4d94544b` (etiqueta sin cambio) | Exige permiso de Caja al listar candidatos de pago |
-| #1110 | #1710 | Implementación (`needs-work`) | fix: bloquea reenvíos de confirmación expirada |
+| #1110 | #1710 | ✅ Implementado; regresión local en `9032d7a4` (etiqueta sin cambio) | fix: bloquea reenvíos de confirmación expirada |
 | #1120 | #1649 | ✅ Implementado; regresión local en `f995e0e0` (etiqueta sin cambio) | fix: limita el reporte de lotes a la compañía |
 | #1130 | #1649 | ✅ Implementado; regresión local en `c4b36226` (etiqueta sin cambio) | fix: valida libro de KPI contra su compañía |
 | #1169 | #1649 | ✅ Implementado; regresión local en `a87db51f` (etiqueta sin cambio) | Aplica alcance de compañía al listado de cierres |
@@ -300,8 +301,8 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1329 | #1649 | ✅ Implementado; regresión local en `ecac5587` (etiqueta sin cambio) | Revoca tareas cuando se pierde acceso a la compañía |
 | #1332 | #1649 | ✅ Implementado; regresión local en `ba3a7f08` (etiqueta sin cambio) | Alinea permisos de líneas en flujos de inventario |
 | #1338 | #1649 | ✅ Implementado; regresión local en `cbac6457` (etiqueta sin cambio) | Rechaza compañías deshabilitadas en query tools |
-| #1354 | #1710 | Implementación (`needs-work`) | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
-| #1355 | #1710 | Implementación (`needs-work`) | [Seguridad] Revoca accesos existentes al restablecer contraseña |
+| #1354 | #1710 | ✅ Implementado; regresión local en `de6f005c` (etiqueta sin cambio) | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
+| #1355 | #1710 | ✅ Implementado; regresión local en `6ebf42a5` (etiqueta sin cambio) | [Seguridad] Revoca accesos existentes al restablecer contraseña |
 | #1357 | #1658 | Implementación (`needs-work`) | [Auditoría] Elimina el blueprint admin sin rutas |
 | #1388 | #1649 | ✅ Implementado; regresión local en `872008d3` (etiqueta sin cambio) | Valida el cliente al crear relaciones O2C por línea |
 | #1399 | #1649 | ✅ Implementado; regresión local en `1afff009` (etiqueta sin cambio) | Valida el tercero seleccionado en importación de pagos |
