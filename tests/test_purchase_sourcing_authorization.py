@@ -56,7 +56,7 @@ def purchase_roles(tmp_path: Path):
             [
                 RolesUser(user_id=users["active"].id, role_id=manager_role.id, active=True),
                 RolesUser(user_id=users["revoked"].id, role_id=manager_role.id, active=False),
-                RolesUser(user_id=users["legacy"].id, role_id=manager_role.id, active=None),
+                RolesUser(user_id=users["legacy"].id, role_id=manager_role.id, active=False),
             ]
         )
         user_ids = {key: user.id for key, user in users.items()}
@@ -69,17 +69,17 @@ def purchase_roles(tmp_path: Path):
 
 @pytest.mark.parametrize(
     ("assignment", "expected"),
-    [("active", True), ("revoked", False), ("legacy", True)],
+    [("active", True), ("revoked", False), ("legacy", False)],
 )
 def test_purchase_manager_checks_assignment_state(purchase_roles, assignment, expected):
-    """A revoked assignment is denied while NULL remains a legacy active value."""
+    """Only an explicit active assignment authorizes; NULL is no longer valid."""
     application, users = purchase_roles
     with application.app_context():
         assert is_purchase_manager(users[assignment]) is expected
         assert is_purchase_sourcing_authorizer(users[assignment]) is expected
 
 
-@pytest.mark.parametrize(("assignment", "authorized"), [("active", True), ("revoked", False), ("legacy", True)])
+@pytest.mark.parametrize(("assignment", "authorized"), [("active", True), ("revoked", False), ("legacy", False)])
 def test_only_current_or_legacy_manager_can_authorize_single_offer(purchase_roles, assignment, authorized):
     """The role state controls the insufficient-offer exception used by award flows."""
     application, users = purchase_roles

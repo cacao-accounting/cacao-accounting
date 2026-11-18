@@ -295,7 +295,7 @@ class Currency(database.Model, BaseTabla):  # type: ignore[name-defined]
     code = database.Column(database.String(10), index=True, nullable=False, unique=True)
     name = database.Column(database.String(75), nullable=False)
     decimals = database.Column(database.Integer(), nullable=True)
-    active = database.Column(database.Boolean, nullable=False, default=True, server_default=database.true())
+    active = database.Column(database.Boolean, nullable=True)
     default = database.Column(database.Boolean, nullable=True)
 
 
@@ -452,7 +452,7 @@ class RolesUser(database.Model, BaseTabla):  # type: ignore[name-defined]
     role_id = database.Column(
         database.String(26), database.ForeignKey(ROLES_ID_COLUMN, ondelete=FK_RESTRICT, onupdate=FK_CASCADE)
     )
-    active = database.Column(database.Boolean, nullable=True)
+    active = database.Column(database.Boolean, nullable=False, default=True, server_default=database.true())
 
 
 # <---------------------------------------------------------------------------------------------> #
