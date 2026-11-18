@@ -12,11 +12,16 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
+
+from flask_login import current_user
 from werkzeug.routing import BuildError
+
+from cacao_accounting.auth.permisos import Permisos
 
 from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.document_flow.status import document_status_payload
 
 DEFAULT_MAX_DEPTH: int = 10
@@ -29,6 +34,49 @@ _PARTY_NAME_FIELDS = ("party_name", "supplier_name", "customer_name")
 # ---------------------------------------------------------------------------
 # Nodo individual
 # ---------------------------------------------------------------------------
+
+_ALTERNATE_READ_MODULES = {
+    "delivery_note": ("sales", "inventory"),
+    "purchase_order": ("purchases", "inventory"),
+    "purchase_receipt": ("purchases", "inventory"),
+}
+
+
+def _node_readable(document_type: str, document_id: str) -> bool:
+    """Indica si el usuario actual puede leer el documento relacionado (#1407).
+
+    El árbol raíz ya está autorizado por la ruta; cada nodo debe revalidar el
+    módulo dueño del documento (con los módulos alternativos de los flujos
+    operativos) y el acceso a su compañía. Sin sesión, el servicio conserva su
+    comportamiento para tareas internas.
+    """
+    try:
+        authenticated = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        return True
+    if not authenticated:
+        return True
+    if getattr(current_user, "classification", None) == "admin":
+        return True
+    doctype = normalize_doctype(document_type)
+    document = get_document(doctype, document_id)
+    if document is None:
+        return False
+    company = getattr(document, "company", None)
+    spec = DOCUMENT_TYPES.get(doctype)
+    if spec is None:
+        return True
+    modules: tuple[str, ...] | None = _ALTERNATE_READ_MODULES.get(doctype)
+    if modules is None:
+        module = spec.permission_module or spec.module
+        if not module or module == "general":
+            return True
+        modules = (module,)
+    for module in modules:
+        permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+        if permissions.consultar and permissions.tiene_acceso_compania(company):
+            return True
+    return False
 
 
 def get_document_node(
@@ -136,6 +184,8 @@ def get_upstream_tree(
         if node_counter[0] >= max_nodes:
             result.append({"max_nodes_reached": True})
             break
+        if not _node_readable(src_type, src_id):
+            continue
 
         node = get_document_node(src_type, src_id)
         node["relation_type"] = row.relation_type
@@ -209,6 +259,8 @@ def get_downstream_tree(
         if node_counter[0] >= max_nodes:
             result.append({"max_nodes_reached": True})
             break
+        if not _node_readable(tgt_type, tgt_id):
+            continue
 
         node = get_document_node(tgt_type, tgt_id)
         node["relation_type"] = row.relation_type
@@ -549,6 +601,8 @@ def _append_payment_reference_node(
 
     if node_counter[0] >= max_nodes:
         result.append({"max_nodes_reached": True})
+        return
+    if not _node_readable(related_doctype, related_id):
         return
 
     node = get_document_node(related_doctype, related_id)
