@@ -358,11 +358,20 @@ class AllocationPlanner:
         existing = set(existing_keys)
         lines: list[AllocationLine] = []
         requested: dict[str, Decimal] = {}
+        seen_keys: set[str] = set()
         consumed = Decimal("0")
         for request in requests:
             item = self.resolver.resolve(request.document_id)
             if request.idempotency_key and request.idempotency_key in existing:
                 continue
+            # #1144: una clave repetida dentro del mismo plan duplicaría el
+            # importe planificado mientras el ejecutor procesa una sola línea.
+            if request.idempotency_key:
+                if request.idempotency_key in seen_keys:
+                    raise AllocationIdempotencyError(
+                        _("La clave %(key)s está repetida en el mismo plan.") % {"key": request.idempotency_key}
+                    )
+                seen_keys.add(request.idempotency_key)
             amount = item.outstanding if request.amount is None else _decimal(request.amount)
             if amount <= 0:
                 raise AllocationError(
