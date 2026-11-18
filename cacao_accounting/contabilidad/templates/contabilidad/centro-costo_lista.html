@@ -18,7 +18,7 @@
   </div>
 
   {% if entidades_creadas %}
-  {% set current_entity_code = entidad[0].code %}
+  {% set current_entity_code = entidad_actual_code|default('', true) %}
 
   {{ tree_toolbar(entidades, current_entity_code) }}
 

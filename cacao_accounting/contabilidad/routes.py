@@ -913,6 +913,7 @@ def unidades():
         tree_all=tree_all,
         entidades=obtener_entidades(),
         entidad=entidad_actual,
+        entidad_actual_code=entidad_actual_code,
         statusweb=STATUS,
     )
 
@@ -1458,6 +1459,7 @@ def cuentas():
         tree_all=tree_all,
         entidades=obtener_entidades(),
         entidad=entidad_actual,
+        entidad_actual_code=entidad_actual_code,
         titulo=TITULO,
     )
 
@@ -1665,6 +1667,7 @@ def ccostos():
         tree_all=tree_all,
         entidades=obtener_entidades(),
         entidad=entidad_actual,
+        entidad_actual_code=entidad_actual_code,
         titulo=TITULO,
     )
 
@@ -1904,6 +1907,7 @@ def proyectos():
         tree_all=tree_all,
         entidades=obtener_entidades(),
         entidad=entidad_actual,
+        entidad_actual_code=entidad_actual_code,
         titulo=_("Listado de Proyectos") + " - " + APPNAME,
         statusweb=STATUS,
     )

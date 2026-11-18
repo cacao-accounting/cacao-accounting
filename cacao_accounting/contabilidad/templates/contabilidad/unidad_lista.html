@@ -21,7 +21,7 @@
   </div>
 
   {% if entidades_creadas is defined %}
-  {% set current_entity_code = entidad[0].code if entidad else '' %}
+  {% set current_entity_code = entidad_actual_code|default('', true) %}
 
   {{ tree_toolbar(entidades, current_entity_code, new_url=url_for('contabilidad.nueva_unidad'), new_label=_('Nueva Unidad')) }}
 
