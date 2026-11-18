@@ -25,6 +25,7 @@ QA1, QA2, QA3 o al administrador.
 | #1541 detalle de artículo; #1418/#1542 edición multiempresa; #1181 proveedor predeterminado | Implementado con regresión | `b3e98f36`, `42786767`, `771d4e15` | `tests/test_item_detail_company_scope.py`, `tests/test_item_edit_company_scope.py` |
 | #1173/#1416/#1176/#1543 listado y formulario de movimientos; #1175/#1540/#1417 lotes (cobertura) | Implementado con regresión | `04b2e32b`, `b4451169` | `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_inventory_batch_company_scope.py` |
 | #1526/#1527 bancos: permiso de alta y alcance por cuenta | Implementado con regresión | `ea3d7dfc` | `tests/test_cash_bank_company_scope.py` |
+| #1320 listado de movimientos bancarios exige consulta de Caja | Implementado con regresión | `74db370b` | `tests/test_cash_bank_company_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
 | #1282 contactos, direcciones y roles cruzados de terceros | Implementado con regresión | `ff54d165` | `tests/test_party_management_company_scope.py` |
 | #1284 adjuntos de terceros por activación y permiso | Implementado con regresión | `9cd29cc2` | `tests/test_party_attachment_company_scope.py` |
@@ -262,7 +263,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1286 | #1649 | ✅ Coordinación cubierta; regresión en `f0ec7506` (etiqueta sin cambio) | Seguimiento: autorización por compañía de terceros |
 | #1299 | #1658 | Implementación (`needs-work`) | Retira o integra preferencias CompanyParty sin consumidores |
 | #1301 | #1649 | ✅ Implementado; regresión local en `8fe99bdc` (etiqueta sin cambio) | Exige alcance de compañía para imágenes globales de artículos |
-| #1320 | #1649 | Implementación (`needs-work`) | Limita el listado de transacciones bancarias |
+| #1320 | #1649 | ✅ Implementado; regresión local en `74db370b` (etiqueta sin cambio) | Limita el listado de transacciones bancarias |
 | #1321 | #1649 | ✅ Implementado; regresión local en `b649bbdf` (etiqueta sin cambio) | Limita el catálogo de usuarios por compañía |
 | #1322 | #1649 | Implementación (`needs-work`) | Filtra gastos de reposición por compañía autorizada |
 | #1327 | #1649 | ✅ Implementado; regresión local en `dbaede68` (etiqueta sin cambio) | Exige permiso de módulo en catálogos del selector |
