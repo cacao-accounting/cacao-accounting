@@ -1472,7 +1472,7 @@ def _petty_cash_fund_in_cash_scope(petty_cash_id: str) -> bool:
         return True
     fund = database.session.get(PettyCashAccount, petty_cash_id)
     if fund is None:
-        return True
+        return False
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre("cash"), usuario=current_user.id)
     if permissions.administrador:
         return True

@@ -461,6 +461,16 @@ def test_servicio_de_gastos_restringe_fondo_fuera_de_alcance(caja_multicompania)
         assert petty_cash_expenses_available_for_replenishment(ids["beta"]) == []
 
 
+def test_servicio_de_gastos_falla_cerrado_con_fondo_inexistente(caja_multicompania):
+    """Un identificador desconocido no devuelve gastos."""
+    from flask_login import login_user
+
+    application, _ids = caja_multicompania
+    with application.test_request_context("/"):
+        login_user(database.session.get(User, "tesorera"))
+        assert petty_cash_expenses_available_for_replenishment("fondo-inexistente") == []
+
+
 def test_servicio_de_gastos_devuelve_fondo_propio(caja_multicompania):
     """Control positivo: el fondo autorizado conserva sus gastos pendientes."""
     from flask_login import login_user
