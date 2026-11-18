@@ -100,12 +100,12 @@ QA1, QA2, QA3 o al administrador.
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 | Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
 
-**Última suite completa:** Cloud **917 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **912 passed, 99 skipped**; 0 fallos (HEAD `43db7563`).
+**Última suite completa:** Cloud **919 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **914 passed, 99 skipped**; 0 fallos (HEAD `981b2bdd`).
 Rondas ejecutadas tras el umbral de 50 commits desde `ded995a4`, que cubren #1254,
 #1354/#1355/#1110, #1467, #1253, #997, #998, #1357/#1283, #1488, #1019, #911,
 #1562, #1641, #1695, #1696, #2013, #2060, #1000, #1466, #1076, #925, #1002, #1294,
-#1669, #1144, #950, #1601, #1778, #1031, #1021, #1697, #1682/#2006, #1299 y los seguimientos QA2 B4/B8/B11/B14.
+#1669, #1144, #950, #1601, #1778, #1031, #1065, #1021, #1697, #1682/#2006, #1299 y los seguimientos QA2 B4/B8/B11/B14.
 Black en verde en `cacao_accounting/` (alcance del workflow de lint); 4 archivos de prueba preexistentes
 de `8f341b3e` requieren reformato de black fuera de ese alcance. Ruff, flake8, mypy y Bandit sin hallazgos bloqueantes. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
 Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados.
