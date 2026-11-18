@@ -32,6 +32,7 @@ QA1, QA2, QA3 o al administrador.
 | #1411 listas relacionadas con módulos alternativos | Implementado con regresión | `1a58f880` (scoping y filtro) / `4e18de70` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1407 cada nodo del árbol documental por módulo | Implementado con regresión | `a43e6117` | `tests/test_document_tree_node_permissions.py` |
 | #1410 líneas de entrega consultables desde Ventas | Implementado con regresión | `54bb39a1` | `tests/test_document_flow_delivery_note_lines.py` |
+| #1388 relaciones O2C entre clientes distintos | Implementado con regresión | `872008d3` | `tests/test_o2c_line_relation_party_scope.py` |
 | #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
 | #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
 | #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
@@ -285,7 +286,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1354 | #1710 | Implementación (`needs-work`) | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
 | #1355 | #1710 | Implementación (`needs-work`) | [Seguridad] Revoca accesos existentes al restablecer contraseña |
 | #1357 | #1658 | Implementación (`needs-work`) | [Auditoría] Elimina el blueprint admin sin rutas |
-| #1388 | #1649 | Implementación (`needs-work`) | Valida el cliente al crear relaciones O2C por línea |
+| #1388 | #1649 | ✅ Implementado; regresión local en `872008d3` (etiqueta sin cambio) | Valida el cliente al crear relaciones O2C por línea |
 | #1399 | #1649 | Implementación (`needs-work`) | Valida el tercero seleccionado en importación de pagos |
 | #1407 | #1649 | ✅ Implementado; regresión local en `a43e6117` (etiqueta sin cambio) | Aplica permisos por módulo a cada nodo del árbol documental |
 | #1410 | #1649 | ✅ Implementado; regresión local en `54bb39a1` (etiqueta sin cambio) | Permite consultar líneas de entrega desde ventas |
