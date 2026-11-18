@@ -13,6 +13,41 @@
 - Antes de atender un issue, leer su descripción y **todos sus comentarios**, con paginación completa, incluidos los del paraguas cuando establezcan el contrato compartido. Los comentarios son la bitácora de desarrollo: contienen decisiones, reproducciones, cambios existentes, rechazos de QA y limitaciones que pueden actualizar o sustituir el diagnóstico inicial. A estas alturas aportan más contexto de ejecución que la descripción original. Identificar las decisiones vigentes y los hallazgos aún aplicables antes de tocar código; no volver a decidir reglas ya aprobadas ni implementar a partir del título o de la descripción aislados. Si hay una contradicción real sin resolución posterior, presentar el caso concreto al responsable.
 - Los cinco issues de interfaz que superan el límite de hijos de #1711 se incluyen por referencia: #2162, #2165, #2193, #2199 y #2201.
 
+## Registro de avance
+
+**Actualizado:** 18 de noviembre de 2026 (rama `estabilizacion`, sin push). Este registro documenta
+implementación, evidencia local y commits; **no cambia etiquetas ni estados de GitHub**, que corresponden a
+QA1, QA2, QA3 o al administrador.
+
+| Lote / issue(s) | Estado local | Commit(s) | Evidencia |
+|---|---|---|---|
+| #1546 catálogos contables por compañía (proyectos, cuentas, centros de costo, unidades; ULID en cuentas/CC/proyectos/unidades) | Implementado con regresión | `1698c612`, `847617de`, `6a04dbdf`, `06058728`, `f4efb796`, `4a808042` | `tests/test_accounting_catalog_company_scope.py`, `tests/test_r2r_cost_center_hierarchy.py`, `tests/test_accounting_unit_detail_404.py` |
+| #1541 detalle de artículo; #1418/#1542 edición multiempresa; #1181 proveedor predeterminado | Implementado con regresión | `b3e98f36`, `42786767`, `771d4e15` | `tests/test_item_detail_company_scope.py`, `tests/test_item_edit_company_scope.py` |
+| #1173/#1416/#1176/#1543 listado y formulario de movimientos; #1175/#1540/#1417 lotes (cobertura) | Implementado con regresión | `04b2e32b`, `b4451169` | `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_inventory_batch_company_scope.py` |
+| #1526/#1527 bancos: permiso de alta y alcance por cuenta | Implementado con regresión | `ea3d7dfc` | `tests/test_cash_bank_company_scope.py` |
+| #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
+| #1280 configuración de terceros por compañía | Implementado con regresión | `039e582a` | `tests/test_party_management_company_scope.py` |
+| #1590 reporte de lotes con evidencia de compañía | Implementado con regresión | `b0d9003a` | `tests/test_report_batch_company_evidence.py` |
+| #1600/#1601 dashboard y permisos de acción contable | Implementado con regresión | `19610192` | `tests/test_dashboard_consult_permission.py`, `tests/test_accounting_action_permission.py` |
+| #1301 imágenes de artículos | Implementado con regresión | `8fe99bdc` | `tests/test_item_image_permission.py` |
+| #1338 compañías deshabilitadas en query tools | Implementado con regresión | `cbac6457` | `tests/test_query_tools_company_enabled.py` |
+| #1327 permiso de módulo en catálogos del selector | Implementado con regresión | `dbaede68` | `tests/test_search_select_module_permission.py` |
+| #2198 filtro `company` en el selector de compañías | Implementado con regresión | `0759a412` | `tests/test_search_select_company_filter.py` |
+| #2110 resolución de período por unión de módulos | Implementado con contrato y regresión | `5053c95e` | `tests/test_delivery_note_period_picker_scope.py` |
+| #1598 destinatarios de tareas por compañía/módulo | Implementado con regresión | `636a37b8` | `tests/test_collaboration_task_recipients_scope.py` |
+| #1321 catálogo de usuarios por compañía | Implementado con regresión | `b649bbdf` | `tests/test_search_select_user_company_scope.py` |
+| Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
+
+**Última validación local:** `pytest -n auto --full` → **632 passed, 94 skipped**, 0 fallos (HEAD `039e582a`).
+Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archivos tocados.
+
+**Controles pendientes:**
+
+- PostgreSQL, MySQL y Redis no están disponibles en este entorno. La matriz Tier 1/Tier 2, la suite Desktop
+  y el aislamiento de caché quedan a cargo de CI; no se declara una ronda completa en verde.
+- Los issues listados siguen OPEN/`needs-work` hasta que QA1 → QA2 revisen y el administrador o QA3 acepten el
+  cierre. Este registro no sustituye esa revisión.
+
 ## Core funcional esperado
 
 El core implementa los procesos empresariales estándar O2C, S2P, R2R, I2F y CTM de punta a punta, con comportamiento robusto, predecible, comprensible y auditable. Se espera que ventas y compras conserven sus documentos y relaciones de origen, que cobros y pagos apliquen y restituyan saldos por documento correctamente, que inventario mantenga cantidades y valoración por artículo, bodega y UOM —incluidos lote y serie cuando correspondan—, y que caja, bancos y conciliaciones reflejen los mismos hechos económicos que GL. El ledger financiero es la fuente única de verdad; AR/AP e inventario son extensiones reconciliables con él. Toda operación debe conservar atomicidad, evidencia append-only, cancelación monotónica, balance por libro y conversión explícita a la moneda de cada libro activo, bloqueando el registro cuando falte una tasa. Las anulaciones neutralizan el registro en su misma fecha y período; las reversiones conservan el efecto histórico y registran su corrección en otro período. R2R debe reportar esas operaciones con cortes y saldos reproducibles. Se aplican los procesos estándar de la industria y las decisiones documentadas del proyecto: no se reinventa su semántica ni se toman decisiones de negocio por iniciativa del implementador. Desktop, con SQLite y sin Redis, debe completar estos recorridos; Cloud agrega aislamiento multiempresa, roles y las capacidades adicionales definidas. Se conserva el monolito modular y el alcance contable; manufactura, nómina y activos fijos quedan fuera del core de este proyecto.
@@ -64,7 +99,7 @@ Cada entrega de implementación sigue este flujo: leer issue y todos sus comenta
 
 ### Primer lote listo para implementación
 
-- **Inicio:** #1546, coordinado con #1649/Fase 1. Corregir lecturas de catálogos contables de otra compañía en Cloud; usar la reproducción y los criterios de aceptación ya registrados en el issue. Cubrir usuario autorizado/ajeno, lectura por lista y detalle, y validar PostgreSQL y SQLite según el alcance documentado.
+- **Inicio:** ✅ #1546 implementado con regresión (`1698c612`, `847617de`, `6a04dbdf`, `06058728`, `f4efb796`, `4a808042`); coordinado con #1649/Fase 1. Corregir lecturas de catálogos contables de otra compañía en Cloud; usar la reproducción y los criterios de aceptación ya registrados en el issue. Cubrir usuario autorizado/ajeno, lectura por lista y detalle, y validar PostgreSQL y SQLite según el alcance documentado.
 - Después, continuar con los lotes de las fases 1 y 2 que protegen autorización, aislamiento, atomicidad e integridad de evidencia. Avanzar por consumidor y dependencias concretas; no esperar a cerrar una fase completa.
 
 ### Ruta de ejecución de features de #1658
@@ -209,27 +244,27 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1120 | #1649 | Implementación (`needs-work`) | fix: limita el reporte de lotes a la compañía |
 | #1130 | #1649 | Implementación (`needs-work`) | fix: valida libro de KPI contra su compañía |
 | #1169 | #1649 | Implementación (`needs-work`) | Aplica alcance de compañía al listado de cierres |
-| #1173 | #1649 | Implementación (`needs-work`) | Filtra bodegas por acceso de compañía en inventario |
-| #1175 | #1649 | Implementación (`needs-work`) | Limita lotes y movimientos al alcance de compañía |
-| #1176 | #1649 | Implementación (`needs-work`) | Valida company explícita en listado de inventario |
-| #1181 | #1649 | Implementación (`needs-work`) | Restringe detalle de artículos a compañías autorizadas |
+| #1173 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Filtra bodegas por acceso de compañía en inventario |
+| #1175 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Limita lotes y movimientos al alcance de compañía |
+| #1176 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Valida company explícita en listado de inventario |
+| #1181 | #1649 | ✅ Implementado; regresión local en `771d4e15` (etiqueta sin cambio) | Restringe detalle de artículos a compañías autorizadas |
 | #1253 | #1649 | Implementación (`needs-work`) | Define el alcance de lotes entre compañías |
 | #1254 | #1649 | Implementación (`needs-work`) | Restringe pendientes de compras en consulta bancaria |
 | #1261 | Consumidor | Implementación (`needs-work`) | Respeta alcance de cuenta en reglas bancarias |
-| #1280 | #1649 | Implementación (`needs-work`) | Autoriza cambios de configuración de terceros por compañía |
+| #1280 | #1649 | ✅ Implementado; regresión local en `039e582a` (etiqueta sin cambio) | Autoriza cambios de configuración de terceros por compañía |
 | #1282 | #1649 | Implementación (`needs-work`) | Protege la edición de contactos y roles de terceros |
 | #1283 | #1658 | Implementación (`needs-work`) | Elimina helpers de terceros sin llamadores |
 | #1284 | #1649 | Implementación (`needs-work`) | Aísla adjuntos de terceros entre compañías |
 | #1286 | #1649 | Implementación (`needs-work`) | Seguimiento: autorización por compañía de terceros |
 | #1299 | #1658 | Implementación (`needs-work`) | Retira o integra preferencias CompanyParty sin consumidores |
-| #1301 | #1649 | Implementación (`needs-work`) | Exige alcance de compañía para imágenes globales de artículos |
+| #1301 | #1649 | ✅ Implementado; regresión local en `8fe99bdc` (etiqueta sin cambio) | Exige alcance de compañía para imágenes globales de artículos |
 | #1320 | #1649 | Implementación (`needs-work`) | Limita el listado de transacciones bancarias |
-| #1321 | #1649 | Implementación (`needs-work`) | Limita el catálogo de usuarios por compañía |
+| #1321 | #1649 | ✅ Implementado; regresión local en `b649bbdf` (etiqueta sin cambio) | Limita el catálogo de usuarios por compañía |
 | #1322 | #1649 | Implementación (`needs-work`) | Filtra gastos de reposición por compañía autorizada |
-| #1327 | #1649 | Implementación (`needs-work`) | Exige permiso de módulo en catálogos del selector |
+| #1327 | #1649 | ✅ Implementado; regresión local en `dbaede68` (etiqueta sin cambio) | Exige permiso de módulo en catálogos del selector |
 | #1329 | #1649 | Implementación (`needs-work`) | Revoca tareas cuando se pierde acceso a la compañía |
 | #1332 | #1649 | Implementación (`needs-work`) | Alinea permisos de líneas en flujos de inventario |
-| #1338 | #1649 | Implementación (`needs-work`) | Rechaza compañías deshabilitadas en query tools |
+| #1338 | #1649 | ✅ Implementado; regresión local en `cbac6457` (etiqueta sin cambio) | Rechaza compañías deshabilitadas en query tools |
 | #1354 | #1710 | Implementación (`needs-work`) | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
 | #1355 | #1710 | Implementación (`needs-work`) | [Seguridad] Revoca accesos existentes al restablecer contraseña |
 | #1357 | #1658 | Implementación (`needs-work`) | [Auditoría] Elimina el blueprint admin sin rutas |
@@ -238,31 +273,31 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1407 | #1649 | Implementación (`needs-work`) | Aplica permisos por módulo a cada nodo del árbol documental |
 | #1410 | #1649 | Implementación (`needs-work`) | Permite consultar líneas de entrega desde ventas |
 | #1411 | #1649 | Implementación (`needs-work`) | Respeta acceso de inventario en lista de órdenes relacionadas |
-| #1416 | #1649 | Implementación (`needs-work`) | El listado de movimientos filtra por compañías sin autorización |
-| #1417 | #1649 | Implementación (`needs-work`) | Detalle de lote expone movimientos de otras compañías |
-| #1418 | #1649 | Implementación (`needs-work`) | Editar artículo permite borrar cuentas de otras compañías |
+| #1416 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | El listado de movimientos filtra por compañías sin autorización |
+| #1417 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Detalle de lote expone movimientos de otras compañías |
+| #1418 | #1649 | ✅ Implementado; regresión local en `42786767` (etiqueta sin cambio) | Editar artículo permite borrar cuentas de otras compañías |
 | #1433 | #1649 | Implementación (`needs-work`) | Valida facturas duplicadas entre compañías |
 | #1467 | #1649 | Implementación (`needs-work`) | Un usuario de solo lectura puede modificar tareas ajenas |
 | #1488 | #1649 | Implementación (`needs-work`) | Vincula el lote de importación al presupuesto autorizado |
 | #1511 | #1649 | Implementación (`needs-work`) | Restringir el precargado de pagos por compañía |
 | #1515 | #1649 | Implementación (`needs-work`) | Restringir fuentes documentales al módulo de origen |
-| #1524 | #1649 | Implementación (`needs-work`) | Customer and supplier management bypass permissions |
-| #1525 | #1649 | Implementación (`needs-work`) | Customer and supplier listings expose data without access checks |
-| #1526 | #1649 | Implementación (`needs-work`) | Bank master creation bypasses cash permissions |
-| #1527 | #1649 | Implementación (`needs-work`) | Bank transaction list omits company access filtering |
-| #1540 | #1649 | Implementación (`needs-work`) | Lotes de inventario exponen datos sin permiso de compañía |
-| #1541 | #1649 | Implementación (`needs-work`) | Detalle de artículo revela cuentas de otras compañías |
-| #1542 | #1649 | Implementación (`needs-work`) | Editar artículo borra cuentas de compañías omitidas |
-| #1543 | #1649 | Implementación (`needs-work`) | Filtro de compañía expone movimientos de inventario |
+| #1524 | #1649 | ✅ Implementado; regresión local en `1be22360` (etiqueta sin cambio) | Customer and supplier management bypass permissions |
+| #1525 | #1649 | ✅ Implementado; regresión local en `1be22360` (etiqueta sin cambio) | Customer and supplier listings expose data without access checks |
+| #1526 | #1649 | ✅ Implementado; regresión local en `ea3d7dfc` (etiqueta sin cambio) | Bank master creation bypasses cash permissions |
+| #1527 | #1649 | ✅ Implementado; regresión local en `ea3d7dfc` (etiqueta sin cambio) | Bank transaction list omits company access filtering |
+| #1540 | #1649 | ✅ Implementado; regresión local en `b4451169` + cobertura verificada (etiqueta sin cambio) | Lotes de inventario exponen datos sin permiso de compañía |
+| #1541 | #1649 | ✅ Implementado; regresión local en `b3e98f36` (etiqueta sin cambio) | Detalle de artículo revela cuentas de otras compañías |
+| #1542 | #1649 | ✅ Implementado; regresión local en `42786767` (etiqueta sin cambio) | Editar artículo borra cuentas de compañías omitidas |
+| #1543 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Filtro de compañía expone movimientos de inventario |
 | #1558 | #1649 | Implementación (`needs-work`) | La portada expone períodos de compañías no autorizadas |
 | #1562 | #1649 | Implementación (`needs-work`) | El portal puede imprimir documentos de otra compañía |
 | #1572 | #1649 | Implementación (`needs-work`) | Filtra tareas por el acceso vigente al documento |
 | #1576 | #1658 | Implementación (`needs-work`) | Incluye validar_solicitud en los permisos calculados |
-| #1590 | #1649 | Implementación (`needs-work`) | Filtra lotes sin evidencia de la compañía en el reporte |
+| #1590 | #1649 | ✅ Implementado; regresión local en `b0d9003a` (etiqueta sin cambio) | Filtra lotes sin evidencia de la compañía en el reporte |
 | #1595 | #1649 | Implementación (`needs-work`) | La bandeja de tareas muestra documentos tras revocar acceso |
-| #1598 | #1649 | Implementación (`needs-work`) | El selector de tareas expone usuarios ajenos a la compañía |
-| #1600 | #1649 | Implementación (`needs-work`) | El dashboard expone datos sin permiso de consulta |
-| #1601 | #1649 | Implementación (`needs-work`) | Rutas contables permiten crear sin permiso de acción |
+| #1598 | #1649 | ✅ Implementado; regresión local en `636a37b8` (etiqueta sin cambio) | El selector de tareas expone usuarios ajenos a la compañía |
+| #1600 | #1649 | ✅ Implementado; regresión local en `19610192` (etiqueta sin cambio) | El dashboard expone datos sin permiso de consulta |
+| #1601 | #1649 | ✅ Implementado; regresión local en `19610192` (etiqueta sin cambio) | Rutas contables permiten crear sin permiso de acción |
 | #1602 | #1710 | Implementación (`needs-work`) | El inicio como módulo crea credenciales admin predeterminadas |
 | #1640 | #1649 | Implementación (`needs-work`) | Ignora roles de ventas desactivados al editar precios |
 | #1641 | #1710 | Implementación (`needs-work`) | El endpoint de desarrollo acepta roles admin inactivos |
