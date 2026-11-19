@@ -3,7 +3,7 @@
 
 """Utilidades para el servicio de importación."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 from sqlalchemy import inspect, select, update
@@ -58,7 +58,8 @@ def recover_crashed_batches() -> int:
     if not _import_tables_exist():
         return 0
 
-    timeout_limit = datetime.now() - timedelta(hours=4)
+    # Las columnas son DateTime sin zona: el corte debe ser UTC ingenuo.
+    timeout_limit = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=4)
     recovered = 0
     for batch_id in _expired_batch_ids(timeout_limit):
         if not _claim_expired_batch(batch_id, timeout_limit):

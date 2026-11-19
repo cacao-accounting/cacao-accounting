@@ -39,6 +39,15 @@ from cacao_accounting.imports.adapters.transaction_documents import (
 from cacao_accounting.imports.utils.validation import is_period_open
 from cacao_accounting.i18n import _
 
+
+# Las columnas de importación son ``DateTime`` sin zona. Guardar siempre UTC
+# ingenuo evita mezclar naive/aware y mantiene comparable el corte de
+# recuperación en cualquier motor (N5).
+def _utc_now_naive() -> datetime:
+    """Devuelve la hora UTC actual sin información de zona."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 IMPORT_SYNC_MAX_ROWS = 100
 REVALIDATABLE_IMPORT_STATUSES = {1, 2, 3, 7}
 STRUCTURAL_ERROR_TYPES = {"DUPLICATE_COLUMN", "PROHIBITED_COLUMN", "MISSING_COLUMN", "MISSING_HEADER", "EXTRA_CELLS"}
@@ -186,7 +195,7 @@ class ImportService:
                 ImportBatch.processed_rows == 0,
                 ImportBatch.started_at.is_(None),
             )
-            .values(import_status=4, started_at=datetime.now(UTC))
+            .values(import_status=4, started_at=_utc_now_naive())
         )
         if result.rowcount != 1:  # type: ignore[attr-defined]
             database.session.rollback()
@@ -479,7 +488,7 @@ class ImportService:
                 return
 
             batch.import_status = 4
-            batch.started_at = datetime.now()
+            batch.started_at = _utc_now_naive()
             database.session.commit()
 
             try:
@@ -583,7 +592,7 @@ class ImportService:
                 return
             current_batch.success_rows = success_count
             current_batch.error_rows = error_count
-            current_batch.completed_at = datetime.now()
+            current_batch.completed_at = _utc_now_naive()
             if current_batch.import_status == 8 or current_batch.cancel_requested:
                 # La cancelación (estado 8) es terminal: los contadores
                 # parciales quedan tal como la ejecución los dejó.

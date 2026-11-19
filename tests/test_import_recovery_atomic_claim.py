@@ -10,7 +10,7 @@ errores `SYSTEM_TIMEOUT`; la actualización condicional decide un único dueño.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from threading import Barrier
 from uuid import uuid4
 
@@ -144,3 +144,23 @@ def test_recovery_leaves_the_batch_failed_and_is_idempotent(import_recovery_scen
         assert recovery.recover_crashed_batches() == 0
 
     assert len(_errors_for(app, ids["batch"])) == 1
+
+
+def test_recovery_skips_batches_within_the_timeout(import_recovery_scenario):
+    """Un lote en proceso reciente no se marca como fallido."""
+    app, _ids = import_recovery_scenario
+    with app.app_context():
+        fresh = ImportBatch(
+            company_id="alpha",
+            record_type="journal_entry",
+            source_format="csv",
+            import_status=4,
+            started_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=1),
+        )
+        database.session.add(fresh)
+        database.session.commit()
+        fresh_id = fresh.id
+
+        assert recovery.recover_crashed_batches() == 1
+
+        assert database.session.get(ImportBatch, fresh_id).import_status == 4
