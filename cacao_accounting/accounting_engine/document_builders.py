@@ -418,39 +418,58 @@ def _subtract_late_receipt_reclassifications(
     posting_dates: dict[str, date],
     prior_receipts: Iterable[PurchaseReceipt],
 ) -> None:
-    """Subtract receipt expense reclassifications from pending invoice values."""
-    from cacao_accounting.database import Book, GLEntry
+    """Subtract prior receipt reclassifications preserving item identity.
 
-    primary_book = (
-        database.session.execute(
-            select(Book)
-            .where(Book.entity == document.company, Book.status == "activo")
-            .order_by(Book.is_primary.desc(), Book.code)
+    The GL credits are aggregated by expense account and do not carry the item
+    dimension. Se reconstruye la reclasificación desde las líneas de recepción
+    y sus asignaciones auditables, de modo que cada crédito se resta una sola
+    vez del artículo que lo originó.
+    """
+    from cacao_accounting.database import PurchaseInvoiceReceiptAllocation
+
+    prior_receipts_list = sorted(prior_receipts, key=lambda receipt: (receipt.posting_date, receipt.id))
+    receipt_items: list[PurchaseReceiptItem] = []
+    for receipt in prior_receipts_list:
+        receipt_items.extend(
+            database.session.execute(
+                select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id, is_superseded=False)
+            )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .first()
-    )
-    prior_receipt_list = list(prior_receipts)
-    for item_code, amount in list(amounts.items()):
-        expense_account_id = _item_account_id(item_code, document.company, "expense")
-        if not expense_account_id:
+    allocated_amounts: dict[str, Decimal] = {}
+    if receipt_items:
+        rows = database.session.execute(
+            select(PurchaseInvoiceReceiptAllocation).where(
+                PurchaseInvoiceReceiptAllocation.company == document.company,
+                PurchaseInvoiceReceiptAllocation.status == "active",
+                PurchaseInvoiceReceiptAllocation.receipt_item_id.in_([item.id for item in receipt_items]),
+            )
+        ).scalars()
+        for row in rows:
+            key = str(row.receipt_item_id)
+            allocated_amounts[key] = allocated_amounts.get(key, Decimal("0")) + _decimal_value(row.invoice_amount)
+
+    remaining = dict(amounts)
+    receipt_by_id = {receipt.id: receipt for receipt in prior_receipts_list}
+    for item in receipt_items:
+        item_code = item.item_code
+        available = remaining.get(item_code, Decimal("0"))
+        if available <= 0:
             continue
-        receipt_ids = [receipt.id for receipt in prior_receipt_list if receipt.posting_date >= posting_dates[item_code]]
-        if not receipt_ids:
+        prior_receipt = receipt_by_id.get(item.purchase_receipt_id)
+        invoice_date = posting_dates.get(item_code)
+        if prior_receipt is None or invoice_date is None or prior_receipt.posting_date < invoice_date:
             continue
-        query = select(GLEntry).where(
-            GLEntry.voucher_type == "purchase_receipt",
-            GLEntry.voucher_id.in_(receipt_ids),
-            GLEntry.account_id == expense_account_id,
-            GLEntry.credit > 0,
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
-        )
-        if primary_book:
-            query = query.where(GLEntry.ledger_id == primary_book.id)
-        entries = database.session.execute(query).scalars().all()
-        reclassified = sum((Decimal(str(entry.credit_in_account_currency or entry.credit)) for entry in entries), Decimal("0"))
-        amounts[item_code] = max(Decimal("0"), amount - reclassified)
+        allocated = allocated_amounts.get(str(item.id), Decimal("0"))
+        reclassified = allocated if allocated > 0 else min(_line_amount(item), available)
+        reclassified = min(reclassified, available)
+        if reclassified <= 0:
+            continue
+        remaining[item_code] = available - reclassified
+
+    for item_code, amount in amounts.items():
+        amounts[item_code] = max(Decimal("0"), remaining[item_code])
 
 
 def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationContext:
