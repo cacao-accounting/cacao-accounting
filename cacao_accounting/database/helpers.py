@@ -978,8 +978,9 @@ def _ensure_user_auth_version_column() -> None:
     columns = {column["name"] for column in sa_inspect(engine).get_columns(User.__tablename__)}
     if "auth_version" in columns:
         return
+    table_name = database.engine.dialect.identifier_preparer.quote(User.__tablename__)
     try:
-        database.session.execute(database.text("ALTER TABLE user ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0"))
+        database.session.execute(database.text(f"ALTER TABLE {table_name} ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0"))
         database.session.commit()
         log.info("Columna user.auth_version agregada al esquema existente.")
     except SQLAlchemyError:
