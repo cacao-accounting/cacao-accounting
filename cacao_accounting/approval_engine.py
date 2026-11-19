@@ -1109,13 +1109,7 @@ class ApprovalEngine:
             return
 
         doctype = cls._resolve_doctype(document)
-        req = database.session.execute(
-            select(ApprovalRequest).filter(
-                ApprovalRequest.document_id == document.id,
-                ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                ApprovalRequest.status.in_({PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}),
-            )
-        ).scalar_one_or_none()
+        req = cls._pending_request(document, lock=True)
         if not req:
             raise ValueError(_("No existe ninguna solicitud de aprobación para este documento."))
 
@@ -1142,6 +1136,9 @@ class ApprovalEngine:
         from cacao_accounting.internal_control_service import approval_request_transition
 
         with approval_request_transition(req):
+            # Revalidar bajo el lock: otra transacción pudo aprobar/rechazar.
+            if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
+                raise ValueError(_("La solicitud de aprobación no está pendiente."))
             req.status = "Rejected"
             database.session.flush()
         if req.document_type == doctype:
