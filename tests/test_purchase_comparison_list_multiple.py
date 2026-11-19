@@ -53,3 +53,4 @@ def test_listado_muestra_todas_las_comparativas(app, entorno_contable, authentic
     assert first_id in html
     assert second_id in html
     assert html.count("Ver comparativo") >= 2
+    assert "NIO" in html

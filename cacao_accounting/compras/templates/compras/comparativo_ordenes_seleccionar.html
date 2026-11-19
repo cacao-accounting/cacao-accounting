@@ -60,7 +60,7 @@
           <td>{{ quotation.document_no or quotation.id }}</td>
           <td>{{ quotation.supplier_name or quotation.supplier_id or "-" }}</td>
           <td>{{ quotation.posting_date or "" }}</td>
-          <td>{{ quotation.grand_total or quotation.total or "0" }}</td>
+          <td>{{ format_money_with_currency(quotation.grand_total or quotation.total or 0, quotation.transaction_currency or quotation.base_currency) }}</td>
         </tr>
         {% else %}
         <tr>
