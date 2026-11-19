@@ -629,10 +629,7 @@ def create_default_petty_cash(company: str, custodian_id: str | None = None) -> 
         company=company,
         account_id=str(primera_cuenta.id),
         name=primera_cuenta.name,
-        currency=primera_cuenta.currency
-        or database.session.execute(database.select(Currency.code).order_by(Currency.default.desc(), Currency.code))
-        .scalars()
-        .first(),
+        currency=_validate_petty_cash_currency(company, primera_cuenta.currency, primera_cuenta),
         custodian_id=custodian_id,
         float_amount=Decimal("0"),
         is_default=True,
