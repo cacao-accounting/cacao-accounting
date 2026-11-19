@@ -152,10 +152,11 @@ QA1, QA2, QA3 o al administrador.
 | #2140 adjudicación concurrente, errores, autoría y CTAs por permiso | Implementado con regresión | `d5a12cbd`, `fde435c4` | `tests/test_purchase_award_concurrency.py`, `tests/test_purchase_sourcing_cta_permissions.py`; lock por RFQ, carreras controladas, recomendaciones visibles, autor y acciones filtradas |
 | #2160 estado real del historial de plantillas recurrentes | Implementado con regresión | `b6efd96a` | `tests/test_recurring_template_list_render.py`; badges y etiquetas por estado |
 | #2158 respuestas obsoletas al cargar libros recurrentes | Implementado con regresión | `34af3132` | `cacao_accounting/static/test/recurring-journal-books.test.js`; secuencia por petición y compañía vigente |
+| #2168 `db seed` repetido sin traceback | Implementado con regresión | `e7f6264a` | `tests/test_cli_seed_idempotent.py`; preflight de entidad demo y `ValueError` controlado |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1073 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1067 passed, 102 skipped**; 0 fallos (HEAD `b6efd96a`).
+**Última suite completa:** Cloud **1074 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1068 passed, 102 skipped**; 0 fallos (HEAD `e7f6264a`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
