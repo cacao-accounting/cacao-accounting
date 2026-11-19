@@ -377,9 +377,9 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1072 | #1650 | Implementación (`needs-work`) | Rechazar factores UOM no finitos |
 | #1087 | #1650 | Implementación (`needs-work`) | Normalizar precisión antes de detectar extractos repetidos |
 | #1174 | #1650 | Implementación (`needs-work`) | Rechaza factores UOM no finitos |
-| #1182 | #1717 | Implementación (`needs-work`) | Respeta validación al crear unidades de medida |
-| #1183 | #1717 | Implementación (`needs-work`) | Respeta validación al crear bodegas |
-| #1184 | #1717 | Implementación (`needs-work`) | Valida campos al crear unidades y proyectos contables |
+| #1182 | #1717 | ✅ Implementado; regresión en `cb5c1074` (etiqueta sin cambio) | UOM inválida no persiste, duplicado controlado y errores visibles en la plantilla |
+| #1183 | #1717 | ✅ Implementado; regresión en `cb5c1074` (etiqueta sin cambio) | Bodega con campos vacíos no persiste; duplicado y compañía autorizada cubiertos |
+| #1184 | #1717 | ✅ Implementado; regresión en `cb5c1074` (etiqueta sin cambio) | Unidad sin código no persiste; presupuesto inválido no se convierte en cero |
 | #1185 | #1650 | Implementación (`needs-work`) | Controla decimales inválidos en flujos de caja |
 | #1197 | #1652 | Implementación (`needs-work`) | Comprobantes interpreta "false" como anticipo |
 | #1199 | #1658 | Implementación (`needs-work`) | Eliminar adaptador de órdenes de compra sin uso productivo |
