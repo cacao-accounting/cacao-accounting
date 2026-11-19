@@ -328,8 +328,8 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1160 | #1653 | Implementación (`needs-work`) | Evita revalorizaciones duplicadas concurrentes |
 | #1177 | #1653 | Implementación (`needs-work`) | Revisa estado de serie al cancelar entradas |
 | #1178 | #1653 | Implementación (`needs-work`) | Serializa la salida concurrente del mismo serial |
-| #1187 | #1653 | Implementación (`needs-work`) | Serializa la liquidación concurrente de vales |
-| #1266 | #1653 | Implementación (`needs-work`) | Evita liquidar dos veces un vale de caja |
+| #1187 | #1653 | ✅ Implementado; fix en `103601f6`, regresión concurrente (etiqueta sin cambio) | Reserva de escritor SQLite y lock del vale; dos liquidaciones producen un solo gasto y un solo asiento |
+| #1266 | #1653 | ✅ Implementado; fix en `103601f6`, regresión concurrente (etiqueta sin cambio) | El vale entregado se bloquea y solo una solicitud crea el gasto; el GL no duplica el asiento |
 | #1271 | #1653 | Implementación (`needs-work`) | Evita ajustes duplicados en conciliación de caja chica |
 | #1294 | #1658 | ⚠️ Código retirado en `2d9d8848`; sin referencias (etiqueta sin cambio); GitHub: needs-work | Retira la mutación de contador externo sin auditoría |
 | #1306 | #1653 | Implementación (`needs-work`) | Bloquea el serial antes de validar salidas concurrentes |
