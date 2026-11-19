@@ -38,3 +38,21 @@ def test_cacao_test_configura_claves_validas_y_booleanas():
     assert debug == "True"
     assert auto_reload == "True"
     assert typo == "False"
+
+
+def test_sin_cacao_test_no_fuerza_flags_de_depuracion():
+    """Sin CACAO_TEST/CI/PYTEST_VERSION no se activan debug ni auto-reload."""
+    entorno = {clave: valor for clave, valor in os.environ.items() if clave not in {"CACAO_TEST", "CI", "PYTEST_VERSION"}}
+    resultado = subprocess.run(
+        [sys.executable, "-c", SCRIPT],
+        capture_output=True,
+        text=True,
+        env=entorno,
+        timeout=120,
+    )
+
+    assert resultado.returncode == 0, resultado.stderr
+    debug, auto_reload, typo = resultado.stdout.split()
+    assert debug in {"False", "None"}
+    assert auto_reload in {"False", "None"}
+    assert typo == "False"
