@@ -129,9 +129,13 @@ QA1, QA2, QA3 o al administrador.
 | #2180 R1 cuenta por defecto imputable; #2181/N25 numeración de pagos; #1076/N26 clave cancelada | Implementado con regresión | `79ab88a8` | `tests/test_bank_note_gl_account_validation.py`, `tests/test_payment_numbering_config_empty_fields.py`, `tests/test_purchase_reconciliation_idempotency_scope.py` |
 | i18n del adaptador transaccional; N24/N15/N18/N19 | Implementado con regresión | `9b6314b3` | `tests/test_import_*.py`, `tests/test_search_select_module_permission.py` |
 | #2197 precisión de existencias en el dashboard | Implementado con regresión | `2ad71bda` | `cacao_accounting/static/test/dashboard.test.js`; suite JS 103 passing |
+| N2/N11 badge de tareas por lote documental y alcance de destinatarios documentado | Implementado con regresión | `516049d2` | `tests/test_collaboration_task_company_revocation.py` |
+| N24a/N24b defaults no escalares y orden de bloqueo documental | Implementado con regresión | `a9872ade` | `tests/test_document_type_legacy_rows.py`, `tests/test_document_relation_concurrency.py` |
+| N12/N16/N21 fixture aislado, evidencia con `is_cancelled` y grupo vacío de centros de costo | Implementado con regresión | `63b58c7f` | `tests/test_delivery_note_period_picker_scope.py`, `tests/test_ledger_cancellation_monotonic.py`, `tests/test_r2r_cost_center_hierarchy.py` |
+| N4 catálogo i18n regenerado, sin fuzzy ni msgstr vacíos | Implementado con regresión | `8df2209a` | `messages.po`/`messages.mo`; 25 cadenas nuevas y 75 fuzzy corregidas |
 
-**Última suite completa:** Cloud **1037 passed, 95 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1032 passed, 100 skipped**; 0 fallos (HEAD `9b6314b3`).
+**Última suite completa:** Cloud **1040 passed, 95 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1035 passed, 100 skipped**; 0 fallos (HEAD `8df2209a`).
 La prueba concurrente de #2188 se ejecutó además contra PostgreSQL con
 `CHECK_DATABASE=true`. La suite JavaScript quedó en 103 passing. La matriz completa
 PostgreSQL/MySQL/Redis sigue pendiente de CI.
