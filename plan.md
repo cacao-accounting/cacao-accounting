@@ -142,9 +142,13 @@ QA1, QA2, QA3 o al administrador.
 | #2144 enlace de tipos de proveedor alineado con administración global | Implementado con regresión | `51f48cc1` | `tests/test_purchases_supplier_group_link.py`; usuario con `purchases.configurar` sin acceso admin |
 | #2154 etiqueta del colapso de auditoría tras el toggle | Verificado con regresión | `caa97a12` | `tests/test_audit_timeline_collapse.py`; eventos `shown`/`hidden`, sin `onclick` inline |
 | #2152 distinción alta/edición de series de numeración | Implementado con regresión | `8439df1c` | `tests/test_naming_series_edit_labels.py`; breadcrumb, encabezado y botón |
+| #2149 fachada de contabilidad con `log_submit` y `__all__` | Implementado con regresión | `c4e77b56` | `tests/test_contabilidad_facade_compat.py`; import nombrado y wildcard |
 
-**Última suite completa:** Cloud **1053 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1047 passed, 102 skipped**; 0 fallos (HEAD `8439df1c`).
+**Última suite completa:** Cloud **1055 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1049 passed, 102 skipped**; 0 fallos (HEAD `c4e77b56`).
+La primera pasada Desktop tuvo tres fallos intermitentes en
+`test_sale_item_eligibility.py` por estado de series; el archivo pasó aislado y la
+repetición completa quedó en verde.
 La suite JavaScript quedó en 105 passing.
 
 **Matriz de motores ejecutada localmente (HEAD `caa97a12`):**
