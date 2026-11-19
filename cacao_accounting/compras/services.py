@@ -780,10 +780,10 @@ def _form_decimal(field_name: str, default: str = "0") -> Decimal:
     raw_value = value if value not in (None, "") else default
     try:
         parsed = Decimal(str(raw_value))
-    except InvalidOperation as exc:
-        raise ValueError(_("El campo %(field)s debe contener un número válido.") % {"field": field_name}) from exc
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(_("El campo %(field)s debe ser un número válido.") % {"field": field_name}) from exc
     if not parsed.is_finite():
-        raise ValueError(_("El campo %(field)s debe contener un número finito.") % {"field": field_name})
+        raise ValueError(_("El campo %(field)s debe ser un número finito.") % {"field": field_name})
     return parsed
 
 

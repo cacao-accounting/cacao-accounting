@@ -544,7 +544,7 @@ def compras_solicitud_compra_editar(request_id: str):
             database.session.commit()
             flash(_("Solicitud de compra actualizada correctamente."), "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=registro.id))
-        except (IdentifierConfigurationError, DocumentFlowError) as exc:
+        except ValueError as exc:
             database.session.rollback()
             flash_error(exc)
 
@@ -839,7 +839,11 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
 
     if request.method == "POST":
         _require_requested_purchase_company_access(registro)
-        return _handle_supplier_quotation_update(registro, request.form, quotation_id)
+        try:
+            return _handle_supplier_quotation_update(registro, request.form, quotation_id)
+        except ValueError as exc:
+            database.session.rollback()
+            flash_error(exc)
 
     lineas = database.session.execute(
         database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
