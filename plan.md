@@ -177,10 +177,11 @@ QA1, QA2, QA3 o al administrador.
 | #2133 presupuesto de compras en moneda del libro | Implementado con regresión | `cd0e531b` | `tests/test_purchase_base_amounts.py`; `base_amount` en orden, recepción y factura con la tasa del documento |
 | #2150 commit inalcanzable en la carga de catálogo | Implementado con regresión | `5862eda3` | `tests/test_catalog_loading_transaction.py`; la carga deja la transacción al caller y el rollback descarta el catálogo |
 | #2137 snapshot de auditoría de compras | Ya implementado y cubierto | `c9e82c95` | `tests/test_purchase_audit_snapshot.py`; factura del proveedor, plantilla, moneda, tasa y logística en `changes_json` |
+| #2179 esquemas de herramientas de consulta aislados | Implementado con regresión | `f896d8af`, `b7ffb32e` | `tests/test_query_tool_schema_isolation.py`; registro, `get()` y `list_tools()` entregan copias profundas |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1115 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1109 passed, 102 skipped**; 0 fallos (HEAD `5862eda3`).
+**Última suite completa:** Cloud **1119 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1113 passed, 102 skipped**; 0 fallos (HEAD `b7ffb32e`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
