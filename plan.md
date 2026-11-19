@@ -204,11 +204,22 @@ QA1, QA2, QA3 o al administrador.
 | #2100 país de la compañía del asistente | Ya implementado; regresión restaurada | `1f9b43cf`, `bef2d5f3` | `tests/test_setup_company_country.py`; país y moneda persistidos |
 | #2101 errores del paso empresa sin 500 | Ya implementado; regresión restaurada | `ae8cc03e`, `6316a4c2` | `tests/test_setup_company_errors.py`; duplicado y alta válida |
 | #2096 metadatos al duplicar líneas | Implementado con regresión | `2b2e6a78` | `tests/test_duplicate_line_metadata.py`; descripción y bodega en compras/ventas |
+| #2099 recálculo fiscal al duplicar factura | Implementado con regresión | `0e5bfe36` | `tests/test_purchase_invoice_duplicate_taxes.py`; bruto y saldo desde plantilla fiscal |
+| #2098 serialización de recepciones contra OC | Implementado con regresión | `5a7d4377` | `tests/test_purchase_receipt_submit_lock.py`; lock documental antes de validar cantidades |
+| #2095 decimales inválidos en formularios de compras | Implementado con regresión | `cc741e10` | `tests/test_purchase_form_decimal_validation.py`; texto, NaN e infinitos |
+| #2094 serialización de órdenes desde comparativo | Implementado con regresión | `3b6dac86` | `tests/test_purchase_comparison_order_lock.py`; lock del comparativo |
+| #2091 conectividad real de Redis en `status` | Implementado con regresión | `11f7d358` | `tests/test_cli_redis_status.py`; ping con timeout y estados diferenciados |
+| #2090 decimales de moneda en caja chica | Implementado con regresión | `e8b0661e` | `tests/test_petty_cash_expense_amount_precision.py`; `step=any` |
+| #2085 compañía en cuentas bancarias | Implementado con regresión | `6c15589c` | `tests/test_bank_account_list_company_pagination.py`; filtro y paginación conservan `company` |
+| #2081 moneda funcional de caja chica de setup | Implementado con regresión | `e7921205` | `tests/test_setup_petty_cash_currency.py`; NIO frente a USD global |
+| #2083 transferencias fuera de alerta de duplicados | Implementado con regresión | `5dba3fd7` | `tests/test_duplicate_payment_transfer.py`; `internal_transfer` no consulta pagos similares |
+| #2082 carrera de conciliaciones de caja chica | Implementado con regresión | `c6608ed8` | `tests/test_petty_cash_reconciliation_race.py`; lock por caja/fecha y `IntegrityError` controlado |
+| #2256 configuración del setup con guard ICFR | Implementado con regresión | `0d8a9175` | `tests/test_setup_config_guard.py`; contexto por clave y Core directo bloqueado |
 
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1181 passed, 99 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1173 passed, 107 skipped**; 0 fallos (HEAD `e7588ed6`).
+**Última suite completa:** Cloud **1199 passed, 99 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1191 passed, 107 skipped**; 0 fallos (HEAD `0d8a9175`).
 JavaScript **106 passing**. Linters del workflow de lint en verde y `complexipy 9.0.0`
 sin funciones > 20. PostgreSQL + psycopg2 en base temporal: **84 passed, 10 skipped**.
 MySQL y Redis no estaban disponibles en el entorno local para repetir la matriz completa.
