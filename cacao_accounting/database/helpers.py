@@ -13,7 +13,7 @@ from typing import Optional
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask import Flask, g, has_request_context
-from sqlalchemy import Index, delete, func, inspect as sa_inspect, select
+from sqlalchemy import Index, delete, func, inspect as sa_inspect, select, update
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import InternalError, InterfaceError, OperationalError, ProgrammingError, SQLAlchemyError
 
@@ -296,36 +296,92 @@ def sequence_period_key(sequence_id: str, posting_date: date, reset_policy: str 
     return "global"
 
 
+def _period_counter_upsert(sequence_id: str, period_key: str):
+    """Devuelve el insert idempotente del contador de periodo para el motor activo.
+
+    ``ON CONFLICT DO NOTHING`` (SQLite/PostgreSQL) y ``ON DUPLICATE KEY``
+    (MySQL) crean la fila una sola vez incluso bajo concurrencia. Después el
+    incremento se aplica con un ``UPDATE`` atómico, así que SQLite no depende
+    de ``FOR UPDATE`` para serializar.
+    """
+    from cacao_accounting.database import SequencePeriodCounter
+
+    values = {"sequence_id": sequence_id, "period_key": period_key, "current_value": 0}
+    dialect = database.session.connection().dialect.name
+    if dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        return (
+            sqlite_insert(SequencePeriodCounter)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=["sequence_id", "period_key"])
+        )
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+
+        return (
+            postgresql_insert(SequencePeriodCounter)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=["sequence_id", "period_key"])
+        )
+    if dialect == "mysql":
+        from sqlalchemy.dialects.mysql import insert as mysql_insert
+
+        statement = mysql_insert(SequencePeriodCounter).values(**values)
+        return statement.on_duplicate_key_update(current_value=SequencePeriodCounter.current_value)
+    return None
+
+
 def get_next_period_sequence_value(sequence_id: str, period_key: str) -> int:
     """Reserva atomicamente el siguiente valor del periodo indicado.
 
-    El bloqueo de la fila ``Sequence`` serializa la creacion y el incremento
-    de los contadores de todos los periodos de esa secuencia. El contador del
-    periodo no depende del orden global de creacion: volver a un periodo
-    anterior continua su propio consecutivo.
+    El contador del periodo se crea de forma idempotente y se incrementa con
+    un ``UPDATE`` atómico. No depende de ``FOR UPDATE`` ni del orden global de
+    creacion, por lo que SQLite y los motores cloud aplican la misma garantía:
+    volver a un periodo anterior continua su propio consecutivo.
     """
     from cacao_accounting.database import Sequence, SequencePeriodCounter
 
-    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id).with_for_update()).scalar_one_or_none()
+    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
     if seq is None:
         raise ValueError(_("Secuencia con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
 
     if period_key == "global":
-        seq.current_value = (seq.current_value or 0) + seq.increment
-        database.session.flush()
-        return int(seq.current_value)
+        database.session.execute(
+            update(Sequence)
+            .where(Sequence.id == sequence_id)
+            .values(current_value=Sequence.current_value + Sequence.increment)
+        )
+        return int(
+            database.session.execute(database.select(Sequence.current_value).where(Sequence.id == sequence_id)).scalar_one()
+        )
 
-    counter = database.session.execute(
-        database.select(SequencePeriodCounter).filter_by(sequence_id=sequence_id, period_key=period_key).with_for_update()
-    ).scalar_one_or_none()
-    if counter is None:
-        counter = SequencePeriodCounter(sequence_id=sequence_id, period_key=period_key, current_value=0)
-        database.session.add(counter)
-        database.session.flush()
-    counter.current_value = (counter.current_value or 0) + seq.increment
-    seq.current_value = counter.current_value
-    database.session.flush()
-    return int(counter.current_value)
+    upsert = _period_counter_upsert(sequence_id, period_key)
+    if upsert is not None:
+        database.session.execute(upsert)
+    else:
+        existing = database.session.execute(
+            database.select(SequencePeriodCounter).filter_by(sequence_id=sequence_id, period_key=period_key).with_for_update()
+        ).scalar_one_or_none()
+        if existing is None:
+            database.session.add(SequencePeriodCounter(sequence_id=sequence_id, period_key=period_key, current_value=0))
+            database.session.flush()
+
+    database.session.execute(
+        update(SequencePeriodCounter)
+        .where(SequencePeriodCounter.sequence_id == sequence_id, SequencePeriodCounter.period_key == period_key)
+        .values(current_value=SequencePeriodCounter.current_value + seq.increment)
+    )
+    value = int(
+        database.session.execute(
+            database.select(SequencePeriodCounter.current_value).where(
+                SequencePeriodCounter.sequence_id == sequence_id,
+                SequencePeriodCounter.period_key == period_key,
+            )
+        ).scalar_one()
+    )
+    database.session.execute(update(Sequence).where(Sequence.id == sequence_id).values(current_value=value))
+    return value
 
 
 def generate_identifier(
