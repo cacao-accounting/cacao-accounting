@@ -443,26 +443,26 @@ class ExchangeRevaluationService:
         return run
 
     def _reverse_prior_period_runs(self, company: str, reversal_date: date, user_id: str | None) -> None:
-        """Reverse outstanding unrealized FX at the opening of a new period."""
-        prior_runs = database.session.execute(
+        """Reverse every outstanding FX run before a new run, including later ones."""
+        outstanding_runs = database.session.execute(
             select(ExchangeRevaluation)
             .where(
                 ExchangeRevaluation.company == company,
                 ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED,
-                ExchangeRevaluation.run_date < reversal_date,
             )
             .order_by(ExchangeRevaluation.run_date, ExchangeRevaluation.created)
             .with_for_update()
             .execution_options(populate_existing=True)
         ).scalars()
-        for prior_run in list(prior_runs):
+        for prior_run in list(outstanding_runs):
+            run_date = prior_run.run_date or reversal_date
             try:
                 self.void(
                     run_id=str(prior_run.id),
                     user_id=user_id,
-                    reason="Reversa automática al inicio del siguiente período de revaluación",
+                    reason="Reversa automática por una nueva corrida de revaluación",
                     commit=False,
-                    reversal_date=reversal_date,
+                    reversal_date=max(reversal_date, run_date),
                     _period_locked=True,
                     _known_run=prior_run,
                 )
