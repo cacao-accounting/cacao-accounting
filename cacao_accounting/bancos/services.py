@@ -2850,7 +2850,7 @@ def _resolve_payment_numbering(
     # El formulario serializa campos no seleccionados como cadena vacía. Se
     # normalizan a None para que la configuración por cuenta/tipo aplique antes
     # que los defaults generales (#2181).
-    naming_series_id = cast(str | None, payload.get("naming_series_id")) or None
+    naming_series_id = (str(payload.get("naming_series_id") or "").strip()) or None
     if naming_series_id is None:
         if config and config.naming_series_id:
             naming_series_id = config.naming_series_id
@@ -2860,7 +2860,7 @@ def _resolve_payment_numbering(
 
     external_counter_id: str | None = None
     if mode_of_payment == "check":
-        external_counter_id = cast(str | None, payload.get("external_counter_id")) or None
+        external_counter_id = (str(payload.get("external_counter_id") or "").strip()) or None
         if external_counter_id is None and config and config.use_external_counter:
             external_counter_id = config.external_counter_id
         if external_counter_id is None:

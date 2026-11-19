@@ -59,3 +59,26 @@ def test_explicit_payment_values_keep_priority(monkeypatch):
 
     assert series == "SERIE-ELEGIDA"
     assert counter == "CHEQUERA-ELEGIDA"
+
+
+def test_whitespace_form_fields_also_fall_back_to_the_configuration(monkeypatch):
+    """Una cadena de solo espacios equivale a un campo no seleccionado."""
+    monkeypatch.setattr(
+        services,
+        "_resolve_bank_account_numbering_config",
+        lambda *_args: SimpleNamespace(
+            naming_series_id="SERIE-CUENTA",
+            use_external_counter=True,
+            external_counter_id="CHEQUERA-CUENTA",
+        ),
+    )
+    payment = SimpleNamespace(bank_account_id="BANK-1", payment_type="pay")
+
+    series, counter = services._resolve_payment_numbering(
+        {"naming_series_id": "   ", "external_counter_id": " \t "},
+        payment,
+        "check",
+    )
+
+    assert series == "SERIE-CUENTA"
+    assert counter == "CHEQUERA-CUENTA"

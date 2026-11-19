@@ -18,7 +18,15 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import Accounts, Bank, BankAccount, GLEntry, PaymentEntry, database
+from cacao_accounting.database import (
+    Accounts,
+    Bank,
+    BankAccount,
+    CompanyDefaultAccount,
+    GLEntry,
+    PaymentEntry,
+    database,
+)
 
 MENSAJE_CUENTA_NO_OPERATIVA = "La cuenta GL del pago debe estar activa, habilitada y ser una cuenta hoja."
 BANDERAS_INVALIDAS = {
@@ -159,3 +167,51 @@ def test_submit_revalida_cuenta_gl_desactivada_tras_el_borrador(entorno_contable
     with app.app_context():
         assert database.session.get(PaymentEntry, pago_id).docstatus == 0
         assert database.session.query(GLEntry).count() == gl_antes
+
+
+def test_submit_rechaza_default_expense_no_operativo(entorno_contable, authenticated_client):
+    """El fallback de gasto por defecto también debe ser una cuenta imputable."""
+    app = entorno_contable.app
+    with app.app_context():
+        sufijo = uuid4().hex[:8]
+        banco_gl_id = _crear_cuenta_gl(sufijo, BANDERAS_VALIDAS)
+        cuenta_bancaria_id = _crear_cuenta_bancaria(sufijo, banco_gl_id)
+        gasto_invalido_id = _crear_cuenta_gl(sufijo + "G", BANDERAS_INVALIDAS["agrupadora"])
+        defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+        gasto_anterior = defaults.default_expense
+        defaults.default_expense = gasto_invalido_id
+        borrador = PaymentEntry(
+            payment_type="debit_note",
+            company="cacao",
+            bank_account_id=cuenta_bancaria_id,
+            posting_date=date(2026, 5, 15),
+            docstatus=0,
+            paid_amount=Decimal("10"),
+            received_amount=Decimal("10"),
+            currency="NIO",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(borrador)
+        database.session.flush()
+        pago_id = str(borrador.id)
+        database.session.commit()
+        gl_antes = database.session.query(GLEntry).count()
+
+    try:
+        response = authenticated_client("admin").post(
+            f"/cash_management/payment/{pago_id}/submit",
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        assert "activa, habilitada" in response.get_data(as_text=True)
+        with app.app_context():
+            assert database.session.get(PaymentEntry, pago_id).docstatus == 0
+            assert database.session.query(GLEntry).count() == gl_antes
+    finally:
+        with app.app_context():
+            defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+            defaults.default_expense = gasto_anterior
+            database.session.commit()

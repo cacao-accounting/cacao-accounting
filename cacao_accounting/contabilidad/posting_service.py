@@ -393,6 +393,8 @@ def _require_company_account(account_id: str | None, company: str, message: str)
     account = database.session.get(Accounts, account_id)
     if account is None or account.entity != company:
         raise PostingError(_("La cuenta contable debe pertenecer a la compañía del documento."))
+    if not account.active or not account.enabled or account.group:
+        raise PostingError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
     return account_id
 
 

@@ -18,6 +18,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.compras.purchase_reconciliation_service import (
     PurchaseReconciliationError,
+    _find_reconciliation_by_idempotency_key,
     reconcile_purchase_invoice,
 )
 from cacao_accounting.config import configuracion
@@ -166,3 +167,15 @@ def test_replay_lookup_runs_after_locking_the_invoice(reconciliation_idempotency
 
     assert result.reconciliation_id == ids["reconciliation"]
     assert order[:2] == ["get", "find"]
+
+
+def test_cancelled_key_remains_visible_to_the_replay_lookup(reconciliation_idempotency_scenario):
+    """Una clave cancelada se detecta como conflicto y no choca con la unicidad."""
+    app, ids = reconciliation_idempotency_scenario
+
+    with app.app_context():
+        reconciliation = database.session.get(PurchaseReconciliation, ids["reconciliation"])
+        reconciliation.status = "cancelled"
+        database.session.commit()
+
+        assert _find_reconciliation_by_idempotency_key(ids["key"]) is not None

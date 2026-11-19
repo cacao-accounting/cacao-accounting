@@ -1064,10 +1064,11 @@ def _find_reconciliation_by_idempotency_key(idempotency_key: str) -> PurchaseRec
     Permite que peticiones de retry, network retry o job replay retornen el
     resultado anterior sin crear un posting duplicado.
     """
+    # La clave es única incluso para conciliaciones canceladas. Incluir la
+    # fila cancelada permite responder un conflicto de negocio en lugar de
+    # dejar que la restricción única produzca un IntegrityError sin traducir.
     return database.session.execute(
-        select(PurchaseReconciliation)
-        .filter_by(idempotency_key=idempotency_key)
-        .where(PurchaseReconciliation.status != "cancelled")
+        select(PurchaseReconciliation).filter_by(idempotency_key=idempotency_key)
     ).scalar_one_or_none()
 
 
@@ -1137,6 +1138,8 @@ def reconcile_purchase_invoice(
     if idempotency_key is not None:
         existing = _find_reconciliation_by_idempotency_key(idempotency_key)
         if existing is not None:
+            if existing.status == "cancelled":
+                raise PurchaseReconciliationError(_("La clave de idempotencia pertenece a una conciliación cancelada."))
             if str(existing.purchase_invoice_id or "") != str(purchase_invoice_id):
                 raise PurchaseReconciliationError(_("La clave de idempotencia ya pertenece a otra factura de compra."))
             return _result_from_existing_reconciliation(existing)
