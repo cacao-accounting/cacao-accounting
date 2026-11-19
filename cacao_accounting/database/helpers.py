@@ -137,6 +137,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_cacao_config_key_unique()
             _ensure_roles_user_unique()
             _ensure_party_tax_id_key_column()
+            _ensure_user_auth_version_column()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -960,6 +961,30 @@ def _create_monthly_close_unique_guard(connection: Connection) -> None:
     )
 
 
+def _ensure_user_auth_version_column() -> None:
+    """Añade `user.auth_version` a esquemas existentes (P3, #1355).
+
+    La columna se agregó al modelo cuando se retiraron las migraciones
+    incrementales; sin ella, cargar `User` en una base previa falla y el login
+    queda inutilizable. El valor por defecto 0 permite emitir nuevas sesiones.
+    """
+    from cacao_accounting.database import User
+
+    engine = database.engine
+    if not sa_inspect(engine).has_table(User.__tablename__):
+        return
+    columns = {column["name"] for column in sa_inspect(engine).get_columns(User.__tablename__)}
+    if "auth_version" in columns:
+        return
+    try:
+        database.session.execute(database.text("ALTER TABLE user ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0"))
+        database.session.commit()
+        log.info("Columna user.auth_version agregada al esquema existente.")
+    except SQLAlchemyError:
+        database.session.rollback()
+        raise
+
+
 def _ensure_party_tax_id_key_column() -> None:
     """Instala y rellena la clave fiscal normalizada en esquemas existentes.
 
@@ -1120,8 +1145,9 @@ def _dedupe_cacao_config_keys(connection: Connection, table, column_names: tuple
     if removed:
         connection.execute(delete(table).where(table.c.id.in_(removed)))
         log.warning(
-            "Se consolidaron {} filas duplicadas de cacao_config conservando la más reciente.",
+            "Se consolidaron {} filas duplicadas de cacao_config conservando la más reciente. IDs: {}",
             len(removed),
+            ", ".join(sorted(removed)),
         )
 
 
@@ -1141,8 +1167,9 @@ def _dedupe_roles_user_assignments(connection: Connection, table, column_names: 
     if removed:
         connection.execute(delete(table).where(table.c.id.in_(removed)))
         log.warning(
-            "Se consolidaron {} asignaciones duplicadas de roles_user.",
+            "Se consolidaron {} asignaciones duplicadas de roles_user. IDs: {}",
             len(removed),
+            ", ".join(sorted(removed)),
         )
 
 

@@ -1621,6 +1621,7 @@ def usuario_password(user_id: str):
             )
         else:
             usuario.password = proteger_passwd(form.password.data)
+            helpers.revocar_credenciales_usuario(usuario)
             database.session.commit()
             flash(_("Contraseña actualizada correctamente."), "success")
             return redirect(url_for(LISTA_USUARIOS))
