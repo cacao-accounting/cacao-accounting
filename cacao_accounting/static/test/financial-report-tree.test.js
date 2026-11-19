@@ -69,6 +69,22 @@ describe('financial report tree', function () {
     assert.strictEqual(link.getAttribute('href'), '/account/1');
   });
 
+  it('restores expanded grandchildren when the root is expanded again', function () {
+    const document = createReportTree();
+    const parentToggle = toggleFor(document, 'balance', '1');
+    const childToggle = toggleFor(document, 'balance', '1.1');
+
+    assert.strictEqual(rowFor(document, 'balance', '1.1.1').hidden, false);
+    parentToggle.click();
+    assert.strictEqual(rowFor(document, 'balance', '1.1').hidden, true);
+    assert.strictEqual(rowFor(document, 'balance', '1.1.1').hidden, true);
+
+    parentToggle.click();
+    assert.strictEqual(rowFor(document, 'balance', '1.1').hidden, false);
+    assert.strictEqual(rowFor(document, 'balance', '1.1.1').hidden, false);
+    assert.strictEqual(childToggle.getAttribute('aria-expanded'), 'true');
+  });
+
   it('restores expanded descendants and retains a collapsed child state', function () {
     const document = createReportTree();
     const parentToggle = toggleFor(document, 'balance', '1');

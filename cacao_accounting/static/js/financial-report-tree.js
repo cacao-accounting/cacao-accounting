@@ -46,6 +46,9 @@
   const expandedByKey = new Map();
 
   function setDescendantVisibility(parentKey, parentVisible) {
+    // Al expandir se recorre también la descendencia y se respeta el estado
+    // guardado de cada hijo: los niveles que seguían expandidos reaparecen y
+    // los colapsados permanecen ocultos (#2196).
     const children = childrenByParent.get(parentKey) || [];
     children.forEach(function (child) {
       child.row.hidden = !parentVisible;
