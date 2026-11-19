@@ -9,7 +9,7 @@ import re
 from datetime import date, datetime, timezone
 from typing import cast
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for, session
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for, session
 from flask_login import current_user, login_required
 from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
@@ -54,6 +54,11 @@ TEMPLATE_CONFIRM_BALANCE_STATUS = "public/confirm_balance_status.html"
 def _utcnow() -> datetime:
     """Retorna la fecha/hora actual en UTC con zona horaria explícita."""
     return datetime.now(timezone.utc)
+
+
+def _secure_text_equal(left: str, right: str) -> bool:
+    """Compara texto en tiempo constante, incluidos caracteres no ASCII."""
+    return hmac.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -169,6 +174,15 @@ def _active_invitation_exists(confirmation_id: str, invitation_id: str, token_ha
     )
 
 
+@balance_confirmations_bp.after_request
+def prevent_public_cache(response):
+    """Evita que proxies retengan páginas públicas con tokens o saldos."""
+    if request.endpoint and request.endpoint.startswith("balance_confirmations.public_"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
 @balance_confirmations_bp.before_request
 def check_desktop_mode():
     """Rechaza cualquier uso de esta funcionalidad en modo Desktop."""
@@ -258,9 +272,10 @@ def _handle_confirmation_creation(party_id: str, party_type: str):
         database.session.commit()
         flash(_("Borrador de confirmación de saldo creado correctamente."), "success")
         return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation.id))
-    except Exception as exc:
+    except Exception:
         database.session.rollback()
-        flash(str(exc), "danger")
+        current_app.logger.exception("No fue posible crear la confirmación de saldo.")
+        flash(_("No fue posible crear la confirmación de saldo."), "danger")
         return redirect(request.url)
 
 
@@ -607,11 +622,13 @@ def public_confirm_balance(token: str):
         )
 
     if confirmation.status in ("confirmed", "disputed"):
+        responded_at = _as_utc(confirmation.responded_at)
+        responded_label = responded_at.strftime("%d/%m/%Y %H:%M UTC") if responded_at else _("fecha no registrada")
         msg = (
             f"Esta solicitud ya fue respondida el "
-            f"{confirmation.responded_at.strftime('%d/%m/%Y %H:%M UTC')} por "
-            f"{confirmation.respondent_first_name} {confirmation.respondent_last_name} "
-            f"({confirmation.respondent_email}) y se encuentra cerrada."
+            f"{responded_label} por "
+            f"{confirmation.respondent_first_name or ''} {confirmation.respondent_last_name or ''} "
+            f"({confirmation.respondent_email or ''}) y se encuentra cerrada."
         )
         return render_template(
             TEMPLATE_CONFIRM_BALANCE_STATUS,
@@ -693,7 +710,7 @@ def public_confirm_balance_verify(token: str):
     confirmation = database.session.execute(
         select(BalanceConfirmation).where(BalanceConfirmation.id == invitation.balance_confirmation_id).with_for_update()
     ).scalar_one_or_none()
-    if not confirmation or confirmation.status in ("confirmed", "disputed", "cancelled"):
+    if not confirmation or confirmation.status not in ("sent", "viewed"):
         flash(_("La confirmación no se encuentra disponible."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
@@ -707,8 +724,8 @@ def public_confirm_balance_verify(token: str):
         flash(_("Esta solicitud de confirmación de saldo ha expirado."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
-    first_name = request.form.get("first_name", "").strip()
-    last_name = request.form.get("last_name", "").strip()
+    first_name = request.form.get("first_name", "").strip()[:100]
+    last_name = request.form.get("last_name", "").strip()[:100]
     email_input = request.form.get("email", "").strip().lower()
     code_input = request.form.get("code", "").strip()
     authorized_checkbox = request.form.get("authorized") == "on"
@@ -729,14 +746,14 @@ def public_confirm_balance_verify(token: str):
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Validar correspondencia exacta de correo
-    if not hmac.compare_digest(email_input, invitation.email or ""):
+    if not _secure_text_equal(email_input, invitation.email or ""):
         database.session.commit()
         flash(_("La dirección de correo electrónico o el código ingresado son incorrectos."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Validar correspondencia del código de verificación
     hashed_code = hashlib.sha256(code_input.encode("utf-8")).hexdigest()
-    if not hmac.compare_digest(hashed_code, invitation.verification_code_hash or ""):
+    if not _secure_text_equal(hashed_code, invitation.verification_code_hash or ""):
         database.session.commit()
         flash(_("La dirección de correo electrónico o el código ingresado son incorrectos."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
@@ -802,7 +819,7 @@ def public_confirm_balance_respond(token: str):
     confirmation = database.session.execute(
         select(BalanceConfirmation).where(BalanceConfirmation.id == invitation.balance_confirmation_id).with_for_update()
     ).scalar_one_or_none()
-    if not confirmation or confirmation.status in ("confirmed", "disputed", "cancelled"):
+    if not confirmation or confirmation.status not in ("sent", "viewed"):
         flash(_("La confirmación no se encuentra disponible para responder."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
@@ -838,6 +855,7 @@ def public_confirm_balance_respond(token: str):
     # El WHERE por estado evita que dos invitaciones concurrentes queden
     # registradas como "primera respuesta válida".
     response_status = "confirmed" if response_type == "confirmed" else "disputed"
+    user_agent = request.user_agent.string if request.user_agent else None
     result = database.session.execute(
         update(BalanceConfirmation)
         .where(
@@ -854,7 +872,7 @@ def public_confirm_balance_respond(token: str):
             respondent_last_name=last_name,
             respondent_email=invitation.email,
             respondent_ip=request.remote_addr,
-            respondent_user_agent=request.user_agent.string if request.user_agent else None,
+            respondent_user_agent=user_agent[:512] if user_agent else None,
         )
         .execution_options(synchronize_session="fetch")
     )

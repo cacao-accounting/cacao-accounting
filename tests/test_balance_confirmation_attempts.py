@@ -102,15 +102,15 @@ def confirmation_attempt_scenario(tmp_path):
         database.engine.dispose()
 
 
-def _post_verification(app, token: str, code: str):
+def _post_verification(app, token: str, code: str, *, client=None, email: str = "cliente@example.test"):
     """Submit the public verification form."""
-    client = app.test_client()
+    client = client or app.test_client()
     return client.post(
         f"/confirm-balance/{token}/verify",
         data={
             "first_name": "Cliente",
             "last_name": "Prueba",
-            "email": "cliente@example.test",
+            "email": email,
             "code": code,
             "authorized": "on",
         },
@@ -168,3 +168,88 @@ def test_successful_verification_resets_the_claim_counter(confirmation_attempt_s
         invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
         assert invitation.status == "viewed"
         assert invitation.failed_attempts == 0
+
+
+def test_correo_unicode_no_rompe_la_comparacion(confirmation_attempt_scenario):
+    """La comparación en tiempo constante admite direcciones no ASCII."""
+    app, ids = confirmation_attempt_scenario
+    email = "cliente@exämple.test"
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        invitation.email = email
+        database.session.commit()
+
+    respuesta = _post_verification(app, ids["token"], "123456", email=email)
+
+    assert respuesta.status_code == 302
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        assert invitation.status == "viewed"
+
+
+def test_nombres_largos_se_acotan_al_verificar(confirmation_attempt_scenario):
+    """Nombre y apellido se recortan al límite de sus columnas."""
+    app, ids = confirmation_attempt_scenario
+    client = app.test_client()
+    respuesta = client.post(
+        f"/confirm-balance/{ids['token']}/verify",
+        data={
+            "first_name": "N" * 200,
+            "last_name": "A" * 200,
+            "email": "cliente@example.test",
+            "code": "123456",
+            "authorized": "on",
+        },
+    )
+
+    assert respuesta.status_code == 302
+    with client.session_transaction() as sesion:
+        nombres = next(valor for clave, valor in sesion.items() if clave.startswith("verified_confirmation_name_"))
+    assert len(nombres[0]) <= 100
+    assert len(nombres[1]) <= 100
+
+
+def test_pagina_publica_no_se_cachea(confirmation_attempt_scenario):
+    """La página con token financiero responde `Cache-Control: no-store`."""
+    app, ids = confirmation_attempt_scenario
+    respuesta = app.test_client().get(f"/confirm-balance/{ids['token']}")
+
+    assert respuesta.status_code == 200
+    assert respuesta.headers["Cache-Control"] == "no-store"
+
+
+def test_confirmacion_sin_responded_at_no_rompe_la_vista(confirmation_attempt_scenario):
+    """Un estado terminal sin fecha de respuesta se muestra sin 500."""
+    app, ids = confirmation_attempt_scenario
+    with app.app_context():
+        confirmation = database.session.execute(database.select(BalanceConfirmation)).scalar_one()
+        confirmation.status = "confirmed"
+        confirmation.responded_at = None
+        confirmation.respondent_first_name = "Cliente"
+        confirmation.respondent_last_name = "Prueba"
+        confirmation.respondent_email = "cliente@example.test"
+        database.session.commit()
+
+    respuesta = app.test_client().get(f"/confirm-balance/{ids['token']}")
+
+    assert respuesta.status_code == 200
+    assert "fecha no registrada" in respuesta.get_data(as_text=True)
+
+
+def test_no_se_responde_un_borrador(confirmation_attempt_scenario):
+    """Una confirmación nunca enviada no acepta respuestas públicas."""
+    app, ids = confirmation_attempt_scenario
+    with app.app_context():
+        confirmation = database.session.execute(database.select(BalanceConfirmation)).scalar_one()
+        confirmation.status = "draft"
+        database.session.commit()
+
+    respuesta = app.test_client().post(
+        f"/confirm-balance/{ids['token']}/respond",
+        data={"response_type": "confirmed", "response_comment": ""},
+    )
+
+    assert respuesta.status_code == 302
+    with app.app_context():
+        confirmation = database.session.execute(database.select(BalanceConfirmation)).scalar_one()
+        assert confirmation.status == "draft"

@@ -11,17 +11,6 @@
         {{ _('Por razones de seguridad y confidencialidad, debe verificar su identidad antes de consultar el detalle de las partidas abiertas y responder a esta solicitud de confirmación.') }}
       </p>
 
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-              {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ _('Cerrar') }}"></button>
-            </div>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
-
       <form method="POST" action="{{ url_for('balance_confirmations.public_confirm_balance_verify', token=token) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
