@@ -15385,6 +15385,10 @@ msgstr "Another monthly close is being created for this period. Please try again
 msgid "El período no existe o ya no pertenece a esta compañía."
 msgstr "The period does not exist or no longer belongs to this company."
 
+#: cacao_accounting/contabilidad/services.py:869
+msgid "El período está deshabilitado y no admite cierre mensual."
+msgstr "The period is disabled and does not accept a monthly close."
+
 #: cacao_accounting/contabilidad/services.py:878 cacao_accounting/contabilidad/services.py:903
 #: cacao_accounting/contabilidad/services.py:954
 msgid "El periodo ya se encuentra cerrado."

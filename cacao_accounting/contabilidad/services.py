@@ -895,6 +895,8 @@ def _lock_monthly_close_period(company: str, period_id: str) -> Any:
     ).scalar_one_or_none()
     if period is None:
         raise PeriodCloseError(_("El período no existe o ya no pertenece a esta compañía."))
+    if period.enabled is False:
+        raise PeriodCloseError(_("El período está deshabilitado y no admite cierre mensual."))
     return period
 
 
@@ -1113,8 +1115,7 @@ def reopen_accounting_period(period_id: str, user_id: str, reason: str, *, commi
                 database.session.commit()
             return pending
         period.is_closed = False
-        period.enabled = True
-        period.status = _accounting_period_status_label(True, False)
+        period.status = _accounting_period_status_label(bool(period.enabled), False)
         close_run.run_status = "open"
         log_task_event(
             period,

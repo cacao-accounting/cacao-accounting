@@ -3170,6 +3170,7 @@ def asistente_cierre_mensual():
         database.session.execute(
             database.select(AccountingPeriod)
             .where(AccountingPeriod.is_closed.is_(False))
+            .where(AccountingPeriod.enabled.is_not(False))
             .where(AccountingPeriod.entity.in_(companies) if companies else false())
         )
         .scalars()
