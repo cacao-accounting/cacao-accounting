@@ -177,7 +177,7 @@
           inventory: [
             { key: "item_name", value: `${row.item_code} · ${row.item_name}` },
             { key: "warehouse", value: row.warehouse },
-            { key: "current_qty", value: this.formatNumber(row.current_qty), className: "text-end" },
+            { key: "current_qty", value: this.formatQuantity(row.current_qty), className: "text-end" },
           ],
           sales: [
             { key: "name", value: row.name },
@@ -269,6 +269,14 @@
       },
       formatNumber(value) {
         return new Intl.NumberFormat("es-NI", { maximumFractionDigits: 2 }).format(Number(value || 0));
+      },
+      formatQuantity(value) {
+        // StockBin.actual_qty usa Numeric(20, 9): la tabla no debe redondear
+        // a cero una existencia positiva ni ocultar fracciones de unidad.
+        return new Intl.NumberFormat("es-NI", {
+          maximumFractionDigits: 9,
+          minimumFractionDigits: 0,
+        }).format(Number(value || 0));
       },
       companyCurrency() {
         return this.payload.company?.currency || "USD";
