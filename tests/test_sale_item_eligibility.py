@@ -208,3 +208,128 @@ def test_alta_manual_acepta_articulo_vendible_y_activo(entorno_contable, authent
         assert linea is not None
         assert linea.item_code == "ART01"
         assert Decimal(str(linea.qty)) == Decimal("1")
+
+
+@dataclass(frozen=True)
+class EspecificacionAprobacion:
+    """Describe la aprobación de un borrador O2C y su ruta de submit."""
+
+    documento: str
+    modelo: type
+    lineas: type
+    clave_foranea: str
+    ruta_submit: str
+    con_bodega: bool = False
+
+
+APROBACIONES = [
+    pytest.param(
+        EspecificacionAprobacion(
+            documento="cotización de venta",
+            modelo=SalesQuotation,
+            lineas=SalesQuotationItem,
+            clave_foranea="sales_quotation_id",
+            ruta_submit="/sales/sales-quotation/{id}/submit",
+        ),
+        id="sales_quotation",
+    ),
+    pytest.param(
+        EspecificacionAprobacion(
+            documento="nota de entrega",
+            modelo=DeliveryNote,
+            lineas=DeliveryNoteItem,
+            clave_foranea="delivery_note_id",
+            ruta_submit="/sales/delivery-note/{id}/submit",
+            con_bodega=True,
+        ),
+        id="delivery_note",
+    ),
+    pytest.param(
+        EspecificacionAprobacion(
+            documento="factura de venta",
+            modelo=SalesInvoice,
+            lineas=SalesInvoiceItem,
+            clave_foranea="sales_invoice_id",
+            ruta_submit="/sales/sales-invoice/{id}/submit",
+        ),
+        id="sales_invoice",
+    ),
+]
+
+
+def _crear_borrador_con_item_vendible(entorno_contable, especificacion: EspecificacionAprobacion) -> tuple[str, str, str]:
+    """Crea un borrador con un artículo inicialmente vendible y devuelve ids y código."""
+    with entorno_contable.app.app_context():
+        cliente = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one()
+        item = Item(
+            code=f"APROB-{uuid4().hex[:10]}",
+            name="Articulo aprobable",
+            item_type="goods",
+            is_stock_item=False,
+            default_uom="UND",
+            is_active=True,
+            is_sale_item=True,
+        )
+        database.session.add(item)
+        database.session.flush()
+        datos_documento = {
+            "company": "cacao",
+            "posting_date": FECHA,
+            "docstatus": 0,
+            "customer_id": cliente.id,
+            "customer_name": cliente.name,
+            "transaction_currency": "NIO",
+            "base_currency": "NIO",
+            "exchange_rate": Decimal("1"),
+        }
+        if especificacion.modelo is SalesInvoice:
+            datos_documento["update_inventory"] = False
+        documento = especificacion.modelo(**datos_documento)
+        if especificacion.modelo is SalesInvoice:
+            documento.document_type = "sales_invoice"
+        database.session.add(documento)
+        database.session.flush()
+        datos_linea = {
+            especificacion.clave_foranea: documento.id,
+            "item_code": item.code,
+            "item_name": item.name,
+            "qty": Decimal("1"),
+            "qty_in_base_uom": Decimal("1"),
+            "uom": "UND",
+            "rate": Decimal("10"),
+            "amount": Decimal("10"),
+        }
+        if especificacion.con_bodega:
+            datos_linea["warehouse"] = "BOD01"
+        linea = especificacion.lineas(**datos_linea)
+        database.session.add(linea)
+        database.session.commit()
+        return documento.id, linea.id, item.code
+
+
+@pytest.mark.parametrize("especificacion", APROBACIONES)
+@pytest.mark.parametrize("vendible,activo", [(False, True), (True, False)], ids=["sin_rol_venta", "inactivo"])
+def test_aprobacion_rechaza_articulo_deshabilitado_despues(
+    entorno_contable, authenticated_client, especificacion, vendible, activo
+):
+    """Un borrador no se aprueba si el artículo dejó de ser vendible tras crearlo (#2124)."""
+    app = entorno_contable.app
+    documento_id, linea_id, codigo_item = _crear_borrador_con_item_vendible(entorno_contable, especificacion)
+    with app.app_context():
+        item = database.session.execute(database.select(Item).filter_by(code=codigo_item)).scalar_one()
+        item.is_sale_item = vendible
+        item.is_active = activo
+        database.session.commit()
+
+    cliente = authenticated_client()
+    respuesta = cliente.post(especificacion.ruta_submit.format(id=documento_id))
+    assert respuesta.status_code == 302
+
+    confirmacion = cliente.get(respuesta.headers["Location"])
+    assert confirmacion.status_code == 200
+    assert MENSAJE_NO_VENDIBLE in confirmacion.get_data(as_text=True)
+
+    with app.app_context():
+        documento = database.session.get(especificacion.modelo, documento_id)
+        assert documento.docstatus == 0
+        assert database.session.get(especificacion.lineas, linea_id) is not None

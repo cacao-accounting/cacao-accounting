@@ -123,6 +123,7 @@ from cacao_accounting.ventas.services import (
     _validate_delivery_quantities_against_so,
     _validate_sales_invoice_quantities,
     _validate_sales_invoice_line_amounts,
+    _validate_sales_items_eligible,
     _validate_sales_source_link,
     _validate_sales_order_requirement,
     _validated_customer,
@@ -1663,6 +1664,7 @@ def ventas_cotizacion_submit(quotation_id: str):
             .scalars()
             .all()
         )
+        _validate_sales_items_eligible(registro, items)
         validate_submit_prerequisites(
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )
@@ -2081,6 +2083,7 @@ def ventas_entrega_submit(note_id: str):
         items = (
             database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars().all()
         )
+        _validate_sales_items_eligible(registro, items)
         validate_submit_prerequisites(
             registro,
             items=items,
@@ -2476,6 +2479,7 @@ def ventas_factura_venta_submit(invoice_id: str):
         items = (
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
         )
+        _validate_sales_items_eligible(registro, items)
         validate_submit_prerequisites(
             registro,
             items=items,

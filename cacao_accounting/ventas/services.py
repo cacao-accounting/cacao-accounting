@@ -169,6 +169,23 @@ def _require_sale_item(item_code: str) -> Item:
     return item
 
 
+def _validate_sales_items_eligible(document: Any, items: Sequence[Any]) -> None:
+    """Exige artículos activos y vendibles al aprobar una venta ordinaria.
+
+    Las devoluciones y notas de crédito/débito pueden referirse a una venta
+    histórica cuyo artículo se deshabilitó después; su tratamiento se rige por
+    la reversión del documento origen y no por la elegibilidad actual.
+    """
+    if getattr(document, "is_return", False) or getattr(document, "document_type", "") in {
+        "sales_credit_note",
+        "sales_return",
+        "sales_debit_note",
+    }:
+        return
+    for item in items:
+        _require_sale_item(item.item_code)
+
+
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
 VENTAS_CLIENTE_NUEVO_TEMPLATE = "ventas/cliente_nuevo.html"
