@@ -136,7 +136,7 @@ QA1, QA2, QA3 o al administrador.
 | #2172 importación bancaria concurrente sin duplicados | Implementado con regresión | `365f92ab` | `tests/test_bank_statement_import_concurrency.py` (PostgreSQL); lock por cuenta y detección bajo el mismo turno |
 | #2200 precisión configurable de importes en servidor y formulario | Implementado con regresión | `6e377747` | `tests/test_currency_precision_formatting.py`, `transaction-form.test.js`; mapa de precisión por request y moneda transaccional |
 | #2196 niveles expandidos del árbol financiero | Verificado con regresión | `ef321bb4` | `cacao_accounting/static/test/financial-report-tree.test.js`; tres niveles y estado de cada control |
-| #2145/#2157/#2199 breadcrumb localizado, frecuencia traducida y enlace de chat | Implementado con regresión | `01b9b237` | `tests/test_ui_navigation_labels.py`, `tests/test_recurring_template_list_render.py`; lista y detalle muestran Mensual/Semanal/Diario |
+| #2145/#2157/#2199 breadcrumb localizado, frecuencia traducida y enlace de chat | Implementado con regresión | `01b9b237`, `7f98ad8f` | `tests/test_ui_navigation_labels.py`, `tests/test_recurring_template_list_render.py`; `Diaria` traduce a `Daily` en lista, detalle y selector sin heredar `Journal` |
 | #2203/#2204 retiro de `transaction_form_js` y macros con consumidor | Implementado con regresión | `752486f1` | `tests/test_transaction_form_macros_consumers.py`; el resto de macros conserva consumidores reales |
 | #2151 cierre fiscal con clasificaciones de catálogo en mayúscula | Implementado con regresión | `09b4b158` | `tests/test_fiscal_year_closing_classification_case.py`; `Income`, `Expense`, `Cost` y minúsculas |
 | #2144 enlace de tipos de proveedor alineado con administración global | Implementado con regresión | `51f48cc1` | `tests/test_purchases_supplier_group_link.py`; usuario con `purchases.configurar` sin acceso admin |
@@ -163,8 +163,8 @@ QA1, QA2, QA3 o al administrador.
 | #2194 libro inexistente, inactivo o ajeno rechazado | Ya implementado y cubierto | `b778ee89` | `tests/test_financial_report_ledger_validation.py`; 400 en lugar de reporte vacío |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1080 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1074 passed, 102 skipped**; 0 fallos (HEAD `79cbdb16`).
+**Última suite completa:** Cloud **1081 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1075 passed, 102 skipped**; 0 fallos (HEAD `7f98ad8f`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
