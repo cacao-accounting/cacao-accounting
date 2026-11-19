@@ -134,6 +134,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_audit_trail_hash_version_column()
             _ensure_file_sha256_column()
             _ensure_monthly_close_run_unique_constraint()
+            _ensure_bank_transaction_identity_unique()
             _ensure_cacao_config_key_unique()
             _ensure_document_flow_lock_table()
             _ensure_roles_user_unique()
@@ -1028,6 +1029,40 @@ def _create_monthly_close_unique_guard(connection: Connection) -> None:
         bind=connection,
         checkfirst=False,
     )
+
+
+def _ensure_bank_transaction_identity_unique() -> None:
+    """Instala la unicidad de ``bank_transaction.identity_key`` en bases previas.
+
+    Las bases nuevas reciben el constraint desde el modelo. Las existentes
+    reciben un índice único equivalente; si ya contienen identidades repetidas,
+    la actualización falla de forma explícita y conserva las filas para revisión
+    humana, porque dos movimientos con la misma identidad son evidencia
+    ambigua y no se consolidan automáticamente.
+    """
+    from cacao_accounting.database import BankTransaction
+
+    _ensure_unique_index(
+        table=BankTransaction.__table__,
+        index_name="uq_bank_transaction_identity",
+        column_names=("identity_key",),
+        deduplicate=_reject_duplicate_bank_transaction_identities,
+    )
+
+
+def _reject_duplicate_bank_transaction_identities(connection: Connection, table, column_names: tuple[str, ...]) -> None:
+    """Bloquea la migración si existen identidades bancarias repetidas."""
+    duplicate = connection.execute(
+        select(table.c.identity_key, func.count()).group_by(table.c.identity_key).having(func.count() > 1).limit(1)
+    ).first()
+    if duplicate is not None:
+        raise RuntimeError(
+            _(
+                "No se puede aplicar la unicidad de movimientos bancarios: la identidad "
+                "%(identity)s se repite. Los registros existentes se conservaron."
+            )
+            % {"identity": duplicate.identity_key}
+        )
 
 
 def _ensure_user_auth_version_column() -> None:

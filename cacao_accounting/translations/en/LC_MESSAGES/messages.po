@@ -17831,6 +17831,13 @@ msgstr ""
 "Monthly close uniqueness cannot be applied: multiple runs exist for company %(company)s and period %(period)s. Existing "
 "records were preserved."
 
+#: cacao_accounting/database/helpers.py:1070
+#, python-format
+msgid ""
+"No se puede aplicar la unicidad de movimientos bancarios: la identidad %(identity)s se repite. Los registros existentes se conservaron."
+msgstr ""
+"Bank movement uniqueness cannot be applied: identity %(identity)s is repeated. Existing records were preserved."
+
 #: cacao_accounting/datos/dev/__init__.py:203
 msgid "El usuario administrador de demostración no existe."
 msgstr "The demo administrator user does not exist."
