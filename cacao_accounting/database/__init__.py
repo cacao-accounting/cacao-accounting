@@ -2359,7 +2359,12 @@ class PurchaseQuotationAwardItem(database.Model):  # type: ignore[name-defined]
         database.ForeignKey(SUPPLIER_QUOTATION_ITEM_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
     )
-    item_code = database.Column(database.String(50), nullable=False, index=True)
+    item_code = database.Column(
+        database.String(50),
+        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
     rate = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
@@ -5842,6 +5847,7 @@ def _item_has_usage(connection, item_code: str) -> bool:
         SalesOrderItem.__table__,
         DeliveryNoteItem.__table__,
         SalesInvoiceItem.__table__,
+        PurchaseQuotationAwardItem.__table__,
     )
     for table in usage_tables:
         if "item_code" not in table.c:
@@ -5878,7 +5884,10 @@ def _lock_item_delete_after_usage(_mapper, connection, target) -> None:
     """Impide eliminar físicamente un item si ya tiene uso transaccional."""
     from cacao_accounting.exceptions import IntegrityError
 
-    if target.code and _has_restricting_foreign_key_reference(connection, Item.__table__.c.code, str(target.code)):
+    if target.code and (
+        _item_has_usage(connection, str(target.code))
+        or _has_restricting_foreign_key_reference(connection, Item.__table__.c.code, str(target.code))
+    ):
         raise IntegrityError(
             _(
                 "El artículo cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
