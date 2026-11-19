@@ -324,3 +324,31 @@ def test_expiracion_no_reemplaza_respuesta_terminal(terminal_status):
         with application.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_claim_confirmation_delivery_rejects_a_concurrent_response():
+    """The CAS claim fails when another request changed the confirmation."""
+    application, confirmation_id, _invitation_ids, _old_tokens, _status, _sent_at = _crear_app("sent", True)
+    try:
+        route_module = import_module("cacao_accounting.contabilidad.balance_confirmation_bp")
+        with application.app_context():
+            confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+            assert confirmation is not None
+            assert route_module._claim_confirmation_delivery(confirmation, ("sent", "viewed")) is True
+            database.session.rollback()
+
+            confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+            assert confirmation is not None
+            database.session.execute(
+                database.update(BalanceConfirmation)
+                .where(BalanceConfirmation.id == confirmation_id)
+                .values(status="confirmed")
+            )
+            database.session.commit()
+            database.session.expire_all()
+
+            assert route_module._claim_confirmation_delivery(confirmation, ("sent", "viewed")) is False
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
