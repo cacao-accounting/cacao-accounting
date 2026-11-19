@@ -1672,6 +1672,8 @@ def _warn_duplicate_payment(payment):
     el registro del pago. El usuario decide si confirma o cancela.
     """
     payment_type = str(payment.payment_type or "").lower()
+    if payment_type == "internal_transfer":
+        return
     is_outflow = payment_type in {"pay", "debit_note"}
     amount_column = PaymentEntry.paid_amount if is_outflow else PaymentEntry.received_amount
     amount = payment.paid_amount if is_outflow else payment.received_amount
