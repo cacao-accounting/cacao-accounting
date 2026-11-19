@@ -702,6 +702,14 @@ def create_purchase_orders_from_comparison(
 ) -> list[PurchaseOrder]:
     """Create one draft purchase order per supplier from a finalized comparison."""
     lock_document_flow_document("purchase_request_comparison", str(comparison.id))
+    locked_comparison = database.session.execute(
+        database.select(PurchaseRequestComparison)
+        .where(PurchaseRequestComparison.id == comparison.id)
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if locked_comparison is None:
+        raise ValueError(_("El comparativo no existe."))
+    comparison = locked_comparison
     purchase_request = _comparison_purchase_request_or_raise(comparison)
     lines = _comparison_selected_lines(comparison)
     grouped, quotations_by_group = _group_comparison_lines(lines, comparison)
