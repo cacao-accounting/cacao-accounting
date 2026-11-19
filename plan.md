@@ -325,7 +325,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1139 | #1653 | Implementación (`needs-work`) | fix: serializa asignaciones de factura a recepción |
 | #1144 | #1653 | ✅ Implementado; regresión local en `0e3f790b` (etiqueta sin cambio) | fix: valida claves duplicadas en planes AR/AP |
 | #1148 | #1653 | QA2 aprobó; QA3/administrador: `fixed` o retorno a `needs-work` | fix: crea reversos de diarios de forma atómica |
-| #1160 | #1653 | Implementación (`needs-work`) | Evita revalorizaciones duplicadas concurrentes |
+| #1160 | #1653 | ✅ Implementado; lock en `49fbd08d`, regresión en `14819dd9` (etiqueta sin cambio) | Dos corridas concurrentes dejan una sola `posted`; una segunda corrida anula la anterior y conserva un único ajuste activo |
 | #1177 | #1653 | Implementación (`needs-work`) | Revisa estado de serie al cancelar entradas |
 | #1178 | #1653 | Implementación (`needs-work`) | Serializa la salida concurrente del mismo serial |
 | #1187 | #1653 | ✅ Implementado; fix en `103601f6`, regresión concurrente (etiqueta sin cambio) | Reserva de escritor SQLite y lock del vale; dos liquidaciones producen un solo gasto y un solo asiento |
