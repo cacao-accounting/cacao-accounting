@@ -562,11 +562,36 @@ def _allow_new_line_under_posted_parent(session: Session, target: Any, parent: A
     """Allow only append-only references or same-transaction posted lines."""
     if _is_posted_advance_reference(target, parent):
         return True
-    if getattr(target, "is_reversal", False) and getattr(target, "reversal_of", None):
+    if getattr(target, "is_reversal", False) and _is_valid_reversal_line(session, target, parent):
         # Un contraasiento nuevo no reescribe evidencia: revierte una línea
-        # posteada y queda enlazado por `reversal_of`.
+        # posteada del mismo documento y queda enlazado por `reversal_of`.
         return True
     return _posted_in_current_transaction(session, parent) and target.__table__.name != "payment_reference"
+
+
+def _is_valid_reversal_line(session: Session, target: Any, parent: Any) -> bool:
+    """Validate that a new reversal points to an unreversed line of this parent."""
+    reversal_id = getattr(target, "reversal_of", None)
+    if not reversal_id:
+        return False
+    original = session.get(type(target), reversal_id)
+    if original is None:
+        return False
+    parent_id = str(getattr(parent, "id", ""))
+    same_parent = any(
+        parent_class is type(parent) and str(parent_pk) == parent_id for parent_class, parent_pk in _line_parents(original)
+    )
+    if not same_parent:
+        return False
+    for pending in session.new:
+        if pending is target or type(pending) is not type(target):
+            continue
+        if str(getattr(pending, "reversal_of", "")) == str(reversal_id):
+            return False
+    existing = (
+        session.connection().execute(select(type(target).id).where(type(target).reversal_of == reversal_id).limit(1)).first()
+    )
+    return existing is None
 
 
 def _guard_new_lines(session: Session) -> None:

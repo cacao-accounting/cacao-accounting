@@ -376,3 +376,96 @@ def test_fallo_de_identificador_revierte_la_corrida(business_app, monkeypatch):
             ).first()
             is None
         )
+
+
+def test_contraasiento_no_puede_revertir_una_linea_ajena(business_app):
+    """La exención de reverso exige una línea del mismo documento padre."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        period_id = _sembrar_exposicion_bancaria(company)
+        usuario_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        corrida = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=usuario_id)
+        modelo = database.session.execute(
+            database.select(GLEntry).filter_by(voucher_type="exchange_revaluation", voucher_id=str(corrida.id)).limit(1)
+        ).scalar_one()
+        ajeno = GLEntry(
+            company=company,
+            ledger_id=modelo.ledger_id,
+            account_id=modelo.account_id,
+            voucher_type="sales_invoice",
+            voucher_id=f"FACT-{uuid4().hex[:8]}",
+            posting_date=modelo.posting_date,
+            debit=Decimal("1"),
+            credit=Decimal("0"),
+        )
+        database.session.add(ajeno)
+        database.session.commit()
+
+        con_reverso_ajeno = GLEntry(
+            company=company,
+            ledger_id=modelo.ledger_id,
+            account_id=modelo.account_id,
+            voucher_type="exchange_revaluation",
+            voucher_id=str(corrida.id),
+            exchange_revaluation_run_id=str(corrida.id),
+            posting_date=modelo.posting_date,
+            debit=Decimal("0"),
+            credit=Decimal("1"),
+            is_reversal=True,
+            reversal_of=ajeno.id,
+        )
+        database.session.add(con_reverso_ajeno)
+        with pytest.raises(ValueError, match="Los datos financieros posteados son inmutables"):
+            database.session.flush()
+        database.session.rollback()
+
+        inexistente = GLEntry(
+            company=company,
+            ledger_id=modelo.ledger_id,
+            account_id=modelo.account_id,
+            voucher_type="exchange_revaluation",
+            voucher_id=str(corrida.id),
+            exchange_revaluation_run_id=str(corrida.id),
+            posting_date=modelo.posting_date,
+            debit=Decimal("0"),
+            credit=Decimal("1"),
+            is_reversal=True,
+            reversal_of=f"NO-EXISTE-{uuid4().hex[:8]}",
+        )
+        database.session.add(inexistente)
+        with pytest.raises(ValueError, match="Los datos financieros posteados son inmutables"):
+            database.session.flush()
+        database.session.rollback()
+
+
+def test_no_se_puede_revertir_dos_veces_la_misma_linea(business_app):
+    """Una línea ya revertida no admite un segundo contraasiento."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        period_id = _sembrar_exposicion_bancaria(company)
+        usuario_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        corrida = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=usuario_id)
+        original = database.session.execute(
+            database.select(GLEntry)
+            .filter_by(voucher_type="exchange_revaluation", voucher_id=str(corrida.id), is_cancelled=False)
+            .limit(1)
+        ).scalar_one()
+        ExchangeRevaluationService().void(run_id=str(corrida.id), user_id=usuario_id, reason="Primera anulación")
+
+        segundo_reverso = GLEntry(
+            company=company,
+            ledger_id=original.ledger_id,
+            account_id=original.account_id,
+            voucher_type="exchange_revaluation",
+            voucher_id=str(corrida.id),
+            exchange_revaluation_run_id=str(corrida.id),
+            posting_date=original.posting_date,
+            debit=Decimal("0"),
+            credit=Decimal("1"),
+            is_reversal=True,
+            reversal_of=original.id,
+        )
+        database.session.add(segundo_reverso)
+        with pytest.raises(ValueError, match="Los datos financieros posteados son inmutables"):
+            database.session.flush()
+        database.session.rollback()
