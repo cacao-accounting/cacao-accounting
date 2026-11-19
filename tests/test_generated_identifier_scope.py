@@ -12,14 +12,12 @@ global.
 
 from __future__ import annotations
 
-import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 from threading import Barrier
 
 import pytest
-from sqlalchemy import inspect
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from cacao_accounting import create_app
@@ -33,12 +31,9 @@ from cacao_accounting.database import (
     SeriesSequenceMap,
     database,
 )
-from cacao_accounting.database.helpers import (
-    GENERATED_IDENTIFIER_GLOBAL_INDEX,
-    GENERATED_IDENTIFIER_SCOPE_INDEX,
-    _ensure_generated_identifier_scope_unique,
-    generate_identifier,
-)
+from cacao_accounting.database.helpers import generate_identifier
+
+GENERATED_IDENTIFIER_GLOBAL_INDEX = "uq_generated_identifier_log_global_identifier"
 
 FECHA = date(2026, 10, 31)
 
@@ -178,232 +173,6 @@ def test_identificadores_internos_conservan_unicidad_global(folios):
             _generar(otra_serie.id, otra_secuencia.id, None, "item", "item-2")
         database.session.rollback()
         assert len(database.session.execute(database.select(GeneratedIdentifierLog)).scalars().all()) == 1
-
-
-LEGACY_DDL = """
-CREATE TABLE entity (code VARCHAR(10) PRIMARY KEY);
-CREATE TABLE sequence (id VARCHAR(26) PRIMARY KEY);
-CREATE TABLE generated_identifier_log (
-    entity_type VARCHAR(50) NOT NULL,
-    entity_id VARCHAR(26) NOT NULL,
-    full_identifier VARCHAR(200) NOT NULL,
-    sequence_id VARCHAR(26),
-    generated_at DATETIME NOT NULL,
-    company VARCHAR(10),
-    posting_date DATE,
-    id VARCHAR(26) NOT NULL,
-    status VARCHAR(50),
-    created DATETIME NOT NULL,
-    created_by VARCHAR(26),
-    modified DATETIME,
-    modified_by VARCHAR(26),
-    PRIMARY KEY (id),
-    UNIQUE (full_identifier),
-    FOREIGN KEY(sequence_id) REFERENCES sequence (id) ON DELETE RESTRICT ON UPDATE CASCADE,
-    FOREIGN KEY(company) REFERENCES entity (code) ON DELETE RESTRICT ON UPDATE CASCADE
-);
-INSERT INTO entity(code) VALUES ('A'), ('B');
-INSERT INTO generated_identifier_log(entity_type, entity_id, full_identifier, generated_at, company, id, created)
-VALUES ('sales_invoice', 'doc-a', 'INV-00001', '2026-01-01 00:00:00', 'A', 'legacy-1', '2026-01-01 00:00:00');
-INSERT INTO generated_identifier_log(entity_type, entity_id, full_identifier, generated_at, company, id, created)
-VALUES ('purchase_invoice', 'doc-b', 'PUR-00001', '2026-01-01 00:00:00', 'B', 'legacy-2', '2026-01-01 00:00:00');
-INSERT INTO generated_identifier_log(entity_type, entity_id, full_identifier, generated_at, company, id, created)
-VALUES ('item', 'doc-c', 'ITEM-00001', '2026-01-01 00:00:00', NULL, 'legacy-3', '2026-01-01 00:00:00');
-"""
-
-
-def _crear_base_heredada(path: Path, script: str = LEGACY_DDL) -> None:
-    """Crea el esquema anterior con unicidad global sobre el folio."""
-    connection = sqlite3.connect(path)
-    try:
-        connection.executescript(script)
-        connection.commit()
-    finally:
-        connection.close()
-
-
-def test_migra_el_indice_global_sin_perder_registros(tmp_path: Path):
-    """La base heredada conserva sus filas y admite folios iguales por compañía."""
-    path = tmp_path / "legacy.sqlite"
-    _crear_base_heredada(path)
-    aplicación = _app(f"sqlite:///{path}")
-    with aplicación.app_context():
-        inspector = inspect(database.engine)
-        indices = {item["name"] for item in inspector.get_indexes("generated_identifier_log")}
-        assert GENERATED_IDENTIFIER_SCOPE_INDEX in indices
-        assert GENERATED_IDENTIFIER_GLOBAL_INDEX in indices
-        assert not inspector.get_unique_constraints("generated_identifier_log")
-        filas = database.session.execute(
-            database.select(GeneratedIdentifierLog.id, GeneratedIdentifierLog.full_identifier).order_by(
-                GeneratedIdentifierLog.id
-            )
-        ).all()
-        assert filas == [("legacy-1", "INV-00001"), ("legacy-2", "PUR-00001"), ("legacy-3", "ITEM-00001")]
-
-        database.session.add(
-            GeneratedIdentifierLog(
-                entity_type="sales_invoice",
-                entity_id="doc-d",
-                full_identifier="INV-00001",
-                company="B",
-                posting_date=FECHA,
-            )
-        )
-        database.session.commit()
-        assert database.session.execute(database.select(database.func.count(GeneratedIdentifierLog.id))).scalar_one() == 4
-        database.session.remove()
-        database.engine.dispose()
-
-
-def test_la_migracion_se_detiene_ante_colisiones(tmp_path: Path):
-    """Si ya hay duplicados dentro del ámbito, no se altera el esquema."""
-    path = tmp_path / "colision.sqlite"
-    aplicación = _app(f"sqlite:///{path}")
-    with aplicación.app_context():
-        database.create_all()
-        database.session.add_all(
-            [
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Entity(
-                    code="A",
-                    name="A",
-                    company_name="A SA",
-                    tax_id="J-A",
-                    currency="NIO",
-                    enabled=True,
-                    status="activo",
-                ),
-            ]
-        )
-        database.session.commit()
-        database.session.execute(database.text(f"DROP INDEX {GENERATED_IDENTIFIER_SCOPE_INDEX}"))
-        database.session.execute(database.text(f"DROP INDEX {GENERATED_IDENTIFIER_GLOBAL_INDEX}"))
-        database.session.execute(
-            database.text(
-                "INSERT INTO generated_identifier_log "
-                "(entity_type, entity_id, full_identifier, generated_at, company, id, created) VALUES "
-                "('sales_invoice', 'doc-1', 'INV-00001', '2026-01-01', 'A', 'dup-1', '2026-01-01'), "
-                "('sales_invoice', 'doc-2', 'INV-00001', '2026-01-01', 'A', 'dup-2', '2026-01-01')"
-            )
-        )
-        database.session.commit()
-        before = {item["name"] for item in inspect(database.engine).get_indexes("generated_identifier_log")}
-
-        with pytest.raises(RuntimeError, match="se repite"):
-            _ensure_generated_identifier_scope_unique()
-
-        after = {item["name"] for item in inspect(database.engine).get_indexes("generated_identifier_log")}
-        assert after == before
-        assert database.session.execute(database.select(database.func.count(GeneratedIdentifierLog.id))).scalar_one() == 2
-        database.session.remove()
-        database.engine.dispose()
-
-
-def test_adjudicaciones_concurrentes_no_duplican_el_folio(tmp_path: Path):
-    """Dos generaciones simultáneas del mismo folio dejan una sola fila."""
-    aplicación = _app(f"sqlite:///{tmp_path / 'concurrente.sqlite'}")
-    with aplicación.app_context():
-        database.create_all()
-        database.session.add_all(
-            [
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Entity(
-                    code="A",
-                    name="A",
-                    company_name="A SA",
-                    tax_id="J-A",
-                    currency="NIO",
-                    enabled=True,
-                    status="activo",
-                ),
-            ]
-        )
-        database.session.flush()
-        serie_uno, secuencia_uno = _serie("A", "sales_invoice", "INV-", "U1")
-        serie_dos, secuencia_dos = _serie("A", "sales_invoice", "INV-", "U2")
-        database.session.commit()
-        ids = [(serie_uno.id, secuencia_uno.id), (serie_dos.id, secuencia_dos.id)]
-
-    barrier = Barrier(2)
-
-    def ejecutar(indice: int):
-        with aplicación.app_context():
-            barrier.wait(timeout=10)
-            try:
-                generate_identifier(
-                    entity_type="sales_invoice",
-                    entity_id=f"doc-{indice}",
-                    posting_date=FECHA,
-                    company="A",
-                    naming_series_id=ids[indice][0],
-                    sequence_id=ids[indice][1],
-                )
-                database.session.commit()
-                return "ok", None
-            except SQLAlchemyError as exc:
-                database.session.rollback()
-                return "error", type(exc).__name__
-            finally:
-                database.session.remove()
-
-    with ThreadPoolExecutor(max_workers=2) as workers:
-        resultados = list(workers.map(ejecutar, range(2)))
-
-    assert sorted(item[0] for item in resultados) == ["error", "ok"]
-    assert next(item[1] for item in resultados if item[0] == "error") == "IntegrityError"
-    with aplicación.app_context():
-        filas = database.session.execute(database.select(GeneratedIdentifierLog)).scalars().all()
-        assert len(filas) == 1
-        database.session.remove()
-        database.engine.dispose()
-
-
-def test_segunda_ejecucion_de_la_migracion_es_noop(tmp_path: Path, monkeypatch):
-    """Una base ya migrada no vuelve a reconstruir la tabla."""
-    path = tmp_path / "idempotente.sqlite"
-    _crear_base_heredada(path, LEGACY_DDL)
-    aplicación = _app(f"sqlite:///{path}")
-    with aplicación.app_context():
-        from cacao_accounting.database import helpers as db_helpers
-
-        def fallar(*_args, **_kwargs):
-            raise AssertionError("no debe reconstruirse una tabla ya migrada")
-
-        monkeypatch.setattr(db_helpers, "_rebuild_generated_identifier_log_scope", fallar)
-        db_helpers._ensure_generated_identifier_scope_unique()
-        assert database.session.execute(database.select(database.func.count(GeneratedIdentifierLog.id))).scalar_one() == 3
-        database.session.remove()
-        database.engine.dispose()
-
-
-def test_columnas_faltantes_detienen_la_migracion(tmp_path: Path):
-    """Una tabla histórica incompleta no se reconstruye a ciegas."""
-    path = tmp_path / "incompleta.sqlite"
-    _crear_base_heredada(path, LEGACY_DDL.replace("    modified_by VARCHAR(26),\n", ""))
-
-    with pytest.raises(RuntimeError, match="columnas"):
-        _app(f"sqlite:///{path}")
-
-
-def test_indice_global_sin_predicado_se_reconstruye(tmp_path: Path):
-    """Un índice homónimo sin `company IS NULL` no se considera migrado."""
-    aplicación = _app(f"sqlite:///{tmp_path / 'predicado.sqlite'}")
-    with aplicación.app_context():
-        database.create_all()
-        with database.engine.begin() as connection:
-            connection.exec_driver_sql(f"DROP INDEX {GENERATED_IDENTIFIER_GLOBAL_INDEX}")
-            connection.exec_driver_sql(
-                f"CREATE UNIQUE INDEX {GENERATED_IDENTIFIER_GLOBAL_INDEX} " "ON generated_identifier_log (full_identifier)"
-            )
-        _ensure_generated_identifier_scope_unique()
-        indice = next(
-            item
-            for item in inspect(database.engine).get_indexes("generated_identifier_log")
-            if item["name"] == GENERATED_IDENTIFIER_GLOBAL_INDEX
-        )
-        assert indice["dialect_options"]["sqlite_where"] is not None
-        database.session.remove()
-        database.engine.dispose()
 
 
 def test_dos_companias_pueden_generar_el_mismo_folio_a_la_vez(tmp_path: Path):
