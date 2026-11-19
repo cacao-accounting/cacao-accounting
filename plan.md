@@ -182,10 +182,11 @@ QA1, QA2, QA3 o al administrador.
 | #2124 artículos vendibles al crear y aprobar ventas | Implementado con regresión | `972989df`, `34b83a66` | `tests/test_sale_item_eligibility.py`; alta y submit rechazan artículo inactivo o sin rol, con devoluciones exentas |
 | #2130 configuración fiscal y de compañía de terceros | Implementado; regresión restaurada | `0bd953ad`, `f78cd14f` | `tests/test_party_company_settings_validation.py`, `tests/test_party_tax_id_validation.py`; plantillas, reglas, campos extendidos, cuentas duales, vínculo activo y `tax_id` único |
 | #2128 endurecimiento de la confirmación pública de saldos | Implementado con regresión | `61061916` | `tests/test_balance_confirmation_attempts.py`; Unicode, límites de columnas, estados, no-store y `responded_at` nulo |
+| #2129 condición de secuencia respetada | Implementado con regresión | `59b6b2b3` | `tests/test_naming_series_sequence_condition.py`; banco A/B, fallback y serie sin mapeos |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1143 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1137 passed, 102 skipped**; 0 fallos (HEAD `61061916`).
+**Última suite completa:** Cloud **1146 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1140 passed, 102 skipped**; 0 fallos (HEAD `59b6b2b3`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
