@@ -23848,3 +23848,11 @@ msgstr "The estimated date must be within the fiscal year (%(start)s to %(end)s)
 #: cacao_accounting/bancos/cash_forecast_service.py cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html
 msgid "Hay %(count)s proyecciones fuera del año fiscal; corríjalas manualmente."
 msgstr "There are %(count)s projections outside the fiscal year; correct them manually."
+
+#: cacao_accounting/ventas/routes.py
+msgid "El tercero no está habilitado para la compañía seleccionada."
+msgstr "The party is not enabled for the selected company."
+
+#: cacao_accounting/ventas/routes.py cacao_accounting/ventas/services.py
+msgid "El cliente debe coincidir con el documento origen."
+msgstr "The customer must match the source document."

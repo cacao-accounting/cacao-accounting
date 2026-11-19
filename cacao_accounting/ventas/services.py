@@ -153,6 +153,23 @@ def _validated_customer(customer_id: str | None) -> Party | None:
     return customer
 
 
+def _validated_delivery_customer(customer_id: str | None, company: str | None) -> Party | None:
+    """Valida cliente activo, con rol y vínculo vigente en la compañía."""
+    if not customer_id:
+        return None
+    customer = database.session.get(Party, customer_id)
+    if customer is None:
+        raise ValueError(_("El tercero no existe."))
+    if not customer.is_active or not customer.is_customer:
+        raise ValueError(_("El tercero seleccionado no está habilitado como cliente."))
+    membership = database.session.execute(
+        database.select(CompanyParty.id).filter_by(party_id=customer_id, company=company, is_active=True)
+    ).first()
+    if membership is None:
+        raise ValueError(_("El tercero no está habilitado para la compañía seleccionada."))
+    return customer
+
+
 def _require_positive_qty(item_code: str, qty: Decimal) -> None:
     """Rechaza cantidades no positivas antes de persistir una línea de venta."""
     if qty <= 0:
@@ -2092,7 +2109,12 @@ def _handle_delivery_note_edit_post(registro):
     revert_relations_for_target("delivery_note", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("delivery_note", registro.id)
     customer_id = request.form.get("customer_id") or None
-    customer = database.session.get(Party, customer_id) if customer_id else None
+    try:
+        customer = _validated_delivery_customer(customer_id, registro.company)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
     requested_company = request.form.get("company") or registro.company

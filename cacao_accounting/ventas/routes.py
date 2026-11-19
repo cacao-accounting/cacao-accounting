@@ -124,6 +124,7 @@ from cacao_accounting.ventas.services import (
     _validate_sales_invoice_quantities,
     _validate_sales_invoice_line_amounts,
     _validate_sales_items_eligible,
+    _validated_delivery_customer,
     _validate_sales_source_link,
     _validate_sales_order_requirement,
     _validated_customer,
@@ -355,8 +356,11 @@ def _handle_delivery_note_new_post() -> ResponseReturnValue:
         request.form.get("currency") or request.form.get("transaction_currency") or None,
     )
     exige_acceso_compania("sales", company, "crear")
-    customer_id = customer_id or getattr(source, "customer_id", None)
-    customer = database.session.get(Party, customer_id) if customer_id else None
+    source_customer_id = getattr(source, "customer_id", None)
+    if source_customer_id and customer_id and customer_id != source_customer_id:
+        raise ValueError(_("El cliente debe coincidir con el documento origen."))
+    customer_id = customer_id or source_customer_id
+    customer = _validated_delivery_customer(customer_id, company)
     entrega = DeliveryNote(
         customer_id=customer_id,
         customer_name=customer.name if customer else None,

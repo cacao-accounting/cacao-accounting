@@ -22,6 +22,7 @@ from cacao_accounting.database import (
     AccountingPeriod,
     Book,
     CompanyDefaultAccount,
+    CompanyParty,
     Currency,
     Entity,
     ExchangeRate,
@@ -439,6 +440,14 @@ def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
         if supplier is None:
             supplier = Party(code="PRV001", name="Proveedor Principal SA", is_supplier=True, tax_id="J0003")
             database.session.add(supplier)
+
+        database.session.flush()
+        for party, active in ((customer, True), (supplier, True)):
+            link = database.session.execute(
+                select(CompanyParty).filter_by(company="cacao", party_id=party.id)
+            ).scalar_one_or_none()
+            if link is None:
+                database.session.add(CompanyParty(company="cacao", party_id=party.id, is_active=active))
 
         warehouse = database.session.execute(select(Warehouse).filter_by(code="BOD01")).scalar_one_or_none()
         if warehouse is None:
