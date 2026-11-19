@@ -114,6 +114,10 @@ MUTABLE_STATE = frozenset(
         "cancelled_at",
         "cancelled_by",
         "cancel_reason",
+        "voided_at",
+        "voided_by",
+        "void_reason",
+        "reversal_journal_id",
         "is_cancelled",
         "outstanding_amount",
         "base_outstanding_amount",
@@ -542,6 +546,17 @@ def _guard_flow_evidence(target: Any, table: str, changed: set[str], deleted: bo
             raise ValueError(_("Una relación revertida no se reactiva; registre una relación nueva."))
 
 
+def _allow_new_line_under_posted_parent(session: Session, target: Any, parent: Any) -> bool:
+    """Allow only append-only references or same-transaction posted lines."""
+    if _is_posted_advance_reference(target, parent):
+        return True
+    if getattr(target, "is_reversal", False) and getattr(target, "reversal_of", None):
+        # Un contraasiento nuevo no reescribe evidencia: revierte una línea
+        # posteada y queda enlazado por `reversal_of`.
+        return True
+    return _posted_in_current_transaction(session, parent) and target.__table__.name != "payment_reference"
+
+
 def _guard_new_lines(session: Session) -> None:
     """Reject additional documentary lines after their header is posted."""
     for target in session.new:
@@ -554,9 +569,7 @@ def _guard_new_lines(session: Session) -> None:
             if not _posted(parent):
                 _stamp_line_editor(parent)
                 continue
-            if _is_posted_advance_reference(target, parent):
-                continue
-            if _posted_in_current_transaction(session, parent) and target.__table__.name != "payment_reference":
+            if _allow_new_line_under_posted_parent(session, target, parent):
                 continue
             raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
 

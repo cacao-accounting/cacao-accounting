@@ -288,3 +288,91 @@ def test_corrida_posteada_sigue_siendo_inmutable_para_controles_internos(busines
         assert persistida is not None
         assert persistida.document_no == documento_original
         assert persistida.docstatus == 1
+
+
+def test_anulacion_de_revalorizacion_funciona_con_controles_activos(business_app):
+    """La transición auditada a anulada no choca con el guard de posteo."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        period_id = _sembrar_exposicion_bancaria(company)
+        usuario_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        corrida = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=usuario_id)
+        run_id = str(corrida.id)
+
+        anulada = ExchangeRevaluationService().void(run_id=run_id, user_id=usuario_id, reason="Prueba de anulación")
+
+        assert anulada.status == "voided"
+        assert anulada.docstatus == 2
+        assert anulada.voided_by == usuario_id
+        assert anulada.voided_at is not None
+        assert anulada.reversal_journal_id
+        activos = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=run_id,
+                    is_cancelled=False,
+                    is_reversal=False,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        reversos = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=run_id,
+                    is_cancelled=False,
+                    is_reversal=True,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert activos == []
+        assert len(reversos) == 2
+
+
+def test_segunda_corrida_anula_la_anterior_con_controles_activos(business_app):
+    """La reejecución anula la corrida posteada previa sin quedar bloqueada."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        period_id = _sembrar_exposicion_bancaria(company)
+        usuario_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        primera = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=usuario_id)
+        primera_id = str(primera.id)
+
+        segunda = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=usuario_id)
+
+        assert segunda.status == "posted"
+        assert segunda.docstatus == 1
+        anterior = database.session.get(ExchangeRevaluation, primera_id)
+        assert anterior is not None
+        assert anterior.status == "voided"
+        assert anterior.docstatus == 2
+
+
+def test_fallo_de_identificador_revierte_la_corrida(business_app, monkeypatch):
+    """Si falla la numeración, no queda corrida ni asiento parcial."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        period_id = _sembrar_exposicion_bancaria(company)
+        usuario_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+
+        def fail_identifier(_self, _run):
+            raise RuntimeError("fallo de numeración")
+
+        monkeypatch.setattr(ExchangeRevaluationService, "_assign_identifier", fail_identifier)
+        with pytest.raises(RuntimeError, match="fallo de numeración"):
+            ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=usuario_id)
+
+        assert database.session.execute(database.select(ExchangeRevaluation).filter_by(company=company)).first() is None
+        assert (
+            database.session.execute(
+                database.select(GLEntry).filter_by(company=company, voucher_type="exchange_revaluation")
+            ).first()
+            is None
+        )
