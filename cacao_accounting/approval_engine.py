@@ -712,8 +712,9 @@ class ApprovalEngine:
         elif doctype in {"purchase_invoice", "purchase_credit_note", "purchase_debit_note"}:
             ApprovalEngine._validate_purchase_submission(document)
         elif doctype == "purchase_receipt":
-            from cacao_accounting.compras import _validate_receipt_quantities_against_po
+            from cacao_accounting.compras import _lock_receipt_purchase_orders, _validate_receipt_quantities_against_po
 
+            _lock_receipt_purchase_orders(document.id, document.purchase_order_id, document.is_return)
             _validate_receipt_quantities_against_po(document.id)
 
     @staticmethod

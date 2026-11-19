@@ -86,6 +86,7 @@ from cacao_accounting.decorators import (  # noqa: F401
 
 from cacao_accounting.document_flow import (
     DocumentFlowError,
+    lock_document_flow_document,
     assert_relation_same_party,
     create_document_relation,
     get_target_line_source,
@@ -2029,6 +2030,22 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
             items=list(items),
         )
     return source
+
+
+def _lock_receipt_purchase_orders(receipt_id: str, purchase_order_id: str | None, is_return: bool = False) -> None:
+    """Serialize receipt approval against every purchase order it consumes."""
+    if is_return:
+        return
+    po_ids = {purchase_order_id} if purchase_order_id else set()
+    po_ids.update(
+        relation.source_id
+        for relation in database.session.execute(
+            database.select(DocumentRelation).filter_by(target_type="purchase_receipt", target_id=receipt_id, status="active")
+        ).scalars()
+        if relation.source_type == "purchase_order"
+    )
+    for po_id in sorted(filter(None, po_ids)):
+        lock_document_flow_document("purchase_order", po_id)
 
 
 def _validate_receipt_quantities_against_po(receipt_id: str) -> None:

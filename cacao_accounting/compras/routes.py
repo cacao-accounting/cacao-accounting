@@ -127,7 +127,6 @@ from cacao_accounting.document_flow import (
     assert_relation_same_party,
     get_target_line_source,
     get_create_actions,
-    lock_document_flow_document,
     refresh_source_caches_for_target,
     revert_relations_for_target,
     validate_submit_prerequisites,
@@ -211,6 +210,7 @@ from cacao_accounting.compras.services import (
     _set_purchase_document_totals,
     _set_purchase_receipt_totals,
     _validate_receipt_quantities_against_po,
+    _lock_receipt_purchase_orders,
     _validate_invoice_quantities_against_receipt,
     _validate_invoice_requires_supplier_link,
     _purchase_invoice_selected_company,
@@ -3000,19 +3000,7 @@ def compras_recepcion_submit(receipt_id: str):
             .scalars()
             .all()
         )
-        if not registro.is_return:
-            po_ids = {registro.purchase_order_id} if registro.purchase_order_id else set()
-            po_ids.update(
-                relation.source_id
-                for relation in database.session.execute(
-                    database.select(DocumentRelation).filter_by(
-                        target_type="purchase_receipt", target_id=receipt_id, status="active"
-                    )
-                ).scalars()
-                if relation.source_type == "purchase_order"
-            )
-            for purchase_order_id in sorted(filter(None, po_ids)):
-                lock_document_flow_document("purchase_order", purchase_order_id)
+        _lock_receipt_purchase_orders(receipt_id, registro.purchase_order_id, registro.is_return)
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         from cacao_accounting.inventario.service import validate_batch_serial_draft
 
