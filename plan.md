@@ -113,8 +113,8 @@ QA1, QA2, QA3 o al administrador.
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 | Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
 
-**Última suite completa:** Cloud **987 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **982 passed, 99 skipped**; 0 fallos (HEAD `e07b4fef`).
+**Última suite completa:** Cloud **990 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **985 passed, 99 skipped**; 0 fallos (HEAD `cd818b30`).
 **Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
 localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
 `needs-work` (reabierto o pendiente de revisión). El estado de GitHub es la fuente para el cierre.
@@ -328,7 +328,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1019 | #1649 | ✅ Implementado; regresión local en `38fd869f` (etiqueta sin cambio) | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
 | #1021 | #1649 | ✅ Implementado; regresión local en `03dfc484` (etiqueta sin cambio) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1104 | #1649 | ✅ Implementado; regresión local en `4d94544b` (etiqueta sin cambio) | Exige permiso de Caja al listar candidatos de pago |
-| #1110 | #1710 | ⚠️ Implementado; regresión local en `9032d7a4` (etiqueta sin cambio); GitHub: needs-work | fix: bloquea reenvíos de confirmación expirada |
+| #1110 | #1710 | ⚠️ Implementado; regresión local en `9032d7a4` + CAS concurrente en `cd818b30` (etiqueta sin cambio); GitHub: needs-work | fix: bloquea reenvíos de confirmación expirada |
 | #1120 | #1649 | ✅ Implementado; regresión local en `f995e0e0` (etiqueta sin cambio) | fix: limita el reporte de lotes a la compañía |
 | #1130 | #1649 | ✅ Implementado; regresión local en `c4b36226` (etiqueta sin cambio) | fix: valida libro de KPI contra su compañía |
 | #1169 | #1649 | ✅ Implementado; regresión local en `a87db51f` (etiqueta sin cambio) | Aplica alcance de compañía al listado de cierres |
@@ -350,11 +350,11 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1321 | #1649 | ✅ Implementado; regresión local en `b649bbdf` (etiqueta sin cambio) | Limita el catálogo de usuarios por compañía |
 | #1322 | #1649 | ✅ Implementado; regresión local en `d1979066` (etiqueta sin cambio) | Filtra gastos de reposición por compañía autorizada |
 | #1327 | #1649 | ✅ Implementado; regresión local en `dbaede68` (etiqueta sin cambio) | Exige permiso de módulo en catálogos del selector |
-| #1329 | #1649 | ⚠️ Implementado; regresión local en `ecac5587` (etiqueta sin cambio); GitHub: needs-work | Revoca tareas cuando se pierde acceso a la compañía |
+| #1329 | #1649 | ⚠️ Implementado; compañía real del documento en `3593b5ad` (etiqueta sin cambio); GitHub: needs-work | Revoca tareas cuando se pierde acceso a la compañía |
 | #1332 | #1649 | ✅ Implementado; regresión local en `ba3a7f08` (etiqueta sin cambio) | Alinea permisos de líneas en flujos de inventario |
 | #1338 | #1649 | ✅ Implementado; regresión local en `cbac6457` (etiqueta sin cambio) | Rechaza compañías deshabilitadas en query tools |
 | #1354 | #1710 | ⚠️ Implementado; regresión local en `de6f005c` (etiqueta sin cambio); GitHub: needs-work | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
-| #1355 | #1710 | ⚠️ Implementado; regresión local en `6ebf42a5` (etiqueta sin cambio); GitHub: needs-work | [Seguridad] Revoca accesos existentes al restablecer contraseña |
+| #1355 | #1710 | ⚠️ Implementado; `auth_version` obligatoria en `2beff9e0` (etiqueta sin cambio); GitHub: needs-work | [Seguridad] Revoca accesos existentes al restablecer contraseña |
 | #1357 | #1658 | ⚠️ Código retirado en `a93657fa`; `admin/services.py` sin `Blueprint` (etiqueta sin cambio); GitHub: needs-work | [Auditoría] Elimina el blueprint admin sin rutas |
 | #1388 | #1649 | ✅ Implementado; regresión local en `872008d3` (etiqueta sin cambio) | Valida el cliente al crear relaciones O2C por línea |
 | #1399 | #1649 | ✅ Implementado; regresión local en `1afff009` (etiqueta sin cambio) | Valida el tercero seleccionado en importación de pagos |
@@ -379,10 +379,10 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1543 | #1649 | ✅ Implementado; regresión local en `04b2e32b` (etiqueta sin cambio) | Filtro de compañía expone movimientos de inventario |
 | #1558 | #1649 | ✅ Implementado; regresión local en `7b7f1de0` (etiqueta sin cambio) | La portada expone períodos de compañías no autorizadas |
 | #1562 | #1649 | ✅ Implementado; regresión local en `5fbd7027` (etiqueta sin cambio) | El portal puede imprimir documentos de otra compañía |
-| #1572 | #1649 | ⚠️ Implementado; regresión local en `584253c4` (etiqueta sin cambio); GitHub: needs-work | Filtra tareas por el acceso vigente al documento |
+| #1572 | #1649 | ⚠️ Implementado; compañía real del documento en `3593b5ad` (etiqueta sin cambio); GitHub: needs-work | Filtra tareas por el acceso vigente al documento |
 | #1576 | #1658 | ✅ Implementado; regresión local en `353bee41` (etiqueta sin cambio) | Incluye validar_solicitud en los permisos calculados |
 | #1590 | #1649 | ✅ Implementado; regresión local en `b0d9003a` (etiqueta sin cambio) | Filtra lotes sin evidencia de la compañía en el reporte |
-| #1595 | #1649 | ⚠️ Implementado; regresión local en `8badc192` (etiqueta sin cambio); GitHub: needs-work | La bandeja de tareas muestra documentos tras revocar acceso |
+| #1595 | #1649 | ⚠️ Implementado; compañía real del documento en `3593b5ad` (etiqueta sin cambio); GitHub: needs-work | La bandeja de tareas muestra documentos tras revocar acceso |
 | #1598 | #1649 | ✅ Implementado; regresión local en `636a37b8` (etiqueta sin cambio) | El selector de tareas expone usuarios ajenos a la compañía |
 | #1600 | #1649 | ✅ Implementado; regresión local en `19610192` (etiqueta sin cambio) | El dashboard expone datos sin permiso de consulta |
 | #1601 | #1649 | ⚠️ Implementado; regresión local en `19610192` (etiqueta sin cambio); GitHub: needs-work | Rutas contables permiten crear sin permiso de acción |
