@@ -134,11 +134,12 @@ QA1, QA2, QA3 o al administrador.
 | N12/N16/N21 fixture aislado, evidencia con `is_cancelled` y grupo vacío de centros de costo | Implementado con regresión | `63b58c7f` | `tests/test_delivery_note_period_picker_scope.py`, `tests/test_ledger_cancellation_monotonic.py`, `tests/test_r2r_cost_center_hierarchy.py` |
 | N4 catálogo i18n regenerado, sin fuzzy ni msgstr vacíos | Implementado con regresión | `8df2209a` | `messages.po`/`messages.mo`; 25 cadenas nuevas y 75 fuzzy corregidas |
 | #2172 importación bancaria concurrente sin duplicados | Implementado con regresión | `365f92ab` | `tests/test_bank_statement_import_concurrency.py` (PostgreSQL); lock por cuenta y detección bajo el mismo turno |
+| #2200 precisión configurable de importes en servidor y formulario | Implementado con regresión | `6e377747` | `tests/test_currency_precision_formatting.py`, `transaction-form.test.js`; mapa de precisión por request y moneda transaccional |
 
-**Última suite completa:** Cloud **1040 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1035 passed, 101 skipped**; 0 fallos (HEAD `365f92ab`).
+**Última suite completa:** Cloud **1043 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1038 passed, 101 skipped**; 0 fallos (HEAD `6e377747`).
 Las pruebas concurrentes de #2188 y #2172 se ejecutaron además contra PostgreSQL con
-`CHECK_DATABASE=true`. La suite JavaScript quedó en 103 passing. La matriz completa
+`CHECK_DATABASE=true`. La suite JavaScript quedó en 104 passing. La matriz completa
 PostgreSQL/MySQL/Redis sigue pendiente de CI.
 **Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
 localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
