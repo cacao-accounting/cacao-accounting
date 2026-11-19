@@ -173,10 +173,12 @@ QA1, QA2, QA3 o al administrador.
 | Aislamiento de FK SQLite en pruebas | Corregido | `8e41e718` | `tests/test_item_delete_award_usage.py`; restaura `PRAGMA foreign_keys` para no contaminar el worker |
 | #2139 democión de cuentas padre con hijas | Implementado con regresión concurrente | `6cee9088` | `tests/test_account_group_demotion_guard.py`; lock por entidad en alta/edición, refresco del padre y guardia de descendientes |
 | #2135 adjudicación validada en órdenes manuales | Implementado; regresión restaurada | `e392d655`, `ad00c2e9`, `cba61952`, `b1369e61` | `tests/test_purchase_order_award_validation.py`; proveedor, origen, líneas y cantidades acumuladas en creación y edición |
+| #2134 UI de revalorización: filtro, estados, moneda e i18n | Implementado; regresión restaurada | `d54859f3`, `c847562a` | `tests/test_exchange_revaluation_ui.py`; estados reales, badges traducidos, totales con moneda y catálogo compilado |
+| #2133 presupuesto de compras en moneda del libro | Implementado con regresión | `cd0e531b` | `tests/test_purchase_base_amounts.py`; `base_amount` en orden, recepción y factura con la tasa del documento |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1108 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1102 passed, 102 skipped**; 0 fallos (HEAD `b1369e61`).
+**Última suite completa:** Cloud **1114 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1108 passed, 102 skipped**; 0 fallos (HEAD `cd0e531b`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
