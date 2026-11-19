@@ -87,11 +87,21 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
 
 
 def validate_template_balance(items: List[Dict[str, Any]]):
-    """Valida que la plantilla esté balanceada."""
+    """Valida que la plantilla esté balanceada y sin importes negativos (#2161)."""
     from decimal import Decimal
 
-    total_debit = sum(Decimal(str(i.get("debit", 0))) for i in items)
-    total_credit = sum(Decimal(str(i.get("credit", 0))) for i in items)
+    for index, item in enumerate(items, start=1):
+        debit = Decimal(str(item.get("debit", 0) or 0))
+        credit = Decimal(str(item.get("credit", 0) or 0))
+        if not debit.is_finite() or not credit.is_finite():
+            raise RecurringJournalError(_("Los importes de la plantilla deben ser números finitos."))
+        if debit < 0 or credit < 0:
+            raise RecurringJournalError(
+                _("La línea %(line)s de la plantilla no puede tener importes negativos.") % {"line": index}
+            )
+
+    total_debit = sum(Decimal(str(i.get("debit", 0) or 0)) for i in items)
+    total_credit = sum(Decimal(str(i.get("credit", 0) or 0)) for i in items)
 
     if total_debit != total_credit:
         raise RecurringJournalError(_("La plantilla debe estar balanceada (Débito != Crédito)."))

@@ -25652,3 +25652,11 @@ msgstr "Document flow locking is not supported by this database engine."
 #: cacao_accounting/imports/adapters/transaction_documents.py
 msgid "La fecha debe ser una fecha válida."
 msgstr "The date must be a valid date."
+
+#: cacao_accounting/contabilidad/recurring_journal_service.py
+msgid "Los importes de la plantilla deben ser números finitos."
+msgstr "Template amounts must be finite numbers."
+
+#: cacao_accounting/contabilidad/recurring_journal_service.py
+msgid "La línea %(line)s de la plantilla no puede tener importes negativos."
+msgstr "Template line %(line)s cannot have negative amounts."
