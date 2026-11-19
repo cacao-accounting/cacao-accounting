@@ -581,11 +581,23 @@ def _lock_hierarchy_companies(company_codes: set[str]) -> None:
         ).scalar_one_or_none()
 
 
+def _fetch_hierarchy_node_locked(node_class, node_id):
+    """Lee un nodo con bloqueo para no reutilizar un snapshot previo.
+
+    En MySQL ``REPEATABLE READ`` una lectura normal posterior al lock puede
+    seguir viendo el snapshot anterior al commit rival. Las lecturas de la
+    jerarquía usan ``FOR UPDATE`` para observar el estado confirmado.
+    """
+    return database.session.execute(
+        database.select(node_class).where(node_class.id == node_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+
+
 def _hierarchy_company_codes(node_class, node_id, entity: str) -> set[str]:
     """Resuelve las compañías cuyo ancla debe bloquearse antes de validar."""
     company_codes = {entity} if entity else set()
     if node_id:
-        current_node = database.session.get(node_class, node_id)
+        current_node = _fetch_hierarchy_node_locked(node_class, node_id)
         current_company = getattr(current_node, "entity", None) if current_node is not None else None
         if current_company:
             company_codes.add(str(current_company))
@@ -603,14 +615,14 @@ def check_hierarchy_cycle(node_class, node_id, proposed_parent_id, *, entity: st
 
     if node_id:
         for descendant_id in get_descendant_ids(node_class, node_id):
-            descendant = database.session.get(node_class, descendant_id)
+            descendant = _fetch_hierarchy_node_locked(node_class, descendant_id)
             if descendant is not None and descendant.entity != entity:
                 raise ValueError(_("Los registros de una jerarquía deben pertenecer a la misma compañía."))
     if not proposed_parent_id:
         return
     if proposed_parent_id == node_id:
         raise ValueError(_("Un registro no puede ser padre de sí mismo."))
-    parent_node = database.session.get(node_class, proposed_parent_id)
+    parent_node = _fetch_hierarchy_node_locked(node_class, proposed_parent_id)
     if parent_node is None:
         raise ValueError(_("El registro padre seleccionado no existe."))
     if parent_node.entity != entity:
@@ -622,7 +634,7 @@ def check_hierarchy_cycle(node_class, node_id, proposed_parent_id, *, entity: st
         if curr_id in visited:
             raise ValueError(_("No se permiten ciclos en la jerarquía (RN-003)."))
         visited.add(curr_id)
-        parent_node = database.session.get(node_class, curr_id)
+        parent_node = _fetch_hierarchy_node_locked(node_class, curr_id)
         if parent_node:
             curr_id = parent_node.parent_id
         else:
