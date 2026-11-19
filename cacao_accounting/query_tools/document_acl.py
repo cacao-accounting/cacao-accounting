@@ -23,6 +23,15 @@ from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
 from cacao_accounting.query_tools.permissions import validate_company_access, validate_module_active
 from cacao_accounting.i18n import _
 
+_MODULE_PERMISSION_FAMILY: dict[str, str] = {
+    "sales": "receivables",
+    "purchases": "payables",
+    "cash": "banking",
+    "inventory": "inventory",
+    "accounting": "accounting",
+}
+
+
 _ALTERNATE_MODULES: dict[str, tuple[str, ...]] = {
     "delivery_note": ("sales", "inventory"),
     "purchase_order": ("purchases", "inventory"),
@@ -59,7 +68,8 @@ def _module_allowed(context: QueryContext, module: str, company_id: str) -> bool
     if not _module_enabled(module):
         return False
     if context.is_service_principal:
-        return f"{module}.reports.read" in context.permissions
+        family = _MODULE_PERMISSION_FAMILY.get(module, module)
+        return f"{family}.reports.read" in context.permissions or f"{module}.reports.read" in context.permissions
     module_id = obtener_id_modulo_por_nombre(module)
     if not module_id:
         return False

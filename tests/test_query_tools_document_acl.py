@@ -176,7 +176,7 @@ def test_document_tools_require_the_owning_module(document_acl_scenario):
 def test_sales_scope_reads_sales_but_not_purchase(document_acl_scenario):
     """The sales module opens sales invoices and rejects purchases."""
     app, ids = document_acl_scenario
-    context = _context({"documents.reports.read", "sales.reports.read"})
+    context = _context({"documents.reports.read", "receivables.reports.read"})
 
     with app.app_context():
         sale = get_document_details_handler.handler(
@@ -193,7 +193,7 @@ def test_sales_scope_reads_sales_but_not_purchase(document_acl_scenario):
 def test_flow_hides_relations_to_modules_without_permission(document_acl_scenario):
     """A sales reader does not see the linked cash payment in the flow."""
     app, ids = document_acl_scenario
-    context = _context({"documents.reports.read", "sales.reports.read"})
+    context = _context({"documents.reports.read", "receivables.reports.read"})
 
     with app.app_context():
         flow = get_document_flow.handler(
@@ -204,7 +204,7 @@ def test_flow_hides_relations_to_modules_without_permission(document_acl_scenari
         )
         assert flow["items"] == []
 
-        cash_context = _context({"documents.reports.read", "sales.reports.read", "cash.reports.read"})
+        cash_context = _context({"documents.reports.read", "receivables.reports.read", "banking.reports.read"})
         visible = get_document_flow.handler(
             context=cash_context,
             company_id="alpha",
@@ -220,13 +220,13 @@ def test_search_relations_filters_by_readable_modules(document_acl_scenario):
 
     with app.app_context():
         sales_only = search_document_relations.handler(
-            context=_context({"documents.reports.read", "sales.reports.read"}),
+            context=_context({"documents.reports.read", "receivables.reports.read"}),
             company_id="alpha",
         )
         assert sales_only["items"] == []
 
         with_cash = search_document_relations.handler(
-            context=_context({"documents.reports.read", "sales.reports.read", "cash.reports.read"}),
+            context=_context({"documents.reports.read", "receivables.reports.read", "banking.reports.read"}),
             company_id="alpha",
         )
         assert len(with_cash["items"]) == 1
@@ -236,7 +236,7 @@ def test_search_relations_filters_by_readable_modules(document_acl_scenario):
 def test_document_tools_enforce_company_scope(document_acl_scenario):
     """A scope for another company cannot read the document."""
     app, ids = document_acl_scenario
-    context = _context({"documents.reports.read", "sales.reports.read"}, companies=["beta"])
+    context = _context({"documents.reports.read", "receivables.reports.read"}, companies=["beta"])
 
     with app.app_context():
         _denied(
@@ -249,7 +249,7 @@ def test_document_tools_enforce_company_scope(document_acl_scenario):
 def test_disabled_module_is_excluded_for_service_principals(document_acl_scenario):
     """Keeping the scope is not enough when the module is disabled."""
     app, _ids = document_acl_scenario
-    context = _context({"documents.reports.read", "sales.reports.read", "cash.reports.read"})
+    context = _context({"documents.reports.read", "receivables.reports.read", "banking.reports.read"})
 
     with app.app_context():
         sales = database.session.execute(database.select(Modules).filter_by(module="sales")).scalar_one()
@@ -258,3 +258,18 @@ def test_disabled_module_is_excluded_for_service_principals(document_acl_scenari
         items = search_document_relations.handler(context=context, company_id="alpha")["items"]
 
     assert items == []
+
+
+def test_real_service_scopes_open_sales_documents(document_acl_scenario):
+    """The published scope vocabulary maps receivables to sales documents."""
+    from cacao_accounting.query_tools.publication import permissions_for_scopes
+
+    app, ids = document_acl_scenario
+    context = _context(permissions_for_scopes({"documents.read", "receivables.read"}))
+
+    with app.app_context():
+        sale = get_document_details_handler.handler(
+            context=context, company_id="alpha", document_type="sales_invoice", document_id=ids["sale"]
+        )
+
+    assert sale["found"] is True
