@@ -65,3 +65,13 @@ def test_admin_por_clasificacion_conserva_acceso_a_desarrollo(app, authenticated
     respuesta = authenticated_client().get("/info")
 
     assert respuesta.status_code == 200
+
+
+def test_asignacion_admin_revocada_no_permite_pagina_de_desarrollo(app):
+    """Una asignación `active=False` no habilita `/info`, `/dev` ni `/development`."""
+    usuario_id = _crear_usuario_con_rol_admin(app, activo=False)
+    cliente = _cliente_como(app, usuario_id)
+
+    for ruta in RUTAS_DESARROLLO:
+        respuesta = cliente.get(ruta)
+        assert respuesta.status_code == 403, ruta
