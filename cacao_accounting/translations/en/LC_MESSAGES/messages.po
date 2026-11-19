@@ -17119,6 +17119,10 @@ msgstr "A period only accepts registrations if it is enabled and not closed."
 msgid "El período está cerrado"
 msgstr "The period is closed"
 
+#: cacao_accounting/contabilidad/routes.py:2437
+msgid "El período está cerrado. Reabralo antes de modificar su definición."
+msgstr "The period is closed. Reopen it before changing its definition."
+
 #: cacao_accounting/contabilidad/templates/contabilidad/periodo_crear.html:112
 msgid "La reapertura habilita nuevamente el asistente de cierre para ejecutar sus pasos."
 msgstr "Reopening enables the close assistant again to run its steps."

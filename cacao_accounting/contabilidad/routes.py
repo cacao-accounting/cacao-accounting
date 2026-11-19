@@ -2439,6 +2439,18 @@ def accounting_period_edit(period_id):
     entity_initial_label = _company_label(period.entity) if period.entity else ""
     TITULO = _("Contabilidad | Editar Período Contable") + " - " + APPNAME
 
+    if request.method == "POST" and bool(period.is_closed):
+        flash(_("El período está cerrado. Reabralo antes de modificar su definición."), "danger")
+        return render_template(
+            _TPL_PERIODO_CREAR,
+            titulo=TITULO,
+            form=formulario,
+            edit=True,
+            entity_initial_label=entity_initial_label,
+            period_id=period.id,
+            period_is_closed=True,
+        )
+
     if formulario.validate_on_submit():
         try:
             requested_entity = request.form.get("entidad", period.entity)

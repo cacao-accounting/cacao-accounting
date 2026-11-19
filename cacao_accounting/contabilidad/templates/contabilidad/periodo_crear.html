@@ -16,9 +16,11 @@
     <h5 class="ca-card-title mb-0"><i class="bi bi-calendar-check me-2"></i> {% if edit %}{{ _('Editar Período Contable') }}{% else %}{{ _('Nuevo Período Contable') }}{% endif %}</h5>
     <div class="d-flex gap-2">
       <a href="{{ url_for('contabilidad.periodo_contable') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      {% if not (edit and period_is_closed|default(false)) %}
       <button class="btn btn-primary btn-sm" form="form-periodo" type="submit">
         <i class="bi bi-save me-1"></i>{{ _('Guardar Período') }}
       </button>
+      {% endif %}
     </div>
   </div>
   <div class="p-4">
@@ -43,11 +45,11 @@
       {% endif %}
       <div class="col-md-4">
         <label class="form-label" for="id-periodo">{{ _('Código') }} <span class="text-danger">*</span></label>
-        {{ form.id(class="form-control form-control-sm", id="id-periodo", required=True) }}
+        {{ form.id(class="form-control form-control-sm", id="id-periodo", required=True, disabled=period_is_closed|default(false)) }}
       </div>
       <div class="col-md-8">
         <label class="form-label" for="nombre">{{ _('Nombre') }} <span class="text-danger">*</span></label>
-        {{ form.nombre(class="form-control form-control-sm", id="nombre", required=True) }}
+        {{ form.nombre(class="form-control form-control-sm", id="nombre", required=True, disabled=period_is_closed|default(false)) }}
       </div>
       <div class="col-md-12">
         <label class="form-label" for="entidad">{{ _('Entidad') }} <span class="text-danger">*</span></label>
@@ -67,7 +69,7 @@
             }
           })'>
           <input type="hidden" name="entidad" x-model="selectedValue">
-          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
+          <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required {% if period_is_closed|default(false) %}disabled{% endif %}>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="option in options" :key="option.value">
               <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)">
@@ -79,20 +81,20 @@
       </div>
       <div class="col-md-6">
         <label class="form-label" for="fiscal_year">{{ _('Año Fiscal') }} <span class="text-danger">*</span></label>
-        {{ form.fiscal_year(class="form-select form-select-sm", id="fiscal_year", required=True) }}
+        {{ form.fiscal_year(class="form-select form-select-sm", id="fiscal_year", required=True, disabled=period_is_closed|default(false)) }}
       </div>
       <div class="col-md-6">
         <label class="form-label" for="inicio">{{ _('Fecha Inicio') }} <span class="text-danger">*</span></label>
-        {{ form.inicio(class="form-control form-control-sm", id="inicio", type="date", required=True) }}
+        {{ form.inicio(class="form-control form-control-sm", id="inicio", type="date", required=True, disabled=period_is_closed|default(false)) }}
       </div>
       <div class="col-md-6">
         <label class="form-label" for="fin">{{ _('Fecha Fin') }} <span class="text-danger">*</span></label>
-        {{ form.fin(class="form-control form-control-sm", id="fin", type="date", required=True) }}
+        {{ form.fin(class="form-control form-control-sm", id="fin", type="date", required=True, disabled=period_is_closed|default(false)) }}
       </div>
       <div class="col-12 mt-3">
         <h6 class="mb-2">{{ _('Estado operativo') }}</h6>
         <div class="form-check form-check-inline">
-          {{ form.habilitado(class="form-check-input", id="habilitado") }}
+          {{ form.habilitado(class="form-check-input", id="habilitado", disabled=period_is_closed|default(false)) }}
           <label class="form-check-label" for="habilitado">{{ _('Habilitado') }}</label>
         </div>
       </div>
