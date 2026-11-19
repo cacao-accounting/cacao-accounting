@@ -193,12 +193,14 @@ QA1, QA2, QA3 o al administrador.
 | #2116 cliente validado en remisión manual | Implementado con regresión | `efcc816a` | `tests/test_delivery_customer_validation.py`; rol, estado, vínculo y consistencia con origen |
 | #2114 moneda en el listado de pedidos | Implementado con regresión | `e008eb01` | `tests/test_sales_request_list_currency.py`; total formateado con su moneda transaccional |
 | #2111 snapshot de `update_inventory` | Implementado con regresión | `f59660c0` | `tests/test_sales_audit_update_inventory.py`; cambio `False -> True` visible en la bitácora |
+| #2104 acceso al origen en el alta de remisión | Ya implementado; regresión añadida | `dd2f453b`, `74526c19` | `tests/test_delivery_note_source_access.py`; el GET autoriza la orden/entrega antes de exponer metadatos |
+
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
 **Última suite completa:** Cloud **1155 passed, 96 skipped**; Desktop
 (`CACAO_ACCOUNTING_DESKTOP=True`) **1147 passed, 104 skipped**; 0 fallos (HEAD `39fc6d46`).
 Después de `39fc6d46` solo se ejecutaron pruebas acotadas para #2102, #2103,
-#2116, #2114 y #2111; las suites completas quedan pendientes de repetir.
+#2116, #2114, #2111 y #2104; las suites completas quedan pendientes de repetir.
 `complexipy 9.0.0` sobre `cacao_accounting` queda en verde con el límite 20.
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
