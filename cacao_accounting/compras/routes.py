@@ -1225,6 +1225,18 @@ def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
         return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
 
 
+def _purchase_action_permissions() -> dict[str, bool]:
+    """Devuelve las acciones de compras disponibles para el usuario actual."""
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("purchases"), usuario=current_user.id)
+    return {
+        "can_create": bool(permissions.administrador or permissions.crear),
+        "can_authorize": bool(permissions.administrador or permissions.autorizar),
+    }
+
+
 def _render_request_comparison_view(request_comparison: PurchaseRequestComparison):
     """Render view for request comparison fallback."""
     exige_acceso_compania("purchases", request_comparison.company, "consultar")
@@ -1264,6 +1276,7 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         comparison_lines=comparison_lines,
         negotiation_rfqs=negotiation_rfqs,
         recommendations_error=recommendations_error,
+        **_purchase_action_permissions(),
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
         titulo=_titulo_comparativo() + " - " + (request_comparison.document_no or request_comparison.id or ""),
     )
@@ -1411,6 +1424,7 @@ def compras_comparativo_ofertas(rfq_id: str):
         award=award,
         award_lines=award_lines,
         negotiation_round=current_negotiation_round(rfq_id),
+        **_purchase_action_permissions(),
         titulo=titulo,
     )
 
