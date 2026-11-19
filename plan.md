@@ -157,10 +157,14 @@ QA1, QA2, QA3 o al administrador.
 | #2177 orden estable de líneas en impresión | Implementado con regresión | `5da4089c` | `tests/test_print_context_stable_order.py`; líneas, referencias y revalorizaciones por `created`/`id` |
 | #2176 actor y auditoría al cambiar rol de tercero | Implementado con regresión | `aae2a6e3` | `tests/test_party_role_audit.py`; `modified_by`, `audit_actor` y snapshots del rol |
 | #2163 precisión de tasas en el listado | Implementado con regresión | `50637dbd` | `tests/test_exchange_rate_list_precision.py`; muestra el Decimal persistido, sin redondeo a cuatro decimales |
+| #2162 `x-if` del modal recurrente sobre `<template>` | Implementado con regresión | `79cbdb16` | `tests/test_recurring_modal_xif_template.py`; todo `x-if` vive en un template Alpine |
+| #2190 apertura de balanza y sábana desde períodos previos | Ya implementado y cubierto | `b778ee89` | `tests/test_trial_balance_opening_balance.py`; el `WHERE` no acota la apertura por período |
+| #2192 export desconocido rechazado con 400 | Ya implementado y cubierto | `b778ee89` | `tests/test_financial_report_export_validation.py`; formatos fuera de `{csv,xlsx,pdf}` no caen a HTML |
+| #2194 libro inexistente, inactivo o ajeno rechazado | Ya implementado y cubierto | `b778ee89` | `tests/test_financial_report_ledger_validation.py`; 400 en lugar de reporte vacío |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1079 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1073 passed, 102 skipped**; 0 fallos (HEAD `50637dbd`).
+**Última suite completa:** Cloud **1080 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1074 passed, 102 skipped**; 0 fallos (HEAD `79cbdb16`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
