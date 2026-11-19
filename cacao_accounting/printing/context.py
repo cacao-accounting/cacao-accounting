@@ -454,7 +454,13 @@ def build_check_print_context(
         check_no = next_check_no or _text(document, "reference_no", _document_number(document))
     payee_name = _text(document, "party_name", "")
 
-    refs = database.session.execute(select(PaymentReference).filter_by(payment_id=document_id)).scalars().all()
+    refs = (
+        database.session.execute(
+            _stable_items_query(select(PaymentReference).filter_by(payment_id=document_id), PaymentReference)
+        )
+        .scalars()
+        .all()
+    )
     context["check"] = {
         "number": check_no,
         "next_check_number": next_check_no,
@@ -530,7 +536,13 @@ def build_payment_entry_print_context(
     context = build_common_context(company_code, _user_name(user))
     if document is None:
         return context
-    refs = database.session.execute(select(PaymentReference).filter_by(payment_id=document_id)).scalars().all()
+    refs = (
+        database.session.execute(
+            _stable_items_query(select(PaymentReference).filter_by(payment_id=document_id), PaymentReference)
+        )
+        .scalars()
+        .all()
+    )
     context["payment"] = {
         "number": _document_number(document),
         "date": _date_text(_first_attr(document, "posting_date", "document_date", "date")),
@@ -617,7 +629,13 @@ def build_exchange_revaluation_print_context(
     context = build_common_context(company_code, _user_name(user))
     if document is None:
         return context
-    items = database.session.execute(select(ExchangeRevaluationItem).filter_by(revaluation_id=document_id)).scalars().all()
+    items = (
+        database.session.execute(
+            _stable_items_query(select(ExchangeRevaluationItem).filter_by(revaluation_id=document_id), ExchangeRevaluationItem)
+        )
+        .scalars()
+        .all()
+    )
     context["revaluation"] = {
         "number": _document_number(document),
         "date": _date_text(_first_attr(document, "run_date", "posting_date", "date")),
@@ -945,6 +963,13 @@ def _build_invoice_context(
     return context
 
 
+def _stable_items_query(query: Any, item_model: Any) -> Any:
+    """Ordena líneas por creación e ID para una impresión determinista."""
+    if hasattr(item_model, "created") and hasattr(item_model, "id"):
+        return query.order_by(item_model.created.asc(), item_model.id.asc())
+    return query
+
+
 def _build_line_document_context(
     model: Any,
     item_model: Any,
@@ -961,7 +986,7 @@ def _build_line_document_context(
     item_query = select(item_model).filter_by(**{foreign_key: document_id})
     if hasattr(item_model, "is_superseded"):
         item_query = item_query.filter_by(is_superseded=False)
-    items = database.session.execute(item_query).scalars().all()
+    items = database.session.execute(_stable_items_query(item_query, item_model)).scalars().all()
     context[root_name] = {
         "number": _document_number(document),
         "date": _date_text(_first_attr(document, "posting_date", "document_date", "date")),
