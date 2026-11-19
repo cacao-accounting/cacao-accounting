@@ -22,8 +22,8 @@ QA1, QA2, QA3 o al administrador.
 El estado canónico de cada issue vive en las tablas de «Issues accionables adicionales por fase».
 Este archivo no mantiene una segunda tabla de seguimiento.
 
-**Última suite completa:** Cloud **1281 passed, 103 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1273 passed, 111 skipped**; 0 fallos (HEAD `b6b7d33f`).
+**Última suite completa:** Cloud **1275 passed, 102 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1267 passed, 110 skipped**; 0 fallos (HEAD `18971bc3`).
 JavaScript **106 passing**. Linters del workflow de lint en verde y `complexipy 9.0.0`
 sin funciones > 20. PostgreSQL + psycopg2 en base temporal: **87 passed, 10 skipped**.
 MySQL y Redis no estaban disponibles en el entorno local; CI debe repetir la matriz.
@@ -492,7 +492,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #2119 | #1706 | ✅ Implementado; regresión local en `c82ac81f` (etiqueta sin cambio) | La exención de contraasiento exige línea existente, mismo padre y sin reverso previo |
 | #2120 | #1709 | ✅ Implementado; regresión local en `e18cd8e9` (etiqueta sin cambio) | Reejecutar un período histórico anula también las corridas posteriores |
 | #2113 | #1653 | ✅ Implementado; regresión local en `7f936c2f` (etiqueta sin cambio) | La cancelación aprobada bloquea antes de validar y refresca los destinos |
-| #2175 | #1656 | ✅ Implementado; regresión local en `bc73b69f` (etiqueta sin cambio) | Folios únicos por compañía/tipo, internos globales, migración e idempotencia en el motor configurado |
+| #2175 | #1656 | ✅ Implementado; runtime en `bc73b69f`, migración retirada en `47f15b3d` (etiqueta sin cambio) | Folios únicos por compañía/tipo e internos globales; `create_all` crea los índices y no hay aparato de migración sin consumidor en pre-alpha |
 | #546 | #1655 | Implementación (`needs-work`) | [AUDIT][R2R][Multimoneda] Las tasas de cambio históricas pueden editarse después de ser usadas |
 | #758 | #1655 | Implementación (`needs-work`) | HIGH: Enforce complete source and destination currency data on every posting |
 | #761 | #1708 | Implementación (`needs-work`) | MEDIUM: Apply cancellation and reversal period semantics consistently to all document types |
