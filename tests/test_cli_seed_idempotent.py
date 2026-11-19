@@ -39,3 +39,38 @@ def test_db_seed_es_idempotente_con_entidad_existente(app, monkeypatch):
 
     assert result.exit_code == 0
     assert "ya están aplicados" in result.output
+
+
+def test_db_seed_se_rechaza_fuera_de_desarrollo_sin_force(app, monkeypatch):
+    """Un entorno no testing no puede sembrar credenciales demo por accidente (#2167)."""
+    monkeypatch.setattr("cacao_accounting.config.TESTING_MODE", False)
+
+    def fail_if_called():
+        raise AssertionError("dev_data no debe ejecutarse fuera de desarrollo sin --force")
+
+    monkeypatch.setattr("cacao_accounting.datos.dev.dev_data", fail_if_called)
+    monkeypatch.setattr(cli, "_obtener_aplicacion", lambda: (_ for _ in ()).throw(AssertionError("no debe abrir la app")))
+
+    result = CliRunner().invoke(cli.db_seed)
+
+    assert result.exit_code == 1
+    assert "solo está disponible en entornos de desarrollo o con --force" in result.output
+
+
+def test_db_seed_permite_force_fuera_de_desarrollo(app, monkeypatch):
+    """`--force` es la autorización explícita para sembrar fuera de testing."""
+    monkeypatch.setattr("cacao_accounting.config.TESTING_MODE", False)
+    llamadas = []
+
+    def fake_dev_data():
+        llamadas.append(True)
+
+    monkeypatch.setattr("cacao_accounting.datos.dev.dev_data", fake_dev_data)
+    monkeypatch.setattr(cli, "_demo_seed_presente", lambda: False)
+    monkeypatch.setattr(cli, "_obtener_aplicacion", lambda: app)
+
+    result = CliRunner().invoke(cli.db_seed, ["--force"])
+
+    assert result.exit_code == 0
+    assert llamadas == [True]
+    assert "Datos de ejemplo insertados." in result.output

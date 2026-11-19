@@ -358,9 +358,15 @@ def _demo_seed_presente() -> bool:
 
 
 @db.command(name="seed", help=_("Inserta datos de ejemplo en la base de datos."))
-def db_seed() -> None:
+@click.option("--force", is_flag=True, help=_("Omite la confirmación y permite ejecutarlo fuera de desarrollo."))
+def db_seed(force: bool) -> None:
     """Carga datos de ejemplo en una base de datos existente."""
+    from cacao_accounting.config import TESTING_MODE
     from cacao_accounting.datos.dev import dev_data
+
+    if not TESTING_MODE and not force:
+        _mensaje_error(_("Este comando solo está disponible en entornos de desarrollo o con --force."))
+        raise click.exceptions.Exit(1)
 
     app = _obtener_aplicacion()
     with app.app_context():
