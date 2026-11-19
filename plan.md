@@ -144,9 +144,11 @@ QA1, QA2, QA3 o al administrador.
 | #2152 distinción alta/edición de series de numeración | Implementado con regresión | `8439df1c` | `tests/test_naming_series_edit_labels.py`; breadcrumb, encabezado y botón |
 | #2149 fachada de contabilidad con `log_submit` y `__all__` | Implementado con regresión | `c4e77b56` | `tests/test_contabilidad_facade_compat.py`; import nombrado y wildcard |
 | #2148 fuentes alineadas en devoluciones de recepción | Implementado con regresión | `df8fb6dd` | `tests/test_s2p_purchase_receipt_source_scope.py`; combinación incompatible 400 y fuente única al coincidir |
+| #2143 snapshot de auditoría con totales y evidencia fiscal | Implementado con regresión | `f6fd5490` | `tests/test_purchase_audit_snapshot.py`; resumen y líneas fiscales antes/después |
+| Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1057 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1051 passed, 102 skipped**; 0 fallos (HEAD `df8fb6dd`).
+**Última suite completa:** Cloud **1058 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1052 passed, 102 skipped**; 0 fallos (HEAD `d3af2aa2`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 105 passing.
