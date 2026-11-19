@@ -408,22 +408,28 @@ def _create_default_series(entity_type: str, company: str | None) -> NamingSerie
     return naming_series
 
 
-def _pick_sequence_id(naming_series_id: str) -> str:
-    """Selecciona la secuencia con mayor prioridad para la serie."""
-    mapping = (
+def _pick_sequence_id(naming_series_id: str, context: dict | None = None) -> str:
+    """Selecciona la secuencia aplicable de menor prioridad para la serie.
+
+    Los mapeos pueden declarar una condición JSON (banco, método de pago u otra
+    dimensión del documento). Se recorre por prioridad ascendente y se usa el
+    primer mapeo cuya condición coincida con el contexto; un mapeo sin
+    condición actúa como fallback.
+    """
+    mappings = (
         database.session.execute(
             database.select(SeriesSequenceMap)
             .filter_by(naming_series_id=naming_series_id)
-            .order_by(SeriesSequenceMap.priority.asc())
+            .order_by(SeriesSequenceMap.priority.asc(), SeriesSequenceMap.id.asc())
         )
         .scalars()
-        .first()
+        .all()
     )
+    for mapping in mappings:
+        if _condition_matches(mapping.condition, context or {}):
+            return mapping.sequence_id
 
-    if not mapping:
-        raise IdentifierConfigurationError(_("La serie seleccionada no tiene una secuencia asociada."))
-
-    return mapping.sequence_id
+    raise IdentifierConfigurationError(_("La serie seleccionada no tiene una secuencia asociada."))
 
 
 # -------------------------------------------------------------------------------------
@@ -619,7 +625,7 @@ def assign_document_identifier(
         company=company_code,
         naming_series_id=naming_series_id,
     )
-    sequence_id = _pick_sequence_id(naming_series.id)
+    sequence_id = _pick_sequence_id(naming_series.id, external_context)
 
     identifier = generate_identifier(
         entity_type=entity_type,
