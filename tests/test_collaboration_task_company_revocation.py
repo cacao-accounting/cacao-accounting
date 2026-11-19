@@ -16,7 +16,11 @@ from uuid import uuid4
 import pytest
 
 from cacao_accounting import create_app
-from cacao_accounting.collaboration_service import open_task_count
+from cacao_accounting.collaboration_service import (
+    CollaborationError,
+    open_task_count,
+    update_task_status,
+)
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
@@ -316,3 +320,32 @@ def test_task_with_a_document_from_another_company_is_hidden(task_revocation_sce
 
         login_user(database.session.get(User, ids["assignee"]))
         assert open_task_count(ids["assignee"]) == 1
+
+
+def test_task_with_unresolvable_document_cannot_change_status(task_revocation_scenario):
+    """Una tarea cuyo documento no se puede validar no puede mutar de estado."""
+    app, ids = task_revocation_scenario
+    with app.app_context():
+        task = DocumentTask(
+            document_type="delivery_note",
+            document_id="01MISSING0000000000000000",
+            document_no="DN-HUERFANA",
+            company=ids["company_alpha"],
+            title="Tarea huérfana",
+            assigned_by=ids["assignee"],
+            assigned_to=ids["assignee"],
+        )
+        database.session.add(task)
+        database.session.commit()
+        task_id = task.id
+
+    with app.test_request_context("/tasks/my"):
+        from flask_login import login_user
+
+        login_user(database.session.get(User, ids["assignee"]))
+        with pytest.raises(CollaborationError) as error:
+            update_task_status(task_id, "completed", ids["assignee"])
+        assert error.value.status_code == 404
+
+    with app.app_context():
+        assert database.session.get(DocumentTask, task_id).status == "open"

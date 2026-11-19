@@ -109,6 +109,9 @@ def update_task_status(task_id: str, status: str, user_id: str) -> DocumentTask:
 
     #1328/#1467: la mutación exige ser el asignado o quien creó la tarea;
     el acceso de lectura al documento solo concede consulta, no gestión.
+    #1329: el documento debe resolverse y validarse también al mutar. Una
+    tarea que apunta a un documento inexistente, de otro tipo o de otra
+    compañía no puede cambiar de estado.
     """
     _ensure_cloud_mode()
     normalized_status = _validate_status(status)
@@ -118,19 +121,13 @@ def update_task_status(task_id: str, status: str, user_id: str) -> DocumentTask:
     if str(task.assigned_to or "") != str(user_id) and str(task.assigned_by or "") != str(user_id):
         # Solo el asignado o el creador gestionan el ciclo de la tarea.
         raise CollaborationError(_("Solo el asignado o quien asignó la tarea puede cambiar su estado."), 403)
-    try:
-        document = _document_for_collaboration(task.document_type, task.document_id, user_id)
-    except CollaborationError as exc:
-        if exc.status_code != 404:
-            raise
-        document = None
+    document = _document_for_collaboration(task.document_type, task.document_id, user_id)
 
     previous_status = task.status
     task.status = normalized_status
     task.completed_at = datetime.now(UTC) if normalized_status == "completed" else None
     action = _audit_action_for_status(normalized_status, previous_status)
-    if document is not None:
-        log_task_event(document, action, f"Tarea '{task.title}' cambió de {previous_status} a {normalized_status}.")
+    log_task_event(document, action, f"Tarea '{task.title}' cambió de {previous_status} a {normalized_status}.")
     database.session.commit()
     return task
 
