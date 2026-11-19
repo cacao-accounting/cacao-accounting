@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     ExchangeRate,
     ExchangeRevaluation,
     ExchangeRevaluationItem,
+    FiscalYear,
     GLEntry,
     PartyAccount,
     PurchaseInvoice,
@@ -241,7 +242,8 @@ class ExchangeRevaluationService:
                 _period_locked=True,
                 _known_run=previous_run,
             )
-        self._reverse_prior_period_runs(company, period.start, user_id)
+        database.session.flush()
+        self._reverse_prior_period_runs(company, period, user_id)
 
     def _build_run_record(
         self,
@@ -442,38 +444,84 @@ class ExchangeRevaluationService:
             database.session.commit()
         return run
 
-    def _reverse_prior_period_runs(self, company: str, reversal_date: date, user_id: str | None) -> None:
-        """Reverse every outstanding FX run before a new run, including later ones."""
+    def _reverse_prior_period_runs(self, company: str, period: AccountingPeriod | date, user_id: str | None) -> None:
+        """Revierte corridas abiertas del mismo ejercicio al reejecutar un periodo.
+
+        El barrido se acota al ejercicio fiscal de la nueva corrida y omite las
+        corridas cuyo periodo ya esté cerrado o deshabilitado. Así una
+        reejecución histórica no altera ejercicios ajenos ni reabre de facto un
+        periodo cerrado; el saldo histórico sigue protegido por el filtro
+        ``as_of_date`` de ``_active_revaluation_balance``.
+        """
+        fy_start, fy_end, reversal_floor = self._reversal_scope(company, period)
+        effective_date = database.func.coalesce(ExchangeRevaluation.run_date, ExchangeRevaluation.posting_date)
         outstanding_runs = database.session.execute(
             select(ExchangeRevaluation)
             .where(
                 ExchangeRevaluation.company == company,
                 ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED,
+                effective_date >= fy_start,
+                effective_date <= fy_end,
             )
             .order_by(ExchangeRevaluation.run_date, ExchangeRevaluation.created)
             .with_for_update()
             .execution_options(populate_existing=True)
         ).scalars()
         for prior_run in list(outstanding_runs):
-            run_date = prior_run.run_date or reversal_date
+            self._void_outstanding_run(prior_run, user_id, reversal_floor)
+
+    def _reversal_scope(self, company: str, period: AccountingPeriod | date) -> tuple[date, date, date]:
+        """Devuelve inicio/fin del ejercicio y la fecha minima de reversa."""
+        if isinstance(period, AccountingPeriod):
+            reversal_floor = period.start
+            fiscal_year_id = period.fiscal_year_id
+            reference_year = period.end.year
+        else:
+            reversal_floor = period
+            reference_year = period.year
             try:
-                self.void(
-                    run_id=str(prior_run.id),
-                    user_id=user_id,
-                    reason="Reversa automática por una nueva corrida de revaluación",
-                    commit=False,
-                    reversal_date=max(reversal_date, run_date),
-                    _period_locked=True,
-                    _known_run=prior_run,
-                )
-            except ExchangeRevaluationError:
-                # Otra transaccion ya anulo la corrida (post-lock re-lectura): la
-                # reversa automatica es idempotente y no debe abortar la corrida nueva.
-                current = database.session.execute(
-                    select(ExchangeRevaluation.status).where(ExchangeRevaluation.id == prior_run.id).with_for_update()
-                ).scalar_one_or_none()
-                if current != EXCHANGE_REVALUATION_STATUS_VOIDED:
-                    raise
+                resolved_period = resolve_accounting_period(company, period)
+            except IdentifierConfigurationError:
+                resolved_period = None
+            fiscal_year_id = resolved_period.fiscal_year_id if resolved_period is not None else None
+        fiscal_year = database.session.get(FiscalYear, fiscal_year_id) if fiscal_year_id else None
+        if fiscal_year is not None:
+            return fiscal_year.year_start_date, fiscal_year.year_end_date, reversal_floor
+        return date(reference_year, 1, 1), date(reference_year, 12, 31), reversal_floor
+
+    def _void_outstanding_run(self, prior_run: ExchangeRevaluation, user_id: str | None, reversal_floor: date) -> None:
+        """Anula una corrida abierta y tolera que otra transaccion la haya anulado."""
+        run_date = prior_run.run_date or prior_run.posting_date or reversal_floor
+        if not self._period_is_open_for_run(str(prior_run.company), run_date):
+            return
+        try:
+            self.void(
+                run_id=str(prior_run.id),
+                user_id=user_id,
+                reason="Reversa automática por una nueva corrida de revaluación",
+                commit=False,
+                reversal_date=max(reversal_floor, run_date),
+                _period_locked=True,
+                _known_run=prior_run,
+            )
+        except ExchangeRevaluationError:
+            # Otra transaccion ya anulo la corrida (post-lock re-lectura): la
+            # reversa automatica es idempotente y no debe abortar la corrida nueva.
+            current = database.session.execute(
+                select(ExchangeRevaluation.status).where(ExchangeRevaluation.id == prior_run.id).with_for_update()
+            ).scalar_one_or_none()
+            if current != EXCHANGE_REVALUATION_STATUS_VOIDED:
+                raise
+
+    def _period_is_open_for_run(self, company: str, run_date: date) -> bool:
+        """Indica si la corrida cae en un periodo resoluble, habilitado y abierto."""
+        try:
+            run_period = resolve_accounting_period(company, run_date)
+        except IdentifierConfigurationError:
+            # Sin periodo resoluble no hay cierre que respetar; las corridas
+            # historicas sin periodo solo existen en escenarios de prueba.
+            return True
+        return bool(run_period.enabled) and not bool(run_period.is_closed)
 
     def list_runs(self) -> list[ExchangeRevaluation]:
         """Lista ejecuciones recientes de revalorizacion."""
