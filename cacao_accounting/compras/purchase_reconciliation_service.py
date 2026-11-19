@@ -227,52 +227,108 @@ def _line_rate(line: Any) -> Decimal:
     return _line_amount(line) / qty
 
 
-def _matched_qty_for_receipt_item(receipt_item_id: str) -> Decimal:
-    matched = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseReconciliationItem.matched_qty), 0))
-        .filter_by(
-            purchase_receipt_item_id=receipt_item_id,
+def _apply_as_of_cutoff(query: Any, effective_date: Any, as_of_date: date | None) -> Any:
+    """Restringe la consulta a la evidencia efectiva hasta la fecha de corte."""
+    if as_of_date is None:
+        return query
+    return query.where(effective_date <= as_of_date)
+
+
+def _reconciliation_effective_date() -> Any:
+    """Fecha contable de una conciliacion de compras.
+
+    ``matched_date`` se persiste al conciliar. Las filas historicas que no lo
+    registraron usan como respaldo la fecha de la factura que origino el match.
+    """
+    return func.coalesce(PurchaseReconciliation.matched_date, PurchaseInvoice.posting_date)
+
+
+def _reconciled_sum_for_receipt_item(receipt_item_id: str, column: Any, as_of_date: date | None) -> Decimal:
+    """Suma evidencia de conciliacion aplicada hasta la fecha de corte."""
+    query = (
+        select(func.coalesce(func.sum(column), 0))
+        .join(
+            PurchaseReconciliation,
+            PurchaseReconciliation.id == PurchaseReconciliationItem.purchase_reconciliation_id,
         )
-        .where(PurchaseReconciliationItem.status != "cancelled")
-    ).scalar_one()
-    allocated = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.qty_in_base_uom), 0)).where(
+        .join(
+            PurchaseInvoiceItem,
+            PurchaseInvoiceItem.id == PurchaseReconciliationItem.purchase_invoice_item_id,
+        )
+        .join(
+            PurchaseInvoice,
+            PurchaseInvoice.id == PurchaseInvoiceItem.purchase_invoice_id,
+        )
+        .where(
+            PurchaseReconciliationItem.purchase_receipt_item_id == receipt_item_id,
+            PurchaseReconciliationItem.status != "cancelled",
+        )
+    )
+    return _decimal_value(
+        database.session.execute(_apply_as_of_cutoff(query, _reconciliation_effective_date(), as_of_date)).scalar_one()
+    )
+
+
+def _allocated_sum_for_receipt_item(receipt_item_id: str, column: Any, as_of_date: date | None) -> Decimal:
+    """Suma asignaciones factura/recepcion efectivas hasta la fecha de corte."""
+    query = (
+        select(func.coalesce(func.sum(column), 0))
+        .join(
+            PurchaseInvoiceItem,
+            PurchaseInvoiceItem.id == PurchaseInvoiceReceiptAllocation.invoice_item_id,
+        )
+        .join(
+            PurchaseInvoice,
+            PurchaseInvoice.id == PurchaseInvoiceItem.purchase_invoice_id,
+        )
+        .where(
             PurchaseInvoiceReceiptAllocation.receipt_item_id == receipt_item_id,
             PurchaseInvoiceReceiptAllocation.status == "active",
         )
-    ).scalar_one()
-    returned = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.qty_in_base_uom), 0)).where(
+    )
+    return _decimal_value(
+        database.session.execute(_apply_as_of_cutoff(query, PurchaseInvoice.posting_date, as_of_date)).scalar_one()
+    )
+
+
+def _returned_sum_for_receipt_item(receipt_item_id: str, column: Any, as_of_date: date | None) -> Decimal:
+    """Suma devoluciones fisicas efectivas hasta la fecha de corte."""
+    query = (
+        select(func.coalesce(func.sum(column), 0))
+        .join(
+            PurchaseReceiptItem,
+            PurchaseReceiptItem.id == PurchaseReceiptReturnAllocation.return_receipt_item_id,
+        )
+        .join(
+            PurchaseReceipt,
+            PurchaseReceipt.id == PurchaseReceiptItem.purchase_receipt_id,
+        )
+        .where(
             PurchaseReceiptReturnAllocation.original_receipt_item_id == receipt_item_id,
             PurchaseReceiptReturnAllocation.status == "active",
         )
-    ).scalar_one()
-    matched_value = _decimal_value(allocated) if _decimal_value(allocated) > 0 else _decimal_value(matched)
-    return matched_value + _decimal_value(returned)
+    )
+    return _decimal_value(
+        database.session.execute(_apply_as_of_cutoff(query, PurchaseReceipt.posting_date, as_of_date)).scalar_one()
+    )
 
 
-def _matched_amount_for_receipt_item(receipt_item_id: str) -> Decimal:
-    matched = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseReconciliationItem.matched_amount), 0))
-        .filter_by(
-            purchase_receipt_item_id=receipt_item_id,
-        )
-        .where(PurchaseReconciliationItem.status != "cancelled")
-    ).scalar_one()
-    allocated = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.receipt_amount), 0)).where(
-            PurchaseInvoiceReceiptAllocation.receipt_item_id == receipt_item_id,
-            PurchaseInvoiceReceiptAllocation.status == "active",
-        )
-    ).scalar_one()
-    returned = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.amount), 0)).where(
-            PurchaseReceiptReturnAllocation.original_receipt_item_id == receipt_item_id,
-            PurchaseReceiptReturnAllocation.status == "active",
-        )
-    ).scalar_one()
-    matched_value = _decimal_value(allocated) if _decimal_value(allocated) > 0 else _decimal_value(matched)
-    return matched_value + _decimal_value(returned)
+def _matched_qty_for_receipt_item(receipt_item_id: str, as_of_date: date | None = None) -> Decimal:
+    """Cantidad aplicada a una linea de recepcion, opcionalmente a una fecha."""
+    matched = _reconciled_sum_for_receipt_item(receipt_item_id, PurchaseReconciliationItem.matched_qty, as_of_date)
+    allocated = _allocated_sum_for_receipt_item(receipt_item_id, PurchaseInvoiceReceiptAllocation.qty_in_base_uom, as_of_date)
+    returned = _returned_sum_for_receipt_item(receipt_item_id, PurchaseReceiptReturnAllocation.qty_in_base_uom, as_of_date)
+    matched_value = allocated if allocated > 0 else matched
+    return matched_value + returned
+
+
+def _matched_amount_for_receipt_item(receipt_item_id: str, as_of_date: date | None = None) -> Decimal:
+    """Devuelve el importe aplicado a una linea de recepcion, opcionalmente a una fecha."""
+    matched = _reconciled_sum_for_receipt_item(receipt_item_id, PurchaseReconciliationItem.matched_amount, as_of_date)
+    allocated = _allocated_sum_for_receipt_item(receipt_item_id, PurchaseInvoiceReceiptAllocation.receipt_amount, as_of_date)
+    returned = _returned_sum_for_receipt_item(receipt_item_id, PurchaseReceiptReturnAllocation.amount, as_of_date)
+    matched_value = allocated if allocated > 0 else matched
+    return matched_value + returned
 
 
 def _item_qty_in_base_uom(item: Any) -> Decimal:
@@ -1706,8 +1762,10 @@ def get_purchase_reconciliation_pending(company: str, as_of_date: date | None = 
     for receipt, item in database.session.execute(query).all():
         item_qty = _line_qty(item)
         item_amount = _line_amount(item)
-        pending_qty = max(Decimal("0"), item_qty - _matched_qty_for_receipt_item(item.id))
-        pending_amount = max(Decimal("0"), item_amount - _matched_amount_for_receipt_item(item.id))
+        matched_qty = _matched_qty_for_receipt_item(item.id, as_of_date)
+        matched_amount = _matched_amount_for_receipt_item(item.id, as_of_date)
+        pending_qty = max(Decimal("0"), item_qty - matched_qty)
+        pending_amount = max(Decimal("0"), item_amount - matched_amount)
         if pending_qty <= 0 and pending_amount <= 0:
             continue
         rows.append(
