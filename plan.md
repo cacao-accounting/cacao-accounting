@@ -529,7 +529,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1149 | #1658 | Implementación (`needs-work`) | fix: aplica la frecuencia de diarios recurrentes |
 | #1153 | #1656 | Implementación (`needs-work`) | fix: evita cierres mensuales duplicados por período |
 | #1154 | #1656 | Implementación (`needs-work`) | fix: bloquea la edición de períodos cerrados |
-| #1155 | #1656 | Implementación (`needs-work`) | Impide rangos superpuestos en períodos contables |
+| #1155 | #1656 | ✅ Implementado; regresión en `d5bf4941` (etiqueta sin cambio) | Crear y editar rechazan rangos superpuestos por compañía bajo lock; fechas adyacentes y otra compañía siguen permitidas |
 | #1156 | Consumidor | Implementación (`needs-work`) | La reapertura activa períodos deshabilitados |
 | #1157 | #1656 | Implementación (`needs-work`) | El cierre mensual revaloriza un período distinto |
 | #1163 | #1654 | Implementación (`needs-work`) | Respeta los libros seleccionados en comprobantes |
