@@ -70,6 +70,7 @@
       books: [],
       selectedBooks: (config.initialJournal && config.initialJournal.books) || [],
       initialBooksSelectionApplied: false,
+      booksRequestSequence: 0,
 
       init: function () {
         if (!this.lines.length) this.addMultipleRows(2);
@@ -114,10 +115,18 @@
       get isBalanced() { return Math.abs(this.totalDebit - this.totalCredit) < 0.001 && this.totalDebit > 0; },
 
       async loadBooks(company) {
-        if (!company) { this.books = []; return; }
+        const requestId = ++this.booksRequestSequence;
+        if (!company) {
+          this.books = [];
+          this.selectedBooks = [];
+          return;
+        }
         try {
           const resp = await fetch(`{{ url_for('contabilidad.journal_books') }}?company=${company}`);
           const data = await resp.json();
+          // Solo la respuesta de la compañía vigente puede actualizar el
+          // formulario; una petición anterior no debe reemplazar los libros.
+          if (requestId !== this.booksRequestSequence || this.header.company !== company) return;
           this.books = data.results;
           if (!this.initialBooksSelectionApplied) {
             if (this.selectedBooks.length) {
