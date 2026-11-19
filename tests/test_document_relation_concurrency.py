@@ -226,3 +226,31 @@ def test_existing_database_receives_document_flow_lock_table(tmp_path):
         assert sa_inspect(database.engine).has_table(DocumentFlowLock.__tablename__)
         database.session.remove()
         database.engine.dispose()
+
+
+def test_creacion_de_relacion_bloquea_documento_origen_y_destino(tmp_path, monkeypatch):
+    """La relación toma el lock documental antes de validar estados."""
+    app = _build_app(f"sqlite:///{tmp_path / 'document-lock.sqlite'}")
+    ids = _seed_quotation(app)
+    llamadas: list[tuple[str, str]] = []
+    original = service.lock_document_flow_document
+
+    def tracking(document_type: str, document_id: str) -> None:
+        llamadas.append((document_type, document_id))
+        original(document_type, document_id)
+
+    monkeypatch.setattr(service, "lock_document_flow_document", tracking)
+    target = ids["targets"][0]
+    with app.app_context():
+        create_document_relation(
+            source_type="sales_quotation",
+            source_id=ids["source_id"],
+            source_item_id=ids["source_item_id"],
+            target_type="sales_order",
+            target_id=target[0],
+            target_item_id=target[1],
+            qty=Decimal("3"),
+        )
+
+    assert ("sales_quotation", ids["source_id"]) in llamadas
+    assert ("sales_order", target[0]) in llamadas

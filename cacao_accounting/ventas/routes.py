@@ -47,6 +47,7 @@ from cacao_accounting.document_identifiers import assign_document_identifier
 from cacao_accounting.document_flow import (
     close_document_balances,
     get_target_line_source,
+    lock_document_flow_document,
     refresh_source_caches_for_target,
     revert_relations_for_target,
     validate_submit_prerequisites,
@@ -708,6 +709,7 @@ def ventas_pedido_venta_cancel(request_id: str):
     exige_acceso_compania("sales", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    lock_document_flow_document("sales_request", request_id)
     if has_active_source_relations("sales_request", request_id):
         flash(_("No se puede cancelar el pedido de venta porque tiene cotizaciones u órdenes de venta activas."), "danger")
         return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
@@ -1702,6 +1704,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
     exige_acceso_compania("sales", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    lock_document_flow_document("sales_quotation", quotation_id)
     if has_active_source_relations("sales_quotation", quotation_id):
         flash(_("No se puede cancelar la cotización de venta porque tiene órdenes de venta activas."), "danger")
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
@@ -1783,6 +1786,7 @@ def ventas_orden_venta_cancel(order_id: str):
     exige_acceso_compania("sales", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    lock_document_flow_document("sales_order", order_id)
     if has_active_source_relations("sales_order", order_id):
         flash(_("No se puede cancelar la orden de venta porque tiene notas de entrega o facturas activas."), "danger")
         return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
@@ -2135,6 +2139,7 @@ def ventas_entrega_cancel(note_id: str):
     if not reason:
         flash(_("Debe indicar el motivo de la anulación."), "danger")
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
+    lock_document_flow_document("delivery_note", note_id)
     if has_active_source_relations("delivery_note", note_id):
         flash(_("No se puede cancelar la nota de entrega porque tiene facturas de venta activas."), "danger")
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
@@ -2581,6 +2586,7 @@ def ventas_factura_venta_cancel(invoice_id: str):
     if not reason:
         flash(_("Debe indicar el motivo de la anulación."), "danger")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
+    lock_document_flow_document("sales_invoice", invoice_id)
     if has_active_source_relations("sales_invoice", invoice_id):
         flash(_("No se puede cancelar la factura de venta porque tiene documentos financieros activos."), "danger")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))

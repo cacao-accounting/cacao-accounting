@@ -569,6 +569,14 @@ def _lock_document_flow_source(source_key: str, source_id: str, source_item_id: 
     database.session.execute(_document_flow_lock_statement(dialect, lock_table, lock_key))
 
 
+def lock_document_flow_document(document_type: str, document_id: str) -> None:
+    """Serializa la creación de relaciones con la cancelación del documento."""
+    key = normalize_doctype(document_type)
+    lock_key = _document_flow_lock_key(key, str(document_id), "", "")
+    dialect = database.session.get_bind().dialect.name
+    database.session.execute(_document_flow_lock_statement(dialect, DocumentFlowLock.__table__, lock_key))
+
+
 def create_document_relation(
     *,
     source_type: str,
@@ -594,6 +602,8 @@ def create_document_relation(
     source_item, target_item = _validate_relation_documents(
         source_key, source_id, source_item_id, target_key, target_id, target_item_id
     )
+    for key, identifier in sorted(((source_key, source_id), (target_key, target_id))):
+        lock_document_flow_document(key, identifier)
     _assert_same_company(source_key, source_id, target_key, target_id)
     _assert_same_sales_party(source_key, source_id, target_key, target_id)
     _validate_relation_status(source_key, source_id, target_key, target_id)
