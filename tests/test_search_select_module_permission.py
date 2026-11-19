@@ -224,3 +224,13 @@ def test_selector_accepts_company_ulid_for_module_permission(selector_module_sce
     assert response.status_code == 200
     labels = " ".join(option["label"] for option in response.get_json()["results"])
     assert ids["alpha_account"] in labels
+
+
+def test_every_search_catalog_declares_an_owner_or_explicit_company_scope():
+    """Un catálogo registrado no puede quedar fail-open por falta de mapeo (#N7)."""
+    from cacao_accounting.api import _SEARCH_SELECT_MODULE
+    from cacao_accounting.search_select import SEARCH_SELECT_REGISTRY
+
+    missing = set(SEARCH_SELECT_REGISTRY) - set(_SEARCH_SELECT_MODULE)
+
+    assert missing == set()
