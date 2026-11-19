@@ -872,17 +872,22 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
         database.session.rollback()
         flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(endpoint, request_id=request_id))
-    registro.posting_date = _parse_date(form.get("posting_date"))
+    try:
+        registro.posting_date = _parse_date(form.get("posting_date"))
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, request_id=request_id))
     registro.remarks = form.get("remarks")
     for item in database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars():
         database.session.delete(item)
     try:
         _total_qty, total = _save_sales_request_items(registro.id)
+        _set_sales_document_totals(registro, total)
     except ValueError as error:
         database.session.rollback()
         flash_error(error)
         return redirect(url_for(endpoint, request_id=request_id))
-    _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -904,17 +909,22 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
         database.session.rollback()
         flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(endpoint, order_id=order_id))
-    registro.posting_date = _parse_date(form.get("posting_date"))
+    try:
+        registro.posting_date = _parse_date(form.get("posting_date"))
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, order_id=order_id))
     registro.remarks = form.get("remarks")
     for item in database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars():
         database.session.delete(item)
     try:
         _total_qty, total = _save_sales_order_items(registro.id)
+        _set_sales_document_totals(registro, total)
     except ValueError as error:
         database.session.rollback()
         flash_error(error)
         return redirect(url_for(endpoint, order_id=order_id))
-    _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -2034,8 +2044,13 @@ def _handle_sales_quotation_edit_post(registro):
         database.session.rollback()
         flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
-    registro.posting_date = _parse_date(request.form.get("posting_date"))
-    registro.valid_until = _parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None
+    try:
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.valid_until = _parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
     registro.remarks = request.form.get("remarks")
     for item in database.session.execute(
         database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id)
@@ -2043,11 +2058,11 @@ def _handle_sales_quotation_edit_post(registro):
         database.session.delete(item)
     try:
         _total_qty, total = _save_sales_quotation_items(registro.id)
+        _set_sales_document_totals(registro, total)
     except ValueError as error:
         database.session.rollback()
         flash_error(error)
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
-    _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -2068,17 +2083,22 @@ def _handle_delivery_note_edit_post(registro):
         database.session.rollback()
         flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
-    registro.posting_date = _parse_date(request.form.get("posting_date"))
+    try:
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
     registro.remarks = request.form.get("remarks")
     for item in database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars():
         database.session.delete(item)
     try:
         _total_qty, total = _save_delivery_note_items(registro.id)
+        _set_sales_document_totals(registro, total)
     except ValueError as error:
         database.session.rollback()
         flash_error(error)
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
-    _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()

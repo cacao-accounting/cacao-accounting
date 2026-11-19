@@ -154,3 +154,49 @@ def test_edicion_sin_lineas_responde_controlado_y_conserva_lineas(entorno_contab
         assert linea.item_code == "ART01"
         assert Decimal(str(linea.qty)) == Decimal("2")
         assert Decimal(str(linea.amount)) == Decimal("20")
+
+
+@pytest.mark.parametrize("especificacion", ESPECIFICACIONES)
+def test_edicion_con_error_de_totales_responde_controlado_y_conserva_lineas(
+    entorno_contable, authenticated_client, monkeypatch, especificacion
+):
+    """Un fallo al recalcular totales no debe escapar como 500 ni borrar las líneas."""
+    from cacao_accounting.ventas import services as sales_services
+
+    app = entorno_contable.app
+    marcador = f"EDIT-TOTALES-{uuid4().hex[:10]}"
+    documento_id, linea_id = _crear_borrador_con_linea(entorno_contable, especificacion, marcador)
+
+    with app.app_context():
+        cliente_id = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one().id
+
+    def fail_totals(*_args, **_kwargs):
+        raise ValueError("No hay moneda transaccional para recalcular totales.")
+
+    monkeypatch.setattr(sales_services, "_set_sales_document_totals", fail_totals)
+    cliente = authenticated_client()
+    respuesta = cliente.post(
+        especificacion.ruta_edicion.format(id=documento_id),
+        data={
+            "company": "cacao",
+            "posting_date": FECHA.isoformat(),
+            "customer_id": cliente_id,
+            "remarks": marcador,
+            "item_code_0": "ART01",
+            "item_name_0": "Articulo Comercial",
+            "qty_0": "2",
+            "rate_0": "10",
+            "uom_0": "UND",
+            "warehouse_0": "BOD01",
+        },
+    )
+    assert respuesta.status_code == 302
+
+    confirmacion = cliente.get(respuesta.headers["Location"])
+    assert confirmacion.status_code == 200
+    assert "moneda transaccional" in confirmacion.get_data(as_text=True)
+
+    with app.app_context():
+        linea = database.session.get(especificacion.lineas, linea_id)
+        assert linea is not None
+        assert linea.item_code == "ART01"
