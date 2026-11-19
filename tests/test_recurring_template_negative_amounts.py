@@ -92,3 +92,21 @@ def test_positive_balanced_template_is_still_created(app, entorno_contable):
             database.session.delete(line)
         database.session.delete(template)
         database.session.commit()
+
+
+@pytest.mark.parametrize("value", ["abc", "NaN", "Infinity"])
+def test_non_numeric_template_amounts_are_rejected(app, entorno_contable, value):
+    """Un importe no numérico o no finito devuelve un error de negocio."""
+    code = f"NV{uuid4().hex[:6].upper()}"
+    with app.app_context():
+        cargo, abono, admin = _accounts()
+        with pytest.raises(RecurringJournalError, match="números"):
+            create_recurring_template(
+                data=_template_data(code),
+                items=[
+                    {"account_code": cargo, "debit": value, "credit": 0},
+                    {"account_code": abono, "debit": 0, "credit": value},
+                ],
+                user_id=admin,
+            )
+        database.session.rollback()

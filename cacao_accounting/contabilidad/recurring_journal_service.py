@@ -86,22 +86,31 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
     return template
 
 
+def _template_amount(value: Any) -> Any:
+    """Convierte un importe de plantilla y traduce errores numéricos a negocio."""
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        amount = Decimal(str(value if value not in (None, "") else "0"))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise RecurringJournalError(_("Los importes de la plantilla deben ser números válidos.")) from exc
+    if not amount.is_finite():
+        raise RecurringJournalError(_("Los importes de la plantilla deben ser números finitos."))
+    return amount
+
+
 def validate_template_balance(items: List[Dict[str, Any]]):
     """Valida que la plantilla esté balanceada y sin importes negativos (#2161)."""
-    from decimal import Decimal
-
     for index, item in enumerate(items, start=1):
-        debit = Decimal(str(item.get("debit", 0) or 0))
-        credit = Decimal(str(item.get("credit", 0) or 0))
-        if not debit.is_finite() or not credit.is_finite():
-            raise RecurringJournalError(_("Los importes de la plantilla deben ser números finitos."))
+        debit = _template_amount(item.get("debit", 0))
+        credit = _template_amount(item.get("credit", 0))
         if debit < 0 or credit < 0:
             raise RecurringJournalError(
                 _("La línea %(line)s de la plantilla no puede tener importes negativos.") % {"line": index}
             )
 
-    total_debit = sum(Decimal(str(i.get("debit", 0) or 0)) for i in items)
-    total_credit = sum(Decimal(str(i.get("credit", 0) or 0)) for i in items)
+    total_debit = sum((_template_amount(i.get("debit", 0)) for i in items), _template_amount(0))
+    total_credit = sum((_template_amount(i.get("credit", 0)) for i in items), _template_amount(0))
 
     if total_debit != total_credit:
         raise RecurringJournalError(_("La plantilla debe estar balanceada (Débito != Crédito)."))

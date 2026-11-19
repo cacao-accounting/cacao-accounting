@@ -561,8 +561,46 @@ def batch_number(batch_id: str | None) -> str:
     return cache[batch_id]
 
 
+def _lock_hierarchy_companies(company_codes: set[str]) -> None:
+    """Serializa los cambios de jerarquía por compañía en orden determinista.
+
+    Las filas de ``Entity`` actúan como el ancla común de la jerarquía: dos
+    transacciones que muevan ramas distintas de la misma compañía no pueden
+    validar y escribir simultáneamente, evitando ciclos (#2188). PostgreSQL y
+    MySQL conservan el lock hasta el commit; SQLite lo ignora y mantiene su
+    modo Desktop de un solo usuario.
+    """
+    from cacao_accounting.database import Entity
+
+    for company_code in sorted(code for code in company_codes if code):
+        database.session.execute(
+            database.select(Entity.code)
+            .where(Entity.code == company_code)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
+
+def _hierarchy_company_codes(node_class, node_id, entity: str) -> set[str]:
+    """Resuelve las compañías cuyo ancla debe bloquearse antes de validar."""
+    company_codes = {entity} if entity else set()
+    if node_id:
+        current_node = database.session.get(node_class, node_id)
+        current_company = getattr(current_node, "entity", None) if current_node is not None else None
+        if current_company:
+            company_codes.add(str(current_company))
+    return company_codes
+
+
 def check_hierarchy_cycle(node_class, node_id, proposed_parent_id, *, entity: str) -> None:
-    """Valida que el padre exista, pertenezca a la compañía y no cree ciclos."""
+    """Valida que el padre exista, pertenezca a la compañía y no cree ciclos.
+
+    La validación y la escritura posterior se serializan por compañía. En un
+    traslado entre compañías se bloquean ambas filas de ``Entity`` en orden
+    estable para no crear ciclos ni interbloqueos (#2188).
+    """
+    _lock_hierarchy_companies(_hierarchy_company_codes(node_class, node_id, entity))
+
     if node_id:
         for descendant_id in get_descendant_ids(node_class, node_id):
             descendant = database.session.get(node_class, descendant_id)
