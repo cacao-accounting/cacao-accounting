@@ -642,6 +642,7 @@ def _capture_sales_state(registro: Any) -> dict[str, Any]:
         "posting_date": str(getattr(registro, "posting_date", "")),
         "total": str(getattr(registro, "total", "")),
         "remarks": getattr(registro, "remarks", None),
+        "update_inventory": getattr(registro, "update_inventory", None),
     }
 
     from cacao_accounting.database import (
