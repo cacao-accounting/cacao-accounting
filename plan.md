@@ -149,11 +149,11 @@ QA1, QA2, QA3 o al administrador.
 | #2138 alta concurrente de reglas de mapeo | Implementado con regresión | `d4378d6b` | `tests/test_ledger_mapping_rule_concurrency.py`; lock por identidad y una sola regla activa |
 | #2183/#2184 referencias de artículo/bodega en borrados | Implementado con regresión | `de04e745` | `tests/test_item_delete_award_usage.py`; adjudicación cubierta y estructura exige FK RESTRICT a item/warehouse |
 | #2141 comparativo de órdenes: filtro, identidad, rondas, estados, múltiples comparativas y moneda | Implementado con regresión | `70ed2238`, `32142b23`, `64381662` | `tests/test_purchase_order_comparison_alignment.py`, `tests/test_purchase_comparison_list_multiple.py`; cantidad fuera de la clave, ronda vigente, órdenes canceladas, i18n, todos los enlaces y totales con moneda |
-| #2140 adjudicación concurrente, errores de recomendaciones y autoría | Implementado parcialmente con regresión | `d5a12cbd` | `tests/test_purchase_award_concurrency.py`; lock por RFQ, carreras controladas, error de recomendaciones y autor. CTA por permiso queda pendiente |
+| #2140 adjudicación concurrente, errores, autoría y CTAs por permiso | Implementado con regresión | `d5a12cbd`, `fde435c4` | `tests/test_purchase_award_concurrency.py`, `tests/test_purchase_sourcing_cta_permissions.py`; lock por RFQ, carreras controladas, recomendaciones visibles, autor y acciones filtradas |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1070 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1064 passed, 102 skipped**; 0 fallos (HEAD `d5a12cbd`).
+**Última suite completa:** Cloud **1072 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1066 passed, 102 skipped**; 0 fallos (HEAD `fde435c4`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 105 passing.
