@@ -7,10 +7,12 @@ import hmac
 import json
 import re
 from datetime import date, datetime, timezone
+from typing import cast
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for, session
 from flask_login import current_user, login_required
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 
 from cacao_accounting.database import (
     database,
@@ -647,6 +649,32 @@ def public_confirm_balance(token: str):
     )
 
 
+def _claim_verification_attempt(invitation: BalanceConfirmationInvitation) -> bool:
+    """Claim one verification attempt with an atomic, bounded increment (#2186).
+
+    La lectura y el incremento en memoria permitían que solicitudes paralelas
+    observaran el mismo contador y probaran más de cinco códigos. La
+    actualización condicional solo incrementa mientras el límite no se haya
+    alcanzado y decide el turno en una sola operación de base de datos.
+    """
+    result = cast(
+        CursorResult,
+        database.session.execute(
+            update(BalanceConfirmationInvitation)
+            .where(
+                BalanceConfirmationInvitation.id == invitation.id,
+                BalanceConfirmationInvitation.failed_attempts < 5,
+            )
+            .values(failed_attempts=BalanceConfirmationInvitation.failed_attempts + 1)
+            .execution_options(synchronize_session=False)
+        ),
+    )
+    claimed = bool(result.rowcount == 1)
+    database.session.commit()
+    database.session.expire(invitation, ["failed_attempts"])
+    return claimed
+
+
 @balance_confirmations_bp.route("/confirm-balance/<token>/verify", methods=["POST"])
 def public_confirm_balance_verify(token: str):
     """Procesa el formulario de verificación de identidad externa."""
@@ -694,14 +722,14 @@ def public_confirm_balance_verify(token: str):
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Rate limiting / failed attempts check
-    if invitation.failed_attempts >= 5:
+    if invitation.failed_attempts >= 5 or not _claim_verification_attempt(invitation):
+        database.session.commit()
         msg = _("Se ha excedido el número de intentos permitidos para este enlace. Por favor contacte al administrador.")
         flash(msg, "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Validar correspondencia exacta de correo
     if not hmac.compare_digest(email_input, invitation.email or ""):
-        invitation.failed_attempts += 1
         database.session.commit()
         flash(_("La dirección de correo electrónico o el código ingresado son incorrectos."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
@@ -709,7 +737,6 @@ def public_confirm_balance_verify(token: str):
     # Validar correspondencia del código de verificación
     hashed_code = hashlib.sha256(code_input.encode("utf-8")).hexdigest()
     if not hmac.compare_digest(hashed_code, invitation.verification_code_hash or ""):
-        invitation.failed_attempts += 1
         database.session.commit()
         flash(_("La dirección de correo electrónico o el código ingresado son incorrectos."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
