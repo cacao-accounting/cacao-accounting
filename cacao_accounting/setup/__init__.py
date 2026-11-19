@@ -11,6 +11,7 @@
 # ---------------------------------------------------------------------------------------
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import login_required
+from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.database import database
 from cacao_accounting.setup.forms import (
@@ -170,6 +171,10 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
     except ValueError as exc:
         database.session.rollback()
         flash(str(exc) or texts["invalid_company"], "danger")
+        return None
+    except SQLAlchemyError:
+        database.session.rollback()
+        flash(texts["invalid_company"], "danger")
         return None
     session.pop("setup_step", None)
     flash(texts["setup_complete"], "success")

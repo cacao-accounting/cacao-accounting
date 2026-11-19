@@ -120,3 +120,26 @@ def test_alta_valida_completa_el_asistente():
         with application.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_error_de_base_de_datos_no_produce_500(monkeypatch):
+    """Una falla SQLAlchemy al crear la compañía mantiene el formulario."""
+    from sqlalchemy.exc import IntegrityError
+
+    import cacao_accounting.setup as setup_module
+
+    def fallar(*_args, **_kwargs):
+        raise IntegrityError("INSERT entity", {}, Exception("falla simulada"))
+
+    monkeypatch.setattr(setup_module, "finalize_setup", fallar)
+    application = _crear_app()
+    try:
+        client = _cliente(application)
+        respuesta = client.post("/setup/", data=_formulario("NEWCO"))
+
+        assert respuesta.status_code == 200
+        assert "Compañía" in respuesta.get_data(as_text=True)
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
