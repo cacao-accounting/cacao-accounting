@@ -168,10 +168,13 @@ QA1, QA2, QA3 o al administrador.
 | #2170 tasa demo USD/EUR consistente | Implementado con regresión | `869210b1` | `tests/test_demo_exchange_rates_consistency.py`; tasa derivada de USD/NIO y EUR/NIO, conversión directa igual a la triangular |
 | #2201 modal de correo único en detalles | Implementado con regresión | `a7a19695`, `9875381f` | `tests/test_detail_email_modal_once.py`; el menú clona botones inline y omite modales |
 | #2187 emisión concurrente de tokens de reset | Ya implementado; regresión concurrente añadida | `cf2551fd`, `e9cb2355` | `tests/test_password_reset_token_concurrency.py`; lock por cuenta, un token activo y solo el último válido |
+| #2136 rol proveedor validado en la RFQ | Implementado; regresión restaurada | `f2e9162d`, `72c2214a` | `tests/test_purchase_rfq_supplier_role.py`; alta/edición con cliente o ID inexistente rechazadas sin mutaciones |
+| #2178 secretos redactados dentro de listas | Ya implementado y cubierto | `da9aa55b` | `tests/test_query_tool_audit_redaction.py`; listas y listas anidadas recorridas antes de persistir |
+| Aislamiento de FK SQLite en pruebas | Corregido | `8e41e718` | `tests/test_item_delete_award_usage.py`; restaura `PRAGMA foreign_keys` para no contaminar el worker |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1090 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1084 passed, 102 skipped**; 0 fallos (HEAD `9875381f`).
+**Última suite completa:** Cloud **1094 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1088 passed, 102 skipped**; 0 fallos (HEAD `8e41e718`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
