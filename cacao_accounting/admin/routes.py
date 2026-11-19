@@ -174,8 +174,12 @@ def _price_list_reference_error(company: str | None, currency: str | None) -> st
     return None
 
 
-def _can_manage_price_list(price_list: PriceList) -> bool:
-    """Return whether the current catalog editor may manage this company list."""
+def _can_access_price_list_company(price_list: PriceList) -> bool:
+    """Comprueba que la lista pertenezca al alcance de compañía del usuario.
+
+    La autorización de escritura la exige `_require_price_list_editor`; esta
+    guarda solo resuelve el alcance por compañía de una lista concreta.
+    """
     if current_user.classification == "admin":
         return True
     if not price_list.company:
@@ -188,7 +192,7 @@ def _can_manage_price_list(price_list: PriceList) -> bool:
 
 def _require_price_list_company_access(price_list: PriceList) -> None:
     """Forbid sales managers from changing a list outside their companies."""
-    if not _can_manage_price_list(price_list):
+    if not _can_access_price_list_company(price_list):
         abort(403)
 
 
@@ -964,7 +968,7 @@ def lista_precios():
     price_lists = [
         price_list
         for price_list in database.session.execute(database.select(PriceList).order_by(PriceList.name)).scalars().all()
-        if _can_manage_price_list(price_list)
+        if _can_access_price_list_company(price_list)
     ]
     return render_template("admin/price_lists.html", price_lists=price_lists, titulo=_("Listas de Precios"))
 
@@ -1039,7 +1043,7 @@ def precios_item():
         )
         .scalars()
         .all()
-        if _can_manage_price_list(price_list)
+        if _can_access_price_list_company(price_list)
     ]
     allowed_list_ids = {price_list.id for price_list in price_lists}
     item_prices = [

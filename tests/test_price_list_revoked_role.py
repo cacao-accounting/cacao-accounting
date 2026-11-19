@@ -15,7 +15,7 @@ import pytest
 from flask_login import login_user
 
 from cacao_accounting import create_app
-from cacao_accounting.admin.routes import _can_manage_price_list
+from cacao_accounting.admin.routes import _can_access_price_list_company
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
@@ -195,14 +195,14 @@ def test_active_sales_manager_can_create_price_list(price_list_role_scenario):
 
 
 def test_company_membership_alone_is_not_enough_for_price_list_scope(price_list_role_scenario):
-    """`_can_manage_price_list` requires an active sales permission, not just the grant."""
+    """`_can_access_price_list_company` requires an active sales permission, not just the grant."""
     app, ids = price_list_role_scenario
     price_list = PriceList(name="Lista Alfa", company="alpha", currency="NIO")
 
     with app.test_request_context("/"):
         login_user(database.session.get(User, ids["member"]))
-        assert _can_manage_price_list(price_list) is False
+        assert _can_access_price_list_company(price_list) is False
 
     with app.test_request_context("/"):
         login_user(database.session.get(User, ids["active"]))
-        assert _can_manage_price_list(price_list) is True
+        assert _can_access_price_list_company(price_list) is True
