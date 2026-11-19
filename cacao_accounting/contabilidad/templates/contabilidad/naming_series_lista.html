@@ -115,7 +115,7 @@
       {% endfor %}
     </tbody>
   </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.naming_series_list") }}</div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.naming_series_list", extra_params={"company": company_filter} if company_filter else None) }}</div>
 </div>
 {% else %}
 {{ macros.crear_nueva_entidad() }}
