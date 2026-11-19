@@ -247,6 +247,9 @@ def _factor_conversion_uom(factor: Decimal) -> Decimal:
 
 def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -> Decimal:
     """Convierte cantidad de un item entre UOM configuradas."""
+    qty = _decimal_value(qty)
+    if not qty.is_finite():
+        raise InventoryServiceError(_("La cantidad a convertir debe ser finita."))
     if from_uom == to_uom:
         return qty
     conversion = (
@@ -255,7 +258,8 @@ def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -
         .first()
     )
     if conversion:
-        return qty * _factor_conversion_uom(_decimal_value(conversion.conversion_factor))
+        factor = _factor_conversion_uom(_decimal_value(conversion.conversion_factor))
+        return _finite_conversion_result(qty * factor)
     inverse = (
         database.session.execute(select(ItemUOMConversion).filter_by(item_code=item_code, from_uom=to_uom, to_uom=from_uom))
         .scalars()
@@ -263,8 +267,15 @@ def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -
     )
     if inverse:
         factor = _factor_conversion_uom(_decimal_value(inverse.conversion_factor))
-        return qty / factor
+        return _finite_conversion_result(qty / factor)
     raise InventoryServiceError(_("No existe conversion UOM para el item."))
+
+
+def _finite_conversion_result(value: Decimal) -> Decimal:
+    """Rechaza un resultado de conversión que no sea un decimal finito."""
+    if not value.is_finite():
+        raise InventoryServiceError(_("La cantidad convertida debe ser finita."))
+    return value
 
 
 def item_qty_in_base_uom(item_code: str | None, quantity: Any, uom: str | None) -> Decimal:
@@ -858,7 +869,10 @@ def parse_item_uom_rows(form: Mapping[str, Any]) -> list[ItemUOMRow]:
         cleaned_factor = str(factor or "").strip()
         if not cleaned_code and not cleaned_factor:
             continue
-        rows.append(ItemUOMRow(uom_code=cleaned_code, conversion_factor=_decimal_value(cleaned_factor)))
+        parsed_factor = _decimal_value(cleaned_factor)
+        if not parsed_factor.is_finite():
+            raise InventoryServiceError(_("La conversión UOM debe ser un número finito."))
+        rows.append(ItemUOMRow(uom_code=cleaned_code, conversion_factor=parsed_factor))
     return rows
 
 
@@ -878,6 +892,8 @@ def validate_item_uom_rows(default_uom: str, rows: list[ItemUOMRow]) -> None:
             raise InventoryServiceError(_("No se puede repetir la misma UOM adicional."))
         if database.session.execute(select(UOM).filter_by(code=row.uom_code)).scalar_one_or_none() is None:
             raise InventoryServiceError(_("La UOM '%(uom_code)s' no existe.") % {"uom_code": row.uom_code})
+        if not row.conversion_factor.is_finite():
+            raise InventoryServiceError(_("El factor de conversión de UOM debe ser finito."))
         if row.conversion_factor <= 0:
             raise InventoryServiceError(_("La conversión a la unidad predeterminada debe ser mayor que cero."))
         seen.add(row.uom_code)

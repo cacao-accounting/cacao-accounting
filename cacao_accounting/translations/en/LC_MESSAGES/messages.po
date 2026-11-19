@@ -18988,6 +18988,22 @@ msgstr "The expiration date cannot be earlier than the manufacturing date."
 msgid "La conversión de UOM requiere un factor positivo."
 msgstr "UOM conversion requires a positive factor."
 
+#: cacao_accounting/inventario/service.py:247
+msgid "La cantidad a convertir debe ser finita."
+msgstr "The quantity to convert must be finite."
+
+#: cacao_accounting/inventario/service.py:265
+msgid "La cantidad convertida debe ser finita."
+msgstr "The converted quantity must be finite."
+
+#: cacao_accounting/inventario/service.py:878
+msgid "La conversión UOM debe ser un número finito."
+msgstr "The UOM conversion must be a finite number."
+
+#: cacao_accounting/inventario/service.py:896
+msgid "El factor de conversión de UOM debe ser finito."
+msgstr "The UOM conversion factor must be finite."
+
 #: cacao_accounting/inventario/service.py:267
 msgid "No existe conversion UOM para el item."
 msgstr "There is no UOM conversion for the item."
