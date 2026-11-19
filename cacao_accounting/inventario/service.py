@@ -13,6 +13,7 @@ from typing import Any, Mapping, Sequence
 
 from flask_login import current_user
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.database import (
     Accounts,
@@ -195,7 +196,17 @@ def create_batch(params: BatchParams) -> Batch:
         is_active=params.is_active,
     )
     database.session.add(batch)
-    database.session.flush()
+    try:
+        database.session.flush()
+    except IntegrityError as exc:
+        # Dos validaciones pueden observar el mismo par (item, lote) antes de
+        # insertar; la restricción única decide el ganador. La solicitud
+        # perdedora debe revertir y responder un conflicto de negocio (#2173).
+        database.session.rollback()
+        raise InventoryServiceError(
+            _("El lote '%(batch_no)s' ya existe para el item %(item_code)s.")
+            % {"batch_no": batch.batch_no, "item_code": batch.item_code}
+        ) from exc
     return batch
 
 
