@@ -284,7 +284,7 @@ def _require_payment_reference_access(
     document = get_document(source_type, document_id)
     if document is None or not document_matches_type(source_type, document):
         abort(404)
-    company = get_document_company(source_type, document_id)
+    company = getattr(document, "company", None) or getattr(document, "entity", None)
     if not company:
         abort(404)
     module = _module_for_document_type(source_type)

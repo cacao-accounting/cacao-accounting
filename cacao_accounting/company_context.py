@@ -24,6 +24,9 @@ def explicit_company_grants() -> set[str]:
     """Compañías asignadas explícitamente al usuario, sin bypass admin.
 
     Fuente única para el alcance Cloud de selectores y servicios de terceros.
+    Un administrador tampoco obtiene compañías implícitas: su acceso debe
+    estar registrado como ``UserCompanyAccess`` igual que el de cualquier
+    usuario (#2198, #1327).
     """
     from cacao_accounting.database import Entity, UserCompanyAccess, database
 

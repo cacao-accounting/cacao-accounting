@@ -25660,3 +25660,51 @@ msgstr "Template amounts must be finite numbers."
 #: cacao_accounting/contabilidad/recurring_journal_service.py
 msgid "La línea %(line)s de la plantilla no puede tener importes negativos."
 msgstr "Template line %(line)s cannot have negative amounts."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."
+msgstr "The accounting account must be active, enabled, and a leaf account."
+
+#: cacao_accounting/contabilidad/recurring_journal_service.py
+msgid "Los importes de la plantilla deben ser números válidos."
+msgstr "Template amounts must be valid numbers."
+
+#: cacao_accounting/compras/purchase_reconciliation_service.py
+msgid "La clave de idempotencia pertenece a una conciliación cancelada."
+msgstr "The idempotency key belongs to a cancelled reconciliation."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "Valor numérico inválido en columna '%(field)s'."
+msgstr "Invalid numeric value in column '%(field)s'."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El documento origen no existe o no corresponde al flujo importado."
+msgstr "The source document does not exist or does not match the imported flow."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El documento origen debe pertenecer a la compañía de la importación."
+msgstr "The source document must belong to the import company."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El tercero del documento origen no coincide con la fila importada."
+msgstr "The source document party does not match the imported row."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "La bodega '%(warehouse)s' no pertenece a la compañía o está inactiva."
+msgstr "Warehouse '%(warehouse)s' does not belong to the company or is inactive."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El item de inventario '%(item)s' requiere una bodega."
+msgstr "Inventory item '%(item)s' requires a warehouse."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "La columna tercero es obligatoria para este tipo de registro."
+msgstr "The party column is required for this record type."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El periodo contable para la fecha %(date)s está cerrado o no existe."
+msgstr "The accounting period for date %(date)s is closed or does not exist."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El tercero no está habilitado para la compañía de la importación."
+msgstr "The party is not enabled for the import company."

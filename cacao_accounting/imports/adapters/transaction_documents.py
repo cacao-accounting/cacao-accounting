@@ -102,7 +102,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             try:
                 amount = self._finite_decimal(row_data.get(field), field)
             except ValueError:
-                errors.append(f"Valor numérico inválido en columna '{field}'.")
+                errors.append(_("Valor numérico inválido en columna '%(field)s'.") % {"field": field})
                 continue
             if field == "cantidad" and amount <= 0:
                 errors.append(_("La cantidad debe ser mayor que cero."))
@@ -128,13 +128,13 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         if not (first_row.get("documento_origen") and self.config.source_field):
             return
         if source is None:
-            errors.append("El documento origen no existe o no corresponde al flujo importado.")
+            errors.append(_("El documento origen no existe o no corresponde al flujo importado."))
         elif source.docstatus != 1:
-            errors.append("El documento origen debe estar aprobado.")
+            errors.append(_("El documento origen debe estar aprobado."))
         elif source.company != company_id:
-            errors.append("El documento origen debe pertenecer a la compañía de la importación.")
+            errors.append(_("El documento origen debe pertenecer a la compañía de la importación."))
         elif self.config.party_field and getattr(source, self.config.party_field, None) != first_row.get("tercero"):
-            errors.append("El tercero del documento origen no coincide con la fila importada.")
+            errors.append(_("El tercero del documento origen no coincide con la fila importada."))
 
     def _validate_document_row(self, row: dict[str, Any], company_id: str, errors: list[str]) -> None:
         """Validate warehouse, stock-item and batch constraints for one row."""
@@ -148,7 +148,9 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 database.select(Warehouse).filter_by(code=warehouse_code)
             ).scalar_one_or_none()
             if warehouse is None or warehouse.company != company_id or not warehouse.is_active:
-                errors.append(f"La bodega '{warehouse_code}' no pertenece a la compañía o está inactiva.")
+                errors.append(
+                    _("La bodega '%(warehouse)s' no pertenece a la compañía o está inactiva.") % {"warehouse": warehouse_code}
+                )
         item = database.session.get(Item, row.get("producto"))
         if (
             item is not None
@@ -156,7 +158,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             and not warehouse_code
             and self.config.entity_type in {"purchase_receipt", "delivery_note"}
         ):
-            errors.append(f"El item de inventario '{item.code}' requiere una bodega.")
+            errors.append(_("El item de inventario '%(item)s' requiere una bodega.") % {"item": item.code})
         errors.extend(self._validate_row_batch(row.get("producto"), row.get("lote")))
 
     def validate_document(self, document_data: list[dict[str, Any]], context: dict[str, Any] | None = None) -> list[str]:
@@ -164,7 +166,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         errors: list[str] = []
         first_row = document_data[0]
         if self.config.party_field and not first_row.get("tercero"):
-            errors.append("La columna tercero es obligatoria para este tipo de registro.")
+            errors.append(_("La columna tercero es obligatoria para este tipo de registro."))
         try:
             posting_date = parse_import_date(first_row.get("fecha"))
         except (ValueError, TypeError):
@@ -172,7 +174,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             return errors
         company_id = (context or {}).get("company_id") or ""
         if not is_period_open(company_id, posting_date):
-            errors.append(f"El periodo contable para la fecha {posting_date} está cerrado o no existe.")
+            errors.append(_("El periodo contable para la fecha %(date)s está cerrado o no existe.") % {"date": posting_date})
         source = self._source_document(first_row.get("documento_origen"))
         self._validate_source_document(first_row, source, company_id, errors)
         if self.config.party_field and first_row.get("tercero"):
@@ -180,7 +182,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 database.select(CompanyParty).filter_by(party_id=first_row.get("tercero"), company=company_id, is_active=True)
             ).scalar_one_or_none()
             if membership is None:
-                errors.append("El tercero no está habilitado para la compañía de la importación.")
+                errors.append(_("El tercero no está habilitado para la compañía de la importación."))
         for row in document_data:
             self._validate_document_row(row, company_id, errors)
         try:

@@ -826,6 +826,10 @@ def close_line_balance(
     ``qty`` se interpreta en ``uom`` (o en la UOM de la línea si se omite) y se
     convierte a la UOM base antes de acumularse en ``closed_qty``. Si ``qty``
     no se indica se cierra todo el pendiente, que ya está expresado en base.
+
+    Contrato transaccional: el servicio solo hace ``flush``. El llamador debe
+    confirmar la transacción antes de responder éxito; la ruta API lo hace
+    antes del ``jsonify`` para no publicar un cierre no persistido (#1466).
     """
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
@@ -884,7 +888,11 @@ def close_document_balances(
     target_type: str,
     reason: str,
 ) -> list[dict[str, Any]]:
-    """Cierra todo el saldo pendiente de un documento fuente hacia un target."""
+    """Cierra todo el saldo pendiente de un documento fuente hacia un target.
+
+    Al igual que :func:`close_line_balance`, el llamador conserva el control
+    del commit para que la evidencia quede confirmada antes de responder.
+    """
     closed: list[dict[str, Any]] = []
     for item in get_document_items(source_type, source_id):
         available = pending_qty(source_type, source_id, item.id, target_type)

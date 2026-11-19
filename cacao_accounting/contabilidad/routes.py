@@ -1505,7 +1505,7 @@ def journal_books():
     )
 
 
-@contabilidad.route("/accounts", methods=["GET", "POST"])
+@contabilidad.route("/accounts", methods=["GET"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -1701,7 +1701,7 @@ def editar_cuenta(id_cta):
     return redirect(url_for("contabilidad.cuenta", id_cta=registro.id))
 
 
-@contabilidad.route("/costs_center", methods=["GET", "POST"])
+@contabilidad.route("/costs_center", methods=["GET"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")

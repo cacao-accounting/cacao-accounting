@@ -52,7 +52,12 @@ def _as_utc(value: datetime) -> datetime:
 
 
 def _secret_digest(secret_type: str, user_id: str, secret: str, purpose: str = "") -> bytes:
-    """Return a keyed, non-reversible digest bound to its auth context."""
+    """Return a keyed, non-reversible digest bound to its auth context.
+
+    La clave de derivación es ``SECRET_KEY``. Rotarla invalida los OTP, tokens
+    de recuperación y hashes de dispositivo pendientes: deben emitirse de
+    nuevo después de la rotación (#1695).
+    """
     key = current_app.secret_key
     if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
         raise RuntimeError("A stable Flask SECRET_KEY is required to protect authentication secrets")
