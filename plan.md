@@ -334,7 +334,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1294 | #1658 | ⚠️ Código retirado en `2d9d8848`; sin referencias (etiqueta sin cambio); GitHub: needs-work | Retira la mutación de contador externo sin auditoría |
 | #1306 | #1653 | Implementación (`needs-work`) | Bloquea el serial antes de validar salidas concurrentes |
 | #1318 | #1658 | Implementación (`needs-work`) | Integra o backfill bancario o elimina |
-| #1319 | #1653 | ✅ Implementado; fix en `8c6e2a0a` (etiqueta sin cambio) | `identity_key` único en base y conflicto concurrente traducido a error controlado por el adaptador |
+| #1319 | #1653 | ✅ Implementado; runtime en `8c6e2a0a`, guard de arranque en `7f75289a` (etiqueta sin cambio) | `identity_key` único en esquemas nuevos y previos; conflicto concurrente traducido a error controlado |
 | #1466 | #1653 | ✅ Implementado; regresión local en `4078e439` (etiqueta sin cambio) | API de cierre de flujo responde 200 sin persistir cambios |
 | #1669 | #1653 | ✅ Implementado; regresión local en `ba0e0252` (etiqueta sin cambio) | [Imports] Recuperación duplica errores de timeout |
 | #1682 | #1653 | ✅ Implementado; regresión local en `8c4fdec4` (etiqueta sin cambio) | [Audit][Auth] Evita roles duplicados por usuario |
@@ -490,7 +490,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #2063 | Consumidor | ✅ Implementado; regresión local en `b8da6123` (etiqueta sin cambio) | Una acción desconocida no despacha a `reject_review`; la solicitud permanece pendiente |
 | #2076 | #1708 | ✅ Implementado; regresión local en `45fa2490` (etiqueta sin cambio) | El segundo rechazo observa la solicitud ya rechazada y no registra otra acción |
 | #2119 | #1706 | ✅ Implementado; regresión local en `c82ac81f` (etiqueta sin cambio) | La exención de contraasiento exige línea existente, mismo padre y sin reverso previo |
-| #2120 | #1709 | ✅ Implementado; regresión local en `e18cd8e9` (etiqueta sin cambio) | Reejecutar un período histórico anula también las corridas posteriores |
+| #2120 | #1709 | ✅ Implementado; barrido acotado en `fdbf8a33` (etiqueta sin cambio) | Reejecutar un período revierte solo corridas abiertas del mismo ejercicio; no toca ejercicios ajenos ni períodos cerrados |
 | #2113 | #1653 | ✅ Implementado; regresión local en `7f936c2f` (etiqueta sin cambio) | La cancelación aprobada bloquea antes de validar y refresca los destinos |
 | #2175 | #1656 | ✅ Implementado; runtime en `bc73b69f`, migración retirada en `47f15b3d` (etiqueta sin cambio) | Folios únicos por compañía/tipo e internos globales; `create_all` crea los índices y no hay aparato de migración sin consumidor en pre-alpha |
 | #546 | #1655 | Implementación (`needs-work`) | [AUDIT][R2R][Multimoneda] Las tasas de cambio históricas pueden editarse después de ser usadas |
@@ -500,7 +500,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #961 | #1655 | Implementación (`needs-work`) | AR/AP acepta tasa unitaria sin conversión válida |
 | #995 | #1707 | Implementación (`needs-work`) | Fiscal: aplicar exclusiones sin lista de inclusión |
 | #996 | #1707 | Implementación (`needs-work`) | Compras: incluir líneas fiscales manuales en el total |
-| #1004 | #1656 | ✅ Implementado; regresión en `1d739a2d` (etiqueta sin cambio) | Contador atómico por periodo anual/mensual; la fecha retroactiva continúa su propio consecutivo y el log registra el periodo |
+| #1004 | #1656 | ✅ Implementado; concurrencia atómica en `0d611e1b` (etiqueta sin cambio) | Upsert idempotente y `UPDATE` atómico por periodo; SQLite ya no depende de `FOR UPDATE` ni choca con el índice único |
 | #1008 | #1707 | ✅ Implementado; regresión en `7e29f010` (etiqueta sin cambio) | Preview, total, snapshot y motor rechazan IDs manuales repetidos; los IDs únicos conservan ambas líneas |
 | #1009 | #1707 | Implementación (`needs-work`) | Fiscal: rechazar líneas manuales negativas en el preview |
 | #1011 | #1707 | Implementación (`needs-work`) | Fiscal: no duplicar conceptos en bases acumuladas |
