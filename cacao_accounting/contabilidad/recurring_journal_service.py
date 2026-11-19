@@ -40,7 +40,9 @@ PLANTILLA_NO_ENCONTRADA = "Plantilla no encontrada."
 RECURRING_FREQUENCY_LABELS = {
     "monthly": _l("Mensual"),
     "weekly": _l("Semanal"),
-    "daily": _l("Diario"),
+    # `Diario` ya identifica el libro contable y se traduce como `Journal`;
+    # la frecuencia usa un msgid propio para no heredar ese significado.
+    "daily": _l("Diaria"),
 }
 
 

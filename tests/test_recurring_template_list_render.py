@@ -165,3 +165,39 @@ def test_historial_recurrente_usa_el_color_de_cada_estado(app, authenticated_cli
             ).scalars():
                 database.session.delete(application)
             database.session.commit()
+
+
+def test_frecuencia_diaria_en_ingles_no_se_traduce_como_libro(app, authenticated_client, plantilla_qa):
+    """`daily` se presenta como «Daily» y no hereda el «Journal» del libro (#2157)."""
+    with app.app_context():
+        plantilla = database.session.execute(
+            database.select(RecurringJournalTemplate).filter_by(code=plantilla_qa)
+        ).scalar_one()
+        plantilla_id = plantilla.id
+        plantilla.frequency = "daily"
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        idioma_previo = admin.language
+        admin.language = "en"
+        database.session.commit()
+
+    try:
+        client = authenticated_client()
+        listado = client.get(f"/accounting/journal/recurring?search={plantilla_qa}")
+        detalle = client.get(f"/accounting/journal/recurring/{plantilla_id}")
+
+        assert listado.status_code == 200
+        assert "<td>Daily</td>" in listado.get_data(as_text=True)
+        assert "<td>Journal</td>" not in listado.get_data(as_text=True)
+        assert detalle.status_code == 200
+        assert ">Daily<" in detalle.get_data(as_text=True)
+        assert ">Journal<" not in detalle.get_data(as_text=True)
+        formulario = client.get("/accounting/journal/recurring/new")
+        assert formulario.status_code == 200
+        assert 'value="daily">Daily</option>' in formulario.get_data(as_text=True)
+    finally:
+        with app.app_context():
+            plantilla = database.session.get(RecurringJournalTemplate, plantilla_id)
+            plantilla.frequency = "monthly"
+            admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+            admin.language = idioma_previo
+            database.session.commit()

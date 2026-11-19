@@ -388,7 +388,7 @@ class FormularioRecurringJournalTemplate(FlaskForm):
         choices=[
             ("monthly", _l("Mensual")),
             ("weekly", _l("Semanal")),
-            ("daily", _l("Diario")),
+            ("daily", _l("Diaria")),
         ],
         default="monthly",
         validators=[DataRequired()],
