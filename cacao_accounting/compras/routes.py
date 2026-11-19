@@ -2674,6 +2674,15 @@ def compras_recepcion_nuevo():
         if origen is not None:
             _require_purchase_document_access(origen, "consultar")
 
+    if from_order_id and from_receipt_id:
+        if orden_origen is None or recepcion_origen is None:
+            abort(404)
+        if recepcion_origen.purchase_order_id != orden_origen.id:
+            abort(400, description=_("La recepción de origen no pertenece a la orden indicada."))
+        # La devolución usa una sola fuente: la recepción original. La orden
+        # solo se valida como vínculo, no para precargar líneas (#2148).
+        from_order_id = None
+
     selected_company = _resolve_receipt_selected_company(recepcion_origen, orden_origen, formulario)
     if selected_company:
         exige_acceso_compania("inventory", selected_company, "crear")

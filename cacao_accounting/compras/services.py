@@ -1843,6 +1843,14 @@ def _create_purchase_receipt_from_form():
         supplier_id = request.form.get("supplier_id") or None
         from_receipt = request.form.get("from_receipt") or None
         from_order = request.form.get("from_order") or None
+        if from_receipt and from_order:
+            receipt_source = database.session.get(PurchaseReceipt, from_receipt)
+            order_source = database.session.get(PurchaseOrder, from_order)
+            if receipt_source is None or order_source is None:
+                raise ValueError(_("El documento origen indicado no existe."))
+            if receipt_source.purchase_order_id != order_source.id:
+                raise ValueError(_("La recepción de origen no pertenece a la orden indicada."))
+            from_order = None
         source = database.session.get(PurchaseReceipt, from_receipt) if from_receipt else None
         source = source or (database.session.get(PurchaseOrder, from_order) if from_order else None)
         company, transaction_currency = _validate_purchase_flow_header(source)

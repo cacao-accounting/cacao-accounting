@@ -255,3 +255,47 @@ def test_lista_relacionada_respeta_el_acceso_de_inventario(receipt_source_scenar
     assert "PO-ALPHA" in body
     assert "PO-BETA" not in body
     assert "PR-BETA" not in body
+
+
+def test_recepcion_rechaza_orden_y_recepcion_incompatibles(receipt_source_scenario):
+    """No se mezcla una orden distinta con la recepción de origen (#2148)."""
+    app, ids = receipt_source_scenario
+    with app.app_context():
+        order_alt = PurchaseOrder(
+            company="alpha",
+            posting_date=date(2026, 10, 20),
+            docstatus=1,
+            document_no="PO-ALPHA-ALT",
+            supplier_name="Proveedor Alpha",
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(order_alt)
+        database.session.commit()
+        order_alt_id = order_alt.id
+
+    response = _authenticated_client(app).get(
+        f"/buying/purchase-receipt/new?from_order={order_alt_id}&from_receipt={ids['receipt_alpha']}"
+    )
+
+    assert response.status_code == 400
+
+
+def test_recepcion_usa_una_sola_fuente_cuando_orden_y_recepcion_coinciden(receipt_source_scenario):
+    """La devolución precarga desde la recepción, no desde la orden (#2148)."""
+    app, ids = receipt_source_scenario
+    with app.app_context():
+        receipt = database.session.get(PurchaseReceipt, ids["receipt_alpha"])
+        receipt.purchase_order_id = ids["order_alpha"]
+        database.session.commit()
+
+    response = _authenticated_client(app).get(
+        f"/buying/purchase-receipt/new?from_order={ids['order_alpha']}&from_receipt={ids['receipt_alpha']}"
+    )
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'name="from_order"' not in html
+    assert 'name="from_receipt"' in html
+    assert 'name="is_return"' in html
+    assert "source_type=purchase_order" not in html

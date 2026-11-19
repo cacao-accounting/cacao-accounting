@@ -23792,3 +23792,11 @@ msgstr "New Order"
 #: cacao_accounting/contabilidad/templates/contabilidad/naming_series_nueva.html
 msgid "Editar Serie"
 msgstr "Edit Series"
+
+#: cacao_accounting/compras/routes.py
+msgid "La recepción de origen no pertenece a la orden indicada."
+msgstr "The source receipt does not belong to the indicated purchase order."
+
+#: cacao_accounting/compras/routes.py
+msgid "El documento origen indicado no existe."
+msgstr "The indicated source document does not exist."
