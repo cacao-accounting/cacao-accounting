@@ -139,9 +139,10 @@ QA1, QA2, QA3 o al administrador.
 | #2145/#2157/#2199 breadcrumb localizado, frecuencia traducida y enlace de chat | Implementado con regresión | `01b9b237` | `tests/test_ui_navigation_labels.py`, `tests/test_recurring_template_list_render.py`; lista y detalle muestran Mensual/Semanal/Diario |
 | #2203/#2204 retiro de `transaction_form_js` y macros con consumidor | Implementado con regresión | `752486f1` | `tests/test_transaction_form_macros_consumers.py`; el resto de macros conserva consumidores reales |
 | #2151 cierre fiscal con clasificaciones de catálogo en mayúscula | Implementado con regresión | `09b4b158` | `tests/test_fiscal_year_closing_classification_case.py`; `Income`, `Expense`, `Cost` y minúsculas |
+| #2144 enlace de tipos de proveedor alineado con administración global | Implementado con regresión | `51f48cc1` | `tests/test_purchases_supplier_group_link.py`; usuario con `purchases.configurar` sin acceso admin |
 
-**Última suite completa:** Cloud **1049 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1043 passed, 102 skipped**; 0 fallos (HEAD `09b4b158`).
+**Última suite completa:** Cloud **1050 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1044 passed, 102 skipped**; 0 fallos (HEAD `51f48cc1`).
 Las pruebas concurrentes de #2188 y #2172 se ejecutaron además contra PostgreSQL con
 `CHECK_DATABASE=true`. La suite JavaScript quedó en 105 passing. La matriz completa
 PostgreSQL/MySQL/Redis sigue pendiente de CI.
