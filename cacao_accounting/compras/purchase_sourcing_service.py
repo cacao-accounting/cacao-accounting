@@ -183,6 +183,12 @@ def offer_line_for_item(
     return lines[occurrence] if 0 <= occurrence < len(lines) else None
 
 
+def _normalize_authorization_reason(reason: str | None) -> str | None:
+    """Return the justification without surrounding whitespace, or None when blank."""
+    normalized = reason.strip() if reason else ""
+    return normalized or None
+
+
 def validate_award_request(
     rfq: PurchaseQuotation,
     selections: dict[str, str],
@@ -190,6 +196,7 @@ def validate_award_request(
     reason: str | None,
 ) -> tuple[list[PurchaseQuotationItem], list[SupplierQuotation], set[str]]:
     """Validate coverage, minimum offers and manual exceptions."""
+    reason = _normalize_authorization_reason(reason)
     offers = submitted_supplier_quotations(rfq.id)
     config = get_purchase_sourcing_config()
     _validate_award_authorization(offers, config.minimum_offers, user_id, reason)
@@ -214,6 +221,7 @@ def _validate_award_authorization(
     offers: Sequence[SupplierQuotation], minimum_offers: int, user_id: str | None, reason: str | None
 ) -> None:
     """Validate offer count and authorization for sourcing exceptions."""
+    normalized_reason = _normalize_authorization_reason(reason)
     insufficient = len(offers) < minimum_offers
     authorizer = is_purchase_sourcing_authorizer(user_id)
     if insufficient and not authorizer:
@@ -221,9 +229,9 @@ def _validate_award_authorization(
             _("Se requieren al menos %(minimum_offers)s ofertas; solo existen %(offer_count)s.")
             % {"minimum_offers": minimum_offers, "offer_count": len(offers)}
         )
-    if insufficient and not reason:
+    if insufficient and not normalized_reason:
         raise PurchaseSourcingError(_("La autorización de oferta única requiere una justificación."))
-    if reason and not authorizer:
+    if normalized_reason and not authorizer:
         raise PurchaseSourcingError(_("Solo un Administrador o el Gerente de Compras puede autorizar excepciones."))
 
 
@@ -258,6 +266,7 @@ def create_purchase_quotation_award(
     """Create an editable line-level award from submitted supplier offers."""
     from cacao_accounting.default_scope import lock_default_scope
 
+    reason = _normalize_authorization_reason(reason)
     lock_default_scope("purchase_quotation_award", rfq.id)
     existing = (
         database.session.execute(

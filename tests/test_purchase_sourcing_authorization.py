@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -14,11 +16,28 @@ from cacao_accounting import create_app
 from cacao_accounting.compras.purchase_sourcing_service import (
     PurchaseSourcingError,
     _validate_award_authorization,
+    create_purchase_quotation_award,
     is_purchase_manager,
     is_purchase_sourcing_authorizer,
 )
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Roles, RolesUser, User, database
+from cacao_accounting.database import (
+    Currency,
+    Entity,
+    Item,
+    Party,
+    PurchaseQuotation,
+    PurchaseQuotationAward,
+    PurchaseQuotationAwardItem,
+    PurchaseQuotationItem,
+    Roles,
+    RolesUser,
+    SupplierQuotation,
+    SupplierQuotationItem,
+    UOM,
+    User,
+    database,
+)
 
 
 @pytest.fixture
@@ -99,3 +118,157 @@ def test_administrador_conserva_autorización_de_excepciones(purchase_roles):
         assert not is_purchase_manager(users["admin"])
         assert is_purchase_sourcing_authorizer(users["admin"])
         _validate_award_authorization([], minimum_offers=1, user_id=users["admin"], reason="Excepción aprobada")
+
+
+@pytest.mark.parametrize("reason", ["   ", "\t\n ", " \u00a0 ", ""])
+@pytest.mark.parametrize("assignment", ["active", "admin"])
+def test_justificacion_sin_contenido_no_autoriza_oferta_unica(purchase_roles, assignment, reason):
+    """A blank justification never enables the insufficient-offer exception."""
+    application, users = purchase_roles
+    with application.app_context():
+        with pytest.raises(PurchaseSourcingError, match="justificación"):
+            _validate_award_authorization([], minimum_offers=2, user_id=users[assignment], reason=reason)
+
+
+@pytest.fixture
+def sourcing_award(tmp_path: Path):
+    """Provide an RFQ with a cheap and an expensive supplier offer."""
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'sourcing_award.db'}",
+            "SQLALCHEMY_ENGINE_OPTIONS": {"poolclass": StaticPool},
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": True,
+        }
+    )
+    with application.app_context():
+        database.create_all()
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Entity(
+                    code="cacao",
+                    name="Cacao",
+                    company_name="Cacao SA",
+                    tax_id="J0001",
+                    currency="NIO",
+                    enabled=True,
+                    status="default",
+                ),
+                User(
+                    id="admin",
+                    user="admin",
+                    name="Administrador",
+                    password=b"x",
+                    active=True,
+                    classification="admin",
+                ),
+                UOM(code="UND", name="Unidad"),
+            ]
+        )
+        database.session.flush()
+        cheap_supplier = Party(code="PROV-CHEAP", name="Proveedor Económico", is_supplier=True)
+        expensive_supplier = Party(code="PROV-COSTLY", name="Proveedor Costoso", is_supplier=True)
+        database.session.add_all(
+            [
+                cheap_supplier,
+                expensive_supplier,
+                Item(code="ART-1", name="Artículo", item_type="goods", is_stock_item=True, default_uom="UND"),
+            ]
+        )
+        database.session.flush()
+        rfq = PurchaseQuotation(
+            company="cacao",
+            posting_date=date(2026, 11, 19),
+            docstatus=1,
+            document_no="RFQ-1422",
+            transaction_currency="NIO",
+        )
+        database.session.add(rfq)
+        database.session.flush()
+        rfq_item = PurchaseQuotationItem(
+            purchase_quotation_id=rfq.id,
+            item_code="ART-1",
+            qty=Decimal("5"),
+            uom="UND",
+            qty_in_base_uom=Decimal("5"),
+        )
+        database.session.add(rfq_item)
+        database.session.flush()
+        offers = {}
+        for supplier, document_no, rate in (
+            (cheap_supplier, "SQ-CHEAP", "10"),
+            (expensive_supplier, "SQ-COSTLY", "15"),
+        ):
+            quotation = SupplierQuotation(
+                company="cacao",
+                posting_date=date(2026, 11, 19),
+                docstatus=1,
+                document_no=document_no,
+                supplier_id=supplier.id,
+                purchase_quotation_id=rfq.id,
+                transaction_currency="NIO",
+            )
+            database.session.add(quotation)
+            database.session.flush()
+            database.session.add(
+                SupplierQuotationItem(
+                    supplier_quotation_id=quotation.id,
+                    item_code="ART-1",
+                    qty=Decimal("5"),
+                    uom="UND",
+                    qty_in_base_uom=Decimal("5"),
+                    rate=Decimal(rate),
+                )
+            )
+            offers[document_no] = quotation.id
+        database.session.commit()
+        ids = {"rfq": rfq.id, "rfq_item": rfq_item.id, **offers}
+    yield application, ids
+    with application.app_context():
+        database.session.remove()
+        database.engine.dispose()
+
+
+@pytest.mark.parametrize("reason", ["   ", "\t\n "])
+def test_adjudicacion_rechaza_justificacion_vacia_en_oferta_no_recomendada(sourcing_award, reason):
+    """Selecting a costlier offer still requires a substantive justification."""
+    application, ids = sourcing_award
+    with application.app_context():
+        rfq = database.session.get(PurchaseQuotation, ids["rfq"])
+        with pytest.raises(PurchaseSourcingError, match="no recomendada"):
+            create_purchase_quotation_award(rfq, {ids["rfq_item"]: ids["SQ-COSTLY"]}, "admin", reason)
+        assert database.session.execute(database.select(PurchaseQuotationAward)).scalars().all() == []
+
+
+def test_adjudicacion_persiste_justificacion_normalizada(sourcing_award):
+    """A valid justification is stored trimmed and authorizes the override."""
+    application, ids = sourcing_award
+    with application.app_context():
+        rfq = database.session.get(PurchaseQuotation, ids["rfq"])
+        award = create_purchase_quotation_award(
+            rfq,
+            {ids["rfq_item"]: ids["SQ-COSTLY"]},
+            "admin",
+            "  Oferta urgente por desabastecimiento  \n",
+        )
+        database.session.commit()
+        assert award.authorization_reason == "Oferta urgente por desabastecimiento"
+        assert award.authorized_by == "admin"
+        award_item = database.session.execute(
+            database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)
+        ).scalar_one()
+        assert award_item.manual_override is True
+        assert award_item.override_reason == "Oferta urgente por desabastecimiento"
+
+
+def test_adjudicacion_descarta_justificacion_vacia_sin_excepcion(sourcing_award):
+    """A blank reason is not persisted when no exception is required."""
+    application, ids = sourcing_award
+    with application.app_context():
+        rfq = database.session.get(PurchaseQuotation, ids["rfq"])
+        award = create_purchase_quotation_award(rfq, {ids["rfq_item"]: ids["SQ-CHEAP"]}, "admin", "   ")
+        assert award.authorization_reason is None
+        assert award.authorized_by is None
