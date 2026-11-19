@@ -137,9 +137,10 @@ QA1, QA2, QA3 o al administrador.
 | #2200 precisión configurable de importes en servidor y formulario | Implementado con regresión | `6e377747` | `tests/test_currency_precision_formatting.py`, `transaction-form.test.js`; mapa de precisión por request y moneda transaccional |
 | #2196 niveles expandidos del árbol financiero | Verificado con regresión | `ef321bb4` | `cacao_accounting/static/test/financial-report-tree.test.js`; tres niveles y estado de cada control |
 | #2145/#2157/#2199 breadcrumb localizado, frecuencia traducida y enlace de chat | Implementado con regresión | `01b9b237` | `tests/test_ui_navigation_labels.py`, `tests/test_recurring_template_list_render.py`; lista y detalle muestran Mensual/Semanal/Diario |
+| #2203/#2204 retiro de `transaction_form_js` y macros con consumidor | Implementado con regresión | `752486f1` | `tests/test_transaction_form_macros_consumers.py`; el resto de macros conserva consumidores reales |
 
-**Última suite completa:** Cloud **1046 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1040 passed, 102 skipped**; 0 fallos (HEAD `01b9b237`).
+**Última suite completa:** Cloud **1048 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1042 passed, 102 skipped**; 0 fallos (HEAD `752486f1`).
 Las pruebas concurrentes de #2188 y #2172 se ejecutaron además contra PostgreSQL con
 `CHECK_DATABASE=true`. La suite JavaScript quedó en 105 passing. La matriz completa
 PostgreSQL/MySQL/Redis sigue pendiente de CI.
