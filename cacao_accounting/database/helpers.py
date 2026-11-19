@@ -138,6 +138,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_document_flow_lock_table()
             _ensure_roles_user_unique()
             _ensure_party_tax_id_key_column()
+            _ensure_purchase_invoice_supplier_key()
             _ensure_user_auth_version_column()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
@@ -1050,6 +1051,55 @@ def _ensure_party_tax_id_key_column() -> None:
         column_names=("tax_id_key",),
         deduplicate=lambda connection, table, column_names: None,
     )
+
+
+def _ensure_purchase_invoice_supplier_key() -> None:
+    """Rellena la clave de duplicidad de facturas de compra heredadas (#1433).
+
+    El listener solo cubre altas y actualizaciones; una fila histórica con
+    clave nula no colisiona con el índice único. Se rellena solo cuando la
+    combinación proveedor/número es inequívoca; los duplicados históricos se
+    dejan en nulo y se auditan para revisión manual.
+    """
+    from cacao_accounting.database import PurchaseInvoice
+
+    engine = database.engine
+    inspector = sa_inspect(engine)
+    if not inspector.has_table(PurchaseInvoice.__tablename__):
+        return
+    columns = {column["name"] for column in inspector.get_columns(PurchaseInvoice.__tablename__)}
+    if "supplier_invoice_key" not in columns:
+        return
+
+    with engine.begin() as connection:
+        rows = connection.execute(
+            select(
+                PurchaseInvoice.id,
+                PurchaseInvoice.supplier_id,
+                PurchaseInvoice.supplier_invoice_no,
+                PurchaseInvoice.supplier_invoice_key,
+                PurchaseInvoice.docstatus,
+            )
+        ).all()
+        grouped: dict[tuple[str | None, str], list[tuple[str, str | None]]] = {}
+        for invoice_id, supplier_id, supplier_invoice_no, supplier_invoice_key, docstatus in rows:
+            number = str(supplier_invoice_no or "").strip()
+            if docstatus == 2 or not number:
+                continue
+            grouped.setdefault((supplier_id, number), []).append((str(invoice_id), supplier_invoice_key))
+        for (_supplier_id, number), members in grouped.items():
+            if len(members) == 1 and members[0][1] is None:
+                connection.execute(
+                    PurchaseInvoice.__table__.update()
+                    .where(PurchaseInvoice.id == members[0][0])
+                    .values(supplier_invoice_key=number)
+                )
+            elif len(members) > 1 and any(key is None for _id, key in members):
+                log.warning(
+                    "Facturas de compra históricas con número {} duplicado; se dejan sin clave para revisión: {}",
+                    number,
+                    ", ".join(sorted(invoice_id for invoice_id, _key in members)),
+                )
 
 
 def _ensure_cacao_config_key_unique() -> None:
