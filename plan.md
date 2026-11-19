@@ -142,8 +142,8 @@ QA1, QA2, QA3 o al administrador.
 | #2144 enlace de tipos de proveedor alineado con administración global | Implementado con regresión | `51f48cc1` | `tests/test_purchases_supplier_group_link.py`; usuario con `purchases.configurar` sin acceso admin |
 | #2154 etiqueta del colapso de auditoría tras el toggle | Verificado con regresión | `caa97a12` | `tests/test_audit_timeline_collapse.py`; eventos `shown`/`hidden`, sin `onclick` inline |
 
-**Última suite completa:** Cloud **1050 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1044 passed, 102 skipped**; 0 fallos.
+**Última suite completa:** Cloud **1051 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1045 passed, 102 skipped**; 0 fallos (HEAD `caa97a12`).
 La suite JavaScript quedó en 105 passing.
 
 **Matriz de motores ejecutada localmente (HEAD `caa97a12`):**
