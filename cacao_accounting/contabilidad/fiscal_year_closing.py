@@ -87,7 +87,7 @@ def calculate_closing_balances(
             GLEntry.is_fiscal_year_closing.is_(False),
             GLEntry.is_cancelled.is_(False),
             GLEntry.is_reversal.is_(False),
-            Accounts.classification.in_(["ingreso", "costo", "gasto", "income", "cost", "expense"]),
+            func.lower(Accounts.classification).in_(["ingreso", "costo", "gasto", "income", "cost", "expense"]),
         )
         .group_by(
             GLEntry.account_id,
