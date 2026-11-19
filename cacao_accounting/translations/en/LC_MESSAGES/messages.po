@@ -25640,3 +25640,15 @@ msgstr "The requested fiscal period is not valid; use the YYYY-MM format."
 #: cacao_accounting/contabilidad/fiscal_year_closing.py
 msgid "El borrador del cierre fiscal no coincide con los saldos calculados; no se envió para aprobación."
 msgstr "The fiscal close draft does not match calculated balances; it was not submitted for approval."
+
+#: cacao_accounting/document_flow/service.py
+msgid "El documento destino pertenece a otro tercero."
+msgstr "The destination document belongs to another party."
+
+#: cacao_accounting/document_flow/service.py
+msgid "El bloqueo del flujo documental no está soportado por este motor de base de datos."
+msgstr "Document flow locking is not supported by this database engine."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "La fecha debe ser una fecha válida."
+msgstr "The date must be a valid date."

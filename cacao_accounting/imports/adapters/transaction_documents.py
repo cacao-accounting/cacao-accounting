@@ -168,7 +168,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         try:
             posting_date = parse_import_date(first_row.get("fecha"))
         except (ValueError, TypeError):
-            errors.append("La fecha debe ser una fecha válida.")
+            errors.append(_("La fecha debe ser una fecha válida."))
             return errors
         company_id = (context or {}).get("company_id") or ""
         if not is_period_open(company_id, posting_date):
