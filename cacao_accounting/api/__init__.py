@@ -1603,9 +1603,12 @@ def _save_arap_reconciliation_policy(company: str):
     if row is None:
         row = ArApReconciliationPolicy(company=company)
         database.session.add(row)
+    enabled = payload.get("enabled", True)
+    if not isinstance(enabled, bool):
+        return jsonify({"error": _("El campo enabled debe ser booleano.")}), 400
     row.mode = mode
     row.tolerance = tolerance
-    row.enabled = bool(payload.get("enabled", True))
+    row.enabled = enabled
     database.session.commit()
     return jsonify({"company": company, "mode": row.mode, "tolerance": str(row.tolerance), "enabled": row.enabled})
 
