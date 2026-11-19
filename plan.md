@@ -155,10 +155,11 @@ QA1, QA2, QA3 o al administrador.
 | #2168 `db seed` repetido sin traceback | Implementado con regresión | `e7f6264a` | `tests/test_cli_seed_idempotent.py`; preflight de entidad demo y `ValueError` controlado |
 | #2147 enlace del listado de costos al detalle | Implementado con regresión | `f51328f6` | `tests/test_landed_cost_list_link.py`; número enlazado al endpoint con ACL |
 | #2177 orden estable de líneas en impresión | Implementado con regresión | `5da4089c` | `tests/test_print_context_stable_order.py`; líneas, referencias y revalorizaciones por `created`/`id` |
+| #2176 actor y auditoría al cambiar rol de tercero | Implementado con regresión | `aae2a6e3` | `tests/test_party_role_audit.py`; `modified_by`, `audit_actor` y snapshots del rol |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1077 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1071 passed, 102 skipped**; 0 fallos (HEAD `5da4089c`).
+**Última suite completa:** Cloud **1078 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1072 passed, 102 skipped**; 0 fallos (HEAD `aae2a6e3`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
