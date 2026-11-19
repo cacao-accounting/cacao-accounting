@@ -23788,3 +23788,7 @@ msgstr "New Order"
 #~ msgid "Último movimiento"
 #~ msgstr "Last movement"
 
+
+#: cacao_accounting/contabilidad/templates/contabilidad/naming_series_nueva.html
+msgid "Editar Serie"
+msgstr "Edit Series"
