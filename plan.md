@@ -374,9 +374,9 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1063 | #1652 | Implementación (`needs-work`) | Importación contable: validar cuenta padre |
 | #1064 | #1652 | 🧪 Implementado localmente; GitHub fix-proposed (QA2 pendiente) | Importación transaccional: validar tarifas negativas |
 | #1065 | #1652 | ✅ Implementado; regresión local en `88964495` (etiqueta sin cambio) | Importación: rechazar archivos sin filas de datos |
-| #1072 | #1650 | Implementación (`needs-work`) | Rechazar factores UOM no finitos |
+| #1072 | #1650 | ✅ Implementado; regresión en `da551940` (etiqueta sin cambio) | Parseo y validación rechazan factores no finitos; la conversión valida entrada y resultado |
 | #1087 | #1650 | Implementación (`needs-work`) | Normalizar precisión antes de detectar extractos repetidos |
-| #1174 | #1650 | Implementación (`needs-work`) | Rechaza factores UOM no finitos |
+| #1174 | #1650 | ✅ Implementado; regresión en `da551940` (etiqueta sin cambio) | `Infinity`/`NaN` no se persisten y producen `InventoryServiceError`, no `InvalidOperation` |
 | #1182 | #1717 | ✅ Implementado; regresión en `cb5c1074` (etiqueta sin cambio) | UOM inválida no persiste, duplicado controlado y errores visibles en la plantilla |
 | #1183 | #1717 | ✅ Implementado; regresión en `cb5c1074` (etiqueta sin cambio) | Bodega con campos vacíos no persiste; duplicado y compañía autorizada cubiertos |
 | #1184 | #1717 | ✅ Implementado; regresión en `cb5c1074` (etiqueta sin cambio) | Unidad sin código no persiste; presupuesto inválido no se convierte en cero |
