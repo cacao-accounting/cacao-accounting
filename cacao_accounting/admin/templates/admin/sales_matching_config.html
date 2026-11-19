@@ -106,7 +106,8 @@
       </div>
       <div class="p-2">
         {% if configs %}
-        <table class="ca-table">
+        {% set tolerance_labels = {"percentage": "%", "absolute": _("Absoluto")} %}
+  <table class="ca-table">
           <caption style="display:none;">{{ _("Configuraciones de conciliación de ventas") }}</caption>
           <thead>
             <tr>
@@ -127,7 +128,7 @@
                 <span class="badge bg-warning text-dark">2-way</span>
                 {% endif %}
               </td>
-              <td>{{ cfg.price_tolerance_value }} {{ cfg.price_tolerance_type }}</td>
+              <td>{{ cfg.price_tolerance_value }} {{ tolerance_labels.get(cfg.price_tolerance_type, cfg.price_tolerance_type) }}</td>
               <td class="small text-muted">
                 {% if cfg.require_sales_order %}<i class="bi bi-check-circle-fill text-success" title="{{ _('Requiere OV') }}"></i>{% endif %}
                 {% if cfg.allow_price_difference %}<i class="bi bi-percent text-secondary ms-1" title="{{ _('Permite diferencia precio') }}"></i>{% endif %}

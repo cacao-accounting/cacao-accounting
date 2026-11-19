@@ -139,7 +139,8 @@
       </div>
       <div class="p-2">
         {% if configs %}
-        <table class="ca-table">
+        {% set tolerance_labels = {"percentage": "%", "absolute": _("Absoluto")} %}
+  <table class="ca-table">
           <caption style="display:none;">{{ _("Configuraciones de conciliación") }}</caption>
           <thead>
             <tr>
@@ -161,8 +162,8 @@
                 <span class="badge bg-warning text-dark">2-way</span>
                 {% endif %}
               </td>
-              <td>{{ cfg.price_tolerance_value }} {{ cfg.price_tolerance_type }}</td>
-              <td>{{ cfg.qty_tolerance_value }} {{ cfg.qty_tolerance_type }}</td>
+              <td>{{ cfg.price_tolerance_value }} {{ tolerance_labels.get(cfg.price_tolerance_type, cfg.price_tolerance_type) }}</td>
+              <td>{{ cfg.qty_tolerance_value }} {{ tolerance_labels.get(cfg.qty_tolerance_type, cfg.qty_tolerance_type) }}</td>
               <td class="small text-muted">
                 {% if cfg.require_purchase_order %}<i class="bi bi-check-circle-fill text-success" title="{{ _('Requiere OC') }}"></i>{% endif %}
                 {% if cfg.bridge_account_required %}<i class="bi bi-link-45deg text-info ms-1" title="{{ _('Requiere cuenta puente') }}"></i>{% endif %}
