@@ -16,6 +16,7 @@ from cacao_accounting.accounting_engine.common.context import TaxRuleContext
 from cacao_accounting.accounting_engine.common.fiscal import (
     SUPPORTED_TAX_CALCULATION_METHODS,
     affects_inventory_from_treatment,
+    find_duplicate_rule_id,
 )
 from cacao_accounting.database import Accounts, DocumentTaxLine, DocumentTaxSummary, TaxRule, database
 from cacao_accounting.i18n import _
@@ -53,11 +54,19 @@ def calculate_document_total_with_taxes(
     return total
 
 
+def _reject_duplicate_tax_line_ids(lines_payload: list[dict[str, Any]]) -> None:
+    """Rechaza líneas fiscales con identificadores repetidos."""
+    duplicate_rule_id = find_duplicate_rule_id(_document_tax_line_rule_id(line) for line in lines_payload)
+    if duplicate_rule_id is not None:
+        raise ValueError(_("Las líneas fiscales no pueden repetir el identificador '%(rule)s'.") % {"rule": duplicate_rule_id})
+
+
 def _document_total_from_canonical_tax_lines(*, company: str, subtotal: Decimal, tax_lines_payload: Any) -> Decimal:
     """Calculate the payable total from the same canonical lines persisted for posting."""
     lines_payload = _normalize_lines_payload(tax_lines_payload)
     if not lines_payload:
         return subtotal
+    _reject_duplicate_tax_line_ids(lines_payload)
     concept_amounts = {"goods": subtotal}
     delta = Decimal("0")
     for line_payload in lines_payload:
@@ -173,6 +182,7 @@ def persist_document_fiscal_snapshot(
 ) -> None:
     """Reemplaza el snapshot fiscal persistido de un documento."""
     lines_payload = _normalize_lines_payload(tax_lines)
+    _reject_duplicate_tax_line_ids(lines_payload)
     summary_payload = _normalize_summary_payload(tax_summary)
     if server_subtotal is not None:
         summary_payload["subtotal"] = str(server_subtotal)
@@ -306,6 +316,7 @@ def _build_document_tax_line(
 def _persist_document_tax_lines(
     *, company: str, summary_id: str, lines_payload: list[dict[str, Any]], server_subtotal: Decimal | None = None
 ) -> None:
+    _reject_duplicate_tax_line_ids(lines_payload)
     concept_amounts: dict[str, Decimal] = {}
     for index, line_payload in enumerate(lines_payload, start=1):
         rule_id = _document_tax_line_rule_id(line_payload)

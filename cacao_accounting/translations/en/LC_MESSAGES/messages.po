@@ -977,6 +977,12 @@ msgstr "Fiscal rule '%(rule)s' produced a negative amount."
 msgid "Las líneas fiscales manuales no pueden contener importes negativos."
 msgstr "Manual tax lines cannot contain negative amounts."
 
+#: cacao_accounting/fiscal_persistence_service.py:58 cacao_accounting/fiscal_preview_service.py:252
+#: cacao_accounting/accounting_engine/fiscal/engine.py:35
+#, python-format
+msgid "Las líneas fiscales no pueden repetir el identificador '%(rule)s'."
+msgstr "Tax lines cannot repeat the identifier '%(rule)s'."
+
 #: cacao_accounting/fiscal_persistence_service.py:456
 #, python-format
 msgid "La regla fiscal '%(rule)s' produjo una base negativa."

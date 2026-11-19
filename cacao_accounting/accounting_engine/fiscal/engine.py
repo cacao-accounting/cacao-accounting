@@ -16,7 +16,7 @@ from cacao_accounting.accounting_engine.common.context import (
     TaxRuleContext,
 )
 from cacao_accounting.accounting_engine.common.rounding import RoundingManager
-from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
+from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment, find_duplicate_rule_id
 from cacao_accounting.i18n import _
 
 
@@ -30,6 +30,12 @@ class FiscalEngine:
         rounding_manager = RoundingManager(context.rounding_policy)
         warnings: list[str] = []
         errors: list[str] = []
+
+        duplicate_rule_id = find_duplicate_rule_id(rule.rule_id for rule in context.tax_rules)
+        if duplicate_rule_id is not None:
+            return FiscalResult(
+                errors=[_("Las líneas fiscales no pueden repetir el identificador '%(rule)s'.") % {"rule": duplicate_rule_id}]
+            )
 
         sorted_rules = self._order_rules(context.tax_rules)
         if sorted_rules is None:
