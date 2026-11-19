@@ -43,6 +43,8 @@ from cacao_accounting.database import (
     User,
     UserCompanyAccess,
     Warehouse,
+    StockLedgerEntry,
+    StockValuationLayer,
     GLEntry,
     database,
 )
@@ -694,9 +696,30 @@ def _build_base_query(spec: SearchSelectSpec, normalized_filters: dict[str, Any]
         return _apply_user_catalog_scope(statement, normalized_filters, company_scope)
     if spec.model is Party and (normalized_filters.get("company") or company_scope is not None):
         return _apply_party_scope(statement, normalized_filters, company_scope)
+    if spec.model is Batch and company_scope is not None:
+        return _apply_batch_scope(statement, company_scope)
     if company_scope is not None and spec.model is not Item and "company" in spec.allowed_filters:
         return statement.where(_column_for(spec.model, spec.allowed_filters["company"]).in_(sorted(company_scope)))
     return statement
+
+
+def _apply_batch_scope(statement: Any, company_scope: set[str]) -> Any:
+    """Limita los lotes a los que tienen evidencia de inventario autorizada.
+
+    `Batch` no guarda compañía: su pertenencia se deriva del libro de stock y
+    de las capas de valoración. Un lote sin evidencia en las compañías
+    autorizadas no debe ser enumerable por el selector (#N6).
+    """
+    companies = sorted(company_scope)
+    valuation_batches = select(StockValuationLayer.batch_id).where(
+        StockValuationLayer.company.in_(companies),
+        StockValuationLayer.batch_id.is_not(None),
+    )
+    ledger_batches = select(StockLedgerEntry.batch_id).where(
+        StockLedgerEntry.company.in_(companies),
+        StockLedgerEntry.batch_id.is_not(None),
+    )
+    return statement.where(or_(Batch.id.in_(valuation_batches), Batch.id.in_(ledger_batches)))
 
 
 def _apply_user_catalog_scope(statement: Any, normalized_filters: dict[str, Any], company_scope: set[str]) -> Any:
