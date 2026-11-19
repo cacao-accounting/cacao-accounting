@@ -418,3 +418,23 @@ def test_close_line_rejects_subtype_mismatch(document_flow_app):
     )
 
     assert response.status_code == 404
+
+
+def test_create_target_rejects_malformed_lines(document_flow_app):
+    """Una línea nula responde 400 y no llega a la autorización por línea (#2171)."""
+    _, client, ids = document_flow_app
+    _login(client, "vendedor")
+
+    response = client.post(
+        "/api/document-flow/create-target",
+        json={
+            "source_document_type": "sales_request",
+            "source_document_id": ids["request"],
+            "target_document_type": "sales_order",
+            "company": "cacao",
+            "posting_date": "2026-01-02",
+            "lines": [None],
+        },
+    )
+
+    assert response.status_code == 400

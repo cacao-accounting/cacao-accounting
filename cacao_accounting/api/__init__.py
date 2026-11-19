@@ -257,7 +257,10 @@ def _require_flow_source_lines_access(payload: dict[str, Any], action: str = "cr
     la pertenencia a compañía del documento padre real de la línea física.
     """
     target_type = normalize_doctype(str(payload.get("target_document_type") or payload.get("target_type") or ""))
-    for selected in payload.get("lines") or []:
+    lines = payload.get("lines") or []
+    if not isinstance(lines, list) or any(not isinstance(selected, dict) for selected in lines):
+        abort(400)
+    for selected in lines:
         source_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
         item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
         document_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
