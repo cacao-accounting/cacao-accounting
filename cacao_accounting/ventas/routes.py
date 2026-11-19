@@ -126,6 +126,7 @@ from cacao_accounting.ventas.services import (
     _validate_sales_invoice_line_amounts,
     _validate_sales_items_eligible,
     _validated_delivery_customer,
+    _validate_delivery_customer_source,
     _validate_sales_source_link,
     _validate_sales_order_requirement,
     _validated_customer,
@@ -2094,6 +2095,7 @@ def ventas_entrega_submit(note_id: str):
             database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars().all()
         )
         _validate_sales_items_eligible(registro, items)
+        _validate_delivery_customer_source(registro, registro.customer_id)
         validate_submit_prerequisites(
             registro,
             items=items,

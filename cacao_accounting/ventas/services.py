@@ -170,6 +170,18 @@ def _validated_delivery_customer(customer_id: str | None, company: str | None) -
     return customer
 
 
+def _validate_delivery_customer_source(registro: DeliveryNote, customer_id: str | None) -> None:
+    """Exige que el cliente coincida con la orden o la nota de devolución."""
+    source: DeliveryNote | SalesOrder | None = None
+    if registro.reversal_of:
+        source = database.session.get(DeliveryNote, registro.reversal_of)
+    if source is None and registro.sales_order_id:
+        source = database.session.get(SalesOrder, registro.sales_order_id)
+    source_customer = getattr(source, "customer_id", None)
+    if source_customer and source_customer != customer_id:
+        raise ValueError(_("El cliente debe coincidir con el documento origen."))
+
+
 def _require_positive_qty(item_code: str, qty: Decimal) -> None:
     """Rechaza cantidades no positivas antes de persistir una línea de venta."""
     if qty <= 0:
@@ -2112,6 +2124,7 @@ def _handle_delivery_note_edit_post(registro):
     customer_id = request.form.get("customer_id") or None
     try:
         customer = _validated_delivery_customer(customer_id, registro.company)
+        _validate_delivery_customer_source(registro, customer_id)
     except ValueError as error:
         database.session.rollback()
         flash_error(error)

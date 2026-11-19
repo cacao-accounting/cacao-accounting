@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import CompanyParty, DeliveryNote, Party, database
+from cacao_accounting.database import CompanyParty, DeliveryNote, DeliveryNoteItem, Party, database
 
 FECHA = date(2026, 5, 15)
 MENSAJE_CLIENTE = "no está habilitado como cliente"
@@ -115,3 +115,95 @@ def test_edicion_rechaza_cambiar_a_proveedor(app, authenticated_client, entorno_
     with app.app_context():
         nota = database.session.get(DeliveryNote, note_id)
         assert nota.customer_id == cliente_id
+
+
+def _nota_origen(app, customer_id: str, suffix: str) -> str:
+    """Crea una nota de entrega aprobada que sirve como origen de devolución."""
+    with app.app_context():
+        cliente = database.session.get(Party, customer_id)
+        nota = DeliveryNote(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            remarks=f"ORIGEN-{suffix}",
+        )
+        database.session.add(nota)
+        database.session.commit()
+        return str(nota.id)
+
+
+def _borrador_devolucion(app, customer_id: str, source_id: str, suffix: str) -> str:
+    """Crea un borrador de devolución con una línea válida."""
+    with app.app_context():
+        cliente = database.session.get(Party, customer_id)
+        nota = DeliveryNote(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=0,
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            is_return=True,
+            reversal_of=source_id,
+            remarks=f"DEV-{suffix}",
+        )
+        database.session.add(nota)
+        database.session.flush()
+        database.session.add(
+            DeliveryNoteItem(
+                delivery_note_id=nota.id,
+                item_code="ART01",
+                item_name="Articulo Comercial",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("10"),
+                amount=Decimal("10"),
+                warehouse="BOD01",
+            )
+        )
+        database.session.commit()
+        return str(nota.id)
+
+
+def test_edicion_rechaza_otro_cliente_valido_del_origen(app, authenticated_client, entorno_contable):
+    """Una devolución no puede cambiar a otro cliente aunque sea válido."""
+    suffix = uuid4().hex[:8]
+    cliente_origen = _tercero(app, customer=True, active=True, membership=True)
+    cliente_alterno = _tercero(app, customer=True, active=True, membership=True)
+    source_id = _nota_origen(app, cliente_origen, suffix)
+    note_id = _borrador_devolucion(app, cliente_origen, source_id, suffix)
+
+    datos = _form(cliente_alterno, suffix)
+    datos.pop("from_warehouse")
+    datos["warehouse_0"] = "BOD01"
+    respuesta = authenticated_client().post(f"/sales/delivery-note/{note_id}/edit", data=datos)
+
+    assert respuesta.status_code == 302
+    with app.app_context():
+        nota = database.session.get(DeliveryNote, note_id)
+        assert nota.customer_id == cliente_origen
+
+
+def test_submit_rechaza_cliente_divergente_del_origen(app, authenticated_client, entorno_contable):
+    """El submit vuelve a comparar el cliente con la nota de devolución."""
+    suffix = uuid4().hex[:8]
+    cliente_origen = _tercero(app, customer=True, active=True, membership=True)
+    cliente_alterno = _tercero(app, customer=True, active=True, membership=True)
+    source_id = _nota_origen(app, cliente_origen, suffix)
+    note_id = _borrador_devolucion(app, cliente_alterno, source_id, suffix)
+
+    respuesta = authenticated_client().post(f"/sales/delivery-note/{note_id}/submit", follow_redirects=True)
+
+    assert respuesta.status_code == 200
+    assert "debe coincidir con el documento origen" in respuesta.get_data(as_text=True)
+    with app.app_context():
+        nota = database.session.get(DeliveryNote, note_id)
+        assert nota.docstatus == 0
