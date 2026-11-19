@@ -29,6 +29,7 @@ def test_catalogo_sin_entidades_muestra_el_alta_inicial(app, authenticated_clien
         response = authenticated_client().get(ruta)
     finally:
         app.jinja_env.globals["entidades_creadas"] = original
+        app.jinja_env.cache.clear()
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)

@@ -43,6 +43,7 @@ def test_detalle_de_factura_no_duplica_el_modal_de_correo(app, entorno_contable,
         invoice_id = invoice.id
 
     monkeypatch.setitem(app.jinja_env.globals, "can_send_transaction_emails", lambda: True)
+    app.jinja_env.cache.clear()
 
     response = authenticated_client().get(f"/sales/sales-invoice/{invoice_id}")
 
