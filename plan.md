@@ -117,11 +117,19 @@ QA1, QA2, QA3 o al administrador.
 | #1355 P3/P4: columna `auth_version` en bases existentes y revocación al cambiar clave desde administración | Implementado con regresión | `0489679e`, `5faa5547` | `tests/test_user_auth_version_schema.py`, `tests/test_admin_password_revokes_credentials.py`; `ALTER TABLE` cita `user` por dialecto |
 | Observaciones QA2 N1/N3/N5/N6/N7/N8/N9/N13/N14/N20/N22 | Implementado con regresión | `4f564721`, `a62cd7bf`, `62835fd3`, `7672d253`, `d5905938`, `b3c6aacf`, `ec9cefba`, `c6b848a7`, `386c54cf`, `f3144011` | `tests/test_search_select_batch_company_scope.py`, `tests/test_collaboration_task_company_revocation.py`, `tests/test_o2c_line_relation_party_scope.py`, `tests/test_purchase_invoice_supplier_key_backfill.py`, `tests/test_document_flow_read_access.py`, `tests/test_document_type_legacy_rows.py`, `tests/test_import_recovery_atomic_claim.py` |
 | QA2 N4: traducción de las cadenas nuevas y del mensaje de fecha del adaptador | Implementado con regresión | `fd0ab982` | `messages.po`/`messages.mo` compilados; `tests/test_import_date_normalization.py` |
+| #2186 intentos de verificación externa reclamados de forma atómica | Implementado con regresión | `d106ed59` | `tests/test_balance_confirmation_attempts.py`; 10 reclamos concurrentes, solo 5 turnos |
+| #2161 importes negativos rechazados en plantillas recurrentes | Implementado con regresión | `b7a06828` | `tests/test_recurring_template_negative_amounts.py` |
+| #2153 cierre de sesión POST-only con CSRF | Verificado con regresión | `c3a6bdab`, `f64393ce` | `tests/test_logout_csrf.py`; GET 405, POST sin token 400, POST con token limpia sesión |
+| #2171 líneas malformadas en `create-target` responden 400 | Implementado con regresión | `3ed9fd5b` | `tests/test_document_flow_read_access.py::test_create_target_rejects_malformed_lines` |
+| #2173 conflicto concurrente al crear lotes | Implementado con regresión | `6a3a673e` | `tests/test_inventory_batch_creation_race.py` |
+| #2181 numeración de pagos respeta la configuración por cuenta con campos vacíos | Implementado con regresión | `e7f895c2` | `tests/test_payment_numbering_config_empty_fields.py` |
+| #2174 cuentas de bodega imputables | Verificado con regresión | `7bce4dd2` | `tests/test_warehouse_inventory_account_validation.py` |
+| #2180 cuentas GL imputables en pagos y notas bancarias | Verificado con regresión | `de37f15f` | `tests/test_payment_gl_account_validation.py` |
 
-**Última suite completa:** Cloud **1007 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1002 passed, 99 skipped**; 0 fallos (HEAD `5faa5547`).
-Las observaciones posteriores (`fd0ab982`, `f3144011`) tienen pruebas dirigidas; la próxima
-ronda completa se ejecuta antes de un push.
+**Última suite completa:** Cloud **1031 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1026 passed, 99 skipped**; 0 fallos (HEAD `f64393ce`).
+La ronda se ejecutó dos veces tras corregir la contaminación de CSRF de una prueba de
+logout; la próxima ronda completa se ejecuta antes de un push.
 **Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
 localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
 `needs-work` (reabierto o pendiente de revisión). El estado de GitHub es la fuente para el cierre.
