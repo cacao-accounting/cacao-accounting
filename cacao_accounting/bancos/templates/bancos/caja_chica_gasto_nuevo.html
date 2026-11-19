@@ -101,7 +101,7 @@
     </div>
     <div class="col-md-4">
       <label class="form-label" for="amount">{{ _('Importe') }} <span class="text-danger">*</span></label>
-      <input class="form-control form-control-sm" type="number" step="0.01" min="0" name="amount" id="amount" value="{{ form.amount.data or '' }}" required>
+      <input class="form-control form-control-sm" type="number" step="any" min="0" name="amount" id="amount" value="{{ form.amount.data or '' }}" required>
     </div>
     <div class="col-md-4">
       <label class="form-label" for="cost_center_code">{{ _('Centro de costo') }} <span class="text-danger">*</span></label>
