@@ -334,7 +334,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1294 | #1658 | ⚠️ Código retirado en `2d9d8848`; sin referencias (etiqueta sin cambio); GitHub: needs-work | Retira la mutación de contador externo sin auditoría |
 | #1306 | #1653 | Implementación (`needs-work`) | Bloquea el serial antes de validar salidas concurrentes |
 | #1318 | #1658 | Implementación (`needs-work`) | Integra o backfill bancario o elimina |
-| #1319 | #1653 | Implementación (`needs-work`) | Evita duplicados en importaciones bancarias concurrentes |
+| #1319 | #1653 | ✅ Implementado; fix en `8c6e2a0a` (etiqueta sin cambio) | `identity_key` único en base y conflicto concurrente traducido a error controlado por el adaptador |
 | #1466 | #1653 | ✅ Implementado; regresión local en `4078e439` (etiqueta sin cambio) | API de cierre de flujo responde 200 sin persistir cambios |
 | #1669 | #1653 | ✅ Implementado; regresión local en `ba0e0252` (etiqueta sin cambio) | [Imports] Recuperación duplica errores de timeout |
 | #1682 | #1653 | ✅ Implementado; regresión local en `8c4fdec4` (etiqueta sin cambio) | [Audit][Auth] Evita roles duplicados por usuario |
