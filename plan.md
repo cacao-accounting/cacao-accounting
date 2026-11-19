@@ -527,7 +527,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1123 | #1709 | Implementación (`needs-work`) | fix: conserva stock histórico antes de anulación |
 | #1124 | #1709 | Implementación (`needs-work`) | fix: conserva facturas en reportes históricos |
 | #1149 | #1658 | Implementación (`needs-work`) | fix: aplica la frecuencia de diarios recurrentes |
-| #1153 | #1656 | Implementación (`needs-work`) | fix: evita cierres mensuales duplicados por período |
+| #1153 | #1656 | ✅ Implementado; fix en `95a3a133`, regresión en `tests/test_r2r_monthly_close_uniqueness.py` (etiqueta sin cambio) | Índice único `(company, period_id)`, lock ordenado y conflicto concurrente resuelto como cierre existente |
 | #1154 | #1656 | ✅ Implementado; regresión en `4c3bde46` (etiqueta sin cambio) | El POST de edición se rechaza mientras el período esté cerrado y el formulario desactiva los campos estructurales |
 | #1155 | #1656 | ✅ Implementado; regresión en `d5bf4941` (etiqueta sin cambio) | Crear y editar rechazan rangos superpuestos por compañía bajo lock; fechas adyacentes y otra compañía siguen permitidas |
 | #1156 | Consumidor | Implementación (`needs-work`) | La reapertura activa períodos deshabilitados |
