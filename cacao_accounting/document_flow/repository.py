@@ -38,12 +38,19 @@ def document_matches_type(doctype: str, document: Any) -> bool:
         # Una fila heredada sin subtipo solo es inequívoca para el tipo base
         # del modelo (por ejemplo ``sales_invoice``); no debe autorizarse como
         # nota de crédito, débito o devolución (#998, N14).
+        if not hasattr(spec.header_model, "document_type"):
+            return True
         default_type = getattr(spec.header_model, "document_type", None)
         default_value = getattr(default_type, "default", None)
         default_arg = getattr(default_value, "arg", None)
         if default_arg is None:
             return True
-        return normalize_doctype(doctype) == normalize_doctype(str(default_arg))
+        # Solo un default escalar identifica el tipo base. Un default callable
+        # no permite inferirlo: se falla cerrado en lugar de comparar el
+        # objeto con el nombre del doctype (N24b).
+        if not isinstance(default_arg, str):
+            return False
+        return normalize_doctype(doctype) == normalize_doctype(default_arg)
     return normalize_doctype(str(actual)) == normalize_doctype(doctype)
 
 

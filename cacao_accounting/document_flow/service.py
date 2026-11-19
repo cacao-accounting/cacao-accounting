@@ -558,6 +558,10 @@ def _lock_document_flow_source(source_key: str, source_id: str, source_item_id: 
     ``pending_qty``; en SQLite toma el turno de escritura y en PostgreSQL/MySQL
     bloquea la fila, de modo que otra transacción espera y recalcula el
     pendiente ya consumido (P6).
+
+    Los llamadores que creen varias relaciones en una misma transacción deben
+    recorrer las líneas en un orden estable para no bloquear dos claves en
+    orden inverso entre transacciones (N24a).
     """
     lock_table = DocumentFlowLock.__table__
     lock_key = _document_flow_lock_key(source_key, source_id, source_item_id, target_key)
