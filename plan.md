@@ -19,234 +19,15 @@
 implementación, evidencia local y commits; **no cambia etiquetas ni estados de GitHub**, que corresponden a
 QA1, QA2, QA3 o al administrador.
 
-| Lote / issue(s) | Estado local | Commit(s) | Evidencia |
-|---|---|---|---|
-| #1546 catálogos contables por compañía (proyectos, cuentas, centros de costo, unidades; ULID en cuentas/CC/proyectos/unidades) | Implementado con regresión | `1698c612`, `847617de`, `6a04dbdf`, `06058728`, `f4efb796`, `4a808042` | `tests/test_accounting_catalog_company_scope.py`, `tests/test_r2r_cost_center_hierarchy.py`, `tests/test_accounting_unit_detail_404.py` |
-| #1541 detalle de artículo; #1418/#1542 edición multiempresa; #1181 proveedor predeterminado | Implementado con regresión | `b3e98f36`, `42786767`, `771d4e15` | `tests/test_item_detail_company_scope.py`, `tests/test_item_edit_company_scope.py` |
-| #1173/#1416/#1176/#1543 listado y formulario de movimientos; #1175/#1540/#1417 lotes (cobertura) | Implementado con regresión | `04b2e32b`, `b4451169` | `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_inventory_batch_company_scope.py` |
-| #1526/#1527 bancos: permiso de alta y alcance por cuenta | Implementado con regresión | `ea3d7dfc` | `tests/test_cash_bank_company_scope.py` |
-| #1320 listado de movimientos bancarios exige consulta de Caja | Implementado con regresión | `74db370b` | `tests/test_cash_bank_company_scope.py` |
-| #1322 gastos de reposición de caja chica por alcance | Implementado con regresión | `d1979066` | `tests/test_petty_cash_fund_scope.py` |
-| #1329 revocación de tareas y badge al perder compañía | Implementado con regresión | `ecac5587` | `tests/test_collaboration_task_company_revocation.py` |
-| #1595 tareas ocultas al perder el permiso del documento | Implementado con regresión | `8badc192` | `tests/test_collaboration_task_company_revocation.py` |
-| #1411 listas relacionadas con módulos alternativos | Implementado con regresión | `1a58f880` (scoping y filtro) / `4e18de70` | `tests/test_s2p_purchase_receipt_source_scope.py` |
-| #1407 cada nodo del árbol documental por módulo | Implementado con regresión | `a43e6117` | `tests/test_document_tree_node_permissions.py` |
-| #1410 líneas de entrega consultables desde Ventas | Implementado con regresión | `54bb39a1` | `tests/test_document_flow_delivery_note_lines.py` |
-| #1388 relaciones O2C entre clientes distintos | Implementado con regresión | `872008d3` | `tests/test_o2c_line_relation_party_scope.py` |
-| #1399 tercero seleccionado en importación de conciliaciones | Implementado con regresión | `1afff009` | `tests/test_payment_reconciliation_import_party_scope.py` |
-| #1169 listado de cierres fiscales por compañía | Implementado con regresión | `a87db51f` | `tests/test_fiscal_year_closing_company_scope.py` |
-| #1261 reglas de matching acotadas a su cuenta | Implementado con regresión | `f79c5da7` | `tests/test_bank_matching_rule_account_scope.py` |
-| #1120 reporte de lotes aislado por compañía | Implementado con regresión | `b0d9003a` + `f995e0e0` | `tests/test_report_batch_company_evidence.py` |
-| #1576 validar_solicitud en permisos calculados | Implementado con regresión | `353bee41` | `tests/test_permissions_validate_request.py` |
-| #1515 fuentes documentales restringidas al módulo origen | Implementado con regresión | `9567dcdf` (prueba) | `tests/test_document_flow_read_access.py` |
-| #1640 rol de ventas desactivado en edición de precios | Implementado con regresión | `13dddd6c` | `tests/test_sales_price_editor_active_role.py` |
-| #1602 credenciales iniciales en el entrypoint del módulo | Implementado con regresión | `3821674c` | `tests/test_module_entrypoint_credentials.py` |
-| #1130 libro de KPI validado contra su compañía | Implementado con regresión | `c4b36226` | `tests/test_kpi_snapshot_ledger_scope.py` |
-| #1511 precargado de pagos acotado por compañía | Implementado con regresión | `147b367d` (prueba) | `tests/test_payment_preload_company_scope.py` |
-| #1104 permiso de Caja en candidatos de conciliación | Implementado con regresión | `4d94544b` | `tests/test_payment_reconciliation_candidates_scope.py` |
-| #1558 períodos de la portada acotados por compañía | Implementado con regresión | `26ab8aaf` (prueba) | `tests/test_home_company_periods_scope.py` |
-| #2011 rol de ventas vigente en listas de precios | Implementado con regresión | `4b25e21f` | `tests/test_price_list_revoked_role.py` |
-| #1433 factura duplicada validada con clave normalizada | Implementado con regresión | `c3d268ff` (fix/pruebas) | `tests/test_purchase_invoice_duplicate_scope.py` |
-| QA2: nodos `journal_entry`, ledger del KPI y compañía de cuenta en matching | Implementado con regresión | `79e40e5f`, `5a2594b9`, `2ee07d67` | `tests/test_document_tree_node_permissions.py`, `tests/test_kpi_snapshot_ledger_scope.py`, `tests/test_bank_matching_rule_account_scope.py` |
-| #1254 pendientes de compras ocultos en banca | Implementado con regresión | `274c1869` | `tests/test_query_tools_banking_purchase_scope.py` |
-| #1354/#1355/#1110 revocación de credenciales y confirmaciones vencidas | Implementado con regresión | `de6f005c`, `6ebf42a5`, `9032d7a4` | `tests/test_token_requerido.py`, `tests/test_password_reset_revokes_sessions.py`, `tests/test_balance_confirmation_delivery_failures.py` |
-| #1467 propiedad al cambiar estado de tareas | Implementado con regresión | `5848ee8e` (prueba) | `tests/test_task_status_authorization.py` |
-| #1253 lotes visibles solo con evidencia de la compañía | Implementado con regresión | `b0d9003a`, `f995e0e0` | `tests/test_report_batch_company_evidence.py` |
-| #997 alias fiscales de cobro/pago con acceso a compañía | Implementado con regresión | `43108a06` | `tests/test_fiscal_preview_company_scope.py` |
-| #998 alias documentales con permiso y subtipo validados | Implementado con regresión | `4bc2dc7e` | `tests/test_document_alias_subtype_access.py` |
-| #1357/#1283 retiro de código sin consumidores | Verificado por inspección y suite relacionada | `a93657fa`, `d1649c9a` | grep sin referencias; 41 passed |
-| #1488 lote de importación ligado a su presupuesto | Implementado con regresión | `76d28dc8` | `tests/test_r2r_budget_import_owner_scope.py` |
-| #1019 cierre de saldo ligado al documento autorizado | Implementado con regresión | `38fd869f` | `tests/test_document_flow_close_line_scope.py` |
-| #911 compañía obligatoria en Cloud sin fallback | Implementado con regresión | `da5cb0c4` | `tests/test_report_company_required.py` |
-| #1562 impresión de portal acotada a la compañía del usuario | Implementado con regresión | `5fbd7027` | `tests/test_portal_print_scope.py` |
-| #1641 vigencia del rol admin en /info | Implementado con regresión | `62e6c02c` | `tests/test_dev_info_admin_role.py` |
-| #1695 secretos de autenticación con HMAC y sin texto plano | Implementado con regresión | `e162b05c` | `tests/test_auth_secret_storage.py` |
-| #1696 consumo atómico del OTP en concurrencia | Implementado con regresión | `474684ec` | `tests/test_otp_atomic_verification.py` |
-| #2013 redondeo del lockout sin minuto extra | Implementado con regresión | `e9b32f49` | `tests/test_session_security_lockout_minutes.py` |
-| #2060 insignia de aprobaciones acotada por compañía | Implementado con regresión | `29fe2836` | `tests/test_approval_count_scope.py` |
-| #1466 cierre de flujo confirmado antes de responder | Implementado con regresión | `4078e439` | `tests/test_document_flow_close_persistence.py` |
-| #1000 consumo atómico del OTP (coordinado con #1696) | Verificado con regresión concurrente | `474684ec` | `tests/test_otp_atomic_verification.py` |
-| #1076 replay de idempotencia ligado a su factura | Implementado con regresión | `7e06776a` | `tests/test_purchase_reconciliation_idempotency_scope.py` |
-| #925 cancelación monotónica del ledger | Implementado con regresión | `4af51ebf` | `tests/test_ledger_cancellation_monotonic.py` |
-| #1002 inmutabilidad de la evidencia de auditoría en Desktop | Implementado con regresión | `39113652` | `tests/test_structural_integrity_guards.py` |
-| #1294 retiro de la mutación de contador externo sin auditoría | Verificado por inspección | `2d9d8848` | grep sin referencias |
-| #1669 claim atómico de la recuperación de importaciones | Implementado con regresión | `ba0e0252` | `tests/test_import_recovery_atomic_claim.py` |
-| #1144 claves repetidas rechazadas en el plan AR/AP | Implementado con regresión | `0e3f790b` | `tests/test_arap_allocation_idempotency.py` |
-| #950 rechazo de números no finitos en importaciones | Implementado con regresión | `135b3b5e` | `tests/test_import_non_finite_validation.py` |
-| #1007/#1010 rechazo de valores fiscales no finitos | Implementado con regresión | `481470f7` | `tests/test_fiscal_non_finite_validation.py`, `tests/test_admin_tax_rule_form.py` |
-| #1021/#1697 setup único y claves de configuración únicas | Implementado con regresión | `03dfc484` | `tests/test_setup_finalize_once.py`, `tests/test_config_key_uniqueness.py` |
-| #1601 acciones de escritura en rutas de Contabilidad | Implementado con regresión | `6845ff63`, `719b89fb` | `tests/test_accounting_write_actions_required.py` |
-| #1031 lote corrupto y recuperación con started_at nulo | Implementado con regresión | `4ac988a1` | `tests/test_import_corrupt_reader_recovery.py` |
-| QA2 B-1: guards únicos instalados en bases existentes | Implementado con regresión | `43db7563` | `tests/test_schema_guards_existing_databases.py` |
-| #1065 rechazo de archivos de importación sin filas | Implementado con regresión | `88964495` | `tests/test_import_empty_file_rejected.py` |
-| #1033 celdas vacías normalizadas en extractos y pronósticos | Implementado con regresión | `0baa66b1` | `tests/test_import_empty_cells_normalized.py` |
-| #1049 importación bloqueada en pronósticos no borrador | Implementado con regresión | `903cdf8b` | `tests/test_cash_forecast_import_status.py` |
-| #1050 importación con montos positivos en pronósticos | Implementado con regresión | `63934c23` | `tests/test_cash_forecast_import_amount.py` |
-| #1046 retiro del importador bancario sin ruta | Verificado por inspección | `a0d0f698` | grep sin referencias; suite de importaciones |
-| #1052 campos requeridos solo con espacios rechazados | Implementado con regresión | `f24b6b6a` | `tests/test_import_required_whitespace.py` |
-| #1055 fechas de Excel normalizadas antes de validar | Implementado con regresión | `70095718` | `tests/test_import_date_normalization.py` |
-| #2252/#2253 ACL documental por módulo en query tools | Implementado con regresión y familias reales en `91247b48` | `9f9ad0f9`, `91247b48` | `tests/test_query_tools_document_acl.py` |
-| #1051 identidad fiscal global normalizada y única | Implementado con regresión | `b4aac8b5` | `tests/test_party_tax_id_uniqueness.py` |
-| #1048 grupo y clasificación en importación de terceros | Implementado con regresión | `acafcce7` | `tests/test_party_import_group_classification.py` |
-| #2254/#2255 subtipo lógico en creación, listas y colaboración | Implementado con regresión | `de32b583` | `tests/test_document_subtype_creation_and_lists.py` |
-| #1061 serial de artículo separado de la serie de numeración | Implementado con regresión | `d807ed6f` | `tests/test_import_template_serial_column.py` |
-| #1064 tarifas negativas rechazadas en prevalidación | Implementado con regresión | `8fbe9f1d` | `tests/test_import_negative_rates.py` |
-| Retornos QA2: ledger Core, tareas sin compañía, módulo activo y replay | Implementado con regresión | `c6eff9bf`, `3201a6a3`, `232d26c2`, `44f91ef2`, `e07b4fef` | `tests/test_ledger_cancellation_monotonic.py`, `tests/test_collaboration_task_company_revocation.py`, `tests/test_query_tools_document_acl.py`, `tests/test_party_tax_id_uniqueness.py`, `tests/test_purchase_reconciliation_idempotency_scope.py` |
-| #1682/#2006/#1299 roles únicos, reemplazo serializado y preferencias inertes retiradas | Implementado con regresión | `8c4fdec4` | `tests/test_admin_user_roles_integrity.py`, `tests/test_company_party_preferences_cleanup.py` |
-| QA2 B4/B8/B11/B14: 404 homogéneo, default fail-closed, subtipo en árbol y política fiscal completa | Implementado con regresión | `eaf2efdc`, `eaaf0daf`, `e257f00a`, `bf8615d3` | `tests/test_accounting_catalog_missing_404.py`, `tests/test_query_tools_banking_purchase_scope.py`, `tests/test_document_tree_subtype_scope.py`, `tests/test_fiscal_preview_company_scope.py` |
-| #1572 filtros de tareas no amplían el alcance tras revocar | Implementado con regresión | `584253c4` | `tests/test_collaboration_task_company_revocation.py` |
-| #1332 alta de recepción y líneas con permiso de Inventario | Implementado con regresión | `ba3a7f08` | `tests/test_s2p_purchase_receipt_source_scope.py` |
-| #1524/#1525 terceros: permisos y alcance de listados/escrituras | Implementado con regresión | `1be22360` | `tests/test_party_management_company_scope.py` |
-| #1282 contactos, direcciones y roles cruzados de terceros | Implementado con regresión | `ff54d165` | `tests/test_party_management_company_scope.py` |
-| #1284 adjuntos de terceros por activación y permiso | Implementado con regresión | `9cd29cc2` | `tests/test_party_attachment_company_scope.py` |
-| #1286 seguimiento de autorización de terceros (política común) | Coordinación cubierta con regresión | `f0ec7506` | `tests/test_party_read_company_scope.py`, `tests/test_party_management_company_scope.py` |
-| #1280 configuración de terceros por compañía | Implementado con regresión | `039e582a` | `tests/test_party_management_company_scope.py` |
-| #1590 reporte de lotes con evidencia de compañía | Implementado con regresión | `b0d9003a` | `tests/test_report_batch_company_evidence.py` |
-| #1600/#1601 dashboard y permisos de acción contable | Implementado con regresión | `19610192` | `tests/test_dashboard_consult_permission.py`, `tests/test_accounting_action_permission.py` |
-| #1301 imágenes de artículos | Implementado con regresión | `8fe99bdc` | `tests/test_item_image_permission.py` |
-| #1338 compañías deshabilitadas en query tools | Implementado con regresión | `cbac6457` | `tests/test_query_tools_company_enabled.py` |
-| #1327 permiso de módulo en catálogos del selector | Implementado con regresión | `dbaede68` | `tests/test_search_select_module_permission.py` |
-| #2198 filtro `company` en el selector de compañías | Implementado con regresión | `0759a412` | `tests/test_search_select_company_filter.py` |
-| #2110 resolución de período por unión de módulos | Implementado con contrato y regresión | `5053c95e` | `tests/test_delivery_note_period_picker_scope.py` |
-| #1598 destinatarios de tareas por compañía/módulo | Implementado con regresión | `636a37b8` | `tests/test_collaboration_task_recipients_scope.py` |
-| #1321 catálogo de usuarios por compañía | Implementado con regresión | `b649bbdf` | `tests/test_search_select_user_company_scope.py` |
-| Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
-| Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
-| QA2 P6: consumo concurrente de una línea documental serializado por origen y familia de destino | Implementado con regresión | `f4f2c7cd` | `tests/test_document_relation_concurrency.py`; tabla `document_flow_lock` creada en bases existentes |
-| QA2 P7: `matched_qty` alineado con las asignaciones persistidas en 2-way/3-way | Implementado con regresión | `0082aa67` | `tests/test_purchase_reconciliation_matched_qty.py` |
-| #1355 P3/P4: columna `auth_version` en bases existentes y revocación al cambiar clave desde administración | Implementado con regresión | `0489679e`, `5faa5547` | `tests/test_user_auth_version_schema.py`, `tests/test_admin_password_revokes_credentials.py`; `ALTER TABLE` cita `user` por dialecto |
-| Observaciones QA2 N1/N3/N5/N6/N7/N8/N9/N13/N14/N20/N22 | Implementado con regresión | `4f564721`, `a62cd7bf`, `62835fd3`, `7672d253`, `d5905938`, `b3c6aacf`, `ec9cefba`, `c6b848a7`, `386c54cf`, `f3144011` | `tests/test_search_select_batch_company_scope.py`, `tests/test_collaboration_task_company_revocation.py`, `tests/test_o2c_line_relation_party_scope.py`, `tests/test_purchase_invoice_supplier_key_backfill.py`, `tests/test_document_flow_read_access.py`, `tests/test_document_type_legacy_rows.py`, `tests/test_import_recovery_atomic_claim.py` |
-| QA2 N4: traducción de las cadenas nuevas y del mensaje de fecha del adaptador | Implementado con regresión | `fd0ab982` | `messages.po`/`messages.mo` compilados; `tests/test_import_date_normalization.py` |
-| #2186 intentos de verificación externa reclamados de forma atómica | Implementado con regresión | `d106ed59` | `tests/test_balance_confirmation_attempts.py`; 10 reclamos concurrentes, solo 5 turnos |
-| #2161 importes negativos rechazados en plantillas recurrentes | Implementado con regresión | `b7a06828` | `tests/test_recurring_template_negative_amounts.py` |
-| #2153 cierre de sesión POST-only con CSRF | Verificado con regresión | `c3a6bdab`, `f64393ce` | `tests/test_logout_csrf.py`; GET 405, POST sin token 400, POST con token limpia sesión |
-| #2171 líneas malformadas en `create-target` responden 400 | Implementado con regresión | `3ed9fd5b` | `tests/test_document_flow_read_access.py::test_create_target_rejects_malformed_lines` |
-| #2173 conflicto concurrente al crear lotes | Implementado con regresión | `6a3a673e` | `tests/test_inventory_batch_creation_race.py` |
-| #2181 numeración de pagos respeta la configuración por cuenta con campos vacíos | Implementado con regresión | `e7f895c2` | `tests/test_payment_numbering_config_empty_fields.py` |
-| #2174 cuentas de bodega imputables | Verificado con regresión | `7bce4dd2` | `tests/test_warehouse_inventory_account_validation.py` |
-| #2180 cuentas GL imputables en pagos y notas bancarias | Verificado con regresión | `de37f15f` | `tests/test_payment_gl_account_validation.py` |
-| #2188 jerarquías concurrentes; #2161/N17 plantillas recurrentes negativas y numéricas | Implementado con regresión | `239c6e6d`, `1401aad7` | `tests/test_r2r_unit_hierarchy_concurrency.py` (PostgreSQL/MySQL), `tests/test_recurring_template_negative_amounts.py` |
-| #2180 R1 cuenta por defecto imputable; #2181/N25 numeración de pagos; #1076/N26 clave cancelada | Implementado con regresión | `79ab88a8` | `tests/test_bank_note_gl_account_validation.py`, `tests/test_payment_numbering_config_empty_fields.py`, `tests/test_purchase_reconciliation_idempotency_scope.py` |
-| i18n del adaptador transaccional; N24/N15/N18/N19 | Implementado con regresión | `9b6314b3` | `tests/test_import_*.py`, `tests/test_search_select_module_permission.py` |
-| #2197 precisión de existencias en el dashboard | Implementado con regresión | `2ad71bda` | `cacao_accounting/static/test/dashboard.test.js`; suite JS 103 passing |
-| N2/N11 badge de tareas por lote documental y alcance de destinatarios documentado | Implementado con regresión | `516049d2` | `tests/test_collaboration_task_company_revocation.py` |
-| N24a/N24b defaults no escalares y orden de bloqueo documental | Implementado con regresión | `a9872ade` | `tests/test_document_type_legacy_rows.py`, `tests/test_document_relation_concurrency.py` |
-| N12/N16/N21 fixture aislado, evidencia con `is_cancelled` y grupo vacío de centros de costo | Implementado con regresión | `63b58c7f` | `tests/test_delivery_note_period_picker_scope.py`, `tests/test_ledger_cancellation_monotonic.py`, `tests/test_r2r_cost_center_hierarchy.py` |
-| N4 catálogo i18n regenerado, sin fuzzy ni msgstr vacíos | Implementado con regresión | `8df2209a` | `messages.po`/`messages.mo`; 25 cadenas nuevas y 75 fuzzy corregidas |
-| #2172 importación bancaria concurrente sin duplicados | Implementado con regresión | `365f92ab` | `tests/test_bank_statement_import_concurrency.py` (PostgreSQL); lock por cuenta y detección bajo el mismo turno |
-| #2200 precisión configurable de importes en servidor y formulario | Implementado con regresión | `6e377747` | `tests/test_currency_precision_formatting.py`, `transaction-form.test.js`; mapa de precisión por request y moneda transaccional |
-| #2196 niveles expandidos del árbol financiero | Verificado con regresión | `ef321bb4` | `cacao_accounting/static/test/financial-report-tree.test.js`; tres niveles y estado de cada control |
-| #2145/#2157/#2199 breadcrumb localizado, frecuencia traducida y enlace de chat | Implementado con regresión | `01b9b237`, `7f98ad8f` | `tests/test_ui_navigation_labels.py`, `tests/test_recurring_template_list_render.py`; `Diaria` traduce a `Daily` en lista, detalle y selector sin heredar `Journal` |
-| #2203/#2204 retiro de `transaction_form_js` y macros con consumidor | Implementado con regresión | `752486f1` | `tests/test_transaction_form_macros_consumers.py`; el resto de macros conserva consumidores reales |
-| #2151 cierre fiscal con clasificaciones de catálogo en mayúscula | Implementado con regresión | `09b4b158` | `tests/test_fiscal_year_closing_classification_case.py`; `Income`, `Expense`, `Cost` y minúsculas |
-| #2144 enlace de tipos de proveedor alineado con administración global | Implementado con regresión | `51f48cc1` | `tests/test_purchases_supplier_group_link.py`; usuario con `purchases.configurar` sin acceso admin |
-| #2154 etiqueta del colapso de auditoría tras el toggle | Verificado con regresión | `caa97a12` | `tests/test_audit_timeline_collapse.py`; eventos `shown`/`hidden`, sin `onclick` inline |
-| #2152 distinción alta/edición de series de numeración | Implementado con regresión | `8439df1c` | `tests/test_naming_series_edit_labels.py`; breadcrumb, encabezado y botón |
-| #2149 fachada de contabilidad con `log_submit` y `__all__` | Implementado con regresión | `c4e77b56` | `tests/test_contabilidad_facade_compat.py`; import nombrado y wildcard |
-| #2148 fuentes alineadas en devoluciones de recepción | Implementado con regresión | `df8fb6dd` | `tests/test_s2p_purchase_receipt_source_scope.py`; combinación incompatible 400 y fuente única al coincidir |
-| #2143 snapshot de auditoría con totales y evidencia fiscal | Implementado con regresión | `f6fd5490` | `tests/test_purchase_audit_snapshot.py`; resumen y líneas fiscales antes/después |
-| #2142 alcance combinado Compras/Inventario en período de OC | Verificado con regresión | `b7d4cc1d` | `tests/test_s2p_purchase_order_period_scope.py`; unión del selector, rango ambiguo 400 y consulta solo Beta |
-| #2138 alta concurrente de reglas de mapeo | Implementado con regresión | `d4378d6b` | `tests/test_ledger_mapping_rule_concurrency.py`; lock por identidad y una sola regla activa |
-| #2183/#2184 referencias de artículo/bodega en borrados | Implementado con regresión | `de04e745` | `tests/test_item_delete_award_usage.py`; adjudicación cubierta y estructura exige FK RESTRICT a item/warehouse |
-| #2141 comparativo de órdenes: filtro, identidad, rondas, estados, múltiples comparativas y moneda | Implementado con regresión | `70ed2238`, `32142b23`, `64381662` | `tests/test_purchase_order_comparison_alignment.py`, `tests/test_purchase_comparison_list_multiple.py`; cantidad fuera de la clave, ronda vigente, órdenes canceladas, i18n, todos los enlaces y totales con moneda |
-| #2140 adjudicación concurrente, errores, autoría y CTAs por permiso | Implementado con regresión | `d5a12cbd`, `fde435c4` | `tests/test_purchase_award_concurrency.py`, `tests/test_purchase_sourcing_cta_permissions.py`; lock por RFQ, carreras controladas, recomendaciones visibles, autor y acciones filtradas |
-| #2160 estado real del historial de plantillas recurrentes | Implementado con regresión | `b6efd96a` | `tests/test_recurring_template_list_render.py`; badges y etiquetas por estado |
-| #2158 respuestas obsoletas al cargar libros recurrentes | Implementado con regresión | `34af3132` | `cacao_accounting/static/test/recurring-journal-books.test.js`; secuencia por petición y compañía vigente |
-| #2168 `db seed` repetido sin traceback | Implementado con regresión | `e7f6264a` | `tests/test_cli_seed_idempotent.py`; preflight de entidad demo y `ValueError` controlado |
-| #2147 enlace del listado de costos al detalle | Implementado con regresión | `f51328f6` | `tests/test_landed_cost_list_link.py`; número enlazado al endpoint con ACL |
-| #2177 orden estable de líneas en impresión | Implementado con regresión | `5da4089c` | `tests/test_print_context_stable_order.py`; líneas, referencias y revalorizaciones por `created`/`id` |
-| #2176 actor y auditoría al cambiar rol de tercero | Implementado con regresión | `aae2a6e3` | `tests/test_party_role_audit.py`; `modified_by`, `audit_actor` y snapshots del rol |
-| #2163 precisión de tasas en el listado | Implementado con regresión | `50637dbd` | `tests/test_exchange_rate_list_precision.py`; muestra el Decimal persistido, sin redondeo a cuatro decimales |
-| #2162 `x-if` del modal recurrente sobre `<template>` | Implementado con regresión | `79cbdb16` | `tests/test_recurring_modal_xif_template.py`; todo `x-if` vive en un template Alpine |
-| #2190 apertura de balanza y sábana desde períodos previos | Ya implementado y cubierto | `b778ee89` | `tests/test_trial_balance_opening_balance.py`; el `WHERE` no acota la apertura por período |
-| #2192 export desconocido rechazado con 400 | Ya implementado y cubierto | `b778ee89` | `tests/test_financial_report_export_validation.py`; formatos fuera de `{csv,xlsx,pdf}` no caen a HTML |
-| #2194 libro inexistente, inactivo o ajeno rechazado | Ya implementado y cubierto | `b778ee89` | `tests/test_financial_report_ledger_validation.py`; 400 en lugar de reporte vacío |
-| #2167 seed demo restringido a desarrollo o `--force` | Implementado con regresión | `8567d5a2` | `tests/test_cli_seed_idempotent.py`; rechazo sin abrir la app y ejecución autorizada |
-| #2189 grupos de movimiento consolidados por valor | Ya implementado y cubierto | `a9350e07` | `tests/test_financial_report_grouping.py`; secuencia A, B, A en un solo bloque con subtotal completo |
-| #2193 sección operating traducida | Ya implementado y cubierto | — | `tests/test_financial_report_section_labels.py`; etiquetas de sección localizadas |
-| #2165 onboarding de catálogos sin entidades | Implementado con regresión | `190386d2` | `tests/test_catalog_onboarding_without_entities.py`; los diez catálogos invocan `entidades_creadas()` y ocultan CTAs sin entidad |
-| #2170 tasa demo USD/EUR consistente | Implementado con regresión | `869210b1` | `tests/test_demo_exchange_rates_consistency.py`; tasa derivada de USD/NIO y EUR/NIO, conversión directa igual a la triangular |
-| #2201 modal de correo único en detalles | Implementado con regresión | `a7a19695`, `9875381f` | `tests/test_detail_email_modal_once.py`; el menú clona botones inline y omite modales |
-| #2187 emisión concurrente de tokens de reset | Ya implementado; regresión concurrente añadida | `cf2551fd`, `e9cb2355` | `tests/test_password_reset_token_concurrency.py`; lock por cuenta, un token activo y solo el último válido |
-| #2136 rol proveedor validado en la RFQ | Implementado; regresión restaurada | `f2e9162d`, `72c2214a` | `tests/test_purchase_rfq_supplier_role.py`; alta/edición con cliente o ID inexistente rechazadas sin mutaciones |
-| #2178 secretos redactados dentro de listas | Ya implementado y cubierto | `da9aa55b` | `tests/test_query_tool_audit_redaction.py`; listas y listas anidadas recorridas antes de persistir |
-| Aislamiento de FK SQLite en pruebas | Corregido | `8e41e718` | `tests/test_item_delete_award_usage.py`; restaura `PRAGMA foreign_keys` para no contaminar el worker |
-| #2139 democión de cuentas padre con hijas | Implementado con regresión concurrente | `6cee9088` | `tests/test_account_group_demotion_guard.py`; lock por entidad en alta/edición, refresco del padre y guardia de descendientes |
-| #2135 adjudicación validada en órdenes manuales | Implementado; regresión restaurada | `e392d655`, `ad00c2e9`, `cba61952`, `b1369e61` | `tests/test_purchase_order_award_validation.py`; proveedor, origen, líneas y cantidades acumuladas en creación y edición |
-| #2134 UI de revalorización: filtro, estados, moneda e i18n | Implementado; regresión restaurada | `d54859f3`, `c847562a` | `tests/test_exchange_revaluation_ui.py`; estados reales, badges traducidos, totales con moneda y catálogo compilado |
-| #2133 presupuesto de compras en moneda del libro | Implementado con regresión | `cd0e531b` | `tests/test_purchase_base_amounts.py`; `base_amount` en orden, recepción y factura con la tasa del documento |
-| #2150 commit inalcanzable en la carga de catálogo | Implementado con regresión | `5862eda3` | `tests/test_catalog_loading_transaction.py`; la carga deja la transacción al caller y el rollback descarta el catálogo |
-| #2137 snapshot de auditoría de compras | Ya implementado y cubierto | `c9e82c95` | `tests/test_purchase_audit_snapshot.py`; factura del proveedor, plantilla, moneda, tasa y logística en `changes_json` |
-| #2179 esquemas de herramientas de consulta aislados | Implementado con regresión | `f896d8af`, `b7ffb32e` | `tests/test_query_tool_schema_isolation.py`; registro, `get()` y `list_tools()` entregan copias profundas |
-| #2126 ediciones O2C inválidas sin HTTP 500 | Implementado con regresión | `b1f2ce6c` | `tests/test_o2c_edit_error_handling.py`; fecha y totales dentro del bloque controlado, rollback y líneas intactas |
-| #2124 artículos vendibles al crear y aprobar ventas | Implementado con regresión | `972989df`, `34b83a66` | `tests/test_sale_item_eligibility.py`; alta y submit rechazan artículo inactivo o sin rol, con devoluciones exentas |
-| #2130 configuración fiscal y de compañía de terceros | Implementado; regresión restaurada | `0bd953ad`, `f78cd14f` | `tests/test_party_company_settings_validation.py`, `tests/test_party_tax_id_validation.py`; plantillas, reglas, campos extendidos, cuentas duales, vínculo activo y `tax_id` único |
-| #2128 endurecimiento de la confirmación pública de saldos | Implementado con regresión | `61061916` | `tests/test_balance_confirmation_attempts.py`; Unicode, límites de columnas, estados, no-store y `responded_at` nulo |
-| #2129 condición de secuencia respetada | Implementado con regresión | `59b6b2b3` | `tests/test_naming_series_sequence_condition.py`; banco A/B, fallback y serie sin mapeos |
-| #2125 fecha de conversión de cotización | Ya implementado; regresión restaurada | `256e3a3b`, `4b3be18b` | `tests/test_sales_quotation_expiry.py`; fecha ausente, último día y vencida |
-| #2123 devoluciones no cierran la orden | Implementado con regresión | `7df7c4ee` | `tests/test_sales_order_return_closure.py`; solo facturas positivas y entregas no devueltas cubren la línea |
-| #2185 proyecciones de caja dentro del año fiscal | Implementado con regresión | `1131408f` | `tests/test_cash_forecast_fiscal_year_scope.py`; alta, edición, importación y reporte de históricos |
-| #2122 exposición al facturar por relación de línea | Implementado con regresión | `44b7060c` | `tests/test_sales_order_exposure_line_relations.py`; descuenta el importe de la relación y evita duplicar el saldo AR |
-| Complejidad CI (`complexipy 9.0.0`) | Corregido | `39fc6d46` | `_visible_task_count`, `compras_recepcion_nuevo` y `_create_purchase_receipt_from_form` quedan ≤ 20 |
-| #2102 claves del modo prueba | Ya implementado; regresión restaurada | `b0c2d246`, `adee8ffa` | `tests/test_config_test_flags.py`; `DEBUG`/`TEMPLATES_AUTO_RELOAD` booleanos y sin `DEGUG` |
-| #2103 paginación de series conserva compañía | Implementado con regresión | `31df00ff` | `tests/test_naming_series_pagination_company.py`; el enlace siguiente mantiene `company` |
-| #2116 cliente validado en remisión manual | Implementado con regresión | `efcc816a` | `tests/test_delivery_customer_validation.py`; rol, estado, vínculo y consistencia con origen |
-| #2114 moneda en el listado de pedidos | Implementado con regresión | `e008eb01` | `tests/test_sales_request_list_currency.py`; total formateado con su moneda transaccional |
-| #2111 snapshot de `update_inventory` | Implementado con regresión | `f59660c0` | `tests/test_sales_audit_update_inventory.py`; cambio `False -> True` visible en la bitácora |
-| #2104 acceso al origen en el alta de remisión | Ya implementado; regresión añadida | `dd2f453b`, `74526c19` | `tests/test_delivery_note_source_access.py`; el GET autoriza la orden/entrega antes de exponer metadatos |
-| #2127 reclasificación 2-way por artículo | Implementado con regresión | `f5d427c7` | `tests/test_late_receipt_reclassification.py`; A=50/B=100 en vez de restar el total a cada artículo |
-| #2119 anulación de revalorización con controles | Implementado con regresión | `8bba7c8f` | `tests/test_exchange_revaluation_internal_controls.py`; anulación, segunda corrida y rollback |
-| #2118 aperturas AR/AP sintéticas valoradas por libro | Ya implementado; regresión restaurada | `214858f3`, `0406cd14` | `tests/test_arap_synthetic_opening_books.py`; book entries NIO/USD |
-| #2120 saldo histórico de revalorización | Ya implementado; regresión reforzada | `0e1a59d2`, `c246242f`, `e7588ed6` | `tests/test_exchange_revaluation_historical_balance.py`; corrida posterior al corte excluida |
-| #2115 tipo documental en detalle de venta | Implementado con regresión | `8a85ca3d` | `tests/test_sales_invoice_detail_type_label.py`; factura, crédito, débito y devolución |
-| #2112 descuentos al editar factura | Implementado con regresión | `3495fdc1` | `tests/test_sales_invoice_edit_discounts.py`; porcentaje y monto iniciales |
-| #2113 serialización cancelación/relaciones | Implementado con regresión | `9eb7eb66` | `tests/test_sales_cancellation_lock.py`, `tests/test_document_relation_concurrency.py`; lock documental compartido |
-| #2100 país de la compañía del asistente | Ya implementado; regresión restaurada | `1f9b43cf`, `bef2d5f3` | `tests/test_setup_company_country.py`; país y moneda persistidos |
-| #2101 errores del paso empresa sin 500 | Ya implementado; regresión restaurada | `ae8cc03e`, `6316a4c2` | `tests/test_setup_company_errors.py`; duplicado y alta válida |
-| #2096 metadatos al duplicar líneas | Implementado con regresión | `2b2e6a78` | `tests/test_duplicate_line_metadata.py`; descripción y bodega en compras/ventas |
-| #2099 recálculo fiscal al duplicar factura | Implementado con regresión | `0e5bfe36` | `tests/test_purchase_invoice_duplicate_taxes.py`; bruto y saldo desde plantilla fiscal |
-| #2098 serialización de recepciones contra OC | Implementado con regresión | `5a7d4377` | `tests/test_purchase_receipt_submit_lock.py`; lock documental antes de validar cantidades |
-| #2095 decimales inválidos en formularios de compras | Implementado con regresión | `cc741e10` | `tests/test_purchase_form_decimal_validation.py`; texto, NaN e infinitos |
-| #2094 serialización de órdenes desde comparativo | Implementado con regresión | `3b6dac86` | `tests/test_purchase_comparison_order_lock.py`; lock del comparativo |
-| #2091 conectividad real de Redis en `status` | Implementado con regresión | `11f7d358` | `tests/test_cli_redis_status.py`; ping con timeout y estados diferenciados |
-| #2090 decimales de moneda en caja chica | Implementado con regresión | `e8b0661e` | `tests/test_petty_cash_expense_amount_precision.py`; `step=any` |
-| #2085 compañía en cuentas bancarias | Implementado con regresión | `6c15589c` | `tests/test_bank_account_list_company_pagination.py`; filtro y paginación conservan `company` |
-| #2081 moneda funcional de caja chica de setup | Implementado con regresión | `e7921205` | `tests/test_setup_petty_cash_currency.py`; NIO frente a USD global |
-| #2083 transferencias fuera de alerta de duplicados | Implementado con regresión | `5dba3fd7` | `tests/test_duplicate_payment_transfer.py`; `internal_transfer` no consulta pagos similares |
-| #2082 carrera de conciliaciones de caja chica | Implementado con regresión | `c6608ed8` | `tests/test_petty_cash_reconciliation_race.py`; lock por caja/fecha y `IntegrityError` controlado |
-| #2256 configuración del setup con guard ICFR | Implementado con regresión | `0d8a9175` | `tests/test_setup_config_guard.py`; contexto por clave y Core directo bloqueado |
-| #2076 rechazo y aprobación serializados | Implementado con regresión | `db17037d` | `tests/test_approval_reject_lock.py`; `reject()` usa `_pending_request(lock=True)` y revalida estado |
-| #2073 subtipo real en conciliaciones | Implementado con regresión | `de15ce35` | `tests/test_payment_reconciliation_subtype.py`; alias y `document_type` deben coincidir |
-| #2074 tipo de pago en preconciliación | Implementado con regresión | `f4a43605` | `tests/test_payment_reconciliation_type_validation.py`; rechazo antes del lote |
-| #2072 KPI de pagos sin permiso de caja | Ya implementado; caso negativo añadido | `098ab940` | `tests/test_dashboard_pending_vouchers_permission.py`; contador no recibe `pending_vouchers` |
-| #2075 rol admin revocado en `/info` | Ya implementado; caso negativo añadido | `7d94653d` | `tests/test_dev_page_active_role_required.py`; 403 en `/info`, `/dev`, `/development` |
-| #2069 cantidad inválida en precio de catálogo | Implementado con regresión | `64de7ee0` | `tests/test_sales_catalog_price_quantity.py`; texto/no finito/no positivo → 400 |
-| #2070 `enabled` booleano en AR/AP | Implementado con regresión | `bf130a82` | `tests/test_arap_reconciliation_enabled_validation.py`; tipos inválidos → 400 y `false` se conserva |
-| #2066 casillas de listas de precios | Ya implementado; regresión restaurada | `f98bcfdb` | `tests/test_price_list_checkbox_flags.py`; solo compras e inactiva |
-| #2067 tipos de tolerancia localizados | Implementado con regresión | `4d7b2068` | `tests/test_tolerance_type_labels.py`; sin códigos crudos en tablas |
-| #2065 booleanos localizados en admin | Implementado con regresión | `649dac40` | `tests/test_admin_boolean_labels.py`; Activo/Inactivo y Sí/No |
-| Setup inicial con `SETUP_COMPLETE=False` | Corregido con regresión | `b01f4913` | `tests/test_setup_claim_existing_false.py`; el claim actualiza la fila base y crea la compañía |
+El estado canónico de cada issue vive en las tablas de «Issues accionables adicionales por fase».
+Este archivo no mantiene una segunda tabla de seguimiento.
 
-| Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
-
-**Última suite completa:** Cloud **1223 passed, 99 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1215 passed, 107 skipped**; 0 fallos (HEAD `649dac40`).
+**Última suite completa:** Cloud **1267 passed, 102 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1259 passed, 110 skipped**; 0 fallos (HEAD `3de324d1`).
 JavaScript **106 passing**. Linters del workflow de lint en verde y `complexipy 9.0.0`
-sin funciones > 20. PostgreSQL + psycopg2 en base temporal: **84 passed, 10 skipped**.
-MySQL y Redis no estaban disponibles en el entorno local para repetir la matriz completa.
+sin funciones > 20. PostgreSQL + psycopg2 en base temporal: **87 passed, 10 skipped**.
+MySQL y Redis no estaban disponibles en el entorno local; CI debe repetir la matriz.
 
-**Matriz de motores ejecutada localmente (HEAD `1401aad7`):**
-
-- SQLite con `-m database --full --slow=True`: **84 passed, 7 skipped, 1060 deselected**.
-- PostgreSQL + pg8000 sobre base temporal dedicada: **81 passed, 10 skipped, 1060 deselected**.
-- PostgreSQL + psycopg2 sobre base temporal recreada: **81 passed, 10 skipped, 1060 deselected**.
-- MySQL 8.0 + pymysql sobre base recreada: **79 passed, 12 skipped, 1060 deselected**.
-  La primera ejecución detectó que #2188 seguía leyendo el snapshot previo bajo
-  `REPEATABLE READ`; corregido en `1401aad7` y repetido en verde.
-- Redis 7.2 + PostgreSQL, pruebas `-m cache`: **1 passed, 1150 deselected**.
-
-La matriz local quedó completa. CI sigue siendo responsable de repetirla con las
-versiones de Python y los servicios del workflow, y de las ramas de caché adicionales.
 **Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
 localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
 `needs-work` (reabierto o pendiente de revisión). El estado de GitHub es la fuente para el cierre.
@@ -567,6 +348,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
+| #2101 | #2207 | ✅ Implementado; regresión local en `e746a9db` (etiqueta sin cambio) | El paso empresa captura `SQLAlchemyError`, revierte y responde 200 sin perder el formulario |
 | #547 | #1652 | Implementación (`needs-work`) | [AUDIT][Importaciones] Acepta moneda inactiva |
 | #950 | #1650 | ✅ Implementado; regresión local en `135b3b5e` (etiqueta sin cambio) | Importación: validar datos numéricos no finitos |
 | #1007 | #1650 | ✅ Implementado; regresión local en `481470f7` (etiqueta sin cambio) | Fiscal: rechazar valores no finitos en líneas manuales |
@@ -705,6 +487,12 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
+| #2063 | Consumidor | ✅ Implementado; regresión local en `b8da6123` (etiqueta sin cambio) | Una acción desconocida no despacha a `reject_review`; la solicitud permanece pendiente |
+| #2076 | #1708 | ✅ Implementado; regresión local en `45fa2490` (etiqueta sin cambio) | El segundo rechazo observa la solicitud ya rechazada y no registra otra acción |
+| #2119 | #1706 | ✅ Implementado; regresión local en `c82ac81f` (etiqueta sin cambio) | La exención de contraasiento exige línea existente, mismo padre y sin reverso previo |
+| #2120 | #1709 | ✅ Implementado; regresión local en `e18cd8e9` (etiqueta sin cambio) | Reejecutar un período histórico anula también las corridas posteriores |
+| #2113 | #1653 | ✅ Implementado; regresión local en `7f936c2f` (etiqueta sin cambio) | La cancelación aprobada bloquea antes de validar y refresca los destinos |
+| #2175 | #1656 | ✅ Implementado; regresión local en `bc73b69f` (etiqueta sin cambio) | Folios únicos por compañía/tipo, internos globales, migración e idempotencia en el motor configurado |
 | #546 | #1655 | Implementación (`needs-work`) | [AUDIT][R2R][Multimoneda] Las tasas de cambio históricas pueden editarse después de ser usadas |
 | #758 | #1655 | Implementación (`needs-work`) | HIGH: Enforce complete source and destination currency data on every posting |
 | #761 | #1708 | Implementación (`needs-work`) | MEDIUM: Apply cancellation and reversal period semantics consistently to all document types |
@@ -815,7 +603,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1382 | #1655 | Implementación (`needs-work`) | fix: rechaza tasas cero numéricas al importar |
 | #1386 | #1654 | Implementación (`needs-work`) | fix: respeta selección de libros en asientos |
 | #1406 | #1654 | Implementación (`needs-work`) | Cierra saldos de documento con la misma regla de pendientes |
-| #1422 | #1708 | Implementación (`needs-work`) | Rechaza justificaciones de adjudicación vacías |
+| #1422 | #1708 | ✅ Implementado; regresión local en `3de324d1` (etiqueta sin cambio) | Rechaza justificaciones de adjudicación vacías; espacios y Unicode en blanco rechazados y razón persistida normalizada |
 | #1427 | #1655 | Implementación (`needs-work`) | Muestra la moneda en conciliación de compras |
 | #1430 | #1708 | Implementación (`needs-work`) | Rechaza adjudicaciones sin líneas válidas |
 | #1432 | #1708 | Implementación (`needs-work`) | Bloquea rondas tras el cierre manual |
@@ -865,7 +653,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1638 | #1708 | Implementación (`needs-work`) | El estado documental omite cancelaciones pendientes |
 | #1642 | #1708 | Implementación (`needs-work`) | La aprobación de anulación no cancela costos de importación |
 | #1673 | #1655 | Implementación (`needs-work`) | [Imports] Balancea comprobantes usando sus tasas por linea |
-| #1685 | #1707 | Implementación (`needs-work`) | [Audit][Fiscal] Rechaza tipos de impuesto desconocidos |
+| #1685 | #1707 | ✅ Implementado; regresión local en `99cccff3` (etiqueta sin cambio) | [Audit][Fiscal] Rechaza tipos de impuesto desconocidos; ruta, modelo ORM y motor fiscal |
 | #1686 | #1707 | Implementación (`needs-work`) | [Audit][Fiscal] Consolida impuestos en un solo motor |
 | #1698 | #1656 | Implementación (`needs-work`) | [AUDIT][R2R] Pasos del cierre reabren corridas cerradas |
 | #1701 | #1708 | Implementación (`needs-work`) | [AUDIT][R2R] Regla Cualquiera no asigna aprobadores |
@@ -878,6 +666,11 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
+| #2096 | #2211 | ✅ Implementado; cobertura local en `2702e43a` (etiqueta sin cambio) | Las cuatro rutas de duplicación conservan descripción y bodega; RFQ y cotización de proveedor cubiertas |
+| #2094 | #1653 | ✅ Implementado; regresión local en `530962dd` (etiqueta sin cambio) | Tras el lock se relee el comparativo con `populate_existing` antes de validar |
+| #2098 | #1653 | ✅ Implementado; regresión local en `3a4b1b94` (etiqueta sin cambio) | La validación final de aprobación bloquea la orden antes de validar cantidades |
+| #2112 | #2211 | ✅ Implementado; regresión local en `988fd2a4` (etiqueta sin cambio) | El POST de edición preserva descuento porcentual, monto y neto |
+| #2116 | #2207 | ✅ Implementado; regresión local en `87393727` (etiqueta sin cambio) | Edición y submit exigen el cliente del origen y prueban otro cliente válido |
 | #651 | #1715 | Implementación (`needs-work`) | [MEDIO][INV] Reconstrucción de capas de valuación destructiva |
 | #947 | #1651 | Implementación (`needs-work`) | Document Flow: cantidades pendientes mezclan UOM |
 | #966 | #1651 | Implementación (`needs-work`) | Document status: unificar cantidades base |
@@ -987,6 +780,9 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
+| #2065 | #1711 | ✅ Implementado; regresión local en `649dac40` y `2efc472c` (etiqueta sin cambio) | Activo/Inactivo y Sí/No verificados sobre HTML renderizado, no sobre el texto de la plantilla |
+| #2067 | #1711 | ✅ Implementado; regresión local en `4d7b2068` y `2efc472c` (etiqueta sin cambio) | Tipos de tolerancia traducidos en tablas renderizadas de compras y ventas |
+| #2102 | #2012 | ✅ Implementado; regresión local en `b0c2d246`, `adee8ffa` y `21a1cc2e` (etiqueta sin cambio) | `DEBUG`/`TEMPLATES_AUTO_RELOAD` solo se fuerzan con `CACAO_TEST`; sin la variable quedan inactivos |
 | #1071 | #1658 | QA2 aprobó; QA3/administrador: `fixed` o retorno a `needs-work` | Eliminar la ruta legacy del árbol documental |
 | #1092 | #1658 | Implementación (`needs-work`) | Completar rutas enlazadas en lista de reposiciones |
 | #1111 | #1711 | Implementación (`needs-work`) | fix: permite agregar correos en confirmación |
