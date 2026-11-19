@@ -7,7 +7,7 @@ import json
 
 from datetime import date
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from logging import getLogger
 
@@ -774,9 +774,16 @@ def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[Pu
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
-    """Convierte un valor de formulario a Decimal."""
+    """Convierte un valor de formulario a Decimal finito."""
     value = request.form.get(field_name)
-    return Decimal(str(value if value not in (None, "") else default))
+    raw_value = value if value not in (None, "") else default
+    try:
+        parsed = Decimal(str(raw_value))
+    except InvalidOperation as exc:
+        raise ValueError(_("El campo %(field)s debe contener un número válido.") % {"field": field_name}) from exc
+    if not parsed.is_finite():
+        raise ValueError(_("El campo %(field)s debe contener un número finito.") % {"field": field_name})
+    return parsed
 
 
 def _line_amount(index: int) -> Decimal:
