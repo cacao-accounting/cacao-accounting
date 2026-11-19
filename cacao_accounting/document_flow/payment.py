@@ -1293,6 +1293,9 @@ def _get_reference_document(flow_source_type: str, document_id: str, company: st
         raise _document_flow_error(_("El documento referenciado debe existir y estar aprobado."), 404)
     if getattr(document, "company", None) != company:
         raise _document_flow_error(_("El documento referenciado no pertenece a la misma compañía."), 409)
+    actual_type = normalize_doctype(str(getattr(document, "document_type", "") or ""))
+    if actual_type != normalize_doctype(flow_source_type):
+        raise _document_flow_error(_("El subtipo del documento no coincide con la referencia."), 409)
     expected_party_type, expected_party_id = _payment_reference_party(document, flow_source_type)
     if expected_party_type != party_type or expected_party_id != party_id:
         raise _document_flow_error(_("El documento referenciado no coincide con el tercero."), 409)

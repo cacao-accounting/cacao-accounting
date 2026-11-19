@@ -1087,6 +1087,12 @@ def _get_payment_reconciliation_reference(
             errors, row_no, "reference_id", _("El documento de referencia no existe o no está aprobado.")
         )
         return None, reference_type
+    actual_type = normalize_doctype(str(getattr(reference, "document_type", "") or ""))
+    if actual_type != reference_type:
+        _append_payment_reconciliation_error(
+            errors, row_no, "reference_type", _("El subtipo del documento no coincide con la referencia.")
+        )
+        return None, reference_type
     return reference, reference_type
 
 
