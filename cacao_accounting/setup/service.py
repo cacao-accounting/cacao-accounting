@@ -225,6 +225,18 @@ def claim_setup_completion() -> None:
     ya completada, sin duplicar la compañía ni sus libros.
     """
     from sqlalchemy.exc import IntegrityError
+    from cacao_accounting.default_scope import lock_default_scope
+
+    lock_default_scope("setup_completion")
+    row = database.session.execute(
+        database.select(CacaoConfig).filter_by(key=SETUP_COMPLETED).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if row is not None:
+        if row.value == "True":
+            raise SetupAlreadyComplete(_("La configuración inicial ya fue completada."))
+        row.value = "True"
+        database.session.flush()
+        return
 
     database.session.add(CacaoConfig(key=SETUP_COMPLETED, value="True"))
     try:
