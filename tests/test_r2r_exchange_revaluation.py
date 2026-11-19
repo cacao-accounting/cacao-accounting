@@ -69,7 +69,7 @@ def business_app(tmp_path):
         database.engine.dispose()
 
 
-def _seed_bank_exposure(company: str) -> tuple[str, int, int, str]:
+def _seed_bank_exposure(company: str) -> tuple[str, int, int, str, str, str, date]:
     """Record a USD bank balance and its closing-rate scenario for one company."""
     occupied_rates = set(
         database.session.execute(
@@ -562,3 +562,101 @@ def test_concurrent_revaluations_preserve_one_active_period_result(business_app)
         database.session.flush()
         assert verify_audit_trail_chain() == [{"row": "main", "finding": "head_pointer_mismatch"}]
         evidence_removal.rollback()
+
+
+def test_two_concurrent_runs_leave_one_active_adjustment(business_app, monkeypatch):
+    """Dos ejecuciones simultaneas del mismo periodo dejan una sola corrida activa.
+
+    El retardo antes de crear el diario fuerza la ventana de intercalado: sin
+    serializacion, ambas transacciones calcularian y postearian el ajuste.
+    """
+    import time
+
+    original_create = ExchangeRevaluationService._create_journal
+
+    def delayed_create(self, run, user_id, *, reversal=False, posting_date=None):
+        time.sleep(2.0)
+        return original_create(self, run, user_id, reversal=reversal, posting_date=posting_date)
+
+    monkeypatch.setattr(ExchangeRevaluationService, "_create_journal", delayed_create)
+
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, year, month, _prior_id, period_id, _following_id, _following_start = _seed_bank_exposure(company)
+        actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+
+    start_together = Barrier(2)
+
+    def ejecutar() -> str | None:
+        with business_app.app_context():
+            start_together.wait(timeout=10)
+            try:
+                run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
+                return str(run.id)
+            except ExchangeRevaluationError as error:
+                if "revalorización está ejecutándose" in str(error):
+                    return None
+                raise
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        run_ids = list(workers.map(lambda _index: ejecutar(), range(2)))
+
+    if None in run_ids:
+        with business_app.app_context():
+            retry = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
+            run_ids.append(str(retry.id))
+
+    with business_app.app_context():
+        runs = list(
+            database.session.execute(database.select(ExchangeRevaluation).filter_by(company=company, year=year, month=month))
+            .scalars()
+            .all()
+        )
+        posted_runs = [run for run in runs if run.status == "posted"]
+        assert len(posted_runs) == 1
+        assert len({run.journal_entry_id for run in posted_runs}) == 1
+
+        entries = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                )
+            )
+            .scalars()
+            .all()
+        )
+        active_originals = [entry for entry in entries if not entry.is_cancelled and not entry.is_reversal]
+        assert {entry.voucher_id for entry in active_originals} == {posted_runs[0].id}
+
+
+def test_rerunning_the_same_period_leaves_one_active_adjustment(business_app):
+    """Una segunda corrida anula la anterior y deja un solo ajuste activo."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, year, month, _prior_id, period_id, _following_id, _following_start = _seed_bank_exposure(company)
+        actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        first = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
+        first_id = str(first.id)
+        second = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
+        second_id = str(second.id)
+
+        runs = list(
+            database.session.execute(database.select(ExchangeRevaluation).filter_by(company=company, year=year, month=month))
+            .scalars()
+            .all()
+        )
+        posted_runs = [run for run in runs if run.status == "posted"]
+        assert len(posted_runs) == 1
+        assert posted_runs[0].id == second_id
+        assert database.session.get(ExchangeRevaluation, first_id).status == "voided"
+
+        entries = list(
+            database.session.execute(database.select(GLEntry).filter_by(company=company, voucher_type="exchange_revaluation"))
+            .scalars()
+            .all()
+        )
+        active_originals = [entry for entry in entries if not entry.is_cancelled and not entry.is_reversal]
+        assert {entry.voucher_id for entry in active_originals} == {second_id}
