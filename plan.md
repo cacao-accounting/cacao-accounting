@@ -194,17 +194,24 @@ QA1, QA2, QA3 o al administrador.
 | #2114 moneda en el listado de pedidos | Implementado con regresión | `e008eb01` | `tests/test_sales_request_list_currency.py`; total formateado con su moneda transaccional |
 | #2111 snapshot de `update_inventory` | Implementado con regresión | `f59660c0` | `tests/test_sales_audit_update_inventory.py`; cambio `False -> True` visible en la bitácora |
 | #2104 acceso al origen en el alta de remisión | Ya implementado; regresión añadida | `dd2f453b`, `74526c19` | `tests/test_delivery_note_source_access.py`; el GET autoriza la orden/entrega antes de exponer metadatos |
+| #2127 reclasificación 2-way por artículo | Implementado con regresión | `f5d427c7` | `tests/test_late_receipt_reclassification.py`; A=50/B=100 en vez de restar el total a cada artículo |
+| #2119 anulación de revalorización con controles | Implementado con regresión | `8bba7c8f` | `tests/test_exchange_revaluation_internal_controls.py`; anulación, segunda corrida y rollback |
+| #2118 aperturas AR/AP sintéticas valoradas por libro | Ya implementado; regresión restaurada | `214858f3`, `0406cd14` | `tests/test_arap_synthetic_opening_books.py`; book entries NIO/USD |
+| #2120 saldo histórico de revalorización | Ya implementado; regresión reforzada | `0e1a59d2`, `c246242f`, `e7588ed6` | `tests/test_exchange_revaluation_historical_balance.py`; corrida posterior al corte excluida |
+| #2115 tipo documental en detalle de venta | Implementado con regresión | `8a85ca3d` | `tests/test_sales_invoice_detail_type_label.py`; factura, crédito, débito y devolución |
+| #2112 descuentos al editar factura | Implementado con regresión | `3495fdc1` | `tests/test_sales_invoice_edit_discounts.py`; porcentaje y monto iniciales |
+| #2113 serialización cancelación/relaciones | Implementado con regresión | `9eb7eb66` | `tests/test_sales_cancellation_lock.py`, `tests/test_document_relation_concurrency.py`; lock documental compartido |
+| #2100 país de la compañía del asistente | Ya implementado; regresión restaurada | `1f9b43cf`, `bef2d5f3` | `tests/test_setup_company_country.py`; país y moneda persistidos |
+| #2101 errores del paso empresa sin 500 | Ya implementado; regresión restaurada | `ae8cc03e`, `6316a4c2` | `tests/test_setup_company_errors.py`; duplicado y alta válida |
+| #2096 metadatos al duplicar líneas | Implementado con regresión | `2b2e6a78` | `tests/test_duplicate_line_metadata.py`; descripción y bodega en compras/ventas |
 
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1155 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1147 passed, 104 skipped**; 0 fallos (HEAD `39fc6d46`).
-Después de `39fc6d46` solo se ejecutaron pruebas acotadas para #2102, #2103,
-#2116, #2114, #2111 y #2104; las suites completas quedan pendientes de repetir.
-`complexipy 9.0.0` sobre `cacao_accounting` queda en verde con el límite 20.
-La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
-por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
-La suite JavaScript quedó en 106 passing.
+**Última suite completa:** Cloud **1181 passed, 99 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1173 passed, 107 skipped**; 0 fallos (HEAD `e7588ed6`).
+JavaScript **106 passing**. Linters del workflow de lint en verde y `complexipy 9.0.0`
+sin funciones > 20. PostgreSQL + psycopg2 en base temporal: **84 passed, 10 skipped**.
+MySQL y Redis no estaban disponibles en el entorno local para repetir la matriz completa.
 
 **Matriz de motores ejecutada localmente (HEAD `1401aad7`):**
 
