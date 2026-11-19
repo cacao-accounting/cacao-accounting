@@ -509,7 +509,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1017 | #1708 | Implementación (`needs-work`) | Aprobaciones: validar la acción recibida en el POST |
 | #1022 | #1708 | Implementación (`needs-work`) | Aprobaciones: doctypes válidos quedan sin rama de envío y quedan 'Approved' en borrador para siempre |
 | #1023 | #1707 | Implementación (`needs-work`) | Fiscal: la persistencia de líneas de impuesto sobrescribe concept_amounts y el total no se reconstruye desde las líneas canónicas |
-| #1024 | #1656 | Implementación (`needs-work`) | Series: allow_closing=True también desbloquea el año fiscal cerrado, contradiciendo la docstring |
+| #1024 | #1656 | ✅ Implementado; fix en `5bb96773`, regresión restaurada en `cb373e2c` (etiqueta sin cambio) | `allow_closing` desbloquea solo períodos; el año fiscal cerrado exige `allow_fiscal_year_closing` exclusivo del asiento de cierre |
 | #1026 | #1707 | Implementación (`needs-work`) | Tax pricing: impuesto aditivo se calcula sobre el precio mostrado que ya contiene el impuesto incluido |
 | #1027 | #1708 | Implementación (`needs-work`) | Retenciones: un certificado cancelado no se re-emite al re-publicar el pago y queda irrecuperable |
 | #1035 | #1654 | Implementación (`needs-work`) | Caja chica: petty_cash_ledger_balance no filtra por libro y consolida el saldo duplicado |
@@ -780,8 +780,8 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
-| #2065 | #1711 | ✅ Implementado; regresión local en `649dac40` y `2efc472c` (etiqueta sin cambio) | Activo/Inactivo y Sí/No verificados sobre HTML renderizado, no sobre el texto de la plantilla |
-| #2067 | #1711 | ✅ Implementado; regresión local en `4d7b2068` y `2efc472c` (etiqueta sin cambio) | Tipos de tolerancia traducidos en tablas renderizadas de compras y ventas |
+| #2065 | #1711 | ✅ Implementado; regresión restaurada en `64276241` (etiqueta sin cambio) | Activo/Inactivo y Sí/No verificados sobre HTML renderizado, no sobre el texto de la plantilla |
+| #2067 | #1711 | ✅ Implementado; regresión restaurada en `64276241` (etiqueta sin cambio) | Tipos de tolerancia traducidos en tablas renderizadas de compras y ventas |
 | #2102 | #2012 | ✅ Implementado; regresión local en `b0c2d246`, `adee8ffa` y `21a1cc2e` (etiqueta sin cambio) | `DEBUG`/`TEMPLATES_AUTO_RELOAD` solo se fuerzan con `CACAO_TEST`; sin la variable quedan inactivos |
 | #1071 | #1658 | QA2 aprobó; QA3/administrador: `fixed` o retorno a `needs-work` | Eliminar la ruta legacy del árbol documental |
 | #1092 | #1658 | Implementación (`needs-work`) | Completar rutas enlazadas en lista de reposiciones |
