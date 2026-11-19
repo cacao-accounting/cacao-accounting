@@ -514,7 +514,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1027 | #1708 | Implementación (`needs-work`) | Retenciones: un certificado cancelado no se re-emite al re-publicar el pago y queda irrecuperable |
 | #1035 | #1654 | Implementación (`needs-work`) | Caja chica: petty_cash_ledger_balance no filtra por libro y consolida el saldo duplicado |
 | #1043 | #1708 | Implementación (`needs-work`) | Inventario: cancelar la origen queda bloqueado para siempre por capas de consumo ya revertidas |
-| #1075 | #1709 | Implementación (`needs-work`) | Aplicar fecha de corte a conciliación S2P pendiente |
+| #1075 | #1709 | ✅ Implementado; regresión en `9d0f27bd` (etiqueta sin cambio) | Conciliación, asignación y devolución posteriores al corte no reducen el saldo histórico; sin corte se conserva la semántica |
 | #1078 | #1655 | Implementación (`needs-work`) | Comparar ofertas en moneda funcional al autorizar excepción |
 | #1082 | #1708 | Implementación (`needs-work`) | Autorizar transición al cerrar ajuste bancario |
 | #1085 | #1658 | Implementación (`needs-work`) | Retirar saldos legacy del pronóstico de caja |
