@@ -98,3 +98,16 @@ def test_usuario_con_permiso_caja_recibe_pending_vouchers(app, authenticated_cli
     assert "pending_vouchers" in kpis
     assert kpis["pending_vouchers"]["format"] == "count"
     assert kpis["pending_vouchers"]["value"] >= 2
+
+
+def test_usuario_sin_permiso_caja_omite_pending_vouchers(app):
+    """Un contador sin permiso de caja no recibe el conteo de pagos pendientes."""
+    _crear_pagos_borrador(app, 1)
+    user_id = _crear_usuario_solo_contabilidad(app)
+
+    respuesta = _cliente_como(app, user_id).get("/api/dashboard/data?company=cacao")
+
+    assert respuesta.status_code == 200
+    contabilidad = respuesta.get_json()["sections"]["accounting"]
+    assert contabilidad["visible"] is True
+    assert "pending_vouchers" not in contabilidad["kpis"]
