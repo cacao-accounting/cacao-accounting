@@ -1168,6 +1168,15 @@ def _validate_payment_reconciliation_row(
         )
     reference, reference_type = _get_payment_reconciliation_reference(row, company_id, row_no, errors)
     if reference is not None and payment is not None:
+        from cacao_accounting.document_flow.payment import _payment_type_matches_source
+
+        if not _payment_type_matches_source(str(payment.payment_type or ""), reference_type):
+            _append_payment_reconciliation_error(
+                errors,
+                row_no,
+                "payment_id",
+                _("El tipo de pago no coincide con el documento de referencia."),
+            )
         _validate_payment_reconciliation_party(payment, reference, reference_type, row_no, errors)
         rate = _payment_reconciliation_rate(row, payment, reference, row_no, errors)
         _validate_payment_reconciliation_amounts(row, payment, reference, rate, row_no, errors)
