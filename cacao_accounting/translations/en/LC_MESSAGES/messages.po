@@ -23828,3 +23828,7 @@ msgstr "Skipped"
 #: cacao_accounting/cli.py
 msgid "Los datos de ejemplo ya están aplicados; no se realizaron cambios."
 msgstr "Sample data is already applied; no changes were made."
+
+#: cacao_accounting/party_management.py
+msgid "Cambio de rol de %(role)s."
+msgstr "Role change for %(role)s."

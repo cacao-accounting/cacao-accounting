@@ -514,6 +514,38 @@ class PartyRoleToggleError(ValueError):
     """Error al togglear rol de tercero."""
 
 
+def _toggle_party_role(party: Party, field: str, enable: bool, user_id: str | None, label: str) -> Party:
+    """Persist the party role with its actor and audit evidence."""
+    from cacao_accounting.audit_trail_service import log_update
+    from cacao_accounting.database import User
+    from cacao_accounting.internal_control_service import audit_actor
+
+    before = {
+        "is_supplier": bool(party.is_supplier),
+        "is_customer": bool(party.is_customer),
+        "modified_by": party.modified_by,
+    }
+    setattr(party, field, bool(enable))
+    party.modified_by = user_id
+    database.session.add(party)
+    database.session.flush()
+    after = {
+        "is_supplier": bool(party.is_supplier),
+        "is_customer": bool(party.is_customer),
+        "modified_by": party.modified_by,
+    }
+    actor = database.session.get(User, user_id) if user_id else None
+    actor_name = getattr(actor, "name", None) or user_id or "system"
+    with audit_actor(user_id, str(actor_name)):
+        log_update(
+            party,
+            before=before,
+            after=after,
+            comment=_("Cambio de rol de %(role)s.") % {"role": label},
+        )
+    return party
+
+
 def toggle_party_supplier_role(party_id: str, enable: bool, user_id: str | None = None) -> Party:
     """Habilita o deshabilita el rol de proveedor para un tercero.
 
@@ -538,14 +570,7 @@ def toggle_party_supplier_role(party_id: str, enable: bool, user_id: str | None 
     if not enable and not party.is_supplier:
         raise PartyRoleToggleError(_("El tercero no es proveedor."))
 
-    if enable:
-        party.is_supplier = True
-    else:
-        party.is_supplier = False
-
-    database.session.add(party)
-    database.session.flush()
-    return party
+    return _toggle_party_role(party, "is_supplier", enable, user_id, "proveedor")
 
 
 def toggle_party_customer_role(party_id: str, enable: bool, user_id: str | None = None) -> Party:
@@ -572,11 +597,4 @@ def toggle_party_customer_role(party_id: str, enable: bool, user_id: str | None 
     if not enable and not party.is_customer:
         raise PartyRoleToggleError(_("El tercero no es cliente."))
 
-    if enable:
-        party.is_customer = True
-    else:
-        party.is_customer = False
-
-    database.session.add(party)
-    database.session.flush()
-    return party
+    return _toggle_party_role(party, "is_customer", enable, user_id, "cliente")

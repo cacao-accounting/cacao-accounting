@@ -194,9 +194,9 @@ def log_create(document: Any) -> AuditTrail:
     return _log("created", document, after=document)
 
 
-def log_update(document: Any, before: Any, after: Any) -> AuditTrail:
+def log_update(document: Any, before: Any, after: Any, comment: str | None = None) -> AuditTrail:
     """Log that a document was updated with before and after snapshots."""
-    return _log("updated", document, before=before, after=after)
+    return _log("updated", document, before=before, after=after, comment=comment)
 
 
 def capture_lines_snapshot(registro: Any, item_cls: Any, fk_name: str) -> list[dict[str, Any]]:
