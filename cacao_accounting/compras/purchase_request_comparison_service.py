@@ -25,7 +25,7 @@ from cacao_accounting.database import (
     SupplierQuotationItem,
     database,
 )
-from cacao_accounting.document_flow import create_document_relation, create_target_document
+from cacao_accounting.document_flow import create_document_relation, create_target_document, lock_document_flow_document
 from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_identifiers import assign_document_identifier
 
@@ -701,6 +701,7 @@ def create_purchase_orders_from_comparison(
     comparison: PurchaseRequestComparison, user_id: str | None = None
 ) -> list[PurchaseOrder]:
     """Create one draft purchase order per supplier from a finalized comparison."""
+    lock_document_flow_document("purchase_request_comparison", str(comparison.id))
     purchase_request = _comparison_purchase_request_or_raise(comparison)
     lines = _comparison_selected_lines(comparison)
     grouped, quotations_by_group = _group_comparison_lines(lines, comparison)
