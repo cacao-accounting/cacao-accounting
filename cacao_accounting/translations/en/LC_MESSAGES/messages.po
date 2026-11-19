@@ -23856,3 +23856,7 @@ msgstr "The party is not enabled for the selected company."
 #: cacao_accounting/ventas/routes.py cacao_accounting/ventas/services.py
 msgid "El cliente debe coincidir con el documento origen."
 msgstr "The customer must match the source document."
+
+#: cacao_accounting/ventas/routes.py
+msgid "Documento de Venta"
+msgstr "Sales Document"

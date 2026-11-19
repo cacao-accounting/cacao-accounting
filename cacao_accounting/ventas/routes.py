@@ -2256,6 +2256,19 @@ def ventas_factura_venta_nuevo():
     )
 
 
+SALES_DOCUMENT_TYPE_LABELS = {
+    "sales_invoice": _l("Factura de Venta"),
+    "sales_credit_note": _l("Nota de Crédito de Venta"),
+    "sales_debit_note": _l("Nota de Débito de Venta"),
+    "sales_return": _l("Devolución de Venta"),
+}
+
+
+def _sales_document_type_label(registro: SalesInvoice) -> str:
+    """Devuelve la etiqueta localizada del tipo documental real."""
+    return str(SALES_DOCUMENT_TYPE_LABELS.get(registro.document_type or "sales_invoice", _l("Documento de Venta")))
+
+
 @ventas.route("/sales-invoice/<invoice_id>")
 @modulo_activo("sales")
 @login_required
@@ -2275,6 +2288,7 @@ def ventas_factura_venta(invoice_id):
         items=items,
         titulo=titulo,
         audit_timeline=audit_timeline,
+        document_type_label=_sales_document_type_label(registro),
         can_edit=permisos["editar"],
         can_create=permisos["crear"],
         can_approve=permisos["autorizar"],
