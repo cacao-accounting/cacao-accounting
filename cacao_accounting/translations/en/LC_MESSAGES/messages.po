@@ -23824,3 +23824,7 @@ msgstr "Reversed"
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_ver.html
 msgid "Omitida"
 msgstr "Skipped"
+
+#: cacao_accounting/cli.py
+msgid "Los datos de ejemplo ya están aplicados; no se realizaron cambios."
+msgstr "Sample data is already applied; no changes were made."

@@ -350,6 +350,13 @@ def db_clean(force: bool) -> None:
         _mensaje_exito(_("Base de datos eliminada."))
 
 
+def _demo_seed_presente() -> bool:
+    """Indica si la entidad demo principal ya está persistida."""
+    from cacao_accounting.database import Entity, database
+
+    return database.session.execute(database.select(Entity.id).filter_by(code="CACAO")).first() is not None
+
+
 @db.command(name="seed", help=_("Inserta datos de ejemplo en la base de datos."))
 def db_seed() -> None:
     """Carga datos de ejemplo en una base de datos existente."""
@@ -357,10 +364,13 @@ def db_seed() -> None:
 
     app = _obtener_aplicacion()
     with app.app_context():
+        if _demo_seed_presente():
+            _mensaje_advertencia(_("Los datos de ejemplo ya están aplicados; no se realizaron cambios."))
+            return
         try:
             dev_data()
             _mensaje_exito(_("Datos de ejemplo insertados."))
-        except SQLAlchemyError as exc:
+        except (SQLAlchemyError, ValueError) as exc:
             log.exception("Error al insertar datos de ejemplo.")
             _mensaje_error(_("No fue posible insertar los datos de ejemplo: %(error)s") % {"error": exc})
             raise click.exceptions.Exit(1)
