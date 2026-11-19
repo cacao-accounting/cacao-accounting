@@ -215,11 +215,22 @@ QA1, QA2, QA3 o al administrador.
 | #2083 transferencias fuera de alerta de duplicados | Implementado con regresión | `5dba3fd7` | `tests/test_duplicate_payment_transfer.py`; `internal_transfer` no consulta pagos similares |
 | #2082 carrera de conciliaciones de caja chica | Implementado con regresión | `c6608ed8` | `tests/test_petty_cash_reconciliation_race.py`; lock por caja/fecha y `IntegrityError` controlado |
 | #2256 configuración del setup con guard ICFR | Implementado con regresión | `0d8a9175` | `tests/test_setup_config_guard.py`; contexto por clave y Core directo bloqueado |
+| #2076 rechazo y aprobación serializados | Implementado con regresión | `db17037d` | `tests/test_approval_reject_lock.py`; `reject()` usa `_pending_request(lock=True)` y revalida estado |
+| #2073 subtipo real en conciliaciones | Implementado con regresión | `de15ce35` | `tests/test_payment_reconciliation_subtype.py`; alias y `document_type` deben coincidir |
+| #2074 tipo de pago en preconciliación | Implementado con regresión | `f4a43605` | `tests/test_payment_reconciliation_type_validation.py`; rechazo antes del lote |
+| #2072 KPI de pagos sin permiso de caja | Ya implementado; caso negativo añadido | `098ab940` | `tests/test_dashboard_pending_vouchers_permission.py`; contador no recibe `pending_vouchers` |
+| #2075 rol admin revocado en `/info` | Ya implementado; caso negativo añadido | `7d94653d` | `tests/test_dev_page_active_role_required.py`; 403 en `/info`, `/dev`, `/development` |
+| #2069 cantidad inválida en precio de catálogo | Implementado con regresión | `64de7ee0` | `tests/test_sales_catalog_price_quantity.py`; texto/no finito/no positivo → 400 |
+| #2070 `enabled` booleano en AR/AP | Implementado con regresión | `bf130a82` | `tests/test_arap_reconciliation_enabled_validation.py`; tipos inválidos → 400 y `false` se conserva |
+| #2066 casillas de listas de precios | Ya implementado; regresión restaurada | `f98bcfdb` | `tests/test_price_list_checkbox_flags.py`; solo compras e inactiva |
+| #2067 tipos de tolerancia localizados | Implementado con regresión | `4d7b2068` | `tests/test_tolerance_type_labels.py`; sin códigos crudos en tablas |
+| #2065 booleanos localizados en admin | Implementado con regresión | `649dac40` | `tests/test_admin_boolean_labels.py`; Activo/Inactivo y Sí/No |
+| Setup inicial con `SETUP_COMPLETE=False` | Corregido con regresión | `b01f4913` | `tests/test_setup_claim_existing_false.py`; el claim actualiza la fila base y crea la compañía |
 
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1199 passed, 99 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1191 passed, 107 skipped**; 0 fallos (HEAD `0d8a9175`).
+**Última suite completa:** Cloud **1223 passed, 99 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1215 passed, 107 skipped**; 0 fallos (HEAD `649dac40`).
 JavaScript **106 passing**. Linters del workflow de lint en verde y `complexipy 9.0.0`
 sin funciones > 20. PostgreSQL + psycopg2 en base temporal: **84 passed, 10 skipped**.
 MySQL y Redis no estaban disponibles en el entorno local para repetir la matriz completa.
