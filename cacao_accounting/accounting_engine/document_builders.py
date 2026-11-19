@@ -45,6 +45,7 @@ from cacao_accounting.database import (
     PurchaseReceiptItem,
     SalesInvoice,
     SalesInvoiceItem,
+    TAX_TYPES,
     Tax,
     TaxTemplateItem,
     database,
@@ -1183,12 +1184,10 @@ def _template_tax_include_concepts(base_mode: str) -> list[str]:
 
 
 def _template_tax_calculation_method(tax: Tax) -> str:
-    """Normalize legacy tax calculation methods to engine-supported values."""
-    match tax.tax_type:
-        case "percentage" | "fixed":
-            return str(tax.tax_type)
-        case _:
-            return "percentage"
+    """Return the engine calculation method or reject an unknown tax type."""
+    if tax.tax_type not in TAX_TYPES:
+        raise CalculationContextBuilderError(_("El tipo de impuesto seleccionado no es válido."))
+    return str(tax.tax_type)
 
 
 def _build_references(

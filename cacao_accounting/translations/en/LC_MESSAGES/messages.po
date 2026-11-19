@@ -23908,3 +23908,7 @@ msgstr "The legacy global folio uniqueness could not be removed."
 #: cacao_accounting/database/helpers.py
 msgid "El identificador interno %(identifier)s está duplicado y los registros se conservaron."
 msgstr "Internal identifier %(identifier)s is duplicated and the records were preserved."
+
+#: cacao_accounting/admin/routes.py cacao_accounting/database/__init__.py
+msgid "El tipo de impuesto seleccionado no es válido."
+msgstr "The selected tax type is not valid."

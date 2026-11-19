@@ -46,6 +46,7 @@ from cacao_accounting.database import (
     Roles,
     RolesAccess,
     SalesMatchingConfig,
+    TAX_TYPES,
     Tax,
     TaxTemplate,
     TaxTemplateItem,
@@ -488,10 +489,14 @@ def lista_impuestos():
         if not rate.is_finite():
             flash(_("La tasa debe ser finita."), "danger")
             return redirect(url_for("admin.lista_impuestos"))
+        tax_type = request.form.get("tax_type") or "percentage"
+        if tax_type not in TAX_TYPES:
+            flash(_("El tipo de impuesto seleccionado no es válido."), "danger")
+            return redirect(url_for("admin.lista_impuestos"))
         tax = Tax(
             name=request.form.get("name") or "",
             rate=rate,
-            tax_type=request.form.get("tax_type") or "percentage",
+            tax_type=tax_type,
             applies_to=request.form.get("applies_to") or "both",
             account_id=request.form.get("account_id") or None,
             is_charge=bool(request.form.get("is_charge")),

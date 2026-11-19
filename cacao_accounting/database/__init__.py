@@ -4660,6 +4660,9 @@ class CashFlowAccountMapping(database.Model, BaseTabla):  # type: ignore[name-de
 # <---------------------------------------------------------------------------------------------> #
 # Tax Structure — Impuestos (estructura sin logica de calculo).
 # <---------------------------------------------------------------------------------------------> #
+TAX_TYPES = frozenset({"percentage", "fixed"})
+
+
 class Tax(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Definicion de impuesto."""
 
@@ -4676,6 +4679,13 @@ class Tax(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_charge = database.Column(database.Boolean(), default=False, nullable=False)
     is_capitalizable = database.Column(database.Boolean(), default=False, nullable=False)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
+
+    @validates("tax_type")
+    def _validate_tax_type(self, _key: str, value: str) -> str:
+        """Rechaza tipos de impuesto fuera del contrato del modelo."""
+        if value not in TAX_TYPES:
+            raise ValueError(_("El tipo de impuesto seleccionado no es válido."))
+        return value
 
 
 class TaxTemplate(database.Model, BaseTabla):  # type: ignore[name-defined]
