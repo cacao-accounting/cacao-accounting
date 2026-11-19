@@ -125,11 +125,14 @@ QA1, QA2, QA3 o al administrador.
 | #2181 numeración de pagos respeta la configuración por cuenta con campos vacíos | Implementado con regresión | `e7f895c2` | `tests/test_payment_numbering_config_empty_fields.py` |
 | #2174 cuentas de bodega imputables | Verificado con regresión | `7bce4dd2` | `tests/test_warehouse_inventory_account_validation.py` |
 | #2180 cuentas GL imputables en pagos y notas bancarias | Verificado con regresión | `de37f15f` | `tests/test_payment_gl_account_validation.py` |
+| #2188 jerarquías concurrentes; #2161/N17 plantillas recurrentes negativas y numéricas | Implementado con regresión | `239c6e6d` | `tests/test_r2r_unit_hierarchy_concurrency.py` (PostgreSQL), `tests/test_recurring_template_negative_amounts.py` |
+| #2180 R1 cuenta por defecto imputable; #2181/N25 numeración de pagos; #1076/N26 clave cancelada | Implementado con regresión | `79ab88a8` | `tests/test_bank_note_gl_account_validation.py`, `tests/test_payment_numbering_config_empty_fields.py`, `tests/test_purchase_reconciliation_idempotency_scope.py` |
+| i18n del adaptador transaccional; N24/N15/N18/N19 | Implementado con regresión | `9b6314b3` | `tests/test_import_*.py`, `tests/test_search_select_module_permission.py` |
 
-**Última suite completa:** Cloud **1031 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1026 passed, 99 skipped**; 0 fallos (HEAD `f64393ce`).
-La ronda se ejecutó dos veces tras corregir la contaminación de CSRF de una prueba de
-logout; la próxima ronda completa se ejecuta antes de un push.
+**Última suite completa:** Cloud **1037 passed, 95 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1032 passed, 100 skipped**; 0 fallos (HEAD `9b6314b3`).
+La prueba concurrente de #2188 se ejecutó además contra PostgreSQL con
+`CHECK_DATABASE=true`. La matriz completa PostgreSQL/MySQL/Redis sigue pendiente de CI.
 **Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
 localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
 `needs-work` (reabierto o pendiente de revisión). El estado de GitHub es la fuente para el cierre.
