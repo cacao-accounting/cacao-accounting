@@ -528,7 +528,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1124 | #1709 | Implementación (`needs-work`) | fix: conserva facturas en reportes históricos |
 | #1149 | #1658 | Implementación (`needs-work`) | fix: aplica la frecuencia de diarios recurrentes |
 | #1153 | #1656 | Implementación (`needs-work`) | fix: evita cierres mensuales duplicados por período |
-| #1154 | #1656 | Implementación (`needs-work`) | fix: bloquea la edición de períodos cerrados |
+| #1154 | #1656 | ✅ Implementado; regresión en `4c3bde46` (etiqueta sin cambio) | El POST de edición se rechaza mientras el período esté cerrado y el formulario desactiva los campos estructurales |
 | #1155 | #1656 | ✅ Implementado; regresión en `d5bf4941` (etiqueta sin cambio) | Crear y editar rechazan rangos superpuestos por compañía bajo lock; fechas adyacentes y otra compañía siguen permitidas |
 | #1156 | Consumidor | Implementación (`needs-work`) | La reapertura activa períodos deshabilitados |
 | #1157 | #1656 | Implementación (`needs-work`) | El cierre mensual revaloriza un período distinto |
