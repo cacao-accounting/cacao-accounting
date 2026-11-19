@@ -152,3 +152,20 @@ def test_persist_rechecks_status_and_does_not_write(forecast_status_scenario):
 
     assert len(_entries(app, ids["draft"])) == 1
     assert _entries(app, ids["approved"]) == []
+
+
+def test_la_importacion_rechaza_fechas_fuera_del_anio_fiscal(forecast_status_scenario):
+    """Una fila con fecha fuera del año fiscal se rechaza en validación y persistencia."""
+    app, ids = forecast_status_scenario
+    adapter = CashForecastEntryAdapter()
+    row = _row(ids["draft"])
+    row["estimated_date"] = "2027-01-01"
+
+    with app.app_context():
+        errores = adapter.validate_row(row)
+        assert any("fiscal" in error.lower() for error in errores)
+
+        document = adapter.build_document([row], {"company_id": "alpha", "created_by": None})
+        with pytest.raises(ValueError, match="fiscal"):
+            adapter.persist_document(document)
+    assert _entries(app, ids["draft"]) == []

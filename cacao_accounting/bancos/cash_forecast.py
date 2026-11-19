@@ -27,6 +27,8 @@ from cacao_accounting.bancos.cash_forecast_service import (
     _resolve_company_currency,
     get_cash_forecast_matrix,
     get_forecast_comparison,
+    out_of_range_forecast_entries,
+    validate_forecast_entry_date,
 )
 
 from cacao_accounting.i18n import _, _l
@@ -215,6 +217,7 @@ def cash_forecast_detail(forecast_id):
         currencies=currencies,
         matrix=matrix,
         entries=entries,
+        out_of_range_entries=out_of_range_forecast_entries(forecast),
         titulo=_("Pronóstico de Flujo de Caja:") + " " + forecast.version,
     )
 
@@ -337,6 +340,7 @@ def cash_forecast_entry_add(forecast_id):
         if not concept or not currency or amount <= 0 or not estimated_date:
             flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
         else:
+            validate_forecast_entry_date(forecast, estimated_date)
             entry = CashForecastEntry(
                 forecast_id=forecast.id,
                 type=type_,
@@ -547,6 +551,7 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
         if not concept or not currency or amount <= 0 or not estimated_date:
             flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
         else:
+            validate_forecast_entry_date(forecast, estimated_date)
             entry.type = type_
             entry.concept = concept
             entry.currency = currency

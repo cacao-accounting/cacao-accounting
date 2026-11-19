@@ -219,6 +219,13 @@
   </div>
   {% endif %}
 
+  {% if out_of_range_entries %}
+  <div class="alert alert-warning" role="alert">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    {{ _('Hay %(count)s proyecciones fuera del año fiscal; corríjalas manualmente.', count=out_of_range_entries|length) }}
+  </div>
+  {% endif %}
+
   <!-- Listado de Proyecciones Manuales -->
   <div class="table-responsive">
     <table class="ca-table text-nowrap align-middle">

@@ -78,6 +78,39 @@ def _generate_weekly_periods(start: date, end: date) -> list[dict]:
     return periods
 
 
+def _fiscal_year_range(forecast: CashForecast) -> tuple[date, date]:
+    """Devuelve el rango del año fiscal asociado al pronóstico."""
+    fiscal_year = database.session.get(FiscalYear, forecast.fiscal_year_id)
+    if fiscal_year is None:
+        raise ValueError(_("El pronóstico no tiene un año fiscal asociado."))
+    return fiscal_year.year_start_date, fiscal_year.year_end_date
+
+
+def validate_forecast_entry_date(forecast: CashForecast, estimated_date: date) -> None:
+    """Exige que una proyección manual caiga dentro de su año fiscal."""
+    start, end = _fiscal_year_range(forecast)
+    if not start <= estimated_date <= end:
+        raise ValueError(
+            _("La fecha estimada debe estar dentro del año fiscal (%(start)s a %(end)s).")
+            % {"start": start.isoformat(), "end": end.isoformat()}
+        )
+
+
+def out_of_range_forecast_entries(forecast: CashForecast) -> list[CashForecastEntry]:
+    """Reporta proyecciones históricas fuera del año fiscal sin modificarlas."""
+    start, end = _fiscal_year_range(forecast)
+    return list(
+        database.session.execute(
+            database.select(CashForecastEntry).where(
+                CashForecastEntry.forecast_id == forecast.id,
+                (CashForecastEntry.estimated_date < start) | (CashForecastEntry.estimated_date > end),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
 def generate_periods(fiscal_year, periodicity):
     """Divide un año fiscal en períodos semanales o mensuales."""
     if periodicity not in CASH_FORECAST_PERIODICITIES:

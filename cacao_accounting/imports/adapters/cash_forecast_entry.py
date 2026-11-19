@@ -6,6 +6,7 @@
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 
+from cacao_accounting.bancos.cash_forecast_service import validate_forecast_entry_date
 from cacao_accounting.database import CashForecast, CashForecastEntry, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.imports.utils.dates import parse_import_date
@@ -62,9 +63,11 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         except ValueError as exc:
             errors.append(str(exc))
         try:
-            parse_import_date(row_data.get("estimated_date"), field="fecha estimada")
-        except (ValueError, TypeError):
-            errors.append(f"Fecha inválida: {row_data.get('estimated_date')}")
+            estimated_date = parse_import_date(row_data.get("estimated_date"), field="fecha estimada")
+            if forecast is not None:
+                validate_forecast_entry_date(forecast, estimated_date)
+        except (ValueError, TypeError) as exc:
+            errors.append(str(exc) or f"Fecha inválida: {row_data.get('estimated_date')}")
         return errors
 
     @staticmethod
@@ -126,6 +129,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
                     _("El pronóstico %(forecast)s pertenece a la compañía %(owner)s, no a %(company)s.")
                     % {"forecast": forecast.id, "owner": forecast.company, "company": company_id}
                 )
+            validate_forecast_entry_date(forecast, entry_data["estimated_date"])
             # #1049: revalidar el estado inmediatamente antes de persistir; el
             # pronóstico pudo aprobarse después de la validación del lote.
             if str(forecast.status or "") != "Draft":

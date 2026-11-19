@@ -23836,3 +23836,15 @@ msgstr "Role change for %(role)s."
 #: cacao_accounting/contabilidad/forms.py cacao_accounting/contabilidad/recurring_journal_service.py
 msgid "Diaria"
 msgstr "Daily"
+
+#: cacao_accounting/bancos/cash_forecast_service.py cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html
+msgid "El pronóstico no tiene un año fiscal asociado."
+msgstr "The forecast has no associated fiscal year."
+
+#: cacao_accounting/bancos/cash_forecast_service.py cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html
+msgid "La fecha estimada debe estar dentro del año fiscal (%(start)s a %(end)s)."
+msgstr "The estimated date must be within the fiscal year (%(start)s to %(end)s)."
+
+#: cacao_accounting/bancos/cash_forecast_service.py cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html
+msgid "Hay %(count)s proyecciones fuera del año fiscal; corríjalas manualmente."
+msgstr "There are %(count)s projections outside the fiscal year; correct them manually."
