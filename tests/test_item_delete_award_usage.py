@@ -24,42 +24,47 @@ def test_item_with_award_usage_cannot_be_deleted(app, entorno_contable):
     suffix = uuid4().hex[:8]
     with app.app_context():
         # SQLite Desktop puede operar sin FK activas; el guard debe cubrir
-        # igualmente la referencia.
+        # igualmente la referencia. Se restaura el pragma para no contaminar
+        # otras pruebas del worker.
         if database.engine.dialect.name == "sqlite":
             database.session.execute(database.text("PRAGMA foreign_keys=OFF"))
-        uom = database.session.execute(database.select(UOM).filter_by(code="UND")).scalar_one_or_none()
-        if uom is None:
-            database.session.add(UOM(code="UND", name="Unidad", is_active=True))
-            database.session.flush()
-        item = Item(
-            code=f"AWD-{suffix}",
-            name="Artículo adjudicado",
-            item_type="goods",
-            is_stock_item=False,
-            default_uom="UND",
-        )
-        database.session.add(item)
-        database.session.flush()
-        database.session.add(
-            PurchaseQuotationAwardItem(
-                award_id=f"AWARD-{suffix}",
-                purchase_quotation_item_id=f"PQI-{suffix}",
-                supplier_quotation_id=f"SQ-{suffix}",
-                supplier_quotation_item_id=f"SQI-{suffix}",
-                item_code=item.code,
-                qty=Decimal("1"),
-                rate=Decimal("10"),
-                amount=Decimal("10"),
+        try:
+            uom = database.session.execute(database.select(UOM).filter_by(code="UND")).scalar_one_or_none()
+            if uom is None:
+                database.session.add(UOM(code="UND", name="Unidad", is_active=True))
+                database.session.flush()
+            item = Item(
+                code=f"AWD-{suffix}",
+                name="Artículo adjudicado",
+                item_type="goods",
+                is_stock_item=False,
+                default_uom="UND",
             )
-        )
-        database.session.commit()
-        item_id = item.id
-
-        with pytest.raises(CacaoIntegrityError):
-            database.session.delete(database.session.get(Item, item_id))
+            database.session.add(item)
             database.session.flush()
-        database.session.rollback()
-        assert database.session.get(Item, item_id) is not None
+            database.session.add(
+                PurchaseQuotationAwardItem(
+                    award_id=f"AWARD-{suffix}",
+                    purchase_quotation_item_id=f"PQI-{suffix}",
+                    supplier_quotation_id=f"SQ-{suffix}",
+                    supplier_quotation_item_id=f"SQI-{suffix}",
+                    item_code=item.code,
+                    qty=Decimal("1"),
+                    rate=Decimal("10"),
+                    amount=Decimal("10"),
+                )
+            )
+            database.session.commit()
+            item_id = item.id
+
+            with pytest.raises(CacaoIntegrityError):
+                database.session.delete(database.session.get(Item, item_id))
+                database.session.flush()
+            database.session.rollback()
+            assert database.session.get(Item, item_id) is not None
+        finally:
+            if database.engine.dialect.name == "sqlite":
+                database.session.execute(database.text("PRAGMA foreign_keys=ON"))
 
 
 def test_all_item_and_warehouse_references_are_restrict():
