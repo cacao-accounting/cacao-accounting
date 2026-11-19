@@ -24,6 +24,17 @@
   <div class="p-4">
     <form method="post" id="form-proyecto" class="row g-3" x-data="{ budgetCurrency: {{ (budget_currency_code or '')|tojson }}, isCapitalizable: {{ 'true' if form.capitalizable.data else 'false' }} }">
       {{ form.csrf_token }}
+      {% if form.errors %}
+      <div class="col-12">
+        <div class="alert alert-danger py-2 mb-0">
+          <ul class="mb-0">
+            {% for field_errors in form.errors.values() %}
+              {% for error in field_errors %}<li>{{ error }}</li>{% endfor %}
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
       <div class="col-md-4">
         <label class="form-label" for="id-proyecto">{{ _('Código') }} <span class="text-danger">*</span></label>
         {{ form.id(class="form-control form-control-sm", id="id-proyecto", required=True) }}

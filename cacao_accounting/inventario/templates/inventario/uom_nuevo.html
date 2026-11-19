@@ -25,6 +25,15 @@
   </div>
   <form method="post" id="form-main">
     {{ form.csrf_token }}
+    {% if form.errors %}
+    <div class="alert alert-danger py-2">
+      <ul class="mb-0">
+        {% for field_errors in form.errors.values() %}
+          {% for error in field_errors %}<li>{{ error }}</li>{% endfor %}
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
     <div class="mb-3">
       {{ form.code.label(class="form-label") }}
       {{ form.code(class="form-control") }}

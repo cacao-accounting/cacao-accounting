@@ -26,6 +26,18 @@
   <form method="post" id="form-main" class="row g-3 p-3">
     {{ form.csrf_token }}
 
+    {% if form.errors %}
+    <div class="col-12">
+      <div class="alert alert-danger py-2 mb-0">
+        <ul class="mb-0">
+          {% for field_errors in form.errors.values() %}
+            {% for error in field_errors %}<li>{{ error }}</li>{% endfor %}
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="col-12">
       <div class="ca-card shadow-sm">
         <div class="ca-card-header">
