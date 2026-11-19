@@ -2694,20 +2694,11 @@ def _receipt_transaction_config(
     }
 
 
-@compras.route("/purchase-receipt/new", methods=["GET", "POST"])
-@modulo_activo("inventory")
-@login_required
-@verifica_permiso("inventory", "crear")
-def compras_recepcion_nuevo():
-    """Formulario para crear una recepción de compra."""
-    from cacao_accounting.compras.forms import FormularioRecepcionCompra
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-
-    formulario = FormularioRecepcionCompra()
-    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-
-    from_order_id = request.args.get("from_order") or request.form.get("from_order")
-    from_receipt_id = request.args.get("from_receipt") or request.form.get("from_receipt")
+def _resolve_receipt_origins(
+    from_order_id: str | None,
+    from_receipt_id: str | None,
+) -> tuple[PurchaseOrder | None, PurchaseReceipt | None, str | None]:
+    """Carga y valida las fuentes de una recepción o devolución."""
     orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
     recepcion_origen = database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None
     for origen in (orden_origen, recepcion_origen):
@@ -2722,6 +2713,24 @@ def compras_recepcion_nuevo():
         # La devolución usa una sola fuente: la recepción original. La orden
         # solo se valida como vínculo, no para precargar líneas (#2148).
         from_order_id = None
+    return orden_origen, recepcion_origen, from_order_id
+
+
+@compras.route("/purchase-receipt/new", methods=["GET", "POST"])
+@modulo_activo("inventory")
+@login_required
+@verifica_permiso("inventory", "crear")
+def compras_recepcion_nuevo():
+    """Formulario para crear una recepción de compra."""
+    from cacao_accounting.compras.forms import FormularioRecepcionCompra
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    formulario = FormularioRecepcionCompra()
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+
+    from_order_id = request.args.get("from_order") or request.form.get("from_order")
+    from_receipt_id = request.args.get("from_receipt") or request.form.get("from_receipt")
+    orden_origen, recepcion_origen, from_order_id = _resolve_receipt_origins(from_order_id, from_receipt_id)
 
     selected_company = _resolve_receipt_selected_company(recepcion_origen, orden_origen, formulario)
     if selected_company:

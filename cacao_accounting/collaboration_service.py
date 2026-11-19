@@ -281,6 +281,45 @@ def active_users(companies: Sequence[str] | None = None, module: str | None = No
     return users
 
 
+def _task_module_visible(module: str | None, cache: dict[str, bool]) -> bool:
+    """Resuelve y memoriza el permiso de consulta del módulo documental."""
+    if not module or module == "general":
+        return True
+    if module not in cache:
+        permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+        cache[module] = bool(permissions.consultar)
+    return cache[module]
+
+
+def _group_visible_tasks(
+    rows: Sequence[Any],
+    authorized: Sequence[str],
+) -> dict[tuple[str, Any], list[tuple[str, str]]]:
+    """Agrupa tareas autorizadas por tipo y modelo de cabecera."""
+    grouped: dict[tuple[str, Any], list[tuple[str, str]]] = {}
+    module_cache: dict[str, bool] = {}
+    for document_type, document_id, company in rows:
+        if company is None or document_id is None or str(company) not in authorized:
+            continue
+        doctype = normalize_doctype(document_type or "")
+        spec = DOCUMENT_TYPES.get(doctype)
+        if spec is None:
+            continue
+        module = spec.permission_module or spec.module
+        if not _task_module_visible(module, module_cache):
+            continue
+        grouped.setdefault((doctype, spec.header_model), []).append((str(document_id), str(company)))
+    return grouped
+
+
+def _document_matches_task_scope(doctype: str, document: Any, company: str) -> bool:
+    """Confirma tipo y compañía del documento cargado para una tarea."""
+    if document is None or not document_matches_type(doctype, document):
+        return False
+    document_company = getattr(document, "company", None) or getattr(document, "entity", None)
+    return not document_company or str(document_company) == company
+
+
 def _visible_task_count(rows: Sequence[Any], authorized: Sequence[str]) -> int:
     """Cuenta tareas visibles cargando documentos por tipo en una sola consulta.
 
@@ -295,35 +334,14 @@ def _visible_task_count(rows: Sequence[Any], authorized: Sequence[str]) -> int:
     if not authenticated:
         return len(rows)
 
-    module_cache: dict[str, bool] = {}
-    grouped: dict[tuple[str, Any], list[tuple[str, str]]] = {}
-    for document_type, document_id, company in rows:
-        if company is None or document_id is None or str(company) not in authorized:
-            continue
-        doctype = normalize_doctype(document_type or "")
-        spec = DOCUMENT_TYPES.get(doctype)
-        if spec is None:
-            continue
-        module = spec.permission_module or spec.module
-        if module and module != "general":
-            if module not in module_cache:
-                permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
-                module_cache[module] = bool(permissions.consultar)
-            if not module_cache[module]:
-                continue
-        grouped.setdefault((doctype, spec.header_model), []).append((str(document_id), str(company)))
-
+    grouped = _group_visible_tasks(rows, authorized)
     visible = 0
     for (doctype, model), items in grouped.items():
         ids = {document_id for document_id, _company in items}
         documents = database.session.execute(database.select(model).where(model.id.in_(ids))).scalars().all()
         by_id = {str(document.id): document for document in documents}
         for document_id, company in items:
-            document = by_id.get(document_id)
-            if document is None or not document_matches_type(doctype, document):
-                continue
-            document_company = getattr(document, "company", None) or getattr(document, "entity", None)
-            if document_company and str(document_company) == company:
+            if _document_matches_task_scope(doctype, by_id.get(document_id), company):
                 visible += 1
     return visible
 
