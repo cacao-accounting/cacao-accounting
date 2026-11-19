@@ -161,10 +161,13 @@ QA1, QA2, QA3 o al administrador.
 | #2190 apertura de balanza y sábana desde períodos previos | Ya implementado y cubierto | `b778ee89` | `tests/test_trial_balance_opening_balance.py`; el `WHERE` no acota la apertura por período |
 | #2192 export desconocido rechazado con 400 | Ya implementado y cubierto | `b778ee89` | `tests/test_financial_report_export_validation.py`; formatos fuera de `{csv,xlsx,pdf}` no caen a HTML |
 | #2194 libro inexistente, inactivo o ajeno rechazado | Ya implementado y cubierto | `b778ee89` | `tests/test_financial_report_ledger_validation.py`; 400 en lugar de reporte vacío |
+| #2167 seed demo restringido a desarrollo o `--force` | Implementado con regresión | `8567d5a2` | `tests/test_cli_seed_idempotent.py`; rechazo sin abrir la app y ejecución autorizada |
+| #2189 grupos de movimiento consolidados por valor | Ya implementado y cubierto | `a9350e07` | `tests/test_financial_report_grouping.py`; secuencia A, B, A en un solo bloque con subtotal completo |
+| #2193 sección operating traducida | Ya implementado y cubierto | — | `tests/test_financial_report_section_labels.py`; etiquetas de sección localizadas |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1081 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1075 passed, 102 skipped**; 0 fallos (HEAD `7f98ad8f`).
+**Última suite completa:** Cloud **1083 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1077 passed, 102 skipped**; 0 fallos (HEAD `8567d5a2`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
