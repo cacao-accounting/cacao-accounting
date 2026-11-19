@@ -1,9 +1,3 @@
-{% macro transaction_form_js(config) %}
-<script>
-  globalThis.transactionFormConfig = {{ config | tojson }};
-</script>
-{% endmacro %}
-
 {% macro logistics_section(include_landed_costs=false, terms_field="purchase_terms") %}
 <section class="ca-card p-3 mb-3" x-data="{ open: false }">
   <button class="btn btn-link text-decoration-none px-0 fw-semibold" type="button"
