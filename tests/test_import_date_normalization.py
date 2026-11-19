@@ -155,3 +155,37 @@ def test_bank_statement_build_accepts_datetime_and_serial():
 
     assert datetime_document[0]["posting_date"] == date(2026, 5, 10)
     assert serial_document[0]["posting_date"] == date(2026, 5, 10)
+
+
+def test_out_of_range_excel_serial_is_a_validation_error():
+    """A huge numeric cell becomes ValueError, not OverflowError (#1055)."""
+    with pytest.raises(ValueError):
+        parse_import_date(20261030)
+
+
+def test_transaction_document_reports_a_huge_numeric_date(date_import_scenario):
+    """A large YYYYMMDD-like number is a row error, not an uncaught exception."""
+    app = date_import_scenario
+    adapter = TransactionDocumentAdapter(
+        TransactionImportConfig(
+            entity_type="purchase_request",
+            header_model=object,
+            item_model=object,
+            parent_field="purchase_request_id",
+        )
+    )
+    with app.app_context():
+        errors = adapter.validate_document(
+            [
+                {
+                    "document_ref": "PR-1",
+                    "fecha": 20261030,
+                    "producto": "ITEM-1",
+                    "cantidad": "1",
+                    "precio_unitario": "5",
+                }
+            ],
+            {"company_id": "alpha"},
+        )
+
+    assert any("formato ISO" in error for error in errors)

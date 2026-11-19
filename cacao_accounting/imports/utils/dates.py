@@ -33,7 +33,10 @@ def parse_import_date(value: Any, *, field: str = "fecha") -> date:
         serial = Decimal(str(value))
         if not serial.is_finite() or serial <= 0:
             raise ValueError(f"{field} debe ser una fecha válida.")
-        return _EXCEL_EPOCH + timedelta(days=int(serial))
+        try:
+            return _EXCEL_EPOCH + timedelta(days=int(serial))
+        except (OverflowError, ValueError) as exc:
+            raise ValueError(f"{field} debe ser una fecha válida.") from exc
     if isinstance(value, str):
         text = value.strip()
         if not text:
