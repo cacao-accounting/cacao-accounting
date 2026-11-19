@@ -55,7 +55,7 @@
                 <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ plantilla.name }}</p></div>
                 <div class="ca-kv-item"><label>{{ _('Compañía') }}</label><p>{{ plantilla.company }}</p></div>
                 <div class="ca-kv-item"><label>{{ _('Inicio') }}</label><p>{{ plantilla.start_date }}</p></div>
-                <div class="ca-kv-item"><label>{{ _('Frecuencia') }}</label><p>{{ _(plantilla.frequency) }}</p></div>
+                <div class="ca-kv-item"><label>{{ _('Frecuencia') }}</label><p>{{ recurring_frequency_label(plantilla.frequency) }}</p></div>
             </div>
         </div>
         <div class="col-md-6">

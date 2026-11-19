@@ -95,3 +95,23 @@ def test_listado_renderiza_la_plantilla_sin_la_columna_fantasma(app, authenticat
     assert CAMPO_FANTASMA not in html
     assert plantilla_qa in html
     assert "Plantilla listado QA" in html
+
+
+def test_listado_y_detalle_traducen_la_frecuencia_interna(app, authenticated_client, plantilla_qa):
+    """La frecuencia `monthly` se presenta como «Mensual» en lista y detalle (#2157)."""
+    with app.app_context():
+        plantilla = database.session.execute(
+            database.select(RecurringJournalTemplate).filter_by(code=plantilla_qa)
+        ).scalar_one()
+        plantilla_id = plantilla.id
+
+    client = authenticated_client()
+    listado = client.get(f"/accounting/journal/recurring?search={plantilla_qa}")
+    detalle = client.get(f"/accounting/journal/recurring/{plantilla_id}")
+
+    assert listado.status_code == 200
+    assert "Mensual" in listado.get_data(as_text=True)
+    assert ">monthly<" not in listado.get_data(as_text=True)
+    assert detalle.status_code == 200
+    assert "Mensual" in detalle.get_data(as_text=True)
+    assert ">monthly<" not in detalle.get_data(as_text=True)

@@ -25,7 +25,7 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 
 class RecurringJournalError(Exception):
@@ -35,6 +35,19 @@ class RecurringJournalError(Exception):
 
 
 PLANTILLA_NO_ENCONTRADA = "Plantilla no encontrada."
+
+
+RECURRING_FREQUENCY_LABELS = {
+    "monthly": _l("Mensual"),
+    "weekly": _l("Semanal"),
+    "daily": _l("Diario"),
+}
+
+
+def recurring_frequency_label(value: Any) -> str:
+    """Devuelve la etiqueta traducida de una frecuencia recurrente válida."""
+    key = str(value or "").strip().lower()
+    return str(RECURRING_FREQUENCY_LABELS.get(key, value or ""))
 
 
 def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]], user_id: str) -> RecurringJournalTemplate:

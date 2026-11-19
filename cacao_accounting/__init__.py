@@ -226,6 +226,9 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(document_currency_code=document_currency_code)
             app.jinja_env.globals.update(format_money_with_currency=format_money_with_currency)
             app.jinja_env.globals.update(currency_decimals_map=currency_decimals_map)
+            from cacao_accounting.contabilidad.recurring_journal_service import recurring_frequency_label
+
+            app.jinja_env.globals.update(recurring_frequency_label=recurring_frequency_label)
             app.jinja_env.filters.update(format_currency=format_money_with_currency)
             app.jinja_env.globals.update(format_quantity=format_quantity)
             app.jinja_env.globals.update(module_badge=module_badge)
