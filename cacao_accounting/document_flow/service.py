@@ -334,6 +334,28 @@ def _assert_same_sales_party(source_type: str, source_id: str, target_type: str,
         raise DocumentFlowError(_("El documento destino pertenece a otro cliente."), 409)
 
 
+def assert_relation_same_party(source_type: str, source_id: str, target_type: str, target_id: str) -> None:
+    """Rechaza relaciones entre documentos de terceros distintos.
+
+    Las rutas que construyen ``DocumentRelation`` directamente (reverso de
+    factura y copia de borrador) deben usar esta guarda para no saltarse la
+    validación que aplica ``create_document_relation`` (#N8). Solo compara
+    documentos cuyo campo de tercero es el mismo (cliente con cliente o
+    proveedor con proveedor); una diferencia de tipo de tercero no se juzga
+    aquí para no bloquear flujos históricos.
+    """
+    source_spec = DOCUMENT_TYPES.get(normalize_doctype(source_type))
+    target_spec = DOCUMENT_TYPES.get(normalize_doctype(target_type))
+    if source_spec is None or target_spec is None:
+        return
+    if not source_spec.party_field or source_spec.party_field != target_spec.party_field:
+        return
+    source_party = _document_party_id(normalize_doctype(source_type), source_id)
+    target_party = _document_party_id(normalize_doctype(target_type), target_id)
+    if source_party and target_party and source_party != target_party:
+        raise DocumentFlowError(_("El documento destino pertenece a otro tercero."), 409)
+
+
 def _assert_same_company(source_type: str, source_id: str, target_type: str, target_id: str) -> None:
     """Valida aislamiento por compania."""
     source_company = get_document_company(source_type, source_id)

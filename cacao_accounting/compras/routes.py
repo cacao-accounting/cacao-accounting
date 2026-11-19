@@ -123,6 +123,7 @@ from cacao_accounting.decorators import (  # noqa: F401
 
 from cacao_accounting.document_flow import (
     DocumentFlowError,
+    assert_relation_same_party,
     get_target_line_source,
     get_create_actions,
     refresh_source_caches_for_target,
@@ -2096,6 +2097,7 @@ def _copy_active_document_relations(
         target_item_id = item_ids.get(relation.target_item_id) if relation.target_item_id else None
         if relation.target_item_id and target_item_id is None:
             continue
+        assert_relation_same_party(relation.source_type, relation.source_id, relation.target_type, target_id)
         database.session.add(
             DocumentRelation(
                 source_type=relation.source_type,

@@ -31,7 +31,11 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
-from cacao_accounting.document_flow.service import DocumentFlowError, create_document_relation
+from cacao_accounting.document_flow.service import (
+    DocumentFlowError,
+    assert_relation_same_party,
+    create_document_relation,
+)
 
 
 @pytest.fixture
@@ -188,3 +192,14 @@ def test_relation_between_same_customer_is_persisted(sales_relation_party_scenar
         database.session.commit()
         assert relation.source_id == ids["quotation"]
         assert relation.target_id == ids["order_a"]
+
+
+def test_direct_relation_writes_validate_the_same_party(sales_relation_party_scenario):
+    """Las rutas directas reutilizan la guarda de tercero de las relaciones O2C."""
+    app, ids = sales_relation_party_scenario
+
+    with app.app_context():
+        assert_relation_same_party("sales_quotation", ids["quotation"], "sales_order", ids["order_a"])
+        with pytest.raises(DocumentFlowError) as error:
+            assert_relation_same_party("sales_quotation", ids["quotation"], "sales_order", ids["order_b"])
+        assert error.value.status_code == 409

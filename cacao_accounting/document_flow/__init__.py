@@ -5,6 +5,7 @@
 
 from cacao_accounting.document_flow.service import (
     DocumentFlowError,
+    assert_relation_same_party,
     close_document_balances,
     close_line_balance,
     create_target_document,
@@ -39,6 +40,7 @@ __all__ = [
     "apply_advance_to_invoice",
     "apply_payment_reconciliation",
     "assert_currency_contract_or_raise",
+    "assert_relation_same_party",
     "calculate_document_status",
     "close_document_balances",
     "close_line_balance",

@@ -86,6 +86,7 @@ from cacao_accounting.decorators import (  # noqa: F401
 
 from cacao_accounting.document_flow import (
     DocumentFlowError,
+    assert_relation_same_party,
     create_document_relation,
     get_target_line_source,
     refresh_source_caches_for_target,
@@ -2612,6 +2613,7 @@ def _update_purchase_reversal_relation(relation: DocumentRelation, invoice: Purc
 
 def _new_purchase_reversal_relation(invoice: PurchaseInvoice, target_type: str, amount: Decimal) -> DocumentRelation:
     """Construye la relación persistible entre la factura y su nota."""
+    assert_relation_same_party("purchase_invoice", invoice.reversal_of, target_type, invoice.id)
     return DocumentRelation(
         source_type="purchase_invoice",
         source_id=invoice.reversal_of,

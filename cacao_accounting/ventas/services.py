@@ -55,6 +55,7 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 
 from cacao_accounting.document_flow import (
     DocumentFlowError,
+    assert_relation_same_party,
     create_document_relation,
     refresh_source_caches_for_target,
     require_line_relations,
@@ -2306,6 +2307,7 @@ def _persist_sales_reversal_relation(invoice: SalesInvoice) -> None:
                 relation.reversed_at = datetime.now(UTC)
                 relation.reversal_reason = "reversal_document_revised"
                 database.session.flush()
+    assert_relation_same_party("sales_invoice", invoice.reversal_of, target_type, invoice.id)
     new_relation = DocumentRelation(
         source_type="sales_invoice",
         source_id=invoice.reversal_of,
