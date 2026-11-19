@@ -17,7 +17,7 @@
     <a href="{{ url_for('contabilidad.nuevo_centro_costo') }}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i> {{ _('Nuevo Centro') }}</a>
   </div>
 
-  {% if entidades_creadas %}
+  {% if entidades_creadas() %}
   {% set current_entity_code = entidad_actual_code|default('', true) %}
 
   {{ tree_toolbar(entidades, current_entity_code) }}
