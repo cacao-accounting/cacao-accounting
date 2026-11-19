@@ -164,10 +164,11 @@ QA1, QA2, QA3 o al administrador.
 | #2167 seed demo restringido a desarrollo o `--force` | Implementado con regresión | `8567d5a2` | `tests/test_cli_seed_idempotent.py`; rechazo sin abrir la app y ejecución autorizada |
 | #2189 grupos de movimiento consolidados por valor | Ya implementado y cubierto | `a9350e07` | `tests/test_financial_report_grouping.py`; secuencia A, B, A en un solo bloque con subtotal completo |
 | #2193 sección operating traducida | Ya implementado y cubierto | — | `tests/test_financial_report_section_labels.py`; etiquetas de sección localizadas |
+| #2165 onboarding de catálogos sin entidades | Implementado con regresión | `190386d2` | `tests/test_catalog_onboarding_without_entities.py`; los diez catálogos invocan `entidades_creadas()` y ocultan CTAs sin entidad |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1083 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1077 passed, 102 skipped**; 0 fallos (HEAD `8567d5a2`).
+**Última suite completa:** Cloud **1086 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1080 passed, 102 skipped**; 0 fallos (HEAD `190386d2`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
