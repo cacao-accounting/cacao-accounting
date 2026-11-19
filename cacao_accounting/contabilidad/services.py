@@ -266,11 +266,15 @@ def _resolve_account_parent(entity: str, parent_ref: str) -> tuple[str, str]:
     parent = None
     if id_value is not None:
         parent = database.session.execute(
-            database.select(Accounts).filter(Accounts.entity == entity, Accounts.id == id_value)
+            database.select(Accounts)
+            .filter(Accounts.entity == entity, Accounts.id == id_value)
+            .execution_options(populate_existing=True)
         ).scalar_one_or_none()
     if parent is None:
         parent = database.session.execute(
-            database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == normalized_ref)
+            database.select(Accounts)
+            .filter(Accounts.entity == entity, Accounts.code == normalized_ref)
+            .execution_options(populate_existing=True)
         ).scalar_one_or_none()
     if parent is None:
         raise ValueError(_("La cuenta padre indicada no existe para la entidad seleccionada."))
@@ -286,7 +290,9 @@ def _validate_account_parent(entity: str, parent_ref: str | None, *, current_cod
     if current_code and parent_code == current_code:
         raise ValueError(_("Una cuenta no puede ser padre de si misma."))
     parent = database.session.execute(
-        database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == parent_code)
+        database.select(Accounts)
+        .filter(Accounts.entity == entity, Accounts.code == parent_code)
+        .execution_options(populate_existing=True)
     ).scalar_one_or_none()
     if parent is None:
         raise ValueError(_("La cuenta padre indicada no existe para la entidad seleccionada."))

@@ -67,10 +67,6 @@ def catalogo_qa(app):
             )
         )
         database.session.commit()
-        for clave, codigo in (("grupo", escenario["grupo"]), ("grupo_libre", escenario["grupo_libre"])):
-            escenario[f"{clave}_id"] = str(
-                database.session.execute(database.select(Accounts.id).filter_by(entity="cacao", code=codigo)).scalar_one()
-            )
 
     yield escenario
 
@@ -103,8 +99,12 @@ def test_descendientes_sustentan_la_guardia(app, catalogo_qa):
 
 def test_no_se_desmarca_grupo_con_cuentas_hijas(app, authenticated_client, catalogo_qa):
     """El POST de desmarcado regresa al formulario con el flash de guardia y no confirma cambios."""
+    with app.app_context():
+        grupo_id = database.session.execute(
+            database.select(Accounts.id).filter_by(entity="cacao", code=catalogo_qa["grupo"])
+        ).scalar_one()
     response = authenticated_client().post(
-        f"/accounting/account/{catalogo_qa['grupo_id']}/edit",
+        f"/accounting/account/{grupo_id}/edit",
         data=_datos_edicion_sin_grupo(catalogo_qa["grupo"], "Grupo QA con hija"),
     )
 
@@ -122,8 +122,12 @@ def test_no_se_desmarca_grupo_con_cuentas_hijas(app, authenticated_client, catal
 
 def test_grupo_sin_hijas_puede_desmarcarse(app, authenticated_client, catalogo_qa):
     """Una cuenta grupo hoja acepta el desmarcado y persiste group=False."""
+    with app.app_context():
+        grupo_libre_id = database.session.execute(
+            database.select(Accounts.id).filter_by(entity="cacao", code=catalogo_qa["grupo_libre"])
+        ).scalar_one()
     response = authenticated_client().post(
-        f"/accounting/account/{catalogo_qa['grupo_libre_id']}/edit",
+        f"/accounting/account/{grupo_libre_id}/edit",
         data=_datos_edicion_sin_grupo(catalogo_qa["grupo_libre"], "Grupo QA sin hijos actualizado"),
     )
 
@@ -136,3 +140,44 @@ def test_grupo_sin_hijas_puede_desmarcarse(app, authenticated_client, catalogo_q
         assert cuenta.active is True
         assert cuenta.enabled is True
         assert cuenta.name == "Grupo QA sin hijos actualizado"
+
+
+def test_alta_y_edicion_toman_el_lock_de_jerarquia(app, authenticated_client, catalogo_qa, monkeypatch):
+    """Crear una hija y demover el padre comparten el mismo lock por entidad."""
+    import cacao_accounting.default_scope as default_scope
+
+    llamadas: list[tuple[str, ...]] = []
+    original = default_scope.lock_default_scope
+
+    def tracking(category: str, *parts: str | None) -> None:
+        llamadas.append((category, *parts))
+        original(category, *parts)
+
+    monkeypatch.setattr(default_scope, "lock_default_scope", tracking)
+    suffix = uuid4().hex[:6].upper()
+    client = authenticated_client()
+
+    alta = client.post(
+        "/accounting/account/new",
+        data={
+            "code": f"AH{suffix}",
+            "name": "Hija nueva",
+            "entidad": "cacao",
+            "padre": catalogo_qa["grupo"],
+            "clasificacion": "asset",
+            "activo": "y",
+        },
+    )
+    assert alta.status_code == 302
+
+    with app.app_context():
+        grupo_id = database.session.execute(
+            database.select(Accounts.id).filter_by(entity="cacao", code=catalogo_qa["grupo"])
+        ).scalar_one()
+    edicion = client.post(
+        f"/accounting/account/{grupo_id}/edit",
+        data=_datos_edicion_sin_grupo(catalogo_qa["grupo"], "Grupo QA con hija"),
+    )
+    assert edicion.status_code == 200
+
+    assert llamadas.count(("account_hierarchy", "cacao")) >= 2

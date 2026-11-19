@@ -1587,6 +1587,9 @@ def nueva_cuenta():
                 entity_initial_label=entity_initial_label,
                 parent_initial_label=parent_initial_label,
             )
+        from cacao_accounting.default_scope import lock_default_scope
+
+        lock_default_scope("account_hierarchy", formulario.entidad.data)
         try:
             parent_code = _validate_account_parent(formulario.entidad.data, formulario.padre.data or None)
         except ValueError as error:
@@ -1661,6 +1664,10 @@ def editar_cuenta(id_cta):
             entity_initial_label=entity_initial_label,
             parent_initial_label=parent_initial_label,
         )
+    from cacao_accounting.default_scope import lock_default_scope
+
+    lock_default_scope("account_hierarchy", registro.entity)
+    database.session.refresh(registro)
     try:
         parent_code = _validate_account_parent(
             formulario.entidad.data,
