@@ -156,6 +156,20 @@ class BankStatementAdapter(BaseImportAdapter):
         """Persist bank transactions to the database."""
         persisted_ids: list[str] = []
         seen_in_batch: set[str] = set()
+        # La comprobación de duplicados y la inserción deben ejecutarse bajo el
+        # mismo lock por cuenta. Dos importaciones concurrentes del mismo
+        # extracto esperan su turno; la segunda ya ve la fila confirmada por la
+        # primera en lugar de insertar un duplicado (#2172). El orden estable
+        # evita interbloqueos cuando el lote toca varias cuentas.
+        for bank_account_id in sorted(
+            {str(tx_data.get("bank_account_id") or "") for tx_data in document if tx_data.get("bank_account_id")}
+        ):
+            database.session.execute(
+                database.select(BankAccount)
+                .where(BankAccount.id == bank_account_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ).scalar_one_or_none()
         for tx_data in document:
             bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
             if bank_account is None:
