@@ -225,6 +225,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
             app.jinja_env.globals.update(document_currency_code=document_currency_code)
             app.jinja_env.globals.update(format_money_with_currency=format_money_with_currency)
+            app.jinja_env.globals.update(currency_decimals_map=currency_decimals_map)
             app.jinja_env.filters.update(format_currency=format_money_with_currency)
             app.jinja_env.globals.update(format_quantity=format_quantity)
             app.jinja_env.globals.update(module_badge=module_badge)
@@ -308,9 +309,45 @@ def _decimal_for_display(value: object | None) -> Decimal:
         return Decimal("0")
 
 
+def _currency_decimals_map() -> dict[str, int]:
+    """Return the configured decimal precision per currency for this request.
+
+    La tabla ``Currency`` es pequeña y se consulta una vez por request; el
+    resultado se guarda en ``flask.g`` para que las múltiples llamadas del
+    helper y las plantillas no generen una consulta por importe.
+    """
+    from flask import g, has_app_context
+
+    if not has_app_context():
+        return {}
+    cached = getattr(g, "_cacao_currency_decimals", None)
+    if cached is not None:
+        return cached
+    from cacao_accounting.database import Currency
+
+    try:
+        rows = database.session.execute(database.select(Currency.code, Currency.decimals)).all()
+    except SQLAlchemyError:
+        rows = []
+    values: dict[str, int] = {}
+    for code, decimals in rows:
+        try:
+            values[str(code)] = max(0, min(int(decimals if decimals is not None else 2), 8))
+        except (TypeError, ValueError):
+            values[str(code)] = 2
+    g._cacao_currency_decimals = values
+    return values
+
+
+def currency_decimals_map() -> dict[str, int]:
+    """Expose the request-scoped currency precision map to templates."""
+    return _currency_decimals_map()
+
+
 def format_money_with_currency(value: object | None, currency_code: str | None = "") -> str:
-    """Format money with thousands separators and optional currency code."""
-    amount = f"{_decimal_for_display(value):,.2f}"
+    """Format money with thousands separators and the currency's precision."""
+    decimals = _currency_decimals_map().get(str(currency_code or ""), 2)
+    amount = f"{_decimal_for_display(value):,.{decimals}f}"
     return f"{currency_code} {amount}" if currency_code else amount
 
 

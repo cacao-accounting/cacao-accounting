@@ -1332,8 +1332,19 @@
           this.lines = filtered;
         },
 
+        currencyDecimals() {
+          const code = String(this.header.currency || this.header.transaction_currency || '');
+          const map = globalThis.__CACAO_CURRENCY_DECIMALS__ || {};
+          const configured = Number(map[code]);
+          return Number.isInteger(configured) ? Math.max(0, Math.min(configured, 8)) : 2;
+        },
+
         formatMoney(value) {
-          return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const decimals = this.currencyDecimals();
+          return Number(value || 0).toLocaleString(undefined, {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          });
         },
 
         serializedTaxLines() {

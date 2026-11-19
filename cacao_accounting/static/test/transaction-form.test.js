@@ -3,6 +3,9 @@
 
 const assert = require('assert');
 
+const nativeSetTimeout = globalThis.setTimeout;
+const nativeClearTimeout = globalThis.clearTimeout;
+
 function deferred() {
   let resolve;
   let reject;
@@ -87,8 +90,9 @@ describe('transaction-form', function () {
     delete globalThis.Alpine;
     delete globalThis.ExcelJS;
     delete globalThis.fetch;
-    delete globalThis.setTimeout;
-    delete globalThis.clearTimeout;
+    delete globalThis.__CACAO_CURRENCY_DECIMALS__;
+    globalThis.setTimeout = nativeSetTimeout;
+    globalThis.clearTimeout = nativeClearTimeout;
   });
 
   it('returns default visible columns for transactional forms', function () {
@@ -1367,4 +1371,20 @@ describe('transaction-form', function () {
     assert.deepStrictEqual(component.importModal.parsedRows, [{ item_code: 'NEW' }]);
     assert.strictEqual(component.importModal.fileLoading, false);
   });
+
+  it("formats money with the configured currency precision", function () {
+    globalThis.__CACAO_CURRENCY_DECIMALS__ = { TST4: 4, TST0: 0 };
+    const create = loadTransactionForm();
+
+    const precise = create({});
+    precise.header.currency = "TST4";
+    const integer = create({});
+    integer.header.transaction_currency = "TST0";
+    const fallback = create({});
+
+    assert.match(precise.formatMoney(1.004), /^1[.,]0040$/);
+    assert.match(integer.formatMoney(1.6), /^2$/);
+    assert.match(fallback.formatMoney(1.004), /^1[.,]00$/);
+  });
+
 });
