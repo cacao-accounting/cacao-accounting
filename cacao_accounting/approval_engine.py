@@ -885,6 +885,14 @@ class ApprovalEngine:
                     actual_doc = database.session.get(get_model_class(actual_doc_type), req.document_id)
                     if actual_doc is None:
                         raise ValueError(_("El documento que se cancelaría ya no existe."))
+                    from cacao_accounting.document_flow import lock_document_flow_document
+
+                    lock_document_flow_document(actual_doc_type, str(actual_doc.id))
+                    actual_doc = database.session.execute(
+                        select(get_model_class(actual_doc_type))
+                        .where(get_model_class(actual_doc_type).id == actual_doc.id)
+                        .execution_options(populate_existing=True)
+                    ).scalar_one()
                     cls._validate_final_cancellation(actual_doc_type, actual_doc)
                     cls._execute_cancel(
                         actual_doc_type,

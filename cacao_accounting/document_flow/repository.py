@@ -329,7 +329,12 @@ def has_active_source_relations(source_type: str, source_id: str) -> bool:
         .all()
     )
     for relation in relations:
-        target = get_document(relation.target_type, relation.target_id)
+        spec = get_document_type(relation.target_type)
+        target = database.session.execute(
+            database.select(spec.header_model)
+            .where(spec.header_model.id == relation.target_id)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
         if target and getattr(target, "docstatus", 0) == 1:
             return True
     return False
