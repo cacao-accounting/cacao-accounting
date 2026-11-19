@@ -125,7 +125,7 @@ QA1, QA2, QA3 o al administrador.
 | #2181 numeración de pagos respeta la configuración por cuenta con campos vacíos | Implementado con regresión | `e7f895c2` | `tests/test_payment_numbering_config_empty_fields.py` |
 | #2174 cuentas de bodega imputables | Verificado con regresión | `7bce4dd2` | `tests/test_warehouse_inventory_account_validation.py` |
 | #2180 cuentas GL imputables en pagos y notas bancarias | Verificado con regresión | `de37f15f` | `tests/test_payment_gl_account_validation.py` |
-| #2188 jerarquías concurrentes; #2161/N17 plantillas recurrentes negativas y numéricas | Implementado con regresión | `239c6e6d` | `tests/test_r2r_unit_hierarchy_concurrency.py` (PostgreSQL), `tests/test_recurring_template_negative_amounts.py` |
+| #2188 jerarquías concurrentes; #2161/N17 plantillas recurrentes negativas y numéricas | Implementado con regresión | `239c6e6d`, `1401aad7` | `tests/test_r2r_unit_hierarchy_concurrency.py` (PostgreSQL/MySQL), `tests/test_recurring_template_negative_amounts.py` |
 | #2180 R1 cuenta por defecto imputable; #2181/N25 numeración de pagos; #1076/N26 clave cancelada | Implementado con regresión | `79ab88a8` | `tests/test_bank_note_gl_account_validation.py`, `tests/test_payment_numbering_config_empty_fields.py`, `tests/test_purchase_reconciliation_idempotency_scope.py` |
 | i18n del adaptador transaccional; N24/N15/N18/N19 | Implementado con regresión | `9b6314b3` | `tests/test_import_*.py`, `tests/test_search_select_module_permission.py` |
 | #2197 precisión de existencias en el dashboard | Implementado con regresión | `2ad71bda` | `cacao_accounting/static/test/dashboard.test.js`; suite JS 103 passing |
@@ -145,19 +145,23 @@ QA1, QA2, QA3 o al administrador.
 | #2149 fachada de contabilidad con `log_submit` y `__all__` | Implementado con regresión | `c4e77b56` | `tests/test_contabilidad_facade_compat.py`; import nombrado y wildcard |
 
 **Última suite completa:** Cloud **1055 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1049 passed, 102 skipped**; 0 fallos (HEAD `c4e77b56`).
-La primera pasada Desktop tuvo tres fallos intermitentes en
-`test_sale_item_eligibility.py` por estado de series; el archivo pasó aislado y la
-repetición completa quedó en verde.
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1049 passed, 102 skipped**; 0 fallos (HEAD `1401aad7`).
+La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
+por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 105 passing.
 
-**Matriz de motores ejecutada localmente (HEAD `caa97a12`):**
+**Matriz de motores ejecutada localmente (HEAD `1401aad7`):**
 
-- SQLite con `-m database --full --slow=True`: **84 passed, 7 skipped, 1055 deselected**.
-- PostgreSQL + pg8000 sobre base temporal dedicada: **81 passed, 10 skipped, 1055 deselected**.
-- PostgreSQL + psycopg2 sobre base temporal recreada: **81 passed, 10 skipped, 1055 deselected**.
-- MySQL y Redis: **no disponibles en el entorno** (sin binarios ni servicios escuchando en
-  3306/6379). Quedan pendientes de CI; no se declara la matriz completa en verde.
+- SQLite con `-m database --full --slow=True`: **84 passed, 7 skipped, 1060 deselected**.
+- PostgreSQL + pg8000 sobre base temporal dedicada: **81 passed, 10 skipped, 1060 deselected**.
+- PostgreSQL + psycopg2 sobre base temporal recreada: **81 passed, 10 skipped, 1060 deselected**.
+- MySQL 8.0 + pymysql sobre base recreada: **79 passed, 12 skipped, 1060 deselected**.
+  La primera ejecución detectó que #2188 seguía leyendo el snapshot previo bajo
+  `REPEATABLE READ`; corregido en `1401aad7` y repetido en verde.
+- Redis 7.2 + PostgreSQL, pruebas `-m cache`: **1 passed, 1150 deselected**.
+
+La matriz local quedó completa. CI sigue siendo responsable de repetirla con las
+versiones de Python y los servicios del workflow, y de las ramas de caché adicionales.
 **Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
 localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
 `needs-work` (reabierto o pendiente de revisión). El estado de GitHub es la fuente para el cierre.
@@ -174,8 +178,9 @@ Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archiv
 
 **Controles pendientes:**
 
-- PostgreSQL, MySQL y Redis no están disponibles en este entorno. La matriz Tier 1/Tier 2, la suite Desktop
-  y el aislamiento de caché quedan a cargo de CI; no se declara una ronda completa en verde.
+- La matriz local SQLite, PostgreSQL (pg8000/psycopg2), MySQL 8 y Redis 7 quedó ejecutada.
+  CI debe repetirla con las versiones de Python y los servicios del workflow antes de un push;
+  no se declara una ronda remota en verde.
 - Los issues listados siguen OPEN/`needs-work` hasta que QA1 → QA2 revisen y el administrador o QA3 acepten el
   cierre. Este registro no sustituye esa revisión.
 
