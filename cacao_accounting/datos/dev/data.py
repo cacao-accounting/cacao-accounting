@@ -7,6 +7,7 @@
 # Libreria estandar
 # --------------------------------------------------------------------------------------
 from datetime import date, datetime
+from decimal import Decimal, ROUND_HALF_UP
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -416,12 +417,20 @@ def _make_proyectos() -> tuple:
 
 
 def _make_tasas_de_cambio() -> tuple:
-    """Crea instancias frescas de Tasas de Cambio."""
+    """Crea tasas demo consistentes entre los pares de monedas.
+
+    La convención del sistema es ``1 origin = rate destination``. La tasa
+    directa USD/EUR se deriva de USD/NIO y EUR/NIO para que una conversión
+    directa y una triangular produzcan el mismo importe.
+    """
     today = date.today()
+    usd_to_nio = Decimal("36.6243")
+    eur_to_nio = Decimal("40.1234")
+    usd_to_eur = (usd_to_nio / eur_to_nio).quantize(Decimal("0.000000001"), rounding=ROUND_HALF_UP)
     return (
-        ExchangeRate(origin="USD", destination="NIO", rate=36.6243, date=today),
-        ExchangeRate(origin="EUR", destination="NIO", rate=40.1234, date=today),
-        ExchangeRate(origin="USD", destination="EUR", rate=1.0954, date=today),
+        ExchangeRate(origin="USD", destination="NIO", rate=usd_to_nio, date=today),
+        ExchangeRate(origin="EUR", destination="NIO", rate=eur_to_nio, date=today),
+        ExchangeRate(origin="USD", destination="EUR", rate=usd_to_eur, date=today),
     )
 
 
