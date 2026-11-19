@@ -258,6 +258,11 @@ def active_users(companies: Sequence[str] | None = None, module: str | None = No
     directorio global. Con ``module`` también se exige permiso de consulta en
     el módulo dueño del documento, de modo que un usuario con acceso a la
     compañía pero sin el módulo no aparece como destinatario elegible.
+
+    El filtro por módulo se resuelve con ``Permisos`` en memoria porque combina
+    roles, accesos y compañías vigentes. El conjunto ya está acotado por las
+    compañías solicitadas; si el directorio crece, debe trasladarse a una
+    consulta SQL equivalente (#N11).
     """
     query = database.select(User).filter_by(active=True).order_by(User.user)
     if companies:
@@ -276,11 +281,58 @@ def active_users(companies: Sequence[str] | None = None, module: str | None = No
     return users
 
 
+def _visible_task_count(rows: Sequence[Any], authorized: Sequence[str]) -> int:
+    """Cuenta tareas visibles cargando documentos por tipo en una sola consulta.
+
+    Sustituye el recorrido fila a fila de ``open_task_count``: agrupa los IDs
+    por modelo documental, resuelve la compañía real en lote y reutiliza el
+    permiso del módulo. Evita una consulta por tarea en el badge (#N2).
+    """
+    try:
+        authenticated = bool(current_user and current_user.is_authenticated)
+    except Exception:  # pragma: no cover - fuera de request context
+        authenticated = False
+    if not authenticated:
+        return len(rows)
+
+    module_cache: dict[str, bool] = {}
+    grouped: dict[tuple[str, Any], list[tuple[str, str]]] = {}
+    for document_type, document_id, company in rows:
+        if company is None or document_id is None or str(company) not in authorized:
+            continue
+        doctype = normalize_doctype(document_type or "")
+        spec = DOCUMENT_TYPES.get(doctype)
+        if spec is None:
+            continue
+        module = spec.permission_module or spec.module
+        if module and module != "general":
+            if module not in module_cache:
+                permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
+                module_cache[module] = bool(permissions.consultar)
+            if not module_cache[module]:
+                continue
+        grouped.setdefault((doctype, spec.header_model), []).append((str(document_id), str(company)))
+
+    visible = 0
+    for (doctype, model), items in grouped.items():
+        ids = {document_id for document_id, _company in items}
+        documents = database.session.execute(database.select(model).where(model.id.in_(ids))).scalars().all()
+        by_id = {str(document.id): document for document in documents}
+        for document_id, company in items:
+            document = by_id.get(document_id)
+            if document is None or not document_matches_type(doctype, document):
+                continue
+            document_company = getattr(document, "company", None) or getattr(document, "entity", None)
+            if document_company and str(document_company) == company:
+                visible += 1
+    return visible
+
+
 def open_task_count(user_id: str) -> int:
     """Return the count of not-completed tasks visible in the user's scope.
 
     Aplica el mismo filtro que la bandeja, incluido el permiso vigente del
-    módulo del documento (#1595).
+    módulo del documento (#1595), con carga de documentos por tipo (#N2).
     """
     authorized, scope = _task_company_scope()
     query = (
@@ -290,12 +342,7 @@ def open_task_count(user_id: str) -> int:
         .where(scope)
     )
     rows = database.session.execute(query).all()
-    module_cache: dict[str, bool] = {}
-    return sum(
-        1
-        for document_type, document_id, company in rows
-        if _task_document_visible(document_type, document_id, company, authorized, module_cache)
-    )
+    return _visible_task_count(rows, authorized)
 
 
 def document_url(task: DocumentTask) -> str | None:

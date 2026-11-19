@@ -16,6 +16,7 @@ from uuid import uuid4
 import pytest
 
 from cacao_accounting import create_app
+from cacao_accounting import collaboration_service
 from cacao_accounting.collaboration_service import (
     CollaborationError,
     open_task_count,
@@ -349,3 +350,19 @@ def test_task_with_unresolvable_document_cannot_change_status(task_revocation_sc
 
     with app.app_context():
         assert database.session.get(DocumentTask, task_id).status == "open"
+
+
+def test_open_task_count_resolves_documents_in_bulk(task_revocation_scenario, monkeypatch):
+    """El badge no consulta cada documento con `get_document` (#N2)."""
+    app, ids = task_revocation_scenario
+
+    def fail_per_row(*_args, **_kwargs):
+        raise AssertionError("open_task_count no debe resolver documentos fila a fila")
+
+    monkeypatch.setattr(collaboration_service, "get_document", fail_per_row)
+
+    with app.test_request_context("/tasks/my"):
+        from flask_login import login_user
+
+        login_user(database.session.get(User, ids["assignee"]))
+        assert open_task_count(ids["assignee"]) == 1
