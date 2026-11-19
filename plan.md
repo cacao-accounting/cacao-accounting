@@ -140,12 +140,19 @@ QA1, QA2, QA3 o al administrador.
 | #2203/#2204 retiro de `transaction_form_js` y macros con consumidor | Implementado con regresión | `752486f1` | `tests/test_transaction_form_macros_consumers.py`; el resto de macros conserva consumidores reales |
 | #2151 cierre fiscal con clasificaciones de catálogo en mayúscula | Implementado con regresión | `09b4b158` | `tests/test_fiscal_year_closing_classification_case.py`; `Income`, `Expense`, `Cost` y minúsculas |
 | #2144 enlace de tipos de proveedor alineado con administración global | Implementado con regresión | `51f48cc1` | `tests/test_purchases_supplier_group_link.py`; usuario con `purchases.configurar` sin acceso admin |
+| #2154 etiqueta del colapso de auditoría tras el toggle | Verificado con regresión | `caa97a12` | `tests/test_audit_timeline_collapse.py`; eventos `shown`/`hidden`, sin `onclick` inline |
 
 **Última suite completa:** Cloud **1050 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1044 passed, 102 skipped**; 0 fallos (HEAD `51f48cc1`).
-Las pruebas concurrentes de #2188 y #2172 se ejecutaron además contra PostgreSQL con
-`CHECK_DATABASE=true`. La suite JavaScript quedó en 105 passing. La matriz completa
-PostgreSQL/MySQL/Redis sigue pendiente de CI.
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1044 passed, 102 skipped**; 0 fallos.
+La suite JavaScript quedó en 105 passing.
+
+**Matriz de motores ejecutada localmente (HEAD `caa97a12`):**
+
+- SQLite con `-m database --full --slow=True`: **84 passed, 7 skipped, 1055 deselected**.
+- PostgreSQL + pg8000 sobre base temporal dedicada: **81 passed, 10 skipped, 1055 deselected**.
+- PostgreSQL + psycopg2 sobre base temporal recreada: **81 passed, 10 skipped, 1055 deselected**.
+- MySQL y Redis: **no disponibles en el entorno** (sin binarios ni servicios escuchando en
+  3306/6379). Quedan pendientes de CI; no se declara la matriz completa en verde.
 **Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
 localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
 `needs-work` (reabierto o pendiente de revisión). El estado de GitHub es la fuente para el cierre.
