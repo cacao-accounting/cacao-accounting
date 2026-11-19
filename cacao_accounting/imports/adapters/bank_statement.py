@@ -9,6 +9,7 @@ from typing import List, Dict, Any
 from cacao_accounting.database import BankAccount, BankTransaction, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.imports.utils.dates import parse_import_date
+from sqlalchemy.exc import IntegrityError
 
 
 from cacao_accounting.i18n import _
@@ -20,6 +21,16 @@ def _text(value: Any, default: str = "") -> str:
         return default
     text = str(value)
     return text if text.strip() else default
+
+
+def _is_bank_identity_conflict(error: IntegrityError) -> bool:
+    """Indica si el error corresponde a la identidad única del movimiento."""
+    original = error.orig
+    diagnostic = getattr(original, "diag", None)
+    if getattr(diagnostic, "constraint_name", None) == "uq_bank_transaction_identity":
+        return True
+    message = str(original).lower()
+    return "uq_bank_transaction_identity" in message or "bank_transaction.identity_key" in message
 
 
 class BankStatementAdapter(BaseImportAdapter):
@@ -212,8 +223,14 @@ class BankStatementAdapter(BaseImportAdapter):
                 deposit=tx_data.get("deposit"),
                 withdrawal=tx_data.get("withdrawal"),
             )
-            database.session.add(tx)
-            database.session.flush()
+            try:
+                with database.session.begin_nested():
+                    database.session.add(tx)
+                    database.session.flush()
+            except IntegrityError as exc:
+                if not _is_bank_identity_conflict(exc):
+                    raise
+                raise ValueError(_("La transacción bancaria ya existe en la base de datos.")) from exc
             seen_in_batch.add(str(tx.id))
             persisted_ids.append(str(tx.id))
         self._auto_reconcile(persisted_ids)
