@@ -115,7 +115,7 @@ def test_transaction_validation_accepts_an_excel_datetime(date_import_scenario):
             {"company_id": "alpha"},
         )
 
-    assert not any("formato ISO" in error for error in errors)
+    assert not any("fecha válida" in error for error in errors)
 
 
 def test_journal_period_validation_accepts_an_excel_datetime(date_import_scenario):
@@ -188,4 +188,4 @@ def test_transaction_document_reports_a_huge_numeric_date(date_import_scenario):
             {"company_id": "alpha"},
         )
 
-    assert any("formato ISO" in error for error in errors)
+    assert any("fecha válida" in error for error in errors)
