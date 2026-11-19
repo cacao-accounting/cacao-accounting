@@ -186,10 +186,13 @@ QA1, QA2, QA3 o al administrador.
 | #2125 fecha de conversión de cotización | Ya implementado; regresión restaurada | `256e3a3b`, `4b3be18b` | `tests/test_sales_quotation_expiry.py`; fecha ausente, último día y vencida |
 | #2123 devoluciones no cierran la orden | Implementado con regresión | `7df7c4ee` | `tests/test_sales_order_return_closure.py`; solo facturas positivas y entregas no devueltas cubren la línea |
 | #2185 proyecciones de caja dentro del año fiscal | Implementado con regresión | `1131408f` | `tests/test_cash_forecast_fiscal_year_scope.py`; alta, edición, importación y reporte de históricos |
+| #2122 exposición al facturar por relación de línea | Implementado con regresión | `44b7060c` | `tests/test_sales_order_exposure_line_relations.py`; descuenta el importe de la relación y evita duplicar el saldo AR |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1153 passed, 96 skipped**; Desktop
+**Última suite completa registrada:** Cloud **1153 passed, 96 skipped**; Desktop
 (`CACAO_ACCOUNTING_DESKTOP=True`) **1145 passed, 104 skipped**; 0 fallos (HEAD `1131408f`).
+Después de `44b7060c` (#2122) solo se ejecutaron las pruebas dirigidas
+(**2 passed**); las suites completas Cloud/Desktop quedan pendientes de repetir.
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
