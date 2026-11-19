@@ -530,7 +530,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1153 | #1656 | ✅ Implementado; fix en `95a3a133`, regresión en `tests/test_r2r_monthly_close_uniqueness.py` (etiqueta sin cambio) | Índice único `(company, period_id)`, lock ordenado y conflicto concurrente resuelto como cierre existente |
 | #1154 | #1656 | ✅ Implementado; regresión en `4c3bde46` (etiqueta sin cambio) | El POST de edición se rechaza mientras el período esté cerrado y el formulario desactiva los campos estructurales |
 | #1155 | #1656 | ✅ Implementado; regresión en `d5bf4941` (etiqueta sin cambio) | Crear y editar rechazan rangos superpuestos por compañía bajo lock; fechas adyacentes y otra compañía siguen permitidas |
-| #1156 | Consumidor | Implementación (`needs-work`) | La reapertura activa períodos deshabilitados |
+| #1156 | Consumidor | ✅ Implementado; regresión en `951c8ee6` (etiqueta sin cambio) | Deshabilitados fuera del asistente y del cierre; la reapertura conserva `enabled=False` y su estado derivado |
 | #1157 | #1656 | Implementación (`needs-work`) | El cierre mensual revaloriza un período distinto |
 | #1163 | #1654 | Implementación (`needs-work`) | Respeta los libros seleccionados en comprobantes |
 | #1164 | #1655 | Implementación (`needs-work`) | Valida el balance de diarios con tasas por línea |
