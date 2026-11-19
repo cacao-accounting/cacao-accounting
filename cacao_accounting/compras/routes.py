@@ -1185,7 +1185,7 @@ def compras_comparativo_colocar_ordenes_solicitud(comparison_id: str):
         abort(404)
     exige_acceso_compania("purchases", comparison.company, "crear")
     try:
-        orders = create_purchase_orders_from_comparison(comparison)
+        orders = create_purchase_orders_from_comparison(comparison, current_user.id)
         database.session.commit()
         flash(_("Se crearon {} Órdenes de Compra correctamente.").format(len(orders)), "success")
     except (DocumentFlowError, IdentifierConfigurationError, SQLAlchemyError) as exc:
@@ -1249,10 +1249,12 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         .scalars()
         .all()
     )
+    recommendations_error = None
     try:
         recommendations = comparison_recommendations(request_comparison)
-    except ValueError:
+    except ValueError as exc:
         recommendations = []
+        recommendations_error = str(exc)
     return render_template(
         "compras/comparativo_solicitud.html",
         comparison=request_comparison,
@@ -1261,6 +1263,7 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         recommendations=recommendations,
         comparison_lines=comparison_lines,
         negotiation_rfqs=negotiation_rfqs,
+        recommendations_error=recommendations_error,
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
         titulo=_titulo_comparativo() + " - " + (request_comparison.document_no or request_comparison.id or ""),
     )
@@ -1385,11 +1388,15 @@ def compras_comparativo_ofertas(rfq_id: str):
     offer_lines = {
         offer.id: {item.id: offer_line_for_item(offer.id, item, rfq_items) for item in rfq_items} for offer in offers
     }
-    award = database.session.execute(
-        database.select(PurchaseQuotationAward)
-        .filter_by(purchase_quotation_id=rfq_id)
-        .order_by(PurchaseQuotationAward.created.desc())
-    ).scalar_one_or_none()
+    award = (
+        database.session.execute(
+            database.select(PurchaseQuotationAward)
+            .filter_by(purchase_quotation_id=rfq_id)
+            .order_by(PurchaseQuotationAward.created.desc())
+        )
+        .scalars()
+        .first()
+    )
     award_lines = _purchase_award_lines(award, registro)
     titulo = _titulo_comparativo() + " - " + (registro.document_no or rfq_id)
     return render_template(
@@ -1445,7 +1452,7 @@ def compras_comparativo_abrir_ronda(rfq_id: str):
         open_negotiation_round(rfq_id, current_user.id)
         database.session.commit()
         flash(_("Nueva ronda de negociación abierta."), "success")
-    except PurchaseSourcingError as exc:
+    except (PurchaseSourcingError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
@@ -1472,7 +1479,7 @@ def compras_comparativo_ofertas_adjudicar(rfq_id: str):
         database.session.commit()
         flash(_("Comparativo confirmado y finalizado correctamente."), "success")
         return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
-    except PurchaseSourcingError as exc:
+    except (PurchaseSourcingError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
         return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
@@ -1493,7 +1500,7 @@ def compras_comparativo_ofertas_cerrar(rfq_id: str):
         close_purchase_quotation_comparison(registro, current_user.id, reason)
         database.session.commit()
         flash(_("Comparativo cerrado manualmente con justificación."), "success")
-    except PurchaseSourcingError as exc:
+    except (PurchaseSourcingError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
@@ -1509,13 +1516,17 @@ def compras_comparativo_colocar_ordenes(rfq_id: str):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro, "crear")
-    award = database.session.execute(
-        database.select(PurchaseQuotationAward)
-        .filter_by(purchase_quotation_id=rfq_id)
-        .order_by(PurchaseQuotationAward.created.desc())
-    ).scalar_one_or_none()
+    award = (
+        database.session.execute(
+            database.select(PurchaseQuotationAward)
+            .filter_by(purchase_quotation_id=rfq_id)
+            .order_by(PurchaseQuotationAward.created.desc())
+        )
+        .scalars()
+        .first()
+    )
     if not award or award.status != "finalized":
-        flash_error(PurchaseSourcingError("El comparativo debe estar finalizado antes de colocar las órdenes."))
+        flash_error(PurchaseSourcingError(_("El comparativo debe estar finalizado antes de colocar las órdenes.")))
         return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
     try:
         orders = _create_purchase_orders_from_award(award)

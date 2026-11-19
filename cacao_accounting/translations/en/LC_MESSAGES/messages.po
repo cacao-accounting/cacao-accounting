@@ -23808,3 +23808,7 @@ msgstr "Select only supplier quotations from the same purchase request."
 #: cacao_accounting/compras/routes.py
 msgid "Seleccione únicamente órdenes de compra de la misma Solicitud de Compra."
 msgstr "Select only purchase orders from the same purchase request."
+
+#: cacao_accounting/compras/routes.py
+msgid "El comparativo debe estar finalizado antes de colocar las órdenes."
+msgstr "The comparison must be finalized before placing purchase orders."

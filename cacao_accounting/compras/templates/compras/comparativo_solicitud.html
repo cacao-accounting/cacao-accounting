@@ -106,6 +106,9 @@ macros %}
   </div>
   {% endif %}
 
+  {% if recommendations_error %}
+  <div class="alert alert-warning m-3 mb-0" role="alert">{{ recommendations_error }}</div>
+  {% endif %}
   <form
     method="post"
     action="{{ url_for('compras.compras_comparativo_guardar_borrador', comparison_id=comparison.id) }}"

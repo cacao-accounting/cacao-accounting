@@ -697,7 +697,9 @@ def _create_purchase_order_for_group(
     return order
 
 
-def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison) -> list[PurchaseOrder]:
+def create_purchase_orders_from_comparison(
+    comparison: PurchaseRequestComparison, user_id: str | None = None
+) -> list[PurchaseOrder]:
     """Create one draft purchase order per supplier from a finalized comparison."""
     purchase_request = _comparison_purchase_request_or_raise(comparison)
     lines = _comparison_selected_lines(comparison)
@@ -708,6 +710,6 @@ def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison
     ]
     comparison.status = "used"
     comparison.used_at = datetime.now(timezone.utc)
-    comparison.modified_by = comparison.finalized_by
+    comparison.modified_by = user_id or comparison.finalized_by
     database.session.flush()
     return orders

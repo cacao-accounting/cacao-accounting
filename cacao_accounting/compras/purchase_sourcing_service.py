@@ -256,11 +256,19 @@ def create_purchase_quotation_award(
     reason: str | None = None,
 ) -> PurchaseQuotationAward:
     """Create an editable line-level award from submitted supplier offers."""
-    existing = database.session.execute(
-        database.select(PurchaseQuotationAward)
-        .filter_by(purchase_quotation_id=rfq.id)
-        .where(PurchaseQuotationAward.status.in_(("finalized", "used")))
-    ).scalar_one_or_none()
+    from cacao_accounting.default_scope import lock_default_scope
+
+    lock_default_scope("purchase_quotation_award", rfq.id)
+    existing = (
+        database.session.execute(
+            database.select(PurchaseQuotationAward)
+            .filter_by(purchase_quotation_id=rfq.id)
+            .where(PurchaseQuotationAward.status.in_(("finalized", "used")))
+            .order_by(PurchaseQuotationAward.created.desc())
+        )
+        .scalars()
+        .first()
+    )
     if existing:
         raise PurchaseSourcingError(_("La solicitud de cotización ya tiene un comparativo finalizado."))
     items, _offers, manual_override_items = validate_award_request(rfq, selections, user_id, reason)
@@ -312,11 +320,19 @@ def close_purchase_quotation_comparison(
         raise PurchaseSourcingError(_("Solo un Administrador o el Gerente de Compras puede cerrar el comparativo."))
     if not reason or not reason.strip():
         raise PurchaseSourcingError(_("El cierre manual del comparativo requiere una justificación."))
-    existing = database.session.execute(
-        database.select(PurchaseQuotationAward)
-        .filter_by(purchase_quotation_id=rfq.id)
-        .where(PurchaseQuotationAward.status.in_(("finalized", "used", "closed")))
-    ).scalar_one_or_none()
+    from cacao_accounting.default_scope import lock_default_scope
+
+    lock_default_scope("purchase_quotation_award", rfq.id)
+    existing = (
+        database.session.execute(
+            database.select(PurchaseQuotationAward)
+            .filter_by(purchase_quotation_id=rfq.id)
+            .where(PurchaseQuotationAward.status.in_(("finalized", "used", "closed")))
+            .order_by(PurchaseQuotationAward.created.desc())
+        )
+        .scalars()
+        .first()
+    )
     if existing:
         raise PurchaseSourcingError(_("La solicitud de cotización ya tiene el comparativo cerrado."))
     negotiation_round = current_negotiation_round(rfq.id)
