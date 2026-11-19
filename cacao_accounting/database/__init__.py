@@ -908,6 +908,27 @@ class Sequence(database.Model, BaseTabla):  # type: ignore[name-defined]
     reset_policy = database.Column(database.String(20), default="never", nullable=False)
 
 
+class SequencePeriodCounter(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Contador de una secuencia para un periodo de numeracion.
+
+    Cada politica de reinicio (anual o mensual) mantiene su propio contador,
+    de modo que un documento retroactivo consume el consecutivo de su periodo
+    y no reutiliza numeros de otro periodo ni reinicia el actual.
+    """
+
+    __tablename__ = "sequence_period_counter"
+    __table_args__ = (database.UniqueConstraint("sequence_id", "period_key", name="uq_sequence_period_counter"),)
+    sequence_id = database.Column(
+        database.String(26),
+        database.ForeignKey("sequence.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    # 'global' para politica never; YYYY para anual; YYYY-MM para mensual
+    period_key = database.Column(database.String(20), nullable=False, index=True)
+    current_value = database.Column(database.Integer(), default=0, nullable=False)
+
+
 class SeriesSequenceMap(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Mapa N:M entre series y secuencias — flexibilidad maxima."""
 
@@ -965,6 +986,8 @@ class GeneratedIdentifierLog(database.Model, BaseTabla):  # type: ignore[name-de
     sequence_id = database.Column(
         database.String(26), database.ForeignKey("sequence.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    # Periodo de numeracion consumido: YYYY, YYYY-MM o global.
+    sequence_period = database.Column(database.String(20), nullable=True, index=True)
     generated_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     company = database.Column(
         database.String(10),

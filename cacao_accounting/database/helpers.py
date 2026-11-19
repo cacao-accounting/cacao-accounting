@@ -269,37 +269,6 @@ def resolve_naming_series_prefix(template: str, posting_date: date, company: Opt
     return result
 
 
-def get_next_sequence_value(sequence_id: str) -> int:
-    """Obtiene y reserva el siguiente valor de una secuencia.
-
-    Operacion atomica con bloqueo pesimista — adquiere lock exclusivo
-    sobre la fila antes de leer e incrementar, evitando asignaciones
-    duplicadas bajo concurrencia.
-
-    Soporta politica de reset: never, yearly, monthly.
-
-    Args:
-        sequence_id: ID de la secuencia (PK de la tabla sequence)
-
-    Returns:
-        Entero con el siguiente valor disponible de la secuencia.
-
-    Raises:
-        ValueError: Si la secuencia no existe.
-    """
-    from cacao_accounting.database import Sequence
-
-    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id).with_for_update()).scalar_one_or_none()
-
-    if seq is None:
-        raise ValueError(_("Secuencia con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
-
-    seq.current_value = (seq.current_value or 0) + seq.increment
-    database.session.flush()
-
-    return int(seq.current_value)
-
-
 def format_sequence_value(value: int, padding: int) -> str:
     """Formatea un valor de secuencia con el padding indicado.
 
@@ -311,6 +280,52 @@ def format_sequence_value(value: int, padding: int) -> str:
         Cadena formateada. Ejemplo: value=5, padding=5 → '00005'
     """
     return str(value).zfill(padding)
+
+
+def sequence_period_key(sequence_id: str, posting_date: date, reset_policy: str | None = None) -> str:
+    """Devuelve la clave del periodo de numeracion que consume una secuencia.
+
+    ``global`` agrupa la politica ``never``; ``YYYY`` la anual y ``YYYY-MM`` la
+    mensual. La clave se deriva de la fecha contable, no de la fecha de alta.
+    """
+    policy = _effective_sequence_reset_policy(sequence_id, reset_policy)
+    if policy == "monthly":
+        return f"{posting_date.year:04d}-{posting_date.month:02d}"
+    if policy == "yearly":
+        return f"{posting_date.year:04d}"
+    return "global"
+
+
+def get_next_period_sequence_value(sequence_id: str, period_key: str) -> int:
+    """Reserva atomicamente el siguiente valor del periodo indicado.
+
+    El bloqueo de la fila ``Sequence`` serializa la creacion y el incremento
+    de los contadores de todos los periodos de esa secuencia. El contador del
+    periodo no depende del orden global de creacion: volver a un periodo
+    anterior continua su propio consecutivo.
+    """
+    from cacao_accounting.database import Sequence, SequencePeriodCounter
+
+    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id).with_for_update()).scalar_one_or_none()
+    if seq is None:
+        raise ValueError(_("Secuencia con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
+
+    if period_key == "global":
+        seq.current_value = (seq.current_value or 0) + seq.increment
+        database.session.flush()
+        return int(seq.current_value)
+
+    counter = database.session.execute(
+        database.select(SequencePeriodCounter).filter_by(sequence_id=sequence_id, period_key=period_key).with_for_update()
+    ).scalar_one_or_none()
+    if counter is None:
+        counter = SequencePeriodCounter(sequence_id=sequence_id, period_key=period_key, current_value=0)
+        database.session.add(counter)
+        database.session.flush()
+    counter.current_value = (counter.current_value or 0) + seq.increment
+    seq.current_value = counter.current_value
+    database.session.flush()
+    return int(counter.current_value)
 
 
 def generate_identifier(
@@ -347,6 +362,7 @@ def generate_identifier(
     from cacao_accounting.database import GeneratedIdentifierLog, NamingSeries, Sequence
 
     prefix = ""
+    sequence_period: Optional[str] = None
 
     if naming_series_id:
         series = database.session.execute(database.select(NamingSeries).filter_by(id=naming_series_id)).scalar_one_or_none()
@@ -362,9 +378,8 @@ def generate_identifier(
         if seq is None:
             raise ValueError(_("Sequence con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
 
-        if should_reset_sequence(sequence_id, posting_date):
-            reset_sequence(sequence_id)
-        next_val = get_next_sequence_value(sequence_id)
+        sequence_period = sequence_period_key(sequence_id, posting_date, seq.reset_policy)
+        next_val = get_next_period_sequence_value(sequence_id, sequence_period)
         suffix = format_sequence_value(next_val, seq.padding)
         full_identifier = f"{prefix}{suffix}"
     else:
@@ -390,6 +405,7 @@ def generate_identifier(
         entity_id=entity_id,
         full_identifier=full_identifier,
         sequence_id=sequence_id,
+        sequence_period=sequence_period,
         company=company,
         posting_date=posting_date,
     )
@@ -428,54 +444,6 @@ def get_active_naming_series(entity_type: str, company: Optional[str] = None) ->
     return list(results)
 
 
-def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
-    """Determina si una secuencia debe reiniciarse segun su politica.
-
-    Politicas soportadas:
-    - 'never': nunca se reinicia
-    - 'yearly': se reinicia al inicio de cada anio
-    - 'monthly': se reinicia al inicio de cada mes
-
-    Args:
-        sequence_id: ID de la secuencia a evaluar
-        posting_date: Fecha contable del documento actual
-
-    Returns:
-        True si la secuencia debe reiniciarse, False en caso contrario.
-    """
-    from cacao_accounting.database import GeneratedIdentifierLog, Sequence
-
-    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
-
-    if seq is None:
-        return False
-
-    effective_policy = _effective_sequence_reset_policy(sequence_id, seq.reset_policy)
-    if effective_policy == "never":
-        return False
-
-    last_log = (
-        database.session.execute(
-            database.select(GeneratedIdentifierLog)
-            .filter_by(sequence_id=sequence_id)
-            .order_by(GeneratedIdentifierLog.generated_at.desc(), GeneratedIdentifierLog.id.desc())
-        )
-        .scalars()
-        .first()
-    )
-
-    if last_log is None or last_log.posting_date is None:
-        return False
-
-    if effective_policy == "yearly":
-        return posting_date.year != last_log.posting_date.year
-
-    if effective_policy == "monthly":
-        return posting_date.year != last_log.posting_date.year or posting_date.month != last_log.posting_date.month
-
-    return False
-
-
 def _effective_sequence_reset_policy(sequence_id: str, configured_policy: str | None) -> str:
     """Deriva la política efectiva considerando el prefijo de la serie asociada."""
     from cacao_accounting.database import NamingSeries, SeriesSequenceMap
@@ -501,28 +469,6 @@ def _effective_sequence_reset_policy(sequence_id: str, configured_policy: str | 
     if any("*YYYY*" in template or "*YY*" in template for template in prefix_templates if template):
         return "yearly"
     return configured
-
-
-def reset_sequence(sequence_id: str) -> None:
-    """Reinicia el contador de una secuencia a cero.
-
-    Usado por should_reset_sequence cuando se detecta un cambio de periodo.
-
-    Args:
-        sequence_id: ID de la secuencia a reiniciar.
-
-    Raises:
-        ValueError: Si la secuencia no existe.
-    """
-    from cacao_accounting.database import Sequence
-
-    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
-
-    if seq is None:
-        raise ValueError(_("Secuencia con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
-
-    seq.current_value = 0
-    database.session.flush()
 
 
 def resolver_credenciales_iniciales() -> tuple[str, str]:
