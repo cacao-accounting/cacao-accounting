@@ -148,10 +148,11 @@ QA1, QA2, QA3 o al administrador.
 | #2142 alcance combinado Compras/Inventario en período de OC | Verificado con regresión | `b7d4cc1d` | `tests/test_s2p_purchase_order_period_scope.py`; unión del selector, rango ambiguo 400 y consulta solo Beta |
 | #2138 alta concurrente de reglas de mapeo | Implementado con regresión | `d4378d6b` | `tests/test_ledger_mapping_rule_concurrency.py`; lock por identidad y una sola regla activa |
 | #2183/#2184 referencias de artículo/bodega en borrados | Implementado con regresión | `de04e745` | `tests/test_item_delete_award_usage.py`; adjudicación cubierta y estructura exige FK RESTRICT a item/warehouse |
+| #2141 comparativo de órdenes: filtro, identidad, rondas y estados | Implementado con regresión | `70ed2238` | `tests/test_purchase_order_comparison_alignment.py`; cantidad fuera de la clave, ronda vigente, órdenes canceladas e i18n |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1064 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1058 passed, 102 skipped**; 0 fallos (HEAD `de04e745`).
+**Última suite completa:** Cloud **1068 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1062 passed, 102 skipped**; 0 fallos (HEAD `70ed2238`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 105 passing.
