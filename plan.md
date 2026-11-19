@@ -85,7 +85,7 @@ QA1, QA2, QA3 o al administrador.
 | #1046 retiro del importador bancario sin ruta | Verificado por inspección | `a0d0f698` | grep sin referencias; suite de importaciones |
 | #1052 campos requeridos solo con espacios rechazados | Implementado con regresión | `f24b6b6a` | `tests/test_import_required_whitespace.py` |
 | #1055 fechas de Excel normalizadas antes de validar | Implementado con regresión | `70095718` | `tests/test_import_date_normalization.py` |
-| #2252/#2253 ACL documental por módulo en query tools | Implementado con regresión | `9f9ad0f9` | `tests/test_query_tools_document_acl.py` |
+| #2252/#2253 ACL documental por módulo en query tools | Implementado con regresión y familias reales en `91247b48` | `9f9ad0f9`, `91247b48` | `tests/test_query_tools_document_acl.py` |
 | #1051 identidad fiscal global normalizada y única | Implementado con regresión | `b4aac8b5` | `tests/test_party_tax_id_uniqueness.py` |
 | #1048 grupo y clasificación en importación de terceros | Implementado con regresión | `acafcce7` | `tests/test_party_import_group_classification.py` |
 | #2254/#2255 subtipo lógico en creación, listas y colaboración | Implementado con regresión | `de32b583` | `tests/test_document_subtype_creation_and_lists.py` |
@@ -113,8 +113,8 @@ QA1, QA2, QA3 o al administrador.
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 | Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
 
-**Última suite completa:** Cloud **990 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **985 passed, 99 skipped**; 0 fallos (HEAD `cd818b30`).
+**Última suite completa:** Cloud **993 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **988 passed, 99 skipped**; 0 fallos (HEAD `91247b48`).
 **Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
 localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
 `needs-work` (reabierto o pendiente de revisión). El estado de GitHub es la fuente para el cierre.
@@ -446,11 +446,11 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1048 | #1652 | 🧪 Implementado; regresión local en `acafcce7` (etiqueta sin cambio); GitHub: fix-proposed | Importación de terceros descarta grupo y clasificación |
 | #1049 | #1652 | ✅ Implementado; regresión local en `903cdf8b` (etiqueta sin cambio) | Importación modifica pronósticos de caja aprobados |
 | #1050 | #1652 | ✅ Implementado; regresión local en `63934c23` (etiqueta sin cambio) | Importación admite montos no positivos en pronósticos de caja |
-| #1051 | #1652 | 🧪 Implementado; regresión local en `b4aac8b5` (etiqueta sin cambio); GitHub: fix-proposed | Importación de terceros duplica identidades ya registradas |
+| #1051 | #1652 | ⚠️ Implementado; clave legacy preservada en `ea8f3377` (etiqueta sin cambio); GitHub: needs-work | Importación de terceros duplica identidades ya registradas |
 | #1052 | #1652 | ✅ Implementado; regresión local en `f24b6b6a` (etiqueta sin cambio) | Importación contable acepta campos requeridos en blanco |
 | #1053 | #1652 | Implementación (`needs-work`) | Importación: preservar relaciones por línea origen |
 | #1054 | #1652 | Implementación (`needs-work`) | Importación: validar campos de cabecera agrupados |
-| #1055 | #1652 | 🧪 Implementado; regresión local en `70095718` (etiqueta sin cambio); GitHub: fix-proposed | Importación: normalizar fechas Excel antes de validar |
+| #1055 | #1652 | ⚠️ Implementado; desbordamiento controlado en `b863f809` (etiqueta sin cambio); GitHub: needs-work | Importación: normalizar fechas Excel antes de validar |
 | #1057 | #1652 | Implementación (`needs-work`) | Importación de órdenes: validar el tipo del proveedor |
 | #1059 | #1652 | Implementación (`needs-work`) | Importación de órdenes: definir tratamiento de impuesto |
 | #1060 | #1652 | Implementación (`needs-work`) | Importación de ventas: validar artículos habilitados |
