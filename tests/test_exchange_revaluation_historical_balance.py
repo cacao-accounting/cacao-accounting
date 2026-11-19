@@ -27,7 +27,14 @@ from cacao_accounting.database import (
 
 def _sembrar(application, run_date: date, document_no: str, account_id: str | None = None):
     with application.app_context():
-        libro = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalar_one()
+        libro = (
+            database.session.execute(
+                database.select(Book).filter_by(entity="cacao").order_by(Book.is_primary.desc(), Book.code.asc())
+            )
+            .scalars()
+            .first()
+        )
+        assert libro is not None
         if account_id is None:
             cuenta = Accounts(
                 code=f"1101-{document_no}",
