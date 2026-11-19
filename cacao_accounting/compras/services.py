@@ -929,6 +929,12 @@ def _msg_item_no_comprable(item_code: str) -> str:
 
 def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una orden de compra desde el formulario."""
+    order = database.session.get(PurchaseOrder, order_id)
+    exchange_rate = _purchase_exchange_rate(
+        order.company if order else None,
+        order.posting_date if order else None,
+        order.transaction_currency if order else None,
+    )
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -957,6 +963,7 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 amount=amount,
             )
             linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
+            linea.base_amount, linea.base_rate = _compute_base_amounts(amount, exchange_rate)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "purchase_order", order_id, linea.id, qty, uom, rate, amount)
@@ -1112,6 +1119,11 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una recepción de compra desde el formulario."""
     receipt = database.session.get(PurchaseReceipt, receipt_id)
     company = receipt.company if receipt is not None else None
+    exchange_rate = _purchase_exchange_rate(
+        company,
+        receipt.posting_date if receipt else None,
+        receipt.transaction_currency if receipt else None,
+    )
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -1142,6 +1154,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )
             linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
+            linea.base_amount, _base_rate = _compute_base_amounts(amount, exchange_rate)
             database.session.add(linea)
             database.session.flush()
             if not getattr(receipt, "is_return", False):
@@ -1180,6 +1193,12 @@ def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | Non
 
 def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una factura de compra desde el formulario."""
+    invoice = database.session.get(PurchaseInvoice, invoice_id)
+    exchange_rate = _purchase_exchange_rate(
+        invoice.company if invoice else None,
+        invoice.posting_date if invoice else None,
+        invoice.transaction_currency if invoice else None,
+    )
     target_type = PURCHASE_INVOICE
     i = 0
     total_qty = Decimal("0")
@@ -1211,6 +1230,7 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )
             linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
+            linea.base_amount, linea.base_rate = _compute_base_amounts(amount, exchange_rate)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, target_type, invoice_id, linea.id, qty, uom, rate, amount)
