@@ -56,7 +56,11 @@ def test_prevalidacion_rechaza_alias_de_nota_sobre_factura(app, entorno_contable
 
     assert reference is None
     assert reference_type == "sales_debit_note"
-    assert any("subtipo" in str(error.get("message", "")).lower() for error in errors)
+    assert any(
+        error.get("field") == "reference_type"
+        and error.get("message") == "El subtipo del documento no coincide con la referencia."
+        for error in errors
+    )
 
 
 def test_post_rechaza_alias_de_nota_sobre_factura(app, entorno_contable):

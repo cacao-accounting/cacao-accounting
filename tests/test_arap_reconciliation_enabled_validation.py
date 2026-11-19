@@ -17,6 +17,7 @@ def test_enabled_no_booleano_responde_400(authenticated_client, enabled):
     )
 
     assert response.status_code == 400
+    assert response.get_json()["error"] == "El campo enabled debe ser booleano."
 
 
 def test_enabled_false_se_conserva(authenticated_client):

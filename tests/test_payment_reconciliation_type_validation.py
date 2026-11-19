@@ -66,5 +66,7 @@ def test_prevalidacion_rechaza_pago_pay_contra_factura_venta(app, entorno_contab
     )
 
     assert any(
-        error.get("field") == "payment_id" and "tipo de pago" in str(error.get("message", "")).lower() for error in errors
+        error.get("field") == "payment_id"
+        and error.get("message") == "El tipo de pago no coincide con el documento de referencia."
+        for error in errors
     )
