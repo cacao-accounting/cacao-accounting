@@ -901,6 +901,10 @@ msgstr "There is no accounting period configured for the specified date."
 msgid "La fecha corresponde a más de un periodo contable."
 msgstr "The date matches more than one accounting period."
 
+#: cacao_accounting/contabilidad/services.py:230
+msgid "El rango del período se superpone con otro período de la misma compañía."
+msgstr "The period range overlaps another period for the same company."
+
 #: cacao_accounting/document_identifiers.py:176 cacao_accounting/document_identifiers.py:374
 msgid "La serie seleccionada no existe o está inactiva."
 msgstr "The selected series does not exist or is inactive."

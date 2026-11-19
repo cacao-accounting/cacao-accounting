@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from cacao_accounting.exceptions import flash_error
 from cacao_accounting.cache import invalidate_cache
+from cacao_accounting.default_scope import lock_default_scope
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request
 
@@ -23,6 +24,7 @@ from cacao_accounting.contabilidad.services import (
     _company_label,
     _validate_active_entity_submission,
     _accounting_period_status_label,
+    _validate_accounting_period_range,
     _validate_entity_can_be_deactivated,
     _resolve_account_parent,
     _validate_account_parent,
@@ -2371,7 +2373,10 @@ def accounting_period_new():
             if not selected_fiscal_year or selected_fiscal_year.entity != requested_entity:
                 raise ValueError(_("El año fiscal debe pertenecer a la compañía del período."))
             exige_acceso_compania("accounting", requested_entity, "crear")
+            lock_default_scope("accounting_period", requested_entity)
+            _validate_accounting_period_range(requested_entity, formulario.inicio.data, formulario.fin.data)
         except ValueError as error:
+            database.session.rollback()
             flash_error(error)
             return render_template(
                 _TPL_PERIODO_CREAR,
@@ -2445,7 +2450,10 @@ def accounting_period_edit(period_id):
             selected_fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
             if not selected_fiscal_year or selected_fiscal_year.entity != period.entity:
                 raise ValueError(_("El año fiscal debe pertenecer a la compañía del período."))
+            lock_default_scope("accounting_period", period.entity)
+            _validate_accounting_period_range(period.entity, formulario.inicio.data, formulario.fin.data, exclude_id=period.id)
         except ValueError as error:
+            database.session.rollback()
             flash_error(error)
             return render_template(
                 _TPL_PERIODO_CREAR,

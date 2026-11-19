@@ -220,6 +220,30 @@ def _accounting_period_status_label(enabled: bool, is_closed: bool) -> str:
     return "deshabilitado_cerrado"
 
 
+def _validate_accounting_period_range(entity: str, start: date, end: date, exclude_id: str | None = None) -> None:
+    """Rechaza un rango invertido o superpuesto con otro período de la compañía.
+
+    Los períodos son inclusivos en ambos extremos, así que dos rangos se
+    superponen cuando ``start <= otro.end`` y ``end >= otro.start``. La consulta
+    se limita a la compañía del período; dos compañías pueden usar las mismas
+    fechas sin conflicto.
+    """
+    from cacao_accounting.database import AccountingPeriod
+
+    if start > end:
+        raise ValueError(_("La fecha final no puede ser anterior a la fecha de inicio."))
+
+    query = database.select(AccountingPeriod.id).where(
+        AccountingPeriod.entity == entity,
+        AccountingPeriod.start <= end,
+        AccountingPeriod.end >= start,
+    )
+    if exclude_id:
+        query = query.where(AccountingPeriod.id != exclude_id)
+    if database.session.execute(query.limit(1)).first() is not None:
+        raise ValueError(_("El rango del período se superpone con otro período de la misma compañía."))
+
+
 def _validate_entity_can_be_deactivated(company_code: str) -> None:
     """Valida reglas administrativas antes de desactivar una entidad."""
     from cacao_accounting.database import Entity
