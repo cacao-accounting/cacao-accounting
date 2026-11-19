@@ -150,10 +150,11 @@ QA1, QA2, QA3 o al administrador.
 | #2183/#2184 referencias de artículo/bodega en borrados | Implementado con regresión | `de04e745` | `tests/test_item_delete_award_usage.py`; adjudicación cubierta y estructura exige FK RESTRICT a item/warehouse |
 | #2141 comparativo de órdenes: filtro, identidad, rondas, estados, múltiples comparativas y moneda | Implementado con regresión | `70ed2238`, `32142b23`, `64381662` | `tests/test_purchase_order_comparison_alignment.py`, `tests/test_purchase_comparison_list_multiple.py`; cantidad fuera de la clave, ronda vigente, órdenes canceladas, i18n, todos los enlaces y totales con moneda |
 | #2140 adjudicación concurrente, errores, autoría y CTAs por permiso | Implementado con regresión | `d5a12cbd`, `fde435c4` | `tests/test_purchase_award_concurrency.py`, `tests/test_purchase_sourcing_cta_permissions.py`; lock por RFQ, carreras controladas, recomendaciones visibles, autor y acciones filtradas |
+| #2160 estado real del historial de plantillas recurrentes | Implementado con regresión | `b6efd96a` | `tests/test_recurring_template_list_render.py`; badges y etiquetas por estado |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1072 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1066 passed, 102 skipped**; 0 fallos (HEAD `fde435c4`).
+**Última suite completa:** Cloud **1073 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1067 passed, 102 skipped**; 0 fallos (HEAD `b6efd96a`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 105 passing.
