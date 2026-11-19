@@ -17,7 +17,14 @@ from uuid import uuid4
 import pytest
 
 from cacao_accounting.contabilidad.recurring_journal_service import create_recurring_template
-from cacao_accounting.database import Accounts, RecurringJournalItem, RecurringJournalTemplate, User, database
+from cacao_accounting.database import (
+    Accounts,
+    RecurringJournalApplication,
+    RecurringJournalItem,
+    RecurringJournalTemplate,
+    User,
+    database,
+)
 
 CAMPO_FANTASMA = "next_application_date"
 RAIZ_PAQUETE = Path(__file__).resolve().parents[1] / "cacao_accounting"
@@ -115,3 +122,46 @@ def test_listado_y_detalle_traducen_la_frecuencia_interna(app, authenticated_cli
     assert detalle.status_code == 200
     assert "Mensual" in detalle.get_data(as_text=True)
     assert ">monthly<" not in detalle.get_data(as_text=True)
+
+
+def test_historial_recurrente_usa_el_color_de_cada_estado(app, authenticated_client, plantilla_qa):
+    """Pendiente, fallida y revertida no se pintan como aplicadas (#2160)."""
+    with app.app_context():
+        plantilla = database.session.execute(
+            database.select(RecurringJournalTemplate).filter_by(code=plantilla_qa)
+        ).scalar_one()
+        applications = [
+            RecurringJournalApplication(
+                company="cacao",
+                template_id=plantilla.id,
+                fiscal_year="2026",
+                accounting_period=f"P-{status}",
+                application_date=date(2026, 5, 1),
+                status=status,
+            )
+            for status in ("pending", "failed", "reversed", "applied")
+        ]
+        database.session.add_all(applications)
+        database.session.commit()
+        application_ids = [application.id for application in applications]
+        template_id = plantilla.id
+
+    try:
+        response = authenticated_client().get(f"/accounting/journal/recurring/{template_id}")
+
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        assert "text-bg-info" in html
+        assert "text-bg-danger" in html
+        assert "text-bg-warning" in html
+        assert "text-bg-success" in html
+        assert "Pendiente" in html
+        assert "Fallida" in html
+        assert "Revertida" in html
+    finally:
+        with app.app_context():
+            for application in database.session.execute(
+                database.select(RecurringJournalApplication).filter(RecurringJournalApplication.id.in_(application_ids))
+            ).scalars():
+                database.session.delete(application)
+            database.session.commit()

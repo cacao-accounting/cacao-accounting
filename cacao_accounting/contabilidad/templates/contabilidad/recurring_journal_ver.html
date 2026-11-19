@@ -122,7 +122,14 @@
                 {% for app in aplicaciones %}
                 <tr><td>{{ app.accounting_period }}</td><td>{{ app.application_date }}</td>
                     <td>{% if app.journal_id %}<a href="{{ url_for('contabilidad.ver_comprobante', identifier=app.journal_id) }}">{{ app.journal_id }}</a>{% else %}-{% endif %}</td>
-                    <td><span class="badge text-bg-success">{{ _(app.status) }}</span></td></tr>
+                    {% set app_meta = {
+                        'applied': ('success', _('Aplicada')),
+                        'pending': ('info', _('Pendiente')),
+                        'failed': ('danger', _('Fallida')),
+                        'reversed': ('warning', _('Revertida')),
+                        'skipped': ('secondary', _('Omitida')),
+                    }.get(app.status, ('secondary', app.status)) %}
+                    <td><span class="badge text-bg-{{ app_meta[0] }}">{{ app_meta[1] }}</span></td></tr>
                 {% else %}<tr><td colspan="4" class="text-center text-muted p-3">{{ _('Sin aplicaciones registradas.') }}</td></tr>{% endfor %}
             </tbody>
         </table>

@@ -23812,3 +23812,15 @@ msgstr "Select only purchase orders from the same purchase request."
 #: cacao_accounting/compras/routes.py
 msgid "El comparativo debe estar finalizado antes de colocar las órdenes."
 msgstr "The comparison must be finalized before placing purchase orders."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_ver.html
+msgid "Fallida"
+msgstr "Failed"
+
+#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_ver.html
+msgid "Revertida"
+msgstr "Reversed"
+
+#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_ver.html
+msgid "Omitida"
+msgstr "Skipped"
