@@ -93,23 +93,30 @@ def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
     database.session.commit()
 
 
+def is_system_admin_user() -> bool:
+    """Indica si el usuario actual es administrador del sistema.
+
+    Acepta la clasificación histórica ``admin`` o la asignación vigente del
+    rol ``admin``; las plantillas usan este resultado para no ofrecer enlaces
+    cuyo endpoint exige administración global (#2144).
+    """
+    if not current_user or not current_user.is_authenticated or getattr(current_user, "active", None) is not True:
+        return False
+    if getattr(current_user, "classification", None) == "admin":
+        return True
+    admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
+    if not admin_role:
+        return False
+    assignment = database.session.execute(
+        database.select(RolesUser).filter_by(user_id=current_user.id, role_id=admin_role.id).where(RolesUser.active.is_(True))
+    ).scalar_one_or_none()
+    return assignment is not None
+
+
 def _require_system_admin() -> None:
     """Restringe configuracion global al administrador del sistema."""
-    if not current_user or not current_user.is_authenticated or getattr(current_user, "active", None) is not True:
+    if not is_system_admin_user():
         abort(403)
-    if getattr(current_user, "classification", None) == "admin":
-        return
-    admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
-    if (
-        admin_role
-        and database.session.execute(
-            database.select(RolesUser)
-            .filter_by(user_id=current_user.id, role_id=admin_role.id)
-            .where(RolesUser.active.is_(True))
-        ).scalar_one_or_none()
-    ):
-        return
-    abort(403)
 
 
 def _active_admin_role_id() -> str | None:

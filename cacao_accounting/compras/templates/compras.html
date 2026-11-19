@@ -38,10 +38,12 @@
         <a href="{{ url_for('compras.compras_proveedor_lista') }}">{{ _('Proveedores') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
+      {% if can_manage_supplier_groups %}
       <li>
         <a href="{{ url_for('admin.lista_grupos_terceros', group_type='supplier') }}">{{ _('Tipos de Proveedor') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
+      {% endif %}
       <li>
         <a href="{{ url_for('compras.compras_proveedor_lista') }}">{{ _('Contactos y Direcciones de Proveedores') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
