@@ -175,10 +175,12 @@ QA1, QA2, QA3 o al administrador.
 | #2135 adjudicación validada en órdenes manuales | Implementado; regresión restaurada | `e392d655`, `ad00c2e9`, `cba61952`, `b1369e61` | `tests/test_purchase_order_award_validation.py`; proveedor, origen, líneas y cantidades acumuladas en creación y edición |
 | #2134 UI de revalorización: filtro, estados, moneda e i18n | Implementado; regresión restaurada | `d54859f3`, `c847562a` | `tests/test_exchange_revaluation_ui.py`; estados reales, badges traducidos, totales con moneda y catálogo compilado |
 | #2133 presupuesto de compras en moneda del libro | Implementado con regresión | `cd0e531b` | `tests/test_purchase_base_amounts.py`; `base_amount` en orden, recepción y factura con la tasa del documento |
+| #2150 commit inalcanzable en la carga de catálogo | Implementado con regresión | `5862eda3` | `tests/test_catalog_loading_transaction.py`; la carga deja la transacción al caller y el rollback descarta el catálogo |
+| #2137 snapshot de auditoría de compras | Ya implementado y cubierto | `c9e82c95` | `tests/test_purchase_audit_snapshot.py`; factura del proveedor, plantilla, moneda, tasa y logística en `changes_json` |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1114 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1108 passed, 102 skipped**; 0 fallos (HEAD `cd0e531b`).
+**Última suite completa:** Cloud **1115 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1109 passed, 102 skipped**; 0 fallos (HEAD `5862eda3`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
