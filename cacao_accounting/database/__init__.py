@@ -939,9 +939,27 @@ class GeneratedIdentifierLog(database.Model, BaseTabla):  # type: ignore[name-de
     """
 
     __tablename__ = "generated_identifier_log"
+    __table_args__ = (
+        database.Index(
+            "uq_generated_identifier_log_company_type_identifier",
+            "company",
+            "entity_type",
+            "full_identifier",
+            unique=True,
+        ),
+        Index(
+            "uq_generated_identifier_log_global_identifier",
+            "full_identifier",
+            unique=True,
+            sqlite_where=text("company IS NULL"),
+            postgresql_where=text("company IS NULL"),
+        ).ddl_if(
+            dialect=("sqlite", "postgresql")  # type: ignore[arg-type]
+        ),  # type: ignore[arg-type]
+    )
     entity_type = database.Column(database.String(50), nullable=False, index=True)
     entity_id = database.Column(database.String(26), nullable=False, index=True)
-    full_identifier = database.Column(database.String(200), nullable=False, unique=True)
+    full_identifier = database.Column(database.String(200), nullable=False)
     sequence_id = database.Column(
         database.String(26), database.ForeignKey("sequence.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )

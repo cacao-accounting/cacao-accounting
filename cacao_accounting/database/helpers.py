@@ -133,6 +133,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_purchase_line_version_columns()
             _ensure_audit_trail_hash_version_column()
             _ensure_file_sha256_column()
+            _ensure_generated_identifier_scope_unique()
             _ensure_monthly_close_run_unique_constraint()
             _ensure_cacao_config_key_unique()
             _ensure_document_flow_lock_table()
@@ -1288,6 +1289,173 @@ def _dedupe_roles_user_assignments(connection: Connection, table, column_names: 
             len(removed),
             ", ".join(sorted(removed)),
         )
+
+
+GENERATED_IDENTIFIER_SCOPE_INDEX = "uq_generated_identifier_log_company_type_identifier"
+GENERATED_IDENTIFIER_GLOBAL_INDEX = "uq_generated_identifier_log_global_identifier"
+GENERATED_IDENTIFIER_SCOPE_COLUMNS = ("company", "entity_type", "full_identifier")
+
+
+def _ensure_generated_identifier_scope_unique() -> None:
+    """Reemplaza la unicidad global de folios por alcance compañía/tipo (#2175).
+
+    Las bases nuevas reciben el índice compuesto desde el modelo. En bases
+    existentes se verifica primero que no haya colisiones dentro del nuevo
+    ámbito; si las hay, no se altera el esquema y se conservan los registros
+    para revisión humana. La unicidad global se mantiene para los
+    identificadores internos, que no tienen compañía asignada.
+    """
+    from cacao_accounting.database import GeneratedIdentifierLog
+
+    table = GeneratedIdentifierLog.__table__
+    engine = database.engine
+    if not sa_inspect(engine).has_table(table.name):
+        return
+    if _generated_identifier_scope_ready(engine, table.name):
+        return
+
+    if engine.dialect.name == "sqlite":
+        with engine.connect() as connection:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            try:
+                _rebuild_generated_identifier_log_scope(connection, table)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return
+
+    try:
+        with engine.begin() as connection:
+            _validate_generated_identifier_collisions(connection, table)
+            _drop_legacy_generated_identifier_unique(connection, table)
+            _create_generated_identifier_scope_indexes(connection, table)
+    except SQLAlchemyError:
+        if _generated_identifier_scope_ready(engine, table.name):
+            return
+        raise
+
+
+def _generated_identifier_scope_ready(bind: Engine | Connection, table_name: str) -> bool:
+    """Indica si el alcance nuevo y la unicidad global interna ya existen."""
+    if not _unique_index_exists(bind, table_name, GENERATED_IDENTIFIER_SCOPE_INDEX, GENERATED_IDENTIFIER_SCOPE_COLUMNS):
+        return False
+    dialect = bind.dialect.name
+    if dialect in {"sqlite", "postgresql"}:
+        return _unique_index_exists(bind, table_name, GENERATED_IDENTIFIER_GLOBAL_INDEX, ("full_identifier",))
+    return True
+
+
+def _generated_identifier_collision(connection: Connection, table):
+    """Devuelve el primer duplicado dentro de compañía, tipo y folio."""
+    company = table.c.company
+    entity_type = table.c.entity_type
+    full_identifier = table.c.full_identifier
+    return connection.execute(
+        select(company, entity_type, full_identifier, func.count())
+        .group_by(company, entity_type, full_identifier)
+        .having(func.count() > 1)
+        .limit(1)
+    ).first()
+
+
+def _validate_generated_identifier_collisions(connection: Connection, table) -> None:
+    """Bloquea la migración si el nuevo índice encontraría duplicados."""
+    duplicate = _generated_identifier_collision(connection, table)
+    if duplicate is None:
+        return
+    message = _(
+        "No se puede aplicar la unicidad de folios por compañía: el identificador "
+        "%(identifier)s se repite para la compañía %(company)s y el tipo %(entity_type)s. "
+        "Los registros existentes se conservaron."
+    ) % {
+        "identifier": duplicate[2],
+        "company": duplicate[0],
+        "entity_type": duplicate[1],
+    }
+    raise RuntimeError(message)
+
+
+def _rebuild_generated_identifier_log_scope(connection: Connection, table) -> None:
+    """Reconstruye la tabla SQLite sin la restricción global heredada."""
+    from sqlalchemy.schema import CreateTable
+
+    _validate_generated_identifier_collisions(connection, table)
+    existing_columns = {column["name"] for column in sa_inspect(connection).get_columns(table.name)}
+    expected_columns = {column.name for column in table.columns}
+    unexpected = existing_columns - expected_columns
+    if unexpected:
+        raise RuntimeError(
+            _(
+                "No se puede reconstruir generated_identifier_log: la tabla existente "
+                "tiene columnas no reconocidas (%(columns)s) y los registros no se modificaron."
+            )
+            % {"columns": ", ".join(sorted(unexpected))}
+        )
+    preparer = connection.dialect.identifier_preparer
+    temp_name = f"{table.name}__scope_migration"
+    temp_table = table.to_metadata(table.metadata, name=temp_name)
+    quoted_temp = preparer.quote(temp_name)
+    quoted_table = preparer.quote(table.name)
+    columns = ", ".join(preparer.quote(column.name) for column in table.columns)
+
+    try:
+        connection.exec_driver_sql(f"DROP TABLE IF EXISTS {quoted_temp}")
+        connection.exec_driver_sql(str(CreateTable(temp_table).compile(dialect=connection.dialect)))
+        connection.exec_driver_sql(f"INSERT INTO {quoted_temp} ({columns}) SELECT {columns} FROM {quoted_table}")
+        connection.exec_driver_sql(f"DROP TABLE {quoted_table}")
+        connection.exec_driver_sql(f"ALTER TABLE {quoted_temp} RENAME TO {quoted_table}")
+        for index in sorted(table.indexes, key=lambda item: item.name or ""):
+            index.create(bind=connection, checkfirst=False)
+    finally:
+        table.metadata.remove(temp_table)
+
+
+def _drop_legacy_generated_identifier_unique(connection: Connection, table) -> None:
+    """Elimina solo la restricción global sobre ``full_identifier``."""
+    inspector = sa_inspect(connection)
+    dialect = connection.dialect.name
+    preparer = connection.dialect.identifier_preparer
+    quoted_table = preparer.format_table(table)
+
+    for constraint in inspector.get_unique_constraints(table.name):
+        if constraint.get("column_names") != ["full_identifier"]:
+            continue
+        name = constraint.get("name")
+        if not name:
+            continue
+        quoted_index = preparer.quote(name)
+        if dialect in {"postgresql", "mssql", "oracle"}:
+            connection.exec_driver_sql(f"ALTER TABLE {quoted_table} DROP CONSTRAINT {quoted_index}")
+        elif dialect in {"mysql", "mariadb"}:
+            connection.exec_driver_sql(f"ALTER TABLE {quoted_table} DROP INDEX {quoted_index}")
+        else:
+            raise RuntimeError(f"No se puede retirar la unicidad global en el motor {dialect}.")
+        return
+
+    for index in inspector.get_indexes(table.name):
+        if not (index.get("unique") and index.get("column_names") == ["full_identifier"]):
+            continue
+        name = index.get("name")
+        if not name:
+            continue
+        quoted_index = preparer.quote(name)
+        if dialect == "sqlite":
+            connection.exec_driver_sql(f"DROP INDEX {quoted_index}")
+        elif dialect == "postgresql":
+            connection.exec_driver_sql(f"DROP INDEX {quoted_index}")
+        elif dialect in {"mysql", "mariadb"}:
+            connection.exec_driver_sql(f"ALTER TABLE {quoted_table} DROP INDEX {quoted_index}")
+        else:
+            raise RuntimeError(f"No se puede retirar la unicidad global en el motor {dialect}.")
+        return
+
+
+def _create_generated_identifier_scope_indexes(connection: Connection, table) -> None:
+    """Crea los índices nuevos sin tocar los registros preservados."""
+    for index in sorted(table.indexes, key=lambda item: item.name or ""):
+        if index.name in {GENERATED_IDENTIFIER_SCOPE_INDEX, GENERATED_IDENTIFIER_GLOBAL_INDEX}:
+            index.create(bind=connection, checkfirst=True)
 
 
 def _ensure_audit_trail_hash_version_column() -> None:
