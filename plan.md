@@ -500,7 +500,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #961 | #1655 | Implementación (`needs-work`) | AR/AP acepta tasa unitaria sin conversión válida |
 | #995 | #1707 | Implementación (`needs-work`) | Fiscal: aplicar exclusiones sin lista de inclusión |
 | #996 | #1707 | Implementación (`needs-work`) | Compras: incluir líneas fiscales manuales en el total |
-| #1004 | #1656 | Implementación (`needs-work`) | Numeración: fecha retroactiva colisiona al reiniciar serie |
+| #1004 | #1656 | ✅ Implementado; regresión en `1d739a2d` (etiqueta sin cambio) | Contador atómico por periodo anual/mensual; la fecha retroactiva continúa su propio consecutivo y el log registra el periodo |
 | #1008 | #1707 | Implementación (`needs-work`) | Fiscal: impedir IDs duplicados en reglas manuales |
 | #1009 | #1707 | Implementación (`needs-work`) | Fiscal: rechazar líneas manuales negativas en el preview |
 | #1011 | #1707 | Implementación (`needs-work`) | Fiscal: no duplicar conceptos en bases acumuladas |
