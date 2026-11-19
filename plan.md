@@ -338,8 +338,8 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1466 | #1653 | ✅ Implementado; regresión local en `4078e439` (etiqueta sin cambio) | API de cierre de flujo responde 200 sin persistir cambios |
 | #1669 | #1653 | ✅ Implementado; regresión local en `ba0e0252` (etiqueta sin cambio) | [Imports] Recuperación duplica errores de timeout |
 | #1682 | #1653 | ✅ Implementado; regresión local en `8c4fdec4` (etiqueta sin cambio) | [Audit][Auth] Evita roles duplicados por usuario |
-| #1683 | #1658 | Implementación (`needs-work`) | [Audit][Database] Elimina columnas muertas de BaseTransaccion |
-| #1684 | #1658 | Implementación (`needs-work`) | [Audit][Database] Retira aliases de compatibilidad sin uso |
+| #1683 | #1658 | ✅ Implementado; runtime en `ab7cf4ab`, regresión restaurada en `22503c2b` (etiqueta sin cambio) | `ComprobanteContable` no expone columnas legacy; el contrato canónico está cubierto |
+| #1684 | #1658 | ✅ Implementado; runtime en `ab7cf4ab`, regresión restaurada en `22503c2b` (etiqueta sin cambio) | Sin `Modulos`, `Unidad`, `Entity.is_active`, `ARAPReconciliationPolicy` ni synonyms legacy |
 | #1689 | #1653 | Implementación (`needs-work`) | Evita sobreasignar factura concurrentemente |
 | #1697 | #1653 | ✅ Implementado; regresión local en `03dfc484` (etiqueta sin cambio) | Evita duplicar claves de configuración |
 | #1853 | Consumidor | Implementación (`needs-work`) | [AUDIT][REFACTOR] Config mypy diverge: .mypy.ini sombreado por pyproject.toml |
@@ -496,7 +496,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #546 | #1655 | Implementación (`needs-work`) | [AUDIT][R2R][Multimoneda] Las tasas de cambio históricas pueden editarse después de ser usadas |
 | #758 | #1655 | Implementación (`needs-work`) | HIGH: Enforce complete source and destination currency data on every posting |
 | #761 | #1708 | Implementación (`needs-work`) | MEDIUM: Apply cancellation and reversal period semantics consistently to all document types |
-| #937 | #1658 | Implementación (`needs-work`) | GL: completar el flujo de comprobante manual |
+| #937 | #1658 | ✅ Implementado; retiro en `6ed2272e`, regresión restaurada en `22503c2b` (etiqueta sin cambio) | `/accounting/gl/*` responde 404 y el flujo canónico `/accounting/journal/*` conserva 200 |
 | #961 | #1655 | Implementación (`needs-work`) | AR/AP acepta tasa unitaria sin conversión válida |
 | #995 | #1707 | Implementación (`needs-work`) | Fiscal: aplicar exclusiones sin lista de inclusión |
 | #996 | #1707 | Implementación (`needs-work`) | Compras: incluir líneas fiscales manuales en el total |
