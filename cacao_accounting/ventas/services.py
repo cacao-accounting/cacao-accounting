@@ -2704,6 +2704,7 @@ def sales_order_line_closure_reasons(sales_order: SalesOrder) -> dict[str, str]:
             DocumentRelation.target_type == "delivery_note",
             DocumentRelation.status == "active",
             DeliveryNote.docstatus == 1,
+            DeliveryNote.is_return.is_(False),
         )
     ).all()
     for item_id, dn in dn_rows:
@@ -2718,6 +2719,8 @@ def sales_order_line_closure_reasons(sales_order: SalesOrder) -> dict[str, str]:
             DocumentRelation.target_type == "sales_invoice",
             DocumentRelation.status == "active",
             SalesInvoice.docstatus == 1,
+            SalesInvoice.is_return.is_(False),
+            SalesInvoice.document_type.notin_(("sales_credit_note", "sales_return", "sales_debit_note")),
         )
     ).all()
     for item_id, invoice in invoice_rows:
