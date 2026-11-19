@@ -11,6 +11,7 @@ import json
 
 from typing import Any, TypedDict, cast
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
 from cacao_accounting.exceptions import flash_error
@@ -1189,6 +1190,7 @@ def create_petty_cash_reconciliation(
     fund = _validate_petty_cash_fund(petty_cash_id, company)
     if counted_cash is None or counted_cash < 0:
         raise ValueError(_("El efectivo contado debe ser un importe no negativo."))
+    lock_default_scope("petty_cash_reconciliation", company, petty_cash_id, str(reconciliation_date))
     duplicate = database.session.execute(
         database.select(PettyCashReconciliation).filter_by(
             company=company, petty_cash_id=petty_cash_id, reconciliation_date=reconciliation_date
@@ -1216,18 +1218,22 @@ def create_petty_cash_reconciliation(
         docstatus=0,
         transaction_currency=fund.currency or _company_currency(company),
     )
-    database.session.add(reconciliation)
-    database.session.flush()
     try:
-        assign_document_identifier(
-            document=reconciliation,
-            entity_type="petty_cash_reconciliation",
-            posting_date_raw=reconciliation_date,
-            naming_series_id=None,
-        )
-    except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
-        pass
-    database.session.commit()
+        database.session.add(reconciliation)
+        database.session.flush()
+        try:
+            assign_document_identifier(
+                document=reconciliation,
+                entity_type="petty_cash_reconciliation",
+                posting_date_raw=reconciliation_date,
+                naming_series_id=None,
+            )
+        except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
+            pass
+        database.session.commit()
+    except IntegrityError as exc:
+        database.session.rollback()
+        raise ValueError(_("Ya existe una conciliación para esa caja y fecha.")) from exc
     return reconciliation
 
 
