@@ -1173,7 +1173,7 @@ def _calculate_three_way_totals(
 ) -> _MatchingTotals:
     """Calculate quantity, amount and tolerance totals for a 3-way match."""
     totals = _MatchingTotals(
-        total_qty=sum((aggregate.qty for aggregate in invoice_groups.values()), Decimal("0")),
+        total_qty=Decimal("0"),
         total_amount=Decimal("0"),
         total_price_difference=Decimal("0"),
         total_amount_difference=Decimal("0"),
@@ -1204,7 +1204,7 @@ def _calculate_three_way_totals(
             config.price_tolerance_value,
         )
         totals = _MatchingTotals(
-            total_qty=totals.total_qty,
+            total_qty=totals.total_qty + min(invoice_group.qty, reference_qty),
             total_amount=totals.total_amount + matched_amount,
             total_price_difference=totals.total_price_difference + line_price_difference,
             total_amount_difference=totals.total_amount_difference + amount_difference,
@@ -1323,7 +1323,7 @@ def _require_compatible_group(order_groups: dict[Any, Any], invoice_line: Any, k
 def _two_way_totals(invoice_groups: dict[Any, Any], order_groups: dict[Any, Any], config: MatchingConfig) -> _TwoWayTotals:
     """Accumulate the 2-way matched, variance and tolerance figures."""
     totals = _TwoWayTotals(
-        total_qty=sum((aggregate.qty for aggregate in invoice_groups.values()), Decimal("0")),
+        total_qty=Decimal("0"),
         total_amount=Decimal("0"),
         total_price_difference=Decimal("0"),
         total_amount_difference=Decimal("0"),
@@ -1351,6 +1351,7 @@ def _two_way_totals(invoice_groups: dict[Any, Any], order_groups: dict[Any, Any]
         ):
             totals.price_tolerance_failed = True
 
+        totals.total_qty += min(invoice_group.qty, reference_qty)
         totals.total_amount += matched_amount
         totals.total_price_difference += line_price_difference
         totals.total_amount_difference += invoice_group.amount - reference_amount
@@ -1600,6 +1601,10 @@ def _finalize_reconciliation(
     reconciliation.status = _derive_reconciliation_status(matching_result, total_invoiced_qty, total_reference_qty)
     event_type = EventType.MATCH_FAILED if matching_result == MatchingResult.MATCH_FAILED else EventType.MATCH_COMPLETED
     reconciliation.matched_amount = total_amount
+    # Sin conciliacion aceptada no se persisten asignaciones a lineas fuente:
+    # publicar la cantidad teorica haria que el encabezado no reconciliara con
+    # el detalle almacenado (ni con el replay de idempotencia).
+    matched_qty = total_qty if matching_result != MatchingResult.MATCH_FAILED else Decimal("0")
 
     emit_economic_event(
         event_type=event_type,
@@ -1610,7 +1615,7 @@ def _finalize_reconciliation(
             "purchase_invoice_id": invoice.id,
             "purchase_receipt_id": receipt_id,
             "purchase_order_id": reconciliation.purchase_order_id,
-            "matched_qty": str(total_qty),
+            "matched_qty": str(matched_qty),
             "matched_amount": str(total_amount),
             "price_difference": str(total_price_difference),
             "amount_difference": str(total_amount_difference),
@@ -1625,7 +1630,7 @@ def _finalize_reconciliation(
 
     return PurchaseReconciliationResult(
         reconciliation_id=reconciliation.id,
-        matched_qty=total_qty,
+        matched_qty=matched_qty,
         matched_amount=total_amount,
         price_difference=total_price_difference,
         status=str(reconciliation.status),
