@@ -22,8 +22,8 @@ QA1, QA2, QA3 o al administrador.
 El estado canónico de cada issue vive en las tablas de «Issues accionables adicionales por fase».
 Este archivo no mantiene una segunda tabla de seguimiento.
 
-**Última suite completa:** Cloud **1299 passed, 103 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1291 passed, 111 skipped**; 0 fallos (HEAD `c1cb7427`).
+**Última suite completa:** Cloud **1308 passed, 103 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1300 passed, 111 skipped**; 0 fallos (HEAD `03349eb7`).
 JavaScript **106 passing**. Linters del workflow de lint en verde y `complexipy 9.0.0`
 sin funciones > 20. PostgreSQL + psycopg2 en base temporal: **88 passed, 10 skipped**.
 MySQL y Redis no estaban disponibles en el entorno local; CI debe repetir la matriz.
