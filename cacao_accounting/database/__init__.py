@@ -1233,11 +1233,26 @@ PAYMENT_TERMS_ID = "payment_terms.id"
 
 
 @event.listens_for(Party, "before_insert")
-@event.listens_for(Party, "before_update")
 def _set_party_tax_id_key(mapper, connection, target: Party) -> None:
-    """Mantiene sincronizada la clave fiscal normalizada."""
+    """Calcula la clave fiscal normalizada al insertar un tercero."""
     from cacao_accounting.party_identity import normalize_tax_id
 
+    target.tax_id_key = normalize_tax_id(target.tax_id)
+
+
+@event.listens_for(Party, "before_update")
+def _update_party_tax_id_key(mapper, connection, target: Party) -> None:
+    """Recalcula la clave solo cuando cambia la identificación fiscal.
+
+    Un duplicado histórico queda deliberadamente con clave nula; editar otros
+    campos (rol, nombre, grupo) no debe reactivarlo y provocar un conflicto
+    de unicidad (#1051, QA2 O-3).
+    """
+    from cacao_accounting.party_identity import normalize_tax_id
+
+    state: Any = inspect(target)
+    if not state.attrs.tax_id.history.has_changes():
+        return
     target.tax_id_key = normalize_tax_id(target.tax_id)
 
 

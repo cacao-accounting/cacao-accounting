@@ -194,6 +194,12 @@ def test_legacy_duplicate_without_key_still_blocks_new_imports(tax_id_scenario):
         database.session.execute(database.update(Party).where(Party.id == legacy.id).values(tax_id_key=None))
         database.session.commit()
 
+        legacy = database.session.get(Party, legacy.id)
+        legacy.name = "Legacy editado"
+        database.session.commit()
+        database.session.refresh(legacy)
+        assert legacy.tax_id_key is None
+
         errors = adapter.validate_row({"nombre": "Nuevo", "identificacion_fiscal": "leg 777"})
         assert any("ya está registrada" in error for error in errors)
         with pytest.raises(ValueError):
