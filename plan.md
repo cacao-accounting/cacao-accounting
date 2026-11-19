@@ -179,10 +179,11 @@ QA1, QA2, QA3 o al administrador.
 | #2137 snapshot de auditoría de compras | Ya implementado y cubierto | `c9e82c95` | `tests/test_purchase_audit_snapshot.py`; factura del proveedor, plantilla, moneda, tasa y logística en `changes_json` |
 | #2179 esquemas de herramientas de consulta aislados | Implementado con regresión | `f896d8af`, `b7ffb32e` | `tests/test_query_tool_schema_isolation.py`; registro, `get()` y `list_tools()` entregan copias profundas |
 | #2126 ediciones O2C inválidas sin HTTP 500 | Implementado con regresión | `b1f2ce6c` | `tests/test_o2c_edit_error_handling.py`; fecha y totales dentro del bloque controlado, rollback y líneas intactas |
+| #2124 artículos vendibles al crear y aprobar ventas | Implementado con regresión | `972989df`, `34b83a66` | `tests/test_sale_item_eligibility.py`; alta y submit rechazan artículo inactivo o sin rol, con devoluciones exentas |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1123 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1117 passed, 102 skipped**; 0 fallos (HEAD `b1f2ce6c`).
+**Última suite completa:** Cloud **1129 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1123 passed, 102 skipped**; 0 fallos (HEAD `34b83a66`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
