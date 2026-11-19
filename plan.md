@@ -172,10 +172,11 @@ QA1, QA2, QA3 o al administrador.
 | #2178 secretos redactados dentro de listas | Ya implementado y cubierto | `da9aa55b` | `tests/test_query_tool_audit_redaction.py`; listas y listas anidadas recorridas antes de persistir |
 | Aislamiento de FK SQLite en pruebas | Corregido | `8e41e718` | `tests/test_item_delete_award_usage.py`; restaura `PRAGMA foreign_keys` para no contaminar el worker |
 | #2139 democión de cuentas padre con hijas | Implementado con regresión concurrente | `6cee9088` | `tests/test_account_group_demotion_guard.py`; lock por entidad en alta/edición, refresco del padre y guardia de descendientes |
+| #2135 adjudicación validada en órdenes manuales | Implementado; regresión restaurada | `e392d655`, `ad00c2e9`, `cba61952`, `b1369e61` | `tests/test_purchase_order_award_validation.py`; proveedor, origen, líneas y cantidades acumuladas en creación y edición |
 | Limpieza de la serie creada por #2152 | Implementado con regresión | `d3af2aa2` | `tests/test_naming_series_edit_labels.py`; elimina la serie al terminar |
 
-**Última suite completa:** Cloud **1095 passed, 96 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1089 passed, 102 skipped**; 0 fallos (HEAD `6cee9088`).
+**Última suite completa:** Cloud **1108 passed, 96 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1102 passed, 102 skipped**; 0 fallos (HEAD `b1369e61`).
 La primera pasada Desktop tuvo fallos intermitentes en `test_sale_item_eligibility.py`
 por estado de series; el archivo pasó aislado y la repetición completa quedó en verde.
 La suite JavaScript quedó en 106 passing.
