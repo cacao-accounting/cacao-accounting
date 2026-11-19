@@ -489,6 +489,22 @@ def version() -> None:
 version.group = "System"  # type: ignore[attr-defined]
 
 
+def _redis_status(cache_type: str, redis_url: str | None) -> str:
+    """Comprueba conectividad real de Redis cuando está configurado."""
+    if str(cache_type).lower() != "rediscache":
+        return _("No configurado")
+    if not redis_url:
+        return _("Configurado sin URL")
+    try:
+        import redis
+
+        client = redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1)
+        client.ping()
+    except Exception:
+        return _("No disponible")
+    return _("Conectado")
+
+
 @linea_comandos.command(name="status", help=_("Muestra el estado general del sistema."))
 def status() -> None:
     """Reporta el estado de la aplicación y sus dependencias."""
@@ -501,9 +517,10 @@ def status() -> None:
         if verifica_coneccion_db(app):
             base_datos = "Conectada"
 
-    redis = "No configurado"
-    if str(configuracion.get("CACHE_TYPE", "")).lower() == "rediscache":
-        redis = "Conectado"
+    redis = _redis_status(
+        str(configuracion.get("CACHE_TYPE", "")),
+        str(configuracion.get("CACHE_REDIS_URL", "") or ""),
+    )
 
     filas = [
         ("Application", APPNAME),

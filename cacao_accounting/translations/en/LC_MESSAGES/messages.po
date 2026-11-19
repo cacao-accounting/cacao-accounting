@@ -23860,3 +23860,19 @@ msgstr "The customer must match the source document."
 #: cacao_accounting/ventas/routes.py
 msgid "Documento de Venta"
 msgstr "Sales Document"
+
+#: cacao_accounting/cli.py
+msgid "No configurado"
+msgstr "Not configured"
+
+#: cacao_accounting/cli.py
+msgid "Configurado sin URL"
+msgstr "Configured without URL"
+
+#: cacao_accounting/cli.py
+msgid "No disponible"
+msgstr "Unavailable"
+
+#: cacao_accounting/cli.py
+msgid "Conectado"
+msgstr "Connected"
