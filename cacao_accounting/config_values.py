@@ -36,7 +36,10 @@ def set_config_value(key: str, value: str) -> None:
         case _:
             _set_config_value_portable(key, value)
             return
-    database.session.execute(statement)
+    from cacao_accounting.internal_control_service import config_value_transition
+
+    with config_value_transition(key):
+        database.session.execute(statement)
 
 
 def _new_id() -> str:

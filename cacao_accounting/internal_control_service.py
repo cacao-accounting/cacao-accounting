@@ -35,6 +35,7 @@ _FLOW_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_flow_transition"
 _BANK_RECONCILIATION_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
     "icfr_bank_reconciliation_transition", default=frozenset()
 )
+_CONFIG_VALUE_TRANSITION: ContextVar[frozenset[str]] = ContextVar("icfr_config_value_transition", default=frozenset())
 _AUDIT_TRAIL_INSERT_ACTIVE: ContextVar[bool] = ContextVar("icfr_audit_trail_insert_active", default=False)
 _ORM_FLUSH_ACTIVE: ContextVar[bool] = ContextVar("icfr_orm_flush_active", default=False)
 _POSTED_DOCUMENTS_IN_TRANSACTION = "icfr_posted_documents"
@@ -176,6 +177,17 @@ def current_audit_actor() -> tuple[str | None, str | None]:
         return explicit
     authenticated = _current_actor()
     return authenticated if authenticated[0] else (None, "system")
+
+
+@contextmanager
+def config_value_transition(*keys: str) -> Iterator[None]:
+    """Authorize the audited key/value writer for the supplied configuration keys."""
+    normalized = frozenset(str(key) for key in keys if str(key))
+    token = _CONFIG_VALUE_TRANSITION.set(_CONFIG_VALUE_TRANSITION.get().union(normalized))
+    try:
+        yield
+    finally:
+        _CONFIG_VALUE_TRANSITION.reset(token)
 
 
 @contextmanager
@@ -811,6 +823,8 @@ def _guard_bulk_insert(connection: Any, clause: Insert, multiparams: Any, params
     """Protect direct Core inserts to audit, ledger and document tables."""
     if table_name == "audit_trail" and _AUDIT_TRAIL_INSERT_ACTIVE.get():
         return
+    if table_name == "cacao_config" and _config_insert_is_authorized(clause, multiparams, params):
+        return
     protected_tables = EVIDENCE_TABLES.union(
         LEDGER_TABLES,
         FLOW_EVIDENCE_TABLES,
@@ -825,6 +839,23 @@ def _guard_bulk_insert(connection: Any, clause: Insert, multiparams: Any, params
         return
     if table_name in _raw_sql_protected_tables():
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+
+
+def _config_insert_is_authorized(clause: Any, multiparams: Any, params: Any) -> bool:
+    """Allow only config keys explicitly authorized by the audited writer."""
+    allowed = _CONFIG_VALUE_TRANSITION.get()
+    if not allowed:
+        return False
+    table = getattr(clause, "table", None)
+    if table is None or table.name != "cacao_config":
+        return False
+    keys: set[str] = set()
+    for group in _parameter_sets(multiparams, params):
+        values = _statement_values_for_parameters(clause, group, table)
+        key = values.get("key")
+        if key is not None:
+            keys.add(str(key))
+    return bool(keys) and keys.issubset(allowed)
 
 
 def _guard_bulk_update(
