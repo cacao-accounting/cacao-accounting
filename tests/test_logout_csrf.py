@@ -26,21 +26,26 @@ def _csrf_token(client) -> str:
 
 def test_logout_requires_post_and_csrf(app, authenticated_client):
     """GET se rechaza; POST sin CSRF no cierra; POST con CSRF sí cierra."""
+    previous_setting = app.config["WTF_CSRF_ENABLED"]
     app.config["WTF_CSRF_ENABLED"] = True
-    client = authenticated_client("admin")
-    token = _csrf_token(client)
+    try:
+        client = authenticated_client("admin")
+        token = _csrf_token(client)
 
-    get_response = client.get("/logout")
-    assert get_response.status_code == 405
-    with client.session_transaction() as session:
-        assert "_user_id" in session
+        get_response = client.get("/logout")
+        assert get_response.status_code == 405
+        with client.session_transaction() as session:
+            assert "_user_id" in session
 
-    missing_token = client.post("/logout")
-    assert missing_token.status_code == 400
-    with client.session_transaction() as session:
-        assert "_user_id" in session
+        missing_token = client.post("/logout")
+        assert missing_token.status_code == 400
+        with client.session_transaction() as session:
+            assert "_user_id" in session
 
-    logged_out = client.post("/logout", data={"csrf_token": token})
-    assert logged_out.status_code == 302
-    with client.session_transaction() as session:
-        assert "_user_id" not in session
+        logged_out = client.post("/logout", data={"csrf_token": token})
+        assert logged_out.status_code == 302
+        with client.session_transaction() as session:
+            assert "_user_id" not in session
+    finally:
+        # `app` es de alcance sesión por worker: no contaminar las demás pruebas.
+        app.config["WTF_CSRF_ENABLED"] = previous_setting
