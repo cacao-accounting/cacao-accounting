@@ -121,6 +121,7 @@ from cacao_accounting.decorators import (  # noqa: F401
     verifica_permiso,
 )
 
+from cacao_accounting.fiscal_persistence_service import calculate_document_total_with_taxes
 from cacao_accounting.document_flow import (
     DocumentFlowError,
     assert_relation_same_party,
@@ -3321,6 +3322,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
     )
     total = Decimal("0")
     item_ids: dict[str, str] = {}
+    items_duplicados: list[PurchaseInvoiceItem] = []
     for item in database.session.execute(
         database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=origen.id, is_superseded=False)
     ).scalars():
@@ -3343,15 +3345,18 @@ def compras_factura_compra_duplicar(invoice_id: str):
         database.session.add(linea)
         database.session.flush()
         item_ids[item.id] = linea.id
+        items_duplicados.append(linea)
         total += item.amount or Decimal("0")
     duplicada.total = total
     exchange_rate = Decimal(str(duplicada.exchange_rate or 1))
     base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
     duplicada.base_total = base_total
-    duplicada.grand_total = total
-    duplicada.base_grand_total = base_total
-    duplicada.outstanding_amount = total
-    duplicada.base_outstanding_amount = base_total
+    grand_total = calculate_document_total_with_taxes(duplicada, total, items_duplicados)
+    base_grand_total = (grand_total * exchange_rate).quantize(Decimal("0.0001"))
+    duplicada.grand_total = grand_total
+    duplicada.base_grand_total = base_grand_total
+    duplicada.outstanding_amount = grand_total
+    duplicada.base_outstanding_amount = base_grand_total
     relation_target_type = (
         duplicada.document_type if duplicada.document_type in {PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE} else PURCHASE_INVOICE
     )
