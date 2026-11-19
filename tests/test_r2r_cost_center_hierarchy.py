@@ -283,3 +283,30 @@ def test_concurrent_cross_reparenting_cannot_create_a_cycle():
             database.session.commit()
             database.session.remove()
             database.engine.dispose()
+
+
+def test_group_cost_center_without_children_can_be_deleted(app, authenticated_client):
+    """Un grupo vacío sin dependencias puede eliminarse; la marca no bloquea (#1778/N21)."""
+    from cacao_accounting.database import CostCenter
+    from uuid import uuid4
+
+    suffix = uuid4().hex[:6].upper()
+    with app.app_context():
+        center = CostCenter(
+            entity="cacao",
+            code=f"GE{suffix}",
+            name="Grupo vacío",
+            group=True,
+            active=True,
+            enabled=True,
+        )
+        database.session.add(center)
+        database.session.commit()
+        center_id = center.id
+        center_code = center.code
+
+    response = authenticated_client().post(f"/accounting/costs_center/{center_id}/delete")
+
+    assert response.status_code == 302
+    with app.app_context():
+        assert database.session.execute(database.select(CostCenter).filter_by(code=center_code)).scalar_one_or_none() is None

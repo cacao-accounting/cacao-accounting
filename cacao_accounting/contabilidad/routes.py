@@ -1916,7 +1916,13 @@ def centro_costo(id_cc: str):
 @verifica_permiso("accounting", "eliminar")
 @verifica_acceso("accounting")
 def eliminar_centro_costo(id_cc):
-    """Elimina un centro de costos."""
+    """Elimina un centro de costos sin hijos vivos.
+
+    El criterio de integridad es la existencia de hijos: un centro marcado
+    como grupo pero sin hijos puede eliminarse, igual que cualquier hoja sin
+    dependencias. Así lo confirma el contrato de #1778 y su regresión de
+    jerarquía; la marca ``group`` no bloquea por sí sola.
+    """
     registro = _get_cost_center_by_id(id_cc)
     if registro is None:
         abort(404)

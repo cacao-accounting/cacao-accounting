@@ -62,7 +62,7 @@ def test_entregas_muestra_periodos_de_compania_autorizada(entorno_contable):
     assert 'initialValue: "alpha"' not in html
 
 
-def test_entregas_no_se_filtran_por_la_compania_del_primer_modulo():
+def test_entregas_no_se_filtran_por_la_compania_del_primer_modulo(tmp_path):
     """Ventas en una compañía e Inventario en otra no recortan el listado (#2110)."""
     from datetime import date
 
@@ -79,7 +79,8 @@ def test_entregas_no_se_filtran_por_la_compania_del_primer_modulo():
     app = create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'delivery-note-scope.sqlite'}",
+            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 4, "max_overflow": 0},
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
@@ -192,21 +193,22 @@ def test_entregas_no_se_filtran_por_la_compania_del_primer_modulo():
         user_id, auth_version = user.id, user.auth_version
 
     client = app.test_client()
-    with client.session_transaction() as session:
-        session["_user_id"] = str(user_id)
-        session["_auth_version"] = auth_version
-        session["_fresh"] = True
+    try:
+        with client.session_transaction() as session:
+            session["_user_id"] = str(user_id)
+            session["_auth_version"] = auth_version
+            session["_fresh"] = True
 
-    response = client.get("/sales/delivery-note/list")
+        response = client.get("/sales/delivery-note/list")
 
-    assert response.status_code == 200
-    html = response.get_data(as_text=True)
-    assert cacao_document in html
-    assert alpha_document in html
-
-    with app.app_context():
-        database.session.remove()
-        database.engine.dispose()
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        assert cacao_document in html
+        assert alpha_document in html
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
 
 
 def test_resolver_de_periodo_usa_la_union_de_los_modulos(entorno_contable, monkeypatch):

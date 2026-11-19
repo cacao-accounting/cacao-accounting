@@ -191,3 +191,16 @@ def test_core_bulk_cancellation_is_rejected(ledger_cancellation_scenario):
         database.session.rollback()
 
     assert _is_cancelled(app, GLEntry, ids["gl"]) is False
+
+
+def test_every_cancellable_evidence_model_has_append_only_listeners():
+    """Todo modelo con `is_cancelled` conserva los guards de actualización y borrado (#925/N16)."""
+    models = sorted(
+        {mapper.class_ for mapper in database.Model.registry.mappers if hasattr(mapper.class_, "is_cancelled")},
+        key=lambda model: model.__name__,
+    )
+
+    assert models, "No se encontraron modelos de evidencia con is_cancelled."
+    for model in models:
+        assert model.__mapper__.dispatch.before_update, f"{model.__name__} no bloquea actualizaciones"
+        assert model.__mapper__.dispatch.before_delete, f"{model.__name__} no bloquea borrados"
