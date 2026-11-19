@@ -15,7 +15,7 @@
 
 ## Registro de avance
 
-**Actualizado:** 18 de noviembre de 2026 (rama `estabilizacion`, sin push). Este registro documenta
+**Actualizado:** 19 de noviembre de 2026 (rama `estabilizacion`, sin push). Este registro documenta
 implementación, evidencia local y commits; **no cambia etiquetas ni estados de GitHub**, que corresponden a
 QA1, QA2, QA3 o al administrador.
 
@@ -112,9 +112,16 @@ QA1, QA2, QA3 o al administrador.
 | #1321 catálogo de usuarios por compañía | Implementado con regresión | `b649bbdf` | `tests/test_search_select_user_company_scope.py` |
 | Aislamiento de pruebas (app context por prueba) | Implementado | `f5be9f90` | `tests/conftest.py`; suite completa estable |
 | Rondas QA1: guardas de caja/inventario, ULID de compañía, filtro de usuarios, helper compartido y smoke Desktop | Implementado con regresión | `40a5579d`, `6e15ff8e`, `40a5579d`, `1a58f880`, `04cf0051`, `ded995a4` | `tests/test_cash_bank_company_scope.py`, `tests/test_inventory_stock_entry_company_scope.py`, `tests/test_search_select_*.py`, `tests/test_desktop_smoke_company_scope_routes.py` |
+| QA2 P6: consumo concurrente de una línea documental serializado por origen y familia de destino | Implementado con regresión | `f4f2c7cd` | `tests/test_document_relation_concurrency.py`; tabla `document_flow_lock` creada en bases existentes |
+| QA2 P7: `matched_qty` alineado con las asignaciones persistidas en 2-way/3-way | Implementado con regresión | `0082aa67` | `tests/test_purchase_reconciliation_matched_qty.py` |
+| #1355 P3/P4: columna `auth_version` en bases existentes y revocación al cambiar clave desde administración | Implementado con regresión | `0489679e`, `5faa5547` | `tests/test_user_auth_version_schema.py`, `tests/test_admin_password_revokes_credentials.py`; `ALTER TABLE` cita `user` por dialecto |
+| Observaciones QA2 N1/N3/N5/N6/N7/N8/N9/N13/N14/N20/N22 | Implementado con regresión | `4f564721`, `a62cd7bf`, `62835fd3`, `7672d253`, `d5905938`, `b3c6aacf`, `ec9cefba`, `c6b848a7`, `386c54cf`, `f3144011` | `tests/test_search_select_batch_company_scope.py`, `tests/test_collaboration_task_company_revocation.py`, `tests/test_o2c_line_relation_party_scope.py`, `tests/test_purchase_invoice_supplier_key_backfill.py`, `tests/test_document_flow_read_access.py`, `tests/test_document_type_legacy_rows.py`, `tests/test_import_recovery_atomic_claim.py` |
+| QA2 N4: traducción de las cadenas nuevas y del mensaje de fecha del adaptador | Implementado con regresión | `fd0ab982` | `messages.po`/`messages.mo` compilados; `tests/test_import_date_normalization.py` |
 
-**Última suite completa:** Cloud **993 passed, 94 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **988 passed, 99 skipped**; 0 fallos (HEAD `91247b48`).
+**Última suite completa:** Cloud **1007 passed, 94 skipped**; Desktop
+(`CACAO_ACCOUNTING_DESKTOP=True`) **1002 passed, 99 skipped**; 0 fallos (HEAD `5faa5547`).
+Las observaciones posteriores (`fd0ab982`, `f3144011`) tienen pruebas dirigidas; la próxima
+ronda completa se ejecuta antes de un push.
 **Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
 localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
 `needs-work` (reabierto o pendiente de revisión). El estado de GitHub es la fuente para el cierre.
@@ -125,7 +132,7 @@ Rondas ejecutadas tras el umbral de 50 commits desde `ded995a4`, que cubren #125
 Black en verde en `cacao_accounting/` (alcance del workflow de lint); 4 archivos de prueba preexistentes
 de `8f341b3e` requieren reformato de black fuera de ese alcance. Ruff, flake8, mypy y Bandit sin hallazgos bloqueantes. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
 Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados.
-Ronda QA2: A1–A3, B1–B4, B8, B11 y B14 resueltos; B5 (N+1 de destinatarios), B7 (fixture de entregas), B9 (backfill de clave heredada), B10 (nombre del guard), B12 (filas legacy sin subtipo) y B15–B17 quedan como deuda no bloqueante.
+Ronda QA2: A1–A3, B1–B4, B8, B11 y B14 resueltos; B9 (backfill de clave heredada), B10 (nombre del guard) y B12 (filas legacy sin subtipo) quedaron resueltos en esta ronda. B5 (N+1 de destinatarios), B7 (fixture de entregas) y B15–B17 siguen como deuda no bloqueante.
 La próxima ronda completa corresponde al siguiente umbral de 50 commits o antes de un push.
 Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archivos tocados.
 
