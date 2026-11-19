@@ -3860,6 +3860,20 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     metadata_json = database.Column(database.Text(), nullable=True)
 
 
+class DocumentFlowLock(database.Model):  # type: ignore[name-defined]
+    """Fila estable para serializar el consumo de una línea documental.
+
+    El pendiente de una línea se calcula leyendo las relaciones ya
+    registradas. Sin un bloqueo, dos transacciones pueden leer el mismo
+    pendiente y crear relaciones hacia destinos distintos que, juntas,
+    excedan la cantidad aprobada. La clave identifica el origen y la familia
+    de destino para no serializar flujos independientes entre sí.
+    """
+
+    __tablename__ = "document_flow_lock"
+    lock_key = database.Column(database.String(64), primary_key=True, nullable=False)
+
+
 class DocumentTransition(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Registro inmutable de una anulación o reversión documental.
 

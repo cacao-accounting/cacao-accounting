@@ -9,6 +9,7 @@ Convencion de naming para referencias de pago:
 - ``document_id``: identificador del documento referenciado.
 """
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -16,9 +17,13 @@ from typing import Any, Sequence
 
 from flask_login import current_user
 from sqlalchemy import select
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from cacao_accounting.database import (
     AuditLog,
+    DocumentFlowLock,
     DocumentRelation,
     database,
 )
@@ -501,6 +506,43 @@ def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: 
     )
 
 
+def _document_flow_lock_key(source_key: str, source_id: str, source_item_id: str, target_key: str) -> str:
+    """Devuelve la clave estable de bloqueo para una línea y familia de destino."""
+    raw = "\x1f".join((source_key, source_id, source_item_id, target_key))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _document_flow_lock_statement(dialect: str, lock_table: Any, lock_key: str) -> Any:
+    """Construye la escritura que serializa el consumo de una línea origen."""
+    statement: Any
+    if dialect == "sqlite":
+        statement = sqlite_insert(lock_table).values(lock_key=lock_key)
+        statement = statement.on_conflict_do_update(index_elements=[lock_table.c.lock_key], set_={"lock_key": lock_key})
+    elif dialect == "postgresql":
+        statement = postgresql_insert(lock_table).values(lock_key=lock_key)
+        statement = statement.on_conflict_do_update(index_elements=[lock_table.c.lock_key], set_={"lock_key": lock_key})
+    elif dialect in {"mysql", "mariadb"}:
+        statement = mysql_insert(lock_table).values(lock_key=lock_key)
+        statement = statement.on_duplicate_key_update(lock_key=lock_key)
+    else:
+        raise DocumentFlowError(_("El bloqueo del flujo documental no está soportado por este motor de base de datos."), 500)
+    return statement
+
+
+def _lock_document_flow_source(source_key: str, source_id: str, source_item_id: str, target_key: str) -> None:
+    """Serializa el consumo de una línea origen hasta el fin de la transacción.
+
+    La escritura condicional sobre la fila de bloqueo se ejecuta antes de leer
+    ``pending_qty``; en SQLite toma el turno de escritura y en PostgreSQL/MySQL
+    bloquea la fila, de modo que otra transacción espera y recalcula el
+    pendiente ya consumido (P6).
+    """
+    lock_table = DocumentFlowLock.__table__
+    lock_key = _document_flow_lock_key(source_key, source_id, source_item_id, target_key)
+    dialect = database.session.get_bind().dialect.name
+    database.session.execute(_document_flow_lock_statement(dialect, lock_table, lock_key))
+
+
 def create_document_relation(
     *,
     source_type: str,
@@ -537,6 +579,7 @@ def create_document_relation(
     base_qty = _relation_qty_in_base_uom(source_item, qty_decimal, presentation_uom)
 
     if source_item_id:
+        _lock_document_flow_source(source_key, source_id, source_item_id, target_key)
         available = pending_qty(
             source_key,
             source_id,

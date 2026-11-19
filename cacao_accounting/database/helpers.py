@@ -135,6 +135,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_file_sha256_column()
             _ensure_monthly_close_run_unique_constraint()
             _ensure_cacao_config_key_unique()
+            _ensure_document_flow_lock_table()
             _ensure_roles_user_unique()
             _ensure_party_tax_id_key_column()
             _ensure_user_auth_version_column()
@@ -983,6 +984,21 @@ def _ensure_user_auth_version_column() -> None:
     except SQLAlchemyError:
         database.session.rollback()
         raise
+
+
+def _ensure_document_flow_lock_table() -> None:
+    """Crea la tabla de bloqueo del flujo documental en esquemas existentes.
+
+    `create_all` solo crea tablas nuevas al inicializar la base; una base ya
+    operativa necesita esta tabla para serializar el consumo de líneas
+    documentales (P6). La creación es idempotente y no toca datos.
+    """
+    from cacao_accounting.database import DocumentFlowLock
+
+    try:
+        DocumentFlowLock.__table__.create(bind=database.engine, checkfirst=True)
+    except SQLAlchemyError as exc:
+        log.warning("No se pudo asegurar la tabla document_flow_lock: {}", exc)
 
 
 def _ensure_party_tax_id_key_column() -> None:

@@ -514,6 +514,7 @@ def create_app(ajustes: dict | None = None) -> Flask:
     with cacao_app.app_context():
         from cacao_accounting.database.helpers import (
             _ensure_cacao_config_key_unique,
+            _ensure_document_flow_lock_table,
             _ensure_monthly_close_run_unique_constraint,
             _ensure_party_tax_id_key_column,
             _ensure_roles_user_unique,
@@ -524,6 +525,7 @@ def create_app(ajustes: dict | None = None) -> Flask:
         _ensure_user_email_identity_column()
         _ensure_monthly_close_run_unique_constraint()
         _ensure_cacao_config_key_unique()
+        _ensure_document_flow_lock_table()
         _ensure_roles_user_unique()
         _ensure_party_tax_id_key_column()
         _ensure_user_auth_version_column()
