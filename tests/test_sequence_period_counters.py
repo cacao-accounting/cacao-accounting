@@ -18,7 +18,6 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy.engine import make_url
-from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -37,27 +36,28 @@ from cacao_accounting.database.helpers import generate_identifier
 
 def _app(uri: str):
     """Crea una aplicación con el motor indicado y CSRF deshabilitado."""
-    settings = {
-        **configuracion,
-        "SQLALCHEMY_DATABASE_URI": uri,
-        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-        "WTF_CSRF_ENABLED": False,
-        "TESTING": True,
-        "MODO_ESCRITORIO": True,
-    }
-    if uri == "sqlite://":
-        settings["SQLALCHEMY_ENGINE_OPTIONS"] = {
-            "poolclass": StaticPool,
-            "connect_args": {"check_same_thread": False},
+    return create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": uri,
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": True,
         }
-    return create_app(settings)
+    )
 
 
-def _configured_test_uri() -> str:
-    """Devuelve el motor configurado; SQLite se aísla en memoria."""
+def _configured_test_uri(tmp_path: Path) -> str:
+    """Devuelve el motor configurado; SQLite usa un archivo aislado por prueba.
+
+    Un ``StaticPool`` en memoria comparte una sola conexión entre los hilos, de
+    modo que las transacciones se entremezclan y la prueba no ejerce la reserva
+    atómica del contador. Con un archivo cada hilo usa su propia conexión.
+    """
     configured_uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
     if make_url(configured_uri).get_backend_name() == "sqlite":
-        return "sqlite://"
+        return f"sqlite:///{tmp_path / 'secuencias-concurrentes.sqlite'}"
     return configured_uri
 
 
@@ -191,13 +191,15 @@ def test_politica_sin_reinicio_mantiene_el_contador_global(series_periodicas):
 
 
 @pytest.mark.database
-def test_reservas_concurrentes_del_mismo_periodo_en_motor_configurado():
+def test_reservas_concurrentes_del_mismo_periodo_en_motor_configurado(tmp_path: Path):
     """Cuatro transacciones del mismo periodo obtienen folios únicos y consecutivos.
 
-    Se ejecuta contra PostgreSQL en CI: allí ``SELECT ... FOR UPDATE`` serializa
-    la reserva del contador del periodo.
+    En SQLite se usa una base en archivo para que cada hilo tenga su propia
+    conexión y la prueba ejerza el upsert atómico del contador. En los demás
+    motores el upsert crea una sola fila y el ``UPDATE`` atómico reparte los
+    consecutivos.
     """
-    application = _app(_configured_test_uri())
+    application = _app(_configured_test_uri(tmp_path))
     suffix = uuid4().hex[:6].upper()
     company_code = f"A{suffix}"
     with application.app_context():
@@ -246,6 +248,11 @@ def test_reservas_concurrentes_del_mismo_periodo_en_motor_configurado():
     assert len(set(folios)) == 4
 
     with application.app_context():
+        contadores = (
+            database.session.execute(database.select(SequencePeriodCounter).filter_by(sequence_id=sequence_id)).scalars().all()
+        )
+        assert len(contadores) == 1
+        assert contadores[0].current_value == 4
         database.session.execute(
             database.delete(GeneratedIdentifierLog).where(GeneratedIdentifierLog.sequence_id == sequence_id)
         )
