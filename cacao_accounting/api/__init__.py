@@ -8,7 +8,7 @@
 # --------------------------------------------------------------------------------------
 from functools import wraps
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 from urllib.parse import unquote, urlparse
 
@@ -382,9 +382,9 @@ def api_sales_catalog_price():
     try:
         qty = Decimal(str(request.args.get("qty") or "1"))
         pricing_date = date.fromisoformat(request.args.get("posting_date") or date.today().isoformat())
-    except ValueError:
+    except (ValueError, InvalidOperation):
         abort(400)
-    if not company or not item_code or qty <= 0:
+    if not company or not item_code or not qty.is_finite() or qty <= 0:
         abort(400)
     exige_acceso_compania("sales", company, "consultar")
     resolved = resolve_sales_catalog_price(company, customer_id, item_code, qty, uom, pricing_date)
