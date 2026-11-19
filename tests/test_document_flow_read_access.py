@@ -392,3 +392,29 @@ def test_source_picker_hides_sales_order_from_inventory_only_user(document_flow_
 
     assert response.status_code == 200
     assert response.get_json()["source_documents"] == []
+
+
+def test_close_line_rejects_subtype_mismatch(document_flow_app):
+    """Una nota de crédito no se autoriza como factura de venta genérica (#N9)."""
+    app, client, ids = document_flow_app
+    with app.app_context():
+        credit_line = database.session.execute(
+            database.select(SalesInvoiceItem).filter_by(sales_invoice_id=ids["credit_note"])
+        ).scalar_one()
+        credit_line_id = credit_line.id
+    _login(client, "vendedor")
+
+    response = client.post(
+        "/api/document-flow/close-line",
+        data={
+            "source_document_type": "sales_invoice",
+            "source_document_id": ids["credit_note"],
+            "source_row_id": credit_line_id,
+            "target_document_type": "sales_order",
+            "target_document_id": ids["own_order"],
+            "qty": "1",
+            "reason": "Cierre de prueba",
+        },
+    )
+
+    assert response.status_code == 404

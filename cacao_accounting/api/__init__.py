@@ -170,7 +170,7 @@ def _require_flow_company_access(payload: dict[str, Any], action: str = "crear")
             return
         abort(404)
     source = get_document(source_type, source_id)
-    if not source:
+    if not source or not document_matches_type(source_type, source):
         abort(404)
     module = _module_for_document_type(source_type)
     if module:
@@ -278,6 +278,9 @@ def _require_payment_reference_access(
         return
     if source_type not in _PAYMENT_REFERENCE_TYPES or not document_id:
         abort(400)
+    document = get_document(source_type, document_id)
+    if document is None or not document_matches_type(source_type, document):
+        abort(404)
     company = get_document_company(source_type, document_id)
     if not company:
         abort(404)
