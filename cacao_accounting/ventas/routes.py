@@ -642,6 +642,8 @@ def ventas_pedido_venta_duplicar(request_id: str):
             sales_request_id=duplicado.id,
             item_code=item.item_code,
             item_name=item.item_name,
+            description=item.description,
+            warehouse=item.warehouse,
             qty=item.qty,
             qty_in_base_uom=item.qty_in_base_uom,
             uom=item.uom,
