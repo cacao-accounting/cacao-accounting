@@ -41,7 +41,7 @@ from cacao_accounting.database import (
     database,
 )
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -2600,7 +2600,20 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
         current_order_id = delivery_note.sales_order_id if delivery_note else None
     for order in orders:
         order_total = _sales_base_amount(order, Decimal(str(order.grand_total or "0")))
-        delivery_note_ids = database.select(DeliveryNote.id).filter_by(sales_order_id=order.id)
+        delivery_note_ids = set(
+            database.session.execute(database.select(DeliveryNote.id).filter_by(sales_order_id=order.id)).scalars().all()
+        )
+        line_links = database.session.execute(
+            database.select(DocumentRelation.target_id, func.sum(DocumentRelation.amount))
+            .where(
+                DocumentRelation.source_type == "sales_order",
+                DocumentRelation.source_id == order.id,
+                DocumentRelation.target_type == "sales_invoice",
+                DocumentRelation.status == "active",
+            )
+            .group_by(DocumentRelation.target_id)
+        ).all()
+        line_linked_amounts = {target_id: Decimal(str(amount or 0)) for target_id, amount in line_links}
         billed_invoices = database.session.execute(
             database.select(SalesInvoice).where(
                 SalesInvoice.company == company,
@@ -2611,13 +2624,20 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
                 or_(
                     SalesInvoice.sales_order_id == order.id,
                     SalesInvoice.delivery_note_id.in_(delivery_note_ids),
+                    SalesInvoice.id.in_(line_linked_amounts),
                 ),
             )
         ).scalars()
-        billed_total = sum(
-            (_sales_base_amount(invoice, Decimal(str(invoice.grand_total or "0"))) for invoice in billed_invoices),
-            Decimal("0"),
-        )
+        billed_total = Decimal("0")
+        for invoice in billed_invoices:
+            if invoice.sales_order_id == order.id or invoice.delivery_note_id in delivery_note_ids:
+                billed_total += _sales_base_amount(invoice, Decimal(str(invoice.grand_total or "0")))
+            else:
+                billed_total += _sales_base_amount(
+                    invoice,
+                    line_linked_amounts.get(invoice.id, Decimal("0")),
+                    use_stored_total=False,
+                )
         pending = max(Decimal("0"), order_total - billed_total)
         if order.id == current_order_id:
             pending = max(
