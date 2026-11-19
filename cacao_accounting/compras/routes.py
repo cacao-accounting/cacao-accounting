@@ -1018,7 +1018,7 @@ def compras_comparativo_ofertas_lista():
         (PurchaseRequest.document_no, PurchaseRequest.requested_by, PurchaseRequest.remarks),
         query=database.select(PurchaseRequest).where(PurchaseRequest.docstatus == 1),
     )
-    comparisons_by_request: dict[str, PurchaseRequestComparison] = {}
+    comparisons_by_request: dict[str, list[PurchaseRequestComparison]] = {}
     request_ids = [item.id for item in consulta.items]
     if request_ids:
         comparisons = database.session.execute(
@@ -1027,7 +1027,7 @@ def compras_comparativo_ofertas_lista():
             .order_by(PurchaseRequestComparison.created.desc(), PurchaseRequestComparison.id.desc())
         ).scalars()
         for comparison in comparisons:
-            comparisons_by_request.setdefault(comparison.purchase_request_id, comparison)
+            comparisons_by_request.setdefault(comparison.purchase_request_id, []).append(comparison)
     titulo = _titulo_comparativo() + " - " + APPNAME
     return render_template(
         "compras/comparativo_ofertas_lista.html",

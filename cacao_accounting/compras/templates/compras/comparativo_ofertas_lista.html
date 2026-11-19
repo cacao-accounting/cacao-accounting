@@ -54,8 +54,9 @@ macros %} {%- if TESTING -%}
       </tr>
     </thead>
     <tbody>
-      {% for item in consulta.items -%} {% set comparison =
-      comparisons_by_request.get(item.id) %}
+      {% for item in consulta.items -%} {% set comparisons =
+      comparisons_by_request.get(item.id, []) %} {% set comparison =
+      comparisons[0] if comparisons else None %}
       <tr>
         <td>{{ item.document_no or item.id }}</td>
         <td>{{ item.requested_by or "-" }}</td>
@@ -77,12 +78,14 @@ macros %} {%- if TESTING -%}
           {% endif %}
         </td>
         <td>
-          {% if comparison %}
+          {% if comparisons %}
+          {% for comparison in comparisons %}
           <a
             href="{{ url_for('compras.compras_comparativo_ordenes', comparison_id=comparison.id) }}"
             class="btn btn-sm btn-outline-primary"
-            >{{ _("Ver comparativo") }}</a
+            >{{ _("Ver comparativo") }}{% if comparisons|length > 1 %} {{ loop.index }}{% endif %}</a
           >
+          {% endfor %}
           <a
             href="{{ url_for('compras.compras_comparativo_ordenes_seleccionar', purchase_request_id=item.id) }}"
             class="btn btn-sm btn-outline-secondary"
