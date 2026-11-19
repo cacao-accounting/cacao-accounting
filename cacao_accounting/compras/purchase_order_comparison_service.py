@@ -100,7 +100,6 @@ def _purchase_order_item_key(item: PurchaseOrderItem) -> tuple[str | None, ...]:
     return (
         item.item_code,
         item.uom,
-        str(item.qty_in_base_uom) if item.qty_in_base_uom is not None else None,
         item.warehouse,
         item.description,
     )

@@ -25,7 +25,7 @@
       <span class="text-warning">{{ _("Comparativo legacy sin Solicitud de Compra reconstruible") }}</span> ·{% endif %}
       {{ _("Orden base:") }} <strong>{{ base_order.document_no or base_order.id }}</strong> ·
       {{ _("Ofertas participantes: %(count)s", count=orders|length) }}
-      {% if selected_round %} · {{ _("Ronda %(number)s (%(status)s)", number=selected_round.round_number, status=selected_round.status) }}{% endif %}
+      {% if selected_round %} · {% set selected_status = {'open': _('Abierta'), 'closed': _('Cerrada')}.get(selected_round.status, selected_round.status) %}{{ _("Ronda %(number)s (%(status)s)", number=selected_round.round_number, status=selected_status) }}{% endif %}
     </p>
   </div>
   {% if rounds %}
@@ -34,7 +34,7 @@
       <span class="text-muted">{{ _("Histórico de rondas:") }}</span>
       {% for round in rounds %}
       <a class="btn btn-sm {% if selected_round and round.id == selected_round.id %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{{ url_for('compras.compras_comparativo_ordenes', comparison_id=comparison.id, round_id=round.id) }}">
-        {{ _("Ronda %(number)s", number=round.round_number) }} · {{ round.status }}
+        {% set round_status = {'open': _('Abierta'), 'closed': _('Cerrada')}.get(round.status, round.status) %}        {{ _("Ronda %(number)s", number=round.round_number) }} · {{ round_status }}
       </a>
       {% endfor %}
     </div>

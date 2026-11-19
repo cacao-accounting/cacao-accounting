@@ -1060,7 +1060,7 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
         exige_acceso_compania("purchases", purchase_request.company, "crear")
         participant_ids = request.form.getlist("supplier_quotation_ids")
         if not participant_ids or not set(participant_ids).issubset(candidate_ids):
-            flash_error("Seleccione únicamente cotizaciones de proveedor de la misma Solicitud de Compra.")
+            flash_error(_("Seleccione únicamente cotizaciones de proveedor de la misma Solicitud de Compra."))
             return redirect(
                 url_for(
                     "compras.compras_comparativo_ordenes_seleccionar",
@@ -1071,7 +1071,7 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
             comparison = create_purchase_request_comparison(purchase_request, participant_ids, current_user.id)
             database.session.commit()
             return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
-        except (IdentifierConfigurationError, SQLAlchemyError) as exc:
+        except (IdentifierConfigurationError, SQLAlchemyError, ValueError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -1212,7 +1212,7 @@ def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
     candidate_ids = {order.id for order in candidate_orders}
     participant_ids = set(request.form.getlist("participant_ids"))
     if not participant_ids.issubset(candidate_ids):
-        flash_error("Seleccione únicamente órdenes de compra de la misma Solicitud de Compra.")
+        flash_error(_("Seleccione únicamente órdenes de compra de la misma Solicitud de Compra."))
         return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
     try:
         round_record = open_purchase_order_comparison_round(comparison, purchase_request, participant_ids, current_user.id)
@@ -1266,6 +1266,19 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
     )
 
 
+def _current_round_participant_ids(comparison: PurchaseOrderComparison) -> set[str]:
+    """Devuelve los participantes de la ronda vigente para el formulario."""
+    current_round = current_purchase_order_comparison_round(comparison.id)
+    if current_round is not None:
+        return {row.purchase_order_id for row in purchase_order_comparison_round_orders(current_round.id)}
+    return {
+        row.purchase_order_id
+        for row in database.session.execute(
+            database.select(PurchaseOrderComparisonOrder).where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
+        ).scalars()
+    }
+
+
 def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested_round_id: str | None):
     """Render view for persisted order comparison."""
     exige_acceso_compania("purchases", comparison.company, "consultar")
@@ -1293,7 +1306,7 @@ def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested
     orders: list[PurchaseOrder] = []
     for row in participant_rows:
         order = database.session.get(PurchaseOrder, row.purchase_order_id)
-        if order is not None:
+        if order is not None and order.docstatus == 1:
             orders.append(order)
     for order in orders:
         _require_purchase_document_access(order)
@@ -1322,7 +1335,9 @@ def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested
         .scalars()
         .all()
     )
-    participant_order_ids = {row.purchase_order_id for row in participant_rows}
+    # El formulario de una ronda nueva parte de la ronda vigente, no de la
+    # histórica que se está consultando (#2141).
+    participant_order_ids = _current_round_participant_ids(comparison)
     return render_template(
         "compras/comparativo_ordenes.html",
         comparison=comparison,

@@ -23800,3 +23800,11 @@ msgstr "The source receipt does not belong to the indicated purchase order."
 #: cacao_accounting/compras/routes.py
 msgid "El documento origen indicado no existe."
 msgstr "The indicated source document does not exist."
+
+#: cacao_accounting/compras/routes.py
+msgid "Seleccione únicamente cotizaciones de proveedor de la misma Solicitud de Compra."
+msgstr "Select only supplier quotations from the same purchase request."
+
+#: cacao_accounting/compras/routes.py
+msgid "Seleccione únicamente órdenes de compra de la misma Solicitud de Compra."
+msgstr "Select only purchase orders from the same purchase request."
