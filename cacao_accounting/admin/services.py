@@ -583,9 +583,14 @@ def _process_pending_approval_post(approval_request, get_model_class) -> None:
         return
     from cacao_accounting.control_review_service import REVIEW_TYPES, approve_review, reject_review
 
+    action = request.form.get("action")
+    if action not in {"approve", "reject"}:
+        flash_error(_("La acción de aprobación no es válida."))
+        return
+
     if req.document_type in REVIEW_TYPES:
         try:
-            handler = approve_review if request.form.get("action") == "approve" else reject_review
+            handler = approve_review if action == "approve" else reject_review
             handler(req, current_user, request.form.get("comments") or None)
             database.session.commit()
         except (SQLAlchemyError, ValueError) as exc:

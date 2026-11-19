@@ -23876,3 +23876,7 @@ msgstr "Unavailable"
 #: cacao_accounting/cli.py
 msgid "Conectado"
 msgstr "Connected"
+
+#: cacao_accounting/admin/services.py
+msgid "La acción de aprobación no es válida."
+msgstr "The approval action is not valid."
