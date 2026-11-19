@@ -255,3 +255,57 @@ def test_edicion_registra_moneda_tasa_y_logistica_en_auditoria(app, authenticate
     assert cambios["delivery_place"]["after"] == f"Puerto Aéreo {ids['sufijo']}"
     assert despues["exchange_rate"] == cambios["exchange_rate"]["after"]
     assert antes["items"] and despues["items"]
+    assert cambios["base_grand_total"]["before"] is None
+    assert Decimal(cambios["base_grand_total"]["after"]) > 0
+    assert antes["tax_summary"] is None
+    assert despues["tax_lines"] == []
+
+
+def test_snapshot_incluye_evidencia_fiscal_antes_de_editar(app, authenticated_client, factura_editable):
+    """El estado capturado incluye el resumen y las líneas fiscales persistidas (#2143)."""
+    ids = factura_editable
+    with app.app_context():
+        summary = DocumentTaxSummary(
+            company="cacao",
+            document_type="purchase_invoice",
+            document_id=ids["factura"],
+            currency="NIO",
+            subtotal=Decimal("20"),
+            document_tax_total=Decimal("2"),
+            grand_total=Decimal("22"),
+        )
+        database.session.add(summary)
+        database.session.flush()
+        database.session.add(
+            DocumentTaxLine(
+                document_tax_summary_id=summary.id,
+                line_index=0,
+                concept="IVA de prueba",
+                tax_type="tax",
+                calculation_method="manual",
+                amount=Decimal("2"),
+            )
+        )
+        database.session.commit()
+
+    datos = {
+        "supplier_id": ids["proveedor"],
+        "company": "cacao",
+        "posting_date": "2026-05-15",
+        "supplier_invoice_no": f"FAC-ORIGEN-{ids['sufijo']}",
+        "tax_template_id": ids["plantilla"],
+        "remarks": "Edición con evidencia fiscal",
+        "item_code_0": "ART01",
+        "item_name_0": "Articulo Comercial",
+        "qty_0": "2",
+        "uom_0": "UND",
+        "rate_0": "10",
+        "amount_0": "20",
+    }
+    _editar_factura(authenticated_client, ids["factura"], datos)
+
+    _cambios, antes, despues = _ultimo_cambio_de_factura(app, ids["factura"])
+    assert antes["tax_summary"]["document_id"] == ids["factura"]
+    assert antes["tax_summary"]["document_tax_total"] == "2.0000"
+    assert antes["tax_lines"][0]["concept"] == "IVA de prueba"
+    assert "tax_summary" in despues

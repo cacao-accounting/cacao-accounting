@@ -2274,6 +2274,14 @@ PURCHASE_AUDIT_FIELDS = (
     "transaction_currency",
     "exchange_rate",
     "base_total",
+    "tax_total",
+    "grand_total",
+    "base_grand_total",
+    "outstanding_amount",
+    "base_outstanding_amount",
+    "document_type",
+    "credit_note_type",
+    "is_return",
     "incoterm_code",
     "incoterm_version",
     "delivery_date",
@@ -2317,6 +2325,8 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
         PurchaseReceiptItem,
         PurchaseInvoice,
         PurchaseInvoiceItem,
+        DocumentTaxLine,
+        DocumentTaxSummary,
     )
 
     mapping = {
@@ -2334,6 +2344,34 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
         from cacao_accounting.audit_trail_service import capture_lines_snapshot
 
         state["items"] = capture_lines_snapshot(registro, item_cls, fk_name)
+
+    if cls is PurchaseInvoice:
+        document_type = str(getattr(registro, "document_type", None) or "purchase_invoice")
+        summary = database.session.execute(
+            database.select(DocumentTaxSummary).filter_by(document_type=document_type, document_id=registro.id)
+        ).scalar_one_or_none()
+        if summary is None:
+            state["tax_summary"] = None
+            state["tax_lines"] = []
+        else:
+            state["tax_summary"] = {
+                column.name: _purchase_snapshot_value(getattr(summary, column.name))
+                for column in summary.__table__.columns
+                if column.name not in {"id", "created", "modified"}
+            }
+            lines = database.session.execute(
+                database.select(DocumentTaxLine)
+                .filter_by(document_tax_summary_id=summary.id)
+                .order_by(DocumentTaxLine.line_index)
+            ).scalars()
+            state["tax_lines"] = [
+                {
+                    column.name: _purchase_snapshot_value(getattr(line, column.name))
+                    for column in line.__table__.columns
+                    if column.name not in {"id", "document_tax_summary_id", "created", "modified"}
+                }
+                for line in lines
+            ]
 
     return state
 
