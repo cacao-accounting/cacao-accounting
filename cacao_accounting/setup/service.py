@@ -219,10 +219,10 @@ class SetupAlreadyComplete(RuntimeError):
 def claim_setup_completion() -> None:
     """Reclama de forma atómica la finalización única del asistente (#1021).
 
-    La clave ``SETUP_COMPLETE`` es única. El primer proceso que la inserta
-    continúa con la creación de la compañía; un segundo proceso concurrente
-    recibe el conflicto, revierte su transacción y trata la instalación como
-    ya completada, sin duplicar la compañía ni sus libros.
+    La clave ``SETUP_COMPLETE`` es única. El proceso toma el bloqueo de alcance
+    y relee la fila: si el valor ya es ``True``, la instalación se considera
+    completada; si existe en ``False``, la marca como completada. Así un segundo
+    proceso concurrente no duplica la compañía ni sus libros.
     """
     from sqlalchemy.exc import IntegrityError
     from cacao_accounting.default_scope import lock_default_scope
