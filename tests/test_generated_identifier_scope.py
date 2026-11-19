@@ -124,7 +124,7 @@ def folios(tmp_path: Path):
         database.engine.dispose()
 
 
-def _generar(aplicación, series_id: str, sequence_id: str, company: str | None, entity_type: str, entity_id: str) -> str:
+def _generar(series_id: str, sequence_id: str, company: str | None, entity_type: str, entity_id: str) -> str:
     """Genera un folio y confirma la transacción."""
     folio = generate_identifier(
         entity_type=entity_type,
@@ -142,8 +142,8 @@ def test_permite_el_mismo_folio_entre_companias(folios):
     """Dos compañías con el mismo prefijo y contadores independientes coexisten."""
     aplicación, ids = folios
     with aplicación.app_context():
-        assert _generar(aplicación, *ids["a"], "A", "sales_invoice", "doc-a") == "INV-00001"
-        assert _generar(aplicación, *ids["b"], "B", "sales_invoice", "doc-b") == "INV-00001"
+        assert _generar(*ids["a"], "A", "sales_invoice", "doc-a") == "INV-00001"
+        assert _generar(*ids["b"], "B", "sales_invoice", "doc-b") == "INV-00001"
         filas = database.session.execute(database.select(GeneratedIdentifierLog.full_identifier)).scalars().all()
         assert filas.count("INV-00001") == 2
 
@@ -152,9 +152,9 @@ def test_rechaza_duplicado_de_la_misma_compania_y_tipo(folios):
     """Otra serie de la misma compañía no puede repetir el folio."""
     aplicación, ids = folios
     with aplicación.app_context():
-        _generar(aplicación, *ids["a"], "A", "sales_invoice", "doc-a")
+        _generar(*ids["a"], "A", "sales_invoice", "doc-a")
         with pytest.raises(IntegrityError):
-            _generar(aplicación, *ids["c"], "A", "sales_invoice", "doc-c")
+            _generar(*ids["c"], "A", "sales_invoice", "doc-c")
         database.session.rollback()
         assert len(database.session.execute(database.select(GeneratedIdentifierLog)).scalars().all()) == 1
 
@@ -163,19 +163,19 @@ def test_permite_el_mismo_folio_en_otro_tipo_documental(folios):
     """El ámbito documental separa folios iguales dentro de la misma compañía."""
     aplicación, ids = folios
     with aplicación.app_context():
-        _generar(aplicación, *ids["a"], "A", "sales_invoice", "doc-a")
-        assert _generar(aplicación, *ids["d"], "A", "purchase_invoice", "doc-d") == "INV-00001"
+        _generar(*ids["a"], "A", "sales_invoice", "doc-a")
+        assert _generar(*ids["d"], "A", "purchase_invoice", "doc-d") == "INV-00001"
 
 
 def test_identificadores_internos_conservan_unicidad_global(folios):
     """Una serie global sin compañía conserva la unicidad de sus códigos."""
     aplicación, ids = folios
     with aplicación.app_context():
-        _generar(aplicación, *ids["global"], None, "item", "item-1")
+        _generar(*ids["global"], None, "item", "item-1")
         otra_serie, otra_secuencia = _serie(None, "item", "ITEM-", "G2")
         database.session.commit()
-        with pytest.raises(IntegrityError):
-            _generar(aplicación, otra_serie.id, otra_secuencia.id, None, "item", "item-2")
+        with pytest.raises(ValueError, match="ya existe"):
+            _generar(otra_serie.id, otra_secuencia.id, None, "item", "item-2")
         database.session.rollback()
         assert len(database.session.execute(database.select(GeneratedIdentifierLog)).scalars().all()) == 1
 
@@ -287,10 +287,13 @@ def test_la_migracion_se_detiene_ante_colisiones(tmp_path: Path):
             )
         )
         database.session.commit()
+        before = {item["name"] for item in inspect(database.engine).get_indexes("generated_identifier_log")}
 
         with pytest.raises(RuntimeError, match="se repite"):
             _ensure_generated_identifier_scope_unique()
 
+        after = {item["name"] for item in inspect(database.engine).get_indexes("generated_identifier_log")}
+        assert after == before
         assert database.session.execute(database.select(database.func.count(GeneratedIdentifierLog.id))).scalar_one() == 2
         database.session.remove()
         database.engine.dispose()
@@ -336,6 +339,123 @@ def test_adjudicaciones_concurrentes_no_duplican_el_folio(tmp_path: Path):
                     sequence_id=ids[indice][1],
                 )
                 database.session.commit()
+                return "ok", None
+            except SQLAlchemyError as exc:
+                database.session.rollback()
+                return "error", type(exc).__name__
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        resultados = list(workers.map(ejecutar, range(2)))
+
+    assert sorted(item[0] for item in resultados) == ["error", "ok"]
+    assert next(item[1] for item in resultados if item[0] == "error") == "IntegrityError"
+    with aplicación.app_context():
+        filas = database.session.execute(database.select(GeneratedIdentifierLog)).scalars().all()
+        assert len(filas) == 1
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_segunda_ejecucion_de_la_migracion_es_noop(tmp_path: Path, monkeypatch):
+    """Una base ya migrada no vuelve a reconstruir la tabla."""
+    path = tmp_path / "idempotente.sqlite"
+    _crear_base_heredada(path, LEGACY_DDL)
+    aplicación = _app(f"sqlite:///{path}")
+    with aplicación.app_context():
+        from cacao_accounting.database import helpers as db_helpers
+
+        def fallar(*_args, **_kwargs):
+            raise AssertionError("no debe reconstruirse una tabla ya migrada")
+
+        monkeypatch.setattr(db_helpers, "_rebuild_generated_identifier_log_scope", fallar)
+        db_helpers._ensure_generated_identifier_scope_unique()
+        assert database.session.execute(database.select(database.func.count(GeneratedIdentifierLog.id))).scalar_one() == 3
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_columnas_faltantes_detienen_la_migracion(tmp_path: Path):
+    """Una tabla histórica incompleta no se reconstruye a ciegas."""
+    path = tmp_path / "incompleta.sqlite"
+    _crear_base_heredada(path, LEGACY_DDL.replace("    modified_by VARCHAR(26),\n", ""))
+
+    with pytest.raises(RuntimeError, match="columnas"):
+        _app(f"sqlite:///{path}")
+
+
+def test_indice_global_sin_predicado_se_reconstruye(tmp_path: Path):
+    """Un índice homónimo sin `company IS NULL` no se considera migrado."""
+    aplicación = _app(f"sqlite:///{tmp_path / 'predicado.sqlite'}")
+    with aplicación.app_context():
+        database.create_all()
+        with database.engine.begin() as connection:
+            connection.exec_driver_sql(f"DROP INDEX {GENERATED_IDENTIFIER_GLOBAL_INDEX}")
+            connection.exec_driver_sql(
+                f"CREATE UNIQUE INDEX {GENERATED_IDENTIFIER_GLOBAL_INDEX} " "ON generated_identifier_log (full_identifier)"
+            )
+        _ensure_generated_identifier_scope_unique()
+        indice = next(
+            item
+            for item in inspect(database.engine).get_indexes("generated_identifier_log")
+            if item["name"] == GENERATED_IDENTIFIER_GLOBAL_INDEX
+        )
+        assert indice["dialect_options"]["sqlite_where"] is not None
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_dos_companias_pueden_generar_el_mismo_folio_a_la_vez(tmp_path: Path):
+    """La concurrencia entre compañías distintas no bloquea el mismo folio."""
+    aplicación = _app(f"sqlite:///{tmp_path / 'concurrente-companias.sqlite'}")
+    with aplicación.app_context():
+        database.create_all()
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Entity(
+                    code="A",
+                    name="A",
+                    company_name="A SA",
+                    tax_id="J-A",
+                    currency="NIO",
+                    enabled=True,
+                    status="activo",
+                ),
+                Entity(
+                    code="B",
+                    name="B",
+                    company_name="B SA",
+                    tax_id="J-B",
+                    currency="NIO",
+                    enabled=True,
+                    status="activo",
+                ),
+            ]
+        )
+        database.session.flush()
+        serie_a, secuencia_a = _serie("A", "sales_invoice", "INV-", "CA")
+        serie_b, secuencia_b = _serie("B", "sales_invoice", "INV-", "CB")
+        database.session.commit()
+        ids = [("A", serie_a.id, secuencia_a.id), ("B", serie_b.id, secuencia_b.id)]
+
+    barrier = Barrier(2)
+
+    def ejecutar(indice: int):
+        company, series_id, sequence_id = ids[indice]
+        with aplicación.app_context():
+            barrier.wait(timeout=10)
+            try:
+                generate_identifier(
+                    entity_type="sales_invoice",
+                    entity_id=f"doc-{company}",
+                    posting_date=FECHA,
+                    company=company,
+                    naming_series_id=series_id,
+                    sequence_id=sequence_id,
+                )
+                database.session.commit()
                 return "ok"
             except SQLAlchemyError:
                 database.session.rollback()
@@ -346,9 +466,31 @@ def test_adjudicaciones_concurrentes_no_duplican_el_folio(tmp_path: Path):
     with ThreadPoolExecutor(max_workers=2) as workers:
         resultados = list(workers.map(ejecutar, range(2)))
 
-    assert sorted(resultados) == ["error", "ok"]
+    assert resultados == ["ok", "ok"]
     with aplicación.app_context():
-        filas = database.session.execute(database.select(GeneratedIdentifierLog)).scalars().all()
-        assert len(filas) == 1
+        filas = database.session.execute(
+            database.select(GeneratedIdentifierLog.company, GeneratedIdentifierLog.full_identifier)
+        ).all()
+        assert sorted(filas) == [("A", "INV-00001"), ("B", "INV-00001")]
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_guard_interno_no_depende_del_indice_parcial(tmp_path: Path):
+    """La unicidad global interna se conserva aunque el motor no tenga índice parcial."""
+    aplicación = _app(f"sqlite:///{tmp_path / 'sin-indice-global.sqlite'}")
+    with aplicación.app_context():
+        database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.flush()
+        serie_uno, secuencia_uno = _serie(None, "item", "ITEM-", "G1")
+        serie_dos, secuencia_dos = _serie(None, "item", "ITEM-", "G2")
+        database.session.commit()
+        with database.engine.begin() as connection:
+            connection.exec_driver_sql(f"DROP INDEX {GENERATED_IDENTIFIER_GLOBAL_INDEX}")
+
+        _generar(serie_uno.id, secuencia_uno.id, None, "item", "item-1")
+        with pytest.raises(ValueError, match="ya existe"):
+            _generar(serie_dos.id, secuencia_dos.id, None, "item", "item-2")
         database.session.remove()
         database.engine.dispose()

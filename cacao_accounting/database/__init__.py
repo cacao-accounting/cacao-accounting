@@ -932,10 +932,12 @@ class SeriesSequenceMap(database.Model, BaseTabla):  # type: ignore[name-defined
 class GeneratedIdentifierLog(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Auditoria obligatoria de identificadores generados.
 
-    Garantiza unicidad y trazabilidad de todos los identificadores del sistema.
-    Los tokens se resuelven usando posting_date, nunca created_at.
-    Un identificador emitido no se libera ni se reutiliza; si un borrador se
-    numeró con datos incorrectos, debe anularse y crearse un registro nuevo.
+    Los folios comerciales son únicos por compañía y tipo documental; dos
+    compañías pueden coincidir. Los identificadores internos, registrados sin
+    compañía, conservan su unicidad global. Los tokens se resuelven usando
+    posting_date, nunca created_at. Un identificador emitido no se libera ni se
+    reutiliza; si un borrador se numeró con datos incorrectos, debe anularse y
+    crearse un registro nuevo.
     """
 
     __tablename__ = "generated_identifier_log"

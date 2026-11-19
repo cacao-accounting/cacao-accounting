@@ -23880,3 +23880,31 @@ msgstr "Connected"
 #: cacao_accounting/admin/services.py
 msgid "La acción de aprobación no es válida."
 msgstr "The approval action is not valid."
+
+#: cacao_accounting/database/helpers.py
+msgid "El comparativo no existe."
+msgstr "The comparison does not exist."
+
+#: cacao_accounting/database/helpers.py
+msgid "El identificador interno ya existe."
+msgstr "The internal identifier already exists."
+
+#: cacao_accounting/database/helpers.py
+msgid "No se puede aplicar la unicidad de folios por compañía: el identificador %(identifier)s se repite para la compañía %(company)s y el tipo %(entity_type)s. Los registros existentes se conservaron."
+msgstr "The per-company folio uniqueness cannot be applied: identifier %(identifier)s is repeated for company %(company)s and type %(entity_type)s. Existing records were preserved."
+
+#: cacao_accounting/database/helpers.py
+msgid "No se puede reconstruir generated_identifier_log: las columnas de la tabla existente no coinciden (%(columns)s) y los registros no se modificaron."
+msgstr "generated_identifier_log cannot be rebuilt: the existing table columns do not match (%(columns)s) and the records were not modified."
+
+#: cacao_accounting/database/helpers.py
+msgid "No se puede retirar la unicidad global en el motor %(dialect)s."
+msgstr "The global uniqueness cannot be removed on the %(dialect)s engine."
+
+#: cacao_accounting/database/helpers.py
+msgid "La unicidad global heredada sobre el folio no se pudo retirar."
+msgstr "The legacy global folio uniqueness could not be removed."
+
+#: cacao_accounting/database/helpers.py
+msgid "El identificador interno %(identifier)s está duplicado y los registros se conservaron."
+msgstr "Internal identifier %(identifier)s is duplicated and the records were preserved."
