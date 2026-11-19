@@ -2350,6 +2350,8 @@ def _build_sales_invoice_edit_config(
                 "qty": str(item.qty),
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
+                "discount_percentage": str(item.discount_percentage or 0),
+                "discount_amount": str(item.discount_amount or 0),
                 "amount": str(item.amount or 0),
                 "warehouse": item.warehouse or "",
                 "batch_id": item.batch_id or "",
