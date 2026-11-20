@@ -2420,9 +2420,12 @@ def _upsert_stock_bin(
     Retorna ``(qty_after, stock_value_after)``.
     """
     # INV-06: Usar SELECT FOR UPDATE para evitar condición de carrera en StockBin
+    # y refrescar la instancia ya cargada: sin populate_existing la actualización
+    # aplica valores obsoletos del identity map (#1868).
     bin_row = (
         database.session.query(StockBin)
         .with_for_update()
+        .populate_existing()
         .filter_by(company=company, item_code=item_code, warehouse=warehouse)
         .first()
     )
