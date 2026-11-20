@@ -2054,6 +2054,21 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
     if receipt and receipt.purchase_order_id:
         receipt_items = _active_receipt_items(receipt_id)
         _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
+        # #2098: serializar la validación contra la OC y sus líneas: sin
+        # bloqueo, dos recepciones concurrentes leen consumo 0 y exceden la
+        # cantidad ordenada del mismo ítem.
+        database.session.execute(
+            database.select(PurchaseOrder)
+            .filter_by(id=receipt.purchase_order_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        database.session.execute(
+            database.select(PurchaseOrderItem)
+            .filter_by(purchase_order_id=receipt.purchase_order_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         purchase_order = database.session.get(PurchaseOrder, receipt.purchase_order_id)
         if purchase_order and purchase_order.supplier_id != receipt.supplier_id:
             raise ValueError(_("El proveedor de la recepción no coincide con el proveedor de la orden de compra."))
