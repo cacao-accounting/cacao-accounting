@@ -4027,7 +4027,12 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
 
 
 def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
-    """Reject reversals that would create forbidden negative stock."""
+    """Reject reversals that leave a bin with forbidden negative stock.
+
+    Valida el resultado final por artículo y bodeja: un prefijo intermedio
+    negativo puede ser restaurado por movimientos posteriores del mismo
+    documento (#1857).
+    """
     projected: dict[tuple[str, str, str], Decimal] = {}
     items: dict[tuple[str, str, str], Any] = {}
     for movement in movements:
@@ -4042,13 +4047,15 @@ def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> 
                 raise PostingError(_("El artículo %(item_code)s no existe.") % {"item_code": movement.item_code})
             items[key] = item
         projected[key] -= _decimal_value(movement.qty_change)
-        if projected[key] < 0 and not items[key].allow_negative_stock:
+    for key, value in projected.items():
+        item = items[key]
+        if value < 0 and not item.allow_negative_stock:
             raise PostingError(
                 _(
                     "No se puede cancelar el movimiento de %(item_name)s: "
                     "la bodega %(warehouse)s quedaría con stock negativo."
                 )
-                % {"item_name": items[key].name, "warehouse": movement.warehouse}
+                % {"item_name": item.name, "warehouse": key[2]}
             )
 
 
