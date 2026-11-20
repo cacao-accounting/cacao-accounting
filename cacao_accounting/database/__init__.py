@@ -1835,6 +1835,40 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     consumed_layers = database.Column(database.Text, nullable=True)
 
 
+class StockLedgerBookEntry(database.Model):  # type: ignore[name-defined]
+    """Snapshot append-only del valor de cada movimiento en cada libro activo."""
+
+    __tablename__ = "stock_ledger_book_entry"
+    __table_args__ = (
+        UniqueConstraint("stock_ledger_entry_id", "ledger_id", name="uq_stock_ledger_book_entry_ledger"),
+        Index("ix_stock_ledger_book_entry_ledger_date", "ledger_id", "posting_date"),
+    )
+
+    id = database.Column(database.String(26), primary_key=True, default=obtiene_texto_unico, nullable=False)
+    stock_ledger_entry_id = database.Column(
+        database.String(26),
+        database.ForeignKey("stock_ledger_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    ledger_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    posting_date = database.Column(database.Date(), nullable=False, index=True)
+    book_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    book_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+
+
+event.listens_for(StockLedgerBookEntry, "before_update")(_reject_ledger_mutation)
+event.listens_for(StockLedgerBookEntry, "before_delete")(_reject_ledger_delete)
+
+
 class LandedCostAllocation(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Detalle persistido del prorrateo de costos capitalizables por linea."""
 
@@ -2367,6 +2401,9 @@ class PurchaseQuotationAward(database.Model):  # type: ignore[name-defined]
     """Adjudicación por línea de una solicitud de cotización."""
 
     __tablename__ = "purchase_quotation_award"
+    # Un comparativo finalizado/usado tiene una única adjudicación (#2140):
+    # dos awards para el mismo comparativo producen el doble aviso en los GETs.
+    __table_args__ = (database.UniqueConstraint("purchase_quotation_id", name="uq_purchase_quotation_award_quotation"),)
     id = database.Column(database.String(26), primary_key=True, default=obtiene_texto_unico)
     purchase_quotation_id = database.Column(
         database.String(26),
