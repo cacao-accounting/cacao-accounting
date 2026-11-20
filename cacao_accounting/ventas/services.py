@@ -531,6 +531,10 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
     (incluyendo ``Item.default_warehouse_id``) para que la cancelación libere
     exactamente la bodega efectiva en que se reservó el inventario.
     """
+    # #1820: una orden cerrada ya liberó su reserva; volver a restar consumiría
+    # reservas de otras órdenes del mismo ítem/bodeja.
+    if getattr(so, "status", None) == "closed" or getattr(so, "docstatus", 0) == 2:
+        return
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
     for item in items:

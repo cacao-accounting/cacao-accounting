@@ -14,6 +14,7 @@ from cacao_accounting.database import (
     DeliveryNoteItem,
     Item,
     SalesOrder,
+    SalesOrderItem,
     StockBin,
     UOM,
     User,
@@ -21,7 +22,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.ventas.routes import ventas_orden_venta_cancel
-from cacao_accounting.ventas.services import _restore_reservation_for_delivery_note
+from cacao_accounting.ventas.services import _release_reservation_for_sales_order, _restore_reservation_for_delivery_note
 
 
 def test_cancel_orden_cerrada_es_rechazada(app):
@@ -36,6 +37,41 @@ def test_cancel_orden_cerrada_es_rechazada(app):
             with pytest.raises(HTTPException) as exc_info:
                 ventas_orden_venta_cancel(order_id)
         assert exc_info.value.code == 400
+
+
+def test_release_reservation_no_libera_orden_cerrada(app):
+    """Liberar reserva de una orden cerrada no consume saldos de otras (#1820)."""
+    with app.app_context():
+        database.session.add(UOM(code="UND1820R", name="Unidad 1820R"))
+        database.session.flush()
+        database.session.add_all(
+            [
+                Item(code="ART-1820R", name="Articulo 1820R", item_type="goods", is_stock_item=True, default_uom="UND1820R"),
+                Warehouse(code="BOD-1820R", name="Bodega 1820R", company="cacao"),
+            ]
+        )
+        database.session.flush()
+        order = SalesOrder(
+            company="cacao", docstatus=1, status="closed", document_no="SO-1820R", customer_name="Cliente 1820R"
+        )
+        database.session.add(order)
+        database.session.flush()
+        database.session.add(
+            SalesOrderItem(
+                sales_order_id=order.id, item_code="ART-1820R", uom="UND1820R", qty=Decimal("5"), qty_in_base_uom=Decimal("5")
+            )
+        )
+        database.session.add(
+            StockBin(company="cacao", item_code="ART-1820R", warehouse="BOD-1820R", reserved_qty=Decimal("5"))
+        )
+        database.session.commit()
+
+        _release_reservation_for_sales_order(order)
+
+        persisted = database.session.execute(
+            database.select(StockBin).filter_by(company="cacao", item_code="ART-1820R", warehouse="BOD-1820R")
+        ).scalar_one()
+        assert persisted.reserved_qty == Decimal("5")
 
 
 def test_restaurar_reserva_no_restaura_de_orden_cerrada(app):
@@ -64,7 +100,7 @@ def test_restaurar_reserva_no_restaura_de_orden_cerrada(app):
                 item_code="ART-1820",
                 item_name="Articulo 1820",
                 qty=Decimal("5"),
-                uom="UND",
+                uom="UND1820",
             )
         )
         database.session.add(StockBin(company="cacao", item_code="ART-1820", warehouse="BOD-1820", reserved_qty=Decimal("5")))
