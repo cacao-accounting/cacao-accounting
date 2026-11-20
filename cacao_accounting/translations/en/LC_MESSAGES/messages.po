@@ -24076,3 +24076,71 @@ msgstr "The requested report does not support saved views."
 #: cacao_accounting/reportes/routes.py
 msgid "La vista debe pertenecer a la compañía del reporte."
 msgstr "The view must belong to the report company."
+
+#: cacao_accounting/inventario/templates/inventario/articulo_nuevo.html
+msgid "Peso por unidad"
+msgstr "Weight per unit"
+
+#: cacao_accounting/inventario/templates/inventario/articulo_nuevo.html
+msgid "UOM de peso"
+msgstr "Weight UOM"
+
+#: cacao_accounting/inventario/templates/inventario/articulo_nuevo.html
+msgid "Volumen por unidad"
+msgstr "Volume per unit"
+
+#: cacao_accounting/inventario/templates/inventario/articulo_nuevo.html
+msgid "UOM de volumen"
+msgstr "Volume UOM"
+
+#: cacao_accounting/compras/services.py
+msgid "Todas las líneas deben usar la misma unidad de peso."
+msgstr "All lines must use the same weight unit."
+
+#: cacao_accounting/compras/services.py
+msgid "Todas las líneas deben usar la misma unidad de volumen."
+msgstr "All lines must use the same volume unit."
+
+#: cacao_accounting/compras/services.py
+#, python-format
+msgid "El %(field)s de una línea no puede ser negativo."
+msgstr "The line %(field)s cannot be negative."
+
+#: cacao_accounting/compras/services.py
+#, python-format
+msgid "El %(field)s de una línea requiere una unidad de medida."
+msgstr "The line %(field)s requires a unit of measure."
+
+#: cacao_accounting/compras/services.py
+#, python-format
+msgid "La unidad de %(field)s no existe."
+msgstr "The %(field)s unit does not exist."
+
+#: cacao_accounting/compras/routes.py
+#, python-format
+msgid "No se pudo crear el costo de importación: %(error)s"
+msgstr "The import cost could not be created: %(error)s"
+
+#: cacao_accounting/inventario/service.py
+msgid "El peso del artículo no puede ser negativo."
+msgstr "The item weight cannot be negative."
+
+#: cacao_accounting/inventario/service.py
+msgid "El volumen del artículo no puede ser negativo."
+msgstr "The item volume cannot be negative."
+
+#: cacao_accounting/inventario/service.py
+msgid "El peso requiere una unidad de medida."
+msgstr "Weight requires a unit of measure."
+
+#: cacao_accounting/inventario/service.py
+msgid "El volumen requiere una unidad de medida."
+msgstr "Volume requires a unit of measure."
+
+#: cacao_accounting/inventario/service.py
+msgid "La unidad de peso no existe."
+msgstr "The weight unit does not exist."
+
+#: cacao_accounting/inventario/service.py
+msgid "La unidad de volumen no existe."
+msgstr "The volume unit does not exist."
