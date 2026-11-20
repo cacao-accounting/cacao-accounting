@@ -95,3 +95,13 @@ def test_edit_route_rejects_disabling_only_entity_in_desktop(desktop_entity_app)
         entity = database.session.execute(database.select(Entity).filter_by(code="C001")).scalar_one()
         assert entity.enabled is True
         assert entity.tax_id == original_tax_id
+
+
+def test_new_entity_route_blocked_in_desktop_when_entity_exists(desktop_entity_app):
+    app, username, password, _ = desktop_entity_app
+    with app.test_client() as client:
+        client.post("/login", data={"usuario": username, "acceso": password}, follow_redirects=True)
+        response = client.get("/accounting/entity/new", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert "/accounting/entity/list" in (response.headers.get("Location") or "")

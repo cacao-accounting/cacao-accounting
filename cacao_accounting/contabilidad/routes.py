@@ -680,6 +680,14 @@ def entidad(entidad_id):
 def nueva_entidad():
     """Formulario para crear una nueva entidad."""
     from cacao_accounting.contabilidad.forms import FormularioEntidad
+    from cacao_accounting.database import Entity
+    from cacao_accounting.runtime_mode import force_single_entity
+
+    if force_single_entity():
+        existing = database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0
+        if existing >= 1:
+            flash(_("En modo escritorio solo se permite una compañía por base de datos."), "warning")
+            return redirect(url_for("contabilidad.entidades"))
 
     formulario = FormularioEntidad()
     formulario.moneda.choices = obtener_lista_monedas()
@@ -853,11 +861,20 @@ def eliminar_entidad(id_entidad):
         Project,
         Unit,
     )
+    from cacao_accounting.runtime_mode import force_single_entity
 
     ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
     if ENTIDAD is None:
         return LISTA_ENTIDADES
     company = ENTIDAD[0].code
+    if force_single_entity():
+        total = database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0
+        if total <= 1 or bool(ENTIDAD[0].enabled):
+            flash(
+                _("En modo escritorio no se puede eliminar la única entidad activa."),
+                "warning",
+            )
+            return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=company))
     if _reject_delete_with_dependencies(
         f"la entidad {company}",
         [
