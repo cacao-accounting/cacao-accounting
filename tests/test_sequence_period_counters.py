@@ -17,6 +17,7 @@ from threading import Barrier
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import make_url
 
 from cacao_accounting import create_app
@@ -31,7 +32,7 @@ from cacao_accounting.database import (
     SeriesSequenceMap,
     database,
 )
-from cacao_accounting.database.helpers import generate_identifier
+from cacao_accounting.database.helpers import _period_counter_id, _period_counter_upsert, generate_identifier
 
 
 def _app(uri: str):
@@ -188,6 +189,25 @@ def test_politica_sin_reinicio_mantiene_el_contador_global(series_periodicas):
             database.session.execute(database.select(SequencePeriodCounter).filter_by(sequence_id=sequence_id)).scalars().all()
             == []
         )
+
+
+def test_el_id_del_contador_es_estable_por_secuencia_y_periodo():
+    """La clave primaria del contador no depende del hilo que reserva el folio."""
+    identificador = _period_counter_id("SEC-1", "2026")
+
+    assert identificador == _period_counter_id("SEC-1", "2026")
+    assert len(identificador) == 26
+    assert identificador != _period_counter_id("SEC-1", "2026-05")
+    assert identificador != _period_counter_id("SEC-2", "2026")
+
+
+def test_upsert_mysql_reutiliza_el_mismo_id_para_la_misma_clave():
+    """Los concurrentes de un periodo insertan una sola fila en InnoDB."""
+    primero = _period_counter_upsert("SEC-1", "2026", dialect="mysql")
+    segundo = _period_counter_upsert("SEC-1", "2026", dialect="mysql")
+    compilador = mysql.dialect()
+
+    assert primero.compile(dialect=compilador).params["id"] == segundo.compile(dialect=compilador).params["id"]
 
 
 @pytest.mark.database

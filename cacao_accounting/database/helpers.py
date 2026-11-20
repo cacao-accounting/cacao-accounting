@@ -8,6 +8,7 @@
 from datetime import date
 from os import environ
 from typing import Optional
+from uuid import NAMESPACE_URL, uuid5
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -297,18 +298,36 @@ def sequence_period_key(sequence_id: str, posting_date: date, reset_policy: str 
     return "global"
 
 
-def _period_counter_upsert(sequence_id: str, period_key: str):
+def _period_counter_id(sequence_id: str, period_key: str) -> str:
+    """Devuelve un identificador estable para el contador de una secuencia y periodo.
+
+    MySQL ``INSERT ... ON DUPLICATE KEY UPDATE`` bloquea tanto la clave primaria
+    como la restricción única. Si cada concurrente inserta un ``id`` distinto,
+    los bloqueos se adquieren en órdenes incompatibles y InnoDB aborta con error
+    1213. Derivar el ``id`` de la propia clave garantiza una sola fila y un
+    único orden de bloqueo para todas las reservas del mismo periodo.
+    """
+    return uuid5(NAMESPACE_URL, f"cacao:sequence-period-counter:{sequence_id}:{period_key}").hex[:26]
+
+
+def _period_counter_upsert(sequence_id: str, period_key: str, dialect: Optional[str] = None):
     """Devuelve el insert idempotente del contador de periodo para el motor activo.
 
     ``ON CONFLICT DO NOTHING`` (SQLite/PostgreSQL) y ``ON DUPLICATE KEY``
     (MySQL) crean la fila una sola vez incluso bajo concurrencia. Después el
     incremento se aplica con un ``UPDATE`` atómico, así que SQLite no depende
-    de ``FOR UPDATE`` para serializar.
+    de ``FOR UPDATE`` para serializar. La clave primaria del contador es
+    determinista para evitar deadlocks de InnoDB con índices múltiples.
     """
     from cacao_accounting.database import SequencePeriodCounter
 
-    values = {"sequence_id": sequence_id, "period_key": period_key, "current_value": 0}
-    dialect = database.session.connection().dialect.name
+    values = {
+        "id": _period_counter_id(sequence_id, period_key),
+        "sequence_id": sequence_id,
+        "period_key": period_key,
+        "current_value": 0,
+    }
+    dialect = dialect or database.session.connection().dialect.name
     if dialect == "sqlite":
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
