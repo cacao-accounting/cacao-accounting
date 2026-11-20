@@ -24,6 +24,18 @@ def get_document(doctype: str, document_id: str) -> Any | None:
     return database.session.get(spec.header_model, document_id)
 
 
+def get_document_fresh(doctype: str, document_id: str) -> Any | None:
+    """Obtiene un documento forzando una lectura a la base de datos.
+
+    ``Session.get`` devuelve la instancia del identity map sin consultar la
+    base cuando ya está cargada. Tras adquirir un lock documental es necesario
+    releer el estado confirmado por otras transacciones; de lo contrario la
+    validación trabaja con una foto tomada antes del bloqueo.
+    """
+    spec = get_document_type(doctype)
+    return database.session.get(spec.header_model, document_id, populate_existing=True)
+
+
 def document_matches_type(doctype: str, document: Any) -> bool:
     """Comprueba que el documento cargado pertenezca al tipo lógico solicitado.
 

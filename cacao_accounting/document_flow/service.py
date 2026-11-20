@@ -40,6 +40,7 @@ from cacao_accounting.document_flow.repository import (
     decimal_or_zero,
     get_document,
     get_document_company,
+    get_document_fresh,
     get_document_item,
     get_document_items,
     get_item_parent_id,
@@ -604,6 +605,8 @@ def create_document_relation(
     )
     for key, identifier in sorted(((source_key, source_id), (target_key, target_id))):
         lock_document_flow_document(key, identifier)
+    get_document_fresh(source_key, source_id)
+    get_document_fresh(target_key, target_id)
     _assert_same_company(source_key, source_id, target_key, target_id)
     _assert_same_sales_party(source_key, source_id, target_key, target_id)
     _validate_relation_status(source_key, source_id, target_key, target_id)
@@ -691,8 +694,8 @@ def _validate_relation_documents(source_key, source_id, source_item_id, target_k
 
 def _validate_relation_status(source_key: str, source_id: str, target_key: str, target_id: str) -> None:
     """Valida estados de documentos en una relación."""
-    source_doc = get_document(source_key, source_id)
-    target_doc = get_document(target_key, target_id)
+    source_doc = get_document_fresh(source_key, source_id)
+    target_doc = get_document_fresh(target_key, target_id)
     if source_doc is None:
         raise DocumentFlowError(_("Documento origen no encontrado."), 404)
     if target_doc is None:
