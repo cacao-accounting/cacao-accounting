@@ -1787,7 +1787,7 @@ def ventas_orden_venta_cancel(order_id: str):
     if not registro:
         abort(404)
     exige_acceso_compania("sales", registro.company, "anular")
-    if registro.docstatus != 1:
+    if registro.docstatus != 1 or registro.status == "closed":
         abort(400)
     lock_document_flow_document("sales_order", order_id)
     if has_active_source_relations("sales_order", order_id):

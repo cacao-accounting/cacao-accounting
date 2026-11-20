@@ -623,6 +623,11 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
         return
     if dn.is_return:
         return
+    # Si la orden está cerrada, su reserva ya se liberó con el cierre:
+    # restaurarla crearía una reserva fantasma (#1820).
+    source_order = database.session.get(SalesOrder, dn.sales_order_id)
+    if source_order is not None and source_order.status == "closed":
+        return
 
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
 
