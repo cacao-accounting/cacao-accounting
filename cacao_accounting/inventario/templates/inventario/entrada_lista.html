@@ -17,9 +17,11 @@
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
     <h5 class="ca-card-title"><i class="bi bi-arrow-down-circle"></i> {{ _('Listado de Entradas de Almacen.') }}</h5>
-    <a href="{{ new_url if new_url else url_for('inventario.inventario_entrada_nuevo') }}" class="btn btn-sm btn-primary">
+    {% if new_url %}
+    <a href="{{ new_url }}" class="btn btn-sm btn-primary">
       <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
+    {% endif %}
   </div>
   {{ macros.list_filters(show_status=True, placeholder=_("Buscar por documento..."), extra_params=consulta.period_extra_params) }}
   {{ macros.period_list_filters(consulta) }}

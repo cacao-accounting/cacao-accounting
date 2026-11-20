@@ -23988,3 +23988,23 @@ msgid "Orientación de papel no soportada: %(value)s."
 msgstr "Unsupported paper orientation: %(value)s."
 
 
+
+#: cacao_accounting/inventario/templates/inventario.html
+msgid "Movimientos de Inventario"
+msgstr "Inventory Movements"
+
+#: cacao_accounting/inventario/templates/inventario.html
+msgid "Ajustes Positivos"
+msgstr "Positive Adjustments"
+
+#: cacao_accounting/inventario/templates/inventario.html
+msgid "Ajustes Negativos"
+msgstr "Negative Adjustments"
+
+#: cacao_accounting/inventario/routes.py
+msgid "Listado de Ajustes de Inventario Históricos"
+msgstr "Historical Inventory Adjustment List"
+
+#: cacao_accounting/inventario/services.py
+msgid "Ajuste de Inventario Histórico"
+msgstr "Historical Inventory Adjustment"

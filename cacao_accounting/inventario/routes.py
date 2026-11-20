@@ -91,6 +91,8 @@ from cacao_accounting.inventario.services import (
     _handle_stock_entry_edit_post,
     _render_stock_entry_edit_form,
     _render_stock_reconciliation_edit_form,
+    STOCK_ENTRY_PURPOSES,
+    LEGACY_STOCK_ENTRY_PURPOSES,
 )
 
 from cacao_accounting.i18n import _
@@ -314,20 +316,19 @@ def inventario_material_transfer_lista():
 @modulo_activo("inventory")
 @login_required
 def inventario_ajuste_lista():
-    """Listado de ajustes de inventario."""
+    """Listado de solo lectura para ajustes históricos (#1891)."""
     consulta = _paginate_list(
         StockEntry,
         (StockEntry.document_no,),
-        _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_adjustment"),
+        _inventory_company_scoped_select(StockEntry).filter(StockEntry.purpose.in_(LEGACY_STOCK_ENTRY_PURPOSES)),
     )
-    titulo = _("Listado de Ajustes de Inventario") + " - " + APPNAME
-    new_url = url_for("inventario.inventario_ajuste_nuevo")
+    titulo = _("Listado de Ajustes de Inventario Históricos") + " - " + APPNAME
     return render_template(
         INVENTARIO_ENTRADA_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
         vista="inventario.inventario_ajuste_lista",
-        new_url=new_url,
+        new_url=None,
     )
 
 
@@ -852,7 +853,6 @@ def inventario_lote(batch_id):
 @inventario.route("/stock-entry/material-receipt/new", methods=["GET", "POST"])
 @inventario.route("/stock-entry/material-issue/new", methods=["GET", "POST"])
 @inventario.route("/stock-entry/material-transfer/new", methods=["GET", "POST"])
-@inventario.route("/stock-entry/adjustment/new", methods=["GET", "POST"])
 @inventario.route("/stock-entry/reconciliation/new", methods=["GET", "POST"])
 @inventario.route("/stock-entry/adjustment-positive/new", methods=["GET", "POST"])
 @inventario.route("/stock-entry/inventory-issue/new", methods=["GET", "POST"])
@@ -885,6 +885,8 @@ def inventario_entrada_nuevo():
     items_disponibles = _stock_entry_item_choices()
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     purpose = request.args.get("purpose") or _infer_stock_entry_purpose(request.path)
+    if purpose and purpose not in STOCK_ENTRY_PURPOSES:
+        abort(404)
     formulario.purpose.data = purpose or formulario.purpose.data
     source_api_url, source_label = _source_context(request.args.get("source_type"), request.args.get("source_id"))
     titulo = _stock_entry_title(_infer_stock_entry_purpose(request.path))
@@ -899,7 +901,7 @@ def inventario_entrada_nuevo():
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Remisión de Mercadería Vendida")},
         ],
-        "allowManualAmount": purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"},
+        "allowManualAmount": purpose in {"adjustment_positive", "adjustment_negative"},
     }
     if request.method == "POST":
         if formulario.validate():
@@ -928,14 +930,6 @@ def inventario_entrada_nuevo():
         source_label=source_label,
         transaction_config=transaction_config,
     )
-
-
-@inventario.route("/stock-entry/adjustment/new-shortcut")
-@modulo_activo("inventory")
-@login_required
-def inventario_ajuste_nuevo():
-    """Alias para crear ajuste de inventario."""
-    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="stock_adjustment"))
 
 
 @inventario.route("/stock-entry/reconciliation/new-shortcut")

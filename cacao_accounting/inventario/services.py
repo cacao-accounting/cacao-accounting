@@ -90,12 +90,15 @@ STOCK_ENTRY_PURPOSES = frozenset(
         "material_receipt",
         "material_issue",
         "material_transfer",
-        "stock_adjustment",
         "stock_reconciliation",
         "adjustment_positive",
         "adjustment_negative",
     }
 )
+
+# Registros creados antes de #1891. Se conservan para lectura y para poder
+# contabilizar borradores históricos, pero no admiten nuevas creaciones.
+LEGACY_STOCK_ENTRY_PURPOSES = frozenset({"stock_adjustment"})
 
 
 def _is_duplicate_master_code_violation(error: IntegrityError, table_name: str) -> bool:
@@ -755,8 +758,6 @@ def _infer_stock_entry_purpose(path: str) -> str | None:
         return "material_issue"
     if path.endswith("/material-transfer/new"):
         return "material_transfer"
-    if path.endswith("/adjustment/new"):
-        return "stock_adjustment"
     if path.endswith("/reconciliation/new"):
         return "stock_reconciliation"
     if path.endswith("/adjustment-positive/new"):
@@ -772,7 +773,7 @@ def _stock_entry_title(purpose: str | None) -> str:
         "material_receipt": "Nueva Recepción de Material",
         "material_issue": "Nueva Salida de Material",
         "material_transfer": "Nueva Transferencia de Material",
-        "stock_adjustment": "Nuevo Ajuste de Inventario",
+        "stock_adjustment": "Ajuste de Inventario Histórico",
         "stock_reconciliation": "Nueva Conciliación de Inventario",
         "adjustment_positive": "Nuevo Ajuste Positivo de Inventario",
         "adjustment_negative": "Nuevo Ajuste Negativo de Inventario",
