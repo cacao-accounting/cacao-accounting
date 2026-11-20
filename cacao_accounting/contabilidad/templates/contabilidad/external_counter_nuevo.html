@@ -38,10 +38,12 @@
         <label class="form-label" for="prefix">{{ _("Prefijo") }}</label>
         {{ form.prefix(class="form-control form-control-sm", id="prefix", placeholder="{{ _('Ej: CHK-') }}") }}
       </div>
+      {% if not modo_edicion %}
       <div class="col-md-4">
         <label class="form-label" for="last-used">{{ _("Ultimo Numero Usado") }}</label>
         {{ form.last_used(class="form-control form-control-sm", id="last-used") }}
       </div>
+      {% endif %}
       <div class="col-md-4">
         <label class="form-label" for="padding">{{ _("Padding (digitos)") }}</label>
         {{ form.padding(class="form-control form-control-sm", id="padding") }}

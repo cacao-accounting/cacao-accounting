@@ -1378,12 +1378,17 @@ def _update_series_sequence(serie, form):
 
 
 def _update_counter_from_form(counter: Any, form: Any) -> None:
-    """Apply form field values to an ExternalCounter instance."""
+    """Apply form field values to an ExternalCounter instance.
+
+    ``last_used`` is intentionally not applied here: manual changes to the
+    last used number require a reason and are recorded by the dedicated
+    adjust operation (``adjust_external_counter``), so the general edit form
+    keeps it outside the editable surface (#1733).
+    """
     counter.company = form.company.data
     counter.name = form.nombre.data
     counter.counter_type = form.counter_type.data or None
     counter.prefix = form.prefix.data or None
-    counter.last_used = form.last_used.data or 0
     counter.padding = form.padding.data or 5
     counter.is_active = bool(form.is_active.data)
     counter.description = form.description.data or None
