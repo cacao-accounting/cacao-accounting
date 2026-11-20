@@ -17,6 +17,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting import create_app
 from cacao_accounting.compras.purchase_reconciliation_service import reconcile_purchase_invoice
@@ -257,3 +258,49 @@ def test_failed_match_reports_zero_qty_because_nothing_is_assigned(matching_scen
         assert result.matching_result == "MATCH_FAILED"
         assert result.matched_qty == Decimal("0")
         assert _persisted_qty(result.reconciliation_id) == Decimal("0")
+
+
+@pytest.mark.parametrize(
+    ("source_table", "source_id_key"),
+    [
+        ("purchase_order_item", "purchase_order_item_id"),
+        ("purchase_receipt_item", "purchase_receipt_item_id"),
+        ("purchase_invoice_item", "purchase_invoice_item_id"),
+    ],
+)
+def test_deleting_reconciled_source_lines_preserves_reconciliation_evidence(matching_scenario, source_table, source_id_key):
+    """Deleting any matched source line cannot cascade away reconciliation evidence."""
+    app, ids = matching_scenario
+
+    with app.app_context():
+        two_way_result = reconcile_purchase_invoice(ids["two_way"])
+        config = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company="alpha")).scalar_one()
+        config.matching_type = "3-way"
+        database.session.commit()
+        result = reconcile_purchase_invoice(ids["three_way"])
+        reconciliation_id = (
+            two_way_result.reconciliation_id if source_id_key == "purchase_order_item_id" else result.reconciliation_id
+        )
+        reconciliation_item = database.session.execute(
+            database.select(PurchaseReconciliationItem).filter_by(purchase_reconciliation_id=reconciliation_id)
+        ).scalar_one()
+        reconciliation_item_id = reconciliation_item.id
+        source_id = getattr(reconciliation_item, source_id_key)
+        assert source_id is not None
+        database.session.commit()
+
+        source_models = {
+            "purchase_order_item": PurchaseOrderItem,
+            "purchase_receipt_item": PurchaseReceiptItem,
+            "purchase_invoice_item": PurchaseInvoiceItem,
+        }
+        source_model = source_models[source_table]
+        source_item = database.session.get(source_model, source_id)
+        assert source_item is not None
+        database.session.delete(source_item)
+        with pytest.raises(IntegrityError):
+            database.session.flush()
+        database.session.rollback()
+
+        assert database.session.get(PurchaseReconciliationItem, reconciliation_item_id) is not None
+        assert database.session.get(source_model, source_id) is not None

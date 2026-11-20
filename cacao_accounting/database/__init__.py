@@ -5146,19 +5146,19 @@ class PurchaseReconciliationItem(database.Model, BaseTabla):  # type: ignore[nam
     )
     purchase_order_item_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_order_item.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        database.ForeignKey("purchase_order_item.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
     purchase_receipt_item_id = database.Column(
         database.String(26),
-        database.ForeignKey(_PURCHASE_RECEIPT_ITEM_ID_FK, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        database.ForeignKey(_PURCHASE_RECEIPT_ITEM_ID_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
     purchase_invoice_item_id = database.Column(
         database.String(26),
-        database.ForeignKey(_PURCHASE_INVOICE_ITEM_ID_FK, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        database.ForeignKey(_PURCHASE_INVOICE_ITEM_ID_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
