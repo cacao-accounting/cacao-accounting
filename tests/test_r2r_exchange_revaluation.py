@@ -565,48 +565,87 @@ def test_concurrent_revaluations_preserve_one_active_period_result(business_app)
 
 
 def test_two_concurrent_runs_leave_one_active_adjustment(business_app, monkeypatch):
-    """Dos ejecuciones simultaneas del mismo periodo dejan una sola corrida activa.
+    """La segunda corrida concurrente no puede postear otro ajuste activo.
 
-    El retardo antes de crear el diario fuerza la ventana de intercalado: sin
-    serializacion, ambas transacciones calcularian y postearian el ajuste.
+    La primera corrida conserva la reserva del periodo mientras la segunda
+    intenta adquirirla. En SQLite la reserva rechaza de inmediato a la segunda;
+    en PostgreSQL ``FOR UPDATE`` la detiene hasta que la primera confirma y
+    entonces relee la corrida previa. No hay reintento que normalice el
+    resultado: la prueba observa que ambas invocaciones respetan la serialización.
     """
-    import time
-
-    original_create = ExchangeRevaluationService._create_journal
-
-    def delayed_create(self, run, user_id, *, reversal=False, posting_date=None):
-        time.sleep(2.0)
-        return original_create(self, run, user_id, reversal=reversal, posting_date=posting_date)
-
-    monkeypatch.setattr(ExchangeRevaluationService, "_create_journal", delayed_create)
-
     company = f"R{uuid4().hex[:9]}"
     with business_app.app_context():
         company, year, month, _prior_id, period_id, _following_id, _following_start = _seed_bank_exposure(company)
         actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        database_dialect = database.engine.dialect.name
 
-    start_together = Barrier(2)
+    first_holds_lock = Event()
+    release_first = Event()
+    second_tries_lock = Event()
+    second_rejected = Event()
+    lock_calls = 0
+    real_lock = ExchangeRevaluationService._lock_period_for_run
+    real_reserve = ExchangeRevaluationService._reserve_sqlite_writer
+    real_create_journal = ExchangeRevaluationService._create_journal
 
-    def ejecutar() -> str | None:
+    def observe_lock(self, period):
+        nonlocal lock_calls
+        lock_calls += 1
+        if lock_calls == 2:
+            second_tries_lock.set()
+        return real_lock(self, period)
+
+    def observe_reserve(self, message):
+        try:
+            return real_reserve(self, message)
+        except ExchangeRevaluationError:
+            if lock_calls == 2:
+                second_rejected.set()
+            raise
+
+    def pause_first(self, run, user_id, *, reversal=False, posting_date=None):
+        if lock_calls == 1 and not first_holds_lock.is_set():
+            first_holds_lock.set()
+            assert release_first.wait(timeout=10)
+        return real_create_journal(self, run, user_id, reversal=reversal, posting_date=posting_date)
+
+    monkeypatch.setattr(ExchangeRevaluationService, "_lock_period_for_run", observe_lock)
+    monkeypatch.setattr(ExchangeRevaluationService, "_reserve_sqlite_writer", observe_reserve)
+    monkeypatch.setattr(ExchangeRevaluationService, "_create_journal", pause_first)
+
+    def execute_once() -> tuple[str, str]:
         with business_app.app_context():
-            start_together.wait(timeout=10)
             try:
                 run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
-                return str(run.id)
+                return ("posted", str(run.id))
             except ExchangeRevaluationError as error:
-                if "revalorización está ejecutándose" in str(error):
-                    return None
-                raise
+                return ("rejected", str(error))
             finally:
                 database.session.remove()
 
     with ThreadPoolExecutor(max_workers=2) as workers:
-        run_ids = list(workers.map(lambda _index: ejecutar(), range(2)))
+        first = workers.submit(execute_once)
+        assert first_holds_lock.wait(timeout=10)
+        second = workers.submit(execute_once)
+        if database_dialect == "sqlite":
+            assert second_rejected.wait(timeout=10)
+        else:
+            assert second_tries_lock.wait(timeout=10)
+        release_first.set()
+        first_result = first.result(timeout=10)
+        second_result = second.result(timeout=10)
 
-    if None in run_ids:
-        with business_app.app_context():
-            retry = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
-            run_ids.append(str(retry.id))
+    if database_dialect == "sqlite":
+        assert first_result[0] == "posted"
+        assert second_result[0] == "rejected"
+        assert "Otra revalorización está ejecutándose" in second_result[1]
+        posted_id = first_result[1]
+        expected_statuses = {"posted"}
+    else:
+        assert first_result[0] == "posted"
+        assert second_result[0] == "posted"
+        posted_id = second_result[1]
+        expected_statuses = {"posted", "voided"}
 
     with business_app.app_context():
         runs = list(
@@ -615,7 +654,9 @@ def test_two_concurrent_runs_leave_one_active_adjustment(business_app, monkeypat
             .all()
         )
         posted_runs = [run for run in runs if run.status == "posted"]
+        assert {run.status for run in runs} == expected_statuses
         assert len(posted_runs) == 1
+        assert posted_runs[0].id == posted_id
         assert len({run.journal_entry_id for run in posted_runs}) == 1
 
         entries = list(
@@ -629,7 +670,78 @@ def test_two_concurrent_runs_leave_one_active_adjustment(business_app, monkeypat
             .all()
         )
         active_originals = [entry for entry in entries if not entry.is_cancelled and not entry.is_reversal]
-        assert {entry.voucher_id for entry in active_originals} == {posted_runs[0].id}
+        assert {entry.voucher_id for entry in active_originals} == {posted_id}
+
+
+def test_historical_rerun_respects_scope_and_closed_periods(business_app):
+    """La reejecución histórica solo revierte corridas abiertas del ejercicio.
+
+    La política documentada en #2120 exige revocar la corrida futura del mismo
+    ejercicio, sin tocar períodos cerrados ni corridas de otros ejercicios.
+    """
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, year, _month, prior_id, period_id, following_id, _following_start = _seed_bank_exposure(company)
+        actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        service = ExchangeRevaluationService()
+
+        prior_run = service.run(company=company, period_id=prior_id, user_id=actor_id)
+        prior_run_id = str(prior_run.id)
+        closed_period = database.session.get(AccountingPeriod, prior_id)
+        assert closed_period is not None
+        closed_period.is_closed = True
+        database.session.commit()
+
+        later_run = service.run(company=company, period_id=following_id, user_id=actor_id)
+        later_run_id = str(later_run.id)
+
+        other_year = FiscalYear(
+            entity=company,
+            name=str(year + 1),
+            year_start_date=date(year + 1, 1, 1),
+            year_end_date=date(year + 1, 12, 31),
+            is_closed=False,
+        )
+        database.session.add(other_year)
+        database.session.flush()
+        foreign_run = ExchangeRevaluation(
+            company=company,
+            status="posted",
+            docstatus=1,
+            run_date=date(year + 1, 3, 31),
+            month=3,
+            year=year + 1,
+            currency="NIO",
+            document_no=f"OTRO-{company}",
+        )
+        database.session.add(foreign_run)
+        database.session.flush()
+        foreign_run_id = str(foreign_run.id)
+        database.session.commit()
+
+        rerun = service.run(company=company, period_id=period_id, user_id=actor_id)
+        rerun_id = str(rerun.id)
+
+        statuses = dict(
+            database.session.execute(
+                database.select(ExchangeRevaluation.id, ExchangeRevaluation.status).where(
+                    ExchangeRevaluation.id.in_([prior_run_id, later_run_id, foreign_run_id, rerun_id])
+                )
+            ).all()
+        )
+        assert statuses[prior_run_id] == "posted"
+        assert statuses[foreign_run_id] == "posted"
+        assert statuses[later_run_id] == "voided"
+        assert statuses[rerun_id] == "posted"
+
+        entries = list(
+            database.session.execute(database.select(GLEntry).filter_by(company=company, voucher_type="exchange_revaluation"))
+            .scalars()
+            .all()
+        )
+        assert any(not entry.is_cancelled for entry in entries if entry.voucher_id == prior_run_id)
+        assert all(entry.is_cancelled for entry in entries if entry.voucher_id == later_run_id and not entry.is_reversal)
+        assert any(entry.is_reversal and not entry.is_cancelled for entry in entries if entry.voucher_id == later_run_id)
 
 
 def test_rerunning_the_same_period_leaves_one_active_adjustment(business_app):
