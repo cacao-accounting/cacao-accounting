@@ -14,19 +14,26 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.contabilidad.arap_ledger_service import _resolve_application_target_item
+from cacao_accounting.contabilidad.arap_ledger_service import (
+    _resolve_application_payment_item,
+    _resolve_application_target_item,
+)
+from cacao_accounting.contabilidad.posting_service import PostingError
 from cacao_accounting.database import (
     ARAPLedgerBookEntry,
     Accounts,
     Book,
     Currency,
     Entity,
+    ExchangeRate,
     GLEntry,
     Party,
+    PaymentEntry,
     SalesInvoice,
     database,
 )
@@ -121,8 +128,57 @@ def _crear_app():
                     party_id=cliente_id,
                 )
             )
+
+        pago = PaymentEntry(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="PAY-2118",
+            payment_type="receive",
+            party_type="customer",
+            party_id=cliente_id,
+            party_name="Cliente",
+            currency="NIO",
+            exchange_rate=Decimal("1"),
+            received_amount=Decimal("80"),
+            base_received_amount=Decimal("80"),
+            unallocated_amount=Decimal("80"),
+        )
+        factura_sin_gl = SalesInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            customer_id=cliente_id,
+            customer_name="Cliente",
+            grand_total=200,
+            transaction_currency="NIO",
+        )
+        database.session.add_all([pago, factura_sin_gl])
+        database.session.flush()
+        for libro, importe in ((libro_nio, Decimal("80")), (libro_usd, Decimal("20"))):
+            database.session.add(
+                GLEntry(
+                    posting_date=FECHA,
+                    company="cacao",
+                    ledger_id=libro.id,
+                    account_id=cuenta.id,
+                    debit=Decimal("0"),
+                    credit=importe,
+                    voucher_type="payment_entry",
+                    voucher_id=pago.id,
+                    party_type="customer",
+                    party_id=cliente_id,
+                )
+            )
         database.session.commit()
-        ids = {"nio": libro_nio.id, "usd": libro_usd.id, "factura": factura.id, "cliente": cliente_id}
+        ids = {
+            "nio": libro_nio.id,
+            "usd": libro_usd.id,
+            "factura": factura.id,
+            "factura_sin_gl": factura_sin_gl.id,
+            "pago": pago.id,
+            "cliente": cliente_id,
+        }
     return application, ids
 
 
@@ -146,14 +202,103 @@ def test_la_apertura_sintetica_valora_todos_los_libros():
             database.session.flush()
 
             assert nuevas == [apertura]
-            filas = (
-                database.session.execute(database.select(ARAPLedgerBookEntry).filter_by(ledger_entry_id=apertura.id))
-                .scalars()
-                .all()
-            )
-            por_libro = {fila.ledger_id: fila.book_amount for fila in filas}
+            por_libro = _valoracion_por_libro(apertura)
             assert por_libro[ids["nio"]] == Decimal("100")
             assert por_libro[ids["usd"]] == Decimal("28")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def _valoracion_por_libro(apertura) -> dict[str, Decimal]:
+    """Devuelve el importe valorado de la apertura en cada libro."""
+    filas = (
+        database.session.execute(database.select(ARAPLedgerBookEntry).filter_by(ledger_entry_id=apertura.id)).scalars().all()
+    )
+    return {fila.ledger_id: fila.book_amount for fila in filas}
+
+
+def test_la_apertura_sintetica_del_pago_valora_todos_los_libros():
+    """El camino de pagos también genera la valoración por libro de la apertura."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            pago = database.session.get(PaymentEntry, ids["pago"])
+            apertura, _cache, nuevas = _resolve_application_payment_item(
+                "cacao",
+                pago,
+                "payment_entry",
+                ids["pago"],
+                "NIO",
+                "customer",
+                ids["cliente"],
+                "AR",
+                Decimal("80"),
+                FECHA,
+            )
+            database.session.flush()
+
+            assert nuevas == [apertura]
+            por_libro = _valoracion_por_libro(apertura)
+            assert por_libro[ids["nio"]] == Decimal("-80")
+            assert por_libro[ids["usd"]] == Decimal("-20")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_sin_gl_valora_con_la_tasa_del_libro():
+    """Sin líneas GL la apertura se convierte con la tasa vigente del libro."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            database.session.add(ExchangeRate(origin="NIO", destination="USD", date=FECHA, rate=Decimal("0.0357")))
+            database.session.commit()
+            factura = database.session.get(SalesInvoice, ids["factura_sin_gl"])
+            apertura, _cache, nuevas = _resolve_application_target_item(
+                "cacao",
+                factura,
+                "sales_invoice",
+                "NIO",
+                "customer",
+                ids["cliente"],
+                "AR",
+                Decimal("200"),
+                FECHA,
+            )
+            database.session.flush()
+
+            assert nuevas == [apertura]
+            por_libro = _valoracion_por_libro(apertura)
+            assert por_libro[ids["nio"]] == Decimal("200")
+            assert por_libro[ids["usd"]] == Decimal("7.14")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_sin_tasa_bloquea_el_registro():
+    """Falta la tasa hacia el libro y no se puede registrar la apertura."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            factura = database.session.get(SalesInvoice, ids["factura_sin_gl"])
+            with pytest.raises(PostingError):
+                _resolve_application_target_item(
+                    "cacao",
+                    factura,
+                    "sales_invoice",
+                    "NIO",
+                    "customer",
+                    ids["cliente"],
+                    "AR",
+                    Decimal("200"),
+                    FECHA,
+                )
+            database.session.rollback()
     finally:
         with application.app_context():
             database.session.remove()
