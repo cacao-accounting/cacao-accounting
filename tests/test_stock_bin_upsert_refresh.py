@@ -12,10 +12,10 @@ from cacao_accounting.database import Item, StockBin, UOM, Warehouse, database
 def test_upsert_stock_bin_refresca_instancia_tras_lock(app):
     """El upsert con lock aplica sobre el saldo refrescado del bin (#1868)."""
     with app.app_context():
-        database.session.add(UOM(code="UND", name="Unidad"))
+        database.session.add(UOM(code="UND1868", name="Unidad 1868"))
         database.session.flush()
         database.session.add(
-            Item(code="ART-1868", name="Articulo 1868", item_type="goods", is_stock_item=True, default_uom="UND")
+            Item(code="ART-1868", name="Articulo 1868", item_type="goods", is_stock_item=True, default_uom="UND1868")
         )
         database.session.flush()
         database.session.add(Warehouse(code="BOD-1868", name="Bodega 1868", company="cacao"))
