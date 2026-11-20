@@ -1891,17 +1891,26 @@ def _validate_sales_invoice_source_links(invoice: SalesInvoice, items: Sequence[
     return order or delivery
 
 
+def _validate_3way_delivery_requirement(invoice: SalesInvoice, config: SalesMatchingConfig | None) -> None:
+    """Exige y valida la nota de entrega en la modalidad 3-way (#1813)."""
+    if not config or config.matching_type != "3-way":
+        return
+    if not invoice.delivery_note_id:
+        raise ValueError(_("La modalidad 3-way exige una Nota de Entrega vinculada a la factura."))
+
+
 def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any] | None = None) -> None:
     """Rechaza facturas sin orden de venta cuando la compañía lo exige."""
     if invoice.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or invoice.is_return:
         return
-    if invoice.sales_order_id or invoice.delivery_note_id:
-        source = _validate_sales_invoice_source_links(invoice, items)
-        if invoice.sales_order_id or getattr(source, "sales_order_id", None):
-            return
     config = database.session.execute(
         database.select(SalesMatchingConfig).filter_by(company=invoice.company)
     ).scalar_one_or_none()
+    if invoice.sales_order_id or invoice.delivery_note_id:
+        source = _validate_sales_invoice_source_links(invoice, items)
+        if invoice.sales_order_id or getattr(source, "sales_order_id", None):
+            _validate_3way_delivery_requirement(invoice, config)
+            return
     if not config or not config.require_sales_order:
         return
     linked_order = database.session.execute(
@@ -1916,6 +1925,7 @@ def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any
         .limit(1)
     ).scalar_one_or_none()
     if linked_order:
+        _validate_3way_delivery_requirement(invoice, config)
         return
     raise ValueError(_("La factura debe estar vinculada a una Orden de Venta aprobada."))
 
