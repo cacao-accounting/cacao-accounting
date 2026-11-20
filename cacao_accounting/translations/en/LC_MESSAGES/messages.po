@@ -14645,6 +14645,17 @@ msgstr "Template amounts must be finite numbers."
 msgid "La línea %(line)s de la plantilla no puede tener importes negativos."
 msgstr "Template line %(line)s cannot have negative amounts."
 
+#, python-format
+msgid "La línea %(line)s de la plantilla no puede tener débito y crédito positivos a la vez."
+msgstr "Template line %(line)s cannot have positive debit and credit at the same time."
+
+#, python-format
+msgid "La línea %(line)s de la plantilla debe tener un débito o un crédito mayor que cero."
+msgstr "Template line %(line)s must have a debit or credit greater than zero."
+
+msgid "Solo se admiten plantillas recurrentes con frecuencia mensual."
+msgstr "Only recurring templates with monthly frequency are supported."
+
 #: cacao_accounting/contabilidad/recurring_journal_service.py:116
 msgid "La plantilla debe estar balanceada (Débito != Crédito)."
 msgstr "The template must be balanced (Debit != Credit)."
@@ -23965,3 +23976,4 @@ msgstr "Internal identifier %(identifier)s is duplicated and the records were pr
 #: cacao_accounting/admin/routes.py cacao_accounting/database/__init__.py
 msgid "El tipo de impuesto seleccionado no es válido."
 msgstr "The selected tax type is not valid."
+

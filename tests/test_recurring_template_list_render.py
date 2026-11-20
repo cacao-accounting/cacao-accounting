@@ -193,7 +193,10 @@ def test_frecuencia_diaria_en_ingles_no_se_traduce_como_libro(app, authenticated
         assert ">Journal<" not in detalle.get_data(as_text=True)
         formulario = client.get("/accounting/journal/recurring/new")
         assert formulario.status_code == 200
-        assert 'value="daily">Daily</option>' in formulario.get_data(as_text=True)
+        html_formulario = formulario.get_data(as_text=True)
+        assert 'value="monthly">' in html_formulario
+        assert 'value="daily"' not in html_formulario
+        assert 'value="weekly"' not in html_formulario
     finally:
         with app.app_context():
             plantilla = database.session.get(RecurringJournalTemplate, plantilla_id)

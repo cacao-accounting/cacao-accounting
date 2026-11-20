@@ -37,6 +37,13 @@ class RecurringJournalError(Exception):
 PLANTILLA_NO_ENCONTRADA = "Plantilla no encontrada."
 
 
+# La frecuencia soportada es mensual (#1493). Una necesidad semanal se
+# representa con cuatro plantillas mensuales en fechas distintas; el servicio
+# no programa ocurrencias diarias ni semanales.
+SUPPORTED_RECURRING_FREQUENCIES = frozenset({"monthly"})
+
+# El mapa conserva etiquetas para filas históricas creadas antes de #1493.
+# La UI ya no ofrece estas opciones y `apply_recurring_template` las rechaza.
 RECURRING_FREQUENCY_LABELS = {
     "monthly": _l("Mensual"),
     "weekly": _l("Semanal"),
@@ -52,9 +59,18 @@ def recurring_frequency_label(value: Any) -> str:
     return str(RECURRING_FREQUENCY_LABELS.get(key, value or ""))
 
 
+def normalize_recurring_frequency(value: Any) -> str:
+    """Normaliza y valida la única frecuencia soportada por las plantillas."""
+    key = str(value or "monthly").strip().lower()
+    if key not in SUPPORTED_RECURRING_FREQUENCIES:
+        raise RecurringJournalError(_("Solo se admiten plantillas recurrentes con frecuencia mensual."))
+    return key
+
+
 def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]], user_id: str) -> RecurringJournalTemplate:
     """Crea una nueva plantilla de comprobante recurrente."""
     validate_template_balance(items)
+    frequency = normalize_recurring_frequency(data.get("frequency"))
     company = data["company"]
     _validate_template_projects(company, items)
     books = _authorized_template_books(company, data.get("books"), user_id, "crear")
@@ -70,7 +86,7 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
         description=data.get("description"),
         start_date=data["start_date"],
         end_date=data["end_date"],
-        frequency=data.get("frequency", "monthly"),
+        frequency=frequency,
         currency=data.get("currency"),
         status="draft",
         docstatus=0,
@@ -115,13 +131,26 @@ def _template_amount(value: Any) -> Any:
 
 
 def validate_template_balance(items: List[Dict[str, Any]]):
-    """Valida que la plantilla esté balanceada y sin importes negativos (#2161)."""
+    """Valida que cada línea tenga un solo lado positivo y que la plantilla balancee.
+
+    Una línea no puede traer débito y crédito positivos a la vez porque
+    ``apply_recurring_template`` representa cada línea con un único ``value``
+    y descartaría uno de los lados (#1492).
+    """
     for index, item in enumerate(items, start=1):
         debit = _template_amount(item.get("debit", 0))
         credit = _template_amount(item.get("credit", 0))
         if debit < 0 or credit < 0:
             raise RecurringJournalError(
                 _("La línea %(line)s de la plantilla no puede tener importes negativos.") % {"line": index}
+            )
+        if debit > 0 and credit > 0:
+            raise RecurringJournalError(
+                _("La línea %(line)s de la plantilla no puede tener débito y crédito positivos a la vez.") % {"line": index}
+            )
+        if debit == 0 and credit == 0:
+            raise RecurringJournalError(
+                _("La línea %(line)s de la plantilla debe tener un débito o un crédito mayor que cero.") % {"line": index}
             )
 
     total_debit = sum((_template_amount(i.get("debit", 0)) for i in items), _template_amount(0))
@@ -134,6 +163,11 @@ def validate_template_balance(items: List[Dict[str, Any]]):
         raise RecurringJournalError(_("La plantilla debe tener al menos dos líneas."))
 
 
+def _validate_persisted_template_lines(items: List[RecurringJournalItem]) -> None:
+    """Revalida líneas ya persistidas antes de aprobar o aplicar (#1492)."""
+    validate_template_balance([{"debit": item.debit, "credit": item.credit} for item in items])
+
+
 def approve_recurring_template(template_id: str, user_id: str):
     """Aprueba una plantilla recurrente."""
     template = database.session.get(RecurringJournalTemplate, template_id, with_for_update=True)
@@ -144,6 +178,9 @@ def approve_recurring_template(template_id: str, user_id: str):
 
     if template.status != "draft":
         raise RecurringJournalError(_("Solo se pueden aprobar plantillas en borrador."))
+
+    items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
+    _validate_persisted_template_lines(items)
 
     template.status = "approved"
     template.docstatus = 1
@@ -186,6 +223,7 @@ def apply_recurring_template(
         raise RecurringJournalError(_("La plantilla recurrente no pertenece a la compañía del cierre."))
     if template.status != "approved":
         raise RecurringJournalError(_("Solo se pueden aplicar plantillas aprobadas."))
+    normalize_recurring_frequency(template.frequency)
     if not template.start_date <= application_date <= template.end_date:
         raise RecurringJournalError(_("La fecha de aplicación está fuera de la vigencia de la plantilla."))
 
@@ -210,6 +248,7 @@ def apply_recurring_template(
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
     if not items:
         raise RecurringJournalError(_("La plantilla aprobada no tiene líneas contables."))
+    _validate_persisted_template_lines(items)
 
     base_currency = database.session.execute(select(Entity.currency).filter_by(code=template.company)).scalar_one_or_none()
     transaction_currency = template.currency or base_currency
