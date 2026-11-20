@@ -52,6 +52,7 @@ from cacao_accounting.database import (
     PettyCashExpense,
     PettyCashReconciliation,
     PettyCashReplenishment,
+    PettyCashReplenishmentExpense,
     PettyCashVoucher,
     Project,
     PurchaseInvoice,
@@ -427,10 +428,16 @@ def petty_cash_open_vouchers_total(petty_cash: PettyCashAccount, as_of_date=None
 
 def petty_cash_pending_replenishment_total(petty_cash: PettyCashAccount, as_of_date=None) -> Decimal:
     """Calcula los gastos posteados aun no incluidos en una reposicion."""
+    associated_expense = (
+        database.select(PettyCashReplenishmentExpense.id)
+        .where(PettyCashReplenishmentExpense.petty_cash_expense_id == PettyCashExpense.id)
+        .exists()
+    )
     query = database.select(database.func.coalesce(database.func.sum(PettyCashExpense.amount), 0)).filter(
         PettyCashExpense.petty_cash_id == petty_cash.id,
         PettyCashExpense.docstatus == 1,
         PettyCashExpense.replenishment_id.is_(None),
+        ~associated_expense,
     )
     if as_of_date is not None:
         query = query.filter(PettyCashExpense.posting_date <= as_of_date)
@@ -1094,6 +1101,18 @@ def create_petty_cash_expense_from_voucher(
     return expense
 
 
+def _petty_cash_replenishment_for_expense(expense: PettyCashExpense) -> PettyCashReplenishment | None:
+    """Resolve a legacy or append-only replenishment association for one expense."""
+    if expense.replenishment_id:
+        return database.session.get(PettyCashReplenishment, expense.replenishment_id)
+    replenishment_id = database.session.execute(
+        database.select(PettyCashReplenishmentExpense.petty_cash_replenishment_id)
+        .where(PettyCashReplenishmentExpense.petty_cash_expense_id == expense.id)
+        .limit(1)
+    ).scalar_one_or_none()
+    return database.session.get(PettyCashReplenishment, replenishment_id) if replenishment_id else None
+
+
 def cancel_petty_cash_expense(
     expense,
     *,
@@ -1109,9 +1128,9 @@ def cancel_petty_cash_expense(
         expense = cast(PettyCashExpense, _lock_row_for_transition(PettyCashExpense, expense.id))
         if expense.docstatus != 1:
             raise ValueError(_("Solo se puede anular un gasto ya posteado."))
-        if expense.replenishment_id:
-            replenishment = database.session.get(PettyCashReplenishment, expense.replenishment_id)
-            if replenishment and replenishment.status == "reembolsado":
+        replenishment = _petty_cash_replenishment_for_expense(expense)
+        if replenishment:
+            if replenishment.status == "reembolsado":
                 raise ValueError(_("No se puede anular un gasto después de reponer la Caja Chica."))
             raise ValueError(_("No se puede anular un gasto reservado en una reposición de Caja Chica."))
         if cancellation_date is not None and hasattr(expense, "posting_date"):
@@ -1451,10 +1470,22 @@ def _post_locked_petty_cash_reconciliation_adjustment(
 
 def petty_cash_replenishment_expenses(replenishment: PettyCashReplenishment) -> list[PettyCashExpense]:
     """Lista los gastos posteados asociados a una solicitud de reposicion."""
+    relation_exists = (
+        database.select(PettyCashReplenishmentExpense.id)
+        .where(
+            PettyCashReplenishmentExpense.petty_cash_expense_id == PettyCashExpense.id,
+            PettyCashReplenishmentExpense.petty_cash_replenishment_id == replenishment.id,
+        )
+        .exists()
+    )
     return list(
         database.session.execute(
             database.select(PettyCashExpense)
-            .filter_by(replenishment_id=replenishment.id, petty_cash_id=replenishment.petty_cash_id, docstatus=1)
+            .where(
+                PettyCashExpense.petty_cash_id == replenishment.petty_cash_id,
+                PettyCashExpense.docstatus == 1,
+                database.or_(PettyCashExpense.replenishment_id == replenishment.id, relation_exists),
+            )
             .order_by(PettyCashExpense.posting_date, PettyCashExpense.document_no)
         ).scalars()
     )
@@ -1490,7 +1521,17 @@ def petty_cash_expenses_available_for_replenishment(petty_cash_id: str, as_of_da
     """
     if not _petty_cash_fund_in_cash_scope(petty_cash_id):
         return []
-    query = database.select(PettyCashExpense).filter_by(petty_cash_id=petty_cash_id, docstatus=1, replenishment_id=None)
+    associated_expense = (
+        database.select(PettyCashReplenishmentExpense.id)
+        .where(PettyCashReplenishmentExpense.petty_cash_expense_id == PettyCashExpense.id)
+        .exists()
+    )
+    query = database.select(PettyCashExpense).where(
+        PettyCashExpense.petty_cash_id == petty_cash_id,
+        PettyCashExpense.docstatus == 1,
+        PettyCashExpense.replenishment_id.is_(None),
+        ~associated_expense,
+    )
     if as_of_date is not None:
         query = query.filter(PettyCashExpense.posting_date <= as_of_date)
     return list(
@@ -1522,13 +1563,22 @@ def create_petty_cash_replenishment(
             .execution_options(populate_existing=True)
         ).scalars()
     )
+    associated_ids = set(
+        database.session.execute(
+            database.select(PettyCashReplenishmentExpense.petty_cash_expense_id).where(
+                PettyCashReplenishmentExpense.petty_cash_expense_id.in_(ids)
+            )
+        ).scalars()
+    )
     if len(expenses) != len(ids) or any(
         expense.company != company
         or expense.petty_cash_id != petty_cash_id
         or expense.docstatus != 1
         or expense.replenishment_id
+        or expense.id in associated_ids
         for expense in expenses
     ):
+        database.session.rollback()
         raise ValueError(_("Uno o mas gastos no estan disponibles para reposición."))
     amount = sum((Decimal(str(expense.amount or 0)) for expense in expenses), Decimal("0"))
     fund = _validate_petty_cash_fund(petty_cash_id, company)
@@ -1544,20 +1594,35 @@ def create_petty_cash_replenishment(
         docstatus=0,
         transaction_currency=fund.currency or _company_currency(company),
     )
-    database.session.add(replenishment)
-    database.session.flush()
-    for expense in expenses:
-        expense.replenishment_id = replenishment.id
     try:
-        assign_document_identifier(
-            document=replenishment,
-            entity_type="petty_cash_replenishment",
-            posting_date_raw=request_date,
-            naming_series_id=None,
-        )
-    except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
-        pass
-    database.session.commit()
+        database.session.add(replenishment)
+        database.session.flush()
+        associations = [
+            PettyCashReplenishmentExpense(
+                company=company,
+                petty_cash_replenishment_id=replenishment.id,
+                petty_cash_expense_id=expense.id,
+            )
+            for expense in expenses
+        ]
+        from cacao_accounting.internal_control_service import petty_cash_replenishment_association
+
+        with petty_cash_replenishment_association(*associations):
+            database.session.add_all(associations)
+            database.session.flush()
+        try:
+            assign_document_identifier(
+                document=replenishment,
+                entity_type="petty_cash_replenishment",
+                posting_date_raw=request_date,
+                naming_series_id=None,
+            )
+        except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
+            pass
+        database.session.commit()
+    except Exception:
+        database.session.rollback()
+        raise
     return replenishment
 
 

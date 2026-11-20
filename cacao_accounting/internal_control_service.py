@@ -32,6 +32,9 @@ _USER_EMAIL_IDENTITY_BACKFILL: ContextVar[frozenset[str]] = ContextVar(
 )
 _APPROVAL_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_approval_transition", default=frozenset())
 _FLOW_TRANSITION: ContextVar[frozenset[int]] = ContextVar("icfr_flow_transition", default=frozenset())
+_PETTY_CASH_REPLENISHMENT_ASSOCIATION: ContextVar[frozenset[int]] = ContextVar(
+    "icfr_petty_cash_replenishment_association", default=frozenset()
+)
 _BANK_RECONCILIATION_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
     "icfr_bank_reconciliation_transition", default=frozenset()
 )
@@ -251,6 +254,17 @@ def flow_evidence_transition(*rows: Any) -> Iterator[None]:
         yield
     finally:
         _FLOW_TRANSITION.reset(token)
+
+
+@contextmanager
+def petty_cash_replenishment_association(*rows: Any) -> Iterator[None]:
+    """Authorize the service to append petty-cash expense association evidence."""
+    allowed = _PETTY_CASH_REPLENISHMENT_ASSOCIATION.get().union(id(row) for row in rows)
+    token = _PETTY_CASH_REPLENISHMENT_ASSOCIATION.set(frozenset(allowed))
+    try:
+        yield
+    finally:
+        _PETTY_CASH_REPLENISHMENT_ASSOCIATION.reset(token)
 
 
 @contextmanager
@@ -497,6 +511,12 @@ def _guard_evidence_flush(session: Session) -> None:
     """
     if not _structural_enabled():
         return
+    for target in session.new:
+        if (
+            target.__table__.name == "petty_cash_replenishment_expense"
+            and id(target) not in _PETTY_CASH_REPLENISHMENT_ASSOCIATION.get()
+        ):
+            raise ValueError(_("La relación de reposición requiere el servicio autorizado."))
     for target in set(session.dirty).union(session.deleted):
         table = target.__table__.name
         if table == "balance_confirmation":
@@ -703,6 +723,11 @@ def _is_valid_reversal_line(session: Session, target: Any, parent: Any) -> bool:
 def _guard_new_lines(session: Session) -> None:
     """Reject additional documentary lines after their header is posted."""
     for target in session.new:
+        if (
+            target.__table__.name == "petty_cash_replenishment_expense"
+            and id(target) in _PETTY_CASH_REPLENISHMENT_ASSOCIATION.get()
+        ):
+            continue
         if _audited_document(target):
             continue
         for parent_class, parent_id in _line_parents(target):

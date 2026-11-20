@@ -3369,6 +3369,27 @@ class PettyCashReplenishment(database.Model, DocBase):  # type: ignore[name-defi
     )
 
 
+class PettyCashReplenishmentExpense(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Append-only association between a posted petty-cash expense and its replenishment."""
+
+    __tablename__ = "petty_cash_replenishment_expense"
+    __table_args__ = (database.UniqueConstraint("petty_cash_expense_id", name="uq_pcre_expense"),)
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    petty_cash_replenishment_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PETTY_CASH_REPLENISHMENT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    petty_cash_expense_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PETTY_CASH_EXPENSE_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+    )
+
+
 class BankAccountNumberingConfig(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Configuracion de numeracion por tipo de transaccion para una cuenta bancaria.
 
