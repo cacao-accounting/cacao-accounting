@@ -36,6 +36,7 @@ from cacao_accounting.audit_trail_service import (
     log_balance_confirmation_event,
     format_document_timeline,
 )
+from cacao_accounting.internal_control_service import balance_confirmation_response_transition
 from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
 
@@ -413,7 +414,9 @@ def enviar_confirmacion(confirmation_id: str):
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
-        body = _("""Estimado cliente/proveedor,
+        body = (
+            _(
+                """Estimado cliente/proveedor,
 
 La empresa %(company)s le solicita la confirmación externa del saldo de su cuenta al %(cutoff_date)s.
 
@@ -425,7 +428,10 @@ Para ver el detalle de los documentos y responder a esta solicitud, ingrese al s
 
 Atentamente,
 %(company)s
-""") % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
+"""
+            )
+            % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
+        )
         try:
             send_email(
                 to_email=inv.email,
@@ -503,7 +509,9 @@ def reenviar_confirmacion(confirmation_id: str):
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
-        body = _("""Estimado cliente/proveedor,
+        body = (
+            _(
+                """Estimado cliente/proveedor,
 
 Le reenviamos la solicitud de confirmación de saldo de %(company)s al %(cutoff_date)s.
 
@@ -515,7 +523,10 @@ Para ver el detalle de los documentos y responder a esta solicitud, ingrese al s
 
 Atentamente,
 %(company)s
-""") % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
+"""
+            )
+            % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
+        )
         try:
             send_email(
                 to_email=inv.email,
@@ -856,55 +867,58 @@ def public_confirm_balance_respond(token: str):
     # registradas como "primera respuesta válida".
     response_status = "confirmed" if response_type == "confirmed" else "disputed"
     user_agent = request.user_agent.string if request.user_agent else None
-    result = database.session.execute(
-        update(BalanceConfirmation)
-        .where(
-            BalanceConfirmation.id == confirmation.id,
-            BalanceConfirmation.status.in_(("draft", "sent", "viewed")),
-            _active_invitation_exists(confirmation.id, invitation.id, token_hash),
-        )
-        .values(
-            status=response_status,
-            responded_at=_utcnow(),
-            response_type=response_type,
-            response_comment=response_comment,
-            respondent_first_name=first_name,
-            respondent_last_name=last_name,
-            respondent_email=invitation.email,
-            respondent_ip=request.remote_addr,
-            respondent_user_agent=user_agent[:512] if user_agent else None,
-        )
-        .execution_options(synchronize_session="fetch")
-    )
-    if getattr(result, "rowcount", 0) == 0:
-        database.session.rollback()
-        flash(_("La confirmación ya fue respondida o ya no se encuentra disponible."), "warning")
-        return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
-
-    # Cerrar la invitación actual y todas las demás asociadas a la misma confirmación
-    invitation.status = "responded"
-    other_invitations = (
-        database.session.execute(
-            select(BalanceConfirmationInvitation).where(
-                BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id,
-                BalanceConfirmationInvitation.id != invitation.id,
+    with balance_confirmation_response_transition(str(confirmation.id)):
+        result = database.session.execute(
+            update(BalanceConfirmation)
+            .where(
+                BalanceConfirmation.id == confirmation.id,
+                BalanceConfirmation.status.in_(("draft", "sent", "viewed")),
+                BalanceConfirmation.response_type.is_(None),
+                BalanceConfirmation.responded_at.is_(None),
+                _active_invitation_exists(confirmation.id, invitation.id, token_hash),
             )
+            .values(
+                status=response_status,
+                responded_at=_utcnow(),
+                response_type=response_type,
+                response_comment=response_comment,
+                respondent_first_name=first_name,
+                respondent_last_name=last_name,
+                respondent_email=invitation.email,
+                respondent_ip=request.remote_addr,
+                respondent_user_agent=user_agent[:512] if user_agent else None,
+            )
+            .execution_options(synchronize_session="fetch")
         )
-        .scalars()
-        .all()
-    )
-    for o_inv in other_invitations:
-        o_inv.status = "cancelled"  # closed because another person responded first
+        if getattr(result, "rowcount", 0) == 0:
+            database.session.rollback()
+            flash(_("La confirmación ya fue respondida o ya no se encuentra disponible."), "warning")
+            return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
-    action_event = "balance_confirmation_confirmed" if response_type == "confirmed" else "balance_confirmation_disputed"
-    log_balance_confirmation_event(
-        confirmation,
-        action_event,
-        comment=_("Confirmación respondida como %(response_type)s. Comentario: %(comment)s.")
-        % {"response_type": response_type.upper(), "comment": response_comment or _("Sin comentario")},
-    )
+        # Cerrar la invitación actual y todas las demás asociadas a la misma confirmación
+        invitation.status = "responded"
+        other_invitations = (
+            database.session.execute(
+                select(BalanceConfirmationInvitation).where(
+                    BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id,
+                    BalanceConfirmationInvitation.id != invitation.id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for o_inv in other_invitations:
+            o_inv.status = "cancelled"  # closed because another person responded first
 
-    database.session.commit()
+        action_event = "balance_confirmation_confirmed" if response_type == "confirmed" else "balance_confirmation_disputed"
+        log_balance_confirmation_event(
+            confirmation,
+            action_event,
+            comment=_("Confirmación respondida como %(response_type)s. Comentario: %(comment)s.")
+            % {"response_type": response_type.upper(), "comment": response_comment or _("Sin comentario")},
+        )
+
+        database.session.commit()
 
     # Limpiar sesión de verificación
     session.pop(session_key, None)

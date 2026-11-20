@@ -39,7 +39,37 @@ _CONFIG_VALUE_TRANSITION: ContextVar[frozenset[str]] = ContextVar("icfr_config_v
 _AUDIT_TRAIL_INSERT_ACTIVE: ContextVar[bool] = ContextVar("icfr_audit_trail_insert_active", default=False)
 _ORM_FLUSH_ACTIVE: ContextVar[bool] = ContextVar("icfr_orm_flush_active", default=False)
 _LEDGER_CANCELLATION_ACTIVE: ContextVar[tuple[str, str] | None] = ContextVar("icfr_ledger_cancellation_active", default=None)
+_BALANCE_CONFIRMATION_RESPONSE_TRANSITION: ContextVar[frozenset[str]] = ContextVar(
+    "icfr_balance_confirmation_response_transition", default=frozenset()
+)
 _POSTED_DOCUMENTS_IN_TRANSACTION = "icfr_posted_documents"
+BALANCE_CONFIRMATION_SNAPSHOT_FIELDS = frozenset(
+    {
+        "id",
+        "created",
+        "created_by",
+        "company",
+        "document_no",
+        "document_type",
+        "party_type",
+        "party_id",
+        "cutoff_date",
+        "snapshot_json",
+        "snapshot_hash",
+    }
+)
+BALANCE_CONFIRMATION_RESPONSE_FIELDS = frozenset(
+    {
+        "responded_at",
+        "response_type",
+        "response_comment",
+        "respondent_first_name",
+        "respondent_last_name",
+        "respondent_email",
+        "respondent_ip",
+        "respondent_user_agent",
+    }
+)
 EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log", "external_counter_audit_log"})
 LEDGER_TABLES = frozenset(
     {
@@ -230,6 +260,19 @@ def bank_reconciliation_transition(*rows: Any) -> Iterator[None]:
         yield
     finally:
         _BANK_RECONCILIATION_TRANSITION.reset(token)
+
+
+@contextmanager
+def balance_confirmation_response_transition(confirmation_id: str) -> Iterator[None]:
+    """Authorize the first external response for one balance confirmation."""
+    if not confirmation_id:
+        raise ValueError("A balance confirmation response requires a document ID")
+    allowed = _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.get().union({str(confirmation_id)})
+    token = _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.set(frozenset(allowed))
+    try:
+        yield
+    finally:
+        _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.reset(token)
 
 
 def _enabled() -> bool:
@@ -450,10 +493,16 @@ def _guard_evidence_flush(session: Session) -> None:
     modo; aquí se cubren las bitácoras de auditoría y los vínculos del flujo
     documental, que solo tenían la capa Cloud de ``_guard_flush``.
     """
-    if _enabled() or not _structural_enabled():
+    if not _structural_enabled():
         return
     for target in set(session.dirty).union(session.deleted):
         table = target.__table__.name
+        if table == "balance_confirmation":
+            changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
+            _guard_balance_confirmation_flush(session, target, changed, target in session.deleted)
+            continue
+        if _enabled():
+            continue
         if table not in EVIDENCE_TABLES and table not in FLOW_EVIDENCE_TABLES:
             continue
         changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
@@ -566,6 +615,38 @@ def _guard_authorized_transition(target: Any, table: str, changed: set[str]) -> 
     if table in FLOW_EVIDENCE_TRANSITIONS and changed.intersection(FLOW_EVIDENCE_TRANSITIONS[table]):
         if id(target) not in _FLOW_TRANSITION.get():
             raise ValueError(_("Las transiciones documentales requieren el servicio autorizado."))
+
+
+def _guard_balance_confirmation_flush(session: Session, target: Any, changed: set[str], deleted: bool) -> None:
+    """Preserve confirmation snapshots and allow a single authorized response."""
+    if deleted or changed.intersection(BALANCE_CONFIRMATION_SNAPSHOT_FIELDS):
+        raise ValueError(_("La evidencia de confirmación de saldos es inmutable."))
+    response_fields_changed = bool(changed.intersection(BALANCE_CONFIRMATION_RESPONSE_FIELDS))
+    terminal_response = "status" in changed and target.status in {"confirmed", "disputed"}
+    if not response_fields_changed and not terminal_response:
+        return
+    if str(target.id) not in _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.get():
+        raise ValueError(_("La respuesta externa requiere el servicio autorizado."))
+    if (
+        target.response_type not in {"confirmed", "disputed"}
+        or target.status != target.response_type
+        or target.responded_at is None
+    ):
+        raise ValueError(_("La respuesta externa debe registrarse completa en una sola transición."))
+    if not _balance_confirmation_response_is_new(session.connection(), str(target.id)):
+        raise ValueError(_("La respuesta externa ya está registrada y no se puede reescribir."))
+
+
+def _balance_confirmation_response_is_new(connection: Any, confirmation_id: str) -> bool:
+    """Check that no response evidence has already been stored for this row."""
+    from cacao_accounting.database import BalanceConfirmation
+
+    previous = connection.execute(
+        select(BalanceConfirmation.response_type, BalanceConfirmation.responded_at).where(
+            BalanceConfirmation.id == confirmation_id
+        )
+    ).first()
+    return previous is not None and previous.response_type is None and previous.responded_at is None
 
 
 def _guard_flow_evidence(target: Any, table: str, changed: set[str], deleted: bool) -> None:
@@ -716,7 +797,9 @@ POLYMORPHIC_EVIDENCE_TABLES = frozenset({"document_tax_summary", "document_tax_l
 # (Desktop assumes the same guarantees as Cloud; these structural guards
 # are independent of the Cloud INTERNAL_CONTROLS process-wide workflow
 # controls, which additionally demand audited service scopes).
-STRUCTURAL_EVIDENCE_TABLES = frozenset(EVIDENCE_TABLES.union(LEDGER_TABLES, FLOW_EVIDENCE_TABLES, POLYMORPHIC_EVIDENCE_TABLES))
+STRUCTURAL_EVIDENCE_TABLES = frozenset(
+    EVIDENCE_TABLES.union(LEDGER_TABLES, FLOW_EVIDENCE_TABLES, POLYMORPHIC_EVIDENCE_TABLES, {"balance_confirmation"})
+)
 
 
 def _field_values(target: Any, key: str) -> tuple[Any, ...]:
@@ -870,6 +953,9 @@ def _guard_bulk_insert_statement(
 
 def _guard_bulk_update_statement(connection: Any, clause: Any, multiparams: Any, params: Any, table_name: str | None) -> None:
     """Protect evidence writes and posted documents for bulk update/delete."""
+    if table_name == "balance_confirmation":
+        _guard_balance_confirmation_statement(connection, clause, multiparams, params)
+        return
     if table_name in POLYMORPHIC_EVIDENCE_TABLES:
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
     if table_name in LEDGER_TABLES:
@@ -885,6 +971,52 @@ def _guard_bulk_update_statement(connection: Any, clause: Any, multiparams: Any,
 def _is_financial_runtime_table(table_name: str | None) -> bool:
     """Return whether a table is a document header or its financial detail."""
     return table_name in _document_parent_tables() or table_name in _financial_child_tables()
+
+
+def _guard_balance_confirmation_statement(connection: Any, clause: Any, multiparams: Any, params: Any) -> None:
+    """Reject bulk deletion and direct rewrites of balance confirmation evidence."""
+    from cacao_accounting.database import BalanceConfirmation
+
+    if isinstance(clause, Delete):
+        raise ValueError(_("La evidencia de confirmación de saldos no se elimina."))
+    changed = _statement_changed_values(clause, multiparams, params, BalanceConfirmation.__table__)
+    if changed.keys() & BALANCE_CONFIRMATION_SNAPSHOT_FIELDS:
+        raise ValueError(_("La instantánea de confirmación de saldos es inmutable."))
+    response_fields_changed = bool(changed.keys() & BALANCE_CONFIRMATION_RESPONSE_FIELDS)
+    terminal_response = changed.get("status") in {"confirmed", "disputed"}
+    if not response_fields_changed and not terminal_response:
+        return
+    authorized_ids = _BALANCE_CONFIRMATION_RESPONSE_TRANSITION.get()
+    authorized_id = next(
+        (
+            candidate
+            for candidate in authorized_ids
+            if _balance_confirmation_statement_targets(clause, candidate)
+            and _balance_confirmation_response_is_new(connection, candidate)
+        ),
+        None,
+    )
+    if (
+        authorized_id is None
+        or not changed.keys() <= BALANCE_CONFIRMATION_RESPONSE_FIELDS.union({"status"})
+        or changed.get("response_type") not in {"confirmed", "disputed"}
+        or changed.get("responded_at") is None
+        or changed.get("status") != changed.get("response_type")
+        or not _balance_confirmation_statement_targets(clause, authorized_id)
+        or not _balance_confirmation_response_is_new(connection, authorized_id)
+    ):
+        raise ValueError(_("La respuesta externa requiere una transición autorizada e inmutable."))
+
+
+def _balance_confirmation_statement_targets(clause: Any, confirmation_id: str) -> bool:
+    """Require the response UPDATE to target its authorized confirmation ID."""
+    return any(
+        isinstance(criterion, BinaryExpression)
+        and getattr(criterion.left, "key", None) == "id"
+        and criterion.operator is operators.eq
+        and str(getattr(criterion.right, "value", "")) == confirmation_id
+        for criterion in getattr(clause, "_where_criteria", ())
+    )
 
 
 def _guard_bulk_insert(connection: Any, clause: Insert, multiparams: Any, params: Any, table_name: str | None) -> None:
