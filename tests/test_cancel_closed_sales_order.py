@@ -41,11 +41,11 @@ def test_cancel_orden_cerrada_es_rechazada(app):
 def test_restaurar_reserva_no_restaura_de_orden_cerrada(app):
     """Restaurar reserva conserva el bin sin cambios si la orden está cerrada (#1820)."""
     with app.app_context():
-        database.session.add(UOM(code="UND", name="Unidad"))
+        database.session.add(UOM(code="UND1820", name="Unidad 1820"))
         database.session.flush()
         database.session.add_all(
             [
-                Item(code="ART-1820", name="Articulo 1820", item_type="goods", is_stock_item=True, default_uom="UND"),
+                Item(code="ART-1820", name="Articulo 1820", item_type="goods", is_stock_item=True, default_uom="UND1820"),
                 Warehouse(code="BOD-1820", name="Bodega 1820", company="cacao"),
             ]
         )
