@@ -20,12 +20,14 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
+    DocumentRelation,
     Entity,
     Item,
     Modules,
     Roles,
     RolesAccess,
     RolesUser,
+    SalesInvoice,
     SalesOrder,
     SalesOrderItem,
     UOM,
@@ -33,7 +35,7 @@ from cacao_accounting.database import (
     UserCompanyAccess,
     database,
 )
-from cacao_accounting.document_flow.service import DocumentFlowError, close_line_balance
+from cacao_accounting.document_flow.service import DocumentFlowError, close_document_balances, close_line_balance
 
 CLOSE_URL = "/api/document-flow/close-line"
 
@@ -234,3 +236,42 @@ def test_close_line_accepts_its_own_line(close_line_scenario):
 
     assert response.status_code == 200
     assert Decimal(str(response.get_json()["state"]["closed_qty"])) == Decimal("10")
+
+
+def test_close_document_ignores_draft_target_reservations(close_line_scenario):
+    """Document-wide and per-line closure use the same pending-quantity rule."""
+    app, ids = close_line_scenario
+    with app.app_context():
+        order = database.session.get(SalesOrder, ids["alpha_order"])
+        assert order is not None
+        draft_invoice = SalesInvoice(company="alpha", posting_date=date(2026, 5, 11), docstatus=0)
+        database.session.add(draft_invoice)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="sales_order",
+                source_id=order.id,
+                source_item_id=ids["alpha_line"],
+                target_type="sales_invoice",
+                target_id=draft_invoice.id,
+                target_item_id="",
+                company="alpha",
+                qty=Decimal("10"),
+                qty_in_base_uom=Decimal("10"),
+                uom="Unidad",
+                relation_type="billing",
+                status="active",
+            )
+        )
+        database.session.flush()
+
+        closed = close_document_balances(
+            source_type="sales_order",
+            source_id=order.id,
+            target_type="sales_invoice",
+            reason="Saldo no facturable cerrado",
+        )
+
+        assert len(closed) == 1
+        assert closed[0]["source_item_id"] == ids["alpha_line"]
+        assert Decimal(str(closed[0]["closed_qty"])) == Decimal("10")

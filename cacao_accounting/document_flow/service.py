@@ -912,7 +912,7 @@ def close_document_balances(
     """
     closed: list[dict[str, Any]] = []
     for item in get_document_items(source_type, source_id):
-        available = pending_qty(source_type, source_id, item.id, target_type)
+        available = pending_qty(source_type, source_id, item.id, target_type, exclude_draft_targets=True)
         if available > 0:
             closed.append(
                 close_line_balance(
