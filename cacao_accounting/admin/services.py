@@ -148,8 +148,8 @@ def _is_admin_state(usuario: User, *, active: bool, classification: str | None, 
     return admin_role_id in vigentes
 
 
-def _active_admin_count(exclude_user_id: str | None = None) -> int:
-    """Cuenta los administradores activos, opcionalmente excluyendo uno."""
+def _active_admin_filter():
+    """Condición SQL para identificar usuarios con privilegios administrativos."""
     admin_role_id = _active_admin_role_id()
     condiciones = [User.classification == "admin"]
     if admin_role_id:
@@ -161,9 +161,42 @@ def _active_admin_count(exclude_user_id: str | None = None) -> int:
                 )
             )
         )
+    return database.or_(*condiciones)
+
+
+def _ensure_write_intent() -> None:
+    """Reserva intención de escritura en SQLite para serializar decisiones críticas."""
+    if database.engine.dialect.name != "sqlite":
+        return
+    connection = database.session.connection()
+    raw_connection = getattr(connection.connection, "driver_connection", None)
+    if raw_connection is not None and not raw_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
+def _lock_last_admin_users(target_user_id: str | None = None) -> None:
+    """Serializa la transición que podría dejar el sistema sin administradores."""
+    _ensure_write_intent()
+    if target_user_id:
+        database.session.execute(
+            database.select(User.id)
+            .where(User.id == target_user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+    database.session.execute(
+        database.select(User.id)
+        .where(User.active.is_(True), _active_admin_filter())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalars().all()
+
+
+def _active_admin_count(exclude_user_id: str | None = None) -> int:
+    """Cuenta los administradores activos, opcionalmente excluyendo uno."""
     consulta = database.select(database.func.count(User.id)).where(
         User.active.is_(True),
-        database.or_(*condiciones),
+        _active_admin_filter(),
     )
     if exclude_user_id:
         consulta = consulta.where(User.id != exclude_user_id)
