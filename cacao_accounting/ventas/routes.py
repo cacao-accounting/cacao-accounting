@@ -1120,13 +1120,13 @@ def ventas_orden_venta_nuevo():
         (str(p[0].id), p[0].name)
         for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
-    from_order_id = request.args.get("from_order") or request.form.get("from_order")
     from_request_id = request.args.get("from_request") or request.form.get("from_request")
     from_quotation_id = request.args.get("from_quotation") or request.form.get("from_quotation")
-    orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
     solicitud_origen = database.session.get(SalesRequest, from_request_id) if from_request_id else None
     cotizacion_origen = database.session.get(SalesQuotation, from_quotation_id) if from_quotation_id else None
-    for origen in (orden_origen, solicitud_origen, cotizacion_origen):
+    # #2045: el parámetro "from_order" no tiene consumidor en la ruta de alta;
+    # se retira su lectura y el contexto asociado.
+    for origen in (solicitud_origen, cotizacion_origen):
         if origen is not None:
             _require_sales_document_access(origen, "consultar")
     items_disponibles = [
@@ -1154,10 +1154,8 @@ def ventas_orden_venta_nuevo():
         "ventas/orden_venta_nuevo.html",
         form=formulario,
         titulo=titulo,
-        orden_origen=orden_origen,
         solicitud_origen=solicitud_origen,
         cotizacion_origen=cotizacion_origen,
-        from_order_id=from_order_id,
         from_request_id=from_request_id,
         from_quotation_id=from_quotation_id,
         items_disponibles=items_disponibles,
