@@ -155,6 +155,21 @@ def _legacy_chain_head(connection: Any) -> str | None:
     return tail_hash
 
 
+def _validate_chain_head(connection: Any, head_hash: str) -> None:
+    """Reject a stored pointer that is missing or no longer terminal."""
+    head_rows = (
+        connection.execute(database.select(AuditTrail.id).where(AuditTrail.payload_hash == head_hash).limit(2)).scalars().all()
+    )
+    if len(head_rows) != 1:
+        raise RuntimeError("La cabeza de la cadena de auditoría no identifica una fila única.")
+    successor = AuditTrail.__table__.alias("audit_chain_successor")
+    successors = connection.execute(
+        database.select(successor.c.id).where(successor.c.prev_hash == head_hash).limit(1)
+    ).scalar_one_or_none()
+    if successors is not None:
+        raise RuntimeError("La cabeza de la cadena de auditoría ya tiene una fila sucesora.")
+
+
 def _serialize_chain_head(connection: Any) -> None:
     """Create and lock the mutable singleton that tracks the audit-chain head."""
     dialect = getattr(getattr(connection, "dialect", None), "name", "")
@@ -179,6 +194,8 @@ def _serialize_chain_head(connection: Any) -> None:
         legacy_head = _legacy_chain_head(connection)
         if legacy_head is not None:
             _set_chain_head(connection, legacy_head)
+    else:
+        _validate_chain_head(connection, head)
 
 
 def _set_chain_head(connection: Any, head_hash: str) -> None:
