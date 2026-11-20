@@ -141,6 +141,15 @@ describe("dashboard", function () {
 
     assert.notStrictEqual(firstKey, secondKey);
   });
+
+  it("uses the customer identity to distinguish rows with the same visible name", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+
+    const firstKey = dashboard.rowKey({ customer_id: "CUSTOMER-1", name: "Acme SA" });
+    const secondKey = dashboard.rowKey({ customer_id: "CUSTOMER-2", name: "Acme SA" });
+
+    assert.notStrictEqual(firstKey, secondKey);
+  });
 });
 
   it("preserves sub-cent stock quantities in the inventory table", function () {

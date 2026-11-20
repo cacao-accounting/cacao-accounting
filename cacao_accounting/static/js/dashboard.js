@@ -189,6 +189,7 @@
       rowKey(row) {
         if (row.document_no) return `document:${row.document_no}`;
         if (row.item_code) return `item:${row.item_code}:${row.warehouse || ''}`;
+        if (row.customer_id) return `customer:${row.customer_id}`;
         if (row.name) return `name:${row.name}`;
         if (row.label) return `label:${row.label}`;
         return JSON.stringify(row);

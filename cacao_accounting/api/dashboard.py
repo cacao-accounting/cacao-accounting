@@ -365,7 +365,9 @@ def get_inventory_data(
     bins = database.session.query(StockBin).filter_by(company=company)
     inventory_value = Decimal(str(bins.with_entities(func.sum(StockBin.stock_value)).scalar() or 0))
     active_warehouses = database.session.query(Warehouse).filter_by(company=company, is_active=True).count()
-    stocked_items = bins.filter(StockBin.actual_qty != 0).count()
+    stocked_items = (
+        bins.filter(StockBin.actual_qty != 0).with_entities(database.func.count(StockBin.item_code.distinct())).scalar() or 0
+    )
     movements = _stock_movements_query(company, start_date, end_date).count()
 
     return {
@@ -718,14 +720,26 @@ def _top_customers(
         _document_query(SalesInvoice, company, start_date, end_date)
         .filter_by(docstatus=1)
         .with_entities(
-            SalesInvoice.customer_name,
+            func.max(SalesInvoice.customer_id).label("customer_id"),
+            func.max(SalesInvoice.customer_name).label("customer_name"),
             func.sum(_signed_document_expression(SalesInvoice)).label("total"),
         )
-        .group_by(SalesInvoice.customer_name)
-        .order_by(func.sum(_signed_document_expression(SalesInvoice)).desc())
+        .group_by(func.coalesce(SalesInvoice.customer_id, SalesInvoice.customer_name))
+        .order_by(
+            func.sum(_signed_document_expression(SalesInvoice)).desc(),
+            func.coalesce(SalesInvoice.customer_id, SalesInvoice.customer_name).asc(),
+        )
         .limit(5)
     )
-    return [{"name": row.customer_name or _("Cliente"), "total": _numeric(row.total), "currency": currency} for row in query]
+    return [
+        {
+            "customer_id": row.customer_id,
+            "name": row.customer_name or _("Cliente"),
+            "total": _numeric(row.total),
+            "currency": currency,
+        }
+        for row in query
+    ]
 
 
 def _recent_sales_invoices(
