@@ -445,7 +445,7 @@ def _allocate_invoice_lines(
 ) -> list[PurchaseInvoiceReceiptAllocation]:
     """Allocate every pending invoice line against the remaining receipt quantities."""
     allocations: list[PurchaseInvoiceReceiptAllocation] = []
-    for invoice_item in _invoice_items(invoice.id):
+    for invoice_item in _lock_invoice_items(invoice.id):
         remaining_invoice_qty = _item_qty_in_base_uom(invoice_item) - _allocated_invoice_qty(invoice_item.id)
         if remaining_invoice_qty <= 0:
             continue
@@ -483,6 +483,9 @@ def allocate_purchase_invoice_receipt_lines(
     allocations: list[PurchaseInvoiceReceiptAllocation] = []
     for invoice in invoices:
         _assert_same_transaction_currency(invoice, receipt)
+        from cacao_accounting.document_flow.service import lock_document_flow_document
+
+        lock_document_flow_document("purchase_invoice", invoice.id)
         allocations.extend(_allocate_invoice_lines(receipt, invoice, receipt_items))
     database.session.flush()
     return allocations
@@ -786,6 +789,19 @@ def _lock_receipt_items(receipt_id: str) -> list[PurchaseReceiptItem]:
         database.session.execute(
             select(PurchaseReceiptItem)
             .where(PurchaseReceiptItem.purchase_receipt_id == receipt_id, PurchaseReceiptItem.is_superseded.is_(False))
+            .with_for_update()
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _lock_invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
+    """Carga y bloquea líneas de factura durante la asignación (#1689)."""
+    return list(
+        database.session.execute(
+            select(PurchaseInvoiceItem)
+            .where(PurchaseInvoiceItem.purchase_invoice_id == invoice_id, PurchaseInvoiceItem.is_superseded.is_(False))
             .with_for_update()
         )
         .scalars()
