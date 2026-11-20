@@ -153,7 +153,17 @@ def _crear_app():
             grand_total=200,
             transaction_currency="NIO",
         )
-        database.session.add_all([pago, factura_sin_gl])
+        factura_usd_sin_gl = SalesInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            customer_id=cliente_id,
+            customer_name="Cliente",
+            grand_total=200,
+            transaction_currency="USD",
+            exchange_rate=Decimal("35"),
+        )
+        database.session.add_all([pago, factura_sin_gl, factura_usd_sin_gl])
         database.session.flush()
         for libro, importe in ((libro_nio, Decimal("80")), (libro_usd, Decimal("20"))):
             database.session.add(
@@ -176,6 +186,7 @@ def _crear_app():
             "usd": libro_usd.id,
             "factura": factura.id,
             "factura_sin_gl": factura_sin_gl.id,
+            "factura_usd_sin_gl": factura_usd_sin_gl.id,
             "pago": pago.id,
             "cliente": cliente_id,
         }
@@ -299,6 +310,62 @@ def test_apertura_sintetica_sin_tasa_bloquea_el_registro():
                     FECHA,
                 )
             database.session.rollback()
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_sin_gl_usa_la_tasa_del_documento():
+    """Sin GL ni tasas registradas, el libro funcional usa la tasa histórica del documento."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            factura = database.session.get(SalesInvoice, ids["factura_usd_sin_gl"])
+            apertura, _cache, nuevas = _resolve_application_target_item(
+                "cacao",
+                factura,
+                "sales_invoice",
+                "USD",
+                "customer",
+                ids["cliente"],
+                "AR",
+                Decimal("200"),
+                FECHA,
+            )
+            database.session.flush()
+
+            assert nuevas == [apertura]
+            por_libro = _valoracion_por_libro(apertura)
+            assert por_libro[ids["nio"]] == Decimal("7000")
+            assert por_libro[ids["usd"]] == Decimal("200")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_sin_tasa_de_documento_bloquea_el_registro():
+    """Sin GL, sin tasas y sin tasa histórica no se valoriza 1:1 contra el libro funcional."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            factura = database.session.get(SalesInvoice, ids["factura_usd_sin_gl"])
+            factura.exchange_rate = None
+            with pytest.raises(PostingError):
+                _resolve_application_target_item(
+                    "cacao",
+                    factura,
+                    "sales_invoice",
+                    "USD",
+                    "customer",
+                    ids["cliente"],
+                    "AR",
+                    Decimal("200"),
+                    FECHA,
+                )
+            database.session.rollback()
+            assert database.session.execute(database.select(ARAPLedgerBookEntry.id)).scalar_one_or_none() is None
     finally:
         with application.app_context():
             database.session.remove()

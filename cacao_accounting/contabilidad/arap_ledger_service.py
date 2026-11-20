@@ -172,8 +172,14 @@ def _add_book_entry(
     database.session.add(row)
 
 
-def _add_synthetic_opening_books(movement: ARAPLedgerEntry, party_id: str | None) -> None:
-    """Valora una apertura sintética en cada libro activo de la compañía."""
+def _add_synthetic_opening_books(movement: ARAPLedgerEntry, party_id: str | None, fallback_rate: Decimal) -> None:
+    """Valora una apertura sintética en cada libro activo de la compañía.
+
+    ``fallback_rate`` es la tasa histórica del documento o del pago que origina
+    la apertura. Se usa solo cuando no hay líneas GL ni tasas registradas hacia
+    el libro de la moneda funcional; pasar una tasa fija de 1 valoraría erróneamente
+    1:1 una operación en moneda extranjera (#2118).
+    """
     entries = (
         database.session.execute(
             select(GLEntry).where(
@@ -199,7 +205,7 @@ def _add_synthetic_opening_books(movement: ARAPLedgerEntry, party_id: str | None
             movement.currency,
             str(book.currency or movement.currency),
             movement.posting_date,
-            Decimal("1"),
+            fallback_rate,
         )
         _add_book_entry(
             movement,
@@ -941,7 +947,7 @@ def _resolve_application_target_item(
                 voucher_id=str(document.id),
             ),
         )
-        _add_synthetic_opening_books(target_opening, party_id)
+        _add_synthetic_opening_books(target_opening, party_id, _decimal(getattr(document, "exchange_rate", None)))
         new_movements.append(target_opening)
     if target_cache is None:
         target_cache = _cache_for_movement(target_opening)
@@ -1017,7 +1023,7 @@ def _resolve_application_payment_item(
                 voucher_id=payment_id,
             ),
         )
-        _add_synthetic_opening_books(payment_opening, party_id)
+        _add_synthetic_opening_books(payment_opening, party_id, _decimal(getattr(payment, "exchange_rate", None)))
         new_movements.append(payment_opening)
     if payment_cache is None:
         payment_cache = _cache_for_movement(payment_opening)
