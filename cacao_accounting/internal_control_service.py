@@ -38,6 +38,7 @@ _BANK_RECONCILIATION_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
 _CONFIG_VALUE_TRANSITION: ContextVar[frozenset[str]] = ContextVar("icfr_config_value_transition", default=frozenset())
 _AUDIT_TRAIL_INSERT_ACTIVE: ContextVar[bool] = ContextVar("icfr_audit_trail_insert_active", default=False)
 _ORM_FLUSH_ACTIVE: ContextVar[bool] = ContextVar("icfr_orm_flush_active", default=False)
+_LEDGER_CANCELLATION_ACTIVE: ContextVar[tuple[str, str] | None] = ContextVar("icfr_ledger_cancellation_active", default=None)
 _POSTED_DOCUMENTS_IN_TRANSACTION = "icfr_posted_documents"
 EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log"})
 LEDGER_TABLES = frozenset(
@@ -142,6 +143,14 @@ def audit_actor(user_id: str | None, name: str) -> Iterator[None]:
         yield
     finally:
         _ACTOR.reset(token)
+
+
+def _ledger_cancellation_is_authorized(target: Any) -> bool:
+    """Check whether the private cancellation scope matches this exact ledger row."""
+    return _LEDGER_CANCELLATION_ACTIVE.get() == (
+        str(getattr(target, "voucher_type", "")),
+        str(getattr(target, "voucher_id", "")),
+    )
 
 
 @contextmanager
@@ -625,6 +634,8 @@ def _is_posted_advance_reference(target: Any, parent: Any) -> bool:
 
 def _guard_line(session: Session, target: Any, changed: set[str]) -> None:
     """Protect existing financial lines through their mapped parent foreign key."""
+    if target.__table__.name in LEDGER_TABLES and "is_cancelled" in changed and not _ledger_cancellation_is_authorized(target):
+        raise ValueError(_("La cancelación del ledger debe realizarse mediante el servicio auditado."))
     if _audited_document(target):
         return
     if changed.issubset(MUTABLE_STATE) and target not in session.deleted:

@@ -395,44 +395,51 @@ class ExchangeRevaluationService:
 
         reversal_period_id, reversal_fiscal_year_id = self._period_ids(str(run.company), effective_reversal_date)
         reversals: list[GLEntry] = []
-        for entry in originals:
-            reversals.append(
-                GLEntry(
-                    posting_date=effective_reversal_date,
-                    company=entry.company,
-                    ledger_id=entry.ledger_id,
-                    account_id=entry.account_id,
-                    account_code=entry.account_code,
-                    debit=self._decimal(entry.credit),
-                    credit=self._decimal(entry.debit),
-                    debit_in_account_currency=self._decimal(entry.credit_in_account_currency),
-                    credit_in_account_currency=self._decimal(entry.debit_in_account_currency),
-                    account_currency=entry.account_currency,
-                    company_currency=entry.company_currency,
-                    exchange_rate=entry.exchange_rate,
-                    party_type=entry.party_type,
-                    party_id=entry.party_id,
-                    bank_account_id=entry.bank_account_id,
-                    is_advance=entry.is_advance,
-                    voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
-                    voucher_id=run.id,
-                    document_no=run.document_no,
-                    naming_series_id=run.naming_series_id,
-                    fiscal_year_id=reversal_fiscal_year_id,
-                    accounting_period_id=reversal_period_id,
-                    cost_center_code=entry.cost_center_code,
-                    unit_code=entry.unit_code,
-                    project_code=entry.project_code,
-                    remarks="Reversion revalorizacion cambiaria",
-                    is_reversal=True,
-                    reversal_of=entry.id,
-                    exchange_revaluation_run_id=run.id,
-                )
-            )
-            entry.is_cancelled = True
+        from cacao_accounting.internal_control_service import _LEDGER_CANCELLATION_ACTIVE
 
-        self._validate_entries(reversals)
-        database.session.add_all(reversals)
+        cancellation_token = _LEDGER_CANCELLATION_ACTIVE.set((EXCHANGE_REVALUATION_ENTITY_TYPE, run.id))
+        try:
+            for entry in originals:
+                reversals.append(
+                    GLEntry(
+                        posting_date=effective_reversal_date,
+                        company=entry.company,
+                        ledger_id=entry.ledger_id,
+                        account_id=entry.account_id,
+                        account_code=entry.account_code,
+                        debit=self._decimal(entry.credit),
+                        credit=self._decimal(entry.debit),
+                        debit_in_account_currency=self._decimal(entry.credit_in_account_currency),
+                        credit_in_account_currency=self._decimal(entry.debit_in_account_currency),
+                        account_currency=entry.account_currency,
+                        company_currency=entry.company_currency,
+                        exchange_rate=entry.exchange_rate,
+                        party_type=entry.party_type,
+                        party_id=entry.party_id,
+                        bank_account_id=entry.bank_account_id,
+                        is_advance=entry.is_advance,
+                        voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
+                        voucher_id=run.id,
+                        document_no=run.document_no,
+                        naming_series_id=run.naming_series_id,
+                        fiscal_year_id=reversal_fiscal_year_id,
+                        accounting_period_id=reversal_period_id,
+                        cost_center_code=entry.cost_center_code,
+                        unit_code=entry.unit_code,
+                        project_code=entry.project_code,
+                        remarks="Reversion revalorizacion cambiaria",
+                        is_reversal=True,
+                        reversal_of=entry.id,
+                        exchange_revaluation_run_id=run.id,
+                    )
+                )
+                entry.is_cancelled = True
+
+            self._validate_entries(reversals)
+            database.session.add_all(reversals)
+            database.session.flush()
+        finally:
+            _LEDGER_CANCELLATION_ACTIVE.reset(cancellation_token)
         run.status = EXCHANGE_REVALUATION_STATUS_VOIDED
         run.docstatus = 2
         run.reversal_journal_id = journal.id

@@ -17,7 +17,16 @@ from sqlalchemy import text
 from cacao_accounting import create_app
 from cacao_accounting.audit_chain import verify_audit_trail_chain
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import AuditTrail, Currency, database
+from cacao_accounting.database import (
+    ApprovalAction,
+    ApprovalRequest,
+    AuditLog,
+    AuditTrail,
+    Currency,
+    Entity,
+    User,
+    database,
+)
 
 
 def _build_app(desktop: bool):
@@ -129,3 +138,99 @@ def test_desktop_rejects_bulk_audit_delete(channel):
         rows = database.session.execute(database.select(AuditTrail.id)).scalars().all()
         assert sorted(rows) == sorted(ids)
         assert verify_audit_trail_chain() == []
+
+
+def _seed_all_evidence(app) -> dict[str, tuple[type, str, str]]:
+    """Create realistic linked evidence rows for all three protected tables."""
+    suffix = uuid4().hex[:6]
+    with app.app_context():
+        database.create_all()
+        currency = Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True)
+        company = Entity(
+            code=f"C{suffix}",
+            name="Compañía de prueba",
+            company_name=f"Compañía evidencia {suffix}",
+            tax_id=f"TAX-{suffix}",
+            currency="NIO",
+            enabled=True,
+            status="default",
+        )
+        database.session.add_all([currency, company])
+        database.session.flush()
+        user = User(user=f"user-{suffix}", password=b"test-password", active=True, company=company.code)
+        database.session.add(user)
+        database.session.flush()
+        request = ApprovalRequest(
+            document_type="sales_invoice",
+            document_id=f"DOC-{suffix}",
+            company_id=company.code,
+            requested_by=user.id,
+            status="Pending Approval",
+        )
+        database.session.add(request)
+        database.session.flush()
+        audit_log = AuditLog(entity_type="sales_invoice", entity_id=f"DOC-{suffix}", action="insert")
+        audit_trail = AuditTrail(
+            document_type="sales_invoice",
+            document_id=f"DOC-{suffix}",
+            document_no=f"INV-{suffix}",
+            action="created",
+        )
+        approval_action = ApprovalAction(
+            approval_request_id=request.id,
+            approved_by=user.id,
+            action="approve",
+            comments="Aprobación registrada",
+        )
+        database.session.add_all([audit_log, audit_trail, approval_action])
+        database.session.commit()
+        return {
+            "audit_log": (AuditLog, audit_log.id, "action"),
+            "audit_trail": (AuditTrail, audit_trail.id, "action"),
+            "approval_action": (ApprovalAction, approval_action.id, "comments"),
+        }
+
+
+@pytest.mark.parametrize("channel", ["orm", "core", "textual"])
+@pytest.mark.parametrize("operation", ["update", "delete"])
+@pytest.mark.parametrize("table_name", ["audit_log", "audit_trail", "approval_action"])
+@pytest.mark.parametrize("desktop", [True, False])
+def test_every_audit_evidence_table_rejects_mutation(channel, operation, table_name, desktop):
+    """ORM, Core, and textual SQL preserve audit evidence in Desktop and Cloud."""
+    app = _build_app(desktop=desktop)
+    evidence = _seed_all_evidence(app)
+    model, row_id, field_name = evidence[table_name]
+
+    with app.app_context():
+        with pytest.raises(ValueError):
+            if channel == "orm":
+                row = database.session.get(model, row_id)
+                assert row is not None
+                if operation == "delete":
+                    database.session.delete(row)
+                else:
+                    setattr(row, field_name, "tampered")
+                database.session.commit()
+            elif channel == "core":
+                statement = (
+                    database.delete(model)
+                    if operation == "delete"
+                    else database.update(model).values({field_name: "tampered"})
+                )
+                database.session.execute(statement.where(model.id == row_id))
+                database.session.commit()
+            else:
+                if operation == "delete":
+                    statement = text(f"DELETE FROM {table_name} WHERE id = :row_id")
+                else:
+                    statement = text(f"UPDATE {table_name} SET {field_name} = :value WHERE id = :row_id")
+                database.session.execute(statement, {"row_id": row_id, "value": "tampered"})
+                database.session.commit()
+        database.session.rollback()
+
+    with app.app_context():
+        row = database.session.get(model, row_id)
+        assert row is not None
+        assert getattr(row, field_name) != "tampered"
+        if table_name == "audit_trail":
+            assert verify_audit_trail_chain() == []

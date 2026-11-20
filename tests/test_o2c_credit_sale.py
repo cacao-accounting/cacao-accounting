@@ -248,6 +248,40 @@ def test_venta_credito_abono_parcial_y_anulacion_conservan_evidencia(entorno_con
             ).scalar_one()
             > arap_events_before
         )
+        cancellation_transition = database.session.execute(
+            select(DocumentTransition).where(
+                DocumentTransition.source_id == payment.id,
+                DocumentTransition.transition_type == "cancellation",
+            )
+        ).scalar_one()
+        assert cancellation_transition.actor_user_id == actor.id
+        assert cancellation_transition.reason == "Abono registrado por error"
+        assert (
+            database.session.execute(
+                select(func.count(DocumentTransition.id)).where(
+                    DocumentTransition.source_id == payment.id,
+                    DocumentTransition.transition_type == "cancellation",
+                )
+            ).scalar_one()
+            == payment_transitions_before + 1
+        )
+        cancelled_gl = (
+            database.session.execute(
+                select(GLEntry).where(
+                    GLEntry.voucher_id == payment.id,
+                    GLEntry.is_reversal.is_(False),
+                    GLEntry.is_cancelled.is_(True),
+                )
+            )
+            .scalars()
+            .first()
+        )
+        assert cancelled_gl is not None
+        cancelled_gl.is_cancelled = False
+        with pytest.raises(ValueError, match="no se reactiva"):
+            database.session.commit()
+        database.session.rollback()
+        assert database.session.get(GLEntry, cancelled_gl.id).is_cancelled is True
 
 
 def test_anular_factura_usa_fecha_de_contabilizacion_de_nota_vinculada(entorno_contable, monkeypatch):

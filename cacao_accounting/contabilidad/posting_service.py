@@ -4914,6 +4914,24 @@ def cancel_document(
     original. ``reason`` y ``actor_user_id`` permiten registrar la transición
     de negocio sin alterar el documento ni el ledger histórico.
     """
+    return _cancel_document(
+        document,
+        reason=reason,
+        actor_user_id=actor_user_id,
+        cancellation_date=cancellation_date,
+        requested_at=requested_at,
+    )
+
+
+def _cancel_document(
+    document: Any,
+    *,
+    reason: str | None = None,
+    actor_user_id: str | None = None,
+    cancellation_date: Any = None,
+    requested_at: Any = None,
+) -> list[GLEntry]:
+    """Execute cancellation while the public service owns ledger authorization."""
     from cacao_accounting.approval_engine import assert_execution_authorized
 
     assert_execution_authorized(document, actor_id=actor_user_id, action="set_null")
@@ -4960,35 +4978,41 @@ def cancel_document(
     company = cancellation_context.company
     original_entries = _get_original_gl_entries(company, voucher_type, voucher_id, document)
 
-    with database.session.begin_nested():
-        _record_cancellation_transition(document, cancellation_context)
-        document.docstatus = 2
-        document.cancelled_at = database.func.now()
-        document.cancelled_by = cancellation_context.actor_user_id
-        document.cancel_reason = cancellation_context.reason
-        if isinstance(document, PaymentEntry):
-            from cacao_accounting.withholding_service import cancel_withholding_certificate
+    from cacao_accounting.internal_control_service import _LEDGER_CANCELLATION_ACTIVE
 
-            cancel_withholding_certificate(document.id)
-        _update_validation_service(document)
+    token = _LEDGER_CANCELLATION_ACTIVE.set((voucher_type, voucher_id))
+    try:
+        with database.session.begin_nested():
+            _record_cancellation_transition(document, cancellation_context)
+            document.docstatus = 2
+            document.cancelled_at = database.func.now()
+            document.cancelled_by = cancellation_context.actor_user_id
+            document.cancel_reason = cancellation_context.reason
+            if isinstance(document, PaymentEntry):
+                from cacao_accounting.withholding_service import cancel_withholding_certificate
 
-        reversals = _create_gl_reversals(
-            document, original_entries, voucher_type, voucher_id, cancellation_context.effective_date
-        )
+                cancel_withholding_certificate(document.id)
+            _update_validation_service(document)
 
-        _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id, cancellation_context.effective_date)
-        _emit_cancel_events(document, voucher_id, company)
-        if isinstance(document, PaymentEntry):
-            from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
+            reversals = _create_gl_reversals(
+                document, original_entries, voucher_type, voucher_id, cancellation_context.effective_date
+            )
 
-            _apply_payment_cancellation_hooks(document)
+            _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id, cancellation_context.effective_date)
+            _emit_cancel_events(document, voucher_id, company)
+            if isinstance(document, PaymentEntry):
+                from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
 
-        result = _add_entries(reversals)
-        from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+                _apply_payment_cancellation_hooks(document)
 
-        cancel_document_ar_ap(document, cancellation_date=cancellation_context.effective_date)
-        _validate_arap_gl_transition(document, as_of_date=cancellation_context.effective_date)
-        return result
+            result = _add_entries(reversals)
+            from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+
+            cancel_document_ar_ap(document, cancellation_date=cancellation_context.effective_date)
+            _validate_arap_gl_transition(document, as_of_date=cancellation_context.effective_date)
+            return result
+    finally:
+        _LEDGER_CANCELLATION_ACTIVE.reset(token)
 
 
 def _validate_arap_gl_transition(document: Any, *, as_of_date: Any = None) -> None:
@@ -5058,20 +5082,26 @@ def _cancel_fiscal_year_closing_document(
     original_entries = _get_original_gl_entries(company, voucher_type, voucher_id, document)
     posting_date = _posting_date_for(document)
 
-    with database.session.begin_nested():
-        document.docstatus = 2
-        document.cancelled_at = database.func.now()
-        document.cancelled_by = normalized_actor
-        document.cancel_reason = normalized_reason
-        _update_validation_service(document)
-        reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id, posting_date)
-        _emit_cancel_events(document, voucher_id, company)
-        result = _add_entries(reversals)
-        from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+    from cacao_accounting.internal_control_service import _LEDGER_CANCELLATION_ACTIVE
 
-        cancel_document_ar_ap(document, cancellation_date=posting_date)
-        _validate_arap_gl_transition(document, as_of_date=posting_date)
-        return result
+    token = _LEDGER_CANCELLATION_ACTIVE.set((voucher_type, voucher_id))
+    try:
+        with database.session.begin_nested():
+            document.docstatus = 2
+            document.cancelled_at = database.func.now()
+            document.cancelled_by = normalized_actor
+            document.cancel_reason = normalized_reason
+            _update_validation_service(document)
+            reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id, posting_date)
+            _emit_cancel_events(document, voucher_id, company)
+            result = _add_entries(reversals)
+            from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+
+            cancel_document_ar_ap(document, cancellation_date=posting_date)
+            _validate_arap_gl_transition(document, as_of_date=posting_date)
+            return result
+    finally:
+        _LEDGER_CANCELLATION_ACTIVE.reset(token)
 
 
 def _lock_document_for_transition(document: Any) -> Any:

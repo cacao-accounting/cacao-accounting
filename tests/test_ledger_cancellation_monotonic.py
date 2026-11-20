@@ -14,6 +14,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -24,14 +25,18 @@ from cacao_accounting.database import (
     Currency,
     Entity,
     GLEntry,
+    Item,
     Party,
+    StockLedgerEntry,
+    UOM,
+    Warehouse,
     database,
 )
 
 
-@pytest.fixture
-def ledger_cancellation_scenario():
-    """Create one GL row and one AR/AP row that can be cancelled."""
+@pytest.fixture(params=[True, False], ids=["desktop", "cloud"])
+def ledger_cancellation_scenario(request):
+    """Create cancelable ledger rows in both runtime modes."""
     app = create_app(
         {
             **configuracion,
@@ -39,7 +44,7 @@ def ledger_cancellation_scenario():
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
-            "MODO_ESCRITORIO": False,
+            "MODO_ESCRITORIO": request.param,
             "INTERNAL_CONTROLS_ENFORCE": True,
         }
     )
@@ -50,6 +55,7 @@ def ledger_cancellation_scenario():
         database.session.add_all(
             [
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                UOM(code="EA", name="Unidad", is_active=True),
                 Entity(
                     code="alpha",
                     name="Alfa",
@@ -80,7 +86,9 @@ def ledger_cancellation_scenario():
             enabled=True,
         )
         party = Party(code=f"CLI-{suffix}", name="Cliente", is_customer=True, is_active=True)
-        database.session.add_all([book, account, party])
+        item = Item(code=f"ITEM-{suffix}", name="Artículo", item_type="goods", is_stock_item=True, default_uom="EA")
+        warehouse = Warehouse(code=f"WH-{suffix}", name="Bodega", company="alpha")
+        database.session.add_all([book, account, party, item, warehouse])
         database.session.flush()
         gl_entry = GLEntry(
             company="alpha",
@@ -93,6 +101,20 @@ def ledger_cancellation_scenario():
             debit=Decimal("100"),
             credit=Decimal("0"),
             is_cancelled=False,
+            is_reversal=False,
+            is_fiscal_year_closing=False,
+        )
+        cancelled_gl_entry = GLEntry(
+            company="alpha",
+            account_id=account.id,
+            ledger_id=book.id,
+            account_code=account.code,
+            voucher_type="journal_entry",
+            voucher_id=f"JE-CANCELLED-{suffix}",
+            posting_date=date(2026, 5, 10),
+            debit=Decimal("25"),
+            credit=Decimal("0"),
+            is_cancelled=True,
             is_reversal=False,
             is_fiscal_year_closing=False,
         )
@@ -110,24 +132,58 @@ def ledger_cancellation_scenario():
             is_reversal=False,
             is_cancelled=False,
         )
-        database.session.add_all([gl_entry, arap_entry])
+        cancelled_arap_entry = ARAPLedgerEntry(
+            company="alpha",
+            ledger_type="AR",
+            party_type="customer",
+            party_id=party.id,
+            document_type="sales_invoice",
+            document_id=f"INV-CANCELLED-{suffix}",
+            posting_date=date(2026, 5, 10),
+            event_type="invoice",
+            currency="NIO",
+            document_amount=Decimal("25"),
+            is_reversal=False,
+            is_cancelled=True,
+        )
+        stock_entry = StockLedgerEntry(
+            posting_date=date(2026, 5, 10),
+            item_code=item.code,
+            warehouse=warehouse.code,
+            company="alpha",
+            qty_change=Decimal("1"),
+            voucher_type="stock_entry",
+            voucher_id=f"SE-{suffix}",
+            is_cancelled=False,
+        )
+        cancelled_stock_entry = StockLedgerEntry(
+            posting_date=date(2026, 5, 10),
+            item_code=item.code,
+            warehouse=warehouse.code,
+            company="alpha",
+            qty_change=Decimal("1"),
+            voucher_type="stock_entry",
+            voucher_id=f"SE-CANCELLED-{suffix}",
+            is_cancelled=True,
+        )
+        database.session.add_all(
+            [gl_entry, arap_entry, stock_entry, cancelled_gl_entry, cancelled_arap_entry, cancelled_stock_entry]
+        )
         database.session.commit()
-        ids = {"gl": gl_entry.id, "arap": arap_entry.id}
+        ids = {
+            "gl": gl_entry.id,
+            "arap": arap_entry.id,
+            "stock": stock_entry.id,
+            "gl_cancelled": cancelled_gl_entry.id,
+            "arap_cancelled": cancelled_arap_entry.id,
+            "stock_cancelled": cancelled_stock_entry.id,
+        }
 
     yield app, ids
 
     with app.app_context():
         database.session.remove()
         database.engine.dispose()
-
-
-def _cancel(app, model, entry_id: str) -> None:
-    """Apply the legitimate False -> True transition and persist it."""
-    with app.app_context():
-        entry = database.session.get(model, entry_id)
-        assert entry is not None
-        entry.is_cancelled = True
-        database.session.commit()
 
 
 def _is_cancelled(app, model, entry_id: str) -> bool:
@@ -138,59 +194,72 @@ def _is_cancelled(app, model, entry_id: str) -> bool:
         return bool(entry.is_cancelled)
 
 
-def _try_reactivation(app, model, entry_id: str, value) -> None:
-    """Attempt a reverse transition and roll back after the guard raises."""
+def _try_direct_cancellation(app, model, entry_id: str) -> None:
+    """Reject a tombstone mutation that bypasses the audited service."""
     with app.app_context():
         entry = database.session.get(model, entry_id)
         assert entry is not None
-        entry.is_cancelled = value
-        with pytest.raises(ValueError):
+        entry.is_cancelled = True
+        with pytest.raises(ValueError, match="servicio auditado"):
             database.session.commit()
         database.session.rollback()
 
 
-def test_cancellation_is_allowed_and_persisted_for_gl(ledger_cancellation_scenario):
-    """The legitimate cancellation keeps working."""
+@pytest.mark.parametrize("model,key", [(GLEntry, "gl"), (ARAPLedgerEntry, "arap"), (StockLedgerEntry, "stock")])
+def test_direct_orm_cancellation_requires_audited_service(ledger_cancellation_scenario, model, key):
+    """GL, AR/AP, and stock cannot be hidden without reversals and audit metadata."""
     app, ids = ledger_cancellation_scenario
 
-    _cancel(app, GLEntry, ids["gl"])
+    _try_direct_cancellation(app, model, ids[key])
 
-    assert _is_cancelled(app, GLEntry, ids["gl"]) is True
-
-
-@pytest.mark.parametrize("value", [False, 0])
-def test_reactivating_a_cancelled_gl_entry_is_rejected(ledger_cancellation_scenario, value):
-    """False and 0 cannot lift the GL cancellation."""
-    app, ids = ledger_cancellation_scenario
-    _cancel(app, GLEntry, ids["gl"])
-
-    _try_reactivation(app, GLEntry, ids["gl"], value)
-
-    assert _is_cancelled(app, GLEntry, ids["gl"]) is True
+    assert _is_cancelled(app, model, ids[key]) is False
 
 
-@pytest.mark.parametrize("value", [False, 0])
-def test_reactivating_a_cancelled_ar_ap_entry_is_rejected(ledger_cancellation_scenario, value):
-    """The AR/AP subledger applies the same monotonic rule."""
-    app, ids = ledger_cancellation_scenario
-    _cancel(app, ARAPLedgerEntry, ids["arap"])
-
-    _try_reactivation(app, ARAPLedgerEntry, ids["arap"], value)
-
-    assert _is_cancelled(app, ARAPLedgerEntry, ids["arap"]) is True
-
-
-def test_core_bulk_cancellation_is_rejected(ledger_cancellation_scenario):
-    """A Core UPDATE cannot cancel evidence without the audited path."""
+@pytest.mark.parametrize("model,key", [(GLEntry, "gl"), (ARAPLedgerEntry, "arap"), (StockLedgerEntry, "stock")])
+@pytest.mark.parametrize("channel", ["core", "textual"])
+def test_bulk_update_cannot_cancel_ledger_evidence(ledger_cancellation_scenario, model, key, channel):
+    """Core and textual SQL cannot bypass the audited cancellation service."""
     app, ids = ledger_cancellation_scenario
 
     with app.app_context():
         with pytest.raises(ValueError):
-            database.session.execute(database.update(GLEntry).where(GLEntry.id == ids["gl"]).values(is_cancelled=True))
-            database.session.commit()
+            if channel == "core":
+                database.session.execute(database.update(model).where(model.id == ids[key]).values(is_cancelled=True))
+                database.session.commit()
+            else:
+                database.session.execute(
+                    text(f"UPDATE {model.__tablename__} SET is_cancelled = TRUE WHERE id = :entry_id"),
+                    {"entry_id": ids[key]},
+                )
+                database.session.commit()
         database.session.rollback()
 
-    assert _is_cancelled(app, GLEntry, ids["gl"]) is False
+    assert _is_cancelled(app, model, ids[key]) is False
+
+
+@pytest.mark.parametrize(
+    "model,key",
+    [(GLEntry, "gl_cancelled"), (ARAPLedgerEntry, "arap_cancelled"), (StockLedgerEntry, "stock_cancelled")],
+)
+@pytest.mark.parametrize("channel", ["core", "textual"])
+def test_bulk_update_cannot_reactivate_cancelled_ledger_evidence(ledger_cancellation_scenario, model, key, channel):
+    """Core and textual SQL cannot erase a persisted cancellation tombstone."""
+    app, ids = ledger_cancellation_scenario
+
+    with app.app_context():
+        with pytest.raises(ValueError):
+            if channel == "core":
+                database.session.execute(database.update(model).where(model.id == ids[key]).values(is_cancelled=False))
+                database.session.commit()
+            else:
+                database.session.execute(
+                    text(f"UPDATE {model.__tablename__} SET is_cancelled = FALSE WHERE id = :entry_id"),
+                    {"entry_id": ids[key]},
+                )
+                database.session.commit()
+        database.session.rollback()
+
+    assert _is_cancelled(app, model, ids[key]) is True
 
 
 def test_every_cancellable_evidence_model_has_append_only_listeners():

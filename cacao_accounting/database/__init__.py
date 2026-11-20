@@ -1697,7 +1697,13 @@ def _reject_ledger_mutation(mapper, connection, target) -> None:
     cancellation = state.attrs["is_cancelled"]
     # #925: solo la transición False -> True es válida. Comparar por valor y
     # no por identidad evita que un 0 reasigne la lápida y reactive la fila.
-    if not cancellation.history.has_changes() or bool(target.is_cancelled):
+    if not cancellation.history.has_changes():
+        return
+    if bool(target.is_cancelled):
+        from cacao_accounting.internal_control_service import _ledger_cancellation_is_authorized
+
+        if not _ledger_cancellation_is_authorized(target):
+            raise ValueError(_("La cancelación del ledger debe realizarse mediante el servicio auditado."))
         return
     if cancellation.history.deleted:
         was_cancelled = bool(cancellation.history.deleted[0])
