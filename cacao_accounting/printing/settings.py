@@ -4,9 +4,12 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from flask import current_app
 
 from cacao_accounting.database import CacaoConfig, database
+from cacao_accounting.i18n import _
 
 VALIDATION_ENABLED_KEY = "external_document_validation_enabled"
 VALIDATION_BASE_URL_KEY = "external_document_validation_base_url"
@@ -30,10 +33,26 @@ def external_validation_base_url() -> str:
     return str(fallback or DEFAULT_VALIDATION_BASE_URL).rstrip("/")
 
 
+def _normalize_validation_base_url(base_url: str | None) -> str:
+    """Valida y normaliza la URL base pública para códigos de validación."""
+    candidate = (base_url or "").strip()
+    if not candidate:
+        return DEFAULT_VALIDATION_BASE_URL.rstrip("/")
+
+    parsed = urlsplit(candidate)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(_("La URL base de validación externa debe usar http o https."))
+    if parsed.username or parsed.password:
+        raise ValueError(_("La URL base de validación externa no debe incluir credenciales."))
+
+    return candidate.rstrip("/")
+
+
 def save_external_validation_settings(enabled: bool, base_url: str | None) -> None:
     """Persist external validation settings in CacaoConfig."""
+    normalized_base_url = _normalize_validation_base_url(base_url)
     _set_config_value(VALIDATION_ENABLED_KEY, "true" if enabled else "false")
-    _set_config_value(VALIDATION_BASE_URL_KEY, (base_url or DEFAULT_VALIDATION_BASE_URL).strip())
+    _set_config_value(VALIDATION_BASE_URL_KEY, normalized_base_url)
     database.session.commit()
 
 

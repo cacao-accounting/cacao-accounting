@@ -325,10 +325,18 @@ def external_document_validation_settings():
     """Administra la validacion externa de documentos impresos."""
     _require_system_admin()
     if request.method == "POST":
-        save_external_validation_settings(
-            enabled=request.form.get("enabled") == "on",
-            base_url=request.form.get("base_url") or DEFAULT_VALIDATION_BASE_URL,
-        )
+        enabled = request.form.get("enabled") == "on"
+        base_url = request.form.get("base_url") or DEFAULT_VALIDATION_BASE_URL
+        try:
+            save_external_validation_settings(enabled=enabled, base_url=base_url)
+        except ValueError as exc:
+            flash(str(exc), "danger")
+            return render_template(
+                "admin/external_document_validation.html",
+                enabled=enabled,
+                base_url=(base_url or "").strip(),
+                fallback_url=DEFAULT_VALIDATION_BASE_URL,
+            )
         flash(_("Configuración de validación externa guardada correctamente."), "success")
         return redirect(url_for("admin.external_document_validation_settings"))
 

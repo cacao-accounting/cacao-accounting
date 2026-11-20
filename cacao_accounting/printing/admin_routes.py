@@ -56,7 +56,16 @@ def validation_settings():
     if request.method == "POST":
         enabled = request.form.get("external_document_validation_enabled") == "on"
         base_url = request.form.get("external_document_validation_base_url")
-        save_external_validation_settings(enabled, base_url)
+        try:
+            save_external_validation_settings(enabled, base_url)
+        except ValueError as exc:
+            flash(str(exc), "danger")
+            return render_template(
+                "admin/print_validation_settings.html",
+                validation_enabled=enabled,
+                validation_base_url=(base_url or "").strip(),
+                default_validation_base_url=DEFAULT_VALIDATION_BASE_URL,
+            )
         flash(_("Configuración de validación externa actualizada."), "success")
         return redirect(url_for("printing_admin.validation_settings"))
 
