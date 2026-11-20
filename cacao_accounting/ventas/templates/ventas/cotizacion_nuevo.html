@@ -53,11 +53,9 @@
   {{ tf_macros.logistics_section(terms_field="sales_terms") }}
 
   {% if from_request_id %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=sales_request&target_type=sales_quotation&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company,
-         source_label="Pedido de Venta") }}
+  {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=sales_request&target_type=sales_quotation&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company) }}
   {% else %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
+  {{ tf_macros.transaction_grid() }}
   {% endif %}
 </form>
 

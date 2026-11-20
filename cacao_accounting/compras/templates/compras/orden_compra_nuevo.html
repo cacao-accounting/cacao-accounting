@@ -68,7 +68,7 @@
     {% set source_api_url = None %}
     {% set source_label = "" %}
   {% endif %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label=source_label) }}
+  {{ tf_macros.transaction_grid(source_api_url=source_api_url) }}
   {% if sourcing_config.require_comparison and is_purchase_manager %}
   <div class="alert alert-warning mt-3">
     <label class="form-label fw-semibold" for="comparison_exception_reason">{{ _('Excepción al comparativo') }}</label>

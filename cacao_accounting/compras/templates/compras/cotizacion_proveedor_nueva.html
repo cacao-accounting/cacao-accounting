@@ -75,15 +75,11 @@
 
   {{ tf_macros.logistics_section(include_landed_costs=true) }}
   {% if from_request_id %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_request&target_type=supplier_quotation&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company,
-         source_label="Solicitud de Compra") }}
+  {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=purchase_request&target_type=supplier_quotation&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company) }}
   {% elif from_rfq_id %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_quotation&target_type=supplier_quotation&source_id=" ~ from_rfq_id ~ "&company=" ~ rfq_origen.company,
-         source_label="Solicitud de Cotización") }}
+  {{ tf_macros.transaction_grid(source_api_url="/api/document-flow/pending-lines?source_type=purchase_quotation&target_type=supplier_quotation&source_id=" ~ from_rfq_id ~ "&company=" ~ rfq_origen.company) }}
   {% else %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
+  {{ tf_macros.transaction_grid() }}
   {% endif %}
 </form>
 
