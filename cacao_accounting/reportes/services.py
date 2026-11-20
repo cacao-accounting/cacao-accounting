@@ -1346,7 +1346,7 @@ def get_inventory_transfers(filters: OperationalReportFilters) -> PaginatedRepor
     query = (
         select(StockEntry, StockEntryItem)
         .join(StockEntryItem, StockEntryItem.stock_entry_id == StockEntry.id)
-        .where(StockEntry.company == filters.company, StockEntry.purpose == "material_transfer", StockEntry.docstatus != 2)
+        .where(StockEntry.company == filters.company, StockEntry.purpose == "material_transfer", StockEntry.docstatus == 1)
     )
     if filters.item_code:
         query = query.where(StockEntryItem.item_code == filters.item_code)
