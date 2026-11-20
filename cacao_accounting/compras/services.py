@@ -3278,8 +3278,11 @@ def _create_import_landed_cost_from_request():
     if from_invoice_id:
         _link_landed_cost_to_invoice(registro, from_invoice_id, company)
 
-    database.session.commit()
+    # #1751: el evento de creación se registra antes del commit para que
+    # quede persistido junto con el documento; log_create solo agrega al
+    # session y una eliminación de sesión posterior perdería la fila.
     log_create(registro)
+    database.session.commit()
     flash(_("Costo de importacion creado exitosamente."), "success")
     return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=registro.id))
 
