@@ -15,7 +15,7 @@ from typing import Any, Iterable, Sequence
 
 from sqlalchemy import func, select
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from cacao_accounting.database import (
     Accounts,
@@ -846,7 +846,10 @@ def _post_with_calculation_engine_payload(document: Any, ledger_code: str | None
         raise PostingError(str(exc)) from exc
     if context is None:
         return None
-    results = BusinessEventOrchestrator().handle_event(context)
+    try:
+        results = BusinessEventOrchestrator().handle_event(context)
+    except ValueError as exc:
+        raise PostingError(str(exc)) from exc
     calculation_errors = [message for result in results.values() for message in getattr(result, "errors", [])]
     if calculation_errors:
         raise PostingError(" ".join(calculation_errors))
@@ -2361,6 +2364,38 @@ def post_bank_transaction(document: BankTransaction, ledger_code: str | None = N
     return _add_entries(entries)
 
 
+def _insert_stock_bin_race_safe(company: str, item_code: str, warehouse: str) -> Any:
+    """Inserta el bin, reintentando si otra transacción lo insertó antes (#332).
+
+    En READ COMMITTED el insert perdedor del ``uq_stock_bin`` es bloqueado
+    hasta que el ganador confirma y luego lanza ``IntegrityError``; con la
+    savepoint del intento, la transacción externa queda usable y se lee el
+    bin confirmado para aplicar el cambio encima del registro existente.
+    """
+    try:
+        with database.session.begin_nested():
+            bin_row = StockBin(
+                company=company,
+                item_code=item_code,
+                warehouse=warehouse,
+                actual_qty=Decimal("0"),
+                stock_value=Decimal("0"),
+            )
+            database.session.add(bin_row)
+            database.session.flush()
+        return bin_row
+    except IntegrityError:
+        existing = (
+            database.session.query(StockBin)
+            .with_for_update()
+            .filter_by(company=company, item_code=item_code, warehouse=warehouse)
+            .first()
+        )
+        if existing is None:
+            raise
+        return existing
+
+
 def _upsert_stock_bin(
     *,
     company: str,
@@ -2392,10 +2427,7 @@ def _upsert_stock_bin(
         .first()
     )
     if not bin_row:
-        bin_row = StockBin(
-            company=company, item_code=item_code, warehouse=warehouse, actual_qty=Decimal("0"), stock_value=Decimal("0")
-        )
-        database.session.add(bin_row)
+        bin_row = _insert_stock_bin_race_safe(company, item_code, warehouse)
 
     current_stock_value = _decimal_value(bin_row.stock_value)
     stock_value_after = current_stock_value + value_change
@@ -4557,6 +4589,8 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
 
     company = _company_for(document)
     purpose = getattr(document, "purpose", "").lower()
+    for line in database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars():
+        _validate_stock_entry_warehouses(document, line)
     if purpose == "material_transfer":
         _validate_material_transfer_accounts(document, company)
 
