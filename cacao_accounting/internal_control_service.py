@@ -92,6 +92,7 @@ FLOW_EVIDENCE_TABLES = frozenset(
         "purchase_invoice_receipt_allocation",
         "purchase_receipt_return_allocation",
         "purchase_credit_note_allocation",
+        "petty_cash_replenishment_expense",
     }
 )
 # Workflow transitions allowed on flow evidence rows; anything else is the
@@ -105,6 +106,7 @@ FLOW_EVIDENCE_TRANSITIONS = {
     "purchase_invoice_receipt_allocation": frozenset({"status"}),
     "purchase_receipt_return_allocation": frozenset({"status"}),
     "purchase_credit_note_allocation": frozenset({"status"}),
+    "petty_cash_replenishment_expense": frozenset(),
 }
 FLOW_PROVIDER_STAMPS = frozenset({"modified", "modified_by"})
 # Structural, mode-agnostic evidence: audit writes, ledger lines and the
@@ -747,12 +749,27 @@ def _guard_line(session: Session, target: Any, changed: set[str]) -> None:
             raise ValueError(_("Los vínculos de conciliación bancaria requieren el servicio autorizado."))
         if target in session.deleted or _has_bank_reconciliation_evidence(session, target):
             raise ValueError(_("Los datos financieros conciliados son inmutables."))
+    _guard_line_parents(session, target)
+
+
+def _guard_line_parents(session: Session, target: Any) -> None:
+    """Rechaza mutaciones de líneas cuyo padre ya está posteado (#1877).
+
+    Las escrituras internas de la transacción de posting (p.ej. las
+    actualizaciones de snapshots de conciliación de inventario) quedan
+    permitidas mientras la transacción dura; al terminar, el permiso se
+    desactiva y las líneas se protegen contra edición externa.
+    """
     for parent_class, parent_id in _line_parents(target):
         parent = session.get(parent_class, parent_id)
-        if parent is not None and _posted(parent):
-            raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
-        if parent is not None:
+        if parent is None:
+            continue
+        if not _posted(parent):
             _stamp_line_editor(parent)
+            continue
+        if _posted_in_current_transaction(session, parent):
+            continue
+        raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
 
 
 def _has_bank_reconciliation_evidence(session: Session, target: Any) -> bool:
