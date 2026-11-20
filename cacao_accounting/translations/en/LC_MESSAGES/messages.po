@@ -23977,3 +23977,14 @@ msgstr "Internal identifier %(identifier)s is duplicated and the records were pr
 msgid "El tipo de impuesto seleccionado no es válido."
 msgstr "The selected tax type is not valid."
 
+#: cacao_accounting/printing/service.py
+#, python-format
+msgid "Tamaño de papel no soportado: %(value)s."
+msgstr "Unsupported paper size: %(value)s."
+
+#: cacao_accounting/printing/service.py
+#, python-format
+msgid "Orientación de papel no soportada: %(value)s."
+msgstr "Unsupported paper orientation: %(value)s."
+
+

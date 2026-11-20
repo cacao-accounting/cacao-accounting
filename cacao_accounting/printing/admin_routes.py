@@ -78,7 +78,13 @@ def create_template():
             document_type = request.form.get("document_type") or ""
             template_body = request.form.get("template_body") or ""
             stylesheet_body = request.form.get("stylesheet_body")
-            PrintService().validate_template(template_body, stylesheet_body, document_type)
+            PrintService().validate_template(
+                template_body,
+                stylesheet_body,
+                document_type,
+                paper_size=request.form.get("paper_size") or "letter",
+                orientation=request.form.get("orientation") or "portrait",
+            )
             template = PrintTemplate(
                 company_code=request.form.get("company_code") or None,
                 document_type=document_type,
@@ -125,7 +131,13 @@ def duplicate_template(template_id: int):
     _require_print_admin()
     source = _get_template(template_id)
     try:
-        PrintService().validate_template(source.template_body, source.stylesheet_body, source.document_type)
+        PrintService().validate_template(
+            source.template_body,
+            source.stylesheet_body,
+            source.document_type,
+            paper_size=source.paper_size,
+            orientation=source.orientation,
+        )
         copy = PrintTemplate(
             company_code=source.company_code,
             document_type=source.document_type,
@@ -168,6 +180,8 @@ def publish_template(template_id: int):
             template.stylesheet_body,
             template.document_type,
             validate_pdf=True,
+            paper_size=template.paper_size,
+            orientation=template.orientation,
         )
         template.status = "published"
         template.updated_by = _current_user_id()
@@ -262,7 +276,13 @@ def _update_template_from_form(template: PrintTemplate) -> None:
     try:
         body = request.form.get("template_body") or ""
         css = request.form.get("stylesheet_body")
-        service.validate_template(body, css, template.document_type)
+        service.validate_template(
+            body,
+            css,
+            template.document_type,
+            paper_size=request.form.get("paper_size") or "letter",
+            orientation=request.form.get("orientation") or "portrait",
+        )
         service.create_version(template, change_note=request.form.get("change_note"))
         template.name = request.form.get("name") or template.name
         template.description = request.form.get("description")

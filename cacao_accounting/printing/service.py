@@ -99,6 +99,9 @@ class _PrintPDFURLFetcher:
 class PrintService:
     """Render registered documents with database-backed templates."""
 
+    PAGE_SIZES = {"letter": "letter", "a4": "A4"}
+    ORIENTATIONS = frozenset({"portrait", "landscape"})
+
     def __init__(self) -> None:
         """Create a sandboxed Jinja environment for print templates."""
         self.env = SandboxedEnvironment(
@@ -138,6 +141,8 @@ class PrintService:
                 template.stylesheet_body,
                 return_url=return_url,
                 export_url=export_url,
+                paper_size=getattr(template, "paper_size", "letter"),
+                orientation=getattr(template, "orientation", "portrait"),
             )
             self.log_print_job(
                 company_code=company_code,
@@ -189,7 +194,12 @@ class PrintService:
                 bank_account_id=self._template_bank_account_id(document_type, context),
             )
             rendered_body = self.env.from_string(template.template_body).render(**context)
-            html_string = self.build_print_html(rendered_body, template.stylesheet_body)
+            html_string = self.build_print_html(
+                rendered_body,
+                template.stylesheet_body,
+                paper_size=getattr(template, "paper_size", "letter"),
+                orientation=getattr(template, "orientation", "portrait"),
+            )
             pdf = self._render_pdf_document(html_string)
             self.log_print_job(
                 company_code=company_code,
@@ -226,10 +236,13 @@ class PrintService:
         stylesheet_body: str | None,
         document_type: str,
         validate_pdf: bool = False,
+        paper_size: str = "letter",
+        orientation: str = "portrait",
     ) -> bool:
         """Validate template safety, syntax and sample rendering."""
         validate_template_security(template_body)
         validate_css_safety(stylesheet_body)
+        self._normalize_page_settings(paper_size, orientation)
         doc_def = get_printable_document(document_type)
         if doc_def is None:
             raise TemplateValidationError(
@@ -246,7 +259,14 @@ class PrintService:
             if "validation.qr_data_uri" in template_body:
                 ValidationService().get_qr_data_uri("https://cacaocontent.com/public/validate_doc/sample")
             if validate_pdf:
-                self._render_pdf_document(self.build_print_html(rendered, stylesheet_body))
+                self._render_pdf_document(
+                    self.build_print_html(
+                        rendered,
+                        stylesheet_body,
+                        paper_size=paper_size,
+                        orientation=orientation,
+                    )
+                )
         except RuntimeError as exc:
             raise TemplateValidationError(str(exc)) from exc
         except TemplateError as exc:
@@ -331,17 +351,37 @@ class PrintService:
         check = context.get("check") or {}
         return str(check.get("bank_account_id") or "") or None
 
+    @classmethod
+    def _normalize_page_settings(cls, paper_size: str | None, orientation: str | None) -> tuple[str, str]:
+        """Valida y normaliza el tamaño y la orientación configurados."""
+        paper = str(paper_size or "letter").strip().lower()
+        orient = str(orientation or "portrait").strip().lower()
+        if paper not in cls.PAGE_SIZES:
+            raise ValueError(_("Tamaño de papel no soportado: %(value)s.") % {"value": paper})
+        if orient not in cls.ORIENTATIONS:
+            raise ValueError(_("Orientación de papel no soportada: %(value)s.") % {"value": orient})
+        return cls.PAGE_SIZES[paper], orient
+
+    @classmethod
+    def _page_rule_css(cls, paper_size: str | None, orientation: str | None) -> str:
+        """Devuelve la regla `@page` que aplica la configuración seleccionada."""
+        paper, orient = cls._normalize_page_settings(paper_size, orientation)
+        return f"@page {{ size: {paper} {orient}; }}"
+
     def build_print_html(
         self,
         rendered_body: str,
         stylesheet_body: str | None,
         return_url: str = "/",
         export_url: str = "/",
+        paper_size: str = "letter",
+        orientation: str = "portrait",
     ) -> str:
         """Build the final standalone HTML document with embedded CSS."""
         validate_template_security(rendered_body)
         validate_css_safety(stylesheet_body)
         css = stylesheet_body or ""
+        page_rule = self._page_rule_css(paper_size, orientation)
         safe_return_url = escape(return_url or "/", quote=True)
         safe_export_url = escape(export_url or "/", quote=True)
         return (
@@ -361,6 +401,7 @@ class PrintService:
             "            .print-document { max-width: none; }\n"
             "        }\n"
             f"{css}\n"
+            f"        {page_rule}\n"
             "    </style>\n"
             "</head>\n"
             "<body>\n"

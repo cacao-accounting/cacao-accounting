@@ -14,7 +14,7 @@ from cacao_accounting.printing.registry import PRINTABLE_DOCUMENTS, init_printin
 SEED_TEMPLATE_VERSION = 2
 
 BASE_CSS = """
-@page { size: letter portrait; margin: 15mm; }
+@page { margin: 15mm; }
 body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; line-height: 1.4; position: relative; }
 .print-header {
   display: flex;
