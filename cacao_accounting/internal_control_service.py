@@ -40,7 +40,7 @@ _AUDIT_TRAIL_INSERT_ACTIVE: ContextVar[bool] = ContextVar("icfr_audit_trail_inse
 _ORM_FLUSH_ACTIVE: ContextVar[bool] = ContextVar("icfr_orm_flush_active", default=False)
 _LEDGER_CANCELLATION_ACTIVE: ContextVar[tuple[str, str] | None] = ContextVar("icfr_ledger_cancellation_active", default=None)
 _POSTED_DOCUMENTS_IN_TRANSACTION = "icfr_posted_documents"
-EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log"})
+EVIDENCE_TABLES = frozenset({"audit_trail", "approval_action", "audit_log", "external_counter_audit_log"})
 LEDGER_TABLES = frozenset(
     {
         "gl_entry",
@@ -469,6 +469,8 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
     del flush_context, instances
     _guard_evidence_flush(session)
     if not _enabled():
+        if _structural_enabled():
+            _guard_desktop_financial_flush(session)
         return
     _guard_new_lines(session)
     for target in set(session.dirty).union(session.deleted):
@@ -482,6 +484,18 @@ def _guard_flush(session: Session, flush_context: Any, instances: Any) -> None:
         _guard_authorized_transition(target, table, changed)
         _guard_lifecycle(target)
         if _posted(target) and (target in session.deleted or changed.difference(MUTABLE_STATE)):
+            raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
+        _guard_line(session, target, changed)
+
+
+def _guard_desktop_financial_flush(session: Session) -> None:
+    """Keep posted documents and their lines immutable in Desktop as in Cloud."""
+    _guard_new_lines(session)
+    for target in set(session.dirty).union(session.deleted):
+        changed = {attr.key for attr in inspect(target).attrs if attr.history.has_changes()}
+        deleted = target in session.deleted
+        _guard_lifecycle(target)
+        if _posted(target) and (deleted or changed.difference(MUTABLE_STATE)):
             raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
         _guard_line(session, target, changed)
 
@@ -818,6 +832,9 @@ def _guard_raw_sql(connection: Any, cursor: Any, statement: str, parameters: Any
         return
     if raw_sql_mutates_protected_table(statement, STRUCTURAL_EVIDENCE_TABLES, connection.dialect.name):
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    financial_runtime_tables = set(_document_parent_tables()).union(_financial_child_tables())
+    if raw_sql_mutates_protected_table(statement, financial_runtime_tables, connection.dialect.name):
+        raise ValueError(_("Los cambios financieros deben realizarse mediante el servicio autorizado."))
     if not _enabled():
         return
     if raw_sql_mutates_protected_table(statement, _raw_sql_protected_tables(), connection.dialect.name):
@@ -832,16 +849,27 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
     if _is_orm_unit_of_work(execution_options, table_name):
         return
     if isinstance(clause, Insert):
-        if table_name == "audit_trail" and _AUDIT_TRAIL_INSERT_ACTIVE.get():
-            return
-        if table_name in STRUCTURAL_EVIDENCE_TABLES:
-            raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
-        if not _enabled():
-            return
-        _guard_bulk_insert(connection, clause, multiparams, params, table_name)
+        _guard_bulk_insert_statement(connection, clause, multiparams, params, table_name)
         return
     if not isinstance(clause, (Update, Delete)):
         return
+    _guard_bulk_update_statement(connection, clause, multiparams, params, table_name)
+
+
+def _guard_bulk_insert_statement(
+    connection: Any, clause: Insert, multiparams: Any, params: Any, table_name: str | None
+) -> None:
+    """Route bulk inserts through the appropriate desktop or cloud controls."""
+    if table_name == "audit_trail" and _AUDIT_TRAIL_INSERT_ACTIVE.get():
+        return
+    if table_name in STRUCTURAL_EVIDENCE_TABLES:
+        raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
+    if _enabled() or _is_financial_runtime_table(table_name):
+        _guard_bulk_insert(connection, clause, multiparams, params, table_name)
+
+
+def _guard_bulk_update_statement(connection: Any, clause: Any, multiparams: Any, params: Any, table_name: str | None) -> None:
+    """Protect evidence writes and posted documents for bulk update/delete."""
     if table_name in POLYMORPHIC_EVIDENCE_TABLES:
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
     if table_name in LEDGER_TABLES:
@@ -850,9 +878,13 @@ def _guard_bulk(connection: Any, clause: Any, multiparams: Any, params: Any, exe
         _guard_flow_evidence_statement(clause, multiparams, params)
     if table_name in EVIDENCE_TABLES:
         raise ValueError(_("La evidencia de auditoría es inmutable."))
-    if not _enabled():
-        return
-    _guard_bulk_update(connection, clause, multiparams, params, table_name)
+    if _enabled() or _is_financial_runtime_table(table_name):
+        _guard_bulk_update(connection, clause, multiparams, params, table_name)
+
+
+def _is_financial_runtime_table(table_name: str | None) -> bool:
+    """Return whether a table is a document header or its financial detail."""
+    return table_name in _document_parent_tables() or table_name in _financial_child_tables()
 
 
 def _guard_bulk_insert(connection: Any, clause: Insert, multiparams: Any, params: Any, table_name: str | None) -> None:

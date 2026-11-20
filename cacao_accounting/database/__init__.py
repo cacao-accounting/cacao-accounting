@@ -6213,6 +6213,8 @@ event.listens_for(DocumentTransition, "before_update")(_reject_ledger_mutation)
 event.listens_for(DocumentTransition, "before_delete")(_reject_ledger_delete)
 event.listens_for(AuditLog, "before_update")(_reject_ledger_mutation)
 event.listens_for(AuditLog, "before_delete")(_reject_ledger_delete)
+event.listens_for(ExternalCounterAuditLog, "before_update")(_reject_ledger_mutation)
+event.listens_for(ExternalCounterAuditLog, "before_delete")(_reject_ledger_delete)
 
 
 @event.listens_for(File, "before_update")

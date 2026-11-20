@@ -24,6 +24,8 @@ from cacao_accounting.database import (
     AuditTrail,
     Currency,
     Entity,
+    ExternalCounter,
+    ExternalCounterAuditLog,
     User,
     database,
 )
@@ -141,7 +143,7 @@ def test_desktop_rejects_bulk_audit_delete(channel):
 
 
 def _seed_all_evidence(app) -> dict[str, tuple[type, str, str]]:
-    """Create realistic linked evidence rows for all three protected tables."""
+    """Create realistic linked evidence rows for all protected audit tables."""
     suffix = uuid4().hex[:6]
     with app.app_context():
         database.create_all()
@@ -159,6 +161,9 @@ def _seed_all_evidence(app) -> dict[str, tuple[type, str, str]]:
         database.session.flush()
         user = User(user=f"user-{suffix}", password=b"test-password", active=True, company=company.code)
         database.session.add(user)
+        database.session.flush()
+        counter = ExternalCounter(company=company.code, name=f"Contador {suffix}", last_used=1)
+        database.session.add(counter)
         database.session.flush()
         request = ApprovalRequest(
             document_type="sales_invoice",
@@ -182,18 +187,25 @@ def _seed_all_evidence(app) -> dict[str, tuple[type, str, str]]:
             action="approve",
             comments="Aprobación registrada",
         )
-        database.session.add_all([audit_log, audit_trail, approval_action])
+        counter_audit = ExternalCounterAuditLog(
+            external_counter_id=counter.id,
+            previous_value=0,
+            new_value=1,
+            reason="Ajuste inicial",
+        )
+        database.session.add_all([audit_log, audit_trail, approval_action, counter_audit])
         database.session.commit()
         return {
             "audit_log": (AuditLog, audit_log.id, "action"),
             "audit_trail": (AuditTrail, audit_trail.id, "action"),
             "approval_action": (ApprovalAction, approval_action.id, "comments"),
+            "external_counter_audit_log": (ExternalCounterAuditLog, counter_audit.id, "reason"),
         }
 
 
 @pytest.mark.parametrize("channel", ["orm", "core", "textual"])
 @pytest.mark.parametrize("operation", ["update", "delete"])
-@pytest.mark.parametrize("table_name", ["audit_log", "audit_trail", "approval_action"])
+@pytest.mark.parametrize("table_name", ["audit_log", "audit_trail", "approval_action", "external_counter_audit_log"])
 @pytest.mark.parametrize("desktop", [True, False])
 def test_every_audit_evidence_table_rejects_mutation(channel, operation, table_name, desktop):
     """ORM, Core, and textual SQL preserve audit evidence in Desktop and Cloud."""
