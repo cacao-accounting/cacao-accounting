@@ -408,7 +408,12 @@ def verify_snapshot_hash(confirmation: BalanceConfirmation) -> bool:
     """Valida que el snapshot almacenado conserve el hash inmutable original."""
     if not confirmation.snapshot_json or not confirmation.snapshot_hash:
         return False
-    snapshot_data = json.loads(confirmation.snapshot_json)
+    try:
+        snapshot_data = json.loads(confirmation.snapshot_json)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(snapshot_data, dict):
+        return False
     return hmac.compare_digest(compute_snapshot_hash(snapshot_data), confirmation.snapshot_hash)
 
 

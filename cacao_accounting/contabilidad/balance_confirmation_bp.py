@@ -236,6 +236,21 @@ def _party_suggested_emails(party_id: str, party: Party) -> list[str]:
     return suggested_emails
 
 
+def _verified_snapshot_for_detail(confirmation: BalanceConfirmation) -> tuple[dict, bool]:
+    """Return snapshot contents only when their stored digest can be verified."""
+    try:
+        if not verify_snapshot_hash(confirmation):
+            raise ValueError("snapshot hash mismatch")
+        return json.loads(confirmation.snapshot_json), True
+    except (TypeError, ValueError):
+        reason = "invalid snapshot JSON or hash"
+
+    current_app.logger.warning(
+        "Balance confirmation snapshot rejected (confirmation_id=%s, reason=%s)", confirmation.id, reason
+    )
+    return {}, False
+
+
 def _handle_confirmation_creation(party_id: str, party_type: str):
     """Validate the POST form and create a balance confirmation draft."""
     company_id = request.form.get("company_id")
@@ -331,13 +346,7 @@ def ver_confirmacion(confirmation_id: str):
     party = database.session.get(Party, confirmation.party_id)
     company = database.session.execute(select(Entity).where(Entity.code == confirmation.company)).scalar_one_or_none()
 
-    snapshot: dict = {}
-    if confirmation.snapshot_json:
-        try:
-            loaded = json.loads(confirmation.snapshot_json)
-        except (TypeError, ValueError):
-            loaded = {}
-        snapshot = loaded if isinstance(loaded, dict) else {}
+    snapshot, snapshot_valid = _verified_snapshot_for_detail(confirmation)
     if not isinstance(snapshot.get("items"), list):
         snapshot["items"] = []
     if not isinstance(snapshot.get("totals"), dict):
@@ -361,6 +370,7 @@ def ver_confirmacion(confirmation_id: str):
         party=party,
         company=company,
         snapshot=snapshot,
+        snapshot_valid=snapshot_valid,
         invitations=invitations,
         audit_timeline=audit_timeline,
     )

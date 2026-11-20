@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 from importlib import import_module
+import json
 import re
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlparse
@@ -17,6 +18,7 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
+from cacao_accounting.contabilidad.balance_confirmation import compute_snapshot_hash
 from cacao_accounting.database import (
     AuditTrail,
     BalanceConfirmation,
@@ -352,3 +354,146 @@ def test_claim_confirmation_delivery_rejects_a_concurrent_response():
         with application.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+@pytest.fixture
+def verified_snapshot_detail():
+    """Prepare a real admin detail route with a balanced, valid snapshot digest."""
+    application, confirmation_id, _invitation_ids, _tokens, _status, _sent_at = _crear_app("draft", False)
+    snapshot = {
+        "company_id": "cacao",
+        "company_name": "Cacao SA",
+        "party_id": "customer-id",
+        "party_name": "Cliente",
+        "party_type": "customer",
+        "cutoff_date": "2026-10-31",
+        "items": [
+            {
+                "document_type": "sales_invoice",
+                "document_no": "ORIGINAL-SNAPSHOT-INVOICE",
+                "document_date": "2026-10-01",
+                "due_date": "2026-10-31",
+                "currency": "NIO",
+                "original_amount": "125.00",
+                "outstanding_amount": "125.00",
+            }
+        ],
+        "totals": {"NIO": "125.00"},
+        "emails": ["client@example.test"],
+    }
+    snapshot_json = json.dumps(snapshot, ensure_ascii=False)
+    snapshot_hash = compute_snapshot_hash(snapshot)
+    with application.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation is not None
+        confirmation.snapshot_json = snapshot_json
+        confirmation.snapshot_hash = snapshot_hash
+        database.session.commit()
+
+    client = application.test_client()
+    login = client.post("/login", data={"usuario": "admin", "acceso": CONTRASENA}, follow_redirects=True)
+    assert login.status_code == 200
+    yield application, confirmation_id, client, snapshot_json, snapshot_hash
+    with application.app_context():
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_balance_confirmation_detail_renders_only_a_verified_snapshot(verified_snapshot_detail, caplog):
+    """A draft displays its stored hash and contents only after validation succeeds."""
+    application, confirmation_id, client, _snapshot_json, snapshot_hash = verified_snapshot_detail
+
+    with caplog.at_level("WARNING"):
+        response = client.get(f"/accounting/balance-confirmations/{confirmation_id}")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Snapshot integrity verified." in body or "Integridad del snapshot verificada." in body
+    assert "ORIGINAL-SNAPSHOT-INVOICE" in body
+    assert snapshot_hash in body
+    assert "Balance confirmation snapshot rejected" not in caplog.text
+    with application.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation is not None and confirmation.snapshot_hash == snapshot_hash
+
+
+def test_balance_confirmation_detail_hides_json_with_a_mismatched_hash(verified_snapshot_detail, caplog):
+    """Tampered but valid JSON is not rendered as trusted accounting evidence."""
+    application, confirmation_id, client, _snapshot_json, snapshot_hash = verified_snapshot_detail
+    tampered_json = json.dumps(
+        {"items": [{"document_no": "TAMPERED-SNAPSHOT-SECRET"}], "totals": {"NIO": "999999.00"}},
+        ensure_ascii=False,
+    )
+    with application.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation is not None
+        confirmation.snapshot_json = tampered_json
+        database.session.commit()
+
+    with caplog.at_level("WARNING"):
+        response = client.get(f"/accounting/balance-confirmations/{confirmation_id}")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "TAMPERED-SNAPSHOT-SECRET" not in body
+    assert "999999.00" not in body
+    assert "No se pudo verificar la integridad" in body
+    assert "Balance confirmation snapshot rejected" in caplog.text
+    assert confirmation_id in caplog.text
+    assert "TAMPERED-SNAPSHOT-SECRET" not in caplog.text
+    with application.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation is not None
+        assert confirmation.snapshot_json == tampered_json
+        assert confirmation.snapshot_hash == snapshot_hash
+
+
+def test_balance_confirmation_detail_hides_malformed_snapshot_without_http_500(verified_snapshot_detail, caplog):
+    """Malformed stored JSON is logged and hidden without crashing or changing evidence."""
+    application, confirmation_id, client, _snapshot_json, snapshot_hash = verified_snapshot_detail
+    malformed_json = '{"items": ['
+    with application.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation is not None
+        confirmation.snapshot_json = malformed_json
+        database.session.commit()
+
+    with caplog.at_level("WARNING"):
+        response = client.get(f"/accounting/balance-confirmations/{confirmation_id}")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "No se pudo verificar la integridad" in body
+    assert "El snapshot no contiene partidas abiertas." not in body
+    assert "Balance confirmation snapshot rejected" in caplog.text
+    with application.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation is not None
+        assert confirmation.snapshot_json == malformed_json
+        assert confirmation.snapshot_hash == snapshot_hash
+
+
+def test_balance_confirmation_detail_rejects_non_object_snapshot_with_matching_hash(verified_snapshot_detail, caplog):
+    """A valid JSON digest still fails closed when the snapshot root is not an object."""
+    application, confirmation_id, client, _snapshot_json, _snapshot_hash = verified_snapshot_detail
+    invalid_snapshot = ["not a balance snapshot"]
+    snapshot_json = json.dumps(invalid_snapshot)
+    snapshot_hash = hashlib.sha256(json.dumps(invalid_snapshot, sort_keys=True).encode("utf-8")).hexdigest()
+    with application.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation is not None
+        confirmation.snapshot_json = snapshot_json
+        confirmation.snapshot_hash = snapshot_hash
+        database.session.commit()
+
+    with caplog.at_level("WARNING"):
+        response = client.get(f"/accounting/balance-confirmations/{confirmation_id}")
+
+    assert response.status_code == 200
+    assert "No se pudo verificar la integridad" in response.get_data(as_text=True)
+    assert "Balance confirmation snapshot rejected" in caplog.text
+    with application.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation is not None
+        assert confirmation.snapshot_json == snapshot_json
+        assert confirmation.snapshot_hash == snapshot_hash

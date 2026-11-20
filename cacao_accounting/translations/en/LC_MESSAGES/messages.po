@@ -22234,6 +22234,18 @@ msgstr "Comment / Explanation"
 msgid "Hash del Snapshot Confirmado"
 msgstr "Confirmed Snapshot Hash"
 
+#: cacao_accounting/templates/admin/balance_confirmation_detail.html
+msgid "Integridad del snapshot verificada."
+msgstr "Snapshot integrity verified."
+
+#: cacao_accounting/templates/admin/balance_confirmation_detail.html
+msgid "No se pudo verificar la integridad del snapshot; su contenido se ocultó."
+msgstr "Snapshot integrity could not be verified; its contents have been hidden."
+
+#: cacao_accounting/templates/admin/balance_confirmation_detail.html
+msgid "Hash SHA-256 almacenado"
+msgstr "Stored SHA-256 hash"
+
 #: cacao_accounting/templates/admin/balance_confirmation_detail.html:78
 #: cacao_accounting/templates/admin/balance_confirmation_detail.html:84
 msgid "Partidas Incluidas en Snapshot"
