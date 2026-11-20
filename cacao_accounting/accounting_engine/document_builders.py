@@ -668,6 +668,8 @@ def _build_landed_cost_item_contexts(
                 net_amount=amount,
                 item_type="inventory",
                 uom=item.uom or "unit",
+                weight=_decimal_value(item.weight),
+                volume=_decimal_value(item.volume),
             )
         )
         try:

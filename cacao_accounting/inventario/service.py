@@ -114,6 +114,10 @@ class ItemParams:
     default_uom: str = ""
     purchase_uom: str | None = None
     sale_uom: str | None = None
+    weight: Decimal | None = None
+    weight_uom: str | None = None
+    volume: Decimal | None = None
+    volume_uom: str | None = None
     default_warehouse_id: str | None = None
     default_supplier_id: str | None = None
     allow_negative_stock: bool = False
@@ -718,6 +722,7 @@ def update_item_with_uoms(
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
     validate_default_warehouse(params.default_warehouse_id, action="editar")
+    _validate_item_dimensions(params)
     if _item_has_records(item_code) and _controles_de_inventario_cambiaron(item, resolved_stock_flag, params):
         raise InventoryServiceError(_("No se pueden cambiar los controles de inventario después de usar el item."))
     validate_item_account_rows(
@@ -731,6 +736,21 @@ def update_item_with_uoms(
     _reemplaza_conversiones_uom(item, resolved_uom_rows, params.default_uom)
     _reemplaza_cuentas_contables(item, resolved_account_rows)
     return item
+
+
+def _validate_item_dimensions(params: ItemParams) -> None:
+    """Valida peso y volumen opcionales con su unidad explícita."""
+    for value, uom, label in (
+        (params.weight, params.weight_uom, "peso"),
+        (params.volume, params.volume_uom, "volumen"),
+    ):
+        if value is not None and value < 0:
+            raise InventoryServiceError(_("El %(label)s del artículo no puede ser negativo.") % {"label": label})
+        if value and value > 0:
+            if not uom:
+                raise InventoryServiceError(_("El %(label)s requiere una unidad de medida.") % {"label": label})
+            if database.session.execute(database.select(UOM).filter_by(code=uom)).scalar_one_or_none() is None:
+                raise InventoryServiceError(_("La unidad de %(label)s no existe.") % {"label": label})
 
 
 def _controles_de_inventario_cambiaron(item: Item, resolved_stock_flag: bool, params: ItemParams) -> bool:
@@ -757,6 +777,10 @@ def _aplica_campos_item(item: Item, params: ItemParams, resolved_item_type: str,
     item.default_uom = params.default_uom
     item.purchase_uom = params.purchase_uom
     item.sale_uom = params.sale_uom
+    item.weight = params.weight
+    item.weight_uom = params.weight_uom
+    item.volume = params.volume
+    item.volume_uom = params.volume_uom
     item.default_warehouse_id = params.default_warehouse_id
     item.default_supplier_id = params.default_supplier_id
     item.allow_negative_stock = params.allow_negative_stock
@@ -912,6 +936,7 @@ def create_item_with_uoms(
     resolved_uom_rows = params.uom_rows or []
     resolved_account_rows = params.account_rows or []
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
+    _validate_item_dimensions(params)
     resolved_item_type = params.item_type or "goods"
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
     validate_default_warehouse(params.default_warehouse_id, action="crear")
@@ -939,6 +964,10 @@ def create_item_with_uoms(
         default_uom=params.default_uom,
         purchase_uom=params.purchase_uom,
         sale_uom=params.sale_uom,
+        weight=params.weight,
+        weight_uom=params.weight_uom,
+        volume=params.volume,
+        volume_uom=params.volume_uom,
         default_warehouse_id=params.default_warehouse_id,
         default_supplier_id=params.default_supplier_id,
         allow_negative_stock=params.allow_negative_stock,

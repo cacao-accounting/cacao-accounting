@@ -2245,6 +2245,10 @@ def _purchase_invoice_catalogs() -> tuple[list[dict[str, str | None]], list[dict
             "has_batch": item.has_batch,
             "has_serial_no": item.has_serial_no,
             "has_expiry_date": item.has_expiry_date,
+            "weight": str(item.weight) if item.weight is not None else None,
+            "weight_uom": item.weight_uom,
+            "volume": str(item.volume) if item.volume is not None else None,
+            "volume_uom": item.volume_uom,
         }
         for (item,) in database.session.execute(database.select(Item)).all()
     ]
@@ -3074,9 +3078,23 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
     """Guarda las lineas de items del costo de importacion desde el formulario."""
     items_agrupados = _parse_grid_rows_from_form(
         "item",
-        ["item_code", "item_name", "qty", "uom", "rate", "amount", "warehouse"],
+        [
+            "item_code",
+            "item_name",
+            "qty",
+            "uom",
+            "rate",
+            "amount",
+            "warehouse",
+            "weight_uom",
+            "weight",
+            "volume_uom",
+            "volume",
+        ],
     )
     total = Decimal("0")
+    weight_uoms: set[str] = set()
+    volume_uoms: set[str] = set()
     for data in items_agrupados.values():
         item_code = data.get("item_code", "").strip()
         if not item_code:
@@ -3085,6 +3103,13 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
         rate = Decimal(str(data.get("rate", "0")))
         if qty < 0 or rate < 0:
             raise ValueError(_("La cantidad y la tarifa de un costo de importación no pueden ser negativas."))
+        item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
+        weight, weight_uom = _landed_cost_dimension(data, item, "weight")
+        volume, volume_uom = _landed_cost_dimension(data, item, "volume")
+        if weight > 0:
+            weight_uoms.add(weight_uom)
+        if volume > 0:
+            volume_uoms.add(volume_uom)
         amount = qty * rate
         exchange_rate = Decimal(str(registro.exchange_rate or "1"))
         base_rate = (rate * exchange_rate).quantize(Decimal("0.0001"))
@@ -3101,10 +3126,38 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
                 amount=amount,
                 base_rate=base_rate,
                 base_amount=base_amount,
-                warehouse=data.get("warehouse", ""),
+                warehouse=data.get("warehouse") or None,
+                weight=weight,
+                weight_uom=weight_uom or None,
+                volume=volume,
+                volume_uom=volume_uom or None,
             )
         )
+    if len(weight_uoms) > 1:
+        raise ValueError(_("Todas las líneas deben usar la misma unidad de peso."))
+    if len(volume_uoms) > 1:
+        raise ValueError(_("Todas las líneas deben usar la misma unidad de volumen."))
     return total
+
+
+def _landed_cost_dimension(
+    data: dict[str, Any],
+    item: Item | None,
+    field: str,
+) -> tuple[Decimal, str]:
+    """Resuelve el valor y la UOM de una dimensión, usando el catálogo como respaldo."""
+    raw_value = data.get(field)
+    raw_uom = data.get(f"{field}_uom")
+    label = "peso" if field == "weight" else "volumen"
+    value = Decimal(str(raw_value)) if raw_value not in (None, "") else Decimal(str(getattr(item, field, 0) or 0))
+    uom = str(raw_uom or getattr(item, f"{field}_uom", "") or "").strip()
+    if value < 0:
+        raise ValueError(_("El %(field)s de una línea no puede ser negativo.") % {"field": label})
+    if value > 0 and not uom:
+        raise ValueError(_("El %(field)s de una línea requiere una unidad de medida.") % {"field": label})
+    if uom and database.session.execute(database.select(UOM).filter_by(code=uom)).scalar_one_or_none() is None:
+        raise ValueError(_("La unidad de %(field)s no existe.") % {"field": label})
+    return value, uom
 
 
 def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:

@@ -6,7 +6,7 @@
 from cacao_accounting.i18n import _l
 from flask_wtf import FlaskForm
 from wtforms import BooleanField, DateField, DecimalField, SelectField, StringField, TextAreaField
-from wtforms.validators import DataRequired, Optional
+from wtforms.validators import DataRequired, NumberRange, Optional
 
 CODIGO = _l("Código")
 
@@ -36,6 +36,10 @@ class FormularioArticulo(FlaskForm):
     has_serial_no = BooleanField(_l("Controlar número de serie"))
     purchase_uom = SelectField(_l("UOM de compra"), choices=[], validators=[Optional()])
     sale_uom = SelectField(_l("UOM de venta"), choices=[], validators=[Optional()])
+    weight = DecimalField(_l("Peso por unidad"), places=9, validators=[Optional(), NumberRange(min=0)])
+    weight_uom = SelectField(_l("UOM de peso"), choices=[], validators=[Optional()])
+    volume = DecimalField(_l("Volumen por unidad"), places=9, validators=[Optional(), NumberRange(min=0)])
+    volume_uom = SelectField(_l("UOM de volumen"), choices=[], validators=[Optional()])
     standard_rate = DecimalField(_l("Tarifa estándar"), places=4, validators=[Optional()])
     last_purchase_rate = DecimalField(_l("Última tarifa de compra"), places=4, validators=[Optional()])
     default_supplier_id = StringField(_l("Proveedor predeterminado"), validators=[Optional()])

@@ -3577,10 +3577,16 @@ def compras_import_landed_cost_nuevo():
             "?source_type=purchase_invoice&target_type=import_landed_cost&source_id=" + (from_invoice_id or "")
         ),
         "source_label": str(FACTURA_COMPRA_LABEL),
+        "enableDimensions": True,
     }
 
     if request.method == "POST":
-        response = _create_import_landed_cost_from_request()
+        try:
+            response = _create_import_landed_cost_from_request()
+        except ValueError as exc:
+            database.session.rollback()
+            flash(_("No se pudo crear el costo de importación: %(error)s") % {"error": exc}, "danger")
+            response = None
         if response is not None:
             return response
 

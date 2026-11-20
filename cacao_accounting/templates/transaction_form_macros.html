@@ -307,6 +307,14 @@
                         line.has_batch = opt.has_batch || false;
                         line.has_serial_no = opt.has_serial_no || false;
                         line.has_expiry_date = opt.has_expiry_date || false;
+                        if (opt.weight !== undefined && opt.weight !== null) {
+                          line.weight = opt.weight;
+                          line.weight_uom = opt.weight_uom || line.weight_uom;
+                        }
+                        if (opt.volume !== undefined && opt.volume !== null) {
+                          line.volume = opt.volume;
+                          line.volume_uom = opt.volume_uom || line.volume_uom;
+                        }
                         onItemChange(line);
                       },
                       messages: {
@@ -386,6 +394,30 @@
                       </template>
                     </div>
                   </div>
+                </template>
+                <template x-if="column.field === 'weight'">
+                  <input class="form-control form-control-sm text-end" type="number" step="0.000000001" min="0"
+                    :name="'weight_' + index" x-model.number="line.weight">
+                </template>
+                <template x-if="column.field === 'weight_uom'">
+                  <select class="form-select form-select-sm" :name="'weight_uom_' + index" x-model="line.weight_uom">
+                    <option value=""></option>
+                    <template x-for="uom in availableUoms" :key="'w-' + uom.code">
+                      <option :value="uom.code" x-text="uom.code"></option>
+                    </template>
+                  </select>
+                </template>
+                <template x-if="column.field === 'volume'">
+                  <input class="form-control form-control-sm text-end" type="number" step="0.000000001" min="0"
+                    :name="'volume_' + index" x-model.number="line.volume">
+                </template>
+                <template x-if="column.field === 'volume_uom'">
+                  <select class="form-select form-select-sm" :name="'volume_uom_' + index" x-model="line.volume_uom">
+                    <option value=""></option>
+                    <template x-for="uom in availableUoms" :key="'v-' + uom.code">
+                      <option :value="uom.code" x-text="uom.code"></option>
+                    </template>
+                  </select>
                 </template>
                 <template x-if="column.field === 'qty'">
                   <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0.0001"

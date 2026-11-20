@@ -1398,6 +1398,14 @@ class Item(database.Model, BaseTabla):  # type: ignore[name-defined]
     sale_uom = database.Column(
         database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    weight = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    weight_uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    volume = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    volume_uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     default_warehouse_id = database.Column(
         database.String(20),
         database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -2688,6 +2696,14 @@ class ImportLandedCostItem(database.Model, BaseTabla):  # type: ignore[name-defi
     base_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     allocated_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    weight = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    weight_uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    volume = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    volume_uom = database.Column(
+        database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     final_inventory_cost = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     unit_inventory_cost = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     warehouse = database.Column(

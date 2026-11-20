@@ -418,6 +418,8 @@ def inventario_articulo_nuevo():
     formulario.default_uom.choices = _uom_choices()
     formulario.purchase_uom.choices = _uom_choices()
     formulario.sale_uom.choices = _uom_choices()
+    formulario.weight_uom.choices = _uom_choices()
+    formulario.volume_uom.choices = _uom_choices()
     formulario.item_category_id.choices = _item_category_choices()
     formulario.currency.choices = _currency_choices()
     titulo = _("Nuevo Artículo") + " - " + APPNAME
@@ -476,6 +478,8 @@ def inventario_articulo_editar(item_id):
     formulario.default_uom.choices = _uom_choices()
     formulario.purchase_uom.choices = _uom_choices()
     formulario.sale_uom.choices = _uom_choices()
+    formulario.weight_uom.choices = _uom_choices()
+    formulario.volume_uom.choices = _uom_choices()
     formulario.item_category_id.choices = _item_category_choices()
     formulario.currency.choices = _currency_choices()
     titulo = _("Editar") + f" {item.name} - " + APPNAME
