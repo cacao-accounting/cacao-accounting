@@ -569,9 +569,12 @@ def test_two_concurrent_runs_leave_one_active_adjustment(business_app, monkeypat
 
     La primera corrida conserva la reserva del periodo mientras la segunda
     intenta adquirirla. En SQLite la reserva rechaza de inmediato a la segunda;
-    en PostgreSQL ``FOR UPDATE`` la detiene hasta que la primera confirma y
-    entonces relee la corrida previa. No hay reintento que normalice el
-    resultado: la prueba observa que ambas invocaciones respetan la serialización.
+    en los motores con ``FOR UPDATE`` la bloquea desde la resolución del periodo,
+    antes de llegar a ``_lock_period_for_run``, así que la prueba observa la
+    entrada de la segunda invocación en esa resolución. Cuando la primera
+    confirma, la segunda relee la corrida previa. No hay reintento que normalice
+    el resultado: la prueba observa que ambas invocaciones respetan la
+    serialización.
     """
     company = f"R{uuid4().hex[:9]}"
     with business_app.app_context():
@@ -581,18 +584,25 @@ def test_two_concurrent_runs_leave_one_active_adjustment(business_app, monkeypat
 
     first_holds_lock = Event()
     release_first = Event()
-    second_tries_lock = Event()
+    second_resolves_period = Event()
     second_rejected = Event()
     lock_calls = 0
+    resolve_calls = 0
+    real_resolve = ExchangeRevaluationService._resolve_period
     real_lock = ExchangeRevaluationService._lock_period_for_run
     real_reserve = ExchangeRevaluationService._reserve_sqlite_writer
     real_create_journal = ExchangeRevaluationService._create_journal
 
+    def observe_resolve(self, company, year, month, period_id):
+        nonlocal resolve_calls
+        resolve_calls += 1
+        if resolve_calls == 2:
+            second_resolves_period.set()
+        return real_resolve(self, company, year, month, period_id)
+
     def observe_lock(self, period):
         nonlocal lock_calls
         lock_calls += 1
-        if lock_calls == 2:
-            second_tries_lock.set()
         return real_lock(self, period)
 
     def observe_reserve(self, message):
@@ -604,11 +614,12 @@ def test_two_concurrent_runs_leave_one_active_adjustment(business_app, monkeypat
             raise
 
     def pause_first(self, run, user_id, *, reversal=False, posting_date=None):
-        if lock_calls == 1 and not first_holds_lock.is_set():
+        if not first_holds_lock.is_set():
             first_holds_lock.set()
             assert release_first.wait(timeout=10)
         return real_create_journal(self, run, user_id, reversal=reversal, posting_date=posting_date)
 
+    monkeypatch.setattr(ExchangeRevaluationService, "_resolve_period", observe_resolve)
     monkeypatch.setattr(ExchangeRevaluationService, "_lock_period_for_run", observe_lock)
     monkeypatch.setattr(ExchangeRevaluationService, "_reserve_sqlite_writer", observe_reserve)
     monkeypatch.setattr(ExchangeRevaluationService, "_create_journal", pause_first)
@@ -630,7 +641,7 @@ def test_two_concurrent_runs_leave_one_active_adjustment(business_app, monkeypat
         if database_dialect == "sqlite":
             assert second_rejected.wait(timeout=10)
         else:
-            assert second_tries_lock.wait(timeout=10)
+            assert second_resolves_period.wait(timeout=10)
         release_first.set()
         first_result = first.result(timeout=10)
         second_result = second.result(timeout=10)

@@ -32,7 +32,7 @@ from cacao_accounting.database import (
     Entity,
     database,
 )
-from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
+from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter, _is_bank_identity_conflict
 
 MOVEMENT_DATE = date(2026, 5, 15)
 DUPLICATE_MESSAGE = "La transacción bancaria ya existe en la base de datos."
@@ -252,8 +252,6 @@ def test_adapter_rejects_a_sequential_duplicate_import(bank_identity_scenario):
 
 def test_identity_conflict_detection_ignores_other_integrity_errors():
     """Solo la restricción de identidad bancaria se traduce a conflicto de negocio."""
-    from cacao_accounting.imports.adapters.bank_statement import _is_bank_identity_conflict
-
     sqlite_error = IntegrityError(
         "INSERT INTO bank_transaction",
         {},
@@ -264,6 +262,11 @@ def test_identity_conflict_detection_ignores_other_integrity_errors():
         {},
         SimpleNamespace(diag=SimpleNamespace(constraint_name="uq_bank_transaction_identity")),
     )
+    mysql_error = IntegrityError(
+        "INSERT INTO bank_transaction",
+        {},
+        Exception("(1062, \"Duplicate entry 'abc' for key 'bank_transaction.uq_bank_transaction_identity'\")"),
+    )
     unrelated_error = IntegrityError(
         "INSERT INTO party",
         {},
@@ -272,6 +275,7 @@ def test_identity_conflict_detection_ignores_other_integrity_errors():
 
     assert _is_bank_identity_conflict(sqlite_error)
     assert _is_bank_identity_conflict(postgres_error)
+    assert _is_bank_identity_conflict(mysql_error)
     assert not _is_bank_identity_conflict(unrelated_error)
 
 
@@ -386,7 +390,9 @@ def test_identity_uniqueness_on_the_configured_engine():
             database.session.add(BankTransaction(**_movement(account_id, reference=None)))
             with pytest.raises(IntegrityError) as error:
                 database.session.flush()
-            assert "identity_key" in str(error.value.orig)
+            # Cada motor nombra la restricción de forma distinta: SQLite y
+            # PostgreSQL exponen la columna, MySQL el índice único.
+            assert _is_bank_identity_conflict(error.value)
             database.session.rollback()
 
             with pytest.raises(ValueError, match="ya existe"):
