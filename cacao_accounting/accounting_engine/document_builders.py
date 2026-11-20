@@ -419,12 +419,12 @@ def _subtract_late_receipt_reclassifications(
     posting_dates: dict[str, date],
     prior_receipts: Iterable[PurchaseReceipt],
 ) -> None:
-    """Subtract prior receipt reclassifications preserving item identity.
+    """Resta las reclasificaciones previas conservando la identidad del artículo.
 
-    The GL credits are aggregated by expense account and do not carry the item
-    dimension. Se reconstruye la reclasificación desde las líneas de recepción
-    y sus asignaciones auditables, de modo que cada crédito se resta una sola
-    vez del artículo que lo originó.
+    Los créditos del GL se agregan por cuenta de gasto y no conservan la
+    dimensión de artículo. La reclasificación se reconstruye desde las líneas
+    de recepción y sus asignaciones auditables, de modo que cada crédito se
+    resta una sola vez del artículo que lo originó.
     """
     from cacao_accounting.database import PurchaseInvoiceReceiptAllocation
 
