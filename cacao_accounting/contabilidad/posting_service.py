@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 
 from typing import Any, Iterable, Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -234,12 +234,22 @@ def _find_period_ids(company: str, posting_date: Any) -> tuple[str | None, str |
 
 
 def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) -> list[Book]:
-    """Return every active book for a company, ignoring legacy selectors."""
+    """Return active books for a company, honoring an optional book selector."""
     query = select(Book).where(
         Book.entity == company,
         Book.status == "activo",
     )
+    requested = [ledger_code] if isinstance(ledger_code, str) else list(ledger_code or [])
+    if requested:
+        query = query.where(or_(Book.id.in_(requested), Book.code.in_(requested)))
     books = database.session.execute(query.order_by(Book.is_primary.desc(), Book.code)).scalars().all()
+    if requested:
+        found = {identifier for book in books for identifier in (book.id, book.code)}
+        invalid = set(requested) - found
+        if invalid:
+            raise PostingError(
+                _("Libro contable no válido para la compañía: %(ledger_code)s.") % {"ledger_code": sorted(invalid)[0]}
+            )
     if not books:
         raise PostingError(_("La compañía no tiene libro contable activo."))
     return list(books)
@@ -256,6 +266,10 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     """
     if type(document).__name__ != "ComprobanteContable":
         ledger_code = None
+    elif ledger_code is None:
+        from cacao_accounting.contabilidad.journal_service import _selected_books_for_journal
+
+        ledger_code = _selected_books_for_journal(document)
     company = _company_for(document)
     posting_date = _posting_date_for(document)
     allow_closing = bool(getattr(document, "is_closing", False))
@@ -1960,9 +1974,7 @@ def _line_rate_generic(line: Any) -> Decimal:
 
 
 def _valuation_method_for_company(company_code: str) -> str:
-    entity = database.session.get(Entity, company_code)
-    if entity is None:
-        entity = database.session.execute(select(Entity).filter_by(code=company_code)).scalars().first()
+    entity = database.session.execute(select(Entity).filter_by(code=company_code).with_for_update()).scalars().first()
     if not entity:
         raise PostingError(_("La compañía no existe."))
     return (entity.valuation_method or "moving_average").lower()
