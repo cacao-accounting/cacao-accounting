@@ -161,7 +161,7 @@ def test_las_asignaciones_activas_se_acumulan_y_las_canceladas_no_descuentan(app
     with app.app_context():
         codes = [f"ART-A-{suffix}", f"ART-B-{suffix}"]
         _sembrar_articulos(suffix, codes)
-        receipts, item_ids = _sembrar_recepciones(suffix, [(codes[0], "50"), (codes[1], "100")])
+        receipts, item_ids = _sembrar_recepciones(suffix, [(codes[0], "70"), (codes[1], "130")])
         invoice_items = _sembrar_factura(suffix, codes, supplier_id)
         database.session.add_all(
             [
