@@ -1155,7 +1155,9 @@ def _validate_line_books(company: str, books: list[str] | None, lines: list[Jour
     if not requested:
         return
 
-    company_books = list(database.session.execute(select(Book).where(Book.entity == company)).scalars())
+    company_books = list(
+        database.session.execute(select(Book).where(Book.entity == company, Book.status == "activo")).scalars()
+    )
     book_ids = {value: book.id for book in company_books for value in (book.id, book.code)}
     invalid = requested - book_ids.keys()
     if invalid:
@@ -1173,8 +1175,8 @@ def _authorized_journal_books(
     requested_books: list[str] | None,
     user_id: str,
     action: str,
-) -> list[str] | None:
-    """Valida el alcance de compañía y devuelve todos los libros activos."""
+) -> list[str]:
+    """Validate access and preserve the explicitly requested active books."""
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
@@ -1189,12 +1191,24 @@ def _authorized_journal_books(
     }.get(action, "crear")
     if not getattr(permissions, permission_name, False) or not permissions.tiene_acceso_compania(company):
         raise JournalValidationError(_("El usuario no tiene acceso a la compañía seleccionada."))
-    return [
-        book.code
-        for book in database.session.execute(
+    active_books = list(
+        database.session.execute(
             select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.is_primary.desc(), Book.code)
         ).scalars()
-    ]
+    )
+    if not active_books:
+        raise JournalValidationError(_("La compañía no tiene libro contable activo."))
+    if not requested_books:
+        return [book.code for book in active_books]
+
+    requested = set(requested_books)
+    books_by_identifier = {identifier: book for book in active_books for identifier in (book.id, book.code)}
+    invalid = requested - books_by_identifier.keys()
+    if invalid:
+        raise JournalValidationError(
+            _("Libro contable no válido para la compañía: %(ledger_code)s.") % {"ledger_code": sorted(invalid)[0]}
+        )
+    return [book.code for book in active_books if book.id in requested or book.code in requested]
 
 
 def _validate_journal_book_access(company: str, books: list[str] | None, user_id: str, action: str) -> None:

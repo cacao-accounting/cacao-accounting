@@ -1841,6 +1841,7 @@ class StockLedgerBookEntry(database.Model):  # type: ignore[name-defined]
     __tablename__ = "stock_ledger_book_entry"
     __table_args__ = (
         UniqueConstraint("stock_ledger_entry_id", "ledger_id", name="uq_stock_ledger_book_entry_ledger"),
+        CheckConstraint("exchange_rate > 0", name="ck_stock_ledger_book_entry_rate_positive"),
         Index("ix_stock_ledger_book_entry_ledger_date", "ledger_id", "posting_date"),
     )
 

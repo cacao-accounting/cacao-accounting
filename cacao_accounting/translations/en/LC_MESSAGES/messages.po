@@ -24156,3 +24156,22 @@ msgstr "The weight unit does not exist."
 #: cacao_accounting/inventario/service.py
 msgid "La unidad de volumen no existe."
 msgstr "The volume unit does not exist."
+
+#: cacao_accounting/ledger_queries.py
+#, python-format
+msgid "No existe un libro contable activo para la compañía %(company)s."
+msgstr "No active accounting book exists for company %(company)s."
+
+#: cacao_accounting/reportes/services.py
+#, python-format
+msgid "Falta la valoración del libro %(ledger)s para uno o más movimientos de inventario."
+msgstr "The valuation for book %(ledger)s is missing for one or more inventory movements."
+
+#: cacao_accounting/reportes/services.py
+#, python-format
+msgid "Falta la valoración AR/AP del libro %(ledger)s para uno o más movimientos."
+msgstr "The AR/AP valuation for book %(ledger)s is missing for one or more movements."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "No se puede reversar el inventario sin su valoración original por libro."
+msgstr "Inventory cannot be reversed without its original valuation by book."

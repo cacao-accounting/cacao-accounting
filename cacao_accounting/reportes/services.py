@@ -20,6 +20,7 @@ from cacao_accounting.contabilidad.journal_constants import JOURNAL_REVERSAL_RET
 from cacao_accounting.database import (
     AccountingPeriod,
     ARAPLedgerEntry,
+    ARAPLedgerBookEntry,
     Accounts,
     Batch,
     BankAccount,
@@ -50,6 +51,7 @@ from cacao_accounting.database import (
     StockBin,
     StockEntry,
     StockEntryItem,
+    StockLedgerBookEntry,
     StockLedgerEntry,
     StockValuationLayer,
     WithholdingCertificate,
@@ -674,17 +676,12 @@ def _reconcile_ar_ap_rows(context: _ReconciliationContext) -> list[ReportRow]:
     as_of_date = context.as_of_date
     ar_account = str(defaults.default_receivable) if defaults and defaults.default_receivable else None
     ap_account = str(defaults.default_payable) if defaults and defaults.default_payable else None
-    ar_subledger = get_ar_ap_subledger(
-        SubledgerFilters(company=filters.company, party_type="customer", as_of_date=as_of_date)
-    ).totals.get("outstanding_amount", Decimal("0"))
-    ap_subledger = get_ar_ap_subledger(
-        SubledgerFilters(company=filters.company, party_type="supplier", as_of_date=as_of_date)
-    ).totals.get("outstanding_amount", Decimal("0"))
+    ar_subledger, ap_subledger = _reconciliation_ar_ap_book_totals(context)
     return [
         _reconciliation_row(
             "AR",
             [ar_account] if ar_account else [],
-            context.convert(ar_subledger, context.company_currency),
+            ar_subledger,
             _reconciliation_gl_amount(
                 filters.company,
                 context.ledger.id,
@@ -699,7 +696,7 @@ def _reconcile_ar_ap_rows(context: _ReconciliationContext) -> list[ReportRow]:
         _reconciliation_row(
             "AP",
             [ap_account] if ap_account else [],
-            context.convert(-ap_subledger, context.company_currency),
+            -ap_subledger,
             _reconciliation_gl_amount(
                 filters.company,
                 context.ledger.id,
@@ -712,6 +709,37 @@ def _reconcile_ar_ap_rows(context: _ReconciliationContext) -> list[ReportRow]:
             note=_("Fuente: facturas de compra y aplicaciones de pago; el pasivo se expresa como crédito neto."),
         ),
     ]
+
+
+def _reconciliation_ar_ap_book_totals(
+    context: _ReconciliationContext,
+) -> tuple[Decimal, Decimal]:  # pylint: disable=not-callable
+    """Sum signed AR/AP evidence already valued in the selected book."""
+    query = select(
+        func.coalesce(func.sum(case((ARAPLedgerEntry.ledger_type == "AR", ARAPLedgerBookEntry.book_amount), else_=0)), 0),
+        func.coalesce(func.sum(case((ARAPLedgerEntry.ledger_type == "AP", ARAPLedgerBookEntry.book_amount), else_=0)), 0),
+        func.count(func.distinct(ARAPLedgerBookEntry.ledger_entry_id)),  # pylint: disable=not-callable
+    ).join(ARAPLedgerEntry, ARAPLedgerEntry.id == ARAPLedgerBookEntry.ledger_entry_id)
+    query = query.where(
+        ARAPLedgerEntry.company == context.filters.company,
+        ARAPLedgerEntry.posting_date <= context.as_of_date,
+        ARAPLedgerBookEntry.posting_date <= context.as_of_date,
+        ARAPLedgerBookEntry.ledger_id == context.ledger.id,
+        ARAPLedgerBookEntry.book_currency == context.comparison_currency,
+    )
+    receivable, payable, valued_count = database.session.execute(query).one()
+    source_count = database.session.execute(
+        select(func.count(ARAPLedgerEntry.id)).where(  # pylint: disable=not-callable
+            ARAPLedgerEntry.company == context.filters.company,
+            ARAPLedgerEntry.ledger_type.in_(("AR", "AP")),
+            ARAPLedgerEntry.posting_date <= context.as_of_date,
+        )
+    ).scalar_one()
+    if int(valued_count) != int(source_count):
+        raise ValueError(
+            _("Falta la valoración AR/AP del libro %(ledger)s para uno o más movimientos.") % {"ledger": context.ledger.code}
+        )
+    return _decimal_value(receivable), _decimal_value(payable)
 
 
 def _reconcile_inventory_row(context: _ReconciliationContext) -> ReportRow:
@@ -729,17 +757,11 @@ def _reconcile_inventory_row(context: _ReconciliationContext) -> ReportRow:
         ).scalars()
         if account_id
     ]
-    inventory_query = exclude_cancelled_stock_entries(
-        select(func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0)).where(
-            StockLedgerEntry.company == filters.company,
-            StockLedgerEntry.posting_date <= as_of_date,
-        )
-    )
-    inventory_subledger = _decimal_value(database.session.execute(inventory_query).scalar_one())
+    inventory_subledger = _reconciliation_inventory_book_amount(context)
     return _reconciliation_row(
         "Inventory",
         inventory_accounts,
-        context.convert(inventory_subledger, context.company_currency),
+        inventory_subledger,
         _reconciliation_gl_amount(
             filters.company, context.ledger.id, inventory_accounts, date_to=as_of_date, currency=context.comparison_currency
         ),
@@ -747,6 +769,36 @@ def _reconcile_inventory_row(context: _ReconciliationContext) -> ReportRow:
         currency=context.ledger.currency,
         note=_("Fuente: Stock Ledger; cuentas derivadas de la configuración activa por bodega."),
     )
+
+
+def _reconciliation_inventory_book_amount(context: _ReconciliationContext) -> Decimal:  # pylint: disable=not-callable
+    """Read stock valuation snapshots for the selected book and cutoff."""
+    stock_query = exclude_cancelled_stock_entries(
+        select(func.count(StockLedgerEntry.id))  # pylint: disable=not-callable
+    ).where(  # pylint: disable=not-callable
+        StockLedgerEntry.company == context.filters.company,
+        StockLedgerEntry.posting_date <= context.as_of_date,
+    )
+    stock_count = int(database.session.execute(stock_query).scalar_one())
+    book_query = exclude_cancelled_stock_entries(
+        select(
+            func.coalesce(func.sum(StockLedgerBookEntry.book_amount), 0),
+            func.count(func.distinct(StockLedgerBookEntry.stock_ledger_entry_id)),  # pylint: disable=not-callable
+        ).join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
+    ).where(
+        StockLedgerEntry.company == context.filters.company,
+        StockLedgerEntry.posting_date <= context.as_of_date,
+        StockLedgerBookEntry.posting_date <= context.as_of_date,
+        StockLedgerBookEntry.ledger_id == context.ledger.id,
+        StockLedgerBookEntry.book_currency == context.comparison_currency,
+    )
+    amount, valued_count = database.session.execute(book_query).one()
+    if int(valued_count) != stock_count:
+        raise ValueError(
+            _("Falta la valoración del libro %(ledger)s para uno o más movimientos de inventario.")
+            % {"ledger": context.ledger.code}
+        )
+    return _decimal_value(amount)
 
 
 def _reconcile_grni_row(context: _ReconciliationContext) -> ReportRow:

@@ -48,6 +48,7 @@ from cacao_accounting.database import (
     StockBin,
     StockEntry,
     StockEntryItem,
+    StockLedgerBookEntry,
     StockLedgerEntry,
     StockValuationLayer,
     Unit,
@@ -788,6 +789,61 @@ def _inventory_ledger_context(context: LedgerContext, document: Any) -> LedgerCo
         functional_currency,
         _lookup_exchange_rate(functional_currency, context.company_currency, context.posting_date),
     )
+
+
+def _persist_stock_book_valuations(document: Any, movements: Sequence[StockLedgerEntry]) -> None:
+    """Persist each stock movement's rounded value in every active book."""
+    if not movements:
+        return
+    database.session.flush()
+    contexts = [_inventory_ledger_context(context, document) for context in _document_contexts(document)]
+    for context in contexts:
+        rate = _decimal_value(context.exchange_rate)
+        if rate <= 0:
+            raise _invalid_exchange_rate_error()
+        for movement in movements:
+            database.session.add(
+                StockLedgerBookEntry(
+                    stock_ledger_entry_id=movement.id,
+                    ledger_id=context.ledger_id,
+                    posting_date=movement.posting_date,
+                    book_currency=context.company_currency,
+                    book_amount=_to_company_currency(_decimal_value(movement.stock_value_difference), rate),
+                    exchange_rate=rate,
+                )
+            )
+
+
+def _persist_stock_book_reversals(
+    original_movements: Sequence[StockLedgerEntry], reversals: Sequence[StockLedgerEntry]
+) -> None:
+    """Append exact book-currency countervalues for stock cancellation rows."""
+    database.session.flush()
+    reversal_by_original = {str(reversal.reversal_of): reversal for reversal in reversals}
+    original_ids = [movement.id for movement in original_movements if movement.id]
+    original_values = database.session.execute(
+        select(StockLedgerBookEntry).where(StockLedgerBookEntry.stock_ledger_entry_id.in_(original_ids))
+    ).scalars()
+    values_by_original: dict[str, list[StockLedgerBookEntry]] = {}
+    for original_value in original_values:
+        original_id = str(original_value.stock_ledger_entry_id)
+        values_by_original.setdefault(original_id, []).append(original_value)
+        reversal = reversal_by_original.get(original_id)
+        if reversal is None:
+            continue
+        database.session.add(
+            StockLedgerBookEntry(
+                stock_ledger_entry_id=reversal.id,
+                ledger_id=original_value.ledger_id,
+                posting_date=reversal.posting_date,
+                book_currency=original_value.book_currency,
+                book_amount=-_decimal_value(original_value.book_amount),
+                exchange_rate=original_value.exchange_rate,
+            )
+        )
+    ledger_sets = {frozenset(row.ledger_id for row in rows) for rows in values_by_original.values()}
+    if len(values_by_original) != len(original_movements) or len(ledger_sets) != 1 or not ledger_sets:
+        raise PostingError(_("No se puede reversar el inventario sin su valoración original por libro."))
 
 
 def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> Decimal:
@@ -3036,6 +3092,7 @@ def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
     if not movements:
         raise PostingError(_("La conciliación no contiene diferencias de cantidad o valuacion."))
     database.session.add_all(movements)
+    _persist_stock_book_valuations(document, movements)
     return movements
 
 
@@ -3862,6 +3919,7 @@ def _create_stock_ledger_for_document_type(
         line_movements = _process_line_stock_ledger(document, line, sign, allocations_by_line_id, is_delivery_return)
         movements.extend(line_movements)
     database.session.add_all(movements)
+    _persist_stock_book_valuations(document, movements)
     return movements
 
 
@@ -5308,6 +5366,7 @@ def _cancel_stock_movements_if_needed(
         stock_reversals.append(_create_stock_reversal(document, movement, cancellation_date))
         movement.is_cancelled = True
     database.session.add_all(stock_reversals)
+    _persist_stock_book_reversals(original_movements, stock_reversals)
 
 
 def _cancel_landed_cost_valuations(

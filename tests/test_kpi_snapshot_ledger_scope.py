@@ -17,7 +17,9 @@ import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Accounts, Book, Currency, Entity, GLEntry, database
+from cacao_accounting.bancos.services import petty_cash_ledger_balance
+from cacao_accounting.database import Accounts, Book, Currency, Entity, GLEntry, PettyCashAccount, database
+from cacao_accounting.ledger_queries import PrimaryLedgerUnavailableError
 from cacao_accounting.reportes.analytics import get_kpi_snapshot
 
 
@@ -144,3 +146,160 @@ def test_kpi_snapshot_accepts_own_book_by_code_and_id(kpi_ledger_scenario):
     assert by_id["currency"] == "NIO"
     assert by_code["metrics"]["income"] == Decimal("100")
     assert by_id["metrics"]["income"] == Decimal("100")
+
+
+def test_kpi_snapshot_fails_when_no_active_ledger_exists(kpi_ledger_scenario):
+    """Inactive books must not be silently combined into a valid-looking KPI."""
+    app, ids = kpi_ledger_scenario
+
+    with app.app_context():
+        primary = database.session.get(Book, ids["alpha_book_id"])
+        assert primary is not None
+        primary.status = "suspendido"
+        second_book = Book(
+            entity="alpha",
+            code="ALPHA-SUSPENDED",
+            name="Libro suspendido",
+            status="suspendido",
+            currency="USD",
+        )
+        database.session.add(second_book)
+        database.session.flush()
+        account = database.session.execute(database.select(Accounts).where(Accounts.entity == "alpha")).scalars().one()
+        database.session.add(
+            GLEntry(
+                company="alpha",
+                account_id=account.id,
+                ledger_id=second_book.id,
+                account_code=account.code,
+                voucher_type="journal_entry",
+                voucher_id="JE-INACTIVE-BOOK",
+                posting_date=date(2026, 5, 10),
+                debit=Decimal("0"),
+                credit=Decimal("50"),
+                is_cancelled=False,
+                is_reversal=False,
+                is_fiscal_year_closing=False,
+            )
+        )
+        database.session.commit()
+
+        with pytest.raises(PrimaryLedgerUnavailableError, match="libro contable activo"):
+            get_kpi_snapshot("alpha", date(2026, 1, 1), date(2026, 12, 31))
+
+
+def test_kpi_snapshot_uses_only_the_primary_of_multiple_active_ledgers(kpi_ledger_scenario):
+    """A multi-book posting is read once in the deterministic primary book."""
+    app, ids = kpi_ledger_scenario
+
+    with app.app_context():
+        secondary_book = Book(
+            entity="alpha",
+            code="ALPHA-SECONDARY",
+            name="Libro secundario",
+            status="activo",
+            currency="USD",
+        )
+        database.session.add(secondary_book)
+        database.session.flush()
+        account = database.session.execute(database.select(Accounts).where(Accounts.entity == "alpha")).scalars().one()
+        database.session.add(
+            GLEntry(
+                company="alpha",
+                account_id=account.id,
+                ledger_id=secondary_book.id,
+                account_code=account.code,
+                voucher_type="journal_entry",
+                voucher_id="JE-SECONDARY-BOOK",
+                posting_date=date(2026, 5, 10),
+                debit=Decimal("0"),
+                credit=Decimal("50"),
+                is_cancelled=False,
+                is_reversal=False,
+                is_fiscal_year_closing=False,
+            )
+        )
+        database.session.commit()
+
+        snapshot = get_kpi_snapshot("alpha", date(2026, 1, 1), date(2026, 12, 31))
+
+    assert snapshot["metrics"]["income"] == Decimal("100")
+
+
+def test_petty_cash_balance_uses_one_book_when_posting_has_multiple_books(kpi_ledger_scenario):
+    """The operational cash balance must not add two book representations."""
+    app, ids = kpi_ledger_scenario
+
+    with app.app_context():
+        primary = database.session.get(Book, ids["alpha_book_id"])
+        assert primary is not None
+        secondary = Book(
+            entity="alpha",
+            code="ALPHA-CASH-SECONDARY",
+            name="Libro de efectivo secundario",
+            status="activo",
+            currency="USD",
+        )
+        account = Accounts(
+            entity="alpha",
+            code="1000-CASH",
+            name="Caja chica",
+            classification="asset",
+            account_type="petty_cash",
+            group=False,
+            active=True,
+            enabled=True,
+        )
+        database.session.add_all([secondary, account])
+        database.session.flush()
+        fund = PettyCashAccount(
+            company="alpha",
+            account_id=account.id,
+            name="Fondo de prueba",
+            currency="NIO",
+            float_amount=Decimal("100"),
+            is_default=False,
+            is_active=True,
+        )
+        database.session.add(fund)
+        database.session.flush()
+        database.session.add_all(
+            [
+                GLEntry(
+                    company="alpha",
+                    account_id=account.id,
+                    ledger_id=primary.id,
+                    account_code=account.code,
+                    voucher_type="journal_entry",
+                    voucher_id="JE-PETTY-CASH-PRIMARY",
+                    posting_date=date(2026, 5, 10),
+                    debit=Decimal("100"),
+                    credit=Decimal("0"),
+                    is_cancelled=False,
+                    is_reversal=False,
+                    is_fiscal_year_closing=False,
+                ),
+                GLEntry(
+                    company="alpha",
+                    account_id=account.id,
+                    ledger_id=secondary.id,
+                    account_code=account.code,
+                    voucher_type="journal_entry",
+                    voucher_id="JE-PETTY-CASH-SECONDARY",
+                    posting_date=date(2026, 5, 10),
+                    debit=Decimal("50"),
+                    credit=Decimal("0"),
+                    is_cancelled=False,
+                    is_reversal=False,
+                    is_fiscal_year_closing=False,
+                ),
+            ]
+        )
+        database.session.commit()
+
+        assert petty_cash_ledger_balance(fund) == Decimal("100")
+        primary.status = "suspendido"
+        secondary.status = "suspendido"
+        database.session.commit()
+        with pytest.raises(PrimaryLedgerUnavailableError, match="libro contable activo"):
+            petty_cash_ledger_balance(fund)

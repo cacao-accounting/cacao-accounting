@@ -12,12 +12,16 @@ from uuid import uuid4
 import pytest
 from flask_login import login_user
 
-from cacao_accounting.contabilidad.posting_service import post_stock_entry
+from cacao_accounting.approval_engine import approved_execution
+from cacao_accounting.contabilidad.posting_service import cancel_document, post_stock_entry
 from cacao_accounting.database import (
     Accounts,
+    Book,
     CompanyDefaultAccount,
+    ExchangeRate,
     GLEntry,
     Item,
+    StockLedgerBookEntry,
     StockEntry,
     StockEntryItem,
     StockLedgerEntry,
@@ -26,6 +30,7 @@ from cacao_accounting.database import (
     WarehouseCompanyAccount,
     database,
 )
+from cacao_accounting.internal_control_service import audit_actor
 from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
 from cacao_accounting.inventario.services import _validate_stock_entry_purpose
 
@@ -76,6 +81,12 @@ def test_el_historial_generico_es_solo_lectura(app, entorno_contable, authentica
 def test_ajuste_positivo_genera_stock_y_gl_balanceado(app, entorno_contable):
     """Un ajuste positivo crea capa de inventario y asiento balanceado."""
     with app.app_context():
+        primary_book_id = database.session.execute(database.select(Book.id).filter_by(code="DEFAULT_BOOK")).scalar_one()
+        secondary_book_id = database.session.execute(database.select(Book.id).filter_by(code="NIIF")).scalar_one()
+        libro_usd = database.session.get(Book, secondary_book_id)
+        assert libro_usd is not None
+        libro_usd.currency = "USD"
+        database.session.add(ExchangeRate(origin="NIO", destination="USD", date=date(2026, 5, 20), rate=Decimal("0.01")))
         artefacto = f"ADJ-{uuid4().hex[:6].upper()}"
         bodega = f"ADJW-{uuid4().hex[:6].upper()}"
         database.session.add(
@@ -149,7 +160,58 @@ def test_ajuste_positivo_genera_stock_y_gl_balanceado(app, entorno_contable):
         por_libro: dict[str, Decimal] = {}
         for asiento in asientos:
             por_libro[asiento.ledger_id] = por_libro.get(asiento.ledger_id, Decimal("0")) + asiento.debit
-        assert set(por_libro.values()) == {Decimal("50")}
+        assert por_libro == {
+            primary_book_id: Decimal("50.0000"),
+            secondary_book_id: Decimal("0.5000"),
+        }
+        valoraciones = (
+            database.session.execute(
+                database.select(StockLedgerBookEntry).where(
+                    StockLedgerBookEntry.stock_ledger_entry_id.in_([movimiento.id for movimiento in movimientos])
+                )
+            )
+            .scalars()
+            .all()
+        )
+        valor_por_libro: dict[str, Decimal] = {}
+        for valoracion in valoraciones:
+            valor_por_libro[valoracion.ledger_id] = valor_por_libro.get(valoracion.ledger_id, Decimal("0")) + Decimal(
+                valoracion.book_amount
+            )
+        assert valor_por_libro == por_libro
+
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        with audit_actor(actor.id, actor.name), approved_execution(entry, actor.id):
+            cancel_document(
+                entry,
+                reason="Ajuste de prueba anulado",
+                actor_user_id=actor.id,
+                cancellation_date=entry.posting_date,
+            )
+        database.session.flush()
+        movimientos_post_cancelacion = (
+            database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=entry.id)).scalars().all()
+        )
+        valores_post_cancelacion = (
+            database.session.execute(
+                database.select(StockLedgerBookEntry).where(
+                    StockLedgerBookEntry.stock_ledger_entry_id.in_(
+                        [movimiento.id for movimiento in movimientos_post_cancelacion]
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        neto_por_libro: dict[str, Decimal] = {}
+        for valoracion in valores_post_cancelacion:
+            neto_por_libro[valoracion.ledger_id] = neto_por_libro.get(valoracion.ledger_id, Decimal("0")) + Decimal(
+                valoracion.book_amount
+            )
+        assert neto_por_libro == {ledger_id: Decimal("0") for ledger_id in por_libro}
+        valores_post_cancelacion[0].book_amount += Decimal("1")
+        with pytest.raises(ValueError, match="inmutables"):
+            database.session.flush()
 
 
 def test_ajuste_negativo_consume_stock_y_genera_gl(app, entorno_contable):
