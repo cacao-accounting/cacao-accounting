@@ -13,9 +13,9 @@ from datetime import date
 
 from typing import cast
 
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_acceso
@@ -98,6 +98,10 @@ else:
 
 
 reportes = Blueprint("reportes", __name__, template_folder="templates")
+
+FINANCIAL_REPORT_CODES = frozenset(
+    {"account-summary", "account-movement", "trial-balance", "income-statement", "balance-sheet", "cash-flow"}
+)
 
 
 @reportes.route("/reports/internal-control")
@@ -356,6 +360,73 @@ def cash_flow():
         selected_view,
         saved_views,
     )
+
+
+def _save_report_view_redirect(report_code: str) -> str:
+    """Devuelve una URL segura de retorno al reporte financiero."""
+    return_url = request.form.get("return_url") or ""
+    if return_url.startswith("/reports/"):
+        return return_url
+    return url_for(f"reportes.{report_code.replace('-', '_')}")
+
+
+@reportes.route("/reports/views/save", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def save_report_view():
+    """Guarda los filtros y preferencias actuales como una vista del usuario."""
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, create_saved_view
+
+    report_code = (request.form.get("report_code") or "").strip()
+    if report_code not in FINANCIAL_REPORT_CODES:
+        abort(400, description=_("El reporte solicitado no admite vistas guardadas."))
+    filters = _financial_filters()
+    company = (request.form.get("company") or "").strip()
+    if company and company != filters.company:
+        abort(400, description=_("La vista debe pertenecer a la compañía del reporte."))
+    display = {
+        "visible_columns": request.args.getlist("visible_columns"),
+        "group_by": request.args.get("group_by") or "",
+        "page_size": request.args.get("page_size") or filters.page_size,
+        "sort_by": request.args.get("sort_by") or filters.sort_by,
+        "sort_dir": request.args.get("sort_dir") or filters.sort_dir,
+        "show_users": request.args.get("show_users") in {"1", "true", "yes", "on"},
+        "advanced": request.args.get("advanced") in {"1", "true", "yes", "on"},
+    }
+    try:
+        create_saved_view(
+            report_code,
+            filters.company,
+            str(current_user.id),
+            request.form.get("name") or "",
+            filters,
+            display,
+        )
+        flash(_("Vista guardada correctamente."), "success")
+    except SavedReportViewError as exc:
+        flash(str(exc), "danger")
+    return redirect(_save_report_view_redirect(report_code))
+
+
+@reportes.route("/reports/views/<view_id>/delete", methods=["POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def delete_report_view(view_id: str):
+    """Elimina una vista propia del usuario autenticado."""
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, delete_saved_view
+
+    report_code = (request.form.get("report_code") or "").strip()
+    if report_code not in FINANCIAL_REPORT_CODES:
+        abort(400, description=_("El reporte solicitado no admite vistas guardadas."))
+    filters = _financial_filters()
+    try:
+        delete_saved_view(view_id, report_code, filters.company, str(current_user.id))
+        flash(_("Vista eliminada correctamente."), "success")
+    except SavedReportViewError as exc:
+        flash(str(exc), "danger")
+    return redirect(_save_report_view_redirect(report_code))
 
 
 def _parse_fiscal_month(month_value: str) -> tuple[int, int]:

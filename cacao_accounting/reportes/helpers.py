@@ -11,8 +11,9 @@ from decimal import Decimal
 from decimal import DecimalException
 from io import BytesIO, StringIO
 from typing import Any
+from urllib.parse import urlencode
 
-from flask import Blueprint, abort, render_template, request, send_file, url_for
+from flask import Blueprint, abort, g, render_template, request, send_file, url_for
 from flask_login import current_user
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
@@ -407,26 +408,73 @@ def _build_unclassified_warning(count: int) -> str | None:
         return message
 
 
-def _load_report_view_options(report_code: str) -> list[str]:
-    return ["default"]
+def _load_report_view_options(report_code: str, company: str, user_id: str | None) -> list[Any]:
+    """Carga las vistas guardadas visibles para el usuario y la compañía."""
+    if not company or not user_id:
+        return []
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, list_saved_views
+
+    try:
+        return list(list_saved_views(report_code, company, user_id))
+    except SavedReportViewError:
+        return []
 
 
 def _handle_saved_view_action(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str]:
+    """Resuelve y aplica una vista guardada solicitada por la URL."""
+    from cacao_accounting.reportes.saved_views_service import (
+        SavedReportViewError,
+        get_saved_view,
+        restore_filters,
+    )
+
     view_key = (request.args.get("saved_view") or "default").strip() or "default"
-    return filters, view_key
+    g.saved_report_view = None
+    if view_key == "default":
+        return filters, "default"
+    user_id = getattr(current_user, "id", None)
+    try:
+        view = get_saved_view(view_key, report_code, filters.company, user_id)
+        g.saved_report_view = view
+        return restore_filters(filters, view), str(view.id)
+    except SavedReportViewError as exc:
+        abort(404, description=str(exc))
 
 
-def _resolve_view_context(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str, list[str]]:
+def _resolve_view_context(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str, list[Any]]:
     resolved_filters, selected_view = _handle_saved_view_action(report_code, filters)
-    return resolved_filters, selected_view, _load_report_view_options(report_code)
+    return (
+        resolved_filters,
+        selected_view,
+        _load_report_view_options(report_code, resolved_filters.company, getattr(current_user, "id", None)),
+    )
 
 
 def _preferred_columns_from_view(report_code: str, view_key: str) -> list[str]:
-    return []
+    """Devuelve las columnas persistidas por la vista seleccionada."""
+    view = getattr(g, "saved_report_view", None)
+    if view is None or str(view.id) != str(view_key) or view.report_code != report_code:
+        return []
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, view_display
+
+    try:
+        columns = view_display(view).get("visible_columns", [])
+    except SavedReportViewError:
+        return []
+    return [str(column) for column in columns] if isinstance(columns, list) else []
 
 
 def _preferred_group_by_from_view(report_code: str, view_key: str) -> str:
-    return ""
+    """Devuelve la agrupación persistida por la vista seleccionada."""
+    view = getattr(g, "saved_report_view", None)
+    if view is None or str(view.id) != str(view_key) or view.report_code != report_code:
+        return ""
+    from cacao_accounting.reportes.saved_views_service import SavedReportViewError, view_display
+
+    try:
+        return str(view_display(view).get("group_by") or "")
+    except SavedReportViewError:
+        return ""
 
 
 def _resolve_company(company_code: str | None, modulo: str = "accounting") -> str:
@@ -1399,6 +1447,14 @@ def _render_financial_report(
     period_picker = _period_picker_payload(
         report_filters.company, getattr(report_filters, "period_from", None), getattr(report_filters, "period_to", None)
     )
+    saved_view_links: dict[str, str] = {}
+    for view in saved_views:
+        query = request.args.to_dict(flat=False)
+        query["saved_view"] = [str(view.id)]
+        saved_view_links[str(view.id)] = f"{request.path}?{urlencode(query, doseq=True)}"
+    default_query = request.args.to_dict(flat=False)
+    default_query.pop("saved_view", None)
+    default_view_url = f"{request.path}?{urlencode(default_query, doseq=True)}" if default_query else request.path
     return render_template(
         "reportes/financial_report.html",
         titulo=f"{report_title} - {APPNAME}",
@@ -1422,6 +1478,8 @@ def _render_financial_report(
         unclassified_warning=_build_unclassified_warning(unclassified_count),
         saved_view=saved_view,
         saved_views=saved_views,
+        saved_view_links=saved_view_links,
+        default_view_url=default_view_url,
         selected_columns=display_columns,
         all_columns=all_columns,
         allow_column_selection=allow_column_selection,

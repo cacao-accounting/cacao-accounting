@@ -3515,6 +3515,32 @@ class ArApReconciliationPolicy(database.Model, BaseTabla):  # type: ignore[name-
     enabled = database.Column(database.Boolean(), nullable=False, default=True)
 
 
+class SavedReportView(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Vista guardada de un reporte financiero por usuario y compañía."""
+
+    __tablename__ = "saved_report_view"
+    __table_args__ = (
+        database.UniqueConstraint("company", "user_id", "report_code", "name", name="uq_saved_report_view_name"),
+    )
+
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    report_code = database.Column(database.String(50), nullable=False, index=True)
+    name = database.Column(database.String(100), nullable=False)
+    filters_json = database.Column(database.Text, nullable=False, default="{}")
+    display_json = database.Column(database.Text, nullable=False, default="{}")
+
+
 class ARAPOpenItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Documento abierto del subledger AP/AR.
 

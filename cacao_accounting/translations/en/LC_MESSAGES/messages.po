@@ -24008,3 +24008,71 @@ msgstr "Historical Inventory Adjustment List"
 #: cacao_accounting/inventario/services.py
 msgid "Ajuste de Inventario Histórico"
 msgstr "Historical Inventory Adjustment"
+
+#: cacao_accounting/reportes/templates/reportes/financial_report.html
+msgid "Vista guardada"
+msgstr "Saved view"
+
+#: cacao_accounting/reportes/templates/reportes/financial_report.html
+msgid "Nombre de la vista"
+msgstr "View name"
+
+#: cacao_accounting/reportes/templates/reportes/financial_report.html
+msgid "Guardar vista"
+msgstr "Save view"
+
+#: cacao_accounting/reportes/templates/reportes/financial_report.html
+msgid "Eliminar vista"
+msgstr "Delete view"
+
+#: cacao_accounting/reportes/routes.py
+msgid "Vista guardada correctamente."
+msgstr "View saved successfully."
+
+#: cacao_accounting/reportes/routes.py
+msgid "Vista eliminada correctamente."
+msgstr "View deleted successfully."
+
+#: cacao_accounting/reportes/saved_views_service.py
+msgid "La vista guardada requiere usuario y compañía."
+msgstr "A saved view requires a user and a company."
+
+#: cacao_accounting/reportes/saved_views_service.py
+msgid "No tiene permisos para administrar vistas de esta compañía."
+msgstr "You do not have permission to manage views for this company."
+
+#: cacao_accounting/reportes/saved_views_service.py
+msgid "El nombre de la vista es obligatorio."
+msgstr "The view name is required."
+
+#: cacao_accounting/reportes/saved_views_service.py
+msgid "El nombre de la vista no puede exceder 100 caracteres."
+msgstr "The view name cannot exceed 100 characters."
+
+#: cacao_accounting/reportes/saved_views_service.py
+msgid "La selección de columnas no tiene un formato válido."
+msgstr "The column selection has an invalid format."
+
+#: cacao_accounting/reportes/saved_views_service.py
+msgid "El tamaño de página no es válido."
+msgstr "The page size is invalid."
+
+#: cacao_accounting/reportes/saved_views_service.py
+msgid "La vista guardada contiene preferencias inválidas."
+msgstr "The saved view contains invalid preferences."
+
+#: cacao_accounting/reportes/saved_views_service.py
+msgid "La vista guardada no existe."
+msgstr "The saved view does not exist."
+
+#: cacao_accounting/reportes/saved_views_service.py
+msgid "Ya existe una vista guardada con ese nombre."
+msgstr "A saved view with that name already exists."
+
+#: cacao_accounting/reportes/routes.py
+msgid "El reporte solicitado no admite vistas guardadas."
+msgstr "The requested report does not support saved views."
+
+#: cacao_accounting/reportes/routes.py
+msgid "La vista debe pertenecer a la compañía del reporte."
+msgstr "The view must belong to the report company."

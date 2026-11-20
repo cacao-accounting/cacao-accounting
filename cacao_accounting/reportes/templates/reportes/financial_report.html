@@ -20,6 +20,33 @@
       </button>
     </div>
     <div class="p-3" x-show="!collapsed">
+      <div class="ca-saved-views mb-3">
+        <label class="form-label mb-1" for="saved-view-select">{{ _("Vista guardada") }}</label>
+        <select class="form-select form-select-sm" id="saved-view-select"
+          onchange="if (this.value) { window.location.href = this.value; }">
+          <option value="{{ default_view_url }}">{{ _("Predeterminada") }}</option>
+          {% for view in saved_views %}
+          <option value="{{ saved_view_links[view.id] }}" {% if saved_view == view.id %}selected{% endif %}>{{ view.name }}</option>
+          {% endfor %}
+        </select>
+        <form method="post" action="{{ url_for('reportes.save_report_view') }}?{{ request.query_string.decode() }}" class="mt-2 d-flex gap-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="report_code" value="{{ report_code }}">
+          <input type="hidden" name="company" value="{{ report_filters.company }}">
+          <input type="hidden" name="return_url" value="{{ request.full_path }}">
+          <input class="form-control form-control-sm" type="text" name="name" maxlength="100" required
+            placeholder="{{ _('Nombre de la vista') }}">
+          <button class="btn btn-sm btn-outline-primary" type="submit">{{ _("Guardar vista") }}</button>
+        </form>
+        {% if saved_view != 'default' %}
+        <form method="post" action="{{ url_for('reportes.delete_report_view', view_id=saved_view) }}?{{ request.query_string.decode() }}" class="mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="report_code" value="{{ report_code }}">
+          <input type="hidden" name="return_url" value="{{ request.full_path }}">
+          <button class="btn btn-sm btn-outline-danger" type="submit">{{ _("Eliminar vista") }}</button>
+        </form>
+        {% endif %}
+      </div>
       <form method="get" class="d-grid gap-2" id="financial-filter-form">
         <input type="hidden" name="apply_filters" value="1">
         <input type="hidden" id="financial-advanced-state" name="advanced" value="{{ '1' if request.args.get('advanced') == '1' else '0' }}">
