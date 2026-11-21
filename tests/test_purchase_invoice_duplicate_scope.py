@@ -10,6 +10,7 @@ El servicio debe detectar el duplicado antes del flush y normalizar el número.
 from __future__ import annotations
 
 from datetime import date
+from importlib import import_module
 from uuid import uuid4
 
 import pytest
@@ -18,6 +19,7 @@ from cacao_accounting import create_app
 from cacao_accounting.compras.services import _validate_duplicate_supplier_invoice
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    CompanyParty,
     Currency,
     Entity,
     Modules,
@@ -71,6 +73,15 @@ def duplicate_invoice_scenario():
         supplier = Party(code=f"SUP-{suffix}", name="Proveedor", is_supplier=True, is_active=True)
         database.session.add(supplier)
         database.session.flush()
+        database.session.add(
+            CompanyParty(
+                company="co2",
+                party_id=supplier.id,
+                is_active=True,
+                allow_purchase_invoice_without_order=True,
+                allow_purchase_invoice_without_receipt=True,
+            )
+        )
         existing = PurchaseInvoice(
             company="co1",
             document_type="purchase_invoice",
@@ -122,3 +133,49 @@ def test_precheck_is_global_across_companies(duplicate_invoice_scenario):
             _validate_duplicate_supplier_invoice(ids["supplier"], "INV-1")
         _validate_duplicate_supplier_invoice(ids["supplier"], "INV-2")
         _validate_duplicate_supplier_invoice(ids["supplier"], "INV-1", exclude_id=ids["existing"])
+
+
+def test_creation_rejects_third_invoice_before_materializing_legacy_null_key_group(duplicate_invoice_scenario, monkeypatch):
+    """A third invoice is rejected before construction when legacy keys are null."""
+    app, ids = duplicate_invoice_scenario
+    services = import_module("cacao_accounting.compras.services")
+    constructions = []
+    monkeypatch.setattr(services, "exige_acceso_compania", lambda *args, **kwargs: None)
+    monkeypatch.setattr(services, "_build_purchase_invoice", lambda context: constructions.append(context))
+
+    with (
+        app.app_context(),
+        app.test_request_context(
+            "/purchase-invoice/new",
+            method="POST",
+            data={
+                "company": "co2",
+                "supplier_id": ids["supplier"],
+                "supplier_invoice_no": "LEGACY-1",
+                "posting_date": "2026-05-12",
+                "transaction_currency": "NIO",
+            },
+        ),
+    ):
+        for company, document_no in (("co1", "LEG-1"), ("co2", "LEG-2")):
+            database.session.execute(
+                database.insert(PurchaseInvoice).values(
+                    company=company,
+                    document_type="purchase_invoice",
+                    document_no=document_no,
+                    supplier_id=ids["supplier"],
+                    supplier_name="Proveedor",
+                    supplier_invoice_no="\tLEGACY-1 \t",
+                    supplier_invoice_key=None,
+                    posting_date=date(2026, 5, 11),
+                    docstatus=1,
+                )
+            )
+        database.session.commit()
+
+        created = services._create_purchase_invoice_from_request()
+        invoice_ids = database.session.execute(database.select(PurchaseInvoice.id)).scalars().all()
+
+    assert created is None
+    assert constructions == []
+    assert len(invoice_ids) == 3

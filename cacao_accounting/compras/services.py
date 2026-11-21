@@ -2535,18 +2535,28 @@ def _validate_duplicate_supplier_invoice(
     if supplier is None:
         raise ValueError(_("El proveedor indicado no existe."))
 
-    # #1433: la unicidad de la base es global por proveedor y número
-    # normalizado (`supplier_invoice_key`); el precheck debe comparar la misma
-    # clave y no el valor original, para no diferir de la restricción.
+    # #1433: filas históricas duplicadas quedan con supplier_invoice_key NULL
+    # para revisión manual. Aun así, nuevas altas no deben ampliar el grupo.
     stmt = database.select(PurchaseInvoice).filter(
         PurchaseInvoice.supplier_id == supplier_id,
-        PurchaseInvoice.supplier_invoice_key == supplier_invoice_no_cleaned,
+        database.or_(
+            PurchaseInvoice.supplier_invoice_key == supplier_invoice_no_cleaned,
+            PurchaseInvoice.supplier_invoice_key.is_(None),
+        ),
         PurchaseInvoice.docstatus != 2,
     )
     if exclude_id:
         stmt = stmt.filter(PurchaseInvoice.id != exclude_id)
 
-    exists = database.session.execute(stmt).scalars().first()
+    candidates = database.session.execute(stmt).scalars().all()
+    exists = any(
+        invoice.supplier_invoice_key == supplier_invoice_no_cleaned
+        or (
+            invoice.supplier_invoice_key is None
+            and str(invoice.supplier_invoice_no or "").strip() == supplier_invoice_no_cleaned
+        )
+        for invoice in candidates
+    )
     if exists:
         raise ValueError(
             _("El número de factura del proveedor '{}' ya está registrado para este proveedor en otra factura activa.").format(
