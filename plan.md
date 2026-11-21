@@ -1,12 +1,16 @@
 # Plan accionable de estabilización
 
 **Repositorio:** [cacao-accounting/cacao-accounting](https://github.com/cacao-accounting/cacao-accounting)
+
 **Tracker maestro:** [#2248](https://github.com/cacao-accounting/cacao-accounting/issues/2248)
+
 **Rama de trabajo:** `estabilizacion`, con seguimiento de la rama remota `origin/estabilizacion`.
+
 **Corte de estado:** 21 de noviembre de 2026. Issues y subissues contrastados en GitHub; incluye el triage
 de cierre de los 157 issues que llegaron a `fixed` (151 cerrados y 6 devueltos a `needs-work`) y la verificación
 QA3 del 2026-11-21 que cerró los 26 issues abiertos restantes con etiqueta `fixed`; hoy no queda ningún
 issue abierto con esa etiqueta en GitHub.
+
 **Estado de commits (21 de noviembre de 2026, refs locales):** `origin/estabilizacion` está en
 `2a8cfb7e`; `HEAD` local está en `8e2fcc44`, 44 commits por delante y sin push. De los 154 hashes
 únicos de commit referenciados aquí, 123 son ancestros de `origin/estabilizacion`, 27 existen en el
@@ -21,130 +25,6 @@ local” no significa publicado en GitHub; los cuatro hashes no resolubles queda
 - Antes de intervenir y de entregar un lote, leer `feedback.md` y `review.md` si existen. Resolver las observaciones aplicables de QA1 y QA2 como parte del criterio de salida.
 - Antes de atender un issue, leer su descripción y **todos sus comentarios**, con paginación completa, incluidos los del paraguas cuando establezcan el contrato compartido. Los comentarios son la bitácora de desarrollo: contienen decisiones, reproducciones, cambios existentes, rechazos de QA y limitaciones que pueden actualizar o sustituir el diagnóstico inicial. A estas alturas aportan más contexto de ejecución que la descripción original. Identificar las decisiones vigentes y los hallazgos aún aplicables antes de tocar código; no volver a decidir reglas ya aprobadas ni implementar a partir del título o de la descripción aislados. Si hay una contradicción real sin resolución posterior, presentar el caso concreto al responsable.
 - El issue de interfaz pendiente que supera el límite de hijos de #1711 se incluye por referencia: #2193.
-
-## Registro de avance
-
-**Lote en curso — work in progress:** Fase 2, Lote #1706 (garantías append-only e
-inmutabilidad a toda la evidencia). Issues asignados: #1733, #1751, #1865, #1877,
-#1987, #2078 (ver tabla Fase 2 más abajo). #1733 tiene implementación local en
-`f915edc5` y sigue abierto/`needs-work` en GitHub, pendiente de QA. **#1751 implementado en
-`97c0da82`** y **#1877 en `ebbe07f9`**, ambos con regresiones añadidas y abiertos/`needs-work`,
-pendientes de QA. **#1865 implementado localmente** en `4eadedf1` (11 pruebas relacionadas;
-GitHub sigue abierto/`needs-work`, pendiente de QA). **#1987 implementado localmente en `5f0e03ab`**
-(19 pruebas dirigidas; sigue abierto/`needs-work` en GitHub, pendiente de QA. Contrato de relación
-append-only aprobado en comentarios).
-**#2078 implementado localmente en `6ba4de3a`** (6 pruebas
-dirigidas; sigue abierto/`needs-work` en GitHub, pendiente de QA). Cada issue se entrega con commit acotado
-(`Refs: #n`), pruebas dirigidas y linters antes del commit.
-**Lote en curso — work in progress:** Fase 6, Lote #2228 (grano/clave de agregación en
-reportes y KPI). Issues asignados: #1619 y #1620. Estado: tomado por Implementador el
-20 de noviembre de 2026; commit acotado `6a9d4696` con pruebas dirigidas de agregación y
-linters. Pendiente QA1 → QA2; el lote sigue en curso hasta `fix-confirmed`.
-**Lote tomado (en proceso, este turno):** #1689 — Fase 2, lote #1653 (concurrencia financiera/bancaria). Evita sobreasignar factura concurrentemente; serializa el consumo de capacidad de líneas de factura entre recepciones. Distinto de los lotes en curso (#1706/#1865, #2228).
-
-**Lote en implementación local, pendiente de QA:** Fase 2, lote #1654 — lecturas de saldo y valoración por libro. Criterio acordado: consultas operativas resuelven al libro primario activo; sin libro efectivo, fallan explícitamente y nunca agregan libros/monedas. Commits locales: `874d52ca` (#1025, #1035, #1163, #1243, #1244, #1269, #1386) y `4d170b45` (#1406); #2118 se verificó contra HEAD. Suite dirigida: 111 passed, 23 skipped. Pendiente QA1 → QA2; no se modificaron etiquetas ni se hizo push.
-**Lote implementado localmente, pendiente de QA:** Fase 3, Lote #1650 — coerción de `Decimal` en la frontera de entrada. Commit `19cdb663`; tests dirigidos: 89 passed; cobertura de `numbers.py`: 100%. Issues trabajados: #1196, #1663, #1741, #1746, #1831, #1864, #1972, #1984 y #2108. #2132 queda parcial en `num2words` hasta definir el comportamiento requerido para importes extremos. Mypy no pudo ejecutarse por la instalación local de `pathspec`; no se cambiaron estados/etiquetas ni se hizo push.
-**Lote implementado localmente, pendiente de QA:** Fase 3, Lote #1652, alcance #1385/#1765. Commit `8e2fcc44`; tests dirigidos: 20 passed, 2 skipped. Corrige agrupación de referencias bancarias y traduce errores CSV UTF-8 a validación. Mypy no pudo iniciar por `pathspec.patterns.gitignore` ausente. El paraguas #1652 conserva criterios generales de lectura tabular pendientes; no se cambiaron labels/estados ni se hizo push.
-
-**Lote en curso (turno anterior):** Fase 2, Lote #1653 (concurrencia en inventario/documentos). #1957 ya parcialmente resuelto en árbol (upload_item_image con una sola transacción). Pendientes del lote: #2140 in curso (finding 1: unicidad de adjudicación por comparativo, uq_purchase_quotation_award_quotation). Restantes: #2098.
-
-**Lote tomado (en proceso, este turno):** Fase 1, lote #2231 (#1767, #1771) — invariante de operatividad mínima (último admin/única entidad activa). Distinto de los lotes en curso; en revisión/implementación por solicitud explícita.
-
-**Registro de avance:** Cargado 20 de noviembre de 2026 (rama `estabilizacion`, sin push).
-**Verificación de cierre QA3 (21 de noviembre de 2026):** los 26 issues abiertos con etiqueta `fixed` fueron
-verificados de forma independiente (diffs de fix, fix presente en el árbol y regresiones dirigidas ejecutadas,
-incluidas variantes concurrentes y contra PostgreSQL con `CHECK_DATABASE=1`) y cerrados como `fixed` con
-comentario de análisis en GitHub. Sin hallazgos bloqueantes ni retornos a `needs-work`; observaciones no
-bloqueantes registradas en los comentarios de #1997, #2095, #1187, #2113, #2196 y #2201.
-
-El estado canónico de cada issue vive en las tablas de «Issues accionables adicionales por fase» y en la
-sección «Triage de cierre de issues `fixed`». GitHub sigue siendo la fuente para el cierre.
-
-**Última suite completa:** Cloud **1317 passed, 106 skipped**; Desktop
-(`CACAO_ACCOUNTING_DESKTOP=True`) **1309 passed, 114 skipped**; 0 fallos (HEAD `fe6998a3`).
-JavaScript **106 passing**. Linters del workflow de lint en verde y `complexipy 9.0.0`
-sin funciones > 20. PostgreSQL + psycopg2 en base temporal: **91 passed, 10 skipped**.
-MySQL y Redis no estaban disponibles en el entorno local; CI debe repetir la matriz.
-**Triage 2026-11-20:** las suites dirigidas se ejecutaron sobre `HEAD` `2a8cfb7e`; la última ronda
-completa satisfactoria sigue siendo la de `fe6998a3` y debe repetirse antes de un push.
-
-**Leyenda de estado:** ✅ implementado con regresión y confirmado por QA2; 🧪 implementado
-localmente, GitHub `fix-proposed` (QA2 pendiente); ⚠️ implementado localmente pero GitHub
-`needs-work` (reabierto o pendiente de revisión). Desde el triage del 2026-11-20, «cerrado como
-`fixed`» significa verificado en `HEAD` y issue cerrado en GitHub. El estado de GitHub es la fuente
-para el cierre.
-Rondas ejecutadas tras el umbral de 50 commits desde `ded995a4`, que cubren #1254,
-#1354/#1355/#1110, #1467, #1253, #997, #998, #1357/#1283, #1488, #1019, #911,
-#1562, #1641, #1695, #1696, #2013, #2060, #1000, #1466, #1076, #925, #1002, #1294,
-#1669, #1144, #950, #1601, #1778, #1031, #1065, #1033, #1049, #1050, #1052, #1055, #1061, #1064, #1048, #1046, #1021, #1697, #1682/#2006, #1299, #2252/#2253, #2254/#2255, #925, #1076 y los seguimientos QA2 B4/B8/B11/B14.
-Black en verde en `cacao_accounting/` (alcance del workflow de lint); 4 archivos de prueba preexistentes
-de `8f341b3e` requieren reformato de black fuera de ese alcance. Ruff, flake8, mypy y Bandit sin hallazgos bloqueantes. Complexipy reporta 2 funciones preexistentes > 20 (`_validate_manual_reversal_ledgers`, `_render_stock_reconciliation_edit_form`), ajenas a los cambios de Fase 1.
-Pylint E/F: 35 avisos preexistentes fuera de los archivos modificados.
-Ronda QA2: A1–A3, B1–B4, B8, B11 y B14 resueltos; B9 (backfill de clave heredada), B10 (nombre del guard) y B12 (filas legacy sin subtipo) quedaron resueltos en esta ronda. B5 (N+1 de destinatarios), B7 (fixture de entregas) y B15–B17 siguen como deuda no bloqueante.
-La próxima ronda completa corresponde al siguiente umbral de 50 commits o antes de un push.
-Black, ruff, flake8, pydocstyle, mypy y complexipy ≤ 20 aplicados a los archivos tocados.
-
-**Controles pendientes:**
-
-- La matriz local SQLite, PostgreSQL (pg8000/psycopg2), MySQL 8 y Redis 7 quedó ejecutada.
-  CI debe repetirla con las versiones de Python y los servicios del workflow antes de un push;
-  no se declara una ronda remota en verde.
-- El triage del 2026-11-20 cerró 151 issues `fixed` verificados y devolvió 6 a `needs-work` (#1021,
-  #1031, #1071, #1338, #2141 y #2252). El resto de la cola sigue sujeta a QA1 → QA2 → QA3; este registro
-  no sustituye esa revisión.
-
-## Triage de cierre de issues `fixed` (2026-11-20)
-
-**Alcance:** 157 issues abiertos con etiqueta `fixed` al cierre de la ventana de triage (105 iniciales más
-las promociones QA3 del 2026-11-20). **Resultado:** 151 verificados y cerrados como completados; 6 devueltos
-a `needs-work` con hallazgos concretos.
-
-**Método:** lectura del cuerpo y todos los comentarios de cada issue; comprobación de que los commits del
-fix existen y son ancestros de `HEAD` (`2a8cfb7e`); inspección del código vigente; exigencia de una
-regresión committed sustancial y discriminante; ejecución de las suites dirigidas. Se ejecutaron
-**655 passed, 16 skipped** en la primera pasada y **425 passed, 9 skipped**, **119 passed** y
-**89 passed** en las rondas por lote; JavaScript **106 passing**. Los casos marcados `database` se
-ejecutan en las matrices de `databases.yml`.
-
-### Devueltos a `needs-work` (6)
-
-| Issue | Hallazgo del triage | Acción requerida |
-|---|---|---|
-| #1021 | El fix de privilegios está aplicado, pero no hay regresión committed que exija 403 a un usuario autenticado no administrador en GET/POST de `/setup/`; `tests/test_setup_access.py` se eliminó en `0970476b` sin equivalente. | Restaurar la prueba de acceso y volver a QA1 → QA2. |
-| #1031 | `preview()` solo captura `ImportReadLimitError`; un XLSX corrupto validado en estado 7 provoca `KeyError`/`BadZipFile` y HTTP 500 al abrir el detalle, en vez de mostrar el `ImportBatchError` guardado. | Manejar el lector corrupto en `preview()` y cubrir el detalle sin 500. |
-| #1071 | La variante `legacy=1` y `document_flow_tree` fueron retiradas, pero no hay regresión committed que fije que `?legacy=1` devuelve el mismo árbol recursivo y no un esquema alterno. | Agregar la prueba del contrato resultante. |
-| #1338 | Los query tools rechazan compañías deshabilitadas, pero sigue vigente el bypass documentado en el primer comentario del issue: `decorators.py::exige_acceso_compania()` retorna antes de validar cuando `permisos.administrador` es verdadero. Reproducido en `HEAD` con `Entity(enabled=False)`. | Validar la compañía también en la rama de administrador y cubrirla con regresión. |
-| #2141 | Los siete puntos están corregidos, pero faltan pruebas para la captura de `ValueError` al crear el comparativo, las etiquetas de estado/moneda de las vistas y la exclusión de órdenes canceladas como participantes. | Cubrir los tres escenarios restantes. |
-| #2252 | Las tres herramientas de documentos dejaron de exigir el módulo inexistente, pero `documents.get_lines` no se invoca en ninguna prueba committed, pese a que el issue exige cobertura de las tres. | Agregar la regresión de `get_lines` autorizada y denegada. |
-
-### Notas de criterio
-
-- **#2150** se cerró como `fixed`: el retiro de la rama inalcanzable está respaldado por una prueba de
-  contrato que exige que `cargar_catalogos()` deje la transacción al llamador y que el rollback no deje
-  cuentas. Aunque la rama muerta no era observable, la prueba fija el contrato vigente y detectaría un
-  commit unilateral del cargador.
-- **#911** se cerró como `fixed`: el criterio funcional del 2026-11-15 quedó cumplido (compañía explícita
-  en Cloud, una y varias compañías, acceso denegado y Desktop) y la exigencia literal de E2E quedó
-  superada por el reinicio de la suite pre-alpha (`79dca241`); la cobertura HTTP committed sustituye ese
-  recorrido.
-- Los issues con prueba marcada `database` (#2172, #1110, #1148, #1272, entre otros) mantienen su
-  cobertura committed; su ejecución real corresponde a las matrices de PostgreSQL/MySQL de CI.
-### Estado real en GitHub al cierre del triage
-
-| Etiqueta | Abiertos | Cerrados |
-|---|---:|---:|
-| `needs-work` | 858 | 25 |
-| `fix-proposed` | 0 | 0 |
-| `fix-confirmed` | 26 | 1 |
-| `fixed` | 0 | 529 |
-| `needs-review` | 1 (#2249) | 0 |
-
-- `fixed`: no queda ningún issue abierto con esta etiqueta; 151 cierres del triage del 2026-11-20 más 26 de la verificación QA3 del 2026-11-21.
-- `fix-confirmed`: 26 issues esperan la aceptación final de QA3 autorizado o del administrador; los lotes
-  pendientes de ese paso están identificados en las tablas por fase.
-- `needs-review`: #2249 («Consolida hallazgos accionables de Pylint y SonarCloud») espera criterio.
-- `needs-work`: la cola abierta es de 858 issues; las tablas por fase identifican los del ámbito de
-  estabilización y los seis devueltos por este triage quedan registrados arriba.
 
 ## Core funcional esperado
 
