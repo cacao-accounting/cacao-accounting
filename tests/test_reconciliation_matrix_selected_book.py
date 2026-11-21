@@ -12,6 +12,7 @@ from cacao_accounting.database import (
     Accounts,
     Book,
     CompanyDefaultAccount,
+    Entity,
     ExchangeRate,
     GLEntry,
     Item,
@@ -33,15 +34,29 @@ from cacao_accounting.reportes.services import (
 
 def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
     """Different book valuations and later rates cannot change historical AR."""
-    selected_book = database.session.execute(
-        database.select(Book).where(Book.entity == "cacao", Book.code == "DEFAULT_BOOK")
-    ).scalar_one()
+    # La conciliación agrega todo el subledger de la compañía. Se usa una
+    # compañía propia para que el resultado no dependa de movimientos que
+    # otras pruebas hayan confirmado en el worker compartido.
+    suffix = uuid4().hex[:8].upper()
+    company = f"R{suffix}"
+    company_entity = Entity(
+        code=company,
+        name=f"Conciliación {suffix}",
+        company_name=f"Conciliación {suffix} SA",
+        tax_id=f"T{suffix}",
+        currency="NIO",
+        enabled=True,
+        status="default",
+    )
+    selected_book = Book(
+        entity=company, code=f"N{suffix}", name="Libro NIO", currency="NIO", status="activo", is_primary=True, default=True
+    )
     secondary_book = Book(
-        entity="cacao", code="USD_RECON", name="Libro USD", currency="USD", status="activo", is_primary=False
+        entity=company, code=f"U{suffix}", name="Libro USD", currency="USD", status="activo", is_primary=False
     )
     receivable = Accounts(
-        entity="cacao",
-        code="AR-RECON",
+        entity=company,
+        code=f"AR-{suffix}",
         name="Cuentas por cobrar de prueba",
         classification="asset",
         account_type="receivable",
@@ -50,8 +65,8 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
         enabled=True,
     )
     payable = Accounts(
-        entity="cacao",
-        code="AP-RECON",
+        entity=company,
+        code=f"AP-{suffix}",
         name="Cuentas por pagar de prueba",
         classification="liability",
         account_type="payable",
@@ -59,16 +74,14 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
         active=True,
         enabled=True,
     )
-    party = Party(code="AR-RECON-CUSTOMER", name="Cliente de conciliación", is_customer=True)
-    supplier = Party(code="AP-RECON-SUPPLIER", name="Proveedor de conciliación", is_supplier=True)
-    database.session.add_all([secondary_book, receivable, payable, party, supplier])
+    party = Party(code=f"AR-{suffix}", name="Cliente de conciliación", is_customer=True)
+    supplier = Party(code=f"AP-{suffix}", name="Proveedor de conciliación", is_supplier=True)
+    database.session.add(company_entity)
     database.session.flush()
-    defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one_or_none()
-    if defaults is None:
-        defaults = CompanyDefaultAccount(company="cacao")
-        database.session.add(defaults)
-    defaults.default_receivable = receivable.id
-    defaults.default_payable = payable.id
+    database.session.add_all([selected_book, secondary_book, receivable, payable, party, supplier])
+    database.session.flush()
+    defaults = CompanyDefaultAccount(company=company, default_receivable=receivable.id, default_payable=payable.id)
+    database.session.add(defaults)
 
     cutoff = date(2026, 10, 31)
     movements = [
@@ -78,7 +91,7 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
     ]
     for index, (event_type, posting_date, document_amount) in enumerate(movements):
         movement = ARAPLedgerEntry(
-            company="cacao",
+            company=company,
             ledger_type="AR",
             party_type="customer",
             party_id=party.id,
@@ -126,7 +139,7 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
         )
     ):
         movement = ARAPLedgerEntry(
-            company="cacao",
+            company=company,
             ledger_type="AP",
             party_type="supplier",
             party_id=supplier.id,
@@ -159,7 +172,7 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
     database.session.add_all(
         [
             GLEntry(
-                company="cacao",
+                company=company,
                 ledger_id=selected_book.id,
                 account_id=receivable.id,
                 account_code=receivable.code,
@@ -170,7 +183,7 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
                 voucher_id="RECON-INVOICE",
             ),
             GLEntry(
-                company="cacao",
+                company=company,
                 ledger_id=selected_book.id,
                 account_id=receivable.id,
                 account_code=receivable.code,
@@ -181,7 +194,7 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
                 voucher_id="RECON-PAYMENT",
             ),
             GLEntry(
-                company="cacao",
+                company=company,
                 ledger_id=selected_book.id,
                 account_id=payable.id,
                 account_code=payable.code,
@@ -192,7 +205,7 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
                 voucher_id="RECON-AP-INVOICE",
             ),
             GLEntry(
-                company="cacao",
+                company=company,
                 ledger_id=selected_book.id,
                 account_id=payable.id,
                 account_code=payable.code,
@@ -206,7 +219,7 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
     )
     database.session.flush()
     context = _ReconciliationContext(
-        filters=ReconciliationFilters(company="cacao", ledger=selected_book.id, as_of_date=cutoff),
+        filters=ReconciliationFilters(company=company, ledger=selected_book.id, as_of_date=cutoff),
         ledger=selected_book,
         comparison_currency="NIO",
         as_of_date=cutoff,
@@ -225,7 +238,7 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
     assert rows["AP"].values["difference"] == Decimal("0.0000")
     database.session.add(
         ARAPLedgerEntry(
-            company="cacao",
+            company=company,
             ledger_type="AR",
             party_type="customer",
             party_id=party.id,

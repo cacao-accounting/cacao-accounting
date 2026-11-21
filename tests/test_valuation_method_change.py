@@ -9,11 +9,46 @@ from uuid import uuid4
 
 import pytest
 
+from cacao_accounting import create_app
+from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.posting_service import _valuation_method_for_company
-from cacao_accounting.database import Entity, Item, StockLedgerEntry, UOM, Warehouse, database
+from cacao_accounting.database import Currency, Entity, Item, StockLedgerEntry, UOM, Warehouse, database
 from cacao_accounting.inventario.valuation_settings import update_company_valuation_method
 
 FECHA = date(2026, 5, 20)
+
+
+@pytest.fixture
+def app():
+    """App aislada: la regla depende de que la compañía no tenga inventario."""
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+        }
+    )
+    with application.app_context():
+        database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.add(
+            Entity(
+                code="cacao",
+                name="Cacao",
+                company_name="Cacao SA",
+                tax_id="J-CACAO",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.commit()
+    yield application
+    with application.app_context():
+        database.session.remove()
+        database.engine.dispose()
 
 
 def _otro_metodo(current: str | None) -> str:
@@ -56,8 +91,6 @@ def test_cambio_valuacion_rechaza_con_actividad(app):
                 voucher_id=f"SE-{sufijo}",
             )
         )
-        # Basta el flush: la actividad debe ser visible dentro de la misma
-        # transacción y la limpieza automática evita contaminar al worker.
         database.session.flush()
         entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
         method = _otro_metodo(entity.valuation_method)
