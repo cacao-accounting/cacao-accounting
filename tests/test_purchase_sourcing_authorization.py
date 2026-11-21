@@ -320,6 +320,22 @@ def test_manual_close_blocks_service_round_and_award_creation(sourcing_award):
         assert awards[0].status == "closed"
 
 
+def test_repeated_manual_close_preserves_the_single_close_record(sourcing_award):
+    """Repeating a close cannot add or rewrite its append-only award evidence."""
+    application, ids = sourcing_award
+    _close_rfq_manually(application, ids)
+
+    with application.app_context():
+        rfq = database.session.get(PurchaseQuotation, ids["rfq"])
+        with pytest.raises(PurchaseSourcingError, match="comparativo cerrado"):
+            close_purchase_quotation_comparison(rfq, "admin", "Segundo intento")
+
+        awards = database.session.execute(database.select(PurchaseQuotationAward)).scalars().all()
+        assert len(awards) == 1
+        assert awards[0].status == "closed"
+        assert awards[0].authorization_reason == "Cierre aprobado por falta de ofertas adecuadas"
+
+
 def test_award_unique_collision_is_translated_to_closed_domain_error(sourcing_award):
     """The database uniqueness guard remains a controlled domain rejection."""
     application, ids = sourcing_award
@@ -339,6 +355,23 @@ def test_award_unique_collision_is_translated_to_closed_domain_error(sourcing_aw
         assert awards[0].status == "closed"
         assert isinstance(error.value.__cause__, IntegrityError)
         # The savepoint leaves the outer transaction available for caller rollback/commit.
+        assert database.session.is_active
+
+
+def test_unrelated_integrity_error_is_not_translated_as_award_collision(sourcing_award):
+    """A different database invariant must remain visible to its caller."""
+    application, ids = sourcing_award
+
+    with application.app_context():
+        invalid_award = PurchaseQuotationAward(
+            purchase_quotation_id=ids["rfq"],
+            company=None,
+            status="finalized",
+        )
+        with pytest.raises(IntegrityError) as error:
+            _flush_award(invalid_award)
+
+        assert "purchase_quotation_award.company" in str(error.value.orig)
         assert database.session.is_active
 
 
