@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
-{% import "transaction_form_macros.html" as tf_macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_vale_nuevo.html"></div>
@@ -39,7 +39,7 @@
           preload=True,
           required=True,
           initial_value=vale.company if vale else '',
-          initial_label=vale.company if vale else '',
+          initial_label=(vale.company_label if vale and vale.company_label is defined else vale.company) if vale else '',
           locked_expr="true" if vale else "false",
           on_select="function(opt){ document.dispatchEvent(new CustomEvent('company-selected', {detail: opt})); }"
       ) }}
@@ -71,7 +71,7 @@
           required_filters=["company"],
           required=True,
           initial_value=vale.petty_cash_id if vale else '',
-          initial_label=vale.petty_cash_id if vale else '',
+          initial_label=(vale.petty_cash_label if vale and vale.petty_cash_label is defined else vale.petty_cash_id) if vale else '',
           locked_expr="true" if vale else "false",
           on_select="function(opt){ var el = document.getElementById('pc_currency'); if (el) el.value = opt.currency || ''; }"
       ) }}

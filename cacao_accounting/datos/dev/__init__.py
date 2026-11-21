@@ -48,7 +48,6 @@ from cacao_accounting.datos.dev.data import (
     _make_periodos,
     _make_proyectos,
     _make_recurring_templates,
-    _make_series,
     _make_tasas_de_cambio,
     _make_terceros,
     _make_unidades,
@@ -122,13 +121,6 @@ def demo_entidad():
             default=bool(e.default),
         )
         seed_matching_config_for_company(e.code)
-    database.session.commit()
-
-
-def series_predeterminadas():
-    """Crear series predeterminadas."""
-    for s in _make_series():
-        database.session.add(s)
     database.session.commit()
 
 

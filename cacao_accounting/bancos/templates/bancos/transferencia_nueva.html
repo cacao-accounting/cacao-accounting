@@ -37,15 +37,17 @@
       init: function () {
         document.addEventListener('bank-account-selected', (event) => {
             this.header.bank_account_id = event.detail.value;
-            if (event.detail.extra && event.detail.extra.currency) {
-                this.header.currency = event.detail.extra.currency;
-            }
+            this.header.currency = event.detail.currency || '';
         });
         document.addEventListener('target-bank-account-selected', (event) => {
             this.header.target_bank_account_id = event.detail.value;
-            if (event.detail.extra && event.detail.extra.currency) {
-                this.header.target_currency = event.detail.extra.currency;
-            }
+            this.header.target_currency = event.detail.currency || '';
+        });
+        this.$watch('header.company', () => {
+            this.header.bank_account_id = '';
+            this.header.currency = '';
+            this.header.target_bank_account_id = '';
+            this.header.target_currency = '';
         });
       },
 

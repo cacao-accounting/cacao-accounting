@@ -27,10 +27,10 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.ledger_queries import primary_ledger_id
-from cacao_accounting.reportes.services import normalize_account_classification_value
+from cacao_accounting.reportes.services import calculate_gross_margin_percentage, normalize_account_classification
 from cacao_accounting.i18n import _
 
-ALLOWED_METRICS = frozenset({"sales", "purchases", "income", "expenses", "gross_margin"})
+ALLOWED_METRICS = frozenset({"sales", "purchases", "income", "expenses", "gross_margin", "gross_margin_percentage"})
 ALLOWED_DIMENSIONS = frozenset({"customer", "supplier", "item"})
 
 
@@ -131,7 +131,10 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
         query = query.where(GLEntry.ledger_id == effective_ledger)
     totals = {"income": Decimal("0"), "cost": Decimal("0"), "expense": Decimal("0")}
     for entry, account in database.session.execute(query).all():
-        classification = normalize_account_classification_value(getattr(account, "classification", None)) or ""
+        classification = normalize_account_classification(
+            getattr(account, "classification", None),
+            getattr(account, "account_type", None),
+        )
         amount = _decimal(entry.credit) - _decimal(entry.debit)
         if classification in {"ingreso", "income"}:
             totals["income"] += amount
@@ -156,6 +159,8 @@ def metric_value(company: str, metric: str, start: date, end: date) -> Decimal:
         return gl["income"]
     if metric == "expenses":
         return gl["expense"]
+    if metric == "gross_margin_percentage":
+        return calculate_gross_margin_percentage(gl["income"], gl["cost"])
     return gl["income"] - gl["cost"]
 
 
@@ -228,13 +233,27 @@ def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = 
     """
     base_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
     ledger_currency = base_currency
+    ledger_id: str | None = None
     if ledger:
-        book = database.session.execute(select(Book).where(Book.entity == company, Book.code == ledger)).scalars().first()
+        # #1130: el libro debe pertenecer a la compañía; no se acepta un ID
+        # ajeno ni un identificador inexistente para etiquetar los KPI con una
+        # moneda que no corresponde a los movimientos consultados.
+        book = (
+            database.session.execute(
+                select(Book).where(
+                    Book.entity == company,
+                    (Book.code == ledger) | (Book.id == ledger),
+                )
+            )
+            .scalars()
+            .first()
+        )
         if book is None:
-            book = database.session.get(Book, ledger)
-        if book is not None and book.currency:
+            raise ValueError(_("El libro indicado no existe para la compañía solicitada."))
+        ledger_id = str(book.id)
+        if book.currency:
             ledger_currency = book.currency
-    gl = _gl_totals(company, start, end, ledger_id=ledger)
+    gl = _gl_totals(company, start, end, ledger_id=ledger_id)
     _needs_conversion = ledger_currency and base_currency and ledger_currency != base_currency
     _target = ledger_currency if _needs_conversion else base_currency
 
@@ -293,6 +312,8 @@ def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = 
             "income": gl["income"],
             "cost": gl["cost"],
             "expenses": gl["expense"],
+            "gross_margin": gl["income"] - gl["cost"],
+            "gross_margin_percentage": calculate_gross_margin_percentage(gl["income"], gl["cost"]),
             "net_income": gl["net_income"],
             "accounts_receivable": ar,
             "accounts_payable": ap,

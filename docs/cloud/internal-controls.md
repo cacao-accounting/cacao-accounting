@@ -113,7 +113,14 @@ GRANT SELECT, INSERT ON document_relation, purchase_reconciliation,
   purchase_reconciliation_item, purchase_invoice_receipt_allocation,
   purchase_receipt_return_allocation, purchase_credit_note_allocation
   TO cacao_runtime;
-GRANT SELECT, UPDATE ON document_relation, purchase_reconciliation,
+REVOKE UPDATE ON document_relation, purchase_reconciliation,
+  purchase_reconciliation_item, purchase_invoice_receipt_allocation,
+  purchase_receipt_return_allocation, purchase_credit_note_allocation
+  FROM cacao_runtime, PUBLIC;
+GRANT UPDATE (status, reversed_at, reversed_by, reversal_reason, cancelled_at,
+  cancelled_by, metadata_json, modified, modified_by)
+  ON document_relation TO cacao_runtime;
+GRANT UPDATE (status, modified, modified_by) ON purchase_reconciliation,
   purchase_reconciliation_item, purchase_invoice_receipt_allocation,
   purchase_receipt_return_allocation, purchase_credit_note_allocation
   TO cacao_runtime;
@@ -132,9 +139,11 @@ provisioning; a REVOKE does not override privileges granted through other roles.
 
 The migration account is unavailable to the running application. Keep deployment
 credentials separate from `SQLALCHEMY_DATABASE_URI` and restrict database network
-access. A PostgreSQL owner or infrastructure administrator can still alter data.
-Retained backups or evidence copies outside that administrator's modification
-rights and restoration exercises belong to the SaaS operational controls.
+access. A PostgreSQL owner or infrastructure administrator can still alter data;
+these restrictions apply to the application's runtime role and do not limit the
+DBA's operational authority. Retained backups or evidence copies outside that
+administrator's modification rights and restoration exercises belong to SaaS
+operational controls.
 
 ## Four-eyes review and administrator authority
 

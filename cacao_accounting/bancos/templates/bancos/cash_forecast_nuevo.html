@@ -5,7 +5,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/cash_forecast_nuevo.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Caja y Bancos") }}</a></li>
@@ -20,18 +20,21 @@
   </div>
 
   <div class="card-body p-4">
-    <form method="POST" action="{{ url_for('bancos.cash_forecast_new') }}" class="row g-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
+    <form method="get" action="{{ url_for('bancos.cash_forecast_new') }}" class="row g-3 mb-3">
       <div class="col-md-6">
         <label for="company" class="form-label fw-bold">{{ _("Compañía") }}</label>
-        <select name="company" id="company" class="form-select" required>
+        <select name="company" id="company" class="form-select" onchange="this.form.submit()">
           {% for code, name in companies %}
           <option value="{{ code }}" {% if code == selected_company %}selected{% endif %}>{{ name }}</option>
           {% endfor %}
         </select>
         <div class="form-text">{{ _("La compañía para la cual se calculará y guardará el pronóstico.") }}</div>
       </div>
+    </form>
+
+    <form method="POST" action="{{ url_for('bancos.cash_forecast_new') }}" class="row g-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="company" value="{{ selected_company or '' }}">
 
       <div class="col-md-6">
         <label for="fiscal_year_id" class="form-label fw-bold">{{ _("Año Fiscal") }}</label>

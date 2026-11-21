@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ _("Seguridad de Sesión") }}</li>
@@ -105,12 +105,12 @@
             </tr>
           </thead>
           <tbody>
-            {% for usuario, segundos in cuentas_bloqueadas %}
+            {% for usuario, segundos, minutos in cuentas_bloqueadas %}
             <tr>
               <td>{{ usuario.user }}</td>
               <td>{{ usuario.failed_login_count }}</td>
               <td>{{ usuario.last_failed_login.strftime("%Y-%m-%d %H:%M") if usuario.last_failed_login else "—" }}</td>
-              <td>{{ (segundos // 60) + 1 }} {{ _("min(s)") }}</td>
+              <td>{{ minutos }} {{ _("min(s)") }}</td>
               <td>
                 <form method="post" class="d-inline">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

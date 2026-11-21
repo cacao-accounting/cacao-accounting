@@ -23,6 +23,7 @@ from cacao_accounting.company_context import authorized_company_codes
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.i18n import _
 from cacao_accounting.modulos import validar_modulo_activo
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 
 def modulo_activo(modulo):  # pragma: no cover
@@ -43,8 +44,13 @@ def modulo_activo(modulo):  # pragma: no cover
     return decorator_modulo_activo
 
 
-def verifica_acceso(modulo):  # pragma: no cover
-    """Comprueba si un usuario tiene acceso a un recurso determinado."""
+def verifica_acceso(modulo, accion=None):  # pragma: no cover
+    """Comprueba si un usuario tiene acceso a un recurso determinado.
+
+    Con ``accion`` (crear/editar/anular) exige además el permiso de
+    acción correspondiente: el acceso sencillo no concede escrituras
+    (#1601).
+    """
 
     def decorator_verifica_acceso(func):
         @wraps(func)
@@ -54,7 +60,7 @@ def verifica_acceso(modulo):  # pragma: no cover
                 return abort(403)
             module_id = obtener_id_modulo_por_nombre(modulo)
             permisos = Permisos(modulo=module_id, usuario=current_user.id)
-            if permisos.autorizado:
+            if permisos.autorizado and (accion is None or getattr(permisos, accion, False)):
                 return func(*args, **kwargs)
             else:
                 flash(_("No se encuentra autorizado a acceder al recurso solicitado."))
@@ -140,10 +146,10 @@ def resolve_required_company(company: str | None, modulo: str) -> str:
     """Resuelve la compañía de una petición que la requiere.
 
     Cuando la petición trae el código de compañía se devuelve tal cual para que
-    la capa de permisos lo valide. Cuando no viene, se resuelve automáticamente
-    si el usuario tiene una única compañía autorizada (caso típico de modo
-    desktop). Si el usuario tiene varias compañías autorizadas el parámetro es
-    obligatorio y la petición falla con HTTP 400 en lugar de asumir un valor.
+    la capa de permisos lo valide. En Cloud el parámetro es obligatorio: no se
+    asume una compañía aunque el usuario tenga una sola autorizada, porque la
+    UI debe enviar siempre la compañía activa (#911). En Desktop se resuelve la
+    única compañía autorizada, que es el caso operativo normal.
 
     Args:
         company: Código de compañía recibido en la petición, o ``None``.
@@ -154,6 +160,8 @@ def resolve_required_company(company: str | None, modulo: str) -> str:
     """
     if company:
         return company
+    if not is_desktop_mode():
+        abort(400, description=_("La compañía es obligatoria."))
     resolved = _single_authorized_company(modulo)
     if resolved is not None:
         return resolved

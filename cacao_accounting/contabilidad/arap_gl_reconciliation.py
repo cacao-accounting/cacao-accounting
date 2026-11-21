@@ -342,12 +342,3 @@ def enforce_arap_gl_policy(result: ARAPGLReconciliationResult) -> None:
         warnings.warn(result.message, RuntimeWarning, stacklevel=2)
         return
     _LOGGER.error(result.message)
-
-
-def reconcile_companies_arap_to_gl(
-    companies: Iterable[str], *, as_of_date: date, mode: str | None = None, tolerance: Decimal | str | None = None
-) -> tuple[ARAPGLReconciliationResult, ...]:
-    """Reconcile multiple companies without hiding which matrix failed."""
-    return tuple(
-        reconcile_arap_to_gl(company=company, as_of_date=as_of_date, mode=mode, tolerance=tolerance) for company in companies
-    )

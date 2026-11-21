@@ -36,14 +36,10 @@ def get_setup_value(key: str, default: Any = None) -> Any:
 
 
 def set_setup_value(key: str, value: str) -> None:
-    """Establece o crea un valor de configuración."""
-    record = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).first()
-    if record:
-        config = record[0]
-        config.value = value
-    else:
-        config = CacaoConfig(key=key, value=value)
-        database.session.add(config)
+    """Establece o crea un valor de configuración de forma atómica (#1697)."""
+    from cacao_accounting.config_values import set_config_value
+
+    set_config_value(key, value)
 
 
 def create_default_entity(data: dict, status: str = "default", default: bool = True) -> Entity:
@@ -377,11 +373,6 @@ def create_default_accounting_period(entity: Entity, fiscal_year: "FiscalYear") 
     if first_period is None:
         raise ValueError(_("No se pudo crear el período contable inicial."))
     return first_period
-
-
-def get_default_entity() -> Entity | None:
-    """Recupera la entidad predeterminada si existe."""
-    return database.session.execute(database.select(Entity).filter_by(status="default")).scalar_one_or_none()
 
 
 _PARTY_GROUP_CATALOG: dict[str, dict[str, list[dict[str, str]]]] = {

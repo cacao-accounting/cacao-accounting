@@ -24,7 +24,7 @@ COLUMN_LABELS: dict[str, dict[str, str]] = {
     "precio_unitario": {"es": "precio_unitario", "en": "unit_price"},
     "bodega": {"es": "bodega", "en": "warehouse"},
     "lote": {"es": "lote", "en": "batch"},
-    "serie": {"es": "serie", "en": "serial"},
+    "numero_serie": {"es": "serie", "en": "serial"},
     "notas": {"es": "notas", "en": "notes"},
     "proveedor": {"es": "proveedor", "en": "supplier"},
     "impuesto": {"es": "impuesto", "en": "tax"},

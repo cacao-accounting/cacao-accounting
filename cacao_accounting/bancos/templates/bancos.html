@@ -8,7 +8,7 @@
 {%- endif -%}
 
 <div class="ca-module-workspace">
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
@@ -154,23 +154,23 @@
     <h5><i class="bi bi-graph-up-arrow"></i> {{ _('Proyección de Flujo de Caja') }}</h5>
     <ul class="ca-module-links">
 
-      {% if acceso.autorizado %}
+      {% if acceso.consultar %}
       <li>
         <a href="{{ url_for('bancos.cash_forecast_list') }}">{{ _('Flujo de Caja') }}</a>
-        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+        {{ macros.module_status_badge(module_badge(access=acceso, required='consultar')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.cash_forecast_compare') }}">{{ _('Comparativo Real vs. Presupuesto') }}</a>
-        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+        {{ macros.module_status_badge(module_badge(access=acceso, required='consultar')) }}
       </li>
       <li>
         <a href="{{ url_for('bancos.cash_forecast_manual_entries') }}">{{ _('Entradas Manuales') }}</a>
-        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+        {{ macros.module_status_badge(module_badge(access=acceso, required='consultar')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
         <span>{{ _('Proyección de Flujo de Caja') }}</span>
-        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
+        {{ macros.module_status_badge(module_badge(access=acceso, required='consultar', view_permission='consultar')) }}
       </li>
       {% endif %}
 
@@ -183,7 +183,7 @@
     <h5><i class="bi bi-bar-chart-fill"></i> {{ _("Reportes") }}</h5>
     <ul class="ca-module-links">
 
-      {% if acceso.autorizado %}
+      {% if acceso.reportes %}
       <li>
         <a href="{{ url_for('reportes.bank_balance_summary', company=company) }}">{{ _('Resumen de Saldos Bancarios') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}

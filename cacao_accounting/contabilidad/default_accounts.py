@@ -107,40 +107,6 @@ DEFAULT_ACCOUNT_DEFINITIONS: tuple[DefaultAccountDefinition, ...] = (
 DEFAULT_ACCOUNT_FIELDS: tuple[str, ...] = tuple(item.field for item in DEFAULT_ACCOUNT_DEFINITIONS)
 DEFAULT_ACCOUNT_DEFINITION_BY_FIELD = {item.field: item for item in DEFAULT_ACCOUNT_DEFINITIONS}
 
-SPECIAL_ACCOUNT_TYPES: frozenset[str] = frozenset(
-    {
-        "bank",
-        "cash",
-        "petty_cash",
-        "receivable",
-        "payable",
-        "inventory",
-        "tax",
-        "bridge",
-        "purchase_settlement_variance",
-        "cost_of_goods_sold",
-        "inventory_adjustment",
-        "customer_advance",
-        "supplier_advance",
-        "bank_difference",
-        "rounding",
-        "exchange_gain",
-        "exchange_loss",
-        "unrealized_exchange_gain",
-        "unrealized_exchange_loss",
-        "deferred_income",
-        "deferred_expense",
-        "payment_discount",
-        "period_profit_loss",
-        "retained_earnings",
-        "asset",
-        "liability",
-        "equity",
-        "income",
-        "expense",
-    }
-)
-
 ACCOUNT_TYPE_ALLOWED_VOUCHERS: dict[str, frozenset[str]] = {
     "bank": frozenset({"payment_entry", "bank_transaction", "exchange_revaluation"}),
     "cash": frozenset({"payment_entry", "bank_transaction", "exchange_revaluation"}),
@@ -293,15 +259,6 @@ def validate_gl_account_usage(account_id: str, voucher_type: str | None) -> None
                 "source": voucher_type or _("este origen"),
             }
         )
-
-
-def accounts_for_company(company: str) -> list[Accounts]:
-    """Lista cuentas activas de detalle para seleccion de defaults."""
-    return list(
-        database.session.execute(
-            select(Accounts).filter_by(entity=company).where(Accounts.group.is_(False)).order_by(Accounts.code)
-        ).scalars()
-    )
 
 
 def default_account_rows(config: CompanyDefaultAccount | None) -> list[dict[str, Any]]:

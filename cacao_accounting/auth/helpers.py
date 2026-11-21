@@ -7,7 +7,7 @@ import re
 from typing import Optional
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from flask import current_app, redirect, session, url_for
 from jwt import encode
 from jwt.exceptions import PyJWTError
@@ -35,6 +35,9 @@ def autenticar_usuario(usuario: str, clave: str) -> Optional[User]:
     try:
         ph.verify(registro.password, clave)
         return registro
+    except InvalidHashError:
+        log.warning("Hash de contraseña inválido para el usuario {}", registro.id)
+        return None
     except VerifyMismatchError:
         return None
 
@@ -80,6 +83,7 @@ def asignar_token_para_usuario(identidad: User) -> None:
         ahora = datetime.now(timezone.utc)
         payload = {
             "user_id": identidad.id,
+            "auth_version": identidad.auth_version,
             "iat": ahora,
             "nbf": ahora,
             "exp": ahora + timedelta(hours=8),
@@ -93,6 +97,12 @@ def asignar_token_para_usuario(identidad: User) -> None:
     except (KeyError, PyJWTError) as exc:
         assert exc is not None  # nosec
         log.warning("No se pudo generar auth token.")
+
+
+def revocar_credenciales_usuario(identidad: User) -> None:
+    """Invalidate every browser session and API token issued to a user."""
+    identidad.auth_version = User.auth_version + 1
+    identidad.token = None
 
 
 def redireccion_despues_de_login():

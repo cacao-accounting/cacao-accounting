@@ -3,7 +3,7 @@
 
 """Módulo de Portal para Clientes y Proveedores (Cloud Mode únicamente)."""
 
-from flask import Blueprint, abort, render_template, flash
+from flask import Blueprint, abort, render_template
 from flask_login import current_user, login_required
 from cacao_accounting.i18n import _
 from cacao_accounting.runtime_mode import is_desktop_mode
@@ -47,17 +47,11 @@ def check_portal_access(role_name: str) -> None:
     if _is_user_admin():
         return
 
-    if role_name == "customer" and current_user.classification == "customer":
-        if current_user.party_id and current_user.company:
-            return
-        flash(_("Usuario de portal sin cliente asignado."), "danger")
-        abort(403)
+    if role_name == "customer" and current_user.is_portal_customer:
+        return
 
-    if role_name == "supplier" and current_user.classification == "supplier":
-        if current_user.party_id and current_user.company:
-            return
-        flash(_("Usuario de portal sin proveedor asignado."), "danger")
-        abort(403)
+    if role_name == "supplier" and current_user.is_portal_supplier:
+        return
 
     abort(403)
 

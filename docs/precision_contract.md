@@ -63,6 +63,11 @@ El redondeo a decimales de visualización (2 decimales para importes) es
 **exclusivo de la capa de presentación** (CSS `toLocaleString`). Nunca
 afecta el valor persistido o transmitido.
 
+En las fronteras de escritura, un valor que exceda la escala de su columna se
+rechaza antes de persistirlo. Los ceros finales que no cambian el valor no
+cuentan como precisión adicional. El sistema no permite que el tipo `Numeric`
+redondee silenciosamente un importe de entrada.
+
 ## Diferencias de redondeo
 
 Cuando el sistema debe redondear (ej. al facturar con monedas de bajo

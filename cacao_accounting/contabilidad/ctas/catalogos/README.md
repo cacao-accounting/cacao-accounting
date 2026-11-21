@@ -10,7 +10,7 @@ El archivo debe tener el siguiente contenido:
  - nombre: Cadena de texto que describe el uso de la cuenta contable.
  - padre: La estructura padre/hijo es la base del arbol de cuentas, debe ser grupo=1. 
  - grupo: Uno de 1 o 0, 1 significa que la cuenta es un agrupador, 0 indica que la cuenta acepta movimiento.
- - rubro: Uno de Asset, Liability, Equity, Income, Expense, Memo.
+ - rubro: Uno de Asset, Liability, Equity, Income, Cost, Expense, Memo.
  - tipo: 
 
 ## Opciones para la presentación alternativa:

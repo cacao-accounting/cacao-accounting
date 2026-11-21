@@ -7,12 +7,24 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any, cast
 from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.imports.utils.dates import parse_import_date
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party, Warehouse, database
 from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_flow.service import qty_in_base_uom
 from cacao_accounting.document_identifiers import assign_document_identifier
 from cacao_accounting.i18n import _
+
+
+def _finite_decimal(value: Any, field: str) -> Decimal:
+    """Convierte un valor de importación y rechaza números no finitos."""
+    try:
+        amount = Decimal(str(value if value not in (None, "") else "0"))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ValueError(_("%(field)s debe ser un número decimal válido.") % {"field": field}) from exc
+    if not amount.is_finite():
+        raise ValueError(_("%(field)s debe ser finito.") % {"field": field})
+    return amount
 
 
 class PurchaseOrderAdapter(BaseImportAdapter):
@@ -39,7 +51,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         company_id = (context or {}).get("company_id") or ""
         posting_date = None
         try:
-            posting_date = date.fromisoformat(str(document_data[0].get("fecha")))
+            posting_date = parse_import_date(document_data[0].get("fecha"))
             if not is_period_open(company_id, posting_date):
                 errors.append(f"El periodo contable para la fecha {posting_date} está cerrado o no existe.")
         except (ValueError, TypeError):
@@ -53,7 +65,10 @@ class PurchaseOrderAdapter(BaseImportAdapter):
                 if warehouse is None or warehouse.company != company_id or not warehouse.is_active:
                     errors.append(f"La bodega '{warehouse_code}' no pertenece a la compañía o está inactiva.")
             try:
-                quantity = Decimal(str(row.get("cantidad") or "0"))
+                quantity = _finite_decimal(row.get("cantidad"), "cantidad")
+                rate = _finite_decimal(row.get("precio_unitario"), "precio_unitario")
+                if rate < 0:
+                    raise ValueError(_("El precio unitario no puede ser negativo."))
                 qty_in_base_uom(row.get("producto"), quantity, None)
             except (InvalidOperation, ValueError) as exc:
                 errors.append(str(exc))
@@ -75,7 +90,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
 
         posting_date = None
         try:
-            posting_date = date.fromisoformat(str(first_row.get("fecha")))
+            posting_date = parse_import_date(first_row.get("fecha"))
         except ValueError:
             pass
 
@@ -97,8 +112,10 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         total = Decimal("0")
 
         for row in document_data:
-            qty = Decimal(str(row.get("cantidad") or 0))
-            rate = Decimal(str(row.get("precio_unitario") or 0))
+            qty = _finite_decimal(row.get("cantidad"), "cantidad")
+            rate = _finite_decimal(row.get("precio_unitario"), "precio_unitario")
+            if rate < 0:
+                raise ValueError(_("El precio unitario no puede ser negativo."))
             amount = qty * rate
 
             item = PurchaseOrderItem(
@@ -135,7 +152,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
             return transaction_currency, base_currency, Decimal("1")
         raw_rate = first_row.get("tipo_cambio")
         if raw_rate:
-            rate_dec = Decimal(str(raw_rate))
+            rate_dec = _finite_decimal(raw_rate, "tipo de cambio")
         else:
             from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 
@@ -143,7 +160,9 @@ class PurchaseOrderAdapter(BaseImportAdapter):
                 Decimal | None,
                 _lookup_exchange_rate(transaction_currency, cast(str, base_currency), posting_date) if posting_date else None,
             )
-            rate_dec = Decimal(str(resolved)) if resolved is not None else Decimal("0")
+            rate_dec = _finite_decimal(resolved, "tipo de cambio") if resolved is not None else Decimal("0")
+        if not rate_dec.is_finite():
+            raise ValueError(_("Tipo de cambio debe ser finito."))
         if rate_dec <= 0:
             raise ValueError(
                 _("No existe tipo de cambio para %(transaction_currency)s -> %(base_currency)s en %(posting_date)s.")

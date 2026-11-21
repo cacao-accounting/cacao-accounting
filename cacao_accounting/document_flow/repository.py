@@ -24,6 +24,48 @@ def get_document(doctype: str, document_id: str) -> Any | None:
     return database.session.get(spec.header_model, document_id)
 
 
+def get_document_fresh(doctype: str, document_id: str) -> Any | None:
+    """Obtiene un documento forzando una lectura a la base de datos.
+
+    ``Session.get`` devuelve la instancia del identity map sin consultar la
+    base cuando ya está cargada. Tras adquirir un lock documental es necesario
+    releer el estado confirmado por otras transacciones; de lo contrario la
+    validación trabaja con una foto tomada antes del bloqueo.
+    """
+    spec = get_document_type(doctype)
+    return database.session.get(spec.header_model, document_id, populate_existing=True)
+
+
+def document_matches_type(doctype: str, document: Any) -> bool:
+    """Comprueba que el documento cargado pertenezca al tipo lógico solicitado.
+
+    Varios tipos lógicos comparten modelo (notas de crédito/débito y
+    devoluciones usan el modelo de factura); la columna ``document_type``
+    desambigua el subtipo. Los modelos sin esa columna son inequívocos.
+    Una fila sin subtipo se considera solo el tipo base del modelo.
+    """
+    spec = get_document_type(doctype)
+    actual = getattr(document, "document_type", None)
+    if actual is None:
+        # Una fila heredada sin subtipo solo es inequívoca para el tipo base
+        # del modelo (por ejemplo ``sales_invoice``); no debe autorizarse como
+        # nota de crédito, débito o devolución (#998, N14).
+        if not hasattr(spec.header_model, "document_type"):
+            return True
+        default_type = getattr(spec.header_model, "document_type", None)
+        default_value = getattr(default_type, "default", None)
+        default_arg = getattr(default_value, "arg", None)
+        if default_arg is None:
+            return True
+        # Solo un default escalar identifica el tipo base. Un default callable
+        # no permite inferirlo: se falla cerrado en lugar de comparar el
+        # objeto con el nombre del doctype (N24b).
+        if not isinstance(default_arg, str):
+            return False
+        return normalize_doctype(doctype) == normalize_doctype(default_arg)
+    return normalize_doctype(str(actual)) == normalize_doctype(doctype)
+
+
 def get_document_company(doctype: str, document_id: str) -> str | None:
     """Obtiene la compania del documento."""
     document = get_document(doctype, document_id)
@@ -299,35 +341,12 @@ def has_active_source_relations(source_type: str, source_id: str) -> bool:
         .all()
     )
     for relation in relations:
-        target = get_document(relation.target_type, relation.target_id)
+        spec = get_document_type(relation.target_type)
+        target = database.session.execute(
+            database.select(spec.header_model)
+            .where(spec.header_model.id == relation.target_id)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
         if target and getattr(target, "docstatus", 0) == 1:
             return True
     return False
-
-
-def recompute_states_for_source(
-    source_type: str,
-    source_id: str,
-    target_type: str | None = None,
-) -> list[DocumentLineFlowState]:
-    """Recalcula estados de todas las lineas de un documento fuente."""
-    source_key = normalize_doctype(source_type)
-    target_keys = [normalize_doctype(target_type)] if target_type else []
-    if not target_keys:
-        target_keys = sorted(
-            {
-                row[0]
-                for row in database.session.execute(
-                    database.select(DocumentRelation.target_type).filter_by(
-                        source_type=source_key,
-                        source_id=source_id,
-                    )
-                )
-            }
-        )
-    states: list[DocumentLineFlowState] = []
-    company = get_document_company(source_key, source_id)
-    for item in get_document_items(source_key, source_id):
-        for target_key in target_keys:
-            states.append(recompute_line_flow_state(source_key, source_id, item.id, target_key, company))
-    return states

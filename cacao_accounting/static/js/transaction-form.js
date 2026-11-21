@@ -251,6 +251,10 @@
       qty: i18n.qtyLabel || 'Cantidad',
       rate: i18n.rateLabel || 'Precio / Costo Unitario',
       amount: i18n.amountLabel || 'Precio / Costo Total',
+      weight: i18n.weightLabel || 'Peso',
+      weightUom: i18n.weightUomLabel || 'UOM de peso',
+      volume: i18n.volumeLabel || 'Volumen',
+      volumeUom: i18n.volumeUomLabel || 'UOM de volumen',
       ...config.messages
     };
   }
@@ -263,6 +267,12 @@
       { field: 'qty', label: i18n.qtyLabel || 'Cantidad', visible: true, width: 1, required: false },
       { field: 'rate', label: i18n.rateLabel || 'Precio', visible: true, width: 1, required: false },
       { field: 'discount_percentage', label: 'Descuento %', visible: config.enableLineDiscounts === true, width: 1, required: false },
+      ...(config.enableDimensions ? [
+        { field: 'weight', label: i18n.weightLabel || 'Peso', visible: true, width: 1, required: false },
+        { field: 'weight_uom', label: i18n.weightUomLabel || 'UOM peso', visible: true, width: 1, required: false },
+        { field: 'volume', label: i18n.volumeLabel || 'Volumen', visible: true, width: 1, required: false },
+        { field: 'volume_uom', label: i18n.volumeUomLabel || 'UOM volumen', visible: true, width: 1, required: false },
+      ] : []),
       { field: 'amount', label: i18n.amountLabel || 'Monto', visible: true, width: 1, required: false },
     ];
   }
@@ -521,6 +531,10 @@
             rate: 0,
             discount_percentage: 0,
             amount: 0,
+            weight: '',
+            weight_uom: '',
+            volume: '',
+            volume_uom: '',
             batch_id: '',
             serial_no: '',
             has_batch: false,
@@ -536,6 +550,7 @@
             source_id: '',
             source_item_id: '',
             allowed_uoms: [],
+            uom_factors: {},
             ...config.linePrototype
           };
         },
@@ -592,6 +607,14 @@
             line.item_name = item.name || line.item_name;
           }
           this._applyItemUom(line, item);
+          if ((line.weight === '' || line.weight === null || line.weight === undefined) && item.weight !== undefined && item.weight !== null) {
+            line.weight = item.weight;
+            line.weight_uom = item.weight_uom || line.weight_uom;
+          }
+          if ((line.volume === '' || line.volume === null || line.volume === undefined) && item.volume !== undefined && item.volume !== null) {
+            line.volume = item.volume;
+            line.volume_uom = item.volume_uom || line.volume_uom;
+          }
           line.has_batch = Boolean(line.has_batch || line.batch_id || item.has_batch || item.has_expiry_date);
           line.has_serial_no = Boolean(line.has_serial_no || line.serial_no || item.has_serial_no);
           line.has_expiry_date = Boolean(item.has_expiry_date || line.has_expiry_date || false);
@@ -604,6 +627,7 @@
 
         _applyItemUom(line, item) {
           line.allowed_uoms = normalizeAllowedUoms(item.allowed_uoms, item.default_uom);
+          line.uom_factors = item.uom_factors || {};
           const allowedUomSet = new Set(line.allowed_uoms);
           if (line.allowed_uoms.length && !allowedUomSet.has(line.uom)) {
             line.uom = line.allowed_uoms[0];
@@ -618,7 +642,14 @@
         },
 
         onUomChange(line, uom) {
+          const oldFactor = Number(line.uom_factors?.[line.uom]);
+          const newFactor = Number(line.uom_factors?.[uom]);
+          if (oldFactor > 0 && newFactor > 0) {
+            line.qty = toNumber(line.qty) * oldFactor / newFactor;
+            line.rate = toNumber(line.rate) * newFactor / oldFactor;
+          }
           line.uom = uom;
+          this.calcAmount(line);
           return this.refreshCatalogPrice(line);
         },
 
@@ -788,6 +819,10 @@
             uom: line.uom || '',
             rate: toCurrencyString(line.rate),
             amount: toCurrencyString(line.amount),
+            weight: line.weight === '' || line.weight === null || line.weight === undefined ? '' : toCurrencyString(line.weight),
+            weight_uom: line.weight_uom || '',
+            volume: line.volume === '' || line.volume === null || line.volume === undefined ? '' : toCurrencyString(line.volume),
+            volume_uom: line.volume_uom || '',
             batch_id: line.batch_id || '',
             serial_no: line.serial_no || '',
           };
@@ -866,7 +901,10 @@
             const data = await response.json();
             if (requestId !== taxPreviewRequestId) return;
             if (!response.ok) {
-              this.taxCharges.error = data?.message || i18n.errorTaxPreview || 'No se pudo calcular.';
+              const detail = Array.isArray(data?.errors) && data.errors.length
+                ? data.errors.join(' ')
+                : (data?.message || i18n.errorTaxPreview || 'No se pudo calcular.');
+              this.taxCharges.error = detail;
               this.taxCharges.loading = false;
               return;
             }
@@ -904,6 +942,13 @@
         },
 
         applyTaxPreviewData(data) {
+          const errors = Array.isArray(data.errors) ? data.errors.filter(Boolean) : [];
+          if (errors.length) {
+            this.taxCharges.error = errors.join(' ');
+            this.taxCharges.loading = false;
+            return;
+          }
+          this.taxCharges.error = '';
           this.taxCharges.profile = data.profile || null;
           this.taxCharges.summary = data.summary || this.taxCharges.summary;
           this.taxCharges.lines = Array.isArray(data.tax_lines) ? data.tax_lines : [];
@@ -1313,8 +1358,19 @@
           this.lines = filtered;
         },
 
+        currencyDecimals() {
+          const code = String(this.header.currency || this.header.transaction_currency || '');
+          const map = globalThis.__CACAO_CURRENCY_DECIMALS__ || {};
+          const configured = Number(map[code]);
+          return Number.isInteger(configured) ? Math.max(0, Math.min(configured, 8)) : 2;
+        },
+
         formatMoney(value) {
-          return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const decimals = this.currencyDecimals();
+          return Number(value || 0).toLocaleString(undefined, {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          });
         },
 
         serializedTaxLines() {

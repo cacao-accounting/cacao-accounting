@@ -1,7 +1,7 @@
 {% extends "base.html" %} {% block contenido %} {% import "macros.html" as
 macros %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"
@@ -89,7 +89,7 @@ macros %}
       >
         <i class="bi bi-plus-circle me-1"></i>{{ _("Agregar oferta a esta ronda") }}
       </a>
-      {% else %}
+      {% elif can_authorize %}
       <form
         method="post"
         action="{{ url_for('compras.compras_comparativo_solicitud_abrir_ronda', comparison_id=comparison.id) }}"
@@ -106,6 +106,9 @@ macros %}
   </div>
   {% endif %}
 
+  {% if recommendations_error %}
+  <div class="alert alert-warning m-3 mb-0" role="alert">{{ recommendations_error }}</div>
+  {% endif %}
   <form
     method="post"
     action="{{ url_for('compras.compras_comparativo_guardar_borrador', comparison_id=comparison.id) }}"
@@ -233,10 +236,12 @@ macros %}
 
     {% if comparison.status not in ['finalized', 'used'] %}
     <div class="d-flex gap-2 mt-3 flex-wrap">
+      {% if can_create %}
       <button type="submit" class="btn btn-outline-primary">
         <i class="bi bi-save me-1"></i>{{ _("Guardar borrador") }}
       </button>
-      {% if is_purchase_sourcing_authorizer %}
+      {% endif %}
+      {% if can_authorize %}
       <button
         type="submit"
         formaction="{{ url_for('compras.compras_comparativo_finalizar', comparison_id=comparison.id) }}"
@@ -249,7 +254,7 @@ macros %}
     {% endif %}
   </form>
 
-  {% if comparison.status == 'finalized' %}
+  {% if comparison.status == 'finalized' and can_create %}
   <div class="d-flex justify-content-end p-3 pt-0">
     <form
       method="post"

@@ -324,44 +324,6 @@ def _allocation_context(transaction: BankTransaction, company: str, reconciliati
     }
 
 
-def backfill_reconciliation_item_context() -> dict[str, int]:
-    """Migra partidas de conciliación bancaria legacy al contexto persistido.
-
-    Recorre las asignaciones bancarias activas sin moneda y completa compania,
-    cuenta bancaria, moneda, libro, dirección y tasa histórica a partir de su
-    transacción fuente.  Las partidas cuya fuente ya no existe (o cuya
-    conciliación no declara compañía) no tienen contexto inequívoco: se
-    cuentan como ``unresolved`` para revisión manual.
-
-    Returns:
-        Conteo de partidas migradas y partidas sin contexto resoluble.
-    """
-    stats = {"backfilled": 0, "unresolved": 0}
-    items = (
-        database.session.execute(
-            select(ReconciliationItem).where(
-                ReconciliationItem.source_type == "bank_transaction",
-                ReconciliationItem.status != "cancelled",
-                ReconciliationItem.currency.is_(None),
-            )
-        )
-        .scalars()
-        .all()
-    )
-    for item in items:
-        transaction = database.session.get(BankTransaction, item.source_id) if item.source_id else None
-        reconciliation = database.session.get(Reconciliation, item.reconciliation_id)
-        company = str(reconciliation.company) if reconciliation and reconciliation.company else None
-        if transaction is None or not company:
-            stats["unresolved"] += 1
-            continue
-        context = _allocation_context(transaction, company, item.reconciliation_date or transaction.posting_date)
-        for field, value in context.items():
-            setattr(item, field, value)
-        stats["backfilled"] += 1
-    return stats
-
-
 def _validate_target_allocation_currency(
     target_type: str,
     target_id: str,

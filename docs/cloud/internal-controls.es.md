@@ -123,7 +123,14 @@ GRANT SELECT, INSERT ON document_relation, purchase_reconciliation,
   purchase_reconciliation_item, purchase_invoice_receipt_allocation,
   purchase_receipt_return_allocation, purchase_credit_note_allocation
   TO cacao_runtime;
-GRANT SELECT, UPDATE ON document_relation, purchase_reconciliation,
+REVOKE UPDATE ON document_relation, purchase_reconciliation,
+  purchase_reconciliation_item, purchase_invoice_receipt_allocation,
+  purchase_receipt_return_allocation, purchase_credit_note_allocation
+  FROM cacao_runtime, PUBLIC;
+GRANT UPDATE (status, reversed_at, reversed_by, reversal_reason, cancelled_at,
+  cancelled_by, metadata_json, modified, modified_by)
+  ON document_relation TO cacao_runtime;
+GRANT UPDATE (status, modified, modified_by) ON purchase_reconciliation,
   purchase_reconciliation_item, purchase_invoice_receipt_allocation,
   purchase_receipt_return_allocation, purchase_credit_note_allocation
   TO cacao_runtime;
@@ -144,7 +151,9 @@ aprovisionamiento; un REVOKE no anula privilegios concedidos por otros roles.
 La cuenta de migración no está disponible para la aplicación en ejecución.
 Mantenga las credenciales de despliegue separadas de `SQLALCHEMY_DATABASE_URI` y
 restrinja el acceso de red a la base de datos. Un propietario de PostgreSQL o un
-administrador de infraestructura aún puede alterar datos. Los respaldos retenidos
+administrador de infraestructura aún puede alterar datos; estas restricciones
+aplican al rol runtime de la aplicación y no limitan la autoridad operativa del DBA.
+Los respaldos retenidos
 o las copias de evidencia fuera de los derechos de modificación de ese
 administrador y los ejercicios de restauración pertenecen a los controles
 operativos del SaaS.

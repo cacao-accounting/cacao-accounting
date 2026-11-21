@@ -25,7 +25,7 @@ from cacao_accounting.database import (
     SupplierQuotationItem,
     database,
 )
-from cacao_accounting.document_flow import create_document_relation, create_target_document
+from cacao_accounting.document_flow import create_document_relation, create_target_document, lock_document_flow_document
 from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_identifiers import assign_document_identifier
 
@@ -79,41 +79,6 @@ def supplier_quotations_for_request(purchase_request: PurchaseRequest) -> list[S
         .scalars()
         .all()
     )
-
-
-def supplier_quotation_comparison_rows(
-    offers: Sequence[SupplierQuotation],
-    offer_items: Mapping[str, Sequence[SupplierQuotationItem]],
-) -> list[dict[str, object]]:
-    """Build comparison rows from the union of all participating offer lines."""
-    rows: list[dict[str, object]] = []
-    seen_keys: set[tuple[tuple[str | None, ...], int]] = set()
-    occurrences_by_offer: dict[str, dict[tuple[str | None, ...], int]] = {}
-
-    for offer in offers:
-        occurrences = occurrences_by_offer.setdefault(offer.id, {})
-        for item in offer_items.get(offer.id, []):
-            key = _supplier_quotation_item_key(item)
-            occurrence = occurrences.get(key, 0)
-            occurrences[key] = occurrence + 1
-            row_key = (key, occurrence)
-            if row_key not in seen_keys:
-                seen_keys.add(row_key)
-                rows.append(
-                    {
-                        "item": item,
-                        "item_key": key,
-                        "occurrence": occurrence,
-                        "offers": {
-                            participant.id: _supplier_quotation_item_at_occurrence(
-                                offer_items.get(participant.id, ()), key, occurrence
-                            )
-                            for participant in offers
-                        },
-                    }
-                )
-
-    return rows
 
 
 def _supplier_quotation_item_key(item: SupplierQuotationItem) -> tuple[str | None, ...]:
@@ -470,25 +435,6 @@ def purchase_request_comparison_covered_item_ids(purchase_request: PurchaseReque
     )
 
 
-def purchase_request_comparison_is_closed(purchase_request: PurchaseRequest) -> bool:
-    """Return whether closed comparisons cover every request line.
-
-    This gate only measures comparison coverage; lines ordered by direct
-    assignment are recognized by :func:`purchase_request_is_ready_to_close`,
-    the actual precondition to close a purchase request.
-    """
-    request_item_ids = set(
-        database.session.execute(
-            database.select(PurchaseRequestItem.id).where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
-        )
-        .scalars()
-        .all()
-    )
-    if not request_item_ids:
-        return False
-    return request_item_ids.issubset(purchase_request_comparison_covered_item_ids(purchase_request))
-
-
 def purchase_request_direct_order_item_ids(purchase_request: PurchaseRequest) -> set[str]:
     """Return request line ids ordered directly through an approved purchase order."""
     request_item_ids = list(
@@ -751,8 +697,19 @@ def _create_purchase_order_for_group(
     return order
 
 
-def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison) -> list[PurchaseOrder]:
+def create_purchase_orders_from_comparison(
+    comparison: PurchaseRequestComparison, user_id: str | None = None
+) -> list[PurchaseOrder]:
     """Create one draft purchase order per supplier from a finalized comparison."""
+    lock_document_flow_document("purchase_request_comparison", str(comparison.id))
+    locked_comparison = database.session.execute(
+        database.select(PurchaseRequestComparison)
+        .where(PurchaseRequestComparison.id == comparison.id)
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if locked_comparison is None:
+        raise ValueError(_("El comparativo no existe."))
+    comparison = locked_comparison
     purchase_request = _comparison_purchase_request_or_raise(comparison)
     lines = _comparison_selected_lines(comparison)
     grouped, quotations_by_group = _group_comparison_lines(lines, comparison)
@@ -762,6 +719,6 @@ def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison
     ]
     comparison.status = "used"
     comparison.used_at = datetime.now(timezone.utc)
-    comparison.modified_by = comparison.finalized_by
+    comparison.modified_by = user_id or comparison.finalized_by
     database.session.flush()
     return orders

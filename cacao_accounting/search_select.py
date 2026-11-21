@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, Sequence
 
-from sqlalchemy import ColumnElement, Select, and_, case, cast, func, literal, or_, select, true
+from sqlalchemy import ColumnElement, Select, and_, case, cast, false, func, literal, or_, select, true
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 from cacao_accounting.database import (
@@ -41,7 +41,10 @@ from cacao_accounting.database import (
     Unit,
     UOM,
     User,
+    UserCompanyAccess,
     Warehouse,
+    StockLedgerEntry,
+    StockValuationLayer,
     GLEntry,
     database,
 )
@@ -261,7 +264,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("code", "company_name", "name", "tax_id"),
         value_field="code",
         label_builder=_company_label,
-        allowed_filters={"is_active": "enabled"},
+        allowed_filters={"is_active": "enabled", "company": "code"},
         default_filters={"enabled": True},
     ),
     "currency": SearchSelectSpec(
@@ -633,7 +636,7 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("user", "name", "last_name"),
         value_field="id",
         label_builder=_user_label,
-        allowed_filters={"active": "active"},
+        allowed_filters={"active": "active", "company": "company"},
         default_filters={"active": True},
     ),
     "external_counter": SearchSelectSpec(
@@ -688,27 +691,71 @@ def _build_base_query(spec: SearchSelectSpec, normalized_filters: dict[str, Any]
     """Build the initial query with company and party scoping."""
     statement = select(spec.model)
     if spec.model is Entity and company_scope is not None:
-        statement = statement.where(Entity.code.in_(sorted(company_scope)))
+        return statement.where(Entity.code.in_(sorted(company_scope)))
+    if spec.model is User and company_scope is not None:
+        return _apply_user_catalog_scope(statement, normalized_filters, company_scope)
     if spec.model is Party and (normalized_filters.get("company") or company_scope is not None):
-        target_companies: set[str] | None = None
-        if normalized_filters.get("company"):
-            target_companies = set(normalized_filters["company"])
-            if company_scope is not None:
-                target_companies = target_companies & company_scope
-        else:
-            target_companies = company_scope
-
-        cp_scope = select(CompanyParty.party_id).where(CompanyParty.is_active.is_(True))
-        if target_companies is not None:
-            cp_scope = cp_scope.where(CompanyParty.company.in_(sorted(target_companies)))
-        # La pertenencia por IN (subconsulta) garantiza una fila por tercero.
-        # Con EXISTS y una lista IN multi-valor SQLite devuelve una fila del
-        # tercero por cada compania coincidente; DISTINCT no es opcion porque
-        # invalida el ORDER BY por relevancia en PostgreSQL.
-        statement = statement.where(Party.id.in_(cp_scope))
-    elif company_scope is not None and spec.model is not Item and "company" in spec.allowed_filters:
-        statement = statement.where(_column_for(spec.model, spec.allowed_filters["company"]).in_(sorted(company_scope)))
+        return _apply_party_scope(statement, normalized_filters, company_scope)
+    if spec.model is Batch and company_scope is not None:
+        return _apply_batch_scope(statement, company_scope)
+    if company_scope is not None and spec.model is not Item and "company" in spec.allowed_filters:
+        return statement.where(_column_for(spec.model, spec.allowed_filters["company"]).in_(sorted(company_scope)))
     return statement
+
+
+def _apply_batch_scope(statement: Any, company_scope: set[str]) -> Any:
+    """Limita los lotes a los que tienen evidencia de inventario autorizada.
+
+    `Batch` no guarda compañía: su pertenencia se deriva del libro de stock y
+    de las capas de valoración. Un lote sin evidencia en las compañías
+    autorizadas no debe ser enumerable por el selector (#N6).
+    """
+    companies = sorted(company_scope)
+    valuation_batches = select(StockValuationLayer.batch_id).where(
+        StockValuationLayer.company.in_(companies),
+        StockValuationLayer.batch_id.is_not(None),
+    )
+    ledger_batches = select(StockLedgerEntry.batch_id).where(
+        StockLedgerEntry.company.in_(companies),
+        StockLedgerEntry.batch_id.is_not(None),
+    )
+    return statement.where(or_(Batch.id.in_(valuation_batches), Batch.id.in_(ledger_batches)))
+
+
+def _apply_user_catalog_scope(statement: Any, normalized_filters: dict[str, Any], company_scope: set[str]) -> Any:
+    """Limita el directorio de usuarios a las compañías autorizadas (#1321).
+
+    El filtro explícito `company` se intersecta con el alcance; una compañía
+    fuera de alcance queda descartada aunque el ACL ya la haya rechazado.
+    """
+    scopes = sorted(company_scope)
+    requested_companies = {str(value) for value in normalized_filters.get("company") or [] if str(value).strip()}
+    if requested_companies:
+        scopes = sorted(set(scopes) & requested_companies)
+    if not scopes:
+        return statement.where(false())
+    scoped_user_ids = select(UserCompanyAccess.user_id).where(UserCompanyAccess.company_code.in_(scopes))
+    return statement.where(or_(User.company.in_(scopes), User.id.in_(scoped_user_ids)))
+
+
+def _apply_party_scope(statement: Any, normalized_filters: dict[str, Any], company_scope: set[str] | None) -> Any:
+    """Filtra terceros por sus vínculos de compañía vigentes."""
+    target_companies: set[str] | None
+    if normalized_filters.get("company"):
+        target_companies = set(normalized_filters["company"])
+        if company_scope is not None:
+            target_companies = target_companies & company_scope
+    else:
+        target_companies = company_scope
+
+    cp_scope = select(CompanyParty.party_id).where(CompanyParty.is_active.is_(True))
+    if target_companies is not None:
+        cp_scope = cp_scope.where(CompanyParty.company.in_(sorted(target_companies)))
+    # La pertenencia por IN (subconsulta) garantiza una fila por tercero.
+    # Con EXISTS y una lista IN multi-valor SQLite devuelve una fila del
+    # tercero por cada compania coincidente; DISTINCT no es opcion porque
+    # invalida el ORDER BY por relevancia en PostgreSQL.
+    return statement.where(Party.id.in_(cp_scope))
 
 
 def _apply_active_only_filters(statement: Any, spec: SearchSelectSpec, active_only: bool) -> Any:
@@ -750,6 +797,7 @@ def search_select(
         raise SearchSelectError(_("Tipo de seleccion no registrado."), 404)
 
     normalized_filters, active_only = _normalize_active_filters(filters)
+    normalized_filters = _normalize_company_filter_values(normalized_filters)
 
     rejected_filters = sorted(set(normalized_filters) - set(spec.allowed_filters))
     if rejected_filters:
@@ -840,9 +888,33 @@ def _apply_default_filters(
         if spec.model is Party and field == "role":
             statement = _apply_role_filter(statement, [str(value)] if isinstance(value, str) else [value])
             continue
+        if spec.model is User and field == "company":
+            # #1321: la compañía del directorio incluye vínculos explícitos,
+            # no solo la compañía principal; ya se aplicó en _build_base_query.
+            continue
         column = _column_for(spec.model, field)
         statement = statement.where(_condition_for(column, [str(value)] if isinstance(value, str) else [value]))
     return statement
+
+
+def _normalize_company_filter_values(filters: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Convierte ULID de compañía a código antes de filtrar (#1327).
+
+    La capa de ACL acepta código o ID; los modelos de negocio guardan el
+    código. Normalizar aquí evita un catálogo vacío al usar el identificador.
+    """
+    values = filters.get("company")
+    if not values:
+        return filters
+    resolved: list[str] = []
+    for value in values:
+        entity = database.session.execute(
+            select(Entity.code).where((Entity.code == value) | (Entity.id == value))
+        ).scalar_one_or_none()
+        resolved.append(str(entity) if entity else value)
+    normalized = dict(filters)
+    normalized["company"] = resolved
+    return normalized
 
 
 def _is_activity_default(field: str, value: str | bool) -> bool:
@@ -869,6 +941,8 @@ def _apply_single_request_filter(
     if spec.model is Item and filter_name == "company":
         return statement
     if spec.model is Party and filter_name == "company":
+        return statement
+    if spec.model is User and filter_name == "company":
         return statement
     if spec.model is Party and filter_name in ("role", "party_type"):
         return _apply_role_filter(statement, clean_values)
@@ -1004,6 +1078,10 @@ def _serialize_result(spec: SearchSelectSpec, row: Any) -> dict[str, Any]:
         "default_uom",
         "default_naming_series_id",
         "default_external_counter_id",
+        "weight",
+        "weight_uom",
+        "volume",
+        "volume_uom",
         "has_batch",
         "has_serial_no",
         "has_expiry_date",

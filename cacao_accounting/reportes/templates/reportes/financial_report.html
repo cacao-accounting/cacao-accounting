@@ -2,7 +2,7 @@
 {% from "smart_select_field.html" import smart_select_field %}
 {% from "reportes/report_macros.html" import period_range_field %}
 {% block contenido %}
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
@@ -20,6 +20,33 @@
       </button>
     </div>
     <div class="p-3" x-show="!collapsed">
+      <div class="ca-saved-views mb-3">
+        <label class="form-label mb-1" for="saved-view-select">{{ _("Vista guardada") }}</label>
+        <select class="form-select form-select-sm" id="saved-view-select"
+          onchange="if (this.value) { window.location.href = this.value; }">
+          <option value="{{ default_view_url }}">{{ _("Predeterminada") }}</option>
+          {% for view in saved_views %}
+          <option value="{{ saved_view_links[view.id] }}" {% if saved_view == view.id %}selected{% endif %}>{{ view.name }}</option>
+          {% endfor %}
+        </select>
+        <form method="post" action="{{ url_for('reportes.save_report_view') }}?{{ request.query_string.decode() }}" class="mt-2 d-flex gap-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="report_code" value="{{ report_code }}">
+          <input type="hidden" name="company" value="{{ report_filters.company }}">
+          <input type="hidden" name="return_url" value="{{ request.full_path }}">
+          <input class="form-control form-control-sm" type="text" name="name" maxlength="100" required
+            placeholder="{{ _('Nombre de la vista') }}">
+          <button class="btn btn-sm btn-outline-primary" type="submit">{{ _("Guardar vista") }}</button>
+        </form>
+        {% if saved_view != 'default' %}
+        <form method="post" action="{{ url_for('reportes.delete_report_view', view_id=saved_view) }}?{{ request.query_string.decode() }}" class="mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="report_code" value="{{ report_code }}">
+          <input type="hidden" name="return_url" value="{{ request.full_path }}">
+          <button class="btn btn-sm btn-outline-danger" type="submit">{{ _("Eliminar vista") }}</button>
+        </form>
+        {% endif %}
+      </div>
       <form method="get" class="d-grid gap-2" id="financial-filter-form">
         <input type="hidden" name="apply_filters" value="1">
         <input type="hidden" id="financial-advanced-state" name="advanced" value="{{ '1' if request.args.get('advanced') == '1' else '0' }}">
@@ -126,7 +153,11 @@
     </div>
     {% endif %}
     <div class="ca-report-table-wrapper">
-      <table class="ca-table ca-report-table">
+      <table
+        class="ca-table ca-report-table"
+        data-expand-label="{{ _('Expandir') }}"
+        data-collapse-label="{{ _('Colapsar') }}"
+      >
         <caption style="display:none;">{{ report_title }}</caption>
         <thead>
           <tr>
@@ -157,9 +188,19 @@
           </tr>
           {% else %}
             {% set meta = row.get('__meta') %}
-          <tr class="{% if meta and meta.is_group %}ca-group-row{% endif %}">
+          <tr
+            class="{% if meta and meta.is_group %}ca-group-row{% endif %}"
+            data-tree-section="{% if row.get('__tree_group') is not none %}group-{{ row.get('__tree_group') }}{% elif meta %}{{ meta.section or '' }}{% endif %}"
+          >
             {% for column in columns %}
-            <td class="{% if column in right_align_columns %}text-end{% endif %}" {% if meta and meta.code %}data-code="{{ meta.code }}" data-parent="{{ meta.parent }}" data-level="{{ meta.level }}"{% endif %}>
+            <td
+              class="{% if column in right_align_columns %}text-end{% endif %}"
+              {% if column == 'account_code' and meta and meta.code %}
+              data-code="{{ meta.code }}"
+              data-parent="{{ meta.parent }}"
+              data-level="{{ meta.level }}"
+              {% endif %}
+            >
               {% if column == 'account_code' and row.get(column) not in (None, '—', '') %}
               <span class="ca-tree-label" data-indent="{{ (meta.level if meta else 1) - 1 }}">
                 {% if meta and meta.drilldown_url %}
@@ -210,7 +251,7 @@
   .ca-total-label{font-size:.75rem;color:var(--ca-text-secondary)}
   .ca-total-value{font-size:.8125rem;text-align:right}
   .ca-total-ok{justify-content:center;font-weight:600;color:#198754}
-  .ca-tree-toggle{cursor:pointer;font-weight:600}
+  .ca-tree-toggle{padding:0;border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;font-weight:600;line-height:inherit}
   .ca-report-table tbody tr.ca-report-group,.ca-report-table tbody tr.ca-report-subtotal{background:var(--ca-surface-hover);color:var(--ca-text)}
   .ca-group-row{background:rgba(13,110,253,.04)!important;font-weight:600}
   .ca-tree-label{display:inline-flex;align-items:center;gap:.35rem}
@@ -240,49 +281,7 @@
       });
     }
 
-    const rows = Array.from(document.querySelectorAll('.ca-report-table tbody tr'));
-    rows.forEach(function (row) {
-      const cell = row.querySelector('td[data-code]');
-      if (!cell) return;
-      const parent = cell.dataset.parent || '';
-      if (parent) row.dataset.parentCode = parent;
-    });
-
-    function toggleChildren(code, hide) {
-      rows.forEach(function (row) {
-        if ((row.dataset.parentCode || '') !== code) return;
-        row.style.display = hide ? 'none' : '';
-        const childCell = row.querySelector('td[data-code]');
-        if (!childCell) return;
-        const childCode = childCell.dataset.code || '';
-        if (hide) toggleChildren(childCode, true);
-      });
-    }
-
-    rows.forEach(function (row) {
-      const cell = row.querySelector('td[data-code]');
-      if (!cell) return;
-      const code = cell.dataset.code || '';
-      if (!code) return;
-      const hasChildren = rows.some(function (candidate) {
-        return (candidate.dataset.parentCode || '') === code;
-      });
-      if (!hasChildren) return;
-      const text = cell.textContent || '';
-      cell.textContent = '';
-      const toggle = document.createElement('span');
-      toggle.className = 'ca-tree-toggle';
-      toggle.textContent = '▾';
-      cell.appendChild(toggle);
-      cell.appendChild(document.createTextNode(' ' + text));
-      let collapsed = false;
-      toggle.addEventListener('click', function (event) {
-        event.preventDefault();
-        collapsed = !collapsed;
-        toggle.textContent = collapsed ? '▸' : '▾';
-        toggleChildren(code, collapsed);
-      });
-    });
 </script>
+<script src="{{ url_for('static', filename='js/financial-report-tree.js') }}"></script>
 
 {% endblock %}

@@ -3,7 +3,6 @@
 
 """Adaptador para importación de comprobantes contables."""
 
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 from sqlalchemy import or_, select
@@ -12,6 +11,7 @@ from cacao_accounting.database import Book, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.contabilidad.journal_service import create_journal_draft
 from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.imports.utils.dates import parse_import_date
 
 
 from cacao_accounting.i18n import _
@@ -74,12 +74,12 @@ class JournalEntryAdapter(BaseImportAdapter):
         if not document_data:
             return []
         try:
-            posting_date = date.fromisoformat(str(self._value(document_data[0], "fecha", "posting_date")))
-            company_id = (context or {}).get("company_id") or ""
-            if not is_period_open(company_id, posting_date):
-                return [f"El periodo contable para la fecha {posting_date} está cerrado o no existe."]
+            posting_date = parse_import_date(self._value(document_data[0], "fecha", "posting_date"))
         except (ValueError, TypeError):
-            pass
+            return ["La fecha debe usar un formato válido."]
+        company_id = (context or {}).get("company_id") or ""
+        if not is_period_open(company_id, posting_date):
+            return [f"El periodo contable para la fecha {posting_date} está cerrado o no existe."]
         return []
 
     def _validate_accounting_lines(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None) -> List[str]:
@@ -142,7 +142,7 @@ class JournalEntryAdapter(BaseImportAdapter):
                 }
             )
 
-        posting_date = self._value(document_data[0], "fecha", "posting_date")
+        posting_date = parse_import_date(self._value(document_data[0], "fecha", "posting_date"))
         reference = self._value(document_data[0], "document_ref", "reference", default="no_ref")
         payload = {
             "company": context.get("company_id"),

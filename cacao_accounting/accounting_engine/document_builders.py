@@ -45,6 +45,7 @@ from cacao_accounting.database import (
     PurchaseReceiptItem,
     SalesInvoice,
     SalesInvoiceItem,
+    TAX_TYPES,
     Tax,
     TaxTemplateItem,
     database,
@@ -53,7 +54,11 @@ from cacao_accounting.document_flow.service import compute_payment_unallocated_a
 from cacao_accounting.warehouse_accounting import inventory_account_id_for_document_line
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 from cacao_accounting.fiscal_persistence_service import build_tax_rule_contexts_from_snapshot
-from cacao_accounting.tax_rule_service import build_tax_rule_context, build_tax_rule_contexts
+from cacao_accounting.tax_rule_service import (
+    build_tax_rule_context,
+    build_tax_rule_contexts,
+    get_tax_rule,
+)
 
 from cacao_accounting.i18n import _
 
@@ -414,39 +419,58 @@ def _subtract_late_receipt_reclassifications(
     posting_dates: dict[str, date],
     prior_receipts: Iterable[PurchaseReceipt],
 ) -> None:
-    """Subtract receipt expense reclassifications from pending invoice values."""
-    from cacao_accounting.database import Book, GLEntry
+    """Resta las reclasificaciones previas conservando la identidad del artículo.
 
-    primary_book = (
-        database.session.execute(
-            select(Book)
-            .where(Book.entity == document.company, Book.status == "activo")
-            .order_by(Book.is_primary.desc(), Book.code)
+    Los créditos del GL se agregan por cuenta de gasto y no conservan la
+    dimensión de artículo. La reclasificación se reconstruye desde las líneas
+    de recepción y sus asignaciones auditables, de modo que cada crédito se
+    resta una sola vez del artículo que lo originó.
+    """
+    from cacao_accounting.database import PurchaseInvoiceReceiptAllocation
+
+    prior_receipts_list = sorted(prior_receipts, key=lambda receipt: (receipt.posting_date, receipt.id))
+    receipt_items: list[PurchaseReceiptItem] = []
+    for receipt in prior_receipts_list:
+        receipt_items.extend(
+            database.session.execute(
+                select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id, is_superseded=False)
+            )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .first()
-    )
-    prior_receipt_list = list(prior_receipts)
-    for item_code, amount in list(amounts.items()):
-        expense_account_id = _item_account_id(item_code, document.company, "expense")
-        if not expense_account_id:
+    allocated_amounts: dict[str, Decimal] = {}
+    if receipt_items:
+        rows = database.session.execute(
+            select(PurchaseInvoiceReceiptAllocation).where(
+                PurchaseInvoiceReceiptAllocation.company == document.company,
+                PurchaseInvoiceReceiptAllocation.status == "active",
+                PurchaseInvoiceReceiptAllocation.receipt_item_id.in_([item.id for item in receipt_items]),
+            )
+        ).scalars()
+        for row in rows:
+            key = str(row.receipt_item_id)
+            allocated_amounts[key] = allocated_amounts.get(key, Decimal("0")) + _decimal_value(row.invoice_amount)
+
+    remaining = dict(amounts)
+    receipt_by_id = {receipt.id: receipt for receipt in prior_receipts_list}
+    for item in receipt_items:
+        item_code = item.item_code
+        available = remaining.get(item_code, Decimal("0"))
+        if available <= 0:
             continue
-        receipt_ids = [receipt.id for receipt in prior_receipt_list if receipt.posting_date >= posting_dates[item_code]]
-        if not receipt_ids:
+        prior_receipt = receipt_by_id.get(item.purchase_receipt_id)
+        invoice_date = posting_dates.get(item_code)
+        if prior_receipt is None or invoice_date is None or prior_receipt.posting_date < invoice_date:
             continue
-        query = select(GLEntry).where(
-            GLEntry.voucher_type == "purchase_receipt",
-            GLEntry.voucher_id.in_(receipt_ids),
-            GLEntry.account_id == expense_account_id,
-            GLEntry.credit > 0,
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
-        )
-        if primary_book:
-            query = query.where(GLEntry.ledger_id == primary_book.id)
-        entries = database.session.execute(query).scalars().all()
-        reclassified = sum((Decimal(str(entry.credit_in_account_currency or entry.credit)) for entry in entries), Decimal("0"))
-        amounts[item_code] = max(Decimal("0"), amount - reclassified)
+        allocated = allocated_amounts.get(str(item.id), Decimal("0"))
+        reclassified = allocated if allocated > 0 else min(_line_amount(item), available)
+        reclassified = min(reclassified, available)
+        if reclassified <= 0:
+            continue
+        remaining[item_code] = available - reclassified
+
+    for item_code, amount in amounts.items():
+        amounts[item_code] = max(Decimal("0"), remaining[item_code])
 
 
 def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationContext:
@@ -644,6 +668,8 @@ def _build_landed_cost_item_contexts(
                 net_amount=amount,
                 item_type="inventory",
                 uom=item.uom or "unit",
+                weight=_decimal_value(item.weight),
+                volume=_decimal_value(item.volume),
             )
         )
         try:
@@ -931,19 +957,40 @@ def _payment_tax_rules(
         at_date=document.posting_date,
         recognition_event=spec.event_type,
     )
-    # A supplier's configured rule is authoritative for withholding at payment
-    # time. Generic company withholding rules do not override that choice.
-    if spec.party_type == "supplier" and spec.event_type == "payment_confirmed" and document.party_id:
-        company_party = database.session.execute(
-            select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
-        ).scalar_one_or_none()
-        configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
-        configured_rule = build_tax_rule_context(configured_rule_id) if configured_rule_id else None
-        if configured_rule and configured_rule.tax_type == "withholding":
-            if configured_rule.recognition_event in {"payment_confirmed", "payment"}:
-                rules = [rule for rule in rules if rule.tax_type != "withholding"]
-                rules.append(configured_rule)
+    configured_rule = _configured_payment_withholding_rule(document, spec, company)
+    if configured_rule is not None:
+        rules = [rule for rule in rules if rule.tax_type != "withholding"]
+        rules.append(configured_rule)
     return sorted(rules, key=lambda rule: rule.order)
+
+
+def _configured_payment_withholding_rule(
+    document: PaymentEntry,
+    spec: PaymentBuildSpec,
+    company: str,
+) -> TaxRuleContext | None:
+    """Return the supplier's configured rule when it applies to this payment.
+
+    A supplier's configured rule is authoritative for withholding at payment
+    time. Generic company withholding rules do not override that choice.
+    """
+    if spec.party_type != "supplier" or spec.event_type != "payment_confirmed" or not document.party_id:
+        return None
+    company_party = database.session.execute(
+        select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
+    ).scalar_one_or_none()
+    configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
+    if not configured_rule_id:
+        return None
+    configured_rule_row = get_tax_rule(configured_rule_id)
+    if configured_rule_row is None or configured_rule_row.company not in (None, company):
+        return None
+    configured_rule = build_tax_rule_context(str(configured_rule_id))
+    if configured_rule is None or configured_rule.tax_type != "withholding":
+        return None
+    if configured_rule.recognition_event not in {"payment_confirmed", "payment"}:
+        return None
+    return configured_rule
 
 
 def _payment_item_context(document: PaymentEntry, document_total: Decimal) -> ItemContext:
@@ -1052,10 +1099,18 @@ def _tax_rules_from_template(
         .scalars()
         .all()
     )
+    items_by_tax: dict[str, list[TaxTemplateItem]] = {}
+    for template_item in template_items:
+        items_by_tax.setdefault(str(template_item.tax_id), []).append(template_item)
+    used_by_tax: dict[str, int] = {}
     rules: list[TaxRuleContext] = []
     for index, tax_line in enumerate(tax_result.lines, start=1):
-        template_item = template_items[index - 1] if index - 1 < len(template_items) else None
-        if rule := _tax_rule_from_template_line(tax_line, template_item, index, event_type):
+        tax_key = str(tax_line.tax_id)
+        candidates = items_by_tax.get(tax_key, [])
+        offset = used_by_tax.get(tax_key, 0)
+        matched_item = candidates[offset] if offset < len(candidates) else None
+        used_by_tax[tax_key] = offset + 1
+        if rule := _tax_rule_from_template_line(tax_line, matched_item, index, event_type):
             rules.append(rule)
     return rules
 
@@ -1131,12 +1186,10 @@ def _template_tax_include_concepts(base_mode: str) -> list[str]:
 
 
 def _template_tax_calculation_method(tax: Tax) -> str:
-    """Normalize legacy tax calculation methods to engine-supported values."""
-    match tax.tax_type:
-        case "percentage" | "fixed":
-            return str(tax.tax_type)
-        case _:
-            return "percentage"
+    """Return the engine calculation method or reject an unknown tax type."""
+    if tax.tax_type not in TAX_TYPES:
+        raise CalculationContextBuilderError(_("El tipo de impuesto seleccionado no es válido."))
+    return str(tax.tax_type)
 
 
 def _build_references(

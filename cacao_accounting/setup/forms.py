@@ -79,6 +79,7 @@ class SetupCompanyForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         """Inicializa el formulario de empresa con las opciones de catálogo disponibles."""
         language = kwargs.pop("language", "es")
+        self.language = language
         super().__init__(*args, **kwargs)
         texts = setup_texts(language)
         self.id.label.text = texts["company_code"]
@@ -96,8 +97,13 @@ class SetupCompanyForm(FlaskForm):
         if self.catalogo.data == "en_cero":
             self.catalogo_origen.data = ""
 
-
-class SetupConfirmationForm(FlaskForm):
-    """Formulario final de confirmación del proceso de configuración."""
-
-    step = HiddenField(default="4")
+    def validate(self, extra_validators=None):
+        """Rechaza un rango fiscal invertido antes de crear datos."""
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        start = self.inicio_anio_fiscal.data
+        end = self.fin_anio_fiscal.data
+        if start and end and start > end:
+            self.fin_anio_fiscal.errors.append(setup_texts(self.language)["invalid_fiscal_range"])
+            return False
+        return True

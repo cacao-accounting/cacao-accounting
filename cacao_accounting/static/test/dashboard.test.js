@@ -141,4 +141,35 @@ describe("dashboard", function () {
 
     assert.notStrictEqual(firstKey, secondKey);
   });
+
+  it("uses the customer identity to distinguish rows with the same visible name", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+
+    const firstKey = dashboard.rowKey({ customer_id: "CUSTOMER-1", name: "Acme SA" });
+    const secondKey = dashboard.rowKey({ customer_id: "CUSTOMER-2", name: "Acme SA" });
+
+    assert.notStrictEqual(firstKey, secondKey);
+  });
 });
+
+  it("preserves sub-cent stock quantities in the inventory table", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+
+    const formatted = dashboard.formatQuantity("0.004");
+    const quantityCell = dashboard.tableCells("inventory", {
+      item_code: "ITEM-001",
+      item_name: "Artículo fraccionado",
+      warehouse: "Bodega Norte",
+      current_qty: "0.004",
+    })[2];
+
+    assert.notStrictEqual(formatted, "0");
+    assert.notStrictEqual(formatted, "0,00");
+    assert.strictEqual(quantityCell.value, formatted);
+  });
+
+  it("keeps nine decimals available for the stored unit precision", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+
+    assert.match(dashboard.formatQuantity("0.000000001"), /^0[.,]000000001$/);
+  });

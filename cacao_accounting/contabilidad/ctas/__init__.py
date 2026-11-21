@@ -77,6 +77,5 @@ def cargar_catalogos(catalogo, entidad):
         )
         database.session.add(registro)
 
-    session = database.session()
-    if not session.in_transaction():
-        database.session.commit()
+    # El caller controla la transacción: el alta de compañía confirma el
+    # catálogo junto con el resto de registros iniciales.

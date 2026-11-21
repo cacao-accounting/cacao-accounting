@@ -84,10 +84,26 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
 
     from cacao_accounting.database import ApprovalRequest, database
 
-    req = database.session.execute(
-        database.select(ApprovalRequest).filter_by(document_type=doctype, document_id=document.id)
-    ).scalar_one_or_none()
-    if req and req.status.startswith("Pending"):
+    pending_requests = (
+        database.session.execute(
+            database.select(ApprovalRequest)
+            .where(
+                ApprovalRequest.document_type.in_((doctype, f"cancel_{doctype}")),
+                ApprovalRequest.document_id == document.id,
+                ApprovalRequest.status.startswith("Pending"),
+            )
+            .order_by(ApprovalRequest.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    if pending_requests:
+        # La solicitud de anulación usa el tipo ``cancel_<doctype>``; si
+        # convive con una aprobación, la anulación gobierna el badge.
+        req = next(
+            (item for item in pending_requests if item.status.startswith("Pending Cancel")),
+            pending_requests[0],
+        )
         if req.status == "Pending Approval":
             return _status("pending_approval", _("Pendiente de Aprobación"), "orange")
         elif req.status == "Pending Cancellation" or req.status.startswith("Pending Cancel"):

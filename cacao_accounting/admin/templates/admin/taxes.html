@@ -32,8 +32,10 @@
   <caption>{{ _("Lista de impuestos y cargos configurados") }}</caption>
   <thead><tr><th>{{ _("Nombre") }}</th><th>{{ _("Tipo") }}</th><th>{{ _("Aplica") }}</th><th>{{ _("Cuenta") }}</th><th>{{ _("Activo") }}</th></tr></thead>
   <tbody>
+    {% set tax_type_labels = {'percentage': _('Porcentaje'), 'fixed': _('Monto fijo')} %}
+    {% set applies_labels = {'both': _('Compra y venta'), 'purchase': _('Compra'), 'sales': _('Venta')} %}
     {% for tax in taxes %}
-    <tr><td>{{ tax.name }}</td><td>{{ tax.tax_type }} {{ tax.rate }}</td><td>{{ tax.applies_to }}</td><td>{{ tax.account_id or "" }}</td><td>{{ tax.is_active }}</td></tr>
+    <tr><td>{{ tax.name }}</td><td>{{ tax_type_labels.get(tax.tax_type, tax.tax_type) }} {{ tax.rate }}</td><td>{{ applies_labels.get(tax.applies_to, tax.applies_to) }}</td><td>{{ tax.account_id or "" }}</td><td>{{ _('Sí') if tax.is_active else _('No') }}</td></tr>
     {% endfor %}
   </tbody>
 </table>

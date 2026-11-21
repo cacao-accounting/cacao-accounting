@@ -8,17 +8,21 @@
 from datetime import date
 from os import environ
 from typing import Optional
+from uuid import NAMESPACE_URL, uuid5
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Flask
+from flask import Flask, g, has_request_context
+from sqlalchemy import Index, delete, func, inspect as sa_inspect, select, update
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import InternalError, InterfaceError, OperationalError, ProgrammingError, SQLAlchemyError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import database
+from cacao_accounting.config import env_bool
 from cacao_accounting.logs import log
 
 from cacao_accounting.i18n import _
@@ -125,9 +129,19 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
         try:
             database.create_all()
             log.info("Esquema de base de datos creado correctamente.")
+            _ensure_user_email_identity_column()
             _ensure_stock_valuation_layer_batch_column()
             _ensure_purchase_line_version_columns()
             _ensure_audit_trail_hash_version_column()
+            _ensure_file_sha256_column()
+            _ensure_monthly_close_run_unique_constraint()
+            _ensure_bank_transaction_identity_unique()
+            _ensure_cacao_config_key_unique()
+            _ensure_document_flow_lock_table()
+            _ensure_roles_user_unique()
+            _ensure_party_tax_id_key_column()
+            _ensure_purchase_invoice_supplier_key()
+            _ensure_user_auth_version_column()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -173,17 +187,6 @@ def obtener_id_rol_por_monbre(rol: str) -> str:
 
     ROL = Roles.query.filter_by(name=rol).first()
     return ROL.id
-
-
-def obtener_id_usuario_por_nombre(usuario: str | None) -> str | None:
-    """Devuelve el UUID de un usuario en base a su id."""
-    if usuario:
-        from cacao_accounting.database import User
-
-        USUARIO = User.query.filter_by(user=usuario).first()
-        return USUARIO.id
-    else:
-        return None
 
 
 def db_version():  # pragma: no cover
@@ -268,37 +271,6 @@ def resolve_naming_series_prefix(template: str, posting_date: date, company: Opt
     return result
 
 
-def get_next_sequence_value(sequence_id: str) -> int:
-    """Obtiene y reserva el siguiente valor de una secuencia.
-
-    Operacion atomica con bloqueo pesimista — adquiere lock exclusivo
-    sobre la fila antes de leer e incrementar, evitando asignaciones
-    duplicadas bajo concurrencia.
-
-    Soporta politica de reset: never, yearly, monthly.
-
-    Args:
-        sequence_id: ID de la secuencia (PK de la tabla sequence)
-
-    Returns:
-        Entero con el siguiente valor disponible de la secuencia.
-
-    Raises:
-        ValueError: Si la secuencia no existe.
-    """
-    from cacao_accounting.database import Sequence
-
-    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id).with_for_update()).scalar_one_or_none()
-
-    if seq is None:
-        raise ValueError(_("Secuencia con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
-
-    seq.current_value = (seq.current_value or 0) + seq.increment
-    database.session.flush()
-
-    return int(seq.current_value)
-
-
 def format_sequence_value(value: int, padding: int) -> str:
     """Formatea un valor de secuencia con el padding indicado.
 
@@ -310,6 +282,126 @@ def format_sequence_value(value: int, padding: int) -> str:
         Cadena formateada. Ejemplo: value=5, padding=5 → '00005'
     """
     return str(value).zfill(padding)
+
+
+def sequence_period_key(sequence_id: str, posting_date: date, reset_policy: str | None = None) -> str:
+    """Devuelve la clave del periodo de numeracion que consume una secuencia.
+
+    ``global`` agrupa la politica ``never``; ``YYYY`` la anual y ``YYYY-MM`` la
+    mensual. La clave se deriva de la fecha contable, no de la fecha de alta.
+    """
+    policy = _effective_sequence_reset_policy(sequence_id, reset_policy)
+    if policy == "monthly":
+        return f"{posting_date.year:04d}-{posting_date.month:02d}"
+    if policy == "yearly":
+        return f"{posting_date.year:04d}"
+    return "global"
+
+
+def _period_counter_id(sequence_id: str, period_key: str) -> str:
+    """Devuelve un identificador estable para el contador de una secuencia y periodo.
+
+    MySQL ``INSERT ... ON DUPLICATE KEY UPDATE`` bloquea tanto la clave primaria
+    como la restricción única. Si cada concurrente inserta un ``id`` distinto,
+    los bloqueos se adquieren en órdenes incompatibles y InnoDB aborta con error
+    1213. Derivar el ``id`` de la propia clave garantiza una sola fila y un
+    único orden de bloqueo para todas las reservas del mismo periodo.
+    """
+    return uuid5(NAMESPACE_URL, f"cacao:sequence-period-counter:{sequence_id}:{period_key}").hex[:26]
+
+
+def _period_counter_upsert(sequence_id: str, period_key: str, dialect: Optional[str] = None):
+    """Devuelve el insert idempotente del contador de periodo para el motor activo.
+
+    ``ON CONFLICT DO NOTHING`` (SQLite/PostgreSQL) y ``ON DUPLICATE KEY``
+    (MySQL) crean la fila una sola vez incluso bajo concurrencia. Después el
+    incremento se aplica con un ``UPDATE`` atómico, así que SQLite no depende
+    de ``FOR UPDATE`` para serializar. La clave primaria del contador es
+    determinista para evitar deadlocks de InnoDB con índices múltiples.
+    """
+    from cacao_accounting.database import SequencePeriodCounter
+
+    values = {
+        "id": _period_counter_id(sequence_id, period_key),
+        "sequence_id": sequence_id,
+        "period_key": period_key,
+        "current_value": 0,
+    }
+    dialect = dialect or database.session.connection().dialect.name
+    if dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        return (
+            sqlite_insert(SequencePeriodCounter)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=["sequence_id", "period_key"])
+        )
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+
+        return (
+            postgresql_insert(SequencePeriodCounter)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=["sequence_id", "period_key"])
+        )
+    if dialect == "mysql":
+        from sqlalchemy.dialects.mysql import insert as mysql_insert
+
+        statement = mysql_insert(SequencePeriodCounter).values(**values)
+        return statement.on_duplicate_key_update(current_value=SequencePeriodCounter.current_value)
+    return None
+
+
+def get_next_period_sequence_value(sequence_id: str, period_key: str) -> int:
+    """Reserva atomicamente el siguiente valor del periodo indicado.
+
+    El contador del periodo se crea de forma idempotente y se incrementa con
+    un ``UPDATE`` atómico. No depende de ``FOR UPDATE`` ni del orden global de
+    creacion, por lo que SQLite y los motores cloud aplican la misma garantía:
+    volver a un periodo anterior continua su propio consecutivo.
+    """
+    from cacao_accounting.database import Sequence, SequencePeriodCounter
+
+    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
+    if seq is None:
+        raise ValueError(_("Secuencia con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
+
+    if period_key == "global":
+        database.session.execute(
+            update(Sequence)
+            .where(Sequence.id == sequence_id)
+            .values(current_value=Sequence.current_value + Sequence.increment)
+        )
+        return int(
+            database.session.execute(database.select(Sequence.current_value).where(Sequence.id == sequence_id)).scalar_one()
+        )
+
+    upsert = _period_counter_upsert(sequence_id, period_key)
+    if upsert is not None:
+        database.session.execute(upsert)
+    else:
+        existing = database.session.execute(
+            database.select(SequencePeriodCounter).filter_by(sequence_id=sequence_id, period_key=period_key).with_for_update()
+        ).scalar_one_or_none()
+        if existing is None:
+            database.session.add(SequencePeriodCounter(sequence_id=sequence_id, period_key=period_key, current_value=0))
+            database.session.flush()
+
+    database.session.execute(
+        update(SequencePeriodCounter)
+        .where(SequencePeriodCounter.sequence_id == sequence_id, SequencePeriodCounter.period_key == period_key)
+        .values(current_value=SequencePeriodCounter.current_value + seq.increment)
+    )
+    value = int(
+        database.session.execute(
+            database.select(SequencePeriodCounter.current_value).where(
+                SequencePeriodCounter.sequence_id == sequence_id,
+                SequencePeriodCounter.period_key == period_key,
+            )
+        ).scalar_one()
+    )
+    database.session.execute(update(Sequence).where(Sequence.id == sequence_id).values(current_value=value))
+    return value
 
 
 def generate_identifier(
@@ -346,6 +438,7 @@ def generate_identifier(
     from cacao_accounting.database import GeneratedIdentifierLog, NamingSeries, Sequence
 
     prefix = ""
+    sequence_period: Optional[str] = None
 
     if naming_series_id:
         series = database.session.execute(database.select(NamingSeries).filter_by(id=naming_series_id)).scalar_one_or_none()
@@ -361,19 +454,34 @@ def generate_identifier(
         if seq is None:
             raise ValueError(_("Sequence con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
 
-        if should_reset_sequence(sequence_id, posting_date):
-            reset_sequence(sequence_id)
-        next_val = get_next_sequence_value(sequence_id)
+        sequence_period = sequence_period_key(sequence_id, posting_date, seq.reset_policy)
+        next_val = get_next_period_sequence_value(sequence_id, sequence_period)
         suffix = format_sequence_value(next_val, seq.padding)
         full_identifier = f"{prefix}{suffix}"
     else:
         full_identifier = prefix or entity_id
+
+    if company is None:
+        from cacao_accounting.default_scope import lock_default_scope
+
+        lock_default_scope("generated_identifier", "global")
+        exists = database.session.execute(
+            database.select(GeneratedIdentifierLog.id)
+            .where(
+                GeneratedIdentifierLog.company.is_(None),
+                GeneratedIdentifierLog.full_identifier == full_identifier,
+            )
+            .limit(1)
+        ).first()
+        if exists is not None:
+            raise ValueError(_("El identificador interno ya existe."))
 
     log_entry = GeneratedIdentifierLog(
         entity_type=entity_type,
         entity_id=entity_id,
         full_identifier=full_identifier,
         sequence_id=sequence_id,
+        sequence_period=sequence_period,
         company=company,
         posting_date=posting_date,
     )
@@ -412,54 +520,6 @@ def get_active_naming_series(entity_type: str, company: Optional[str] = None) ->
     return list(results)
 
 
-def should_reset_sequence(sequence_id: str, posting_date: date) -> bool:
-    """Determina si una secuencia debe reiniciarse segun su politica.
-
-    Politicas soportadas:
-    - 'never': nunca se reinicia
-    - 'yearly': se reinicia al inicio de cada anio
-    - 'monthly': se reinicia al inicio de cada mes
-
-    Args:
-        sequence_id: ID de la secuencia a evaluar
-        posting_date: Fecha contable del documento actual
-
-    Returns:
-        True si la secuencia debe reiniciarse, False en caso contrario.
-    """
-    from cacao_accounting.database import GeneratedIdentifierLog, Sequence
-
-    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
-
-    if seq is None:
-        return False
-
-    effective_policy = _effective_sequence_reset_policy(sequence_id, seq.reset_policy)
-    if effective_policy == "never":
-        return False
-
-    last_log = (
-        database.session.execute(
-            database.select(GeneratedIdentifierLog)
-            .filter_by(sequence_id=sequence_id)
-            .order_by(GeneratedIdentifierLog.generated_at.desc())
-        )
-        .scalars()
-        .first()
-    )
-
-    if last_log is None or last_log.posting_date is None:
-        return False
-
-    if effective_policy == "yearly":
-        return posting_date.year != last_log.posting_date.year
-
-    if effective_policy == "monthly":
-        return posting_date.year != last_log.posting_date.year or posting_date.month != last_log.posting_date.month
-
-    return False
-
-
 def _effective_sequence_reset_policy(sequence_id: str, configured_policy: str | None) -> str:
     """Deriva la política efectiva considerando el prefijo de la serie asociada."""
     from cacao_accounting.database import NamingSeries, SeriesSequenceMap
@@ -487,28 +547,6 @@ def _effective_sequence_reset_policy(sequence_id: str, configured_policy: str | 
     return configured
 
 
-def reset_sequence(sequence_id: str) -> None:
-    """Reinicia el contador de una secuencia a cero.
-
-    Usado por should_reset_sequence cuando se detecta un cambio de periodo.
-
-    Args:
-        sequence_id: ID de la secuencia a reiniciar.
-
-    Raises:
-        ValueError: Si la secuencia no existe.
-    """
-    from cacao_accounting.database import Sequence
-
-    seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
-
-    if seq is None:
-        raise ValueError(_("Secuencia con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
-
-    seq.current_value = 0
-    database.session.flush()
-
-
 def resolver_credenciales_iniciales() -> tuple[str, str]:
     """Resuelve las credenciales de administración iniciales de forma segura.
 
@@ -522,9 +560,9 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
     Raises:
         ValueError: Si faltan las credenciales y no es entorno de desarrollo.
     """
-    flask_env = (environ.get("FLASK_ENV") or "").lower()
-    env_var = (environ.get("ENV") or "").lower()
-    is_dev = flask_env in ("dev", "development") or env_var in ("dev", "development")
+    environments = {value.strip().lower() for value in (environ.get("FLASK_ENV"), environ.get("ENV")) if value}
+    is_dev = not env_bool("CACAO_TEST") and bool(environments) and environments.issubset({"dev", "development"})
+    is_database_test = env_bool("CI") and env_bool("CACAO_TEST") and env_bool("CHECK_DATABASE") and not environments
 
     usuario = environ.get("CACAO_USER") or environ.get("ADMIN_USER")
     contrasena = environ.get("CACAO_PSWD") or environ.get("CACAO_PASSWORD") or environ.get("ADMIN_PASSWORD")
@@ -535,15 +573,97 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
         usuario = usuario or "cacao"
         contrasena = contrasena or "cacao"
 
+    if not (is_dev or is_database_test) and usuario.casefold() == "cacao" and contrasena == "cacao":
+        raise ValueError(_("Las credenciales predeterminadas CACAO no se permiten fuera de desarrollo."))
+
     return usuario, contrasena
 
 
-def check_hierarchy_cycle(node_class, node_id, proposed_parent_id) -> None:
-    """Valida que no existan ciclos en la jerarquía (RN-003)."""
+def batch_number(batch_id: str | None) -> str:
+    """Resuelve el número público del lote, con caché por request."""
+    if not batch_id:
+        return ""
+    from cacao_accounting.database import Batch
+
+    if not has_request_context():
+        batch = database.session.get(Batch, batch_id)
+        return batch.batch_no if batch else ""
+    cache = getattr(g, "_batch_number_cache", None)
+    if cache is None:
+        cache = {}
+        g._batch_number_cache = cache
+    if batch_id not in cache:
+        batch = database.session.get(Batch, batch_id)
+        cache[batch_id] = batch.batch_no if batch else ""
+    return cache[batch_id]
+
+
+def _lock_hierarchy_companies(company_codes: set[str]) -> None:
+    """Serializa los cambios de jerarquía por compañía en orden determinista.
+
+    Las filas de ``Entity`` actúan como el ancla común de la jerarquía: dos
+    transacciones que muevan ramas distintas de la misma compañía no pueden
+    validar y escribir simultáneamente, evitando ciclos (#2188). PostgreSQL y
+    MySQL conservan el lock hasta el commit; SQLite lo ignora y mantiene su
+    modo Desktop de un solo usuario.
+    """
+    from cacao_accounting.database import Entity
+
+    for company_code in sorted(code for code in company_codes if code):
+        database.session.execute(
+            database.select(Entity.code)
+            .where(Entity.code == company_code)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+
+
+def _fetch_hierarchy_node_locked(node_class, node_id):
+    """Lee un nodo con bloqueo para no reutilizar un snapshot previo.
+
+    En MySQL ``REPEATABLE READ`` una lectura normal posterior al lock puede
+    seguir viendo el snapshot anterior al commit rival. Las lecturas de la
+    jerarquía usan ``FOR UPDATE`` para observar el estado confirmado.
+    """
+    return database.session.execute(
+        database.select(node_class).where(node_class.id == node_id).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+
+
+def _hierarchy_company_codes(node_class, node_id, entity: str) -> set[str]:
+    """Resuelve las compañías cuyo ancla debe bloquearse antes de validar."""
+    company_codes = {entity} if entity else set()
+    if node_id:
+        current_node = _fetch_hierarchy_node_locked(node_class, node_id)
+        current_company = getattr(current_node, "entity", None) if current_node is not None else None
+        if current_company:
+            company_codes.add(str(current_company))
+    return company_codes
+
+
+def check_hierarchy_cycle(node_class, node_id, proposed_parent_id, *, entity: str) -> None:
+    """Valida que el padre exista, pertenezca a la compañía y no cree ciclos.
+
+    La validación y la escritura posterior se serializan por compañía. En un
+    traslado entre compañías se bloquean ambas filas de ``Entity`` en orden
+    estable para no crear ciclos ni interbloqueos (#2188).
+    """
+    _lock_hierarchy_companies(_hierarchy_company_codes(node_class, node_id, entity))
+
+    if node_id:
+        for descendant_id in get_descendant_ids(node_class, node_id):
+            descendant = _fetch_hierarchy_node_locked(node_class, descendant_id)
+            if descendant is not None and descendant.entity != entity:
+                raise ValueError(_("Los registros de una jerarquía deben pertenecer a la misma compañía."))
     if not proposed_parent_id:
         return
     if proposed_parent_id == node_id:
         raise ValueError(_("Un registro no puede ser padre de sí mismo."))
+    parent_node = _fetch_hierarchy_node_locked(node_class, proposed_parent_id)
+    if parent_node is None:
+        raise ValueError(_("El registro padre seleccionado no existe."))
+    if parent_node.entity != entity:
+        raise ValueError(_("Los registros de una jerarquía deben pertenecer a la misma compañía."))
 
     curr_id = proposed_parent_id
     visited = {node_id} if node_id else set()
@@ -551,7 +671,7 @@ def check_hierarchy_cycle(node_class, node_id, proposed_parent_id) -> None:
         if curr_id in visited:
             raise ValueError(_("No se permiten ciclos en la jerarquía (RN-003)."))
         visited.add(curr_id)
-        parent_node = database.session.get(node_class, curr_id)
+        parent_node = _fetch_hierarchy_node_locked(node_class, curr_id)
         if parent_node:
             curr_id = parent_node.parent_id
         else:
@@ -657,6 +777,126 @@ def _ensure_stock_valuation_layer_batch_column() -> None:
         log.warning("Could not ensure StockValuationLayer.batch_id during initialization: {}", exc)
 
 
+def _ensure_user_email_identity_column() -> None:
+    """Add and backfill the indexed, portable identity key for user emails.
+
+    Backfilling keeps legacy case variants discoverable without choosing a
+    database-specific Unicode ``lower()`` implementation. The index is
+    intentionally non-unique so existing ambiguous identities remain visible
+    to password recovery, which fails closed when more than one row matches.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    from cacao_accounting.database import User
+
+    inspector = sa_inspect(database.engine)
+    if not inspector.has_table(User.__tablename__):
+        return
+
+    columns = {column["name"] for column in inspector.get_columns(User.__tablename__)}
+    if User.email_identity.name not in columns:
+        _add_user_email_identity_column(User)
+    _create_user_email_identity_index(User)
+    _backfill_user_email_identity(User)
+
+
+def _add_user_email_identity_column(User) -> None:
+    """Add the identity column, tolerating another process creating it first."""
+    from time import sleep
+
+    from sqlalchemy import inspect as sa_inspect
+
+    preparer = database.engine.dialect.identifier_preparer
+    table_name = preparer.quote(User.__tablename__)
+    identity_column = preparer.quote(User.email_identity.name)
+    dialect = database.engine.dialect.name
+    add_column_if_missing = " IF NOT EXISTS" if dialect == "postgresql" else ""
+    alter_statement = database.text(
+        f"ALTER TABLE {table_name} ADD COLUMN{add_column_if_missing} {identity_column} VARCHAR(150)"
+    )
+    for attempt in range(5):
+        try:
+            database.session.execute(alter_statement)
+            database.session.commit()
+            return
+        except (OperationalError, ProgrammingError):
+            database.session.rollback()
+            columns = {column["name"] for column in sa_inspect(database.engine).get_columns(User.__tablename__)}
+            if User.email_identity.name in columns:
+                return
+            if attempt == 4:
+                raise
+            sleep(0.05 * (attempt + 1))
+
+
+def _create_user_email_identity_index(User) -> None:
+    """Create the email identity index safely when application workers start together."""
+    from time import sleep
+
+    from sqlalchemy import inspect as sa_inspect
+
+    email_index = next(index for index in User.__table__.indexes if index.name == "ix_user_email_identity")
+    for attempt in range(5):
+        try:
+            email_index.create(bind=database.engine, checkfirst=True)
+            database.session.commit()
+            return
+        except SQLAlchemyError:
+            database.session.rollback()
+            index_names = {index["name"] for index in sa_inspect(database.engine).get_indexes(User.__tablename__)}
+            if email_index.name in index_names:
+                return
+            if attempt == 4:
+                raise
+            sleep(0.05 * (attempt + 1))
+
+
+def _backfill_user_email_identity(User) -> None:
+    """Fill canonical identity keys in batches without overwriting concurrent edits.
+
+    A blank key marks a legacy address containing only whitespace. It cannot
+    match normalized form input and lets the backfill finish without rewriting
+    the original legacy value.
+    """
+    from sqlalchemy import bindparam, select, update
+
+    from cacao_accounting.email_identity import normalize_user_email
+    from cacao_accounting.internal_control_service import user_email_identity_backfill
+
+    user_table = User.__table__
+    update_statement = (
+        update(user_table)
+        .where(
+            user_table.c.id == bindparam("email_identity_user_id"),
+            user_table.c.e_mail == bindparam("email_identity_source"),
+            user_table.c.email_identity.is_(None),
+        )
+        .values(email_identity=bindparam("email_identity_value"))
+    )
+    while True:
+        criteria = [
+            user_table.c.email_identity.is_(None),
+            user_table.c.e_mail.is_not(None),
+        ]
+        rows = database.session.execute(
+            select(user_table.c.id, user_table.c.e_mail).where(*criteria).order_by(user_table.c.id).limit(500)
+        ).all()
+        if not rows:
+            break
+        updates = [
+            {
+                "email_identity_user_id": user_id,
+                "email_identity_source": email,
+                "email_identity_value": normalize_user_email(email) or "",
+            }
+            for user_id, email in rows
+        ]
+        user_ids = tuple(str(values["email_identity_user_id"]) for values in updates)
+        with user_email_identity_backfill(*user_ids):
+            database.session.execute(update_statement, updates)
+        database.session.commit()
+
+
 def _ensure_purchase_line_version_columns() -> None:
     """Agrega columnas append-only a líneas de compras en esquemas existentes."""
     try:
@@ -692,6 +932,433 @@ def _ensure_purchase_line_version_columns() -> None:
     except Exception as exc:
         database.session.rollback()
         log.warning("Could not ensure purchase line version columns during initialization: {}", exc)
+
+
+def _ensure_file_sha256_column() -> None:
+    """Suple idempotentemente ``file.sha256`` en esquemas existentes.
+
+    La integridad de los adjuntos se verifica contra el hash persistido en
+    ``File``. ``create_all`` crea la columna en esquemas nuevos y esta rutina
+    la agrega, junto con su índice, en bases existentes sin migración formal.
+    Las filas históricas quedan con ``NULL`` y se aceptan como tales hasta un
+    backfill controlado.
+    """
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        from cacao_accounting.database import File
+
+        inspector = sa_inspect(database.engine)
+        if not inspector.has_table(File.__tablename__):
+            return
+        columns = {column["name"] for column in inspector.get_columns(File.__tablename__)}
+        if "sha256" not in columns:
+            database.session.execute(database.text("ALTER TABLE file ADD COLUMN sha256 VARCHAR(64)"))
+            log.info("Columna sha256 agregada a file.")
+        database.session.execute(database.text("CREATE INDEX IF NOT EXISTS ix_file_sha256 ON file (sha256)"))
+        database.session.commit()
+    except (OperationalError, ProgrammingError, InterfaceError):
+        database.session.rollback()
+    except Exception as exc:
+        database.session.rollback()
+        log.warning("Could not ensure file.sha256 during initialization: {}", exc)
+
+
+def _ensure_monthly_close_run_unique_constraint() -> None:
+    """Install the company/period uniqueness guard without rewriting old rows.
+
+    New schemas get the constraint from SQLAlchemy metadata. Existing schemas
+    receive an equivalent unique index after duplicate keys have been checked.
+    Ambiguous historical runs are preserved and block this schema update so a
+    person can resolve them without an automated business choice.
+    """
+    engine = database.engine
+    from cacao_accounting.database import PeriodCloseRun
+
+    if not sa_inspect(engine).has_table(PeriodCloseRun.__tablename__):
+        return
+
+    if engine.dialect.name == "sqlite":
+        with engine.connect() as connection:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            try:
+                _create_monthly_close_unique_guard(connection)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return
+
+    try:
+        with engine.begin() as connection:
+            _create_monthly_close_unique_guard(connection)
+    except SQLAlchemyError:
+        if _monthly_close_unique_guard_exists(engine):
+            return
+        raise
+
+
+def _monthly_close_unique_guard_exists(bind: Engine | Connection) -> bool:
+    """Validate the canonical unique object and its protected columns."""
+    from cacao_accounting.database import PeriodCloseRun
+
+    table_name = PeriodCloseRun.__tablename__
+    index_name = "uq_period_close_run_company_period"
+    expected_columns = ["company", "period_id"]
+    inspector = sa_inspect(bind)
+    if not inspector.has_table(table_name):
+        return False
+
+    for constraint in inspector.get_unique_constraints(table_name):
+        if constraint.get("name") == index_name:
+            if constraint.get("column_names") == expected_columns:
+                return True
+            raise RuntimeError(f"El constraint {index_name} no protege company y period_id.")
+
+    for index in inspector.get_indexes(table_name):
+        if index.get("name") == index_name:
+            if index.get("unique") and index.get("column_names") == expected_columns:
+                return True
+            raise RuntimeError(f"El índice {index_name} no protege company y period_id de forma única.")
+    return False
+
+
+def _create_monthly_close_unique_guard(connection: Connection) -> None:
+    """Create the guard on an open connection after checking historical rows."""
+    from cacao_accounting.database import PeriodCloseRun
+
+    index_name = "uq_period_close_run_company_period"
+    if _monthly_close_unique_guard_exists(connection):
+        return
+
+    duplicate = connection.execute(
+        select(PeriodCloseRun.company, PeriodCloseRun.period_id, func.count())
+        .group_by(PeriodCloseRun.company, PeriodCloseRun.period_id)
+        .having(func.count() > 1)
+        .limit(1)
+    ).first()
+    if duplicate is not None:
+        message = _(
+            "No se puede aplicar la unicidad de cierres mensuales: hay varias corridas "
+            "para compañía %(company)s y período %(period)s. Los registros existentes se conservaron."
+        ) % {"company": duplicate.company, "period": duplicate.period_id}
+        raise RuntimeError(message)
+
+    Index(index_name, PeriodCloseRun.company, PeriodCloseRun.period_id, unique=True).create(
+        bind=connection,
+        checkfirst=False,
+    )
+
+
+def _ensure_bank_transaction_identity_unique() -> None:
+    """Instala la unicidad de ``bank_transaction.identity_key`` en bases previas.
+
+    Las bases nuevas reciben el constraint desde el modelo. Las existentes
+    reciben un índice único equivalente; si ya contienen identidades repetidas,
+    la actualización falla de forma explícita y conserva las filas para revisión
+    humana, porque dos movimientos con la misma identidad son evidencia
+    ambigua y no se consolidan automáticamente.
+    """
+    from cacao_accounting.database import BankTransaction
+
+    _ensure_unique_index(
+        table=BankTransaction.__table__,
+        index_name="uq_bank_transaction_identity",
+        column_names=("identity_key",),
+        deduplicate=_reject_duplicate_bank_transaction_identities,
+    )
+
+
+def _reject_duplicate_bank_transaction_identities(connection: Connection, table, column_names: tuple[str, ...]) -> None:
+    """Bloquea la migración si existen identidades bancarias repetidas."""
+    duplicate = connection.execute(
+        select(table.c.identity_key, func.count()).group_by(table.c.identity_key).having(func.count() > 1).limit(1)
+    ).first()
+    if duplicate is not None:
+        raise RuntimeError(
+            _(
+                "No se puede aplicar la unicidad de movimientos bancarios: la identidad "
+                "%(identity)s se repite. Los registros existentes se conservaron."
+            )
+            % {"identity": duplicate.identity_key}
+        )
+
+
+def _ensure_user_auth_version_column() -> None:
+    """Añade `user.auth_version` a esquemas existentes (P3, #1355).
+
+    La columna se agregó al modelo cuando se retiraron las migraciones
+    incrementales; sin ella, cargar `User` en una base previa falla y el login
+    queda inutilizable. El valor por defecto 0 permite emitir nuevas sesiones.
+    """
+    from cacao_accounting.database import User
+
+    engine = database.engine
+    if not sa_inspect(engine).has_table(User.__tablename__):
+        return
+    columns = {column["name"] for column in sa_inspect(engine).get_columns(User.__tablename__)}
+    if "auth_version" in columns:
+        return
+    table_name = database.engine.dialect.identifier_preparer.quote(User.__tablename__)
+    try:
+        database.session.execute(database.text(f"ALTER TABLE {table_name} ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0"))
+        database.session.commit()
+        log.info("Columna user.auth_version agregada al esquema existente.")
+    except SQLAlchemyError:
+        database.session.rollback()
+        raise
+
+
+def _ensure_document_flow_lock_table() -> None:
+    """Crea la tabla de bloqueo del flujo documental en esquemas existentes.
+
+    `create_all` solo crea tablas nuevas al inicializar la base; una base ya
+    operativa necesita esta tabla para serializar el consumo de líneas
+    documentales (P6). La creación es idempotente y no toca datos.
+    """
+    from cacao_accounting.database import DocumentFlowLock
+
+    try:
+        DocumentFlowLock.__table__.create(bind=database.engine, checkfirst=True)
+    except SQLAlchemyError as exc:
+        log.warning("No se pudo asegurar la tabla document_flow_lock: {}", exc)
+
+
+def _ensure_party_tax_id_key_column() -> None:
+    """Instala y rellena la clave fiscal normalizada en esquemas existentes.
+
+    Los duplicados históricos no se fusionan: se dejan con clave nula y se
+    registran sus IDs para resolución manual; el índice único protege las
+    identidades que sí quedan determinadas (#1051).
+    """
+    from cacao_accounting.database import Party
+
+    engine = database.engine
+    inspector = sa_inspect(engine)
+    if not inspector.has_table(Party.__tablename__):
+        return
+    columns = {column["name"] for column in inspector.get_columns(Party.__tablename__)}
+    if "tax_id_key" not in columns:
+        try:
+            database.session.execute(database.text("ALTER TABLE party ADD COLUMN tax_id_key VARCHAR(50)"))
+            database.session.commit()
+        except SQLAlchemyError:
+            database.session.rollback()
+            if "tax_id_key" not in {column["name"] for column in sa_inspect(engine).get_columns(Party.__tablename__)}:
+                raise
+
+    from cacao_accounting.party_identity import normalize_tax_id
+
+    with engine.begin() as connection:
+        rows = connection.execute(select(Party.id, Party.tax_id)).all()
+        grouped: dict[str, list[str]] = {}
+        for party_id, tax_id in rows:
+            key = normalize_tax_id(tax_id)
+            if key:
+                grouped.setdefault(key, []).append(str(party_id))
+        for key, ids in grouped.items():
+            if len(ids) == 1:
+                connection.execute(Party.__table__.update().where(Party.id == ids[0]).values(tax_id_key=key))
+            else:
+                connection.execute(Party.__table__.update().where(Party.id.in_(ids)).values(tax_id_key=None))
+                log.warning(
+                    "Identidad fiscal {} duplicada en party; se dejan sin clave para revisión: {}",
+                    key,
+                    ", ".join(sorted(ids)),
+                )
+
+    _ensure_unique_index(
+        table=Party.__table__,
+        index_name="uq_party_tax_id_key",
+        column_names=("tax_id_key",),
+        deduplicate=lambda connection, table, column_names: None,
+    )
+
+
+def _ensure_purchase_invoice_supplier_key() -> None:
+    """Rellena la clave de duplicidad de facturas de compra heredadas (#1433).
+
+    El listener solo cubre altas y actualizaciones; una fila histórica con
+    clave nula no colisiona con el índice único. Se rellena solo cuando la
+    combinación proveedor/número es inequívoca; los duplicados históricos se
+    dejan en nulo y se auditan para revisión manual.
+    """
+    from cacao_accounting.database import PurchaseInvoice
+
+    engine = database.engine
+    inspector = sa_inspect(engine)
+    if not inspector.has_table(PurchaseInvoice.__tablename__):
+        return
+    columns = {column["name"] for column in inspector.get_columns(PurchaseInvoice.__tablename__)}
+    if "supplier_invoice_key" not in columns:
+        return
+
+    with engine.begin() as connection:
+        rows = connection.execute(
+            select(
+                PurchaseInvoice.id,
+                PurchaseInvoice.supplier_id,
+                PurchaseInvoice.supplier_invoice_no,
+                PurchaseInvoice.supplier_invoice_key,
+                PurchaseInvoice.docstatus,
+            )
+        ).all()
+        grouped: dict[tuple[str | None, str], list[tuple[str, str | None]]] = {}
+        for invoice_id, supplier_id, supplier_invoice_no, supplier_invoice_key, docstatus in rows:
+            number = str(supplier_invoice_no or "").strip()
+            if docstatus == 2 or not number:
+                continue
+            grouped.setdefault((supplier_id, number), []).append((str(invoice_id), supplier_invoice_key))
+        for (_supplier_id, number), members in grouped.items():
+            if len(members) == 1 and members[0][1] is None:
+                connection.execute(
+                    PurchaseInvoice.__table__.update()
+                    .where(PurchaseInvoice.id == members[0][0])
+                    .values(supplier_invoice_key=number)
+                )
+            elif len(members) > 1 and any(key is None for _id, key in members):
+                log.warning(
+                    "Facturas de compra históricas con número {} duplicado; se dejan sin clave para revisión: {}",
+                    number,
+                    ", ".join(sorted(invoice_id for invoice_id, _key in members)),
+                )
+
+
+def _ensure_cacao_config_key_unique() -> None:
+    """Instala la unicidad de `CacaoConfig.key` en esquemas existentes.
+
+    Las bases nuevas reciben el constraint desde el modelo. En bases creadas
+    antes, el upsert de configuración necesita un índice único equivalente;
+    los duplicados históricos se consolidan conservando la fila de ULID mayor
+    (la más reciente) y se registra la intervención (#1697, QA2 B-1).
+    """
+    from cacao_accounting.database import CacaoConfig
+
+    _ensure_unique_index(
+        table=CacaoConfig.__table__,
+        index_name="uq_cacao_config_key",
+        column_names=("key",),
+        deduplicate=_dedupe_cacao_config_keys,
+    )
+
+
+def _ensure_roles_user_unique() -> None:
+    """Instala la unicidad de `(user_id, role_id)` en esquemas existentes.
+
+    Conserva la asignación activa cuando existe y consolida las filas
+    duplicadas con el ULID mayor; registra la intervención (#1682, QA2 B-1).
+    """
+    from cacao_accounting.database import RolesUser
+
+    _ensure_unique_index(
+        table=RolesUser.__table__,
+        index_name="uq_roles_user",
+        column_names=("user_id", "role_id"),
+        deduplicate=_dedupe_roles_user_assignments,
+    )
+
+
+def _unique_index_exists(bind: Engine | Connection, table_name: str, index_name: str, column_names: tuple[str, ...]) -> bool:
+    """Comprueba que el índice único canónico existe con sus columnas."""
+    inspector = sa_inspect(bind)
+    if not inspector.has_table(table_name):
+        return False
+    expected = list(column_names)
+    for constraint in inspector.get_unique_constraints(table_name):
+        if constraint.get("name") == index_name:
+            if constraint.get("column_names") == expected:
+                return True
+            raise RuntimeError(f"El constraint {index_name} no protege {', '.join(expected)}.")
+    for index in inspector.get_indexes(table_name):
+        if index.get("name") == index_name:
+            if index.get("unique") and index.get("column_names") == expected:
+                return True
+            raise RuntimeError(f"El índice {index_name} no protege {', '.join(expected)} de forma única.")
+    return False
+
+
+def _ensure_unique_index(
+    *,
+    table,
+    index_name: str,
+    column_names: tuple[str, ...],
+    deduplicate,
+) -> None:
+    """Crea un índice único idempotente tras consolidar duplicados históricos."""
+    engine = database.engine
+    if not sa_inspect(engine).has_table(table.name):
+        return
+
+    if engine.dialect.name == "sqlite":
+        with engine.connect() as connection:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+            try:
+                if not _unique_index_exists(connection, table.name, index_name, column_names):
+                    deduplicate(connection, table, column_names)
+                    _create_unique_index_sql(connection, table, index_name, column_names)
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return
+
+    try:
+        with engine.begin() as connection:
+            if not _unique_index_exists(connection, table.name, index_name, column_names):
+                deduplicate(connection, table, column_names)
+                _create_unique_index_sql(connection, table, index_name, column_names)
+    except SQLAlchemyError:
+        if _unique_index_exists(engine, table.name, index_name, column_names):
+            return
+        raise
+
+
+def _create_unique_index_sql(connection: Connection, table, index_name: str, column_names: tuple[str, ...]) -> None:
+    """Crea el índice con DDL sin mutar el metadata global de SQLAlchemy."""
+    preparer = connection.dialect.identifier_preparer
+    quoted_table = preparer.format_table(table)
+    quoted_index = preparer.quote(index_name)
+    quoted_columns = ", ".join(preparer.quote(name) for name in column_names)
+    connection.exec_driver_sql(f"CREATE UNIQUE INDEX {quoted_index} ON {quoted_table} ({quoted_columns})")
+
+
+def _dedupe_cacao_config_keys(connection: Connection, table, column_names: tuple[str, ...]) -> None:
+    """Conserva una fila por clave y elimina el resto, dejando registro."""
+    key_column = table.c[column_names[0]]
+    rows = connection.execute(select(table.c.id, key_column).order_by(table.c.id)).all()
+    keep: dict[str, str] = {}
+    for row in rows:
+        keep[str(row[1])] = str(row[0])
+    removed = [str(row[0]) for row in rows if str(row[0]) != keep.get(str(row[1]))]
+    if removed:
+        connection.execute(delete(table).where(table.c.id.in_(removed)))
+        log.warning(
+            "Se consolidaron {} filas duplicadas de cacao_config conservando la más reciente. IDs: {}",
+            len(removed),
+            ", ".join(sorted(removed)),
+        )
+
+
+def _dedupe_roles_user_assignments(connection: Connection, table, column_names: tuple[str, ...]) -> None:
+    """Conserva una asignación por usuario/rol, prefiriendo la activa."""
+    user_column = table.c[column_names[0]]
+    role_column = table.c[column_names[1]]
+    rows = connection.execute(select(table.c.id, user_column, role_column, table.c.active).order_by(table.c.id)).all()
+    groups: dict[tuple[str, str], list] = {}
+    for row in rows:
+        groups.setdefault((str(row[1]), str(row[2])), []).append(row)
+    removed: list[str] = []
+    for group in groups.values():
+        active_rows = [row for row in group if bool(row[3])]
+        keep_row = max(active_rows or group, key=lambda row: str(row[0]))
+        removed.extend(str(row[0]) for row in group if str(row[0]) != str(keep_row[0]))
+    if removed:
+        connection.execute(delete(table).where(table.c.id.in_(removed)))
+        log.warning(
+            "Se consolidaron {} asignaciones duplicadas de roles_user. IDs: {}",
+            len(removed),
+            ", ".join(sorted(removed)),
+        )
 
 
 def _ensure_audit_trail_hash_version_column() -> None:

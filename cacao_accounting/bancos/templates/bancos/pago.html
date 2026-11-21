@@ -44,17 +44,11 @@
   </ol>
 </nav>
 
-{% set status_value = _('Borrador') %}
-{% set status_badge = 'bg-secondary' %}
-{% if registro.docstatus == 1 %}
-  {% set status_value = _('Aprobado') %}
-  {% set status_badge = 'bg-success' %}
-{% elif registro.docstatus == 2 %}
-  {% set status_value = _('Anulado') %}
-  {% set status_badge = 'bg-dark' %}
-{% endif %}
-{% set payment_amount = registro.received_amount if registro.payment_type == 'receive' else registro.paid_amount %}
-{% set payment_label = _('Recibir') if registro.payment_type == 'receive' else _('Pagar') %}
+{% set status = document_status_info('payment_entry', registro) %}
+{% set status_value = status.label %}
+{% set status_badge = status.badge_class %}
+{% set payment_amount = registro.received_amount if registro.payment_type in ['receive', 'credit_note'] else registro.paid_amount %}
+{% set payment_label = {'pay': _('Pagar'), 'receive': _('Recibir'), 'credit_note': _('Nota de crédito'), 'debit_note': _('Nota de débito'), 'internal_transfer': _('Transferencia interna')}.get(registro.payment_type, registro.payment_type) %}
 {% set payment_actions %}
   {{ macros.workflow_buttons(
         registro.docstatus,
@@ -66,12 +60,12 @@
         url_for('bancos.bancos_pago_lista'),
         url_for('bancos.bancos_pago_nuevo')) }}
   {% if registro.mode_of_payment == 'check' %}
-    {{ macros.document_print_button("check", registro.id) }}
+    {{ macros.document_print_button("check", registro.id, company=registro.company) }}
   {% else %}
-    {{ macros.document_print_button(registro.document_type or "payment_entry", registro.id) }}
+    {{ macros.document_print_button(registro.document_type or "payment_entry", registro.id, company=registro.company) }}
   {% endif %}
   {% if withholding_certificate and withholding_certificate.status == "issued" %}
-    {{ macros.document_print_button("withholding_certificate", withholding_certificate.id) }}
+    {{ macros.document_print_button("withholding_certificate", withholding_certificate.id, company=withholding_certificate.company) }}
   {% endif %}
 {% endset %}
 
@@ -139,7 +133,7 @@
         </div>
         <div class="ca-kv-item">
           <label>{{ _('Monto') }}</label>
-          <p class="fw-semibold">{{ registro.currency or '' }} {{ "{:,.2f}".format(payment_amount or 0) }}</p>
+          <p class="fw-semibold">{{ registro.transaction_currency or registro.currency or '' }} {{ "{:,.2f}".format(payment_amount or 0) }}</p>
         </div>
         <div class="ca-kv-item">
           <label>{{ _('Tipo de cambio') }}</label>

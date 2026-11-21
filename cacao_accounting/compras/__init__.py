@@ -18,6 +18,7 @@ from cacao_accounting.compras.services import (  # noqa: F401
     _copy_logistics as _copy_logistics,
     _has_active_purchase_reversal_notes as _has_active_purchase_reversal_notes,
     _landed_cost_snapshot as _landed_cost_snapshot,
+    _lock_receipt_purchase_orders as _lock_receipt_purchase_orders,
     _persist_purchase_reversal_relation as _persist_purchase_reversal_relation,
     _purchase_exchange_rate as _purchase_exchange_rate,
     _validate_duplicate_supplier_invoice as _validate_duplicate_supplier_invoice,

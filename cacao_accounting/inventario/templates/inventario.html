@@ -8,7 +8,7 @@
 {%- endif -%}
 
 <div class="ca-module-workspace">
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
@@ -95,7 +95,15 @@
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('inventario.inventario_entrada_lista') }}">{{ _('Ajustes de Inventario') }}</a>
+        <a href="{{ url_for('inventario.inventario_entrada_lista') }}">{{ _('Movimientos de Inventario') }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('inventario.inventario_ajuste_positivo_lista') }}">{{ _('Ajustes Positivos') }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('inventario.inventario_salida_inventario_lista') }}">{{ _('Ajustes Negativos') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>

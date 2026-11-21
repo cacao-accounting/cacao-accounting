@@ -16,7 +16,7 @@ from cacao_accounting.accounting_engine.common.context import (
     ItemContext,
     TaxRuleContext,
 )
-from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
+from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment, find_duplicate_rule_id
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts
 
@@ -255,6 +255,9 @@ def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
     )
     if not profile.supports_taxes and not profile.supports_charges:
         tax_rules = []
+    duplicate_rule_id = find_duplicate_rule_id(rule.rule_id for rule in tax_rules)
+    if duplicate_rule_id is not None:
+        raise ValueError(_("Las líneas fiscales no pueden repetir el identificador '%(rule)s'.") % {"rule": duplicate_rule_id})
 
     context = CalculationContext(
         company_id=company,
@@ -495,12 +498,15 @@ def _parse_date(value: Any) -> date:
 
 
 def _decimal_value(value: Any, *, default: str) -> Decimal:
-    """Convierte valores numéricos de payload en Decimal."""
+    """Convierte valores numéricos de payload en Decimal finito."""
     raw = value if value not in (None, "") else default
     try:
-        return Decimal(str(raw))
-    except ArithmeticError:
-        return Decimal(default)
+        amount = Decimal(str(raw))
+    except ArithmeticError as exc:
+        raise ValueError(_("Los valores fiscales deben ser números válidos.")) from exc
+    if not amount.is_finite():
+        raise ValueError(_("Los valores fiscales deben ser finitos."))
+    return amount
 
 
 def _as_list(value: Any) -> list[str]:

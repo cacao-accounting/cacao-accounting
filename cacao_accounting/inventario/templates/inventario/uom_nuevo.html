@@ -6,7 +6,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/uom_nuevo.html"></div>
 {%- endif -%}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventario") }}</a></li>
@@ -25,6 +25,15 @@
   </div>
   <form method="post" id="form-main">
     {{ form.csrf_token }}
+    {% if form.errors %}
+    <div class="alert alert-danger py-2">
+      <ul class="mb-0">
+        {% for field_errors in form.errors.values() %}
+          {% for error in field_errors %}<li>{{ error }}</li>{% endfor %}
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
     <div class="mb-3">
       {{ form.code.label(class="form-label") }}
       {{ form.code(class="form-control") }}

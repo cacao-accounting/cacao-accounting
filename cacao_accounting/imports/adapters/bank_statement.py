@@ -3,19 +3,42 @@
 
 """Adaptador para importación de extractos bancarios."""
 
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 
 from cacao_accounting.database import BankAccount, BankTransaction, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
+from cacao_accounting.imports.utils.dates import parse_import_date
+from cacao_accounting.numbers import coerce_decimal
+from sqlalchemy.exc import IntegrityError
 
 
 from cacao_accounting.i18n import _
 
 
+def _text(value: Any, default: str = "") -> str:
+    """Normaliza celdas vacías de XLSX/ODS sin convertirlas en "None"."""
+    if value is None:
+        return default
+    text = str(value)
+    return text if text.strip() else default
+
+
+def _is_bank_identity_conflict(error: IntegrityError) -> bool:
+    """Indica si el error corresponde a la identidad única del movimiento."""
+    original = error.orig
+    diagnostic = getattr(original, "diag", None)
+    if getattr(diagnostic, "constraint_name", None) == "uq_bank_transaction_identity":
+        return True
+    message = str(original).lower()
+    return "uq_bank_transaction_identity" in message or "bank_transaction.identity_key" in message
+
+
 class BankStatementAdapter(BaseImportAdapter):
     """Adaptador para Extractos Bancarios."""
+
+    # Una referencia bancaria es informativa; movimientos distintos pueden compartirla.
+    group_by_reference = False
 
     columns = [
         "bank_account_id",
@@ -29,7 +52,14 @@ class BankStatementAdapter(BaseImportAdapter):
 
     @staticmethod
     def _optional_amount(value: Any) -> Decimal | None:
-        """Convierte una columna vacía o cero en un lado bancario ausente."""
+        """Convierte una columna vacía o cero en un lado bancario ausente.
+
+        Los importes con separadores ambiguos se rechazan en lugar de
+        interpretarse: un importe con milés por convención europea que se
+        lea como decimales corrompe el extracto por un factor de 1000.
+        ``1.000,00`` y ``1,234.56`` son inequívocos; ``1.000`` y ``1,000``
+        no lo son y abortan la fila con un error de negocio.
+        """
         if value is None or (isinstance(value, str) and value == ""):
             return None
         normalized = str(value).strip().replace(" ", "")
@@ -45,24 +75,22 @@ class BankStatementAdapter(BaseImportAdapter):
             normalized = normalized.replace(",", ".")
         elif normalized.count(".") > 1:
             raise InvalidOperation(_("Separador de miles ambiguo"))
-        amount = Decimal(normalized)
-        if not amount.is_finite():
-            raise ValueError(_("El monto debe ser finito."))
+        elif "." in normalized:
+            decimal_part = normalized.rsplit(".", 1)[1]
+            if len(decimal_part) == 3:
+                raise InvalidOperation(_("Separador de miles ambiguo"))
+        amount = coerce_decimal(normalized, "monto", max_fractional_digits=4)
         return amount if amount != 0 else None
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
         """Validate a single bank statement row."""
         errors = super().validate_row(row_data)
-        bank_account = database.session.get(BankAccount, str(row_data.get("bank_account_id", "")))
+        bank_account = database.session.get(BankAccount, _text(row_data.get("bank_account_id")))
         if bank_account is None:
             errors.append(f"Cuenta bancaria no encontrada: {row_data.get('bank_account_id')}")
         raw_date = row_data.get("posting_date")
         try:
-            if isinstance(raw_date, date):
-                parsed_date = raw_date
-            else:
-                parsed_date = date.fromisoformat(str(raw_date))
-            if not parsed_date:
+            if not parse_import_date(raw_date, field="fecha bancaria"):
                 raise ValueError
         except (TypeError, ValueError):
             errors.append(f"Fecha bancaria inválida: {raw_date}")
@@ -71,9 +99,9 @@ class BankStatementAdapter(BaseImportAdapter):
         for field in ("deposit", "withdrawal"):
             try:
                 amounts[field] = self._optional_amount(row_data.get(field))
-            except (InvalidOperation, TypeError, ValueError):
+            except (InvalidOperation, TypeError, ValueError) as exc:
                 amounts[field] = None
-                errors.append(f"Monto bancario inválido en columna '{field}': {row_data.get(field)}")
+                errors.append(f"Monto bancario inválido en columna '{field}': {row_data.get(field)} ({exc})")
             else:
                 amt = amounts[field]
                 if amt is not None and amt < 0:
@@ -95,15 +123,14 @@ class BankStatementAdapter(BaseImportAdapter):
         company_id = (context or {}).get("company_id") or ""
         errors: list[str] = []
         for row in document_data:
-            bank_account = database.session.get(BankAccount, str(row.get("bank_account_id", "")))
+            bank_account = database.session.get(BankAccount, _text(row.get("bank_account_id")))
             if bank_account and bank_account.company != company_id:
                 errors.append(
                     f"La cuenta bancaria {bank_account.id} pertenece a la compañía "
                     f"{bank_account.company}, no a {company_id}."
                 )
             try:
-                posting_date = row.get("posting_date")
-                posting_date = posting_date if isinstance(posting_date, date) else date.fromisoformat(str(posting_date))
+                posting_date = parse_import_date(row.get("posting_date"), field="fecha bancaria")
             except (TypeError, ValueError):
                 continue
             if not is_period_open(company_id, posting_date):
@@ -115,23 +142,26 @@ class BankStatementAdapter(BaseImportAdapter):
         transactions = []
         for row in document_data:
             posting_date = row.get("posting_date")
-            if isinstance(posting_date, str):
-                try:
-                    posting_date = date.fromisoformat(posting_date)
-                except ValueError as exc:
-                    raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
+            try:
+                posting_date = parse_import_date(posting_date, field="fecha bancaria")
+            except ValueError as exc:
+                raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
+            deposit = self._optional_amount(row.get("deposit"))
+            withdrawal = self._optional_amount(row.get("withdrawal"))
+            if (deposit is not None and deposit < 0) or (withdrawal is not None and withdrawal < 0):
+                raise ValueError(_("El monto bancario no puede ser negativo."))
             transactions.append(
                 {
-                    "bank_account_id": str(row.get("bank_account_id", "")),
+                    "bank_account_id": _text(row.get("bank_account_id")),
                     "company_id": context.get("company_id"),
                     "posting_date": posting_date,
-                    "reference_number": str(row.get("reference_number", "")),
-                    "description": str(row.get("description", "")),
-                    "deposit": self._optional_amount(row.get("deposit")),
-                    "withdrawal": self._optional_amount(row.get("withdrawal")),
+                    "reference_number": _text(row.get("reference_number") or row.get("reference")),
+                    "description": _text(row.get("description")),
+                    "deposit": deposit,
+                    "withdrawal": withdrawal,
                 }
             )
-            if transactions[-1]["deposit"] is not None and transactions[-1]["withdrawal"] is not None:
+            if deposit is not None and withdrawal is not None:
                 raise ValueError(_("Una fila bancaria no puede contener depósito y retiro simultáneamente."))
         return transactions
 
@@ -139,6 +169,20 @@ class BankStatementAdapter(BaseImportAdapter):
         """Persist bank transactions to the database."""
         persisted_ids: list[str] = []
         seen_in_batch: set[str] = set()
+        # La comprobación de duplicados y la inserción deben ejecutarse bajo el
+        # mismo lock por cuenta. Dos importaciones concurrentes del mismo
+        # extracto esperan su turno; la segunda ya ve la fila confirmada por la
+        # primera en lugar de insertar un duplicado (#2172). El orden estable
+        # evita interbloqueos cuando el lote toca varias cuentas.
+        for bank_account_id in sorted(
+            {str(tx_data.get("bank_account_id") or "") for tx_data in document if tx_data.get("bank_account_id")}
+        ):
+            database.session.execute(
+                database.select(BankAccount)
+                .where(BankAccount.id == bank_account_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ).scalar_one_or_none()
         for tx_data in document:
             bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
             if bank_account is None:
@@ -181,8 +225,14 @@ class BankStatementAdapter(BaseImportAdapter):
                 deposit=tx_data.get("deposit"),
                 withdrawal=tx_data.get("withdrawal"),
             )
-            database.session.add(tx)
-            database.session.flush()
+            try:
+                with database.session.begin_nested():
+                    database.session.add(tx)
+                    database.session.flush()
+            except IntegrityError as exc:
+                if not _is_bank_identity_conflict(exc):
+                    raise
+                raise ValueError(_("La transacción bancaria ya existe en la base de datos.")) from exc
             seen_in_batch.add(str(tx.id))
             persisted_ids.append(str(tx.id))
         self._auto_reconcile(persisted_ids)

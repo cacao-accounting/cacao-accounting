@@ -18,10 +18,11 @@ from cacao_accounting.bancos.services import create_default_petty_cash
 from cacao_accounting.contabilidad.ctas import (
     CatalogoCtas,
     DIRECTORIO_CTAS,
-    base as catalogo_base,
+    base_en,
+    base_es,
     cargar_catalogos,
 )
-from cacao_accounting.database import Entity, database
+from cacao_accounting.database import CacaoConfig, Entity, database
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company, ensure_global_naming_series
 from cacao_accounting.runtime_mode import force_single_entity
 from cacao_accounting.setup.catalogs import normalize_language
@@ -72,15 +73,17 @@ def available_catalog_files() -> list[tuple[str, str]]:
 
 def choose_catalog_file(country: str, idioma: str, catalog_name: str | None = None) -> Any | None:
     """Selecciona el catálogo contable adecuado según país, idioma y nombre de archivo."""
+    idioma_normalizado = normalize_language(idioma).upper()
     if catalog_name:
         catalog_file = join(DIRECTORIO_CTAS, catalog_name)
         if isfile(catalog_file) and catalog_has_default_mapping(catalog_file):
-            return CatalogoCtas(file=catalog_file, pais=country, idioma=idioma)
+            return CatalogoCtas(file=catalog_file, pais=country, idioma=idioma_normalizado)
         return None
 
-    if catalogo_base.pais == country and catalogo_base.idioma == idioma:
-        return catalogo_base
-    return catalogo_base
+    candidato = base_en if idioma_normalizado == "EN" else base_es
+    if not isfile(candidato.file) or not catalog_has_default_mapping(candidato.file):
+        return None
+    return CatalogoCtas(file=candidato.file, pais=country, idioma=idioma_normalizado)
 
 
 def create_company(
@@ -173,6 +176,11 @@ def get_setup_configuration() -> dict[str, Any]:
     }
 
 
+def is_setup_complete() -> bool:
+    """Indica si el asistente de configuración ya finalizó con éxito."""
+    return (get_setup_value(SETUP_COMPLETED, "") or "") == "True"
+
+
 def available_currencies() -> list[tuple[str, str]]:
     """Devuelve las monedas disponibles para el formulario de configuración."""
     from cacao_accounting.database import Currency
@@ -204,6 +212,40 @@ def _activate_and_set_default_currency(currency_code: str) -> None:
         currency.default = is_selected
 
 
+class SetupAlreadyComplete(RuntimeError):
+    """La instalación ya completó el asistente inicial."""
+
+
+def claim_setup_completion() -> None:
+    """Reclama de forma atómica la finalización única del asistente (#1021).
+
+    La clave ``SETUP_COMPLETE`` es única. El proceso toma el bloqueo de alcance
+    y relee la fila: si el valor ya es ``True``, la instalación se considera
+    completada; si existe en ``False``, la marca como completada. Así un segundo
+    proceso concurrente no duplica la compañía ni sus libros.
+    """
+    from sqlalchemy.exc import IntegrityError
+    from cacao_accounting.default_scope import lock_default_scope
+
+    lock_default_scope("setup_completion")
+    row = database.session.execute(
+        database.select(CacaoConfig).filter_by(key=SETUP_COMPLETED).with_for_update().execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if row is not None:
+        if row.value == "True":
+            raise SetupAlreadyComplete(_("La configuración inicial ya fue completada."))
+        row.value = "True"
+        database.session.flush()
+        return
+
+    database.session.add(CacaoConfig(key=SETUP_COMPLETED, value="True"))
+    try:
+        database.session.flush()
+    except IntegrityError as exc:
+        database.session.rollback()
+        raise SetupAlreadyComplete(_("La configuración inicial ya fue completada.")) from exc
+
+
 def finalize_setup(
     company_data: dict,
     catalogo_tipo: str,
@@ -212,18 +254,22 @@ def finalize_setup(
     catalogo_archivo: str | None = None,
 ) -> None:
     """Completa el proceso de configuración inicial y crea la entidad por defecto."""
-    is_initial_entity = (database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0) == 0
-    create_company(
-        company_data,
-        catalogo_tipo=catalogo_tipo,
-        country=country,
-        idioma=idioma,
-        catalogo_archivo=catalogo_archivo,
-        status="default" if is_initial_entity else "activo",
-        default=is_initial_entity,
-    )
-    _activate_and_set_default_currency(company_data.get("moneda", ""))
-    create_default_party_groups(idioma)
-    save_company_details(company_data)
-    mark_setup_complete()
-    database.session.commit()
+    claim_setup_completion()
+    try:
+        is_initial_entity = (database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0) == 0
+        create_company(
+            company_data,
+            catalogo_tipo=catalogo_tipo,
+            country=country,
+            idioma=idioma,
+            catalogo_archivo=catalogo_archivo,
+            status="default" if is_initial_entity else "activo",
+            default=is_initial_entity,
+        )
+        _activate_and_set_default_currency(company_data.get("moneda", ""))
+        create_default_party_groups(idioma)
+        save_company_details(company_data)
+        database.session.commit()
+    except Exception:
+        database.session.rollback()
+        raise

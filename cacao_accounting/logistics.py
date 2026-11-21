@@ -54,8 +54,11 @@ def validate_incoterm(values: dict[str, Any], allowed_codes: Iterable[str] | Non
         return
     version = values.get("incoterm_version") or "2020"
     if allowed_codes is None:
-        active = database.session.execute(database.select(Incoterm.code).where(Incoterm.is_active.is_(True))).all()
-        allowed = {row[0] for row in active} if active else set(INCOTERM_CODES)
+        rows = database.session.execute(database.select(Incoterm.code, Incoterm.is_active)).all()
+        if rows:
+            allowed = {code for code, active in rows if active}
+        else:
+            allowed = set(INCOTERM_CODES)
     else:
         allowed = set(allowed_codes)
     if code not in allowed or version != "2020":
@@ -91,12 +94,8 @@ def ensure_compatible_logistics(documents: Iterable[Any], *, terms_field: str) -
 
 
 def incoterm_options() -> list[dict[str, str]]:
-    """Return active Incoterms for form controls, with a safe dev fallback."""
-    rows = (
-        database.session.execute(database.select(Incoterm).where(Incoterm.is_active.is_(True)).order_by(Incoterm.code))
-        .scalars()
-        .all()
-    )
+    """Devuelve solo los Incoterms activos; el fallback aplica si no hay catálogo."""
+    rows = database.session.execute(database.select(Incoterm).order_by(Incoterm.code)).scalars().all()
     if rows:
-        return [{"code": row.code, "label": row.name, "version": row.version} for row in rows]
+        return [{"code": row.code, "label": row.name, "version": row.version} for row in rows if row.is_active]
     return [{"code": code, "label": code, "version": "2020"} for code in INCOTERM_CODES]

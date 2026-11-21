@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from sqlalchemy import or_, select
 
@@ -15,6 +15,7 @@ from cacao_accounting.database import (
     Accounts,
     CompanyDefaultAccount,
     CompanyParty,
+    Party,
     PartyAccount,
     PriceList,
     TaxRule,
@@ -53,20 +54,8 @@ class PartyCompanySettings:
     default_price_list_label: str
     allow_purchase_invoice_without_order: bool
     allow_purchase_invoice_without_receipt: bool
-    default_currency: str | None
-    default_income_account_id: str | None = None
-    default_income_account_label: str = ""
-    default_expense_account_id: str | None = None
-    default_expense_account_label: str = ""
-    default_purchase_account_id: str | None = None
-    default_purchase_account_label: str = ""
-    default_advance_account_id: str | None = None
-    default_advance_account_label: str = ""
     default_cost_center: str | None = None
     default_business_unit: str | None = None
-    default_bank_name: str | None = None
-    default_bank_account_no: str | None = None
-    default_bank_iban: str | None = None
     block_overdue: bool = False
 
 
@@ -82,20 +71,8 @@ class PartyCompanySettingsParams:
     default_price_list_id: str | None
     allow_purchase_invoice_without_order: bool
     allow_purchase_invoice_without_receipt: bool
-    default_currency: str | None = None
-    default_income_account_id: str | None = None
-    default_income_account_label: str = ""
-    default_expense_account_id: str | None = None
-    default_expense_account_label: str = ""
-    default_purchase_account_id: str | None = None
-    default_purchase_account_label: str = ""
-    default_advance_account_id: str | None = None
-    default_advance_account_label: str = ""
     default_cost_center: str | None = None
     default_business_unit: str | None = None
-    default_bank_name: str | None = None
-    default_bank_account_no: str | None = None
-    default_bank_iban: str | None = None
     block_overdue: bool = False
 
 
@@ -189,7 +166,6 @@ def _build_settings(
     price_list: PriceList | None,
 ) -> PartyCompanySettings:
     """Construye la configuración completa por compañía."""
-    account_settings = _party_account_settings(company, company_party)
     values = _party_company_values(company_party)
     return PartyCompanySettings(
         company=company,
@@ -207,36 +183,10 @@ def _build_settings(
         default_price_list_label=price_list.name if price_list else "",
         allow_purchase_invoice_without_order=values["allow_purchase_invoice_without_order"],
         allow_purchase_invoice_without_receipt=values["allow_purchase_invoice_without_receipt"],
-        default_currency=values["default_currency"],
-        default_income_account_id=account_settings[0][0],
-        default_income_account_label=account_settings[0][1],
-        default_expense_account_id=account_settings[1][0],
-        default_expense_account_label=account_settings[1][1],
-        default_purchase_account_id=account_settings[2][0],
-        default_purchase_account_label=account_settings[2][1],
-        default_advance_account_id=account_settings[3][0],
-        default_advance_account_label=account_settings[3][1],
         default_cost_center=values["default_cost_center"],
         default_business_unit=values["default_business_unit"],
-        default_bank_name=values["default_bank_name"],
-        default_bank_account_no=values["default_bank_account_no"],
-        default_bank_iban=values["default_bank_iban"],
         block_overdue=values["block_overdue"],
     )
-
-
-def _party_account_settings(company: str, company_party: CompanyParty | None) -> list[tuple[str | None, str]]:
-    """Resuelve las cuentas configuradas por compañía."""
-    ids = [
-        getattr(company_party, field, None) if company_party else None
-        for field in (
-            "default_income_account_id",
-            "default_expense_account_id",
-            "default_purchase_account_id",
-            "default_advance_account_id",
-        )
-    ]
-    return [_settings_for_account_labels(company, account_id) for account_id in ids]
 
 
 def _party_company_values(company_party: CompanyParty | None) -> dict[str, Any]:
@@ -244,12 +194,8 @@ def _party_company_values(company_party: CompanyParty | None) -> dict[str, Any]:
     fields = (
         "tax_template_id",
         "default_tax_rule_id",
-        "default_currency",
         "default_cost_center",
         "default_business_unit",
-        "default_bank_name",
-        "default_bank_account_no",
-        "default_bank_iban",
     )
     values = {field: getattr(company_party, field, None) if company_party else None for field in fields}
     values.update(
@@ -317,13 +263,19 @@ def party_company_settings_rows(
     selected_company: str | None,
     *,
     role: str,
+    authorized_companies: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Devuelve filas editables de configuracion por compania para Cliente/Proveedor."""
+    company_scope = (
+        None if authorized_companies is None else {str(company) for company in authorized_companies if str(company).strip()}
+    )
     companies: list[str] = []
     if party_id:
         query = select(CompanyParty.company).filter_by(party_id=party_id).order_by(CompanyParty.company)
+        if company_scope is not None:
+            query = query.where(CompanyParty.company.in_(company_scope)) if company_scope else query.where(database.false())
         companies = [str(company) for company in database.session.execute(query).scalars()]
-    if not companies and selected_company:
+    if not companies and selected_company and (company_scope is None or selected_company in company_scope):
         companies = [selected_company]
     return [
         _party_company_settings_row(build_party_company_settings(party_id or "", company, role=role)) for company in companies
@@ -444,6 +396,16 @@ def upsert_party_company_settings_rows(party_id: str, role: str, values: Mapping
         if company in seen:
             raise ValueError(_("No se puede repetir la misma compañía en la configuración."))
         seen.add(company)
+        existing = _party_company_record(party_id, company)
+        if role == "supplier":
+            allow_without_order = _truthy_row_value(fields["allow_purchase_invoice_without_order"], index)
+            allow_without_receipt = _truthy_row_value(fields["allow_purchase_invoice_without_receipt"], index)
+        else:
+            # Las preferencias de factura de compra pertenecen al rol
+            # proveedor; el formulario de cliente no las envía y no debe
+            # reiniciarlas.
+            allow_without_order = bool(existing.allow_purchase_invoice_without_order) if existing else False
+            allow_without_receipt = bool(existing.allow_purchase_invoice_without_receipt) if existing else False
         params = PartyCompanySettingsParams(
             is_active=_truthy_row_value(fields["company_is_active"], index, default=True),
             receivable_account_id=_row_value(fields["receivable_account_id"], index) or None,
@@ -451,15 +413,24 @@ def upsert_party_company_settings_rows(party_id: str, role: str, values: Mapping
             tax_template_id=_row_value(fields["tax_template_id"], index) or None,
             default_tax_rule_id=_row_value(fields["default_tax_rule_id"], index) or None,
             default_price_list_id=_row_value(fields["default_price_list_id"], index) or None,
-            allow_purchase_invoice_without_order=_truthy_row_value(fields["allow_purchase_invoice_without_order"], index),
-            allow_purchase_invoice_without_receipt=_truthy_row_value(fields["allow_purchase_invoice_without_receipt"], index),
+            allow_purchase_invoice_without_order=allow_without_order,
+            allow_purchase_invoice_without_receipt=allow_without_receipt,
         )
         upsert_party_company_settings(party_id, role, company, params)
-    _delete_removed_company_settings(party_id, seen)
+    _delete_removed_company_settings(party_id, role, seen)
 
 
-def _delete_removed_company_settings(party_id: str, submitted_companies: set[str]) -> None:
-    """Elimina configuraciones por compania removidas de la tabla editable."""
+def _delete_removed_company_settings(party_id: str, role: str, submitted_companies: set[str]) -> None:
+    """Elimina configuraciones por compania removidas de la tabla editable.
+
+    ``CompanyParty`` y ``PartyAccount`` son compartidos por los roles cliente y
+    proveedor. Si el tercero conserva el otro rol, quitar la fila de un rol no
+    debe desvincularlo ni borrar las cuentas del otro.
+    """
+    party = database.session.get(Party, party_id)
+    keeps_other_role = bool(party and (party.is_supplier if role == "customer" else party.is_customer))
+    if keeps_other_role:
+        return
     existing = database.session.execute(select(CompanyParty).filter_by(party_id=party_id)).scalars().all()
     for company_party in existing:
         if company_party.company in submitted_companies:
@@ -483,7 +454,8 @@ def _validate_account(company: str, account_id: str | None, expected_type: str) 
         )
 
 
-def _validate_tax_template(company: str, tax_template_id: str | None) -> None:
+def _validate_tax_template(company: str, tax_template_id: str | None, role: str) -> None:
+    """Valida existencia, compañía, vigencia y tipo de la plantilla fiscal."""
     if not tax_template_id:
         return
     template = _tax_template_by_id(tax_template_id)
@@ -491,6 +463,11 @@ def _validate_tax_template(company: str, tax_template_id: str | None) -> None:
         raise ValueError(_("La plantilla de impuestos seleccionada no existe."))
     if template.company not in (None, company):
         raise ValueError(_("La plantilla de impuestos debe pertenecer a la misma compañía."))
+    if not template.is_active:
+        raise ValueError(_("La plantilla de impuestos seleccionada no esta activa."))
+    expected_type = "selling" if role == "customer" else "buying"
+    if template.template_type != expected_type:
+        raise ValueError(_("La plantilla de impuestos no corresponde al tipo de tercero seleccionado."))
 
 
 def _validate_tax_rule(company: str, rule_id: str | None, role: str) -> None:
@@ -506,6 +483,13 @@ def _validate_tax_rule(company: str, rule_id: str | None, role: str) -> None:
         raise ValueError(_("La regla fiscal no corresponde al tipo de tercero seleccionado."))
     if not rule.is_active:
         raise ValueError(_("La regla fiscal seleccionada no esta activa."))
+    if role == "supplier":
+        # El consumidor solo aplica retenciones reconocidas al pagar; aceptar
+        # otra regla deja una configuración que nunca se ejecuta.
+        if rule.tax_type != "withholding":
+            raise ValueError(_("La regla fiscal de proveedor debe ser una retención."))
+        if rule.recognition_event not in ("payment", "payment_confirmed"):
+            raise ValueError(_("La regla fiscal de proveedor debe reconocerse al pagar."))
 
 
 def _price_list_for_company(company: str, price_list_id: str | None) -> PriceList | None:
@@ -536,19 +520,29 @@ def upsert_party_company_settings(
     role: str,
     company: str,
     params: PartyCompanySettingsParams,
+    *,
+    update_extended: bool = False,
 ) -> None:
-    """Crea o actualiza la configuracion de activacion del tercero por compania."""
+    """Crea o actualiza la configuracion de activacion del tercero por compania.
+
+    El centro de costo, la unidad de negocio y el bloqueo por mora no forman
+    parte del formulario básico; se conservan al actualizar salvo que el
+    llamador pida explícitamente ``update_extended=True``.
+    """
     receivable_account_id = params.receivable_account_id
     payable_account_id = params.payable_account_id
+    existing_account = _party_account_record(party_id, company)
 
     if role == "customer":
         _validate_account(company, receivable_account_id, "receivable")
-        payable_account_id = None
+        # La cuenta por pagar pertenece al rol proveedor del mismo tercero.
+        payable_account_id = existing_account.payable_account_id if existing_account else None
     else:
         _validate_account(company, payable_account_id, "payable")
-        receivable_account_id = None
+        # La cuenta por cobrar pertenece al rol cliente del mismo tercero.
+        receivable_account_id = existing_account.receivable_account_id if existing_account else None
 
-    _validate_tax_template(company, params.tax_template_id)
+    _validate_tax_template(company, params.tax_template_id, role)
     _validate_tax_rule(company, params.default_tax_rule_id, role)
     _validate_price_list(company, params.default_price_list_id, role)
 
@@ -556,6 +550,9 @@ def upsert_party_company_settings(
     if company_party is None:
         company_party = CompanyParty(company=company, party_id=party_id)
         database.session.add(company_party)
+        is_new = True
+    else:
+        is_new = False
 
     company_party.is_active = params.is_active
     company_party.tax_template_id = params.tax_template_id
@@ -563,17 +560,10 @@ def upsert_party_company_settings(
     company_party.default_price_list_id = params.default_price_list_id
     company_party.allow_purchase_invoice_without_order = params.allow_purchase_invoice_without_order
     company_party.allow_purchase_invoice_without_receipt = params.allow_purchase_invoice_without_receipt
-    company_party.default_currency = params.default_currency
-    company_party.default_income_account_id = params.default_income_account_id
-    company_party.default_expense_account_id = params.default_expense_account_id
-    company_party.default_purchase_account_id = params.default_purchase_account_id
-    company_party.default_advance_account_id = params.default_advance_account_id
-    company_party.default_cost_center = params.default_cost_center
-    company_party.default_business_unit = params.default_business_unit
-    company_party.default_bank_name = params.default_bank_name
-    company_party.default_bank_account_no = params.default_bank_account_no
-    company_party.default_bank_iban = params.default_bank_iban
-    company_party.block_overdue = params.block_overdue
+    if is_new or update_extended:
+        company_party.default_cost_center = params.default_cost_center
+        company_party.default_business_unit = params.default_business_unit
+        company_party.block_overdue = params.block_overdue
 
     party_account = _party_account_record(party_id, company)
     if party_account is None:

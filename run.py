@@ -29,16 +29,23 @@ from cacao_accounting.database.helpers import (
 
 app = create_app(configuracion)
 
-try:
-    user, passwd = resolver_credenciales_iniciales()
-except ValueError as exc:
-    logger.critical(str(exc))
-    sys.exit(1)
+
+def _credenciales_iniciales() -> tuple[str, str]:
+    """Resuelve credenciales solo cuando realmente se inicializa la base."""
+    try:
+        return resolver_credenciales_iniciales()
+    except ValueError as exc:
+        logger.critical(str(exc))
+        sys.exit(1)
+
 
 if verifica_coneccion_db(app=app):
     with app.app_context():
 
-        if not usuarios_creados():
+        if usuarios_creados():
+            db = True
+        else:
+            user, passwd = _credenciales_iniciales()
             if user == "cacao" and passwd == "cacao":
                 logger.warning("Se están usando usuario y contraseña predeterminados para el setup inicial.")
             try:
@@ -47,11 +54,10 @@ if verifica_coneccion_db(app=app):
             except OperationalError:
                 logger.warning("Hubo un error al inicializar la base de datos.")
                 db = False
-        else:
-            db = True
 else:
     with app.app_context():
         try:
+            user, passwd = _credenciales_iniciales()
             if not usuarios_creados() and user == "cacao" and passwd == "cacao":
                 logger.warning("Se están usando usuario y contraseña predeterminados para el setup inicial.")
             inicia_base_de_datos(app=app, user=user, passwd=passwd, with_examples=False)

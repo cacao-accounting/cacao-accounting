@@ -41,7 +41,7 @@ from cacao_accounting.database import (
     database,
 )
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -55,6 +55,7 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 
 from cacao_accounting.document_flow import (
     DocumentFlowError,
+    assert_relation_same_party,
     create_document_relation,
     refresh_source_caches_for_target,
     require_line_relations,
@@ -99,6 +100,7 @@ from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
     apply_party_profile,
     build_party_detail_context,
+    companias_autorizadas_por_accion,
     create_party_address,
     create_party_contact,
     deactivate_party_address,
@@ -107,6 +109,8 @@ from cacao_accounting.party_management import (  # noqa: F401
     party_group_label,
     toggle_party_customer_role as toggle_party_customer_role,  # noqa: F401
     toggle_party_supplier_role,
+    validated_party_name,
+    validated_party_tax_id,
     PartyRoleToggleError,
     update_party_address,
     update_party_contact,
@@ -130,6 +134,85 @@ def _raise_posting_error(message: str) -> NoReturn:
 def _msg_item_repetido(item_code: str) -> str:
     """Mensaje para item repetido en el documento."""
     return _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}
+
+
+def _msg_cantidad_item(item_code: str) -> str:
+    """Mensaje para cantidad de item no positiva."""
+    return _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}
+
+
+def _validated_customer(customer_id: str | None) -> Party | None:
+    """Carga el cliente y exige el rol cuando se informa un tercero."""
+    if not customer_id:
+        return None
+    customer = database.session.get(Party, customer_id)
+    if customer is None:
+        raise ValueError(_("El tercero no existe."))
+    if not customer.is_customer:
+        raise ValueError(_("El tercero seleccionado no está habilitado como cliente."))
+    return customer
+
+
+def _validated_delivery_customer(customer_id: str | None, company: str | None) -> Party | None:
+    """Valida cliente activo, con rol y vínculo vigente en la compañía."""
+    if not customer_id:
+        return None
+    customer = database.session.get(Party, customer_id)
+    if customer is None:
+        raise ValueError(_("El tercero no existe."))
+    if not customer.is_active or not customer.is_customer:
+        raise ValueError(_("El tercero seleccionado no está habilitado como cliente."))
+    membership = database.session.execute(
+        database.select(CompanyParty.id).filter_by(party_id=customer_id, company=company, is_active=True)
+    ).first()
+    if membership is None:
+        raise ValueError(_("El tercero no está habilitado para la compañía seleccionada."))
+    return customer
+
+
+def _validate_delivery_customer_source(registro: DeliveryNote, customer_id: str | None) -> None:
+    """Exige que el cliente coincida con la orden o la nota de devolución."""
+    source: DeliveryNote | SalesOrder | None = None
+    if registro.reversal_of:
+        source = database.session.get(DeliveryNote, registro.reversal_of)
+    if source is None and registro.sales_order_id:
+        source = database.session.get(SalesOrder, registro.sales_order_id)
+    source_customer = getattr(source, "customer_id", None)
+    if source_customer and source_customer != customer_id:
+        raise ValueError(_("El cliente debe coincidir con el documento origen."))
+
+
+def _require_positive_qty(item_code: str, qty: Decimal) -> None:
+    """Rechaza cantidades no positivas antes de persistir una línea de venta."""
+    if qty <= 0:
+        raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
+
+
+def _require_sale_item(item_code: str) -> Item:
+    """Devuelve el artículo y exige que esté activo y habilitado para venta."""
+    item = _item_by_code(item_code)
+    if not item:
+        raise ValueError(_("El item %(item_code)s no existe.") % {"item_code": item_code})
+    if not item.is_active or not item.is_sale_item:
+        raise ValueError(_("El item %(item_code)s no está habilitado para venta.") % {"item_code": item_code})
+    return item
+
+
+def _validate_sales_items_eligible(document: Any, items: Sequence[Any]) -> None:
+    """Exige artículos activos y vendibles al aprobar una venta ordinaria.
+
+    Las devoluciones y notas de crédito/débito pueden referirse a una venta
+    histórica cuyo artículo se deshabilitó después; su tratamiento se rige por
+    la reversión del documento origen y no por la elegibilidad actual.
+    """
+    if getattr(document, "is_return", False) or getattr(document, "document_type", "") in {
+        "sales_credit_note",
+        "sales_return",
+        "sales_debit_note",
+    }:
+        return
+    for item in items:
+        _require_sale_item(item.item_code)
 
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
@@ -448,6 +531,10 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
     (incluyendo ``Item.default_warehouse_id``) para que la cancelación libere
     exactamente la bodega efectiva en que se reservó el inventario.
     """
+    # #1820: una orden cerrada ya liberó su reserva; volver a restar consumiría
+    # reservas de otras órdenes del mismo ítem/bodeja.
+    if getattr(so, "status", None) == "closed" or getattr(so, "docstatus", 0) == 2:
+        return
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
     for item in items:
@@ -540,6 +627,11 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
         return
     if dn.is_return:
         return
+    # Si la orden está cerrada, su reserva ya se liberó con el cierre:
+    # restaurarla crearía una reserva fantasma (#1820).
+    source_order = database.session.get(SalesOrder, dn.sales_order_id)
+    if source_order is not None and source_order.status == "closed":
+        return
 
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
 
@@ -571,6 +663,7 @@ def _capture_sales_state(registro: Any) -> dict[str, Any]:
         "posting_date": str(getattr(registro, "posting_date", "")),
         "total": str(getattr(registro, "total", "")),
         "remarks": getattr(registro, "remarks", None),
+        "update_inventory": getattr(registro, "update_inventory", None),
     }
 
     from cacao_accounting.database import (
@@ -608,10 +701,7 @@ def _authorized_companies(access_modules: tuple[str, ...]) -> set[str]:
     """Return companies the current user may consult in the given modules."""
     companies: set[str] = set()
     for module in access_modules:
-        module_id = obtener_id_modulo_por_nombre(module)
-        permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        if permissions.consultar:
-            companies.update(permissions.obtener_companias_autorizadas())
+        companies.update(companias_autorizadas_por_accion(module, "consultar"))
     return companies
 
 
@@ -630,17 +720,28 @@ def _apply_company_scope(base_query: Any, model: Any, access_modules: tuple[str,
 
 
 def _period_company_for_query(access_modules: tuple[str, ...]) -> str | None:
-    """Resolve the sole authorized company used by period filters."""
+    """Resolve the sole authorized company across every module of the query.
+
+    El listado de entregas autoriza Ventas e Inventario a la vez. Elegir la
+    compañía del primer módulo con una sola concesión aplicaba un filtro de
+    período que contradecía el alcance combinado: por ejemplo, A para Ventas y
+    B para Inventario terminaba mostrando solo A (#2110). Solo se inyecta una
+    compañía cuando la unión de concesiones tiene exactamente una.
+    """
     period_company = request.args.get("company")
     if period_company or getattr(current_user, "classification", None) == "admin":
         return period_company
+    authorized_companies: set[str] = set()
+    has_read_access = False
     for module in access_modules:
         module_id = obtener_id_modulo_por_nombre(module)
         permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        if permissions.consultar:
-            authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
-            if len(authorized_companies) == 1:
-                return authorized_companies[0]
+        if not permissions.consultar:
+            continue
+        has_read_access = True
+        authorized_companies.update(permissions.obtener_companias_autorizadas())
+    if has_read_access and len(authorized_companies) == 1:
+        return next(iter(authorized_companies))
     return period_company
 
 
@@ -679,7 +780,7 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
         max_per_page=10,
         count=True,
     )
-    attach_period_picker(paginated, model, access_modules[0], current_user=current_user)
+    attach_period_picker(paginated, model, access_modules, current_user=current_user)
     return paginated
 
 
@@ -694,10 +795,12 @@ def _require_delivery_note_access(document: DeliveryNote, action: str = "consult
 
 
 def _can_manage_delivery_notes() -> bool:
-    """Return whether the current user has Inventory write permission."""
+    """Return whether the user can create delivery notes in Sales and Inventory."""
     module_id = obtener_id_modulo_por_nombre("inventory")
-    permissions = Permisos(modulo=module_id, usuario=current_user.id)
-    return bool(permissions.administrador or permissions.crear)
+    inventory = Permisos(modulo=module_id, usuario=current_user.id)
+    sales_module_id = obtener_id_modulo_por_nombre("sales")
+    sales = Permisos(modulo=sales_module_id, usuario=current_user.id)
+    return bool(sales.crear and inventory.crear)
 
 
 def _require_sales_document_access(document: Any, action: str = "consultar") -> None:
@@ -729,16 +832,16 @@ def _handle_cliente_create(
     titulo: str,
 ):
     """Maneja la creacion de un nuevo cliente desde el formulario POST."""
-    cliente = Party(
-        code=str(ULID()),
-        is_customer=True,
-        name=form.get("name") or "",
-        comercial_name=form.get("comercial_name"),
-        tax_id=form.get("tax_id"),
-        fiscal_name=form.get("fiscal_name"),
-        is_active=form.get("is_active") is not None,
-    )
     try:
+        cliente = Party(
+            code=str(ULID()),
+            is_customer=True,
+            name=validated_party_name(form),
+            comercial_name=form.get("comercial_name"),
+            tax_id=validated_party_tax_id(form),
+            fiscal_name=form.get("fiscal_name"),
+            is_active=form.get("is_active") is not None,
+        )
         database.session.add(cliente)
         apply_party_group(cliente, form.get("party_group_id") or None, role="customer")
         apply_party_profile(cliente, form)
@@ -759,6 +862,8 @@ def _handle_cliente_create(
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="sales",
+        company_scope_action="crear",
         group_label=party_group_label(form.get("party_group_id") or None),
     )
 
@@ -773,9 +878,9 @@ def _handle_cliente_update(
 ):
     """Maneja la actualizacion de un cliente existente desde el formulario POST."""
     try:
-        cliente.name = form.get("name") or ""
+        cliente.name = validated_party_name(form)
         cliente.comercial_name = form.get("comercial_name") or None
-        cliente.tax_id = form.get("tax_id") or None
+        cliente.tax_id = validated_party_tax_id(form, exclude_party_id=cliente.id)
         cliente.fiscal_name = form.get("fiscal_name")
         cliente.is_active = form.get("is_active") is not None
         apply_party_group(cliente, form.get("party_group_id") or None, role="customer")
@@ -798,6 +903,8 @@ def _handle_cliente_update(
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="sales",
+        company_scope_action="editar",
         group_label=party_group_label(cliente.party_group_id),
     )
 
@@ -808,7 +915,12 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
     revert_relations_for_target("sales_request", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("sales_request", registro.id)
     customer_id = form.get("customer_id") or None
-    customer = database.session.get(Party, customer_id) if customer_id else None
+    try:
+        customer = _validated_customer(customer_id)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, request_id=request_id))
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
     requested_company = form.get("company") or registro.company
@@ -816,12 +928,22 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
         database.session.rollback()
         flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(endpoint, request_id=request_id))
-    registro.posting_date = _parse_date(form.get("posting_date"))
+    try:
+        registro.posting_date = _parse_date(form.get("posting_date"))
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, request_id=request_id))
     registro.remarks = form.get("remarks")
     for item in database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars():
         database.session.delete(item)
-    _total_qty, total = _save_sales_request_items(registro.id)
-    _set_sales_document_totals(registro, total)
+    try:
+        _total_qty, total = _save_sales_request_items(registro.id)
+        _set_sales_document_totals(registro, total)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, request_id=request_id))
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -843,12 +965,22 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
         database.session.rollback()
         flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(endpoint, order_id=order_id))
-    registro.posting_date = _parse_date(form.get("posting_date"))
+    try:
+        registro.posting_date = _parse_date(form.get("posting_date"))
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, order_id=order_id))
     registro.remarks = form.get("remarks")
     for item in database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars():
         database.session.delete(item)
-    _total_qty, total = _save_sales_order_items(registro.id)
-    _set_sales_document_totals(registro, total)
+    try:
+        _total_qty, total = _save_sales_order_items(registro.id)
+        _set_sales_document_totals(registro, total)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, order_id=order_id))
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -963,8 +1095,10 @@ def _line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, D
     return _source_line_discount(index, gross_amount) or _form_line_discount(index, gross_amount)
 
 
-def validate_sales_quotation_expiry(quotation: SalesQuotation, conversion_date: date) -> None:
+def validate_sales_quotation_expiry(quotation: SalesQuotation, conversion_date: date | None) -> None:
     """Reject conversion after a quotation's inclusive validity date."""
+    if conversion_date is None:
+        raise ValueError(_("La fecha de conversión es obligatoria."))
     if quotation.valid_until and conversion_date > quotation.valid_until:
         raise ValueError(_("No se puede convertir una cotización vencida."))
 
@@ -1016,14 +1150,11 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
-            item_obj = _item_by_code(item_code)
-            if not item_obj:
-                raise ValueError(_("El item %(item_code)s no existe.") % {"item_code": item_code})
-            if not item_obj.is_active or not item_obj.is_sale_item:
-                raise ValueError(_("El item %(item_code)s no está habilitado para venta.") % {"item_code": item_code})
+            item_obj = _require_sale_item(item_code)
             _validate_sales_catalog_rate(order, i, item_code, qty, uom, rate)
             qty_in_base_uom = convert_item_qty(item_code, qty, uom or item_obj.default_uom, item_obj.default_uom)
             warehouse = (
@@ -1075,14 +1206,11 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
+            _require_sale_item(item_code)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
-            item_obj = _item_by_code(item_code)
-            if not item_obj:
-                raise ValueError(_("El item %(item_code)s no existe.") % {"item_code": item_code})
-            if not item_obj.is_active or not item_obj.is_sale_item:
-                raise ValueError(_("El item %(item_code)s no está habilitado para venta.") % {"item_code": item_code})
             _validate_sales_catalog_rate(sales_request, i, item_code, qty, uom, rate)
             linea = SalesRequestItem(
                 sales_request_id=request_id,
@@ -1125,6 +1253,8 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
+            _require_sale_item(item_code)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
@@ -1170,6 +1300,8 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
+            _require_sale_item(item_code)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
@@ -1228,6 +1360,8 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
+            _require_positive_qty(item_code, qty)
+            _require_sale_item(item_code)
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
@@ -1546,7 +1680,11 @@ def is_sales_price_editor(user_id: str | None) -> bool:
     role_ids = database.select(Roles.id).where((Roles.name == "sales_manager") | (Roles.note == "Gerente de Ventas"))
     return (
         database.session.execute(
-            database.select(RolesUser).where(RolesUser.user_id == user_id, RolesUser.role_id.in_(role_ids))
+            database.select(RolesUser).where(
+                RolesUser.user_id == user_id,
+                RolesUser.role_id.in_(role_ids),
+                RolesUser.active.is_(True),
+            )
         ).scalar_one_or_none()
         is not None
     )
@@ -1753,17 +1891,26 @@ def _validate_sales_invoice_source_links(invoice: SalesInvoice, items: Sequence[
     return order or delivery
 
 
+def _validate_3way_delivery_requirement(invoice: SalesInvoice, config: SalesMatchingConfig | None) -> None:
+    """Exige y valida la nota de entrega en la modalidad 3-way (#1813)."""
+    if not config or config.matching_type != "3-way":
+        return
+    if not invoice.delivery_note_id:
+        raise ValueError(_("La modalidad 3-way exige una Nota de Entrega vinculada a la factura."))
+
+
 def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any] | None = None) -> None:
     """Rechaza facturas sin orden de venta cuando la compañía lo exige."""
     if invoice.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or invoice.is_return:
         return
-    if invoice.sales_order_id or invoice.delivery_note_id:
-        source = _validate_sales_invoice_source_links(invoice, items)
-        if invoice.sales_order_id or getattr(source, "sales_order_id", None):
-            return
     config = database.session.execute(
         database.select(SalesMatchingConfig).filter_by(company=invoice.company)
     ).scalar_one_or_none()
+    if invoice.sales_order_id or invoice.delivery_note_id:
+        source = _validate_sales_invoice_source_links(invoice, items)
+        if invoice.sales_order_id or getattr(source, "sales_order_id", None):
+            _validate_3way_delivery_requirement(invoice, config)
+            return
     if not config or not config.require_sales_order:
         return
     linked_order = database.session.execute(
@@ -1778,6 +1925,7 @@ def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any
         .limit(1)
     ).scalar_one_or_none()
     if linked_order:
+        _validate_3way_delivery_requirement(invoice, config)
         return
     raise ValueError(_("La factura debe estar vinculada a una Orden de Venta aprobada."))
 
@@ -1962,15 +2110,25 @@ def _handle_sales_quotation_edit_post(registro):
         database.session.rollback()
         flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
-    registro.posting_date = _parse_date(request.form.get("posting_date"))
-    registro.valid_until = _parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None
+    try:
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.valid_until = _parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
     registro.remarks = request.form.get("remarks")
     for item in database.session.execute(
         database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id)
     ).scalars():
         database.session.delete(item)
-    _total_qty, total = _save_sales_quotation_items(registro.id)
-    _set_sales_document_totals(registro, total)
+    try:
+        _total_qty, total = _save_sales_quotation_items(registro.id)
+        _set_sales_document_totals(registro, total)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -1983,7 +2141,13 @@ def _handle_delivery_note_edit_post(registro):
     revert_relations_for_target("delivery_note", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("delivery_note", registro.id)
     customer_id = request.form.get("customer_id") or None
-    customer = database.session.get(Party, customer_id) if customer_id else None
+    try:
+        customer = _validated_delivery_customer(customer_id, registro.company)
+        _validate_delivery_customer_source(registro, customer_id)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
     requested_company = request.form.get("company") or registro.company
@@ -1991,12 +2155,22 @@ def _handle_delivery_note_edit_post(registro):
         database.session.rollback()
         flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
-    registro.posting_date = _parse_date(request.form.get("posting_date"))
+    try:
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
     registro.remarks = request.form.get("remarks")
     for item in database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars():
         database.session.delete(item)
-    _total_qty, total = _save_delivery_note_items(registro.id)
-    _set_sales_document_totals(registro, total)
+    try:
+        _total_qty, total = _save_delivery_note_items(registro.id)
+        _set_sales_document_totals(registro, total)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -2037,15 +2211,21 @@ def _sales_invoice_sources_and_type(formulario) -> dict[str, Any]:
         or ("sales_invoice" if not f_invoice_id else "sales_credit_note")
     )
     formulario.is_return.data = doc_type in ("sales_credit_note", "sales_return")
+    orden_origen = database.session.get(SalesOrder, f_order) if f_order else None
+    entrega_origen = database.session.get(DeliveryNote, f_note) if f_note else None
+    factura_origen = database.session.get(SalesInvoice, f_invoice_id) if f_invoice_id else None
+    for origen in (orden_origen, entrega_origen, factura_origen):
+        if origen is not None:
+            _require_sales_document_access(origen, "consultar")
     return {
         "from_order_id": f_order,
         "from_note_id": f_note,
         "from_invoice_id": f_invoice_id,
         "from_return_id": f_return,
         "document_type": doc_type,
-        "orden_origen": database.session.get(SalesOrder, f_order) if f_order else None,
-        "entrega_origen": database.session.get(DeliveryNote, f_note) if f_note else None,
-        "factura_origen": database.session.get(SalesInvoice, f_invoice_id) if f_invoice_id else None,
+        "orden_origen": orden_origen,
+        "entrega_origen": entrega_origen,
+        "factura_origen": factura_origen,
     }
 
 
@@ -2219,6 +2399,7 @@ def _persist_sales_reversal_relation(invoice: SalesInvoice) -> None:
                 relation.reversed_at = datetime.now(UTC)
                 relation.reversal_reason = "reversal_document_revised"
                 database.session.flush()
+    assert_relation_same_party("sales_invoice", invoice.reversal_of, target_type, invoice.id)
     new_relation = DocumentRelation(
         source_type="sales_invoice",
         source_id=invoice.reversal_of,
@@ -2321,7 +2502,6 @@ def _cancel_linked_delivery_note(
     invoice: SalesInvoice,
     reason: str | None = None,
     actor_user_id: str | None = None,
-    cancellation_date: Any = None,
     requested_at: Any = None,
 ) -> None:
     """Cancela la Nota de Entrega vinculada si update_inventory esta activo."""
@@ -2337,7 +2517,7 @@ def _cancel_linked_delivery_note(
             dn,
             reason=reason,
             actor_user_id=actor_user_id,
-            cancellation_date=cancellation_date,
+            cancellation_date=dn.posting_date,
             requested_at=requested_at,
         )  # type: ignore[misc]
     _restore_reservation_for_delivery_note(dn)
@@ -2475,7 +2655,20 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
         current_order_id = delivery_note.sales_order_id if delivery_note else None
     for order in orders:
         order_total = _sales_base_amount(order, Decimal(str(order.grand_total or "0")))
-        delivery_note_ids = database.select(DeliveryNote.id).filter_by(sales_order_id=order.id)
+        delivery_note_ids = set(
+            database.session.execute(database.select(DeliveryNote.id).filter_by(sales_order_id=order.id)).scalars().all()
+        )
+        line_links = database.session.execute(
+            database.select(DocumentRelation.target_id, func.sum(DocumentRelation.amount))
+            .where(
+                DocumentRelation.source_type == "sales_order",
+                DocumentRelation.source_id == order.id,
+                DocumentRelation.target_type == "sales_invoice",
+                DocumentRelation.status == "active",
+            )
+            .group_by(DocumentRelation.target_id)
+        ).all()
+        line_linked_amounts = {target_id: Decimal(str(amount or 0)) for target_id, amount in line_links}
         billed_invoices = database.session.execute(
             database.select(SalesInvoice).where(
                 SalesInvoice.company == company,
@@ -2486,13 +2679,20 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
                 or_(
                     SalesInvoice.sales_order_id == order.id,
                     SalesInvoice.delivery_note_id.in_(delivery_note_ids),
+                    SalesInvoice.id.in_(line_linked_amounts),
                 ),
             )
         ).scalars()
-        billed_total = sum(
-            (_sales_base_amount(invoice, Decimal(str(invoice.grand_total or "0"))) for invoice in billed_invoices),
-            Decimal("0"),
-        )
+        billed_total = Decimal("0")
+        for invoice in billed_invoices:
+            if invoice.sales_order_id == order.id or invoice.delivery_note_id in delivery_note_ids:
+                billed_total += _sales_base_amount(invoice, Decimal(str(invoice.grand_total or "0")))
+            else:
+                billed_total += _sales_base_amount(
+                    invoice,
+                    line_linked_amounts.get(invoice.id, Decimal("0")),
+                    use_stored_total=False,
+                )
         pending = max(Decimal("0"), order_total - billed_total)
         if order.id == current_order_id:
             pending = max(
@@ -2579,6 +2779,7 @@ def sales_order_line_closure_reasons(sales_order: SalesOrder) -> dict[str, str]:
             DocumentRelation.target_type == "delivery_note",
             DocumentRelation.status == "active",
             DeliveryNote.docstatus == 1,
+            DeliveryNote.is_return.is_(False),
         )
     ).all()
     for item_id, dn in dn_rows:
@@ -2593,6 +2794,8 @@ def sales_order_line_closure_reasons(sales_order: SalesOrder) -> dict[str, str]:
             DocumentRelation.target_type == "sales_invoice",
             DocumentRelation.status == "active",
             SalesInvoice.docstatus == 1,
+            SalesInvoice.is_return.is_(False),
+            SalesInvoice.document_type.notin_(("sales_credit_note", "sales_return", "sales_debit_note")),
         )
     ).all()
     for item_id, invoice in invoice_rows:

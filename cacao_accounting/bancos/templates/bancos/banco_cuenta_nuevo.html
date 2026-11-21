@@ -82,7 +82,8 @@
     </div>
     <div class="col-md-6">
       <label class="form-label" for="account_name">{{ _('Nombre de cuenta') }} <span class="text-danger">*</span></label>
-      {{ form.account_name(class="form-control form-control-sm", id="account_name", required=True) }}
+      {{ form.account_name(class="form-control form-control-sm", id="account_name", required=True, maxlength="150") }}
+      {% for error in form.account_name.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
     </div>
     <div class="col-md-6">
       <label class="form-label" for="currency">{{ _('Moneda') }}</label>
@@ -114,11 +115,13 @@
     </div>
     <div class="col-md-6">
       <label class="form-label" for="account_no">{{ _('Número de cuenta') }}</label>
-      {{ form.account_no(class="form-control form-control-sm", id="account_no") }}
+      {{ form.account_no(class="form-control form-control-sm", id="account_no", maxlength="50") }}
+      {% for error in form.account_no.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
     </div>
     <div class="col-md-6">
       <label class="form-label" for="iban">{{ _('IBAN') }}</label>
-      {{ form.iban(class="form-control form-control-sm", id="iban") }}
+      {{ form.iban(class="form-control form-control-sm", id="iban", maxlength="50") }}
+      {% for error in form.iban.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
     </div>
     <div class="col-12">
       <label class="form-label" for="gl_account_id">{{ _('Cuenta contable bancaria') }}</label>

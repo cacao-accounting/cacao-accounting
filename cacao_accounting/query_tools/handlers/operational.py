@@ -23,6 +23,7 @@ from cacao_accounting.document_flow.payment import compute_payment_unallocated_a
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
+from cacao_accounting.query_tools.document_acl import allowed_doctypes
 from cacao_accounting.query_tools.permissions import validate_permission
 
 
@@ -296,8 +297,13 @@ def search_document_relations(
     page_size: int = 100,
 ) -> dict[str, Any]:
     validate_permission(context, "documents.reports.read", None, company_id)
+    readable_types = allowed_doctypes(context, company_id)
     current_page, size = paginate(page, page_size)
-    query = database.select(DocumentRelation).where(DocumentRelation.company == company_id)
+    query = database.select(DocumentRelation).where(
+        DocumentRelation.company == company_id,
+        DocumentRelation.source_type.in_(readable_types),
+        DocumentRelation.target_type.in_(readable_types),
+    )
     if document_id:
         query = query.where((DocumentRelation.source_id == document_id) | (DocumentRelation.target_id == document_id))
     if relation_type:

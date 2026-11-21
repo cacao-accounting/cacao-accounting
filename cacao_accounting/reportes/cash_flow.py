@@ -197,17 +197,19 @@ def save_cash_flow_mappings(company: str, overrides: dict[str, str | None]) -> N
     configuraciones inválidas desde la vista dedicada.
     """
     clean: dict[str, str] = {}
+    # Validar todas las cuentas recibidas, incluso las que llegan sin sección,
+    # para impedir que un origen parcial o manipulado borre mappings ajenos.
     for account_id, raw_section in overrides.items():
-        section = (raw_section or "").strip().lower()
-        if not section:
-            continue
-        if section not in VALID_SECTIONS:
-            raise ValueError(_("Sección de flujo inválida: %(section)s") % {"section": section})
         account = database.session.execute(
             select(Accounts).where(Accounts.id == account_id, Accounts.entity == company)
         ).scalar_one_or_none()
         if account is None:
             raise ValueError(_("La cuenta indicada no pertenece a la compañía."))
+        section = (raw_section or "").strip().lower()
+        if not section:
+            continue
+        if section not in VALID_SECTIONS:
+            raise ValueError(_("Sección de flujo inválida: %(section)s") % {"section": section})
         clean[account_id] = section
 
     existing = {
@@ -216,7 +218,11 @@ def save_cash_flow_mappings(company: str, overrides: dict[str, str | None]) -> N
             select(CashFlowAccountMapping.account_id, CashFlowAccountMapping).where(CashFlowAccountMapping.company == company)
         ).all()
     }
+    # Solo se tocan los mapeos de las cuentas presentes en ``overrides``; los
+    # omitidos se conservan para que un POST parcial no los elimine.
     for account_id, mapping in existing.items():
+        if account_id not in overrides:
+            continue
         target = clean.get(account_id)
         if target is None:
             database.session.delete(mapping)
@@ -327,40 +333,45 @@ def _cash_flow_movement_totals(
         .where(*_movement_scope_filters(filters.company, ledger, None, period_end))
     )
     for entry, account in database.session.execute(query).all():
-        if account is None:
-            continue
-        delta = _decimal_value(entry.debit) - _decimal_value(entry.credit)
-        before_start = bool(period_start) and entry.posting_date < period_start
-        if before_start:
-            if mappings.get(account.id) == SECTION_CASH:
-                totals.cash_opening += delta
-            continue
-        if mappings.get(account.id) == SECTION_CASH:
-            totals.cash_window_delta += delta
-            continue
-        classification = normalize_classification(account.classification)
-        if classification in {"ingreso", "income"}:
-            totals.net_profit += _decimal_value(entry.credit) - _decimal_value(entry.debit)
-            continue
-        if classification in {"costo", "cost", "gasto", "expense"}:
-            totals.net_profit -= delta
-            continue
-        section = mappings.get(account.id)
-        if section not in totals.section_totals:
-            continue
-        contribution = -delta
-        totals.section_totals[section] += contribution
-        detail = totals.section_details[section].setdefault(
-            account.id,
-            {
-                "account_code": account.code or "",
-                "account_name": account.name or "",
-                "amount": Decimal("0"),
-                "level": (account.code or "").count(".") + 1,
-            },
-        )
-        detail["amount"] += contribution
+        _accumulate_cash_flow_entry(totals, entry, account, period_start, mappings, _decimal_value)
     return totals
+
+
+def _accumulate_cash_flow_entry(totals, entry, account, period_start, mappings, decimal_value) -> None:
+    """Update cash-flow totals for one ledger entry and its account."""
+    if account is None:
+        return
+    delta = decimal_value(entry.debit) - decimal_value(entry.credit)
+    before_start = bool(period_start) and entry.posting_date < period_start
+    section = mappings.get(account.id)
+    if before_start:
+        if section == SECTION_CASH:
+            totals.cash_opening += delta
+        return
+    if section == SECTION_CASH:
+        totals.cash_window_delta += delta
+        return
+    classification = normalize_classification(account.classification)
+    if classification in {"ingreso", "income"}:
+        totals.net_profit += decimal_value(entry.credit) - decimal_value(entry.debit)
+        return
+    if classification in {"costo", "cost", "gasto", "expense"}:
+        totals.net_profit -= delta
+        return
+    if section not in totals.section_totals:
+        return
+    contribution = -delta
+    totals.section_totals[section] += contribution
+    detail = totals.section_details[section].setdefault(
+        account.id,
+        {
+            "account_code": account.code or "",
+            "account_name": account.name or "",
+            "amount": Decimal("0"),
+            "level": (account.code or "").count(".") + 1,
+        },
+    )
+    detail["amount"] += contribution
 
 
 def _cash_flow_detail_rows(section: str, details: dict[str, dict[str, Any]]) -> list[Any]:

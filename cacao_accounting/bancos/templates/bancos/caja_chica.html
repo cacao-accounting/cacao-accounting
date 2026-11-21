@@ -22,6 +22,7 @@
       {% if registro.is_active %}<span class="badge bg-success ms-2">{{ _('Activa') }}</span>{% else %}<span class="badge bg-secondary ms-2">{{ _('Inactiva') }}</span>{% endif %}
     </h5>
     <div class="d-flex gap-2 flex-wrap">
+      {% if can_edit_cash %}
       <form method="post" action="{{ url_for('bancos.caja_chica_alternar', pc_id=registro.id) }}" class="d-inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-outline-secondary btn-sm" type="submit">
@@ -35,6 +36,7 @@
       </form>
       {% endif %}
       <a href="{{ url_for('bancos.caja_chica_editar', pc_id=registro.id) }}" class="btn btn-primary btn-sm"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
+      {% endif %}
       <a href="{{ url_for('bancos.caja_chica_lista') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
     </div>
   </div>

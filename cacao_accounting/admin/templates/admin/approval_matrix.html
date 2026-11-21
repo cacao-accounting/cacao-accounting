@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block contenido %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a>
@@ -197,12 +197,17 @@
                 <span class="badge bg-dark">{{ r.approval_level }}</span>
               </td>
               <td class="text-center">
-                <form method="post" onsubmit="return confirm('{{ _("¿Está seguro de eliminar esta regla?") }}');" class="d-inline">
+                <span class="badge {{ 'bg-success' if r.enabled else 'bg-secondary' }}">
+                  {{ _("Activa") if r.enabled else _("Inactiva") }}
+                </span>
+                <form method="post" class="d-inline">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="action" value="delete_rule">
+                  <input type="hidden" name="action" value="toggle_rule">
                   <input type="hidden" name="rule_id" value="{{ r.id }}">
-                  <button type="submit" class="btn btn-sm btn-danger p-1 py-0">
-                    <i class="bi bi-trash"></i>
+                  {% set accion_regla = _('Deshabilitar regla de aprobación') if r.enabled else _('Habilitar regla de aprobación') %}
+                  <button type="submit" class="btn btn-sm {{ 'btn-outline-secondary' if r.enabled else 'btn-outline-success' }} p-1 py-0"
+                          aria-label="{{ accion_regla }}" title="{{ accion_regla }}">
+                    <i class="bi {{ 'bi-pause-circle' if r.enabled else 'bi-play-circle' }}" aria-hidden="true"></i>
                   </button>
                 </form>
               </td>

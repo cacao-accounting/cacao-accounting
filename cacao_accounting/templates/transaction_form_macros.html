@@ -1,9 +1,3 @@
-{% macro transaction_form_js(config) %}
-<script>
-  globalThis.transactionFormConfig = {{ config | tojson }};
-</script>
-{% endmacro %}
-
 {% macro logistics_section(include_landed_costs=false, terms_field="purchase_terms") %}
 <section class="ca-card p-3 mb-3" x-data="{ open: false }">
   <button class="btn btn-link text-decoration-none px-0 fw-semibold" type="button"
@@ -250,7 +244,7 @@
 </div>
 {% endmacro %}
 
-{% macro transaction_grid(items_disponibles, uoms_disponibles, source_api_url=None, source_label='', warehouses_disponibles=None, title=None) %}
+{% macro transaction_grid(source_api_url=None, title=None) %}
 {% set title = title if title is not none else _('Líneas de detalle') %}
 <section class="border rounded-2 p-3 mt-3"
          {% if source_api_url %}x-init='loadSourceFromUrl({{ source_api_url | tojson }}).then((loaded) => { if (loaded) applySource(); })'{% endif %}>
@@ -313,6 +307,14 @@
                         line.has_batch = opt.has_batch || false;
                         line.has_serial_no = opt.has_serial_no || false;
                         line.has_expiry_date = opt.has_expiry_date || false;
+                        if (opt.weight !== undefined && opt.weight !== null) {
+                          line.weight = opt.weight;
+                          line.weight_uom = opt.weight_uom || line.weight_uom;
+                        }
+                        if (opt.volume !== undefined && opt.volume !== null) {
+                          line.volume = opt.volume;
+                          line.volume_uom = opt.volume_uom || line.volume_uom;
+                        }
                         onItemChange(line);
                       },
                       messages: {
@@ -393,8 +395,32 @@
                     </div>
                   </div>
                 </template>
+                <template x-if="column.field === 'weight'">
+                  <input class="form-control form-control-sm text-end" type="number" step="0.000000001" min="0"
+                    :name="'weight_' + index" x-model.number="line.weight">
+                </template>
+                <template x-if="column.field === 'weight_uom'">
+                  <select class="form-select form-select-sm" :name="'weight_uom_' + index" x-model="line.weight_uom">
+                    <option value=""></option>
+                    <template x-for="uom in availableUoms" :key="'w-' + uom.code">
+                      <option :value="uom.code" x-text="uom.code"></option>
+                    </template>
+                  </select>
+                </template>
+                <template x-if="column.field === 'volume'">
+                  <input class="form-control form-control-sm text-end" type="number" step="0.000000001" min="0"
+                    :name="'volume_' + index" x-model.number="line.volume">
+                </template>
+                <template x-if="column.field === 'volume_uom'">
+                  <select class="form-select form-select-sm" :name="'volume_uom_' + index" x-model="line.volume_uom">
+                    <option value=""></option>
+                    <template x-for="uom in availableUoms" :key="'v-' + uom.code">
+                      <option :value="uom.code" x-text="uom.code"></option>
+                    </template>
+                  </select>
+                </template>
                 <template x-if="column.field === 'qty'">
-                  <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0"
+                  <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0.0001"
                     :name="'qty_' + index" x-model.number="line.qty" @input="calcAmount(line); refreshCatalogPrice(line)">
                 </template>
                 <template x-if="column.field === 'rate'">

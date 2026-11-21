@@ -2,7 +2,7 @@
 {% from "smart_select_field.html" import smart_select_field %}
 
 {% block contenido %}
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
@@ -21,6 +21,7 @@
     </div>
     <div class="p-3" x-show="!collapsed">
       <form method="post" class="d-grid gap-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {{ smart_select_field(_("Compañía"), "company", "company", filters.company or '', "report-company") }}
         {{ smart_select_field(_("Año Fiscal"), "fiscal_year_id", "fiscal_year", filters.fiscal_year_id or '', "report-fiscal-year", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {{ smart_select_field(_("Libro Contable"), "ledger_id", "book", filters.ledger_id or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
@@ -79,7 +80,7 @@
             <th class="text-end">{{ _("Real") }}</th>
             <th class="text-end">{{ _("Presupuesto") }}</th>
             <th class="text-end">{{ _("Variación") }}</th>
-            <th class="text-end">{{ _("Var %") }}</th>
+            <th class="text-end">{{ _("Var") }} %</th>
           </tr>
         </thead>
         <tbody>

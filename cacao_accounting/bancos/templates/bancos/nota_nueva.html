@@ -32,16 +32,18 @@
         unit_code: '',
         project_code: '',
         remarks: '',
-        external_number: '',
+        reference_no: '',
       },
       payload: '',
 
       init: function () {
         document.addEventListener('bank-account-selected', (event) => {
             this.header.bank_account_id = event.detail.value;
-            if (event.detail.extra && event.detail.extra.currency) {
-                this.header.currency = event.detail.extra.currency;
-            }
+            this.header.currency = event.detail.currency || '';
+        });
+        this.$watch('header.company', () => {
+            this.header.bank_account_id = '';
+            this.header.currency = '';
         });
       },
 
@@ -65,7 +67,7 @@
           unit_code: this.header.unit_code,
           project_code: this.header.project_code,
           remarks: this.header.remarks,
-          external_number: this.header.external_number
+          reference_no: this.header.reference_no
         });
       }
     };
@@ -251,7 +253,7 @@
         </div>
         <div class="col-md-6">
             <label class="form-label">{{ _('Referencia externa') }}</label>
-            <input class="form-control" x-model="header.external_number" placeholder="{{ _('No. documento...') }}">
+            <input class="form-control" x-model="header.reference_no" placeholder="{{ _('No. documento...') }}">
         </div>
         <div class="col-md-12">
             <label class="form-label">{{ _('Descripción / Concepto') }}</label>

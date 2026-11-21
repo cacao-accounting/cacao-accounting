@@ -70,6 +70,7 @@
       books: [],
       selectedBooks: (config.initialJournal && config.initialJournal.books) || [],
       initialBooksSelectionApplied: false,
+      booksRequestSequence: 0,
 
       init: function () {
         if (!this.lines.length) this.addMultipleRows(2);
@@ -114,10 +115,18 @@
       get isBalanced() { return Math.abs(this.totalDebit - this.totalCredit) < 0.001 && this.totalDebit > 0; },
 
       async loadBooks(company) {
-        if (!company) { this.books = []; return; }
+        const requestId = ++this.booksRequestSequence;
+        if (!company) {
+          this.books = [];
+          this.selectedBooks = [];
+          return;
+        }
         try {
           const resp = await fetch(`{{ url_for('contabilidad.journal_books') }}?company=${company}`);
           const data = await resp.json();
+          // Solo la respuesta de la compañía vigente puede actualizar el
+          // formulario; una petición anterior no debe reemplazar los libros.
+          if (requestId !== this.booksRequestSequence || this.header.company !== company) return;
           this.books = data.results;
           if (!this.initialBooksSelectionApplied) {
             if (this.selectedBooks.length) {
@@ -188,6 +197,7 @@
     </div>
     <div class="d-flex gap-2">
       <a href="{{ cancel_url or url_for('contabilidad.comprobantes_recurrentes') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> {{ _('Cancelar') }}</a>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-floppy me-1"></i>{{ _('Guardar plantilla') }}</button>
     </div>
   </div>
 
@@ -397,7 +407,8 @@
   {# Modal de detalle avanzado #}
   <div class="modal fade" id="lineDetailModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-      <div class="modal-content" x-if="modalLine">
+      <template x-if="modalLine">
+      <div class="modal-content">
         <div class="modal-header"><h5 class="modal-title">{{ _('Detalle de línea') }}</h5><button class="btn-close" type="button" data-bs-dismiss="modal"></button></div>
         <div class="modal-body">
           <div class="ca-journal-modal-grid">
@@ -469,6 +480,7 @@
         </div>
         <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">{{ _('Cerrar') }}</button><button class="btn btn-primary" type="button" @click="saveModalLine()">{{ _('Actualizar') }}</button></div>
       </div>
+      </template>
     </div>
   </div>
 

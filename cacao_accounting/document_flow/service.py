@@ -9,6 +9,7 @@ Convencion de naming para referencias de pago:
 - ``document_id``: identificador del documento referenciado.
 """
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -16,14 +17,19 @@ from typing import Any, Sequence
 
 from flask_login import current_user
 from sqlalchemy import select
+from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from cacao_accounting.database import (
     AuditLog,
+    DocumentFlowLock,
     DocumentRelation,
     database,
 )
 from cacao_accounting.document_flow.registry import (
     ALLOWED_FLOWS,
+    DOCUMENT_TYPES,
     get_document_type,
     get_flow,
     is_allowed_flow,
@@ -34,6 +40,7 @@ from cacao_accounting.document_flow.repository import (
     decimal_or_zero,
     get_document,
     get_document_company,
+    get_document_fresh,
     get_document_item,
     get_document_items,
     get_item_parent_id,
@@ -42,7 +49,11 @@ from cacao_accounting.document_flow.repository import (
     save_relation,
 )
 from cacao_accounting.audit_trail_service import log_create
-from cacao_accounting.document_identifiers import assign_document_identifier
+from cacao_accounting.document_identifiers import (
+    IdentifierConfigurationError,
+    assign_document_identifier,
+    parse_posting_date,
+)
 from cacao_accounting.i18n import _
 
 _MSG_LINEA_ORIGEN = "Línea origen no encontrada."
@@ -284,6 +295,68 @@ def pending_qty(
     return pending if pending > 0 else Decimal("0")
 
 
+_SALES_PARTY_TYPES = frozenset(
+    {
+        "sales_request",
+        "sales_quotation",
+        "sales_order",
+        "delivery_note",
+        "sales_invoice",
+        "sales_return",
+        "sales_credit_note",
+        "sales_debit_note",
+    }
+)
+
+
+def _document_party_id(document_type: str, document_id: str) -> str | None:
+    """Devuelve el tercero del documento según su spec, si lo declara."""
+    spec = DOCUMENT_TYPES.get(document_type)
+    if spec is None or not spec.party_field:
+        return None
+    document = get_document(document_type, document_id)
+    if document is None:
+        return None
+    return str(getattr(document, spec.party_field, None) or "") or None
+
+
+def _assert_same_sales_party(source_type: str, source_id: str, target_type: str, target_id: str) -> None:
+    """Rechaza relaciones O2C entre documentos de clientes distintos (#1388).
+
+    Aplica a la creación manual por línea y al endpoint genérico porque ambos
+    pasan por `create_document_relation`. Si alguno de los documentos no expone
+    cliente, la validación se omite para no bloquear datos históricos.
+    """
+    if source_type not in _SALES_PARTY_TYPES or target_type not in _SALES_PARTY_TYPES:
+        return
+    source_party = _document_party_id(source_type, source_id)
+    target_party = _document_party_id(target_type, target_id)
+    if source_party and target_party and source_party != target_party:
+        raise DocumentFlowError(_("El documento destino pertenece a otro cliente."), 409)
+
+
+def assert_relation_same_party(source_type: str, source_id: str, target_type: str, target_id: str) -> None:
+    """Rechaza relaciones entre documentos de terceros distintos.
+
+    Las rutas que construyen ``DocumentRelation`` directamente (reverso de
+    factura y copia de borrador) deben usar esta guarda para no saltarse la
+    validación que aplica ``create_document_relation`` (#N8). Solo compara
+    documentos cuyo campo de tercero es el mismo (cliente con cliente o
+    proveedor con proveedor); una diferencia de tipo de tercero no se juzga
+    aquí para no bloquear flujos históricos.
+    """
+    source_spec = DOCUMENT_TYPES.get(normalize_doctype(source_type))
+    target_spec = DOCUMENT_TYPES.get(normalize_doctype(target_type))
+    if source_spec is None or target_spec is None:
+        return
+    if not source_spec.party_field or source_spec.party_field != target_spec.party_field:
+        return
+    source_party = _document_party_id(normalize_doctype(source_type), source_id)
+    target_party = _document_party_id(normalize_doctype(target_type), target_id)
+    if source_party and target_party and source_party != target_party:
+        raise DocumentFlowError(_("El documento destino pertenece a otro tercero."), 409)
+
+
 def _assert_same_company(source_type: str, source_id: str, target_type: str, target_id: str) -> None:
     """Valida aislamiento por compania."""
     source_company = get_document_company(source_type, source_id)
@@ -456,6 +529,55 @@ def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: 
     )
 
 
+def _document_flow_lock_key(source_key: str, source_id: str, source_item_id: str, target_key: str) -> str:
+    """Devuelve la clave estable de bloqueo para una línea y familia de destino."""
+    raw = "\x1f".join((source_key, source_id, source_item_id, target_key))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _document_flow_lock_statement(dialect: str, lock_table: Any, lock_key: str) -> Any:
+    """Construye la escritura que serializa el consumo de una línea origen."""
+    statement: Any
+    if dialect == "sqlite":
+        statement = sqlite_insert(lock_table).values(lock_key=lock_key)
+        statement = statement.on_conflict_do_update(index_elements=[lock_table.c.lock_key], set_={"lock_key": lock_key})
+    elif dialect == "postgresql":
+        statement = postgresql_insert(lock_table).values(lock_key=lock_key)
+        statement = statement.on_conflict_do_update(index_elements=[lock_table.c.lock_key], set_={"lock_key": lock_key})
+    elif dialect in {"mysql", "mariadb"}:
+        statement = mysql_insert(lock_table).values(lock_key=lock_key)
+        statement = statement.on_duplicate_key_update(lock_key=lock_key)
+    else:
+        raise DocumentFlowError(_("El bloqueo del flujo documental no está soportado por este motor de base de datos."), 500)
+    return statement
+
+
+def _lock_document_flow_source(source_key: str, source_id: str, source_item_id: str, target_key: str) -> None:
+    """Serializa el consumo de una línea origen hasta el fin de la transacción.
+
+    La escritura condicional sobre la fila de bloqueo se ejecuta antes de leer
+    ``pending_qty``; en SQLite toma el turno de escritura y en PostgreSQL/MySQL
+    bloquea la fila, de modo que otra transacción espera y recalcula el
+    pendiente ya consumido (P6).
+
+    Los llamadores que creen varias relaciones en una misma transacción deben
+    recorrer las líneas en un orden estable para no bloquear dos claves en
+    orden inverso entre transacciones (N24a).
+    """
+    lock_table = DocumentFlowLock.__table__
+    lock_key = _document_flow_lock_key(source_key, source_id, source_item_id, target_key)
+    dialect = database.session.get_bind().dialect.name
+    database.session.execute(_document_flow_lock_statement(dialect, lock_table, lock_key))
+
+
+def lock_document_flow_document(document_type: str, document_id: str) -> None:
+    """Serializa la creación de relaciones con la cancelación del documento."""
+    key = normalize_doctype(document_type)
+    lock_key = _document_flow_lock_key(key, str(document_id), "", "")
+    dialect = database.session.get_bind().dialect.name
+    database.session.execute(_document_flow_lock_statement(dialect, DocumentFlowLock.__table__, lock_key))
+
+
 def create_document_relation(
     *,
     source_type: str,
@@ -481,7 +603,12 @@ def create_document_relation(
     source_item, target_item = _validate_relation_documents(
         source_key, source_id, source_item_id, target_key, target_id, target_item_id
     )
+    for key, identifier in sorted(((source_key, source_id), (target_key, target_id))):
+        lock_document_flow_document(key, identifier)
+    get_document_fresh(source_key, source_id)
+    get_document_fresh(target_key, target_id)
     _assert_same_company(source_key, source_id, target_key, target_id)
+    _assert_same_sales_party(source_key, source_id, target_key, target_id)
     _validate_relation_status(source_key, source_id, target_key, target_id)
     qty_decimal = decimal_or_zero(qty)
     if qty_decimal <= 0:
@@ -491,6 +618,7 @@ def create_document_relation(
     base_qty = _relation_qty_in_base_uom(source_item, qty_decimal, presentation_uom)
 
     if source_item_id:
+        _lock_document_flow_source(source_key, source_id, source_item_id, target_key)
         available = pending_qty(
             source_key,
             source_id,
@@ -566,8 +694,8 @@ def _validate_relation_documents(source_key, source_id, source_item_id, target_k
 
 def _validate_relation_status(source_key: str, source_id: str, target_key: str, target_id: str) -> None:
     """Valida estados de documentos en una relación."""
-    source_doc = get_document(source_key, source_id)
-    target_doc = get_document(target_key, target_id)
+    source_doc = get_document_fresh(source_key, source_id)
+    target_doc = get_document_fresh(target_key, target_id)
     if source_doc is None:
         raise DocumentFlowError(_("Documento origen no encontrado."), 404)
     if target_doc is None:
@@ -715,6 +843,10 @@ def close_line_balance(
     ``qty`` se interpreta en ``uom`` (o en la UOM de la línea si se omite) y se
     convierte a la UOM base antes de acumularse en ``closed_qty``. Si ``qty``
     no se indica se cierra todo el pendiente, que ya está expresado en base.
+
+    Contrato transaccional: el servicio solo hace ``flush``. El llamador debe
+    confirmar la transacción antes de responder éxito; la ruta API lo hace
+    antes del ``jsonify`` para no publicar un cierre no persistido (#1466).
     """
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
@@ -723,6 +855,12 @@ def close_line_balance(
     source_item = get_document_item(source_key, source_item_id)
     if source_item is None:
         raise DocumentFlowError(_(_MSG_LINEA_ORIGEN), 404)
+    # #1019: el cierre se autoriza por la cabecera; la línea debe pertenecer a
+    # ese mismo documento y no a otro de la compañía o de otra compañía.
+    if get_item_parent_id(get_document_type(source_key), source_item) != str(source_id):
+        raise DocumentFlowError(_("La línea origen no pertenece al documento indicado."), 400)
+    if get_document(source_key, source_id) is None:
+        raise DocumentFlowError(_("Documento origen no encontrado."), 404)
     available = pending_qty(
         source_key,
         source_id,
@@ -767,10 +905,14 @@ def close_document_balances(
     target_type: str,
     reason: str,
 ) -> list[dict[str, Any]]:
-    """Cierra todo el saldo pendiente de un documento fuente hacia un target."""
+    """Cierra todo el saldo pendiente de un documento fuente hacia un target.
+
+    Al igual que :func:`close_line_balance`, el llamador conserva el control
+    del commit para que la evidencia quede confirmada antes de responder.
+    """
     closed: list[dict[str, Any]] = []
     for item in get_document_items(source_type, source_id):
-        available = pending_qty(source_type, source_id, item.id, target_type)
+        available = pending_qty(source_type, source_id, item.id, target_type, exclude_draft_targets=True)
         if available > 0:
             closed.append(
                 close_line_balance(
@@ -885,6 +1027,9 @@ def _create_target_header(
         "company": company,
         "posting_date": posting_date,
         "docstatus": 0,
+        # #2254: los alias de nota/devolución comparten modelo con la factura;
+        # el registro debe conservar el subtipo lógico solicitado.
+        "document_type": target_type,
         "purpose": payload.get("purpose") or "receipt",
         "supplier_id": payload.get("supplier_id"),
         "supplier_name": payload.get("supplier_name"),
@@ -968,14 +1113,17 @@ def create_target_document(payload: dict[str, Any], *, commit: bool = True) -> d
     """
     target_type = normalize_doctype(str(payload.get("target_document_type", "")))
     company = payload.get("company") or payload.get("company_id")
-    posting_date = payload.get("posting_date")
+    try:
+        posting_date = parse_posting_date(payload.get("posting_date"))
+    except IdentifierConfigurationError as exc:
+        raise DocumentFlowError(str(exc), 400) from exc
     lines = payload.get("lines") or []
     if not target_type or not company or not posting_date or not lines:
         raise DocumentFlowError(_("Debe indicar destino, compañía, fecha y líneas."), 400)
     if target_type == "payment_entry":
         from cacao_accounting.document_flow.payment import _create_payment_target
 
-        return _create_payment_target(payload)
+        return _create_payment_target(payload, commit=commit)
 
     target_spec = get_document_type(target_type)
     target = _create_target_header(target_spec, target_type, company, posting_date, payload)

@@ -376,13 +376,21 @@ def get_open_documents_at_cutoff(
     return items
 
 
-def prepare_invitation_token(invitation: Any) -> tuple[str, str]:
-    """Genera de forma segura nuevos tokens y códigos de verificación."""
+def generate_invitation_credentials() -> tuple[str, str, str, str]:
+    """Generate raw invitation credentials and their persisted hashes."""
     raw_token = secrets.token_urlsafe(32)
     raw_code = "".join(secrets.choice("0123456789") for _ in range(6))
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    code_hash = hashlib.sha256(raw_code.encode("utf-8")).hexdigest()
+    return raw_token, raw_code, token_hash, code_hash
 
-    invitation.token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
-    invitation.verification_code_hash = hashlib.sha256(raw_code.encode("utf-8")).hexdigest()
+
+def prepare_invitation_token(invitation: Any) -> tuple[str, str]:
+    """Generate credentials and store their hashes on an invitation."""
+    raw_token, raw_code, token_hash, code_hash = generate_invitation_credentials()
+
+    invitation.token_hash = token_hash
+    invitation.verification_code_hash = code_hash
 
     # Almacenar temporalmente los códigos para el envío (no se guardan en la bd en texto plano)
     invitation._raw_token = raw_token
@@ -400,7 +408,12 @@ def verify_snapshot_hash(confirmation: BalanceConfirmation) -> bool:
     """Valida que el snapshot almacenado conserve el hash inmutable original."""
     if not confirmation.snapshot_json or not confirmation.snapshot_hash:
         return False
-    snapshot_data = json.loads(confirmation.snapshot_json)
+    try:
+        snapshot_data = json.loads(confirmation.snapshot_json)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(snapshot_data, dict):
+        return False
     return hmac.compare_digest(compute_snapshot_hash(snapshot_data), confirmation.snapshot_hash)
 
 

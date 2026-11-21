@@ -49,7 +49,14 @@ def pagina_inicio():
         if authorized_codes
         else []
     )
-    periodos = database.session.query(AccountingPeriod).order_by(AccountingPeriod.start.desc()).all()
+    periodos = (
+        database.session.query(AccountingPeriod)
+        .filter(AccountingPeriod.entity.in_(authorized_codes))
+        .order_by(AccountingPeriod.start.desc())
+        .all()
+        if authorized_codes
+        else []
+    )
     dashboard_entities = [
         {"id": entity.id, "code": entity.code, "name": entity.name or entity.company_name} for entity in entidades
     ]
@@ -110,21 +117,12 @@ def informacion_para_desarrolladores():
     import platform
     from flask import abort
     from flask_login import current_user
-    from cacao_accounting.database import Roles, RolesUser, database
+    from cacao_accounting.auth.roles import tiene_rol
     from cacao_accounting.database.helpers import db_version
 
-    is_admin = False
-    if getattr(current_user, "classification", None) == "admin":
-        is_admin = True
-    else:
-        admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
-        if (
-            admin_role
-            and database.session.execute(
-                database.select(RolesUser).filter_by(user_id=current_user.id, role_id=admin_role.id)
-            ).scalar_one_or_none()
-        ):
-            is_admin = True
+    # #1641: la vigencia del vínculo de rol se resuelve con la misma regla que
+    # el resto del sistema; una asignación revocada no concede acceso.
+    is_admin = getattr(current_user, "classification", None) == "admin" or tiene_rol(current_user.id, "admin")
 
     if not is_admin:
         abort(403)

@@ -10,7 +10,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
-from sqlalchemy import case, extract, func
+from sqlalchemy import case, extract, func, or_
 
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import (
@@ -47,6 +47,7 @@ from cacao_accounting.ledger_queries import (
     exclude_cancelled_stock_entries,
     primary_ledger_id,
 )
+from cacao_accounting.reportes.services import COST_ACCOUNT_TYPES, normalize_account_classification
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
@@ -105,7 +106,7 @@ def user_can_access_company(user: Any, company: Entity | None) -> bool:
     for module_name in (MODULE_ACCOUNTING, MODULE_BANKS, MODULE_PURCHASES, MODULE_INVENTORY, MODULE_SALES):
         module_id = obtener_id_modulo_por_nombre(module_name)
         permissions = Permisos(modulo=module_id, usuario=user.id)
-        if permissions.administrador or (permissions.autorizado and permissions.tiene_acceso_compania(company_code)):
+        if permissions.administrador or (permissions.consultar and permissions.tiene_acceso_compania(company_code)):
             return True
     return False
 
@@ -143,7 +144,13 @@ def _dashboard_sections(
             company_code,
             _("Contabilidad"),
             _("Resumen financiero del periodo seleccionado."),
-            lambda: get_accounting_data(company_code, currency, start_date, end_date),
+            lambda: get_accounting_data(
+                company_code,
+                currency,
+                start_date,
+                end_date,
+                include_pending_vouchers=_has_module_access(MODULE_BANKS, company_code),
+            ),
         ),
         "banks": _section_or_hidden(
             MODULE_BANKS,
@@ -198,11 +205,11 @@ def _has_module_access(module_name: str, company: str | None = None) -> bool:
     """Indica si el usuario actual puede consultar un módulo."""
     module_id = obtener_id_modulo_por_nombre(module_name)
     permissions = Permisos(modulo=module_id, usuario=current_user.id)
-    if not permissions.autorizado:
+    if not permissions.consultar:
         return False
     if permissions.administrador:
         return True
-    return permissions.autorizado and permissions.tiene_acceso_compania(company)
+    return permissions.consultar and permissions.tiene_acceso_compania(company)
 
 
 def _hidden_section(title: str, subtitle: str) -> dict[str, Any]:
@@ -225,24 +232,27 @@ def get_accounting_data(
     currency: str,
     start_date: date | None,
     end_date: date | None,
+    *,
+    include_pending_vouchers: bool = True,
 ) -> dict[str, Any]:
     """Obtiene métricas contables desde el GL."""
     balances = _income_expense_balances(company, start_date, end_date)
     income = balances["income"]
     expenses = balances["expenses"]
     profit = income - expenses
-    pending_vouchers = _count_model(PaymentEntry, company, docstatus=0)
     journal_entries = (
         _gl_query(company, start_date, end_date).with_entities(GLEntry.voucher_type, GLEntry.voucher_id).distinct().count()
     )
+    kpis: dict[str, Any] = {
+        "income": _money_kpi(_("Ingresos"), income, currency),
+        "expenses": _money_kpi(_("Gastos"), expenses, currency),
+        "profit": _money_kpi(_("Utilidad"), profit, currency),
+    }
+    if include_pending_vouchers:
+        kpis["pending_vouchers"] = _count_kpi(_("Pendientes"), _count_model(PaymentEntry, company, docstatus=0))
 
     return {
-        "kpis": {
-            "income": _money_kpi(_("Ingresos"), income, currency),
-            "expenses": _money_kpi(_("Gastos"), expenses, currency),
-            "profit": _money_kpi(_("Utilidad"), profit, currency),
-            "pending_vouchers": _count_kpi(_("Pendientes"), pending_vouchers),
-        },
+        "kpis": kpis,
         "charts": {"monthly_result": _accounting_monthly_result(company, start_date, end_date)},
         "tables": {
             "summary": [
@@ -355,7 +365,9 @@ def get_inventory_data(
     bins = database.session.query(StockBin).filter_by(company=company)
     inventory_value = Decimal(str(bins.with_entities(func.sum(StockBin.stock_value)).scalar() or 0))
     active_warehouses = database.session.query(Warehouse).filter_by(company=company, is_active=True).count()
-    stocked_items = bins.filter(StockBin.actual_qty != 0).count()
+    stocked_items = (
+        bins.filter(StockBin.actual_qty != 0).with_entities(database.func.count(StockBin.item_code.distinct())).scalar() or 0
+    )
     movements = _stock_movements_query(company, start_date, end_date).count()
 
     return {
@@ -447,10 +459,19 @@ def _income_expense_balances(
 ) -> dict[str, Decimal]:
     """Calcula ingresos y gastos por clasificación de cuenta."""
     query = (
-        database.session.query(Accounts.classification, func.sum(GLEntry.debit - GLEntry.credit).label("balance"))
+        database.session.query(
+            Accounts.classification,
+            Accounts.account_type,
+            func.sum(GLEntry.debit - GLEntry.credit).label("balance"),
+        )
         .join(GLEntry, Accounts.id == GLEntry.account_id)
         .filter(GLEntry.company == company, Accounts.entity == company)
-        .filter(func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
+        .filter(
+            or_(
+                func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS),
+                func.lower(Accounts.account_type).in_(COST_ACCOUNT_TYPES),
+            )
+        )
     )
     query = exclude_cancelled_gl_entries(query)
     ledger_id = primary_ledger_id(company)
@@ -458,15 +479,15 @@ def _income_expense_balances(
         query = query.filter(GLEntry.ledger_id == ledger_id)
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
-    results = query.group_by(Accounts.classification).all()
+    results = query.group_by(Accounts.classification, Accounts.account_type).all()
     income = Decimal("0")
     expenses = Decimal("0")
     for result in results:
         balance = Decimal(result.balance or 0)
-        classification = (result.classification or "").lower()
-        if classification in INCOME_CLASSIFICATIONS:
+        classification = normalize_account_classification(result.classification, result.account_type)
+        if classification in {"income", "ingreso"}:
             income += -balance
-        elif classification in EXPENSE_CLASSIFICATIONS:
+        elif classification in {"cost", "costo", "expense", "gasto"}:
             expenses += balance
     return {"income": income, "expenses": expenses}
 
@@ -481,11 +502,17 @@ def _accounting_monthly_result(
         database.session.query(
             extract("month", GLEntry.posting_date).label("month"),
             Accounts.classification,
+            Accounts.account_type,
             func.sum(GLEntry.debit - GLEntry.credit).label("balance"),
         )
         .join(Accounts, Accounts.id == GLEntry.account_id)
         .filter(GLEntry.company == company, Accounts.entity == company)
-        .filter(func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
+        .filter(
+            or_(
+                func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS),
+                func.lower(Accounts.account_type).in_(COST_ACCOUNT_TYPES),
+            )
+        )
     )
     query = exclude_cancelled_gl_entries(query)
     ledger_id = primary_ledger_id(company)
@@ -493,7 +520,7 @@ def _accounting_monthly_result(
         query = query.filter(GLEntry.ledger_id == ledger_id)
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
-    rows = query.group_by("month", Accounts.classification).order_by("month").all()
+    rows = query.group_by("month", Accounts.classification, Accounts.account_type).order_by("month").all()
     months: dict[int, dict[str, str | int]] = {}
     for row in rows:
         if row.month is None:
@@ -504,10 +531,10 @@ def _accounting_monthly_result(
             continue
         payload = months.setdefault(month, {"month": month, "income": "0", "expenses": "0"})
         balance = Decimal(str(row.balance or 0))
-        classification = (row.classification or "").lower()
-        if classification in INCOME_CLASSIFICATIONS:
+        classification = normalize_account_classification(row.classification, row.account_type)
+        if classification in {"income", "ingreso"}:
             payload["income"] = _numeric(Decimal(str(payload["income"])) - balance)
-        elif classification in EXPENSE_CLASSIFICATIONS:
+        elif classification in {"cost", "costo", "expense", "gasto"}:
             payload["expenses"] = _numeric(Decimal(str(payload["expenses"])) + balance)
     return list(months.values())
 
@@ -693,14 +720,26 @@ def _top_customers(
         _document_query(SalesInvoice, company, start_date, end_date)
         .filter_by(docstatus=1)
         .with_entities(
-            SalesInvoice.customer_name,
+            func.max(SalesInvoice.customer_id).label("customer_id"),
+            func.max(SalesInvoice.customer_name).label("customer_name"),
             func.sum(_signed_document_expression(SalesInvoice)).label("total"),
         )
-        .group_by(SalesInvoice.customer_name)
-        .order_by(func.sum(_signed_document_expression(SalesInvoice)).desc())
+        .group_by(func.coalesce(SalesInvoice.customer_id, SalesInvoice.customer_name))
+        .order_by(
+            func.sum(_signed_document_expression(SalesInvoice)).desc(),
+            func.coalesce(SalesInvoice.customer_id, SalesInvoice.customer_name).asc(),
+        )
         .limit(5)
     )
-    return [{"name": row.customer_name or _("Cliente"), "total": _numeric(row.total), "currency": currency} for row in query]
+    return [
+        {
+            "customer_id": row.customer_id,
+            "name": row.customer_name or _("Cliente"),
+            "total": _numeric(row.total),
+            "currency": currency,
+        }
+        for row in query
+    ]
 
 
 def _recent_sales_invoices(
@@ -771,11 +810,6 @@ def _sum_document_field(
             amount = Decimal(str(getattr(row, base_field, None) or getattr(row, fallback_field, None) or 0))
         total += -amount if row.is_return else amount
     return total
-
-
-def _sum_query(query: Any, expression: Any) -> str:
-    """Suma una expresión sobre un query existente."""
-    return _numeric(query.with_entities(func.sum(expression)).scalar())
 
 
 def _signed_document_expression(model: Any, base_field: str | None = None, fallback_field: str | None = None) -> Any:

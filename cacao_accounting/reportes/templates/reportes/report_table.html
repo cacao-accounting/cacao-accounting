@@ -3,7 +3,7 @@
 {% from "reportes/report_macros.html" import period_range_field %}
 {% block contenido %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ report_title }}</li>
@@ -17,7 +17,7 @@
   <div class="p-3">
     <form method="get" class="row g-2 mb-3">
       <div class="col-md-2">
-        <input name="company" value="{{ company or request.args.get('company', '') }}" class="form-control" placeholder="{{ _('Compañía') }}">
+        <input name="company" id="report-company" value="{{ company or request.args.get('company', '') }}" class="form-control" placeholder="{{ _('Compañía') }}">
       </div>
       <div class="col-md-2">
         <input name="party_type" value="{{ request.args.get('party_type', '') }}" class="form-control" placeholder="{{ _('Tipo tercero') }}">
@@ -48,7 +48,7 @@
         <tr>
           {% if rows %}
             {% for key in rows[0].values.keys() %}
-            <th scope="col">{{ key }}</th>
+            <th scope="col">{{ column_labels.get(key, key) }}</th>
             {% endfor %}
           {% else %}
             <th scope="col">{{ _("Sin datos") }}</th>
@@ -70,7 +70,7 @@
 
     <div class="mt-3">
       {% for key, value in totals.items() %}
-      <span class="badge bg-secondary me-2">{{ key }}: {{ value }}</span>
+      <span class="badge bg-secondary me-2">{{ column_labels.get(key, key) }}: {{ value }}</span>
       {% endfor %}
     </div>
   </div>

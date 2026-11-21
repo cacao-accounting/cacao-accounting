@@ -58,9 +58,15 @@ def company_has_inventory_activity(company_code: str) -> bool:
 
 
 def update_company_valuation_method(company_code: str, method: str) -> Entity:
-    """Actualiza el metodo de valuacion de una compania si el cambio esta permitido."""
+    """Actualiza el metodo de valuacion de una compania si el cambio esta permitido.
+
+    El bloqueo de la fila de ``Entity`` serializa con la lectura del método
+    del posting (``_valuation_method_for_company``), así el chequeo de
+    actividad se mantiene bajo el mismo punto de serialización que la
+    consulta que lee el método (#1881).
+    """
     normalized_method = normalize_valuation_method(method)
-    entity = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
+    entity = database.session.execute(database.select(Entity).filter_by(code=company_code).with_for_update()).scalars().first()
     if entity is None:
         raise ValueError(_("La compañía seleccionada no existe."))
 

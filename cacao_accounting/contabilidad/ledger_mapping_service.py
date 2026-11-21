@@ -32,6 +32,13 @@ def create_ledger_mapping_rule(
     Rules intentionally map only from the primary book to one secondary book;
     this makes reversal/posting semantics identical in both directions.
     """
+    # Serializa la comprobación de duplicados y la inserción por identidad de
+    # regla. En Cloud, dos administradores concurrentes no pueden confirmar
+    # destinos distintos para la misma cuenta origen (#2138).
+    from cacao_accounting.default_scope import lock_default_scope
+
+    lock_default_scope("ledger_mapping", source_book, target_book, source_account_id)
+
     source, target, source_account, target_account = _validate_rule_references(
         source_book, target_book, source_account_id, target_account_id
     )

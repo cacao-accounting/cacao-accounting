@@ -28,7 +28,8 @@ class BaseImportAdapter:
                 errors.append(f"Fórmula detectada en columna '{key}': {value}. Las fórmulas no están permitidas.")
 
         for col in self.required_columns:
-            if col not in row_data or row_data[col] in (None, ""):
+            value = row_data.get(col)
+            if value in (None, "") or (isinstance(value, str) and not value.strip()):
                 errors.append(f"Columna requerida faltante: {col}")
         return errors
 

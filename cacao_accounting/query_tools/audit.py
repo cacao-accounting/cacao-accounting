@@ -24,7 +24,14 @@ ALLOWED_QUERY_ACTIONS = frozenset(
 )
 
 
+SENSITIVE_PARAMETER_KEYS = frozenset({"api_key", "password", "secret", "token", "access_token"})
+
+
 def _serialize_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return serialize_parameters(value)
+    if isinstance(value, (list, tuple)):
+        return [_serialize_value(item) for item in value]
     if isinstance(value, Decimal):
         return str(value)
     if isinstance(value, datetime):
@@ -36,10 +43,8 @@ def serialize_parameters(params: dict[str, Any]) -> dict[str, Any]:
     """Sanitiza parámetros ocultando valores sensibles y serializando tipos especiales."""
     sanitized = {}
     for key, value in params.items():
-        if key.lower() in {"api_key", "password", "secret", "token", "access_token"}:
+        if key.lower() in SENSITIVE_PARAMETER_KEYS:
             sanitized[key] = "***"
-        elif isinstance(value, dict):
-            sanitized[key] = serialize_parameters(value)  # type: ignore[assignment]
         else:
             sanitized[key] = _serialize_value(value)
     return sanitized

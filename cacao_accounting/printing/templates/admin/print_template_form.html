@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 
-{% block content %}
+{% block contenido %}
 <div class="container-fluid">
     <div class="pt-3 pb-2 mb-3 border-bottom">
         <h1 class="h2">{% if template %}{{ _('Editar') }}{% else %}{{ _('Nuevo') }}{% endif %} {{ _('formato de impresión') }}</h1>
     </div>
 
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row">
             <div class="col-md-8">
                 <div class="card mb-4 shadow-sm">

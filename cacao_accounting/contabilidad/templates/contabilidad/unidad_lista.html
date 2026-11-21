@@ -4,7 +4,7 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html"></div>
 {% from "contabilidad/tree_macros.html" import tree_toolbar, tree_toolbar_close, render_tree with context %}
 
-<nav aria-label="breadcrumb">
+<nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
@@ -15,13 +15,15 @@
 <div class="ca-card">
   <div class="ca-card-header ca-tree-page-header">
     <h5 class="ca-card-title"><i class="bi bi-building me-2" style="color:#BB6A40"></i>{{ _('Unidades de Negocio') }}</h5>
+    {% if entidades_creadas() %}
     <a href="{{ url_for('contabilidad.nueva_unidad') }}" class="btn btn-primary btn-sm">
       <i class="bi bi-plus-lg me-1"></i>{{ _('Nueva Unidad') }}
     </a>
+    {% endif %}
   </div>
 
-  {% if entidades_creadas is defined %}
-  {% set current_entity_code = entidad[0].code if entidad else '' %}
+  {% if entidades_creadas() %}
+  {% set current_entity_code = entidad_actual_code|default('', true) %}
 
   {{ tree_toolbar(entidades, current_entity_code, new_url=url_for('contabilidad.nueva_unidad'), new_label=_('Nueva Unidad')) }}
 

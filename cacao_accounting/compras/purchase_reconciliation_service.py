@@ -227,52 +227,108 @@ def _line_rate(line: Any) -> Decimal:
     return _line_amount(line) / qty
 
 
-def _matched_qty_for_receipt_item(receipt_item_id: str) -> Decimal:
-    matched = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseReconciliationItem.matched_qty), 0))
-        .filter_by(
-            purchase_receipt_item_id=receipt_item_id,
+def _apply_as_of_cutoff(query: Any, effective_date: Any, as_of_date: date | None) -> Any:
+    """Restringe la consulta a la evidencia efectiva hasta la fecha de corte."""
+    if as_of_date is None:
+        return query
+    return query.where(effective_date <= as_of_date)
+
+
+def _reconciliation_effective_date() -> Any:
+    """Fecha contable de una conciliacion de compras.
+
+    ``matched_date`` se persiste al conciliar. Las filas historicas que no lo
+    registraron usan como respaldo la fecha de la factura que origino el match.
+    """
+    return func.coalesce(PurchaseReconciliation.matched_date, PurchaseInvoice.posting_date)
+
+
+def _reconciled_sum_for_receipt_item(receipt_item_id: str, column: Any, as_of_date: date | None) -> Decimal:
+    """Suma evidencia de conciliacion aplicada hasta la fecha de corte."""
+    query = (
+        select(func.coalesce(func.sum(column), 0))
+        .join(
+            PurchaseReconciliation,
+            PurchaseReconciliation.id == PurchaseReconciliationItem.purchase_reconciliation_id,
         )
-        .where(PurchaseReconciliationItem.status != "cancelled")
-    ).scalar_one()
-    allocated = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.qty_in_base_uom), 0)).where(
+        .join(
+            PurchaseInvoiceItem,
+            PurchaseInvoiceItem.id == PurchaseReconciliationItem.purchase_invoice_item_id,
+        )
+        .join(
+            PurchaseInvoice,
+            PurchaseInvoice.id == PurchaseInvoiceItem.purchase_invoice_id,
+        )
+        .where(
+            PurchaseReconciliationItem.purchase_receipt_item_id == receipt_item_id,
+            PurchaseReconciliationItem.status != "cancelled",
+        )
+    )
+    return _decimal_value(
+        database.session.execute(_apply_as_of_cutoff(query, _reconciliation_effective_date(), as_of_date)).scalar_one()
+    )
+
+
+def _allocated_sum_for_receipt_item(receipt_item_id: str, column: Any, as_of_date: date | None) -> Decimal:
+    """Suma asignaciones factura/recepcion efectivas hasta la fecha de corte."""
+    query = (
+        select(func.coalesce(func.sum(column), 0))
+        .join(
+            PurchaseInvoiceItem,
+            PurchaseInvoiceItem.id == PurchaseInvoiceReceiptAllocation.invoice_item_id,
+        )
+        .join(
+            PurchaseInvoice,
+            PurchaseInvoice.id == PurchaseInvoiceItem.purchase_invoice_id,
+        )
+        .where(
             PurchaseInvoiceReceiptAllocation.receipt_item_id == receipt_item_id,
             PurchaseInvoiceReceiptAllocation.status == "active",
         )
-    ).scalar_one()
-    returned = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.qty_in_base_uom), 0)).where(
+    )
+    return _decimal_value(
+        database.session.execute(_apply_as_of_cutoff(query, PurchaseInvoice.posting_date, as_of_date)).scalar_one()
+    )
+
+
+def _returned_sum_for_receipt_item(receipt_item_id: str, column: Any, as_of_date: date | None) -> Decimal:
+    """Suma devoluciones fisicas efectivas hasta la fecha de corte."""
+    query = (
+        select(func.coalesce(func.sum(column), 0))
+        .join(
+            PurchaseReceiptItem,
+            PurchaseReceiptItem.id == PurchaseReceiptReturnAllocation.return_receipt_item_id,
+        )
+        .join(
+            PurchaseReceipt,
+            PurchaseReceipt.id == PurchaseReceiptItem.purchase_receipt_id,
+        )
+        .where(
             PurchaseReceiptReturnAllocation.original_receipt_item_id == receipt_item_id,
             PurchaseReceiptReturnAllocation.status == "active",
         )
-    ).scalar_one()
-    matched_value = _decimal_value(allocated) if _decimal_value(allocated) > 0 else _decimal_value(matched)
-    return matched_value + _decimal_value(returned)
+    )
+    return _decimal_value(
+        database.session.execute(_apply_as_of_cutoff(query, PurchaseReceipt.posting_date, as_of_date)).scalar_one()
+    )
 
 
-def _matched_amount_for_receipt_item(receipt_item_id: str) -> Decimal:
-    matched = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseReconciliationItem.matched_amount), 0))
-        .filter_by(
-            purchase_receipt_item_id=receipt_item_id,
-        )
-        .where(PurchaseReconciliationItem.status != "cancelled")
-    ).scalar_one()
-    allocated = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.receipt_amount), 0)).where(
-            PurchaseInvoiceReceiptAllocation.receipt_item_id == receipt_item_id,
-            PurchaseInvoiceReceiptAllocation.status == "active",
-        )
-    ).scalar_one()
-    returned = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.amount), 0)).where(
-            PurchaseReceiptReturnAllocation.original_receipt_item_id == receipt_item_id,
-            PurchaseReceiptReturnAllocation.status == "active",
-        )
-    ).scalar_one()
-    matched_value = _decimal_value(allocated) if _decimal_value(allocated) > 0 else _decimal_value(matched)
-    return matched_value + _decimal_value(returned)
+def _matched_qty_for_receipt_item(receipt_item_id: str, as_of_date: date | None = None) -> Decimal:
+    """Cantidad aplicada a una linea de recepcion, opcionalmente a una fecha."""
+    matched = _reconciled_sum_for_receipt_item(receipt_item_id, PurchaseReconciliationItem.matched_qty, as_of_date)
+    allocated = _allocated_sum_for_receipt_item(receipt_item_id, PurchaseInvoiceReceiptAllocation.qty_in_base_uom, as_of_date)
+    returned = _returned_sum_for_receipt_item(receipt_item_id, PurchaseReceiptReturnAllocation.qty_in_base_uom, as_of_date)
+    matched_value = allocated if allocated > 0 else matched
+    return matched_value + returned
+
+
+def _matched_amount_for_receipt_item(receipt_item_id: str, as_of_date: date | None = None) -> Decimal:
+    """Devuelve el importe aplicado a una linea de recepcion, opcionalmente a una fecha."""
+    matched = _reconciled_sum_for_receipt_item(receipt_item_id, PurchaseReconciliationItem.matched_amount, as_of_date)
+    allocated = _allocated_sum_for_receipt_item(receipt_item_id, PurchaseInvoiceReceiptAllocation.receipt_amount, as_of_date)
+    returned = _returned_sum_for_receipt_item(receipt_item_id, PurchaseReceiptReturnAllocation.amount, as_of_date)
+    matched_value = allocated if allocated > 0 else matched
+    return matched_value + returned
 
 
 def _item_qty_in_base_uom(item: Any) -> Decimal:
@@ -389,7 +445,7 @@ def _allocate_invoice_lines(
 ) -> list[PurchaseInvoiceReceiptAllocation]:
     """Allocate every pending invoice line against the remaining receipt quantities."""
     allocations: list[PurchaseInvoiceReceiptAllocation] = []
-    for invoice_item in _invoice_items(invoice.id):
+    for invoice_item in _lock_invoice_items(invoice.id):
         remaining_invoice_qty = _item_qty_in_base_uom(invoice_item) - _allocated_invoice_qty(invoice_item.id)
         if remaining_invoice_qty <= 0:
             continue
@@ -427,6 +483,9 @@ def allocate_purchase_invoice_receipt_lines(
     allocations: list[PurchaseInvoiceReceiptAllocation] = []
     for invoice in invoices:
         _assert_same_transaction_currency(invoice, receipt)
+        from cacao_accounting.document_flow.service import lock_document_flow_document
+
+        lock_document_flow_document("purchase_invoice", invoice.id)
         allocations.extend(_allocate_invoice_lines(receipt, invoice, receipt_items))
     database.session.flush()
     return allocations
@@ -737,6 +796,19 @@ def _lock_receipt_items(receipt_id: str) -> list[PurchaseReceiptItem]:
     )
 
 
+def _lock_invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
+    """Carga y bloquea líneas de factura durante la asignación (#1689)."""
+    return list(
+        database.session.execute(
+            select(PurchaseInvoiceItem)
+            .where(PurchaseInvoiceItem.purchase_invoice_id == invoice_id, PurchaseInvoiceItem.is_superseded.is_(False))
+            .with_for_update()
+        )
+        .scalars()
+        .all()
+    )
+
+
 def _invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
     return list(
         database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id, is_superseded=False))
@@ -795,13 +867,6 @@ def _compatible_group(groups: dict, line: Any) -> Any | None:
     return None
 
 
-def _group_lines_by_item_and_uom(lines: list[Any]) -> dict[tuple[str, str | None, str | None], list[Any]]:
-    grouped: dict[tuple[str, str | None, str | None], list[Any]] = defaultdict(list)
-    for line in lines:
-        grouped[_line_key(line)].append(line)
-    return grouped
-
-
 def _aggregate_lines_by_item_and_uom(
     lines: list[Any],
 ) -> dict[tuple[str, str | None, str | None], _AggregatedLines]:
@@ -820,34 +885,6 @@ def _apply_config_snapshot(reconciliation: PurchaseReconciliation, config: Match
     reconciliation.price_tolerance_value = config.price_tolerance_value
     reconciliation.qty_tolerance_type = config.qty_tolerance_type
     reconciliation.qty_tolerance_value = config.qty_tolerance_value
-
-
-def _find_receipt_item_for_invoice_line(
-    receipt_items: list[PurchaseReceiptItem],
-    invoice_item: PurchaseInvoiceItem,
-) -> PurchaseReceiptItem:
-    candidates = [
-        ri
-        for ri in receipt_items
-        if _line_key(ri)[:2] == _line_key(invoice_item)[:2]
-        and (invoice_item.warehouse is None or ri.warehouse == invoice_item.warehouse)
-    ]
-    if not candidates:
-        raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
-    if len(candidates) > 1 and invoice_item.warehouse is None:
-        raise PurchaseReconciliationError(_("La línea de factura requiere almacén para conciliar sin ambigüedad."))
-    return candidates[0]
-
-
-def _find_order_item_for_invoice_line(order_items: list[Any], invoice_item: PurchaseInvoiceItem) -> Any:
-    candidates = [order_item for order_item in order_items if _line_key(order_item)[:2] == _line_key(invoice_item)[:2]]
-    if not candidates:
-        raise PurchaseReconciliationError(
-            _("No existe línea de OC compatible para el ítem %(item_code)s.") % {"item_code": invoice_item.item_code}
-        )
-    if len(candidates) > 1:
-        raise PurchaseReconciliationError(_("La línea de factura requiere una OC sin líneas duplicadas ambiguas."))
-    return candidates[0]
 
 
 def _available_line_slices(
@@ -1099,10 +1136,11 @@ def _find_reconciliation_by_idempotency_key(idempotency_key: str) -> PurchaseRec
     Permite que peticiones de retry, network retry o job replay retornen el
     resultado anterior sin crear un posting duplicado.
     """
+    # La clave es única incluso para conciliaciones canceladas. Incluir la
+    # fila cancelada permite responder un conflicto de negocio en lugar de
+    # dejar que la restricción única produzca un IntegrityError sin traducir.
     return database.session.execute(
-        select(PurchaseReconciliation)
-        .filter_by(idempotency_key=idempotency_key)
-        .where(PurchaseReconciliation.status != "cancelled")
+        select(PurchaseReconciliation).filter_by(idempotency_key=idempotency_key)
     ).scalar_one_or_none()
 
 
@@ -1162,19 +1200,21 @@ def reconcile_purchase_invoice(
     reenviar la misma peticion con la misma clave y obtener el mismo resultado
     sin crear un posting duplicado.
     """
-    # Replay por idempotency key: si la peticion es un retry, devolvemos el
-    # resultado previo sin tocar la base de datos transaccional.
-    if idempotency_key is not None:
-        existing = _find_reconciliation_by_idempotency_key(idempotency_key)
-        if existing is not None:
-            return _result_from_existing_reconciliation(existing)
-
-    # Lock the economic document before checking for an existing reconciliation.
-    # Without this ordering two workers can both observe no row and create a
-    # duplicate reconciliation for the same invoice.
+    # Lock the economic document before resolving the replay. En PostgreSQL el
+    # segundo retry espera el lock y luego observa la conciliación ya creada,
+    # devolviendo el mismo resultado en vez de un conflicto (#1076).
     invoice = database.session.get(PurchaseInvoice, purchase_invoice_id, with_for_update=True)
     if not invoice:
         raise PurchaseReconciliationError(_("La factura de compra no existe."))
+
+    if idempotency_key is not None:
+        existing = _find_reconciliation_by_idempotency_key(idempotency_key)
+        if existing is not None:
+            if existing.status == "cancelled":
+                raise PurchaseReconciliationError(_("La clave de idempotencia pertenece a una conciliación cancelada."))
+            if str(existing.purchase_invoice_id or "") != str(purchase_invoice_id):
+                raise PurchaseReconciliationError(_("La clave de idempotencia ya pertenece a otra factura de compra."))
+            return _result_from_existing_reconciliation(existing)
 
     duplicate = database.session.execute(
         select(PurchaseReconciliation.id)
@@ -1208,7 +1248,7 @@ def _calculate_three_way_totals(
 ) -> _MatchingTotals:
     """Calculate quantity, amount and tolerance totals for a 3-way match."""
     totals = _MatchingTotals(
-        total_qty=sum((aggregate.qty for aggregate in invoice_groups.values()), Decimal("0")),
+        total_qty=Decimal("0"),
         total_amount=Decimal("0"),
         total_price_difference=Decimal("0"),
         total_amount_difference=Decimal("0"),
@@ -1239,7 +1279,7 @@ def _calculate_three_way_totals(
             config.price_tolerance_value,
         )
         totals = _MatchingTotals(
-            total_qty=totals.total_qty,
+            total_qty=totals.total_qty + min(invoice_group.qty, reference_qty),
             total_amount=totals.total_amount + matched_amount,
             total_price_difference=totals.total_price_difference + line_price_difference,
             total_amount_difference=totals.total_amount_difference + amount_difference,
@@ -1358,7 +1398,7 @@ def _require_compatible_group(order_groups: dict[Any, Any], invoice_line: Any, k
 def _two_way_totals(invoice_groups: dict[Any, Any], order_groups: dict[Any, Any], config: MatchingConfig) -> _TwoWayTotals:
     """Accumulate the 2-way matched, variance and tolerance figures."""
     totals = _TwoWayTotals(
-        total_qty=sum((aggregate.qty for aggregate in invoice_groups.values()), Decimal("0")),
+        total_qty=Decimal("0"),
         total_amount=Decimal("0"),
         total_price_difference=Decimal("0"),
         total_amount_difference=Decimal("0"),
@@ -1386,6 +1426,7 @@ def _two_way_totals(invoice_groups: dict[Any, Any], order_groups: dict[Any, Any]
         ):
             totals.price_tolerance_failed = True
 
+        totals.total_qty += min(invoice_group.qty, reference_qty)
         totals.total_amount += matched_amount
         totals.total_price_difference += line_price_difference
         totals.total_amount_difference += invoice_group.amount - reference_amount
@@ -1635,6 +1676,10 @@ def _finalize_reconciliation(
     reconciliation.status = _derive_reconciliation_status(matching_result, total_invoiced_qty, total_reference_qty)
     event_type = EventType.MATCH_FAILED if matching_result == MatchingResult.MATCH_FAILED else EventType.MATCH_COMPLETED
     reconciliation.matched_amount = total_amount
+    # Sin conciliacion aceptada no se persisten asignaciones a lineas fuente:
+    # publicar la cantidad teorica haria que el encabezado no reconciliara con
+    # el detalle almacenado (ni con el replay de idempotencia).
+    matched_qty = total_qty if matching_result != MatchingResult.MATCH_FAILED else Decimal("0")
 
     emit_economic_event(
         event_type=event_type,
@@ -1645,7 +1690,7 @@ def _finalize_reconciliation(
             "purchase_invoice_id": invoice.id,
             "purchase_receipt_id": receipt_id,
             "purchase_order_id": reconciliation.purchase_order_id,
-            "matched_qty": str(total_qty),
+            "matched_qty": str(matched_qty),
             "matched_amount": str(total_amount),
             "price_difference": str(total_price_difference),
             "amount_difference": str(total_amount_difference),
@@ -1660,7 +1705,7 @@ def _finalize_reconciliation(
 
     return PurchaseReconciliationResult(
         reconciliation_id=reconciliation.id,
-        matched_qty=total_qty,
+        matched_qty=matched_qty,
         matched_amount=total_amount,
         price_difference=total_price_difference,
         status=str(reconciliation.status),
@@ -1733,8 +1778,10 @@ def get_purchase_reconciliation_pending(company: str, as_of_date: date | None = 
     for receipt, item in database.session.execute(query).all():
         item_qty = _line_qty(item)
         item_amount = _line_amount(item)
-        pending_qty = max(Decimal("0"), item_qty - _matched_qty_for_receipt_item(item.id))
-        pending_amount = max(Decimal("0"), item_amount - _matched_amount_for_receipt_item(item.id))
+        matched_qty = _matched_qty_for_receipt_item(item.id, as_of_date)
+        matched_amount = _matched_amount_for_receipt_item(item.id, as_of_date)
+        pending_qty = max(Decimal("0"), item_qty - matched_qty)
+        pending_amount = max(Decimal("0"), item_amount - matched_amount)
         if pending_qty <= 0 and pending_amount <= 0:
             continue
         rows.append(

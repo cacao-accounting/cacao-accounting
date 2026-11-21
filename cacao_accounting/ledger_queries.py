@@ -14,9 +14,14 @@ from sqlalchemy import exists, select
 from sqlalchemy.orm import aliased
 
 from cacao_accounting.database import Book, GLEntry, StockLedgerEntry, database
+from cacao_accounting.i18n import _
 
 
-def primary_ledger_id(company: str, requested: str | None = None) -> str | None:
+class PrimaryLedgerUnavailableError(ValueError):
+    """Raised when a balance query has no active accounting book to read."""
+
+
+def primary_ledger_id(company: str, requested: str | None = None) -> str:
     """Resolve the deterministic read ledger for non-accounting modules.
 
     Operational/reporting consumers must never aggregate every active book.
@@ -29,7 +34,11 @@ def primary_ledger_id(company: str, requested: str | None = None) -> str | None:
     else:
         query = query.order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
     book = database.session.execute(query).scalars().first()
-    return book.id if book else None
+    if book is None:
+        raise PrimaryLedgerUnavailableError(
+            _("No existe un libro contable activo para la compañía %(company)s.") % {"company": company}
+        )
+    return book.id
 
 
 def exclude_cancelled_gl_entries(query: Any) -> Any:

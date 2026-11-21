@@ -376,7 +376,9 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, (date, datetime)):
         return value.strftime("%Y-%m-%d")
     if isinstance(value, Decimal):
-        return format(value, "f")
+        if value == 0:
+            return "0"
+        return format(value.normalize(), "f")
     return value
 
 

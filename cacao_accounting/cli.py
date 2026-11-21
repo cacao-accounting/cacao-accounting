@@ -25,6 +25,7 @@ from sqlalchemy.exc import SQLAlchemyError
 # Recursos locales
 # --------------------------------------------------------------------------------------
 from cacao_accounting.logs import log
+from cacao_accounting.config import env_bool
 from cacao_accounting.version import APPNAME, VERSION
 
 from cacao_accounting.i18n import _
@@ -121,10 +122,15 @@ def _obtener_aplicacion():
 
 def _entorno_actual() -> str:
     """Devuelve el nombre del entorno de ejecución configurado."""
-    if os.environ.get("CACAO_TEST"):
+    if env_bool("CACAO_TEST"):
         return "test"
-    if os.environ.get("FLASK_ENV") == "production":
+    configured_environments = {
+        value.strip().lower() for value in (os.environ.get("FLASK_ENV"), os.environ.get("ENV")) if value
+    }
+    if configured_environments.intersection({"prod", "production"}):
         return "production"
+    if configured_environments.intersection({"test", "testing"}):
+        return "test"
     return "development"
 
 
@@ -167,13 +173,16 @@ def linea_comandos(ctx: click.Context, env: str | None, verbose: bool, quiet: bo
         log.remove()
         log.add(sys.stderr, level="WARNING")
 
-    if env == "test":
+    selected_environment = env or _entorno_actual()
+    if selected_environment == "test":
         os.environ["CACAO_TEST"] = "True"
-    elif env == "prod":
+    elif selected_environment in {"prod", "production"}:
         os.environ["FLASK_ENV"] = "production"
+    elif env == "dev" and not os.environ.get("FLASK_ENV") and not os.environ.get("ENV"):
+        os.environ["FLASK_ENV"] = "development"
 
     ctx.ensure_object(dict)
-    ctx.obj["ENV"] = env or _entorno_actual()
+    ctx.obj["ENV"] = selected_environment
 
     if ctx.invoked_subcommand is None:
         _mostrar_banner()
@@ -215,21 +224,22 @@ def db_init(force: bool, seed: bool) -> None:
         resolver_credenciales_iniciales,
     )
 
-    try:
-        usuario, contrasena = resolver_credenciales_iniciales()
-    except ValueError as exc:
-        _mensaje_error(str(exc))
-        raise click.exceptions.Exit(1)
-
     app = _obtener_aplicacion()
     with app.app_context():
         base_lista = usuarios_creados()
+        if base_lista and not force:
+            _mensaje_info(_("La base de datos ya existe, nada que hacer."))
+            raise click.exceptions.Exit(0)
+
+        try:
+            usuario, contrasena = resolver_credenciales_iniciales()
+        except ValueError as exc:
+            _mensaje_error(str(exc))
+            raise click.exceptions.Exit(1)
+
         if force and base_lista:
             _mensaje_advertencia(_("La base de datos existente será reemplazada."))
             database.drop_all()
-        elif base_lista and not force:
-            _mensaje_info(_("La base de datos ya existe, nada que hacer."))
-            raise click.exceptions.Exit(0)
 
         if usuario == "cacao" and contrasena == "cacao":
             _mensaje_advertencia(_("Se están usando usuario y contraseña predeterminados para el setup inicial."))
@@ -340,17 +350,33 @@ def db_clean(force: bool) -> None:
         _mensaje_exito(_("Base de datos eliminada."))
 
 
+def _demo_seed_presente() -> bool:
+    """Indica si la entidad demo principal ya está persistida."""
+    from cacao_accounting.database import Entity, database
+
+    return database.session.execute(database.select(Entity.id).filter_by(code="CACAO")).first() is not None
+
+
 @db.command(name="seed", help=_("Inserta datos de ejemplo en la base de datos."))
-def db_seed() -> None:
+@click.option("--force", is_flag=True, help=_("Omite la confirmación y permite ejecutarlo fuera de desarrollo."))
+def db_seed(force: bool) -> None:
     """Carga datos de ejemplo en una base de datos existente."""
+    from cacao_accounting.config import TESTING_MODE
     from cacao_accounting.datos.dev import dev_data
+
+    if not TESTING_MODE and not force:
+        _mensaje_error(_("Este comando solo está disponible en entornos de desarrollo o con --force."))
+        raise click.exceptions.Exit(1)
 
     app = _obtener_aplicacion()
     with app.app_context():
+        if _demo_seed_presente():
+            _mensaje_advertencia(_("Los datos de ejemplo ya están aplicados; no se realizaron cambios."))
+            return
         try:
             dev_data()
             _mensaje_exito(_("Datos de ejemplo insertados."))
-        except SQLAlchemyError as exc:
+        except (SQLAlchemyError, ValueError) as exc:
             log.exception("Error al insertar datos de ejemplo.")
             _mensaje_error(_("No fue posible insertar los datos de ejemplo: %(error)s") % {"error": exc})
             raise click.exceptions.Exit(1)
@@ -463,6 +489,22 @@ def version() -> None:
 version.group = "System"  # type: ignore[attr-defined]
 
 
+def _redis_status(cache_type: str, redis_url: str | None) -> str:
+    """Comprueba conectividad real de Redis cuando está configurado."""
+    if str(cache_type).lower() != "rediscache":
+        return _("No configurado")
+    if not redis_url:
+        return _("Configurado sin URL")
+    try:
+        import redis
+
+        client = redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1)
+        client.ping()
+    except Exception:
+        return _("No disponible")
+    return _("Conectado")
+
+
 @linea_comandos.command(name="status", help=_("Muestra el estado general del sistema."))
 def status() -> None:
     """Reporta el estado de la aplicación y sus dependencias."""
@@ -475,9 +517,10 @@ def status() -> None:
         if verifica_coneccion_db(app):
             base_datos = "Conectada"
 
-    redis = "No configurado"
-    if str(configuracion.get("CACHE_TYPE", "")).lower() == "rediscache":
-        redis = "Conectado"
+    redis = _redis_status(
+        str(configuracion.get("CACHE_TYPE", "")),
+        str(configuracion.get("CACHE_REDIS_URL", "") or ""),
+    )
 
     filas = [
         ("Application", APPNAME),

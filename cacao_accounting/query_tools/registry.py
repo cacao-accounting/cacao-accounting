@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
+from dataclasses import replace
 from typing import Any
 
 from cacao_accounting.i18n import _
@@ -40,7 +42,7 @@ class Registry:
                 _("La herramienta '%(tool)s' debe declarar read_only=True. Las operaciones de escritura no están permitidas.")
                 % {"tool": tool.name}
             )
-        self._tools[tool.name] = tool
+        self._tools[tool.name] = self._isolated_tool(tool)
 
     def get(self, name: str) -> QueryTool:
         """Obtiene una herramienta por su nombre; lanza QueryToolError si no existe."""
@@ -50,11 +52,20 @@ class Registry:
                 code=ErrorCode.TOOL_NOT_FOUND,
                 message=_("Herramienta '%(name)s' no encontrada.") % {"name": name},
             )
-        return tool
+        return self._isolated_tool(tool)
 
     def list_tools(self) -> dict[str, QueryTool]:
-        """Devuelve una copia del diccionario con todas las herramientas registradas."""
-        return dict(self._tools)
+        """Devuelve copias de las herramientas registradas con esquemas aislados."""
+        return {name: self._isolated_tool(tool) for name, tool in self._tools.items()}
+
+    @staticmethod
+    def _isolated_tool(tool: QueryTool) -> QueryTool:
+        """Copia los esquemas mutables para que el consumidor no altere el contrato."""
+        return replace(
+            tool,
+            parameters_schema=deepcopy(tool.parameters_schema),
+            response_schema=deepcopy(tool.response_schema),
+        )
 
     def get_tools_for_permissions(self, permissions: set[str]) -> list[dict[str, Any]]:
         """Filtra y devuelve las herramientas que el conjunto de permisos puede ejecutar."""

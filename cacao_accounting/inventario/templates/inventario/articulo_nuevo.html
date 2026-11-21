@@ -234,6 +234,22 @@
               </div>
             </div>
             <div class="col-md-4">
+              <label class="form-label" for="weight">{{ _('Peso por unidad') }}</label>
+              {{ form.weight(class="form-control form-control-sm", id="weight", type="number", step="0.000000001", min="0") }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="weight_uom">{{ _('UOM de peso') }}</label>
+              {{ form.weight_uom(class="form-select form-select-sm", id="weight_uom") }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="volume">{{ _('Volumen por unidad') }}</label>
+              {{ form.volume(class="form-control form-control-sm", id="volume", type="number", step="0.000000001", min="0") }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="volume_uom">{{ _('UOM de volumen') }}</label>
+              {{ form.volume_uom(class="form-select form-select-sm", id="volume_uom") }}
+            </div>
+            <div class="col-md-4">
               <label class="form-label" for="standard_rate">{{ _('Precio base') }}</label>
               {{ form.standard_rate(class="form-control form-control-sm", id="standard_rate", type="number", step="0.0001") }}
             </div>

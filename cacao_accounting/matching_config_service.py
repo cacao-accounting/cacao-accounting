@@ -12,11 +12,12 @@ su operación de un solo usuario y la auditoría sigue el modo existente.
 
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from cacao_accounting.database import PurchaseMatchingConfig, SalesMatchingConfig, database
 from cacao_accounting.i18n import _
+from cacao_accounting.numbers import coerce_decimal
 
 CONFIG_MODELS = {
     "purchase": PurchaseMatchingConfig,
@@ -53,10 +54,7 @@ def _plain(value: Any) -> Any:
 def _normalize(field: str, value: Any) -> Any:
     """Acepta valores del formulario o del JSON de revisión con igual resultado."""
     if field in _DECIMAL_FIELDS and value is not None and value != "":
-        try:
-            return Decimal(str(value))
-        except (ValueError, InvalidOperation) as exc:
-            raise ValueError(_("El valor de tolerancia debe ser numérico.")) from exc
+        return coerce_decimal(value, field, max_fractional_digits=4)
     return value
 
 
@@ -88,6 +86,9 @@ def update_matching_config(
         raise ValueError(_("La configuración de matching no existe para la compañía solicitada."))
     fields = CONFIG_FIELDS[model]
     typed_after = {field: _normalize(field, values.get(field)) for field in fields}
+    if model == "sales" and typed_after.get("price_tolerance_value") is not None:
+        if typed_after["price_tolerance_value"] < 0:
+            raise ValueError(_("La tolerancia de precio no puede ser negativa."))
     typed_before = {field: _normalize(field, getattr(config, field)) for field in fields}
     if expected_before is not None and typed_before != {
         field: _normalize(field, expected_before.get(field)) for field in fields

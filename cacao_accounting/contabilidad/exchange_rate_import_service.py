@@ -231,7 +231,11 @@ class ExchangeRateImportService:
 
     def _parse_csv(self, file_content: bytes) -> List[Dict[str, str]]:
         """Parsea un archivo CSV."""
-        text = io.StringIO(file_content.decode("utf-8-sig"))
+        try:
+            decoded_content = file_content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ExchangeRateImportError(_("El archivo CSV debe estar codificado en UTF-8.")) from exc
+        text = io.StringIO(decoded_content)
         reader = csv.DictReader(text)
         return [row for row in reader if self._row_has_content(row)]
 

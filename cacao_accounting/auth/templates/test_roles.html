@@ -55,7 +55,7 @@
 {% for modulo in modulos %}
 <div class="ca-card mt-3">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-puzzle"></i> {{ _("Módulo: %(modulo)s", modulo=modulo.modulo | capitalize) }}</h5>
+    <h5 class="ca-card-title"><i class="bi bi-puzzle"></i> {{ _("Módulo: %(modulo)s", modulo=modulo.module | capitalize) }}</h5>
     <span style="font-size:.75rem;color:#64748b;font-family:monospace;">{{ modulo.id }}</span>
   </div>
   <table class="ca-table">

@@ -16,6 +16,7 @@ from typing import Any, Sequence, cast
 from sqlalchemy import update
 
 from cacao_accounting.exceptions import flash_error
+from cacao_accounting.numbers import coerce_decimal
 from cacao_accounting.cache import invalidate_cache
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -71,8 +72,9 @@ from cacao_accounting.contabilidad.posting import PostingError
 
 from cacao_accounting.database.helpers import get_active_naming_series
 
+from cacao_accounting.company_context import explicit_company_grants
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-
+from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.auth.permisos import Permisos
 
 from cacao_accounting.decorators import (  # noqa: F401
@@ -85,6 +87,8 @@ from cacao_accounting.decorators import (  # noqa: F401
 
 from cacao_accounting.document_flow import (
     DocumentFlowError,
+    lock_document_flow_document,
+    assert_relation_same_party,
     create_document_relation,
     get_target_line_source,
     refresh_source_caches_for_target,
@@ -120,6 +124,8 @@ from cacao_accounting.party_management import (  # noqa: F401
     party_group_label,
     toggle_party_customer_role,
     toggle_party_supplier_role as toggle_party_supplier_role,  # noqa: F401
+    validated_party_name,
+    validated_party_tax_id,
     PartyRoleToggleError,
     update_party_address,
     update_party_contact,
@@ -282,8 +288,14 @@ def _authorized_companies(access_modules: tuple[str, ...]) -> set[str]:
     for module in access_modules:
         module_id = obtener_id_modulo_por_nombre(module)
         permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        if permissions.consultar:
+        if not permissions.consultar:
+            continue
+        if is_desktop_mode():
             companies.update(permissions.obtener_companias_autorizadas())
+        else:
+            # En Cloud la clasificación admin no reemplaza las asignaciones
+            # explícitas de compañía (#1828).
+            companies.update(explicit_company_grants())
     return companies
 
 
@@ -295,25 +307,22 @@ def _apply_company_scope(base_query: Any, model: Any, access_modules: tuple[str,
     if company:
         exige_acceso_compania_cualquiera(access_modules, company, "consultar")
         return base_query.filter(model.company == company)
-    if getattr(current_user, "classification", None) == "admin":
+    if is_desktop_mode() and getattr(current_user, "classification", None) == "admin":
         return base_query
     companies = _authorized_companies(access_modules)
     return base_query.where(model.company.in_(companies)) if companies else base_query.where(database.false())
 
 
 def _period_company_for_query(access_modules: tuple[str, ...]) -> str | None:
-    """Resolve the sole authorized company used by period filters."""
+    """Resolve the sole authorized company across every access module."""
+    from cacao_accounting.list_filters import period_company_from_request
+
     period_company = request.args.get("company")
-    if period_company or getattr(current_user, "classification", None) == "admin":
+    if period_company:
         return period_company
-    for module in access_modules:
-        module_id = obtener_id_modulo_por_nombre(module)
-        permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        if permissions.consultar:
-            authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
-            if len(authorized_companies) == 1:
-                return authorized_companies[0]
-    return period_company
+    if getattr(current_user, "classification", None) == "admin":
+        return None
+    return period_company_from_request(access_modules, current_user=current_user)
 
 
 def _apply_period_scope(base_query: Any, model: Any, access_modules: tuple[str, ...]) -> Any:
@@ -351,7 +360,7 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
         max_per_page=10,
         count=True,
     )
-    attach_period_picker(paginated, model, access_modules[0], current_user=current_user)
+    attach_period_picker(paginated, model, access_modules, current_user=current_user)
     return paginated
 
 
@@ -479,13 +488,6 @@ def _purchase_quotation_selected_company(choices: list[tuple[str, str]]) -> str 
     return request.values.get("company") or (choices[0][0] if choices else None)
 
 
-def _supplier_quotation_supplier_choices() -> list[tuple[str, str]]:
-    """Construye el listado de proveedores para el formulario."""
-    return [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
-
-
 def _supplier_quotation_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
     """Carga catálogos reutilizados por la cotización de proveedor."""
     items_disponibles = [
@@ -591,15 +593,15 @@ def _handle_supplier_create(
     titulo: str,
 ):
     """Maneja la creacion de un nuevo proveedor desde el formulario POST."""
-    proveedor = Party(
-        code=str(ULID()),
-        is_supplier=True,
-        name=form.get("name") or "",
-        comercial_name=form.get("comercial_name"),
-        tax_id=form.get("tax_id"),
-        is_active=form.get("is_active", "on") is not None,
-    )
     try:
+        proveedor = Party(
+            code=str(ULID()),
+            is_supplier=True,
+            name=validated_party_name(form),
+            comercial_name=form.get("comercial_name"),
+            tax_id=validated_party_tax_id(form),
+            is_active=form.get("is_active", "on") is not None,
+        )
         database.session.add(proveedor)
         apply_party_group(proveedor, form.get("party_group_id") or None, role="supplier")
         apply_party_profile(proveedor, form)
@@ -620,6 +622,8 @@ def _handle_supplier_create(
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="purchases",
+        company_scope_action="crear",
         group_label=party_group_label(form.get("party_group_id") or None),
     )
 
@@ -634,9 +638,9 @@ def _handle_supplier_update(
 ):
     """Maneja la actualizacion de un proveedor existente desde el formulario POST."""
     try:
-        proveedor.name = form.get("name") or ""
+        proveedor.name = validated_party_name(form)
         proveedor.comercial_name = form.get("comercial_name") or None
-        proveedor.tax_id = form.get("tax_id") or None
+        proveedor.tax_id = validated_party_tax_id(form, exclude_party_id=proveedor.id)
         proveedor.is_active = form.get("is_active") is not None
         apply_party_group(proveedor, form.get("party_group_id") or None, role="supplier")
         apply_party_profile(proveedor, form)
@@ -658,6 +662,8 @@ def _handle_supplier_update(
         company_choices=company_choices,
         selected_company=selected_company,
         company_settings_rows=company_settings_rows,
+        company_scope_module="purchases",
+        company_scope_action="editar",
         group_label=party_group_label(proveedor.party_group_id),
     )
 
@@ -671,14 +677,6 @@ def _comparison_item_key(item: PurchaseOrderItem) -> tuple[str | None, ...]:
         item.warehouse,
         item.description,
     )
-
-
-def _comparison_item_at_occurrence(
-    items: list[PurchaseOrderItem], base_item: PurchaseOrderItem, occurrence: int
-) -> PurchaseOrderItem | None:
-    """Return the matching line by commercial identity and occurrence."""
-    matching_items = [item for item in items if _comparison_item_key(item) == _comparison_item_key(base_item)]
-    return matching_items[occurrence] if occurrence < len(matching_items) else None
 
 
 def _award_lines_by_supplier(award_id: str) -> dict[str, list[PurchaseQuotationAwardItem]]:
@@ -778,9 +776,10 @@ def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[Pu
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
-    """Convierte un valor de formulario a Decimal."""
+    """Convierte un valor de formulario a Decimal finito."""
     value = request.form.get(field_name)
-    return Decimal(str(value if value not in (None, "") else default))
+    raw_value = value if value not in (None, "") else default
+    return coerce_decimal(raw_value, field_name)
 
 
 def _line_amount(index: int) -> Decimal:
@@ -909,6 +908,18 @@ def _msg_cantidad_item(item_code: str) -> str:
     return _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}
 
 
+def _validated_supplier(supplier_id: str | None) -> Party | None:
+    """Carga el proveedor y exige el rol cuando se informa un tercero."""
+    if not supplier_id:
+        return None
+    supplier = database.session.get(Party, supplier_id)
+    if supplier is None:
+        raise ValueError(_("El tercero no existe."))
+    if not supplier.is_supplier:
+        raise ValueError(_("El tercero seleccionado no está habilitado como proveedor."))
+    return supplier
+
+
 def _msg_item_inexistente(item_code: str) -> str:
     """Mensaje para item inexistente."""
     return _("El item %(item_code)s no existe.") % {"item_code": item_code}
@@ -921,6 +932,12 @@ def _msg_item_no_comprable(item_code: str) -> str:
 
 def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una orden de compra desde el formulario."""
+    order = database.session.get(PurchaseOrder, order_id)
+    exchange_rate = _purchase_exchange_rate(
+        order.company if order else None,
+        order.posting_date if order else None,
+        order.transaction_currency if order else None,
+    )
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -949,6 +966,7 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 amount=amount,
             )
             linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
+            linea.base_amount, linea.base_rate = _compute_base_amounts(amount, exchange_rate)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "purchase_order", order_id, linea.id, qty, uom, rate, amount)
@@ -1104,6 +1122,11 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una recepción de compra desde el formulario."""
     receipt = database.session.get(PurchaseReceipt, receipt_id)
     company = receipt.company if receipt is not None else None
+    exchange_rate = _purchase_exchange_rate(
+        company,
+        receipt.posting_date if receipt else None,
+        receipt.transaction_currency if receipt else None,
+    )
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -1134,6 +1157,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )
             linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
+            linea.base_amount, _base_rate = _compute_base_amounts(amount, exchange_rate)
             database.session.add(linea)
             database.session.flush()
             if not getattr(receipt, "is_return", False):
@@ -1172,6 +1196,12 @@ def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | Non
 
 def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una factura de compra desde el formulario."""
+    invoice = database.session.get(PurchaseInvoice, invoice_id)
+    exchange_rate = _purchase_exchange_rate(
+        invoice.company if invoice else None,
+        invoice.posting_date if invoice else None,
+        invoice.transaction_currency if invoice else None,
+    )
     target_type = PURCHASE_INVOICE
     i = 0
     total_qty = Decimal("0")
@@ -1203,6 +1233,7 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )
             linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
+            linea.base_amount, linea.base_rate = _compute_base_amounts(amount, exchange_rate)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, target_type, invoice_id, linea.id, qty, uom, rate, amount)
@@ -1275,13 +1306,6 @@ def _purchase_order_selected_company(default_company: str | None) -> str | None:
     return request.values.get("company") or default_company
 
 
-def _purchase_order_supplier_choices() -> list[tuple[str, str]]:
-    """Construye el listado de proveedores para órdenes de compra."""
-    return [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
-
-
 def _purchase_order_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
     """Carga catálogos reutilizados por órdenes de compra."""
     items_disponibles = [
@@ -1347,6 +1371,31 @@ def _purchase_order_source(form: dict) -> Any:
     return None
 
 
+def _purchase_order_edit_source(registro: PurchaseOrder) -> Any:
+    """Resolve the active source of an existing order for award validation."""
+    source = _purchase_order_source(request.form)
+    if source is not None:
+        return source
+    relation = database.session.execute(
+        database.select(DocumentRelation)
+        .where(
+            DocumentRelation.target_type == "purchase_order",
+            DocumentRelation.target_id == registro.id,
+            DocumentRelation.status == "active",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if relation is None:
+        return None
+    source_models = {
+        "purchase_request": PurchaseRequest,
+        "purchase_quotation": PurchaseQuotation,
+        "supplier_quotation": SupplierQuotation,
+    }
+    model = source_models.get(relation.source_type)
+    return database.session.get(model, relation.source_id) if model else None
+
+
 def _validate_purchase_order_sourcing(
     sourcing_config: Any, source: Any, award_id: str | None, exception_reason: str | None
 ) -> bool:
@@ -1363,8 +1412,15 @@ def _validate_purchase_order_sourcing(
     return True
 
 
-def _validate_purchase_order_award(award_id: str | None, company: str | None) -> Any:
-    """Load a finalized award and verify it belongs to the selected company."""
+def _validate_purchase_order_award(
+    award_id: str | None,
+    company: str | None,
+    *,
+    source: Any = None,
+    supplier_id: str | None = None,
+    form: Any = None,
+) -> Any:
+    """Load a finalized award and verify company, source, supplier and lines."""
     award = database.session.get(PurchaseQuotationAward, award_id) if award_id else None
     if award_id and (not award or award.status != "finalized"):
         flash_error(PurchaseSourcingError("La adjudicación seleccionada no es válida."))
@@ -1372,7 +1428,110 @@ def _validate_purchase_order_award(award_id: str | None, company: str | None) ->
     if award and award.company != company:
         flash_error(PurchaseSourcingError("La adjudicación no pertenece a la compañía seleccionada."))
         return None, False
+    if award is None:
+        return None, True
+    if not supplier_id:
+        flash_error(PurchaseSourcingError("La adjudicación requiere un proveedor seleccionado."))
+        return None, False
+    if not _award_matches_source(award, source):
+        flash_error(PurchaseSourcingError("La adjudicación no corresponde al origen seleccionado."))
+        return None, False
+    if not _award_matches_supplier_and_lines(award, supplier_id, form):
+        flash_error(PurchaseSourcingError("La adjudicación no corresponde al proveedor o líneas de la orden."))
+        return None, False
     return award, True
+
+
+def _award_matches_source(award: PurchaseQuotationAward, source: Any) -> bool:
+    """Return whether the award belongs to the purchase-flow source."""
+    if isinstance(source, PurchaseQuotation):
+        return award.purchase_quotation_id == source.id
+    if isinstance(source, SupplierQuotation):
+        return bool(source.purchase_quotation_id) and award.purchase_quotation_id == source.purchase_quotation_id
+    return False
+
+
+def _award_decimal(value: Any) -> Decimal:
+    """Convierte un valor de formulario o modelo a Decimal seguro."""
+    try:
+        return Decimal(str(value or "0"))
+    except (ArithmeticError, ValueError):
+        return Decimal("0")
+
+
+def _award_matches_supplier_and_lines(award: PurchaseQuotationAward, supplier_id: str | None, form: Any) -> bool:
+    """Return whether award items cover the selected supplier and submitted lines."""
+    award_items = _award_items(award)
+    if not award_items or not _award_matches_supplier(award_items, supplier_id):
+        return False
+    if form is None:
+        return True
+    requested = _order_requested_quantities(form)
+    if not requested:
+        return False
+    return all(
+        _award_covers_request(item_code, source_item_id, qty, award_items)
+        for (item_code, source_item_id), qty in requested.items()
+    )
+
+
+def _award_items(award: PurchaseQuotationAward) -> list[PurchaseQuotationAwardItem]:
+    """Return the persisted lines of an award."""
+    return list(database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalars())
+
+
+def _award_matches_supplier(award_items: list[PurchaseQuotationAwardItem], supplier_id: str | None) -> bool:
+    """Return whether every awarded line belongs to the selected supplier."""
+    for supplier_quotation_id in {item.supplier_quotation_id for item in award_items}:
+        quotation = database.session.get(SupplierQuotation, supplier_quotation_id)
+        if quotation is None or (supplier_id and quotation.supplier_id != supplier_id):
+            return False
+    return True
+
+
+def _order_form_lines(form: Any) -> list[tuple[str, Decimal, str]]:
+    """Return the item, quantity and optional source row submitted for an order."""
+    lines: list[tuple[str, Decimal, str]] = []
+    index = 0
+    while form.get(f"item_code_{index}"):
+        item_code = str(form.get(f"item_code_{index}") or "").strip()
+        if item_code:
+            lines.append(
+                (
+                    item_code,
+                    _award_decimal(form.get(f"qty_{index}")),
+                    str(form.get(f"source_item_id_{index}") or ""),
+                )
+            )
+        index += 1
+    return lines
+
+
+def _order_requested_quantities(form: Any) -> dict[tuple[str, str], Decimal]:
+    """Accumulate requested quantities per item and source row."""
+    requested: dict[tuple[str, str], Decimal] = {}
+    for item_code, qty, source_item_id in _order_form_lines(form):
+        key = (item_code, source_item_id)
+        requested[key] = requested.get(key, Decimal("0")) + qty
+    return requested
+
+
+def _award_covers_request(
+    item_code: str,
+    source_item_id: str,
+    qty: Decimal,
+    award_items: list[PurchaseQuotationAwardItem],
+) -> bool:
+    """Return whether the awarded lines cover the accumulated requested quantity."""
+    candidates = [item for item in award_items if item.item_code == item_code]
+    if source_item_id:
+        candidates = [
+            item for item in candidates if source_item_id in {item.supplier_quotation_item_id, item.purchase_quotation_item_id}
+        ]
+    if not candidates:
+        return False
+    awarded = sum((_award_decimal(item.qty) for item in candidates), Decimal("0"))
+    return qty <= awarded
 
 
 def _purchase_order_comparison_open(source: Any) -> bool:
@@ -1397,21 +1556,32 @@ def _purchase_order_context(form: dict):
     source = _purchase_order_source(form)
     if not _validate_purchase_order_sourcing(sourcing_config, source, award_id, exception_reason):
         return None
-    _, valid_award = _validate_purchase_order_award(award_id, form.get("company") or None)
+    award, valid_award = _validate_purchase_order_award(
+        award_id,
+        form.get("company") or None,
+        source=source,
+        supplier_id=form.get("supplier_id") or None,
+        form=form,
+    )
     if not valid_award:
         return None
     supplier_id = form.get("supplier_id") or None
-    supplier = database.session.get(Party, supplier_id) if supplier_id else None
     posting_date = _parse_date(form.get("posting_date"))
     comparison_open = _purchase_order_comparison_open(source)
     company, transaction_currency = _validate_purchase_flow_header(source, form)
     transaction_currency = transaction_currency or form.get("transaction_currency") or form.get("currency") or None
+    supplier = _validated_purchase_supplier(supplier_id, company)
     return award_id, supplier_id, supplier, posting_date, company, transaction_currency, comparison_open
 
 
 def _create_purchase_order_from_request(form: dict):
     """Crea una orden de compra desde el formulario enviado."""
-    context = _purchase_order_context(form)
+    try:
+        context = _purchase_order_context(form)
+    except ValueError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return None
     if context is None:
         return None
     award_id, supplier_id, supplier, posting_date, company, transaction_currency, comparison_open = context
@@ -1496,12 +1666,20 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
         ).scalar_one_or_none()
     )
     before_state = _capture_purchase_state(registro)
+    if registro.purchase_award_id:
+        source = _purchase_order_edit_source(registro)
+        award, valid_award = _validate_purchase_order_award(
+            registro.purchase_award_id,
+            registro.company,
+            source=source,
+            supplier_id=request.form.get("supplier_id") or None,
+            form=request.form,
+        )
+        if not valid_award:
+            return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
     revert_relations_for_target("purchase_order", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("purchase_order", registro.id)
     supplier_id = request.form.get("supplier_id") or None
-    supplier = database.session.get(Party, supplier_id) if supplier_id else None
-    registro.supplier_id = supplier_id
-    registro.supplier_name = supplier.name if supplier else None
     requested_company = request.form.get("company") or registro.company
     requested_currency = (
         request.form.get("transaction_currency") or request.form.get("currency") or registro.transaction_currency
@@ -1510,6 +1688,14 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
         database.session.rollback()
         flash(_("La compañía y moneda de una orden derivada no pueden cambiarse."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
+    try:
+        supplier = _validated_purchase_supplier(supplier_id, requested_company)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
+    registro.supplier_id = supplier_id
+    registro.supplier_name = supplier.name if supplier else None
     registro.company = requested_company
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
@@ -1545,13 +1731,6 @@ def _validate_purchase_flow_header(source: object | None, form_data: Any | None 
 def _purchase_quotation_origin_id() -> str | None:
     """Obtiene el documento origen para una solicitud de cotización."""
     return request.args.get("from_request") or request.form.get("from_request")
-
-
-def _purchase_quotation_supplier_choices() -> list[tuple[str, str]]:
-    """Construye las opciones de proveedores para solicitudes de cotización."""
-    return [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
 
 
 def _purchase_quotation_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
@@ -1592,7 +1771,7 @@ def _create_purchase_quotation_from_request():
     """Crea una solicitud de cotización a partir del formulario enviado."""
     try:
         supplier_id = request.form.get("supplier_id") or None
-        supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        supplier = _validated_supplier(supplier_id)
         posting_date = _parse_date(request.form.get("posting_date"))
         from_request_id = _purchase_quotation_origin_id()
         source = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
@@ -1637,46 +1816,63 @@ def _create_purchase_quotation_from_request():
 
 
 def _handle_purchase_quotation_edit_post(registro):
-    from cacao_accounting.database import Party
-
     before_state = _capture_purchase_state(registro)
-    revert_relations_for_target("purchase_quotation", registro.id, reason="draft_edited")
-    refresh_source_caches_for_target("purchase_quotation", registro.id)
-    supplier_id = request.form.get("supplier_id") or None
-    supplier = database.session.get(Party, supplier_id) if supplier_id else None
-    registro.supplier_id = supplier_id
-    registro.supplier_name = supplier.name if supplier else None
-    requested_company = request.form.get("company") or registro.company
-    source_relation = database.session.execute(
-        database.select(DocumentRelation)
-        .where(
-            DocumentRelation.target_type == "purchase_quotation",
-            DocumentRelation.target_id == registro.id,
-            DocumentRelation.source_type == "purchase_request",
-            DocumentRelation.status == "active",
-        )
-        .limit(1)
-    ).scalar_one_or_none()
-    source = database.session.get(PurchaseRequest, source_relation.source_id) if source_relation else None
-    if requested_company != registro.company or (source and source.company != requested_company):
+    try:
+        revert_relations_for_target("purchase_quotation", registro.id, reason="draft_edited")
+        refresh_source_caches_for_target("purchase_quotation", registro.id)
+        supplier_id = request.form.get("supplier_id") or None
+        supplier = _validated_supplier(supplier_id)
+        registro.supplier_id = supplier_id
+        registro.supplier_name = supplier.name if supplier else None
+        requested_company = request.form.get("company") or registro.company
+        source_relation = database.session.execute(
+            database.select(DocumentRelation)
+            .where(
+                DocumentRelation.target_type == "purchase_quotation",
+                DocumentRelation.target_id == registro.id,
+                DocumentRelation.source_type == "purchase_request",
+                DocumentRelation.status == "active",
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        source = database.session.get(PurchaseRequest, source_relation.source_id) if source_relation else None
+        if requested_company != registro.company or (source and source.company != requested_company):
+            raise DocumentFlowError(_("La compañía debe permanecer alineada con el documento origen."), 400)
+        registro.company = requested_company
+        registro.posting_date = _parse_date(request.form.get("posting_date"))
+        registro.remarks = request.form.get("remarks")
+        _copy_logistics(registro, form=request.form)
+        for item in database.session.execute(
+            database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
+        ).scalars():
+            database.session.delete(item)
+        _qty, total = _save_purchase_quotation_items(registro.id)
+        _set_purchase_document_totals(registro, total)
+        after_state = _capture_purchase_state(registro)
+        log_update(registro, before=before_state, after=after_state)
+        database.session.commit()
+    except ValueError as exc:
         database.session.rollback()
-        flash(_("La compañía debe permanecer alineada con el documento origen."), "danger")
+        flash_error(exc)
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
-    registro.company = requested_company
-    registro.posting_date = _parse_date(request.form.get("posting_date"))
-    registro.remarks = request.form.get("remarks")
-    _copy_logistics(registro, form=request.form)
-    for item in database.session.execute(
-        database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
-    ).scalars():
-        database.session.delete(item)
-    _qty, total = _save_purchase_quotation_items(registro.id)
-    _set_purchase_document_totals(registro, total)
-    after_state = _capture_purchase_state(registro)
-    log_update(registro, before=before_state, after=after_state)
-    database.session.commit()
     flash(_("Solicitud de cotizacion actualizada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
+
+
+def _resolve_receipt_creation_source(
+    from_receipt: str | None,
+    from_order: str | None,
+) -> tuple[PurchaseReceipt | PurchaseOrder | None, str | None]:
+    """Resuelve la fuente única de una recepción o devolución manual."""
+    receipt_source = database.session.get(PurchaseReceipt, from_receipt) if from_receipt else None
+    order_source = database.session.get(PurchaseOrder, from_order) if from_order else None
+    if from_receipt and from_order:
+        if receipt_source is None or order_source is None:
+            raise ValueError(_("El documento origen indicado no existe."))
+        if receipt_source.purchase_order_id != order_source.id:
+            raise ValueError(_("La recepción de origen no pertenece a la orden indicada."))
+        from_order = None
+    return receipt_source or order_source, from_order
 
 
 def _create_purchase_receipt_from_form():
@@ -1686,12 +1882,13 @@ def _create_purchase_receipt_from_form():
         supplier_id = request.form.get("supplier_id") or None
         from_receipt = request.form.get("from_receipt") or None
         from_order = request.form.get("from_order") or None
-        source = database.session.get(PurchaseReceipt, from_receipt) if from_receipt else None
-        source = source or (database.session.get(PurchaseOrder, from_order) if from_order else None)
+        source, from_order = _resolve_receipt_creation_source(from_receipt, from_order)
         company, transaction_currency = _validate_purchase_flow_header(source)
         supplier_id = supplier_id or getattr(source, "supplier_id", None)
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
-        exige_acceso_compania("purchases", company, "crear")
+        # #1332: el alta de recepción es una operación de Inventario; la ruta
+        # autoriza `inventory.crear` y el servicio debe exigir el mismo módulo.
+        exige_acceso_compania("inventory", company, "crear")
         _validate_supplier_company_membership(supplier_id, company)
         receipt = PurchaseReceipt(
             supplier_id=supplier_id,
@@ -1830,12 +2027,43 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
     return source
 
 
+def _lock_receipt_purchase_orders(receipt_id: str, purchase_order_id: str | None, is_return: bool = False) -> None:
+    """Serialize receipt approval against every purchase order it consumes."""
+    if is_return:
+        return
+    po_ids = {purchase_order_id} if purchase_order_id else set()
+    po_ids.update(
+        relation.source_id
+        for relation in database.session.execute(
+            database.select(DocumentRelation).filter_by(target_type="purchase_receipt", target_id=receipt_id, status="active")
+        ).scalars()
+        if relation.source_type == "purchase_order"
+    )
+    for po_id in sorted(filter(None, po_ids)):
+        lock_document_flow_document("purchase_order", po_id)
+
+
 def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
     """Valida que las cantidades recibidas no excedan las ordenadas en la OC."""
     receipt = database.session.get(PurchaseReceipt, receipt_id)
     if receipt and receipt.purchase_order_id:
         receipt_items = _active_receipt_items(receipt_id)
         _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
+        # #2098: serializar la validación contra la OC y sus líneas: sin
+        # bloqueo, dos recepciones concurrentes leen consumo 0 y exceden la
+        # cantidad ordenada del mismo ítem.
+        database.session.execute(
+            database.select(PurchaseOrder)
+            .filter_by(id=receipt.purchase_order_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        database.session.execute(
+            database.select(PurchaseOrderItem)
+            .filter_by(purchase_order_id=receipt.purchase_order_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         purchase_order = database.session.get(PurchaseOrder, receipt.purchase_order_id)
         if purchase_order and purchase_order.supplier_id != receipt.supplier_id:
             raise ValueError(_("El proveedor de la recepción no coincide con el proveedor de la orden de compra."))
@@ -1963,13 +2191,6 @@ def _purchase_invoice_selected_company(choices: list[tuple[str, str]]) -> str | 
     return request.values.get("company") or (choices[0][0] if choices else None)
 
 
-def _purchase_invoice_supplier_choices() -> list[tuple[str, str]]:
-    """Build the supplier choices list for purchase invoices."""
-    return [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
-
-
 def _purchase_invoice_source_ids() -> dict[str, str | None]:
     """Get the source identifiers used by the purchase invoice."""
     return {
@@ -2018,6 +2239,9 @@ def _purchase_invoice_sources(
     factura_origen = (
         database.session.get(PurchaseInvoice, source_ids["from_invoice_id"]) if source_ids["from_invoice_id"] else None
     )
+    for origen in (orden_origen, recepcion_origen, factura_origen):
+        if origen is not None:
+            _require_purchase_document_access(origen, "consultar")
     return orden_origen, recepcion_origen, factura_origen
 
 
@@ -2031,6 +2255,10 @@ def _purchase_invoice_catalogs() -> tuple[list[dict[str, str | None]], list[dict
             "has_batch": item.has_batch,
             "has_serial_no": item.has_serial_no,
             "has_expiry_date": item.has_expiry_date,
+            "weight": str(item.weight) if item.weight is not None else None,
+            "weight_uom": item.weight_uom,
+            "volume": str(item.volume) if item.volume is not None else None,
+            "volume_uom": item.volume_uom,
         }
         for (item,) in database.session.execute(database.select(Item)).all()
     ]
@@ -2100,14 +2328,53 @@ def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_
     return exchange_rate
 
 
+PURCHASE_AUDIT_FIELDS = (
+    "supplier_id",
+    "company",
+    "posting_date",
+    "total",
+    "remarks",
+    "supplier_invoice_no",
+    "tax_template_id",
+    "transaction_currency",
+    "exchange_rate",
+    "base_total",
+    "tax_total",
+    "grand_total",
+    "base_grand_total",
+    "outstanding_amount",
+    "base_outstanding_amount",
+    "document_type",
+    "credit_note_type",
+    "is_return",
+    "incoterm_code",
+    "incoterm_version",
+    "delivery_date",
+    "delivery_place",
+    "purchase_terms",
+    "purchase_request_id",
+    "purchase_quotation_id",
+    "supplier_quotation_id",
+    "purchase_award_id",
+    "purchase_request_comparison_id",
+    "purchase_order_id",
+    "purchase_receipt_id",
+)
+
+
+def _purchase_snapshot_value(value: Any) -> Any:
+    """Serializa valores de cabecera para comparar snapshots de auditoría."""
+    if isinstance(value, (date, Decimal)):
+        return str(value)
+    return value
+
+
 def _capture_purchase_state(registro: Any) -> dict[str, Any]:
     """CROSS-01: Captura estado de documento de compras para auditoría."""
     state = {
-        "supplier_id": getattr(registro, "supplier_id", None),
-        "company": getattr(registro, "company", None),
-        "posting_date": str(getattr(registro, "posting_date", "")),
-        "total": str(getattr(registro, "total", "")),
-        "remarks": getattr(registro, "remarks", None),
+        field: _purchase_snapshot_value(getattr(registro, field))
+        for field in PURCHASE_AUDIT_FIELDS
+        if hasattr(registro, field)
     }
 
     from cacao_accounting.database import (
@@ -2123,6 +2390,8 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
         PurchaseReceiptItem,
         PurchaseInvoice,
         PurchaseInvoiceItem,
+        DocumentTaxLine,
+        DocumentTaxSummary,
     )
 
     mapping = {
@@ -2140,6 +2409,34 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
         from cacao_accounting.audit_trail_service import capture_lines_snapshot
 
         state["items"] = capture_lines_snapshot(registro, item_cls, fk_name)
+
+    if cls is PurchaseInvoice:
+        document_type = str(getattr(registro, "document_type", None) or "purchase_invoice")
+        summary = database.session.execute(
+            database.select(DocumentTaxSummary).filter_by(document_type=document_type, document_id=registro.id)
+        ).scalar_one_or_none()
+        if summary is None:
+            state["tax_summary"] = None
+            state["tax_lines"] = []
+        else:
+            state["tax_summary"] = {
+                column.name: _purchase_snapshot_value(getattr(summary, column.name))
+                for column in summary.__table__.columns
+                if column.name not in {"id", "created", "modified"}
+            }
+            lines = database.session.execute(
+                database.select(DocumentTaxLine)
+                .filter_by(document_tax_summary_id=summary.id)
+                .order_by(DocumentTaxLine.line_index)
+            ).scalars()
+            state["tax_lines"] = [
+                {
+                    column.name: _purchase_snapshot_value(getattr(line, column.name))
+                    for column in line.__table__.columns
+                    if column.name not in {"id", "document_tax_summary_id", "created", "modified"}
+                }
+                for line in lines
+            ]
 
     return state
 
@@ -2175,6 +2472,19 @@ def _validate_supplier_invoice_flags(
         matching_config = get_matching_config(company)
         if matching_config.require_purchase_order:
             raise ValueError(_("La configuración de la compañía requiere una orden de compra para las facturas de compra."))
+
+
+def _validated_purchase_supplier(supplier_id: str | None, company: str | None) -> Party | None:
+    """Valida proveedor existente, activo, con rol y membresía de compañía."""
+    if not supplier_id:
+        return None
+    supplier = database.session.get(Party, supplier_id)
+    if supplier is None:
+        raise ValueError(_("El tercero no existe."))
+    if not supplier.is_active or not supplier.is_supplier:
+        raise ValueError(_("El tercero seleccionado no está habilitado como proveedor."))
+    _validate_supplier_company_membership(supplier_id, company)
+    return supplier
 
 
 def _validate_supplier_company_membership(supplier_id: str | None, company: str | None) -> None:
@@ -2221,9 +2531,12 @@ def _validate_duplicate_supplier_invoice(
     if supplier is None:
         raise ValueError(_("El proveedor indicado no existe."))
 
+    # #1433: la unicidad de la base es global por proveedor y número
+    # normalizado (`supplier_invoice_key`); el precheck debe comparar la misma
+    # clave y no el valor original, para no diferir de la restricción.
     stmt = database.select(PurchaseInvoice).filter(
         PurchaseInvoice.supplier_id == supplier_id,
-        PurchaseInvoice.supplier_invoice_no == supplier_invoice_no_cleaned,
+        PurchaseInvoice.supplier_invoice_key == supplier_invoice_no_cleaned,
         PurchaseInvoice.docstatus != 2,
     )
     if exclude_id:
@@ -2411,6 +2724,7 @@ def _update_purchase_reversal_relation(relation: DocumentRelation, invoice: Purc
 
 def _new_purchase_reversal_relation(invoice: PurchaseInvoice, target_type: str, amount: Decimal) -> DocumentRelation:
     """Construye la relación persistible entre la factura y su nota."""
+    assert_relation_same_party("purchase_invoice", invoice.reversal_of, target_type, invoice.id)
     return DocumentRelation(
         source_type="purchase_invoice",
         source_id=invoice.reversal_of,
@@ -2709,19 +3023,24 @@ def _handle_purchase_invoice_edit_post(registro):
         registro.supplier_invoice_no = request.form.get("supplier_invoice_no") or registro.supplier_invoice_no
         if "tax_template_id" in request.form:
             registro.tax_template_id = request.form.get("tax_template_id") or None
+        registro.transaction_currency = (
+            request.form.get("transaction_currency") or request.form.get("currency") or registro.transaction_currency
+        )
         _validate_purchase_tax_template(
             registro.company,
             registro.tax_template_id,
             registro.transaction_currency,
         )
         registro.remarks = request.form.get("remarks")
+        _copy_logistics(registro, form=request.form)
         for item in _active_invoice_items(registro.id):
             item.is_superseded = True
         _total_qty, total = _save_purchase_invoice_items(registro.id)
+        items = _active_invoice_items(registro.id)
+        _validate_purchase_invoice_source(registro, items)
         fx_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
         registro.exchange_rate = fx_rate
         base_total, _base = _compute_base_amounts(total, fx_rate)
-        items = _active_invoice_items(registro.id)
         grand_total = calculate_document_total_with_taxes(registro, total, items, request.form.get("tax_summary_payload"))
         base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
         registro.total = total
@@ -2769,17 +3088,38 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
     """Guarda las lineas de items del costo de importacion desde el formulario."""
     items_agrupados = _parse_grid_rows_from_form(
         "item",
-        ["item_code", "item_name", "qty", "uom", "rate", "amount", "warehouse"],
+        [
+            "item_code",
+            "item_name",
+            "qty",
+            "uom",
+            "rate",
+            "amount",
+            "warehouse",
+            "weight_uom",
+            "weight",
+            "volume_uom",
+            "volume",
+        ],
     )
     total = Decimal("0")
+    weight_uoms: set[str] = set()
+    volume_uoms: set[str] = set()
     for data in items_agrupados.values():
         item_code = data.get("item_code", "").strip()
         if not item_code:
             continue
-        qty = Decimal(str(data.get("qty", "1")))
-        rate = Decimal(str(data.get("rate", "0")))
+        qty = coerce_decimal(data.get("qty", "1"), field_name=_("cantidad"), non_negative=True)
+        rate = coerce_decimal(data.get("rate", "0"), field_name=_("tarifa"), non_negative=True)
         if qty < 0 or rate < 0:
             raise ValueError(_("La cantidad y la tarifa de un costo de importación no pueden ser negativas."))
+        item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
+        weight, weight_uom = _landed_cost_dimension(data, item, "weight")
+        volume, volume_uom = _landed_cost_dimension(data, item, "volume")
+        if weight > 0:
+            weight_uoms.add(weight_uom)
+        if volume > 0:
+            volume_uoms.add(volume_uom)
         amount = qty * rate
         exchange_rate = Decimal(str(registro.exchange_rate or "1"))
         base_rate = (rate * exchange_rate).quantize(Decimal("0.0001"))
@@ -2796,10 +3136,40 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
                 amount=amount,
                 base_rate=base_rate,
                 base_amount=base_amount,
-                warehouse=data.get("warehouse", ""),
+                warehouse=data.get("warehouse") or None,
+                weight=weight,
+                weight_uom=weight_uom or None,
+                volume=volume,
+                volume_uom=volume_uom or None,
             )
         )
+    if len(weight_uoms) > 1:
+        raise ValueError(_("Todas las líneas deben usar la misma unidad de peso."))
+    if len(volume_uoms) > 1:
+        raise ValueError(_("Todas las líneas deben usar la misma unidad de volumen."))
     return total
+
+
+def _landed_cost_dimension(
+    data: dict[str, Any],
+    item: Item | None,
+    field: str,
+) -> tuple[Decimal, str]:
+    """Resuelve el valor y la UOM de una dimensión, usando el catálogo como respaldo."""
+    raw_value = data.get(field)
+    raw_uom = data.get(f"{field}_uom")
+    label = "peso" if field == "weight" else "volumen"
+    value = coerce_decimal(
+        raw_value if raw_value not in (None, "") else getattr(item, field, 0) or 0,
+        field_name=_("peso") if field == "weight" else _("volumen"),
+        non_negative=True,
+    )
+    uom = str(raw_uom or getattr(item, f"{field}_uom", "") or "").strip()
+    if value > 0 and not uom:
+        raise ValueError(_("El %(field)s de una línea requiere una unidad de medida.") % {"field": label})
+    if uom and database.session.execute(database.select(UOM).filter_by(code=uom)).scalar_one_or_none() is None:
+        raise ValueError(_("La unidad de %(field)s no existe.") % {"field": label})
+    return value, uom
 
 
 def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
@@ -2810,9 +3180,11 @@ def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
         concept = data.get("concept", "").strip()
         if not concept:
             continue
-        amount = Decimal(str(data.get("amount", "0")))
-        if amount < 0:
-            raise ValueError(_("El importe de un cargo de importación no puede ser negativo."))
+        amount = coerce_decimal(
+            data.get("amount", "0"),
+            field_name=_("importe del cargo de importación"),
+            non_negative=True,
+        )
         exchange_rate = Decimal(str(registro.exchange_rate or "1"))
         base_amount = (amount * exchange_rate).quantize(Decimal("0.0001"))
         total += amount
@@ -2973,8 +3345,11 @@ def _create_import_landed_cost_from_request():
     if from_invoice_id:
         _link_landed_cost_to_invoice(registro, from_invoice_id, company)
 
-    database.session.commit()
+    # #1751: el evento de creación se registra antes del commit para que
+    # quede persistido junto con el documento; log_create solo agrega al
+    # session y una eliminación de sesión posterior perdería la fila.
     log_create(registro)
+    database.session.commit()
     flash(_("Costo de importacion creado exitosamente."), "success")
     return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=registro.id))
 

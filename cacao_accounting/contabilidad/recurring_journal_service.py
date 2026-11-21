@@ -6,8 +6,8 @@
 from datetime import date
 from decimal import Decimal
 import json
-from typing import Any, Dict, List, Sequence
-from sqlalchemy import or_, select
+from typing import Any, Dict, List
+from sqlalchemy import select
 from cacao_accounting.audit_trail_service import log_create, log_submit
 from cacao_accounting.database import (
     Accounts,
@@ -19,12 +19,13 @@ from cacao_accounting.database import (
     ComprobanteContable,
     ComprobanteContableDetalle,
     Entity,
+    Project,
 )
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 
 class RecurringJournalError(Exception):
@@ -36,10 +37,42 @@ class RecurringJournalError(Exception):
 PLANTILLA_NO_ENCONTRADA = "Plantilla no encontrada."
 
 
+# La frecuencia soportada es mensual (#1493). Una necesidad semanal se
+# representa con cuatro plantillas mensuales en fechas distintas; el servicio
+# no programa ocurrencias diarias ni semanales.
+SUPPORTED_RECURRING_FREQUENCIES = frozenset({"monthly"})
+
+# El mapa conserva etiquetas para filas históricas creadas antes de #1493.
+# La UI ya no ofrece estas opciones y `apply_recurring_template` las rechaza.
+RECURRING_FREQUENCY_LABELS = {
+    "monthly": _l("Mensual"),
+    "weekly": _l("Semanal"),
+    # `Diario` ya identifica el libro contable y se traduce como `Journal`;
+    # la frecuencia usa un msgid propio para no heredar ese significado.
+    "daily": _l("Diaria"),
+}
+
+
+def recurring_frequency_label(value: Any) -> str:
+    """Devuelve la etiqueta traducida de una frecuencia recurrente válida."""
+    key = str(value or "").strip().lower()
+    return str(RECURRING_FREQUENCY_LABELS.get(key, value or ""))
+
+
+def normalize_recurring_frequency(value: Any) -> str:
+    """Normaliza y valida la única frecuencia soportada por las plantillas."""
+    key = str(value or "monthly").strip().lower()
+    if key not in SUPPORTED_RECURRING_FREQUENCIES:
+        raise RecurringJournalError(_("Solo se admiten plantillas recurrentes con frecuencia mensual."))
+    return key
+
+
 def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]], user_id: str) -> RecurringJournalTemplate:
     """Crea una nueva plantilla de comprobante recurrente."""
     validate_template_balance(items)
+    frequency = normalize_recurring_frequency(data.get("frequency"))
     company = data["company"]
+    _validate_template_projects(company, items)
     books = _authorized_template_books(company, data.get("books"), user_id, "crear")
     primary_book = _book_for_reference(company, books[0]) if books else None
 
@@ -53,7 +86,7 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
         description=data.get("description"),
         start_date=data["start_date"],
         end_date=data["end_date"],
-        frequency=data.get("frequency", "monthly"),
+        frequency=frequency,
         currency=data.get("currency"),
         status="draft",
         docstatus=0,
@@ -84,18 +117,55 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
     return template
 
 
-def validate_template_balance(items: List[Dict[str, Any]]):
-    """Valida que la plantilla esté balanceada."""
-    from decimal import Decimal
+def _template_amount(value: Any) -> Any:
+    """Convierte un importe de plantilla y traduce errores numéricos a negocio."""
+    from decimal import Decimal, InvalidOperation
 
-    total_debit = sum(Decimal(str(i.get("debit", 0))) for i in items)
-    total_credit = sum(Decimal(str(i.get("credit", 0))) for i in items)
+    try:
+        amount = Decimal(str(value if value not in (None, "") else "0"))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise RecurringJournalError(_("Los importes de la plantilla deben ser números válidos.")) from exc
+    if not amount.is_finite():
+        raise RecurringJournalError(_("Los importes de la plantilla deben ser números finitos."))
+    return amount
+
+
+def validate_template_balance(items: List[Dict[str, Any]]):
+    """Valida que cada línea tenga un solo lado positivo y que la plantilla balancee.
+
+    Una línea no puede traer débito y crédito positivos a la vez porque
+    ``apply_recurring_template`` representa cada línea con un único ``value``
+    y descartaría uno de los lados (#1492).
+    """
+    for index, item in enumerate(items, start=1):
+        debit = _template_amount(item.get("debit", 0))
+        credit = _template_amount(item.get("credit", 0))
+        if debit < 0 or credit < 0:
+            raise RecurringJournalError(
+                _("La línea %(line)s de la plantilla no puede tener importes negativos.") % {"line": index}
+            )
+        if debit > 0 and credit > 0:
+            raise RecurringJournalError(
+                _("La línea %(line)s de la plantilla no puede tener débito y crédito positivos a la vez.") % {"line": index}
+            )
+        if debit == 0 and credit == 0:
+            raise RecurringJournalError(
+                _("La línea %(line)s de la plantilla debe tener un débito o un crédito mayor que cero.") % {"line": index}
+            )
+
+    total_debit = sum((_template_amount(i.get("debit", 0)) for i in items), _template_amount(0))
+    total_credit = sum((_template_amount(i.get("credit", 0)) for i in items), _template_amount(0))
 
     if total_debit != total_credit:
         raise RecurringJournalError(_("La plantilla debe estar balanceada (Débito != Crédito)."))
 
     if len(items) < 2:
         raise RecurringJournalError(_("La plantilla debe tener al menos dos líneas."))
+
+
+def _validate_persisted_template_lines(items: List[RecurringJournalItem]) -> None:
+    """Revalida líneas ya persistidas antes de aprobar o aplicar (#1492)."""
+    validate_template_balance([{"debit": item.debit, "credit": item.credit} for item in items])
 
 
 def approve_recurring_template(template_id: str, user_id: str):
@@ -108,6 +178,9 @@ def approve_recurring_template(template_id: str, user_id: str):
 
     if template.status != "draft":
         raise RecurringJournalError(_("Solo se pueden aprobar plantillas en borrador."))
+
+    items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
+    _validate_persisted_template_lines(items)
 
     template.status = "approved"
     template.docstatus = 1
@@ -133,27 +206,6 @@ def cancel_recurring_template(template_id: str, reason: str, user_id: str):
     database.session.commit()
 
 
-def get_applicable_templates(company: str, ledger_id: str, period_date: date) -> Sequence[RecurringJournalTemplate]:
-    """Obtiene las plantillas aplicables para un periodo."""
-    # Filtros: compañía, ledger, rango de fechas, estado aprobado, no completado
-    book = _book_for_reference(company, ledger_id)
-    if book is None:
-        return []
-    stmt = select(RecurringJournalTemplate).where(
-        RecurringJournalTemplate.company == company,
-        or_(
-            RecurringJournalTemplate.ledger_id == book.id,
-            RecurringJournalTemplate.ledger_id == book.code,  # Backward compatibility with legacy code values
-            RecurringJournalTemplate.book_codes.contains(f'"{book.code}"'),
-        ),
-        RecurringJournalTemplate.start_date <= period_date,
-        RecurringJournalTemplate.end_date >= period_date,
-        RecurringJournalTemplate.status == "approved",
-        RecurringJournalTemplate.is_completed.is_(False),
-    )
-    return database.session.execute(stmt).scalars().all()
-
-
 def apply_recurring_template(
     template_id: str,
     fiscal_year: str,
@@ -171,6 +223,7 @@ def apply_recurring_template(
         raise RecurringJournalError(_("La plantilla recurrente no pertenece a la compañía del cierre."))
     if template.status != "approved":
         raise RecurringJournalError(_("Solo se pueden aplicar plantillas aprobadas."))
+    normalize_recurring_frequency(template.frequency)
     if not template.start_date <= application_date <= template.end_date:
         raise RecurringJournalError(_("La fecha de aplicación está fuera de la vigencia de la plantilla."))
 
@@ -195,6 +248,7 @@ def apply_recurring_template(
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
     if not items:
         raise RecurringJournalError(_("La plantilla aprobada no tiene líneas contables."))
+    _validate_persisted_template_lines(items)
 
     base_currency = database.session.execute(select(Entity.currency).filter_by(code=template.company)).scalar_one_or_none()
     transaction_currency = template.currency or base_currency
@@ -264,6 +318,21 @@ def apply_recurring_template(
     # La aplicación queda pendiente hasta que el comprobante pase al GL.
     database.session.commit()
     return application
+
+
+def _validate_template_projects(company: str, items: List[Dict[str, Any]]) -> None:
+    """Rechaza proyectos que no pertenecen a la compañía de la plantilla."""
+    for item in items:
+        project_code = str(item.get("project") or "").strip()
+        if not project_code:
+            continue
+        exists = database.session.execute(
+            database.select(Project.id).filter_by(entity=company, code=project_code)
+        ).scalar_one_or_none()
+        if exists is None:
+            raise RecurringJournalError(
+                _("El proyecto %(project)s no pertenece a la compañía de la plantilla.") % {"project": project_code}
+            )
 
 
 def _normalize_account_code(company: str, account_value: Any) -> str:
@@ -377,28 +446,6 @@ def accessible_recurring_template_ids(user_id: str) -> list[str]:
             continue
         accessible.append(str(template.id))
     return accessible
-
-
-def _canonical_book_reference(company: str, value: Any) -> str | None:
-    """Convierte id o código de libro a su código canónico."""
-    if not value:
-        return None
-    book = database.session.execute(
-        database.select(Book).where(Book.entity == company).where((Book.id == str(value)) | (Book.code == str(value)))
-    ).scalar_one_or_none()
-    return book.code if book else str(value)
-
-
-def _normalize_ledger_id_for_validation(company: str, ledger_id: Any) -> list[str]:
-    """Convierte ledger_id (UUID o código legacy) a una lista canónica de referencias."""
-    if not ledger_id:
-        return []
-    # Resolve the book regardless of whether ledger_id is UUID or code
-    book = _book_for_reference(company, ledger_id)
-    if book:
-        return [book.code, book.id]  # Include both code and UUID for matching
-    # If book not found, return the value as-is for error reporting
-    return [str(ledger_id)]
 
 
 def _book_for_reference(company: str, value: Any) -> Book | None:

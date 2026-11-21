@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from flask import Blueprint, Response, abort, current_app, render_template, request, url_for
 from flask_login import current_user, login_required
 
@@ -23,16 +25,16 @@ printing_public = Blueprint("printing_public", __name__)
 def validate_document(token: str):
     """Validate a public document token without authentication."""
     if not external_validation_enabled():
-        return "Validation unavailable", 403
+        return _("Validación no disponible"), 403
 
     service = ValidationService()
     result = service.validate_token(token)
     if result["status"] == "unavailable":
-        return "Document not found or validation unavailable", 404
+        return _("Documento no encontrado o validación no disponible"), 404
 
     view = service.build_public_view(result)
     if view is None:
-        return "Document not found or validation unavailable", 404
+        return _("Documento no encontrado o validación no disponible"), 404
     return render_template("public/validation_result.html", validation=view)
 
 
@@ -60,14 +62,14 @@ def preview_document(document_type: str, document_id: str) -> str:
             return_url=return_url,
             export_url=export_url,
         )
-    except PrintingError as exc:
+    except PrintingError:
         log.exception(
             "Error generando vista previa de impresión: type={} id={} company={}",
             document_type,
             document_id,
             company,
         )
-        abort(404, str(exc))
+        abort(404)
         raise RuntimeError(_("Flask abort returned unexpectedly"))
 
 
@@ -85,14 +87,14 @@ def document_pdf(document_type: str, document_id: str) -> Response:
             company_code=company,
             template_id=template_id,
         )
-    except PrintingError as exc:
+    except PrintingError:
         log.exception(
             "Error generando PDF de impresión: type={} id={} company={}",
             document_type,
             document_id,
             company,
         )
-        abort(404, str(exc))
+        abort(404)
     return Response(pdf, mimetype="application/pdf")
 
 
@@ -120,6 +122,15 @@ def _current_company() -> str:
 
 def _safe_return_url(value: str | None) -> str:
     """Return an internal destination for the preview's back button."""
-    if value and value.startswith("/") and not value.startswith("//"):
-        return value
-    return url_for("cacao_app.pagina_inicio")
+    if not value:
+        return url_for("cacao_app.pagina_inicio")
+    if not value.startswith("/") or value.startswith("//"):
+        return url_for("cacao_app.pagina_inicio")
+    if "\\" in value or "%5c" in value.lower():
+        return url_for("cacao_app.pagina_inicio")
+    if any(ord(character) < 32 for character in value):
+        return url_for("cacao_app.pagina_inicio")
+    parsed = urlsplit(value)
+    if parsed.scheme or parsed.netloc:
+        return url_for("cacao_app.pagina_inicio")
+    return value
