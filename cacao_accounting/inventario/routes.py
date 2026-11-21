@@ -564,6 +564,7 @@ def _proveedor_predeterminado_visible(default_supplier) -> Any:
             .where(
                 CompanyParty.party_id == default_supplier.id,
                 CompanyParty.company.in_(authorized),
+                CompanyParty.is_active.is_(True),
             )
             .limit(1)
         ).scalar_one_or_none()

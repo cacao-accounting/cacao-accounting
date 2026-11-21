@@ -248,3 +248,24 @@ def test_item_detail_shows_default_supplier_of_authorized_company(item_detail_sc
     body = response.get_data(as_text=True)
     assert ids["local_supplier_name"] in body
     assert ids["secret_supplier_name"] not in body
+
+
+def test_item_detail_hides_default_supplier_with_inactive_authorized_company_link(item_detail_scope_scenario):
+    """An inactive company relationship does not make the supplier visible."""
+    app, ids = item_detail_scope_scenario
+    with app.app_context():
+        item = database.session.execute(database.select(Item).filter_by(code=ids["item_code"])).scalar_one()
+        item.default_supplier_id = ids["local_supplier"]
+        relationship = database.session.execute(
+            database.select(CompanyParty).filter_by(company=ids["local_company"], party_id=ids["local_supplier"])
+        ).scalar_one()
+        relationship.is_active = False
+        database.session.commit()
+    client = _authenticated_client(app, ids["reader_id"])
+
+    response = client.get(f"/inventory/item/{ids['item_code']}")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert ids["local_supplier_name"] not in body
+    assert ids["secret_supplier_name"] not in body
