@@ -209,7 +209,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
-| #998 | #1649 | ❌ QA1/QA2 confirman QA3; guards de subtipo presentes, faltan pruebas de email-info y adjuntos con alias de ventas/compras; GitHub: needs-work, etiqueta intacta | API: validar permisos en alias de notas documentales |
+| #998 | #1649 | ✅ Email-info, listado y descarga de aliases de venta/compra cubiertos con alcance, subtipo y no lectura de archivos denegados; QA1/QA2 aprueban; commit `1da1ee73`; GitHub: fix-proposed | API: validar permisos en alias de notas documentales |
 | #1019 | #1649 | ✅ Regresiones HTTP de destino, líneas y cierres con controles positivos; QA1/QA2 aprueban; commit `6b8d9ad8`; GitHub: fix-proposed | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
 | #1021 | #1649 | ✅ Regresión GET/POST 403 y ausencia de efectos secundarios; QA1/QA2 aprueban; commit `16eac22f`; GitHub: fix-proposed | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1181 | #1649 | ✅ Vínculo CompanyParty activo requerido; QA1/QA2 aprueban; commit `4eca88fb`; GitHub: fix-proposed | Restringe detalle de artículos a compañías autorizadas |
