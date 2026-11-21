@@ -12,10 +12,9 @@ QA3 del 2026-11-21 que cerró los 26 issues abiertos restantes con etiqueta `fix
 issue abierto con esa etiqueta en GitHub.
 
 **Estado de commits (21 de noviembre de 2026, refs locales):** `origin/estabilizacion` está en
-`2a8cfb7e`; `HEAD` local está en `8e2fcc44`, 44 commits por delante y sin push. De los 154 hashes
-únicos de commit referenciados aquí, 123 son ancestros de `origin/estabilizacion`, 27 existen en el
-object database local pero no en esa rama remota y 4 no se resuelven en el repositorio local. “Commit
-local” no significa publicado en GitHub; los cuatro hashes no resolubles quedan pendientes de verificar.
+`94d80e55`; `HEAD` local acumula 7 commits por delante y sin push. “Commit local” no
+significa publicado en GitHub. Los hashes citados en las tablas deben verificarse contra la rama
+antes de considerarlos integrados; el lote de cierre de esta sesión es local y aún requiere QA1 → QA2.
 
 ## Alcance de ejecución
 
@@ -92,7 +91,7 @@ Cada entrega de implementación sigue este flujo: leer issue y todos sus comenta
 | Sub-lote | Issues | Trabajo para un fix acotado |
 |---|---|---|
 | 1658-A · Recurrentes | #1492, #1493 | Validar balance por plantilla y aplicar la frecuencia aprobada en la creación/ejecución. |
-| 1658-B · O2C/R2R | #1118 ✅ ba39c672; #1813 ✅ 94043df4; #2045 ✅ 31a0f6ef; #1937 | Corregir exclusión de transferencias sin postear, requisito de entrega para 3-way, exportación PDF del mayor y consumo de origen desde orden; separar commits por consumidor si no comparten servicio. |
+| 1658-B · O2C/R2R | #1118 ❌ QA1/QA2 rechazan; #1813 ❌ QA1/QA2 rechazan localmente; #2045 ❌ QA1/QA2 rechazan; #1937 ❌ QA1/QA2 rechazan | Corregir exclusión de transferencias sin postear, requisito de entrega para 3-way, exportación PDF del mayor y consumo de origen desde orden; separar commits por consumidor si no comparten servicio. |
 | 1658-C · Inventario | #1737, #1811, #1888, #1891 | Aplicar conversiones UOM, moneda requerida de conciliación, persistencia de detalle y contrato de ajustes solo positivos/negativos. |
 | 1658-D · Costos de compra | #1752, #1758 | Completar edición/prorrateo de landed cost y enlace a detalle; separar el enlace de interfaz si es independiente del cálculo. |
 | 1658-E · Portal y vistas de administración | #1564, #1919, #1928, #1930, #1931, #1938 | Completar paginación, revocar portal inactivo, renderizar administración, aplicar tamaño/orientación PDF, habilitar historial y vistas guardadas con RBAC. Dividir por consumidor; no combinar cambios de portal, PDF y reportes en un commit. |
@@ -101,8 +100,8 @@ Cada entrega de implementación sigue este flujo: leer issue y todos sus comenta
 
 ### Fase 1 — Acceso, aislamiento y seguridad
 
-- **Lote 1 — Origen y autorización de documentos — #1649:** #1405, #1753, #1971, #2135, #2142.
-- **Lote 2 — Permisos, acceso y reportes — #1649:** #1725, #1761, #1777, #1781, #1785, #1789, #1797, #1828, #1833, #1852, #1920, #1926, #1998, #2018, #2059, #2092.
+- **Lote 1 — Origen y autorización de documentos — #1649:** #1405 ❌ QA1/QA2 rechazan cobertura HTTP; #1753 ❌ QA1/QA2 rechazan cobertura HTTP; #1971 ❌ QA1/QA2 rechazan cobertura HTTP; #2135 ❌ QA1/QA2 rechazan regresión de edición; #2142 ❌ QA1/QA2 rechazan regresión del filtro de período.
+- **Lote 2 — Permisos, acceso y reportes — #1649:** #1725 ✅ QA1/QA2 aprueban localmente; #1761 ❌ QA1/QA2 rechazan falta de regresión CSRF HTTP; #1777 ❌ QA1/QA2 rechazan exposición residual de contactos globales; #1781 ❌ QA1/QA2 rechazan cobertura de acciones incompleta; #1785 ❌ QA1/QA2 rechazan falta de regresión draft/approved; #1789 ❌ QA1/QA2 rechazan falta de regresión de mapeos; #1797 ❌ QA1/QA2 rechazan mapeo de acciones y cobertura cross-company; #1828 ❌ QA1/QA2 rechazan bypass admin con `?company=`; #1833 ❌ QA1/QA2 rechazan cobertura de rol, compañía y flujo HTTP canónico; #1852 ❌ QA1/QA2 rechazan falta de regresión del permiso `editar`; #1920 ❌ QA1/QA2 rechazan bypass de admin y falta de pruebas de portal; #1926 ✅ fix local de regresiones HTTP para lista/detalle UOM, QA1/QA2 aprobados; #1998 ⚠️ Regresiones HTTP de privacidad implementadas en `2725af0e`; pendiente QA1/QA2; #2018 ⚠️ Fix local en `41e3d615`: rechaza cuenta específica en regla global, exige cuenta de la compañía al postear y agrega regresiones de consumidores; pendiente QA1/QA2; #2059/#2060 ✅ fix local de paridad badge/bandeja aprobado QA1/QA2 y committed en `30859cd2`; el primer set queda limitado a compañías activas concedidas; riesgo de costo O(N) en compañías autorizadas documentado como no bloqueante; #2092 ✅ fix local, regresión y QA1/QA2 aprobados; committed en `8885d843`. Sin cambios de etiqueta.
 - **Lote 3 — Listados y rutas adyacentes — #1649:** #1841, #1869, #1934, #2039, #2044, #2047, #2052, #2105.
 - **Objetivo compartido:** aplicar el mismo alcance de compañía a rutas de lectura/escritura, IDs fuente y payloads; cubrir actor, acción, compañía propia/ajena y rutas alternativas.
 - **Lote #1710 — [ROOT CAUSE][AUTH] Ciclo de vida de credenciales y mensajería: revocación, fail-safe e idempotencia:** #1732, #1762, #1917, #1948, #1958, #1965, #2023.
@@ -113,14 +112,15 @@ Cada entrega de implementación sigue este flujo: leer issue y todos sus comenta
 ### Fase 2 — Persistencia y garantías transversales
 
 - **Lotes por consumidor — #1653 (Consolidación causa-raíz: atomicidad/idempotencia en read-then-post):**
-  - Concurrencia en inventario/documentos: #332, #1820, #1857, #1868, #1881, #1957, #2098, #2140.
-  - Concurrencia financiera/bancaria: #1776, #1784, #2082, #2084, #2128, #2129, #2138.
-  - Concurrencia auth/base/aprobaciones: #1680, #1730, #1910, #2076, #2186, #2187, #2188.
+  - Concurrencia en inventario/documentos: #332, #1820, #1857, #1868, #1881, #1957, #2098.
+  - #2140 (paraguas S2P): sus seis hallazgos anteriores tienen QA2 aprobado; QA1/QA2 aprobaron localmente el residual de cierre manual asociado a #1432 en HEAD `45e38f2b`. GitHub y etiquetas intactos; queda la decisión de QA3/autorizado.
+  - Concurrencia financiera/bancaria: #1776 ❌ QA1/QA2 rechazan recuperación/idempotencia; #1784 ❌ QA1/QA2 rechazan atomicidad y retry; #2082 ❌ QA1/QA2 rechazan concurrencia PostgreSQL no probada; #2084 ❌ QA1/QA2 rechazan read-then-insert sin recuperación, #2128 ❌ QA1/QA2 rechazan faltan regresiones UA/error creación; #2129 ❌ QA1/QA2 rechazan casos legacy de idempotencia/default; #2138 ❌ QA1/QA2 rechazan falta de test PostgreSQL Tier 1.
+  - Concurrencia auth/base/aprobaciones: #1680 ❌ QA1/QA2 rechazan falta de expected-version en formularios, #1730 ❌ QA1/QA2 rechazan seed no idempotente; #1910 ❌ QA1/QA2 rechazan harness de concurrencia ausente; #2076 ❌ QA1/QA2 rechazan approve que revive tras reject, #2186 ❌ QA1/QA2 rechazan falta de concurrencia PostgreSQL; #2187 ❌ QA1/QA2 rechazan test SQLite-only; #2188 ❌ QA1/QA2 rechazan posible deadlock por orden de locks.
   - Contrato de importación/UI: #1678.
   - **Dependencia:** fijar atomicidad/idempotencia por motor; no asumir que locks equivalen en SQLite y PostgreSQL. Cada fix cubre commit/rollback, repetición y carrera realista.
 - **Lote #1706 — [ROOT CAUSE][TRANSVERSAL] Extender garantías append-only e inmutabilidad a toda la evidencia:** #1733, #1751, #1865, #1877, #1987, #2078.
-- **Lote #2208 — Consolidación causa-raíz: Contrato de evidencia de auditoría: escritura atómica, cobertura de campos y actor:** #1794, #1854, #1863, #2137.
-- **Lote #2210 — Consolidación causa-raíz: Integridad referencial: FK desactivada y guards de uso/eliminación no replicados:** #1779.
+- **Lote #2208 — Consolidación causa-raíz: Contrato de evidencia de auditoría: escritura atómica, cobertura de campos y actor:** #1794 ❌ QA1/QA2 rechazan cobertura de rollback; #1854 ❌ QA1/QA2 rechazan auditoría y datos heredados; #1863 ❌ QA1/QA2 rechazan snapshot incompleto; #2137 ❌ QA1/QA2 rechazan snapshot/enlaces y cobertura.
+- **Lote #2210 — Consolidación causa-raíz: Integridad referencial: FK desactivada y guards de uso/eliminación no replicados:** #1779 ✅ QA1/QA2 aprueban localmente; no se cambia la etiqueta.
 - **Lote #2219 — Consolidación causa-raíz: Contrato de driver/base Tier-1 (portabilidad SQLite↔PostgreSQL y deploy):** #1731, #1738, #1851.
 - **Lote #2220 — Consolidación causa-raíz: Idempotencia y guards de entorno en seed/bootstrap:** #1848, #2168.
 - **Lote #2229 — Consolidación causa-raíz: Invalidación de caché al mutar datos maestros:** #1677, #1900.
@@ -209,20 +209,20 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
-| #998 | #1649 | ⚠️ Implementado; regresión local en `4bc2dc7e`; GitHub: needs-work | API: validar permisos en alias de notas documentales |
+| #998 | #1649 | ❌ QA1/QA2 confirman QA3; guards de subtipo presentes, faltan pruebas de email-info y adjuntos con alias de ventas/compras; GitHub: needs-work, etiqueta intacta | API: validar permisos en alias de notas documentales |
 | #1019 | #1649 | ⚠️ Implementado; regresión local en `38fd869f`; GitHub: needs-work | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
 | #1021 | #1649 | ⚠️ Fix aplicado en `03dfc484`; falta regresión committed del 403 para no-admin en GET/POST de `/setup/`; GitHub: needs-work (triage 2026-11-20) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1181 | #1649 | ⚠️ Implementado; regresión local en `771d4e15`; GitHub: needs-work | Restringe detalle de artículos a compañías autorizadas |
 | #1253 | #1649 | ⚠️ Implementado; evidencia y regresión en `b0d9003a`, `f995e0e0`; GitHub: needs-work | Define el alcance de lotes entre compañías |
-| #1283 | #1658 | ⚠️ Helpers retirados en `d1649c9a`; sin referencias; GitHub: needs-work | Elimina helpers de terceros sin llamadores |
-| #1299 | #1658 | ⚠️ Implementado; regresión local en `8c4fdec4`; GitHub: needs-work | Retira o integra preferencias CompanyParty sin consumidores |
-| #1301 | #1649 | ⚠️ Implementado; regresión local en `8fe99bdc`; GitHub: needs-work | Exige alcance de compañía para imágenes globales de artículos |
-| #1332 | #1649 | ⚠️ Implementado; regresión local en `ba3a7f08`; GitHub: needs-work | Alinea permisos de líneas en flujos de inventario |
+| #1283 | #1658 | ❌ QA1/QA2 rechazan; los helpers no tienen referencias, pero el guard de ausencia se eliminó en `0970476b`; GitHub: needs-work, etiqueta intacta | Elimina helpers de terceros sin llamadores y protege el contrato de retiro |
+| #1299 | #1658 | ❌ QA1/QA2 rechazan tras QA3; GitHub: needs-work, sin cambiar etiqueta | Retira o integra preferencias CompanyParty sin consumidores; falta quitar rama/docs muertas y pruebas obsoletas |
+| #1301 | #1649 | ❌ QA1/QA2 confirman QA3; GitHub: needs-work, etiqueta intacta | Guard sigue la decisión de imagen global, pero la fixture da acceso de compañía a todos; falta probar lector/editor sin asignaciones |
+| #1332 | #1649 | ⚠️ Parcial: recepción de compra cubierta; Orden de Venta → entrega en conflicto sin resolver con #1515; GitHub: needs-work | Alinea permisos de líneas en flujos de inventario |
 | #1338 | #1649 | ⚠️ Fix parcial en `cbac6457`: query tools rechazan compañías deshabilitadas; sigue el bypass admin de `exige_acceso_compania`; GitHub: needs-work (triage 2026-11-20) | Rechaza compañías deshabilitadas en query tools |
-| #1354 | #1710 | ⚠️ Implementado; regresión local en `de6f005c`; GitHub: needs-work | [Seguridad] Rechaza tokens API de usuarios deshabilitados |
-| #1357 | #1658 | ⚠️ Código retirado en `a93657fa`; `admin/services.py` sin `Blueprint`; GitHub: needs-work | [Auditoría] Elimina el blueprint admin sin rutas |
-| #1433 | #1649 | ⚠️ `0b0b6d54` no se resuelve localmente; verificar referencia de commit; GitHub: needs-work | Valida facturas duplicadas entre compañías |
-| #2060 | Consumidor | ⚠️ Implementado; regresión local en `29fe2836`; GitHub: needs-work | [AUDIT][Auth] El contador de aprobaciones ignora el alcance de empresa |
+| #1354 | #1710 | ✅ QA1/QA2 local aprueban HEAD `45e38f2b`; GitHub: needs-work, sin cambiar estado | [Seguridad] Rechaza JWT y sesiones de usuarios deshabilitados |
+| #1357 | #1658 | ✅ QA1/QA2 local aprueban el retiro en `a93657fa`; búsqueda sin consumidores; GitHub: needs-work, sin cambiar estado | [Auditoría] Elimina el blueprint admin sin rutas |
+| #1433 | #1649 | ❌ QA1/QA2 rechazan independientemente re-revisión local; GitHub `needs-work` intacto | Precheck solo consulta `supplier_invoice_key`; grupos históricos activos duplicados se preservan con key NULL, así admite un tercer duplicado (alta o edición) en vez de dar error de negocio; falta regresión con fallback legados |
+| #2060 | Consumidor | ❌ QA1/QA2 rechazan independientemente la re-revisión local; GitHub `needs-work` intacto | El badge filtra por compañías del módulo accounting y estado, pero no aplica permisos/policy/nivel de `can_approve` ni `review_is_allowed`; puede sobrecontar solicitudes no visibles y omitir aprobables de otros módulos. Test solo compara compañías |
 
 ### Fase 2 — Persistencia y garantías transversales
 
@@ -232,69 +232,69 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #923 | #1706 | ✅ `5fb3e5f8` + `0181df55`: FK RESTRICT en esquema nuevo y evidencia preservada; 91 passed, 1 skipped; GitHub: fix-confirmed. Sin migraciones por alcance pre-alpha. | [HIGH][S2P][O2C][Append-only] DocumentRelation y conciliaciones permiten reescritura sin auditoría |
 | #925 | #1706 | ✅ `5fb3e5f8`: cancelación de ledger limitada a servicios auditados, con lápida monotónica y regresiones Desktop/Cloud; 91 passed, 1 skipped; GitHub: fix-confirmed | [MEDIUM][Append-only][Accounting] Impedir reactivar asientos mediante is_cancelled=False |
 | #1002 | #1706 | ✅ `5fb3e5f8`: UPDATE/DELETE de auditoría bloqueados en Desktop/Cloud por ORM/Core/SQL; 91 passed, 1 skipped; GitHub: fix-confirmed | Audit: impedir borrar la cadena en modo Desktop |
-| #1093 | #1653 | ⚠️ Implementación pendiente; GitHub: needs-work | Serializar la reposición concurrente de Caja Chica |
-| #1094 | #1653 | ⚠️ Implementación pendiente; GitHub: needs-work | Reservar gastos de reposición bajo bloqueo |
-| #1139 | #1653 | ⚠️ Implementación pendiente; GitHub: needs-work | fix: serializa asignaciones de factura a recepción |
-| #1177 | #1653 | ⚠️ Implementación pendiente; GitHub: needs-work | Revisa estado de serie al cancelar entradas |
-| #1178 | #1653 | ⚠️ Implementación pendiente; GitHub: needs-work | Serializa la salida concurrente del mismo serial |
-| #1266 | #1653 | ⚠️ Implementado; fix en `103601f6`, regresión concurrente; GitHub: needs-work | El vale entregado se bloquea y solo una solicitud crea el gasto; el GL no duplica el asiento |
-| #1271 | #1653 | ⚠️ Implementación pendiente; GitHub: needs-work | Evita ajustes duplicados en conciliación de caja chica |
-| #1294 | #1658 | ⚠️ Código retirado en `2d9d8848`; sin referencias; GitHub: needs-work | Retira la mutación de contador externo sin auditoría |
-| #1306 | #1653 | ⚠️ Implementación pendiente; GitHub: needs-work | Bloquea el serial antes de validar salidas concurrentes |
-| #1318 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | Integra o backfill bancario o elimina |
-| #1683 | #1658 | ⚠️ Implementado; runtime en `ab7cf4ab`, regresión restaurada en `22503c2b`; GitHub: needs-work | `ComprobanteContable` no expone columnas legacy; el contrato canónico está cubierto |
-| #1684 | #1658 | ⚠️ Implementado; runtime en `ab7cf4ab`, regresión restaurada en `22503c2b`; GitHub: needs-work | Sin `Modulos`, `Unidad`, `Entity.is_active`, `ARAPReconciliationPolicy` ni synonyms legacy |
-| #1689 | #1653 | ⚠️ En proceso (este turno); GitHub: needs-work | Evita sobreasignar factura concurrentemente |
-| #1697 | #1653 | ⚠️ Implementado; regresión local en `03dfc484`; GitHub: needs-work | Evita duplicar claves de configuración |
+| #1093 | #1653 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work intacto | Código bloquea y revalida, pero falta regresión de doble reembolso multi-sesión PostgreSQL Tier 1 |
+| #1094 | #1653 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work intacto | Servicio serializa y tiene unique; falta prueba multi-sesión PostgreSQL, actual es SQLite-only |
+| #1139 | #1653 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work intacto | El servicio serializa por factura y bloquea líneas, pero falta prueba con interleaving de dos transacciones PostgreSQL |
+| #1177 | #1653 / #1708 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work intacto | La reversa de recepción se interpreta como entrega y el estado final de transferencias depende del orden de movimientos |
+| #1178 | #1653 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work intacto | Estado serial se lee y actualiza sin lock; falta regresión de doble salida en PostgreSQL |
+| #1266 | #1653 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Lock y rollback están, pero falta restricción única persistida/migración en `PettyCashExpense.voucher_id` y prueba concurrente PostgreSQL del escenario |
+| #1271 | #1653 | ✅ QA1/QA2 aprueban estáticamente; GitHub: needs-work, etiqueta intacta; pendiente QA3 | Evita ajustes duplicados en conciliación de caja chica |
+| #1294 | #1658 | ✅ QA1/QA2 aprueban localmente en `45e38f2b`; GitHub: needs-work intacto tras QA3 previo | Función retirada; el test trackeado ya está presente en HEAD local, pendiente aceptación QA3/remota |
+| #1306 | #1653 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work intacto | Validación y actualización de serial siguen sin lock/revalidación dentro del posteo |
+| #1318 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work intacto | Helper retirado, pero el modelo y reporte aún exigen diagnosticar/migrar filas legacy; falta estrategia de datos verificable |
+| #1683 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work intacto | Modelo y MUTABLE_STATE ya limpios, pero no existe migración Alembic efectiva ni prueba de upgrade existente según ADR #1898 |
+| #1684 | #1658 | ❌ QA1/QA2 rechazan; persisten tres synonyms de `ARAPLedgerEntry` sin consumidor ni prueba contractual; GitHub: needs-work, etiqueta intacta | Retira los aliases restantes sin consumidores y los fija en prueba de contrato |
+| #1689 | #1653 | ❌ QA1/QA2 rechazan; lock presente, regresión ThreadPoolExecutor no determinista en SQLite; GitHub: needs-work, etiqueta intacta | Evita sobreasignar factura concurrentemente con carrera real y prueba discriminante PostgreSQL |
+| #1697 | #1653 | ❌ QA1/QA2 rechazan; carrera de sal SMTP y DDL de arranque en conflicto con Alembic aprobado #1898; GitHub: needs-work, etiqueta intacta | Claves únicas, escritura atómica de todos los callers y upgrade versionado de bases existentes |
 | #1853 | Consumidor | ⚠️ Implementación pendiente; GitHub: needs-work | [AUDIT][REFACTOR] Config mypy diverge: .mypy.ini sombreado por pyproject.toml |
-| #1987 | #1706 | ⚠️ Implementado en `5f0e03ab`; 19 pruebas dirigidas; GitHub: needs-work, pendiente QA | Vincula gastos posteados a reposiciones con evidencia append-only |
-| #2078 | #1706 | ⚠️ Implementado en `6ba4de3a`; 6 pruebas dirigidas; GitHub: needs-work, pendiente QA | Bloquea escrituras si la cadena de auditoría no tiene cabeza terminal |
+| #1987 | #1706 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work intacto | Asociación append-only y pruebas presentes; falta migración Alembic efectiva para la tabla nueva según #1898 |
+| #2078 | #1706 | ✅ QA1/QA2 aprueban localmente en `45e38f2b`; test trackeado en HEAD; GitHub/etiqueta intactos | Bloquea escrituras si la cadena hasheada carece de cabeza terminal; QA1 deja corrupción desconectada con cabeza válida como endurecimiento fuera de alcance |
 
 ### Fase 3 — Entradas, maestros y contratos de API
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
 | #547 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | [AUDIT][Importaciones] Acepta moneda inactiva |
-| #1030 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación bancaria: '1.000' (miles europeos) se corrompe a 1.000 y '1,000' (miles americanos) se rechaza |
-| #1031 | #1652 | ⚠️ Fix parcial en `4ac988a1`: validación y recovery cerrados; `preview()` devuelve 500 con XLSX corrupto; GitHub: needs-work (triage 2026-11-20) | Importación: un lector que lanza excepción deja el lote zombi en estado 4 y la recuperación ignora started_at NULL |
-| #1032 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación: la cancelación de un lote en ejecución queda sobrescrita (estado 8 se reescribe a 5/6) |
-| #1046 | #1658 | ⚠️ Retirado en `a0d0f698`; sin referencias; GitHub: needs-work | Extractos: retirar el importador CSV sin ruta productiva |
+| #1030 | #1652 | ❌ QA1/QA2 confirman QA3: blancos solo con espacios fallan y separadores mixtos mal agrupados se aceptan; GitHub: needs-work, etiqueta intacta | Importación bancaria: rechazar importes ambiguos/mal agrupados y tratar blancos opcionales como ausentes |
+| #1031 | #1652 | ❌ QA1/QA2 confirman QA3: `preview()` propaga errores del lector y ficha de lote corrupto puede devolver 500; GitHub: needs-work, etiqueta intacta | Importación: hacer visible el error y recuperable el lote cuando falla lectura |
+| #1032 | #1652 | ❌ QA1/QA2 confirman QA3: cancel_requested tras último check deja el lote en estado 4 y sin test vigente; GitHub: needs-work, etiqueta intacta | Toda cancelación aceptada termina en estado terminal 8, incluidos lotes vacíos y ventana de finalización |
+| #1046 | #1658 | ❌ QA1/QA2 rechazan: persisten shim, plantilla sin caller y helpers del parser antiguo; GitHub: needs-work, etiqueta intacta | Retirar residuo del importador CSV; mantener adapter y servicios activos de matching/autorreconciliación |
 | #1053 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación: preservar relaciones por línea origen |
 | #1054 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación: validar campos de cabecera agrupados |
-| #1055 | #1652 | ⚠️ Implementado; desbordamiento controlado en `b863f809`; GitHub: needs-work | Importación: normalizar fechas Excel antes de validar |
-| #1057 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación de órdenes: validar el tipo del proveedor |
-| #1059 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación de órdenes: definir tratamiento de impuesto |
-| #1060 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación de ventas: validar artículos habilitados |
-| #1062 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación: lotes fallidos quedan sin recuperación |
-| #1063 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación contable: validar cuenta padre |
-| #1087 | #1650 | ⚠️ Implementación pendiente; GitHub: needs-work | Normalizar precisión antes de detectar extractos repetidos |
-| #1174 | #1650 | ⚠️ Implementado; regresión en `da551940`; GitHub: needs-work | `Infinity`/`NaN` no se persisten y producen `InventoryServiceError`, no `InvalidOperation` |
-| #1183 | #1717 | ⚠️ Implementado; regresión en `cb5c1074`; GitHub: needs-work | Bodega con campos vacíos no persiste; duplicado y compañía autorizada cubiertos |
-| #1184 | #1717 | ⚠️ Implementado; regresión en `cb5c1074`; GitHub: needs-work | Unidad sin código no persiste; presupuesto inválido no se convierte en cero |
-| #1185 | #1650 | ⚠️ Implementación pendiente; GitHub: needs-work | Controla decimales inválidos en flujos de caja |
-| #1197 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Comprobantes interpreta "false" como anticipo |
-| #1199 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | Eliminar adaptador de órdenes de compra sin uso productivo |
-| #1200 | Consumidor | ⚠️ Implementación pendiente; GitHub: needs-work | Importación acepta archivos sin filas de datos |
-| #1201 | Consumidor | ⚠️ Implementación pendiente; GitHub: needs-work | Lectores Excel no normalizan fechas de celdas |
-| #1204 | #1718 | ⚠️ Implementación pendiente; GitHub: needs-work | Validador de conciliación acepta ajustes mayores al monto |
-| #1205 | #1718 | ⚠️ Implementación pendiente; GitHub: needs-work | Validación de conciliación no acumula saldo entre líneas |
-| #1206 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | El lector XLSX materializa dimensiones antes de limitar filas |
-| #1212 | #1717 | ⚠️ Implementación pendiente; GitHub: needs-work | Rechaza filas duplicadas por artículo y bodega en conciliación |
-| #1225 | #1717 | ⚠️ Implementación pendiente; GitHub: needs-work | Rechaza tipos desconocidos en facturas de venta |
-| #1262 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Unifica deteccion de duplicados bancarios |
-| #1263 | #1650 | ⚠️ Implementación pendiente; GitHub: needs-work | Rechaza tolerancias negativas de matching |
-| #1265 | #1716 | ⚠️ Implementación pendiente; GitHub: needs-work | Filtra cuentas inactivas en setup de caja chica |
-| #1291 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Seguimiento: normalización de fechas Excel en importaciones |
-| #1292 | #1650 | ⚠️ Implementación pendiente; GitHub: needs-work | Seguimiento: importes positivos en pronósticos importados |
-| #1295 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Seguimiento: rechazo de importaciones sin filas de datos |
-| #1296 | #1650 | ⚠️ Implementación pendiente; GitHub: needs-work | Seguimiento: rechazo de factores UOM no finitos |
-| #1300 | #1716 | ⚠️ Implementación pendiente; GitHub: needs-work | Rechaza cuentas AR/AP no contabilizables |
-| #1302 | #1716 | ⚠️ Implementación pendiente; GitHub: needs-work | Valida proveedor activo al aprobar factura de compra |
-| #1339 | #1716 | ⚠️ Implementación pendiente; GitHub: needs-work | Impide agregar valores a dimensiones inactivas |
-| #1342 | #1716 | ⚠️ Implementación pendiente; GitHub: needs-work | Valida cuenta bancaria al elegir plantilla de cheque |
-| #1345 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | ODS omite filas con number-rows-repeated |
-| #1346 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Importación de maestros descarta filas agrupadas por document_ref |
-| #1353 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | [Auditoría] Define o elimina el filtro fiscal por categoría de artículo |
+| #1055 | #1652 | ❌ QA1/QA2 confirman QA3: XLS omite datemode 1904; el TabularBook local convierte serial a texto; GitHub: needs-work, etiqueta intacta | Normalizar fechas Excel/XLS con época del workbook antes de validar periodo |
+| #1057 | #1652 | ❌ QA1/QA2 rechazan: validate_document no valida proveedor y build permite terceros inactivos/no hallados; GitHub: needs-work, etiqueta intacta | Importación de órdenes: validar proveedor existente, activo y con rol |
+| #1059 | #1652 | ❌ QA1/QA2 rechazan; decisión aprobada 6716234735 pero el adaptador ignora impuesto y no calcula/persiste impuestos; GitHub: needs-work, etiqueta intacta | Aplicar plantilla fiscal, comparar observado, calcular omitido y persistir resultado en orden/línea |
+| #1060 | #1652 | ❌ QA1/QA2 rechazan en HEAD `45e38f2b`; GitHub: needs-work, etiqueta intacta | Importaciones no validan actividad/rol de Item ni UOM activa en rutas afectadas; faltan regresiones de ventas, compras y UOM inactiva |
+| #1062 | #1658 | ❌ QA1/QA2 rechazan en HEAD `45e38f2b`; GitHub: needs-work, etiqueta intacta | Falta checkpoint/idempotencia para reanudar tras commit parcial; estado 7 no ofrece acción y `detail()` vuelve a parsear la fuente fallida |
+| #1063 | #1652 | ❌ QA1/QA2 rechazan en HEAD `45e38f2b`; GitHub: needs-work, etiqueta intacta | Normalizar padre vacío a NULL y validar/resolver jerarquía activa, de grupo, misma compañía e intraarchivo antes de persistir |
+| #1087 | #1650 | ❌ QA1/QA2 rechazan en HEAD `45e38f2b`; GitHub: needs-work, etiqueta intacta | Se rechaza >4 decimales, pero el Decimal aceptado no se cuantiza a escala 4 antes de búsqueda/identidad/persistencia; faltan pruebas de reimport equivalente y PostgreSQL |
+| #1174 | #1650 | ❌ QA1/QA2 rechazan; GitHub: needs-work, etiqueta intacta | Parser/servicio rechazan no finitos, pero helper lanza antes de handlers en POST alta/edición; además `1e-10` pasa y redondea a cero en Numeric(20,9). Faltan regresiones HTTP y de representabilidad. |
+| #1183 | #1717 | ✅ QA1/QA2 aprueban estáticamente en HEAD `45e38f2b`; etiqueta `needs-work` intacta | Campos vacíos no persisten, alta válida crea bodega/configuración y duplicado devuelve error controlado; queda como mejora una prueba HTTP de usuario no-admin y compañía ajena |
+| #1184 | #1717 | ✅ QA1/QA2 aprueban estáticamente en HEAD `45e38f2b`; etiqueta `needs-work` intacta | Unidad vacía y presupuesto `abc` no persisten; unidad válida y presupuesto decimal exacto cubiertos; jerarquía de otra compañía se rechaza |
+| #1185 | #1650 | ❌ QA1/QA2 rechazan por cobertura HTTP incompleta; GitHub: needs-work, etiqueta intacta | Coerción compartida ahora convierte parseo inválido a ValueError y callers lo capturan; falta regresión para alta de conciliación de caja chica y demás consumers/campos |
+| #1197 | #1652 | ❌ QA1/QA2 rechazan; GitHub: needs-work, etiqueta intacta | Adapter copia texto y `_normalize_line()` usa `bool()`, por lo que false textual es True; no hay pruebas. Diff local rechaza cabecera extra pero no ofrece coerción solicitada ni corrige consumers centrales |
+| #1199 | #1658 | ❌ QA1/QA2 rechazan: adaptador huérfano y pruebas siguen en árbol; GitHub: needs-work, etiqueta intacta | Retirar archivo y tests directos del adaptador no registrado; asegurar tests del activo. Contrato fiscal aprobado #1059 requiere integración separada antes de declarar paridad funcional |
+| #1200 | Consumidor | ❌ QA1/QA2 rechazan: validation/execute preflight rechazan, pero `_execute_task()` carece de guard tras su segunda lectura; GitHub: needs-work, etiqueta intacta | Probar worker ante fuente vacía entre preflight y proceso; nunca completar con cero documentos |
+| #1201 | Consumidor | ❌ QA1/QA2 rechazan: XLSX nativo ya normaliza, XLS sigue convirtiendo serial a texto y omite datemode; faltan fixtures 1900/1904 y recorrido a consumer; GitHub: needs-work, etiqueta intacta | Normalizar fechas nativas XLS/XLSX al mismo contrato y preservar época de workbook |
+| #1204 | #1718 | ❌ QA1/QA2 rechazan; GitHub: needs-work, etiqueta intacta | API calcula consumo con `max(..., 0)` pero omite rechazar `discount + gain_loss >= allocated`; servicio de aplicación sí lo rechaza; faltan bordes igualdad/exceso |
+| #1205 | #1718 | ❌ QA1/QA2 rechazan; GitHub: needs-work, etiqueta intacta | Cada fila compara saldo inicial; faltan acumuladores por pago/documento y tests múltiples de prevalidación vs apply |
+| #1206 | #1652 | ❌ QA1/QA2 rechazan: endpoint sigue haciendo `list(worksheet.iter_rows())` antes de límites; el XLSXReader limitado no se usa y no hay prueba endpoint con dimensión inflada; GitHub: needs-work, etiqueta intacta | Aplicar límites de filas/columnas durante lectura en `/parse-xlsx`, sin confiar en dimensión declarada |
+| #1212 | #1717 | ❌ QA1/QA2 rechazan; GitHub: needs-work | Rechaza filas duplicadas por artículo y bodega en conciliación |
+| #1225 | #1717 | ❌ QA1/QA2 rechazan; GitHub: needs-work | Rechaza tipos desconocidos en facturas de venta |
+| #1262 | #1652 | ❌ QA1/QA2 rechazan; GitHub: needs-work | Unifica deteccion de duplicados bancarios |
+| #1263 | #1650 | ❌ QA1/QA2 rechazan; GitHub: needs-work | Rechaza tolerancias negativas de matching |
+| #1265 | #1716 | ❌ QA1/QA2 rechazan; GitHub: needs-work | Filtra cuentas inactivas en setup de caja chica |
+| #1291 | #1652 | ❌ QA1/QA2 rechazan; GitHub: needs-work | Seguimiento: normalización de fechas Excel en importaciones |
+| #1292 | #1650 | ❌ QA1/QA2 rechazan por cobertura contractual; GitHub: needs-work | Seguimiento: importes positivos en pronósticos importados |
+| #1295 | #1652 | ❌ QA1/QA2 rechazan: falta guard de worker y regresiones de formatos; GitHub: needs-work | Seguimiento: rechazo de importaciones sin filas de datos |
+| #1296 | #1650 | ❌ QA1/QA2 rechazan: error HTTP fuera del handler y factor no representable; GitHub: needs-work | Seguimiento: rechazo de factores UOM no finitos |
+| #1300 | #1716 | ❌ QA1/QA2 rechazan: configuración y ambos postings admiten cuentas inválidas; GitHub: needs-work | Rechaza cuentas AR/AP no contabilizables |
+| #1302 | #1716 | ❌ QA1/QA2 rechazan: PO ya revalida; cotización/recepción/factura conservan bypasses; GitHub: needs-work | Valida proveedor activo al aprobar factura de compra |
+| #1339 | #1716 | ❌ QA1/QA2 rechazan: sin guard de alta/selector y discovery omite vigencia; GitHub: needs-work | Impide agregar valores a dimensiones inactivas |
+| #1342 | #1716 | ❌ QA1/QA2 rechazan template_id entre cuentas; semántica global+cuenta pendiente, GitHub: needs-work | Valida cuenta bancaria al elegir plantilla de cheque |
+| #1345 | #1652 | ✅ QA1/QA2 aprueban estáticamente; GitHub: needs-work, etiqueta intacta | ODS expande filas repetidas con límites previos y filas independientes |
+| #1346 | #1652 | ⚠️ Fix local en `ef0cd81d`/`d294d139`: columnas fuera del esquema rechazadas antes de agrupar, etiquetas con prioridad sobre aliases y regresiones de maestros/plantilla inglesa; pendiente QA1/QA2; GitHub: needs-work, etiqueta intacta | Añadir regresiones de pérdida de filas y corregir colisión de alias `reference` en JournalEntry |
+| #1353 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Persistencia, propagación y evaluación fiscal de categoría por línea no están implementadas |
 | #1358 | #1717 | ⚠️ Implementación pendiente; GitHub: needs-work | [Auditoría] Valida el tipo de grupo de terceros al guardarlo |
 | #1362 | #1717 | ⚠️ Implementación pendiente; GitHub: needs-work | [Auditoría] Valida enums en configuración de matching |
 | #1373 | #1652 | ⚠️ Implementación pendiente; GitHub: needs-work | Limita filas XLSX antes de materializar la hoja completa |
@@ -377,8 +377,8 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
-| #2076 | #1708 | ⚠️ Implementado; regresión local en `45fa2490`; GitHub: needs-work | El segundo rechazo observa la solicitud ya rechazada y no registra otra acción |
-| #2120 | #1709 | ⚠️ Implementado; barrido acotado en `fdbf8a33`; GitHub: needs-work | Reejecutar un período revierte solo corridas abiertas del mismo ejercicio; no toca ejercicios ajenos ni períodos cerrados |
+| #2076 | #1708 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Prueba solo dos rechazos secuenciales; falta interleaving de aprobación/rechazo en PostgreSQL y verificar que el flujo perdedor no cree solicitud nueva ni publique efectos |
+| #2120 | #1709 | ❌ QA1 rechaza; QA2 aprueba alcance nominal; GitHub: needs-work, etiqueta intacta | Barrido fiscal nominal cubierto, pero `IdentifierConfigurationError` por período ausente/ambiguo se interpreta como abierto y omite la guarda de `void`; revisar fail-closed y cierre concurrente |
 | #546 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | [AUDIT][R2R][Multimoneda] Las tasas de cambio históricas pueden editarse después de ser usadas |
 | #758 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | HIGH: Enforce complete source and destination currency data on every posting |
 | #761 | #1708 | ⚠️ Implementación pendiente; GitHub: needs-work | MEDIUM: Apply cancellation and reversal period semantics consistently to all document types |
@@ -463,34 +463,57 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1325 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | Advierte flujos omitidos por falta de tipo de cambio |
 | #1337 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | Conecta las dimensiones analíticas con el ledger GL |
 | #1341 | #1709 | ⚠️ Implementación pendiente; GitHub: needs-work | Incluye saldo inicial en balanza de query tools |
-| #1348 | #1709 | ⚠️ Implementación pendiente; GitHub: needs-work | El saldo acumulado bancario omite el saldo anterior al rango |
-| #1352 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | [Auditoría] Integra o elimina la reversión de snapshots |
-| #1359 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | [Auditoría] Conecta las dimensiones analíticas adicionales con el GL |
-| #1361 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | [Auditoría] Retira el catálogo de tipos especiales sin consumidores |
-| #1364 | #1708 | ⚠️ Implementación pendiente; GitHub: needs-work | [Auditoría] Restringe adjudicación a la ronda activa |
-| #1365 | #1708 | ⚠️ Implementación pendiente; GitHub: needs-work | [Auditoría] Invalida comparativos al cancelar oferta seleccionada |
-| #1367 | #1708 | ⚠️ Implementación pendiente; GitHub: needs-work | [Auditoría] Registra y valida excepción de abastecimiento |
+| #1348 | #1709 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Apertura previa, reversas con fecha efectiva y acumulado separado por cuenta |
+| #1352 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Retirar helper sin caller y corregir documentación que afirma persistencia/uso de snapshot |
+| #1359 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Integración dinámica ausente; revertir dirección local de retiro del modelo conforme a la decisión vigente |
+| #1361 | #1658 | ✅ QA1/QA2 aprueban estáticamente el retiro en `a93657fa`; GitHub: needs-work, etiqueta intacta | `SPECIAL_ACCOUNT_TYPES` sin referencias; contratos activos de tipos de cuenta conservados |
+| #1364 | #1708 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Guard de adjudicación existe; faltan regresiones y rechazar quotes con ronda inválida/nula |
+| #1365 | #1708 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Cierre aún cuenta ofertas canceladas/no aprobadas en comparativos finalized/used |
+| #1367 | #1708 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Excepción aún acepta espacios y no conserva motivo/actor en la orden |
 | #1368 | Consumidor | ⚠️ Implementación pendiente; GitHub: needs-work | Seguimiento: conectar dimensiones analíticas con el ledger GL |
-| #1372 | #1656 | ⚠️ Implementación pendiente; GitHub: needs-work | Preserva el inicio fiscal cuando solo se recibe una fecha |
-| #1375 | #1708 | ⚠️ Implementación pendiente; GitHub: needs-work | Valida prerrequisitos de notas al aprobar documentos |
-| #1377 | #1709 | ⚠️ Implementación pendiente; GitHub: needs-work | fix: incluye créditos abiertos en saldo por pagar |
-| #1378 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | fix: muestra la moneda correcta al relacionar pagos |
-| #1380 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | fix: actualiza tasas al cambiar la cuenta bancaria |
-| #1381 | #1656 | ⚠️ Implementación pendiente; GitHub: needs-work | fix: bloquea imports en pronósticos aprobados |
-| #1382 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | fix: rechaza tasas cero numéricas al importar |
-| #1386 | #1654 | ⚠️ Implementación pendiente; GitHub: needs-work | fix: respeta selección de libros en asientos |
-| #1406 | #1654 | ⚠️ Implementación pendiente; GitHub: needs-work | Cierra saldos de documento con la misma regla de pendientes |
-| #1427 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | Muestra la moneda en conciliación de compras |
-| #1430 | #1708 | ⚠️ Implementación pendiente; GitHub: needs-work | Rechaza adjudicaciones sin líneas válidas |
-| #1432 | #1708 | ⚠️ Implementación pendiente; GitHub: needs-work | Bloquea rondas tras el cierre manual |
-| #1434 | #1709 | ⚠️ Implementación pendiente; GitHub: needs-work | Excluye órdenes completadas del dashboard |
-| #1436 | #1707 | ⚠️ Implementación pendiente; GitHub: needs-work | Método fiscal por cantidad devuelve siempre cero |
-| #1437 | #1707 | ⚠️ Implementación pendiente; GitHub: needs-work | Notas de crédito muestran preview fiscal de factura |
-| #1438 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | Preview de factura de compra usa NIO en vez de su moneda |
-| #1440 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | Saldo de pagos previos se duplica al prorratear |
-| #1441 | #1707 | ⚠️ Implementación pendiente; GitHub: needs-work | Asiento fiscal omite impuestos sin cuenta configurada |
+| #1372 | #1656 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Fecha fiscal parcial se acepta y se reemplaza por calendario sin aviso |
+| #1375 | #1708 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Guard final ya incluye las cuatro notas, pero falta regresión vigente y las notas de compra omiten importe no nulo; nota de venta solo valida origen si se informa |
+| #1377 | #1709 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | KPI aún usa `include_returns=False` y `payables` filtra devoluciones; falta regresión de conciliación |
+| #1378 | #1655 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Árbol reutiliza allocated en moneda ajena y total de referencias etiqueta allocated con moneda del pago |
+| #1380 | #1655 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Al cambiar cuenta la UI conserva tasa positiva antigua y backend la persiste sin validar el par nuevo |
+| #1381 | #1656 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | El guard secuencial existe, pero session identity stale evade aprobación concurrente; faltan Closed/Archived |
+| #1382 | #1655 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | El adaptador activo pierde 0 numérico con `or` y cae a tasa histórica; faltan regresiones |
+| #1386 | #1654 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Fix y regresiones principales presentes; falta regresión de libro activo de otra compañía |
+| #1406 | #1654 | ✅ QA3 lo marcó fixed; GitHub: fixed (sin cambio de etiqueta en esta sesión) | `close_document_balances()` excluye destinos Draft igual que cierre por línea; test real vigente cubre 10 unidades |
+| #1427 | #1655 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Tablas, pendientes y panel siguen mostrando importes sin moneda transaccional |
+| #1430 | #1708 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | Clave ajena no se valida y permite persistir award finalized sin líneas |
+| #1432 | #1708 | ✅ QA1/QA2 aprueban localmente; GitHub: needs-work, etiqueta intacta | `closed` es terminal bajo lock compartido; tests vigentes cubren servicio, POST, cierre repetido y errores |
+| #1434 | #1709 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work, etiqueta intacta | KPI cuenta todo docstatus=1 sin status ni pendientes; reproducción sigue vigente |
+| #1436 | #1707 | ✅ QA1/QA2 aprueban rechazo del método no soportado; GitHub: needs-work, etiqueta intacta | UI/config, motor y snapshot rechazan `quantity`; no queda cero silencioso |
+| #1437 | #1707 | ❌ QA1/QA2 rechazan; GitHub: needs-work (sin cambios) | Notas de crédito muestran preview fiscal de factura |
+| #1438 | #1655 | ❌ QA1/QA2 rechazan; GitHub: needs-work (sin cambios) | Preview de factura de compra usa NIO en vez de su moneda |
+| #1440 | #1655 | ❌ QA1/QA2 rechazan; GitHub: needs-work (sin cambios) | Saldo de pagos previos se duplica al prorratear |
+| #1441 | #1707 | ❌ QA1/QA2 rechazan; GitHub: needs-work (sin cambios) | Asiento fiscal omite impuestos sin cuenta configurada |
+| #1465 | #2207 | ❌ QA1/QA2 rechazan; GitHub: needs-work (sin cambios) | Falta regresión HTTP para tipo desconocido; close-line/close-document aún pueden responder 500 |
 | #1460 | #1655 | ⚠️ Implementación pendiente; GitHub: needs-work | Prorratea mal el valor de anticipos multimoneda |
 | #1490 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | Guarda cambios de libro y año fiscal del presupuesto |
+| #1492 | #1658 | ❌ QA1/QA2 rechazan en re-revisión; GitHub: needs-work intacto | El test remoto está presente, pero los casos dual-positive también violan otra condición y no reproducen el defecto con totales globales balanceados; agregar regresión discriminante para creación y datos históricos |
+| #1493 | #1658 | ❌ QA1/QA2 rechazan en re-revisión local; GitHub: needs-work intacto | Falta test de repetición por misma ocurrencia; tras estado `reversed`/`failed` puede propagarse IntegrityError por índice único |
+| #1564 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | 9 listados aún limitan a 100 sin paginación ni total real; badges cuentan solo la página obtenida |
+| #1737 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | purchase_uom/sale_uom no se cruzan con UOM base ni conversiones al crear/editar |
+| #1752 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | Editar borrador ignora ID y POST crea un costo de importación duplicado |
+| #1758 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | Falta test integrado persisted dims→builder→allocation y migración para cuatro columnas nuevas |
+| #1811 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | El formulario de conciliación no manda moneda exigida; error controlado re-renderiza, no permite alta normal |
+| #1813 | #1658 | ❌ QA1/QA2 rechazan en re-revisión local; GitHub: needs-work intacto | 3-way pasa con `require_sales_order=False` y sin OV/Nota, o con Nota no vinculada a OV; test solo invoca helper, falta regresión POST submit y prueba de no-posting |
+| #1888 | #1658 | ❌ QA1/QA2 rechazan independientemente en revisión local; GitHub `needs-work` intacto | Decisión aprobada reciente: persistir/recuperar remarks y centro de costo/proyecto por línea según #1359; retirar tax payloads, ocultar/rechazar account arbitraria y campos no soportados. `StockEntryItem` carece de columnas; writer y edit renderer omiten esos valores; macro/JS aún muestran y preparan controles fiscales/dimensiones/cuenta; faltan propagación GL por línea, validación/RBAC y regresiones integradas. |
+| #1891 | #1658 | ❌ QA1/QA2 rechazan independientemente en re-revisión local; GitHub `needs-work` intacto | Aunque formulario/alta rechazan `stock_adjustment` y existe test local, `/stock-entry/<id>/duplicate` copia `origen.purpose` y commitea un nuevo borrador genérico; el submit/posting aún lo admite; test no cubre duplicación histórica |
+| #1915 | #1658 | ✅ QA1/QA2 aprueban estáticamente en HEAD local; GitHub: needs-work (sin cambios) | `base.ods` no tiene consumidor/documentación de uso manual; CSV operativo y flujo integrado de alta probado estáticamente |
+| #1930 | #1658 | ✅ QA1/QA2 aprueban estáticamente en HEAD local; GitHub: needs-work (sin cambios) | Tamaño/orientación aplican a CSS/PDF/preview; POST inválidos de alta/edición re-renderizan sin alterar configuración |
+| #1916 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | Falta migración efectiva para tablas workflow en bases existentes y queda `WORKFLOW_STATE_ID` huérfano |
+| #1938 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | `show_users`/`advanced` persistidos no se restauran; falta migración de SavedReportView para DB existentes |
+| #1973 | #1658 | ❌ QA1/QA2 rechazan localmente tras reevaluación; GitHub: needs-work (sin cambios) | La prueba inspecciona solo la primera llamada por template; callers posteriores no quedan protegidos |
+| #1992 | #1658 | ❌ QA1/QA2 rechazan independientemente en revisión local; GitHub `needs-work` intacto | Vale omite `naming_series` aunque servicio lo acepta; gasto y reposición tampoco pasan selector ni servicio; los tres consumen default y silencian `IdentifierConfigurationError`; faltan regresiones de selección válida/inválida y contadores |
+| #2061 | #1658 | ❌ QA1/QA2 rechazan independientemente en revisión local; GitHub `needs-work` intacto | `server()` solo llama el resolver si falla conexión; `verifica_coneccion_db()` trata el objeto Result como truthy aunque User no tenga filas, por lo que arranca Waitress en DB conectada sin admin; sin test de Waitress |
+| #2062 | #1658 | ⏸ Revisión de alcance sin decisión funcional aprobada; GitHub `needs-work` intacto | POST delete sigue borrando `CompanyDefaultAccount`, y guard sensible lo rechaza en flush; el issue no decide entre borrado auditado, inactivación o retirar acción. AGENTS prohíbe resolver esa decisión desde QA |
+| #2077 | #1658 | ✅ QA1/QA2 aprueban estáticamente en re-revisión; GitHub: needs-work (sin cambios) | Pipeline activo y regresiones de validación/almacenamiento/hash/rollback/limpieza verificados. Migración Alembic de `File.sha256` pertenece a #1898; no se cambió etiqueta ni se publicó comentario |
+| #1118 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | Test cubre borrador/posteado, pero no cancelado ni total exclusivo posteado |
+| #2045 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | Test HTTP solo verifica 200, no detecta si vuelve a consultarse `from_order` ni cubre origins soportados/company scope |
+| #1937 | #1658 | ❌ QA1/QA2 rechazan localmente; GitHub: needs-work (sin cambios) | No existe regresión vigente con >100 filas que verifique el PDF completo; el test histórico solo mockeaba el flag |
 | #1499 | #1709 | ⚠️ Implementación pendiente; GitHub: needs-work | Incluye reversas de GL en el pronóstico real de caja |
 | #1501 | #1656 | ⚠️ Implementación pendiente; GitHub: needs-work | Valida fechas de proyecciones dentro del año fiscal |
 | #1502 | #1709 | ⚠️ Implementación pendiente; GitHub: needs-work | Permite conciliar reversas contabilizadas de otro período |
@@ -541,7 +564,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
-| #2098 | #1653 | ⚠️ Implementado; regresión local en `3a4b1b94`; GitHub: needs-work | La validación final de aprobación bloquea la orden antes de validar cantidades |
+| #2098 | #1653 | ❌ QA1/QA2 rechazan; GitHub: needs-work, etiqueta intacta | Ambos caminos bloquean OC y líneas, pero la regresión 6+6 es secuencial y pasa sin locks; falta concurrencia PostgreSQL de dos aprobaciones |
 | #651 | #1715 | ⚠️ Implementación pendiente; GitHub: needs-work | [MEDIO][INV] Reconstrucción de capas de valuación destructiva |
 | #947 | #1651 | ⚠️ Implementación pendiente; GitHub: needs-work | Document Flow: cantidades pendientes mezclan UOM |
 | #966 | #1651 | ⚠️ Implementación pendiente; GitHub: needs-work | Document status: unificar cantidades base |
@@ -650,8 +673,9 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
-| #2065 | #1711 | ⚠️ Implementado; regresión restaurada en `64276241`; GitHub: needs-work | Activo/Inactivo y Sí/No verificados sobre HTML renderizado, no sobre el texto de la plantilla |
-| #1071 | #1658 | ⚠️ Código legacy retirado en `a93657fa`; falta regresión committed de `?legacy=1`; GitHub: needs-work (triage 2026-11-20) | Eliminar la ruta legacy del árbol documental |
+| #2065 | #1711 | ❌ QA1/QA2 confirman QA3; GitHub: needs-work, etiqueta intacta | Render real sin contaminación, pero asserts globales solo exigen ambas etiquetas; no detectan ramas booleanas invertidas por fila/columna |
+| #2067 | #1711 | ⚠️ QA1/QA2 cuestionan suficiencia de cobertura; GitHub: cerrado/fixed, sin modificar | Render real aislado, pero solo cubre compra precio=percentage, compra cantidad=absolute y venta precio=absolute; faltan combinaciones restantes por campo |
+| #1071 | #1658 | ❌ QA1/QA2 confirman QA3; GitHub: needs-work, etiqueta intacta | Retiro correcto; falta regresión HTTP que pruebe el contrato canónico ante `?legacy=1` |
 | #1092 | #1658 | ⚠️ Implementación pendiente; GitHub: needs-work | Completar rutas enlazadas en lista de reposiciones |
 | #1111 | #1711 | ⚠️ Implementación pendiente; GitHub: needs-work | fix: permite agregar correos en confirmación |
 | #1112 | #1711 | ⚠️ Implementación pendiente; GitHub: needs-work | fix: muestra historial de confirmaciones por tercero |
@@ -724,3 +748,73 @@ Si durante la implementación aparece una incompatibilidad real con estos contra
 - Tier 1 se valida en SQLite y PostgreSQL; MySQL Tier 2 también se prueba según la cadencia de integración. Desktop debe operar sin Redis. R2R consume fuentes conciliadas, no agregados sin grano definido.
 - Antes de cada commit de código, ejecutar las pruebas mínimas pertinentes y los linters; cada 50 commits acumulados y antes del push, completar la ronda de workflows definida en «Ritmo de desarrollo y controles». Registrar comandos, SHA validado, resultados y bloqueos en GitHub. QA1 y QA2 revisan independientemente; conservar `needs-work` si falta cobertura o una observación sigue abierta. Solo QA3 expresamente autorizado o el administrador puede establecer `fixed`; no cerrar ni hacer push sin autorización expresa.
 - La puerta Alpha de #2248 requiere recorridos O2C/S2P/I2F/CTM y R2R, migración de bases limpia/existente según modo, y limitaciones diferidas aceptadas con justificación e impacto.
+
+### Revisión QA local — #1919 y #1931
+
+- #1919: QA1 y QA2 rechazan. Falta revocación efectiva por `Party.is_active`/`CompanyParty.is_active`, incluso en preview/PDF. Corregir guard y cubrir listado/detalle/impresión. GitHub intacto.
+- #1931: QA1 y QA2 rechazan. La ruta carga versiones, pero la interfaz las ignora y no ofrece enlace al historial. Renderizarlo bajo RBAC y agregar regresión funcional. GitHub intacto.
+- #1928: QA1/QA2 rechazan. Los bloques de plantilla están corregidos, pero falta una regresión positiva de contenido para lista, formulario y settings; el test histórico citado no está en HEAD.
+- #1564: QA rechaza. Los dashboards de cliente y proveedor aún limitan cada listado a 100 sin continuación y calculan conteos con las filas limitadas.
+- #1950: QA1/QA2 rechazan. Los tres formularios carecen de token; el middleware global bloquea los POST y el fixture existente desactiva CSRF. Agregar token y regresiones HTTP activas/negativas por cada formulario.
+- #2093: QA1/QA2 rechazan. `PurchaseOrderComparison*`, ruta/render legacy, servicio/template y test siguen en HEAD aunque se retiró el constructor; preservar `PurchaseRequestComparison` activo al completar la limpieza.
+- #1162: QA1/QA2 rechazan por fix ausente. La constante solo tiene su definición en `exchange_revaluation_service.py:50`; eliminar la línea, conservar la lógica explícita de candidatos y sus pruebas existentes.
+- #1882: QA1/QA2 rechazan. El template y redirect legacy siguen presentes, y el dashboard los enlaza; cambiar al asistente canónico y mantener la cobertura del pipeline bancario.
+- #1899: QA1/QA2 rechazan por retiro ausente. Las tres hojas legacy no tienen consumidores; conservar `signin.css` y el CSS activo `cacaoaccounting.css`.
+- #1909: QA1/QA2 rechazan. `SetupConfirmationForm` ya no existe, pero los tres forms todavía declaran `step` oculto sin consumidor; el wizard y CSRF siguen gobernados/renderizados independientemente.
+- #2071: QA1/QA2 aprueban localmente el retiro presente desde `d738bcdb`; no hay referencias; dashboard y agregaciones vigentes mantienen cobertura. GitHub intacto.
+- #2079: QA1/QA2 rechazan por alias aún presente en `audit_chain.py:61`. Retirar solo `_CHAIN_FIELDS`; conservar hashing heredado V1/actual V2 y reinstalar cobertura de ambos formatos.
+- #2203: verificado completo localmente; macro/global retirados en `752486f1`, test estructural trackeado y QA3 cerró el issue como `fixed`. No se cambió GitHub.
+- #2204: falso positivo inicial verificado; las macros compartidas restantes tienen consumidores Jinja reales, el guard estructural está versionado y QA3 cerró como `fixed`.
+- #2150: completado y QA3/fixed verificado; el contrato es caller-controls-transaction y la prueba real de catálogo cubre rollback sin cuentas persistidas.
+- #2147: completado localmente; link a detalle y regresión HTTP están en HEAD, QA3 autorizó `fixed` y cierre.
+- #1093: QA1/QA2 rechazan. La protección del servicio parece correcta, pero la regresión concurrente vigente es SQLite-only; falta cubrir dos reembolsos simultáneos en PostgreSQL y verificar una sola nota/pago/efecto GL.
+- #1094: QA1/QA2 rechazan. El lock determinista y la asociación única parecen correctos; falta regresión de reserva simultánea del mismo gasto en dos sesiones PostgreSQL.
+- #1139: QA1/QA2 rechazan. El lock transaccional común de la factura y los locks de sus líneas permiten recalcular bajo serialización; la única prueba de concurrencia usa fixture SQLite y no fuerza el interleaving. Agregar regresión de dos transacciones PostgreSQL sobre recepciones distintas y una factura, verificando que la cantidad asignada nunca excede la facturada. GitHub intacto.
+- #1177: QA1/QA2 rechazan. La decisión vigente (#1177/#1539) establece que cancelar una recepción no es una entrega: un serial puede recibirse de nuevo si no queda entrada activa, manteniendo unicidad y una sola ubicación. La reversa aún marca `delivered`; la cancelación de transferencia aplica varias reversas no ordenadas y puede dejar estado/ubicación incoherentes. No hay regresiones específicas. Cubrir recepción-cancelación-recepción, serial ya activo, devolución real y transferencia cancelada independiente del orden. GitHub intacto.
+- #1178: QA1/QA2 rechazan. `_validate_serial()` comprueba `available` y bodega con SELECT ordinario; `update_serial_state()` vuelve a leer y mutar sin `FOR UPDATE` ni transición condicional. La unique de `SerialNumber.serial_no` evita filas duplicadas, no dos movimientos. Agregar lock/revalidación transaccional y regresión PostgreSQL multi-sesión que pruebe una salida aceptada, otra rechazada y una sola salida activa. GitHub intacto.
+- #1306: QA1/QA2 rechazan. Los caminos `_create_stock_movement()` y `_outgoing_stock_values()` validan disponibilidad antes de bloquear/consumir `StockBin`, luego actualizan la fila serial sin revalidar. Falta lock de `(item_code, serial_no)` dentro de la transacción de posteo y test de doble posting concurrente con stock restante, una sola salida aceptada. Código y brecha coinciden con #1178, pero mantener criterios y seguimiento propios. GitHub intacto.
+- #1318: QA1/QA2 rechazan el retiro como incompleto. El helper sin callers sí fue eliminado, pero `ReconciliationItem` aún documenta que filas legacy nullable deben migrarse y el reporte/test siguen detectando `reconciliation_item_missing_context`. Fallbacks dependen de que exista la transacción fuente; no hay backfill alternativo ni evidencia de censo/cero datos persistidos. Definir mecanismo explícito o establecer el contrato de datos legacy antes de retirar la estrategia. GitHub intacto.
+- #1865: QA1/QA2 rechazan al reevaluar el contrato reciente. El test está trackeado, pero el guard rechaza hasta cambios solo de cabecera antes de comprobar las relaciones; el criterio permite guardar si conserva exactamente vínculos activos/cantidades y rechaza solo cambios/eliminaciones vinculados. Agregar caso positivo de cabecera-only y preservar rechazo/rollback de cambios de línea y cantidad. GitHub intacto.
+- #1877: QA1/QA2 rechazan localmente. El test trackeado simula docstatus=1 y cambios de línea, no ejecuta `submit_document()`/`post_stock_entry()` ni rollback del savepoint. Además, el listener concede el allowance al detectar cualquier transición ORM draft→posted, no un posting autorizado, lo que abre bypass potencial del guard. Vincular la autorización al posting y probar conciliación Cloud real, edición bloqueada post-commit y limpieza en rollback. GitHub intacto.
+
+### Revisión QA local — #1710 (continuación)
+
+- #1732: QA1/QA2 aprueban localmente el fix de revocación administrativa: login HTTP real, invalidación de JWT/cookie previo y no resurrección al reactivar. GitHub y etiquetas intactos.
+- #1917: QA1/QA2 rechazan localmente. El handler ya conserva la respuesta y setea cookie correctamente, pero falta la regresión HTTP del éxito OTP para destino, cookie, estado autenticado y destino predeterminado. GitHub y etiquetas intactos.
+
+- #1948: QA1/QA2 rechazan localmente por test de validador retirado en `0970476b`; la dependencia está declarada y empaquetada. Falta recuperar validación inválida/vacía. GitHub y etiquetas intactos.
+- #1965: QA1/QA2 rechazan localmente; el manejo `InvalidHashError` está en HEAD, pero la regresión HTTP retirada en `0970476b` no tiene reemplazo. GitHub y etiquetas intactos.
+- #2023: QA1/QA2 rechazan localmente. El rollback de SMTP fallido parece preservar el token previo, pero falta prueba HTTP y un fallo de commit después de SMTP puede invalidar el enlace ya enviado. GitHub y etiquetas intactos.
+- #1762: QA1/QA2 rechazan localmente por falta de regresión del endpoint. Código confirma intentos incorrectos y helper consume al límite; el test HTTP que prueba persistencia después de teardown fue retirado. GitHub y etiquetas intactos.
+- #1958: QA1/QA2 rechazan localmente. El diseño conserva pending antes de SMTP, pero test de fallo de commit solo cubre reintento; falta fallo en envío inicial y destinatarios parciales. GitHub y etiquetas intactos.
+
+### Revisión QA local — #2209
+
+- #1923: QA1/QA2 aprueban en HEAD `45e38f2b`; el test restaurado `dfdfdf41` sí está en la rama local y cubre retorno interno, URLs externas, barras inversas/codificadas y controles. QA3 verificó ausencia en origin antes de la restauración local. GitHub/etiquetas intactos.
+
+- #1930: QA1/QA2 aprueban localmente en HEAD `45e38f2b`; `3a81c9d2` normaliza el error y el test HTTP versionado cubre alta/edición con valores inválidos sin mutación. GitHub/etiquetas intactos.
+
+- #1758: re-revisión QA1/QA2 rechaza localmente por cobertura de integración. La decisión funcional está aprobada; implementación guarda dimensiones y builder las propaga, pero no hay test persistido → contexto real → asignación del engine/posting. GitHub/etiquetas intactos.
+
+- #2077: re-revisión tras QA3: no hay consenso QA1/QA2. Test restaurado cubre validación/storage/hash/rollback/cleanup y QA1 aprueba; QA2 identifica falta de POST multipart válido al endpoint consumidor activo. Registrar #1898 aparte por la columna `File.sha256`/migración. GitHub/etiquetas intactos.
+
+- #1891: re-revisión QA1/QA2 rechaza localmente. El endpoint de duplicación copia `stock_adjustment` histórico a un draft nuevo sin usar el validator; el test de contrato no cubre el bypass. Bloquear duplicación y verificar ninguna fila nueva manteniendo consulta histórica. GitHub/etiquetas intactos.
+
+### Revisión QA local — #1938
+
+- QA1/QA2 rechazan en HEAD `45e38f2b`. RBAC y aislamiento actuales parecen correctos; `show_users`/`advanced` se persisten pero no se restauran desde la vista ni tienen regresión. Falta migración Alembic de `saved_report_view` conforme a #1898. GitHub/etiquetas intactos.
+
+- #1973: re-revisión QA1/QA2 rechaza localmente por cobertura parcial: las llamadas actuales están limpias, pero test inspecciona solo el primer match por archivo; los templates con llamadas múltiples no se renderizan en los smoke tests. GitHub/etiquetas intactos.
+
+- #1405: QA1/QA2 rechazan localmente por falta de regresión HTTP del fix actual. El handler permite origen por línea y aplica ACL de destino/fuente, pero el test de pago invoca servicio directamente; el único POST del endpoint cubre línea malformada. Agregar caso HTTP positivo y denegaciones de ACL. GitHub/etiqueta intactos.
+
+- #1753: QA1/QA2 rechazan localmente por cobertura HTTP específica ausente. La ruta ya valida `purchases/consultar` sobre factura fuente antes de render; añadir GET positivo/negativo para controlar metadatos expuestos. GitHub/etiqueta intactos.
+
+### Implementación local — cierre del árbol de trabajo
+
+- #1652: contrato tabular común en `ef0cd81d`, con `TabularBook`, normalización de encabezados/celdas y fixture equivalente CSV/XLS/XLSX/ODS. Siguen abiertos los consumidores paralelos, las fechas tipadas XLS y el límite de filas XLSX previo a materializar; esta entrega no los declara resueltos.
+- #1346: `d294d139` rechaza columnas ajenas al esquema antes de agrupar y da prioridad a las etiquetas localizadas sobre aliases. El CSV maestro `document_ref,nombre` ya no pierde filas; quedan regresiones QA1/QA2.
+- #2018: `41e3d615` impide que una regla global asocie una cuenta específica, exige cuenta de la compañía del documento en el posteo fiscal y cubre alta, edición, retención ajena y posteo.
+- #1998 y #1926: `2725af0e` agrega regresiones HTTP de privacidad de confirmaciones de saldo y de lectura de UOM por permiso de consulta.
+- #2059/#2060: `30859cd2` comparte el predicado del badge y la bandeja de aprobaciones. #2092: `8885d843` falla cerrado cuando el documento fuente no declara compañía.
+- Estado: commits locales sin push; no se cerraron issues ni se modificaron etiquetas. Siguiente paso obligatorio: QA1 → QA2 sobre este lote.
