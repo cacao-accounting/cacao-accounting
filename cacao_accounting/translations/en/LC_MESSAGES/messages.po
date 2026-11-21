@@ -24202,3 +24202,7 @@ msgstr "The approval level must be an integer greater than or equal to one."
 #: cacao_accounting/matching_config_service.py
 msgid "La tolerancia de precio no puede ser negativa."
 msgstr "Price tolerance cannot be negative."
+
+#: cacao_accounting/contabilidad/exchange_rate_import_service.py
+msgid "El archivo CSV debe estar codificado en UTF-8."
+msgstr "The CSV file must be encoded in UTF-8."

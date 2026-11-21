@@ -150,7 +150,7 @@ class ImportService:
                 return True
 
             normalized_rows = self._normalize_rows(table.columns, table.rows)
-            docs = self._group_by_reference(table.columns, normalized_rows)
+            docs = self._group_by_reference(table.columns, normalized_rows, adapter)
             batch.total_rows = len(normalized_rows)
 
             business_errors_count = self._collect_business_errors(adapter, batch_id, batch.company_id, docs)
@@ -380,7 +380,7 @@ class ImportService:
             docs = {}
         else:
             normalized_rows = self._normalize_rows(table.columns, table.rows)
-            docs = self._group_by_reference(table.columns, normalized_rows)
+            docs = self._group_by_reference(table.columns, normalized_rows, adapter)
 
         sample_rows_list = table.rows[:10]
 
@@ -503,7 +503,7 @@ class ImportService:
                     return
 
                 normalized_rows = self._normalize_rows(table.columns, table.rows)
-                docs = self._group_by_reference(table.columns, normalized_rows)
+                docs = self._group_by_reference(table.columns, normalized_rows, adapter)
                 ImportBatchError.query.filter_by(batch_id=batch_id).delete()
                 batch.total_rows = len(normalized_rows)
                 business_errors_count = self._collect_business_errors(adapter, batch_id, batch.company_id, docs)
@@ -613,8 +613,13 @@ class ImportService:
             database.session.add(err_record)
             database.session.commit()
 
-    def _group_by_reference(self, columns: List[str], rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-        """Agrupa las filas por la columna document_ref."""
+    def _group_by_reference(
+        self, columns: List[str], rows: List[Dict[str, Any]], adapter: Any | None = None
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Agrupa filas solo cuando el adaptador usa una referencia documental."""
+        if adapter is not None and not getattr(adapter, "group_by_reference", True):
+            return {f"row_{i}": [_IndexedImportRow(row, i + 1)] for i, row in enumerate(rows)}
+
         reference_column = next(
             (column for column in ("document_ref", "reference", "document_reference") if column in columns), None
         )

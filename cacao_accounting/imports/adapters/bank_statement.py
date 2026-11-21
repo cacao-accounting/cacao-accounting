@@ -37,6 +37,9 @@ def _is_bank_identity_conflict(error: IntegrityError) -> bool:
 class BankStatementAdapter(BaseImportAdapter):
     """Adaptador para Extractos Bancarios."""
 
+    # Una referencia bancaria es informativa; movimientos distintos pueden compartirla.
+    group_by_reference = False
+
     columns = [
         "bank_account_id",
         "posting_date",
@@ -152,7 +155,7 @@ class BankStatementAdapter(BaseImportAdapter):
                     "bank_account_id": _text(row.get("bank_account_id")),
                     "company_id": context.get("company_id"),
                     "posting_date": posting_date,
-                    "reference_number": _text(row.get("reference_number")),
+                    "reference_number": _text(row.get("reference_number") or row.get("reference")),
                     "description": _text(row.get("description")),
                     "deposit": deposit,
                     "withdrawal": withdrawal,
