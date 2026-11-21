@@ -20,6 +20,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
+    DocumentLineFlowState,
     DocumentRelation,
     Entity,
     Item,
@@ -201,6 +202,41 @@ def test_close_line_rejects_a_line_from_another_document(close_line_scenario):
     )
 
     assert response.status_code == 400
+    with app.app_context():
+        state = database.session.execute(
+            database.select(DocumentLineFlowState).filter_by(
+                source_id=ids["alpha_order"],
+                target_type="sales_invoice",
+            )
+        ).scalar_one_or_none()
+        assert state is None
+
+
+def test_close_line_rejects_consistent_foreign_document_and_line(close_line_scenario):
+    """A correctly paired foreign source and line still fail the user's company ACL."""
+    app, ids = close_line_scenario
+    client = _authenticated_client(app, ids["seller"])
+
+    response = client.post(
+        CLOSE_URL,
+        json={
+            "source_document_type": "sales_order",
+            "source_document_id": ids["beta_order"],
+            "source_row_id": ids["beta_line"],
+            "target_document_type": "sales_invoice",
+            "reason": "Cierre de compañía no autorizada",
+        },
+    )
+
+    assert response.status_code == 403
+    with app.app_context():
+        state = database.session.execute(
+            database.select(DocumentLineFlowState).filter_by(
+                source_id=ids["beta_order"],
+                target_type="sales_invoice",
+            )
+        ).scalar_one_or_none()
+        assert state is None
 
 
 def test_service_rejects_a_line_from_another_document(close_line_scenario):

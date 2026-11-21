@@ -15,8 +15,12 @@ from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
 from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.config import configuracion
+from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 from cacao_accounting.database import (
+    AccountingPeriod,
     Currency,
+    DocumentLineFlowState,
+    DocumentRelation,
     Entity,
     Item,
     Modules,
@@ -123,29 +127,31 @@ def _sembrar_escenario() -> dict[str, str]:
         rate=Decimal("10"),
         amount=Decimal("50"),
     )
+    own_order_line = SalesOrderItem(
+        sales_order_id=own_order.id,
+        item_code="ITEM-PRIVADO",
+        item_name="Producto propio",
+        qty=Decimal("5"),
+        qty_in_base_uom=Decimal("5"),
+        uom="Unidad",
+        rate=Decimal("10"),
+        amount=Decimal("50"),
+    )
+    foreign_order_line = SalesOrderItem(
+        sales_order_id=foreign_order.id,
+        item_code="ITEM-PRIVADO",
+        item_name="Producto secreto de Cafe",
+        qty=Decimal("9"),
+        qty_in_base_uom=Decimal("9"),
+        uom="Unidad",
+        rate=Decimal("999"),
+        amount=Decimal("8991"),
+    )
     database.session.add_all(
         [
             own_line,
-            SalesOrderItem(
-                sales_order_id=own_order.id,
-                item_code="ITEM-PRIVADO",
-                item_name="Producto propio",
-                qty=Decimal("5"),
-                qty_in_base_uom=Decimal("5"),
-                uom="Unidad",
-                rate=Decimal("10"),
-                amount=Decimal("50"),
-            ),
-            SalesOrderItem(
-                sales_order_id=foreign_order.id,
-                item_code="ITEM-PRIVADO",
-                item_name="Producto secreto de Cafe",
-                qty=Decimal("9"),
-                qty_in_base_uom=Decimal("9"),
-                uom="Unidad",
-                rate=Decimal("999"),
-                amount=Decimal("8991"),
-            ),
+            own_order_line,
+            foreign_order_line,
             *[
                 SalesInvoiceItem(
                     sales_invoice_id=invoice.id,
@@ -164,8 +170,11 @@ def _sembrar_escenario() -> dict[str, str]:
     database.session.commit()
     return {
         "request": pedido.id,
+        "request_line": own_line.id,
         "own_order": own_order.id,
+        "own_order_line": own_order_line.id,
         "foreign_order": foreign_order.id,
+        "foreign_order_line": foreign_order_line.id,
         "credit_note": invoices["sales_credit_note"].id,
         "sales_return": invoices["sales_return"].id,
     }
@@ -438,3 +447,160 @@ def test_create_target_rejects_malformed_lines(document_flow_app):
     )
 
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("line_document_id_value", "expected_status"),
+    [
+        ("foreign_order", 403),
+        ("own_order", 400),
+    ],
+)
+def test_create_target_rejects_foreign_line_with_own_header(document_flow_app, line_document_id_value, expected_status):
+    """An authorized request header cannot authorize a foreign or mismatched source line."""
+    app, client, ids = document_flow_app
+    _login(client, "vendedor")
+    with app.app_context():
+        order_count = len(database.session.execute(database.select(SalesOrder.id)).scalars().all())
+        relation_count = len(database.session.execute(database.select(DocumentRelation.id)).scalars().all())
+    line_document_id = ids[line_document_id_value]
+
+    response = client.post(
+        "/api/document-flow/create-target",
+        json={
+            "source_document_type": "sales_request",
+            "source_document_id": ids["request"],
+            "target_document_type": "sales_order",
+            "company": "cacao",
+            "posting_date": "2026-10-16",
+            "lines": [
+                {
+                    "source_document_type": "sales_order",
+                    "source_document_id": line_document_id,
+                    "source_row_id": ids["foreign_order_line"],
+                    "qty": "1",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == expected_status
+    with app.app_context():
+        current_order_count = len(database.session.execute(database.select(SalesOrder.id)).scalars().all())
+        current_relation_count = len(database.session.execute(database.select(DocumentRelation.id)).scalars().all())
+        assert current_order_count == order_count
+        assert current_relation_count == relation_count
+
+
+def test_create_target_rejects_unauthorized_destination_without_creating_document(document_flow_app):
+    """A source grant cannot create an otherwise valid target in an ungranted company."""
+    app, client, ids = document_flow_app
+    _login(client, "vendedor")
+    with app.app_context():
+        order_count = len(database.session.execute(database.select(SalesOrder.id)).scalars().all())
+        relation_count = len(database.session.execute(database.select(DocumentRelation.id)).scalars().all())
+
+    response = client.post(
+        "/api/document-flow/create-target",
+        json={
+            "source_document_type": "sales_request",
+            "source_document_id": ids["request"],
+            "target_document_type": "sales_order",
+            "company": "cafe",
+            "posting_date": "2026-10-16",
+            "lines": [
+                {
+                    "source_document_type": "sales_request",
+                    "source_document_id": ids["request"],
+                    "source_row_id": ids["request_line"],
+                    "qty": "1",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 403
+    with app.app_context():
+        current_order_count = len(database.session.execute(database.select(SalesOrder.id)).scalars().all())
+        current_relation_count = len(database.session.execute(database.select(DocumentRelation.id)).scalars().all())
+        assert current_order_count == order_count
+        assert current_relation_count == relation_count
+
+
+def test_close_document_rejects_foreign_source_without_mutating_balance(document_flow_app):
+    """A sales grant for cacao cannot close balances from a foreign order."""
+    app, client, ids = document_flow_app
+    _login(client, "vendedor")
+
+    response = client.post(
+        "/api/document-flow/close-document",
+        json={
+            "source_document_type": "sales_order",
+            "source_document_id": ids["foreign_order"],
+            "target_document_type": "delivery_note",
+            "reason": "Cierre sin acceso",
+        },
+    )
+
+    assert response.status_code == 403
+    with app.app_context():
+        state = database.session.execute(
+            database.select(DocumentLineFlowState).filter_by(
+                source_id=ids["foreign_order"],
+                target_type="delivery_note",
+            )
+        ).scalar_one_or_none()
+        assert state is None
+
+
+def test_create_target_accepts_own_source_line_and_persists_relation(document_flow_app):
+    """An authorized request can create a target from its own source line."""
+    app, client, ids = document_flow_app
+    _login(client, "vendedor")
+    with app.app_context():
+        ensure_default_naming_series_for_company("cacao", ["sales_order"])
+        database.session.add(
+            AccountingPeriod(
+                entity="cacao",
+                name="2026",
+                status="Open",
+                enabled=True,
+                start=date(2026, 1, 1),
+                end=date(2026, 12, 31),
+            )
+        )
+        database.session.commit()
+
+    response = client.post(
+        "/api/document-flow/create-target",
+        json={
+            "source_document_type": "sales_request",
+            "source_document_id": ids["request"],
+            "target_document_type": "sales_order",
+            "company": "cacao",
+            "posting_date": "2026-10-16",
+            "lines": [
+                {
+                    "source_document_type": "sales_request",
+                    "source_document_id": ids["request"],
+                    "source_row_id": ids["request_line"],
+                    "qty": "1",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 201, response.get_data(as_text=True)
+    target_id = response.get_json()["target_id"]
+    with app.app_context():
+        target = database.session.get(SalesOrder, target_id)
+        relation = database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                source_id=ids["request"],
+                source_item_id=ids["request_line"],
+                target_id=target_id,
+            )
+        ).scalar_one_or_none()
+        assert target is not None
+        assert target.company == "cacao"
+        assert relation is not None
