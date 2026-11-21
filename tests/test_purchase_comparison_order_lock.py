@@ -100,11 +100,16 @@ def test_la_instancia_obsoleta_no_omite_la_revalidacion(tmp_path):
         comparison_id = comparison.id
         database.session.expunge(comparison)
         database.session.rollback()
-        with database.engine.begin() as connection:
-            connection.execute(
-                database.text("UPDATE purchase_request_comparison SET status = 'used' WHERE id = :id"),
-                {"id": comparison_id},
-            )
+        # La mutación simula otro escritor del ciclo; se hace en la conexión
+        # DBAPI cruda porque el guard de SQL textual rechaza cambios directos
+        # a documentos desde la capa SQLAlchemy.
+        raw_connection = database.engine.raw_connection()
+        try:
+            raw_dbapi = raw_connection.driver_connection
+            raw_dbapi.execute("UPDATE purchase_request_comparison SET status = 'used' WHERE id = ?", (comparison_id,))
+            raw_dbapi.commit()
+        finally:
+            raw_connection.close()
 
         with pytest.raises(ValueError, match="finalizado"):
             comparison_service.create_purchase_orders_from_comparison(comparison)

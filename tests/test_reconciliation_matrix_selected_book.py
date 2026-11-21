@@ -63,8 +63,12 @@ def test_ar_reconciliation_uses_selected_book_posting_values_and_cutoff():
     supplier = Party(code="AP-RECON-SUPPLIER", name="Proveedor de conciliación", is_supplier=True)
     database.session.add_all([secondary_book, receivable, payable, party, supplier])
     database.session.flush()
-    defaults = CompanyDefaultAccount(company="cacao", default_receivable=receivable.id, default_payable=payable.id)
-    database.session.add(defaults)
+    defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one_or_none()
+    if defaults is None:
+        defaults = CompanyDefaultAccount(company="cacao")
+        database.session.add(defaults)
+    defaults.default_receivable = receivable.id
+    defaults.default_payable = payable.id
 
     cutoff = date(2026, 10, 31)
     movements = [

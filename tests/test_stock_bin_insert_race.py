@@ -62,11 +62,20 @@ def test_post_stock_entry_rechaza_bodega_ajena_al_company(app, entorno_contable)
     with app.app_context():
         artefacto = f"332A-{uuid4().hex[:6].upper()}"
         bodega = f"332W-{uuid4().hex[:6].upper()}"
+        sufijo = uuid4().hex[:6].upper()
+        otra_compania = f"C{sufijo}"
         database.session.add_all(
             [
-                Entity(code="cafe", name="Cafe", company_name="Cafe SA", tax_id="J0002", currency="NIO", enabled=True),
+                Entity(
+                    code=otra_compania,
+                    name="Cafe",
+                    company_name="Cafe SA",
+                    tax_id=f"J-{sufijo}",
+                    currency="NIO",
+                    enabled=True,
+                ),
                 Item(code=artefacto, name="Articulo 332", item_type="goods", is_stock_item=True, default_uom="UND"),
-                Warehouse(code=bodega, name="Bodega ajena 332", company="cafe"),
+                Warehouse(code=bodega, name="Bodega ajena 332", company=otra_compania),
             ]
         )
         database.session.commit()

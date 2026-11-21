@@ -123,7 +123,8 @@ def factura_editable(app, entorno_contable):
         }
     yield ids
     with app.app_context():
-        database.session.execute(database.delete(AuditTrail).where(AuditTrail.document_id == ids["factura"]))
+        # La evidencia de auditoría es append-only y sostiene la cadena de
+        # hashes compartida por el worker: no se elimina al limpiar la prueba.
         resumenes = (
             database.session.execute(
                 database.select(DocumentTaxSummary).filter_by(document_type="purchase_invoice", document_id=ids["factura"])

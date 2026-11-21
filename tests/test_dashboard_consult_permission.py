@@ -17,6 +17,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    Book,
     Currency,
     Entity,
     Modules,
@@ -64,6 +65,17 @@ def dashboard_permission_scenario():
             ]
         )
         database.session.flush()
+        database.session.add(
+            Book(
+                entity=company,
+                code=f"B{suffix}",
+                name="Libro principal",
+                status="activo",
+                is_primary=True,
+                default=True,
+                currency="NIO",
+            )
+        )
         database.session.add_all(
             [
                 User(
