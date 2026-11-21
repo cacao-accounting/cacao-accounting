@@ -155,17 +155,33 @@ def _legacy_chain_head(connection: Any) -> str | None:
     return tail_hash
 
 
+def _current_read(connection: Any, statement: Any) -> Any:
+    """Fuerza una lectura del estado confirmado más reciente.
+
+    MySQL usa REPEATABLE READ por defecto: un SELECT normal ve la instantánea
+    abierta al iniciar la transacción y no el puntero que otra transacción
+    acaba de confirmar. La validación de la cabeza debe observar el valor
+    bloqueado actual; de lo contrario un escritor concurrente reportaría una
+    cabeza inexistente y perdería su evidencia.
+    """
+    if connection.dialect.name == "sqlite":
+        return statement
+    return statement.with_for_update()
+
+
 def _validate_chain_head(connection: Any, head_hash: str) -> None:
     """Reject a stored pointer that is missing or no longer terminal."""
-    head_rows = (
-        connection.execute(database.select(AuditTrail.id).where(AuditTrail.payload_hash == head_hash).limit(2)).scalars().all()
+    head_statement = _current_read(
+        connection, database.select(AuditTrail.id).where(AuditTrail.payload_hash == head_hash).limit(2)
     )
+    head_rows = connection.execute(head_statement).scalars().all()
     if len(head_rows) != 1:
         raise RuntimeError("La cabeza de la cadena de auditoría no identifica una fila única.")
     successor = AuditTrail.__table__.alias("audit_chain_successor")
-    successors = connection.execute(
-        database.select(successor.c.id).where(successor.c.prev_hash == head_hash).limit(1)
-    ).scalar_one_or_none()
+    successor_statement = _current_read(
+        connection, database.select(successor.c.id).where(successor.c.prev_hash == head_hash).limit(1)
+    )
+    successors = connection.execute(successor_statement).scalar_one_or_none()
     if successors is not None:
         raise RuntimeError("La cabeza de la cadena de auditoría ya tiene una fila sucesora.")
 
