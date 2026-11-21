@@ -312,16 +312,13 @@ def _sales_invoice_currency_and_rate(
     """Resuelve moneda, moneda funcional y tasa, conservando la tasa del origen.
 
     Cuando hay un documento origen de Document Flow la moneda se hereda; si el
-    usuario envia una moneda distinta se rechaza. Sin origen, se exige moneda
-    del usuario; en su defecto se usa la moneda del tercero. La moneda de la
-    compania actua como ultimo recurso explicito.
+    usuario envia una moneda distinta se rechaza. Sin origen, se usa la moneda
+    seleccionada por el usuario o, si falta, la moneda funcional de la compañía.
     """
     from cacao_accounting.document_flow.currency_resolver import resolve_transaction_currency
 
-    party = getattr(source, "customer", None) if source is not None else None
     resolved = resolve_transaction_currency(
         company=company,
-        party=party,
         user_selection=requested_currency,
         sources=[source] if source is not None else None,
         context="documento de ventas",

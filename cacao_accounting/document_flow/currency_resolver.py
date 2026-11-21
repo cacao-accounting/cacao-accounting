@@ -9,10 +9,9 @@ El contrato de moneda exige que toda transaccion persistida tenga una
 moneda transaccional explícita y que el posting rechace cualquier inferencia
 silenciosa. Este modulo concentra la prelacion:
 
-    1. Moneda seleccionada explícitamente por el usuario.
-    2. Moneda del documento origen en Document Flow (heredada, no sustituible).
-    3. Moneda predeterminada del tercero.
-    4. Moneda funcional de la compañía.
+    1. Moneda del documento origen en Document Flow (heredada, no sustituible).
+    2. Moneda seleccionada explícitamente por el usuario.
+    3. Moneda funcional de la compañía.
 
 Cuando existe un origen de Document Flow la moneda se hereda obligatoriamente;
 el usuario no puede sustituirla y los origenes deben compartir moneda o la
@@ -35,7 +34,7 @@ class ResolvedCurrency:
 
     transaction_currency: str
     base_currency: str
-    source: str  # user | source | party | company
+    source: str  # source | user | company
 
 
 def company_functional_currency(company: str | None) -> str | None:
@@ -107,18 +106,9 @@ def validate_flow_currency_homogeneity(sources: Sequence[Any] | None) -> str | N
     return first
 
 
-def resolve_party_currency(party: Any | None) -> str | None:
-    """Devuelve la moneda predeterminada de un tercero sin aplicar fallback."""
-    if party is None:
-        return None
-    currency = getattr(party, "default_currency", None) or getattr(party, "currency", None)
-    return str(currency) if currency else None
-
-
 def resolve_transaction_currency(
     *,
     company: str | None,
-    party: Any | None = None,
     user_selection: str | None = None,
     sources: Sequence[Any] | None = None,
     context: str = "documento",
@@ -130,8 +120,7 @@ def resolve_transaction_currency(
     - Si hay origenes de Document Flow se exige moneda homogenea explícita;
       el usuario no puede sustituirla.
     - Si no hay origenes y el usuario eligio moneda, gana la eleccion.
-    - Si no hay eleccion del usuario, se usa la moneda del tercero.
-    - Como ultimo recurso se usa la moneda funcional de la compañía.
+    - Si no hay eleccion del usuario, se usa la moneda funcional de la compañía.
 
     El resultado siempre incluye ``transaction_currency`` y ``base_currency``
     explícitas; la funcion nunca devuelve valores nulos en presencia de
@@ -169,14 +158,6 @@ def resolve_transaction_currency(
             transaction_currency=_require_explicit_currency(user_selection, context=context),
             base_currency=base_currency,
             source="user",
-        )
-
-    party_currency = resolve_party_currency(party)
-    if party_currency:
-        return ResolvedCurrency(
-            transaction_currency=_require_explicit_currency(party_currency, context=context),
-            base_currency=base_currency,
-            source="party",
         )
 
     return ResolvedCurrency(
@@ -257,7 +238,6 @@ __all__ = [
     "assert_base_currency_snapshot",
     "assert_currency_explicit",
     "company_functional_currency",
-    "resolve_party_currency",
     "resolve_transaction_currency",
     "source_transaction_currencies",
     "validate_flow_currency_homogeneity",

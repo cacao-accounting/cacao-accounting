@@ -9,6 +9,7 @@ preferencias sin consumidores se retiraron del modelo y de los parámetros.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -16,6 +17,8 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import CompanyParty, Currency, Entity, Party, database
+from cacao_accounting.document_flow import currency_resolver
+from cacao_accounting.document_flow import DocumentFlowError
 from cacao_accounting.party_settings import (
     PartyCompanySettingsParams,
     build_party_company_settings,
@@ -157,3 +160,32 @@ def test_business_relationship_and_retained_settings_still_work(company_party_sc
         assert settings.default_cost_center == "CC-1"
         assert settings.default_business_unit == "BU-1"
         assert settings.block_overdue is True
+
+
+def test_currency_precedence_uses_source_then_user_then_company(company_party_scenario):
+    """Document Flow and user selection outrank the company's functional currency."""
+    app, _ = company_party_scenario
+
+    with app.app_context():
+        inherited = currency_resolver.resolve_transaction_currency(
+            company="alpha",
+            user_selection="USD",
+            sources=[SimpleNamespace(transaction_currency="USD")],
+        )
+        selected = currency_resolver.resolve_transaction_currency(company="alpha", user_selection="EUR")
+        fallback = currency_resolver.resolve_transaction_currency(company="alpha")
+        with pytest.raises(DocumentFlowError):
+            currency_resolver.resolve_transaction_currency(
+                company="alpha",
+                user_selection="EUR",
+                sources=[SimpleNamespace(transaction_currency="USD")],
+            )
+
+    assert (inherited.transaction_currency, inherited.base_currency, inherited.source) == ("USD", "NIO", "source")
+    assert (selected.transaction_currency, selected.base_currency, selected.source) == ("EUR", "NIO", "user")
+    assert (fallback.transaction_currency, fallback.base_currency, fallback.source) == ("NIO", "NIO", "company")
+
+
+def test_currency_resolver_has_no_dead_party_currency_reader():
+    """The removed CompanyParty preference has no residual currency resolver."""
+    assert not hasattr(currency_resolver, "resolve_party_currency")
