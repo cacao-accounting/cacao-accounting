@@ -216,7 +216,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1253 | #1649 | ⚠️ Implementado; evidencia y regresión en `b0d9003a`, `f995e0e0`; GitHub: needs-work | Define el alcance de lotes entre compañías |
 | #1283 | #1658 | ✅ Regresión específica impide reintroducir los helpers retirados; QA1/QA2 aprueban; commit `914738f5`; GitHub: fix-proposed | Elimina helpers de terceros sin llamadores y protege el contrato de retiro |
 | #1299 | #1658 | ✅ Retirada la rama y documentación de moneda por tercero; regresión cubre precedencia y rechazo de sustitución; QA1/QA2 aprueban; commit `ddfe074f`; GitHub: fix-proposed | Retira o integra preferencias CompanyParty sin consumidores |
-| #1301 | #1649 | ❌ QA1/QA2 confirman QA3; GitHub: needs-work, etiqueta intacta | Guard sigue la decisión de imagen global, pero la fixture da acceso de compañía a todos; falta probar lector/editor sin asignaciones |
+| #1301 | #1649 | ✅ Ciclo HTTP de imagen global con lector/editor sin `UserCompanyAccess`; QA1/QA2 aprueban; commit `f63eb9f4`; GitHub: fix-proposed | Guard sigue la decisión de imagen global y cubre lector/editor sin asignaciones |
 | #1332 | #1649 | ⚠️ Parcial: recepción de compra cubierta; Orden de Venta → entrega en conflicto sin resolver con #1515; GitHub: needs-work | Alinea permisos de líneas en flujos de inventario |
 | #1338 | #1649 | ⚠️ Fix parcial en `cbac6457`: query tools rechazan compañías deshabilitadas; sigue el bypass admin de `exige_acceso_compania`; GitHub: needs-work (triage 2026-11-20) | Rechaza compañías deshabilitadas en query tools |
 | #1354 | #1710 | ✅ QA1/QA2 local aprueban HEAD `45e38f2b`; GitHub: needs-work, sin cambiar estado | [Seguridad] Rechaza JWT y sesiones de usuarios deshabilitados |
