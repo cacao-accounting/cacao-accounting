@@ -24235,3 +24235,27 @@ msgstr "The tax rule '%(rule)s' with allowed item categories cannot participate 
 #: cacao_accounting/accounting_engine/fiscal/engine.py
 msgid "La regla fiscal '%(rule)s' con categorías de artículo permitidas debe calcular su base sobre la mercadería de las líneas que coinciden."
 msgstr "The tax rule '%(rule)s' with allowed item categories must calculate its base on the matching lines' goods."
+
+#: cacao_accounting/inventario/routes.py
+msgid "Entregas pendientes"
+msgstr "Pending deliveries"
+
+#: cacao_accounting/inventario/templates/inventario/entregas_pendientes.html
+msgid "Pendientes de despacho desde órdenes de venta aprobadas. Solo se muestran datos logísticos."
+msgstr "Pending dispatch from approved sales orders. Only logistics data is shown."
+
+#: cacao_accounting/inventario/templates/inventario/entregas_pendientes.html
+msgid "Entregas pendientes por orden de venta"
+msgstr "Pending deliveries by sales order"
+
+#: cacao_accounting/inventario/templates/inventario/entregas_pendientes.html
+msgid "Cantidad pendiente"
+msgstr "Pending quantity"
+
+#: cacao_accounting/inventario/templates/inventario/entregas_pendientes.html
+msgid "Preparar entrega"
+msgstr "Prepare delivery"
+
+#: cacao_accounting/inventario/templates/inventario/entregas_pendientes.html
+msgid "No hay entregas pendientes para la compañía seleccionada."
+msgstr "There are no pending deliveries for the selected company."

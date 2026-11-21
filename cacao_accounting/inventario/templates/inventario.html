@@ -91,6 +91,10 @@
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
+        <a href="{{ url_for('inventario.inventario_entregas_pendientes') }}">{{ _('Entregas pendientes') }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
         <a href="{{ url_for('inventario.inventario_material_issue_lista') }}">{{ _('Salidas de Material') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>

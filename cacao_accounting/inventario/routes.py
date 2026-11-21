@@ -233,6 +233,35 @@ def inventario_bodega_lista():
     return render_template("inventario/bodega_lista.html", consulta=consulta, titulo=titulo)
 
 
+@inventario.route("/pending-deliveries")
+@modulo_activo("inventory")
+@login_required
+@verifica_permiso("inventory", "consultar")
+def inventario_entregas_pendientes():
+    """Listado logistico de entregas pendientes desde ordenes de venta."""
+    from cacao_accounting.company_context import get_active_company
+    from cacao_accounting.document_flow.service import get_pending_delivery_logistics
+
+    company = request.args.get("company") or get_active_company()
+    exige_acceso_compania("inventory", company, "consultar")
+    lines = get_pending_delivery_logistics(company)
+    orders: dict[str, dict[str, Any]] = {}
+    for line in lines:
+        key = str(line.get("source_id") or "")
+        order = orders.setdefault(
+            key,
+            {"source_id": key, "document_no": line.get("source_document_no") or key, "lines": []},
+        )
+        order["lines"].append(line)
+    titulo = _("Entregas pendientes") + " - " + APPNAME
+    return render_template(
+        "inventario/entregas_pendientes.html",
+        ordenes=list(orders.values()),
+        titulo=titulo,
+        company=company,
+    )
+
+
 @inventario.route("/stock-entry/list")
 @modulo_activo("inventory")
 @login_required

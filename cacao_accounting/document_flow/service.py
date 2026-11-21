@@ -249,6 +249,51 @@ def get_source_items(source_type: str, source_id: str, target_type: str | None =
     ]
 
 
+def get_pending_delivery_logistics(company: str) -> list[dict[str, Any]]:
+    """Proyecta entregas pendientes desde órdenes de venta aprobadas.
+
+    Devuelve solo información logística (artículo, cantidad pendiente y UOM)
+    para que Inventario pueda completar una entrega sin recibir precios,
+    importes ni datos comerciales ni requerir permisos de Ventas (#1332/#1515).
+    El backend resuelve la orden origen y conserva la trazabilidad documental.
+    """
+    from cacao_accounting.database import SalesOrder
+
+    order_ids = database.session.execute(
+        select(SalesOrder.id)
+        .where(SalesOrder.company == company, SalesOrder.docstatus == 1)
+        .order_by(SalesOrder.posting_date, SalesOrder.document_no)
+    ).scalars()
+    lines: list[dict[str, Any]] = []
+    for order_id in order_ids:
+        document = get_document("sales_order", order_id)
+        document_no = getattr(document, "document_no", None) or order_id
+        for line in get_source_items("sales_order", order_id, "delivery_note"):
+            line["source_document_no"] = document_no
+            lines.append(_logistics_line_projection(line))
+    return lines
+
+
+LOGISTICS_LINE_FIELDS = (
+    "source_type",
+    "source_id",
+    "source_item_id",
+    "source_document_no",
+    "item_code",
+    "item_name",
+    "uom",
+    "qty",
+    "pending_qty",
+    "pending_qty_in_base_uom",
+    "line_status",
+)
+
+
+def _logistics_line_projection(line: dict[str, Any]) -> dict[str, Any]:
+    """Recorta una línea origen a los campos estrictamente logísticos."""
+    return {field: line.get(field) for field in LOGISTICS_LINE_FIELDS}
+
+
 def get_document_flow_items(target_type: str, source_values: list[str]) -> list[dict[str, Any]]:
     """Devuelve líneas pendientes para uno o mas documentos origen."""
     target_key = normalize_doctype(target_type)

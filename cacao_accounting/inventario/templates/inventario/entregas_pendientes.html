@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/entregas_pendientes.html"></div>
+{%- endif -%}
+
+<nav aria-label="{{ _('Ruta de navegación') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventario") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Entregas pendientes') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-truck"></i> {{ _('Entregas pendientes') }}</h5>
+  </div>
+  <p class="text-muted px-3 pt-2">{{ _('Pendientes de despacho desde órdenes de venta aprobadas. Solo se muestran datos logísticos.') }}</p>
+  {% if ordenes %}
+  <table class="ca-table">
+    <caption style="display: none;">{{ _('Entregas pendientes por orden de venta') }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{{ _('Orden') }}</th>
+        <th scope="col">{{ _('Artículo') }}</th>
+        <th scope="col">{{ _('Descripción') }}</th>
+        <th scope="col">{{ _('Cantidad pendiente') }}</th>
+        <th scope="col">{{ _('Unidad') }}</th>
+        <th scope="col">{{ _('Acciones') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for orden in ordenes %}
+      {% for line in orden.lines %}
+      <tr>
+        <td>{{ orden.document_no }}</td>
+        <td>{{ line.item_code }}</td>
+        <td>{{ line.item_name }}</td>
+        <td>{{ line.pending_qty }}</td>
+        <td>{{ line.uom }}</td>
+        <td>
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('ventas.ventas_entrega_nuevo', from_order=orden.source_id) }}">
+            <i class="bi bi-box-arrow-up"></i> {{ _('Preparar entrega') }}
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="alert alert-info mx-3">{{ _('No hay entregas pendientes para la compañía seleccionada.') }}</div>
+  {% endif %}
+</div>
+
+{% endblock %}

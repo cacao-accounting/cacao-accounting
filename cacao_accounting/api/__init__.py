@@ -87,7 +87,11 @@ from cacao_accounting.document_flow.repository import (
     get_document_company,
     get_document_item,
 )
-from cacao_accounting.document_flow.service import get_source_items
+from cacao_accounting.document_flow.service import (
+    _logistics_line_projection,
+    get_pending_delivery_logistics,
+    get_source_items,
+)
 from cacao_accounting.i18n import _
 from cacao_accounting.document_flow.status import document_status_payload
 from cacao_accounting.document_flow.tree import build_document_flow_tree
@@ -1486,16 +1490,29 @@ def api_document_flow_pending_lines():
     if not source_type or not target_type or not source_ids or not company:
         abort(400)
     normalized_source_type = normalize_doctype(source_type)
+    normalized_target_type = normalize_doctype(target_type)
     access_modules = _document_read_access_modules(normalized_source_type)
     if not access_modules:
         abort(400)
+    logistics_projection = False
     for source_id in source_ids:
-        source_document = _require_document_read_access(normalized_source_type, source_id)
+        source_document = _load_pending_line_source(normalized_source_type, source_id)
         source_company = getattr(source_document, "company", None)
         if not source_company:
             abort(403)
         if source_company != company:
             abort(409)
+        if _puede_leer_documento_compania(normalized_source_type, company):
+            continue
+        # #1332/#1515: Inventario puede cargar lineas para una entrega sin
+        # acceso de lectura a la orden de venta; recibe solo la proyeccion
+        # logistica, sin precios, importes ni datos comerciales.
+        if _allows_logistics_delivery_projection(normalized_source_type, normalized_target_type) and (
+            _puede_consultar_modulo_compania("inventory", company)
+        ):
+            logistics_projection = True
+            continue
+        abort(403)
     try:
         lines = get_pending_lines(
             source_document_type=source_type,
@@ -1505,7 +1522,47 @@ def api_document_flow_pending_lines():
         )
     except DocumentFlowError as exc:
         abort(exc.status_code)
+    if logistics_projection:
+        lines = [_logistics_line_projection(line) for line in lines]
     return jsonify({"target_type": target_type, "items": lines})
+
+
+def _load_pending_line_source(document_type: str, document_id: str) -> Any:
+    """Carga un documento origen para autorizar lineas sin abortar por modulo."""
+    try:
+        document = get_document(document_type, document_id)
+    except (KeyError, ValueError):
+        abort(400)
+    if not document:
+        abort(404)
+    if not document_matches_type(document_type, document):
+        abort(404)
+    return document
+
+
+def _allows_logistics_delivery_projection(source_type: str, target_type: str) -> bool:
+    """Identifica el flujo de despacho con proyeccion logistica controlada."""
+    return source_type == "sales_order" and target_type == "delivery_note"
+
+
+@api.route("/api/document-flow/pending-deliveries")
+@login_required
+def api_document_flow_pending_deliveries():
+    """Proyecta pendientes logisticos de despacho para el modulo de Inventario.
+
+    La ruta se autoriza con el permiso de Inventario y no exige permisos de
+    Ventas: devuelve solo articulo, cantidad pendiente y UOM, sin precios,
+    importes ni datos comerciales (#1332/#1515).
+    """
+    company = request.args.get("company") or request.args.get("company_id")
+    if not company:
+        abort(400)
+    exige_acceso_compania("inventory", company, "consultar")
+    try:
+        lines = get_pending_delivery_logistics(company)
+    except DocumentFlowError as exc:
+        abort(exc.status_code)
+    return jsonify({"company": company, "items": lines})
 
 
 @api.route("/api/document-flow/payment-reference-candidates")
