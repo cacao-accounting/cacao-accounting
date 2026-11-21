@@ -210,7 +210,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
 | #998 | #1649 | ❌ QA1/QA2 confirman QA3; guards de subtipo presentes, faltan pruebas de email-info y adjuntos con alias de ventas/compras; GitHub: needs-work, etiqueta intacta | API: validar permisos en alias de notas documentales |
-| #1019 | #1649 | ⚠️ Implementado; regresión local en `38fd869f`; GitHub: needs-work | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
+| #1019 | #1649 | ✅ Regresiones HTTP de destino, líneas y cierres con controles positivos; QA1/QA2 aprueban; commit `6b8d9ad8`; GitHub: fix-proposed | API document-flow: la autorización cubre solo el documento de cabecera; las líneas y la compañía destino se escapan |
 | #1021 | #1649 | ⚠️ Fix aplicado en `03dfc484`; falta regresión committed del 403 para no-admin en GET/POST de `/setup/`; GitHub: needs-work (triage 2026-11-20) | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1181 | #1649 | ⚠️ Implementado; regresión local en `771d4e15`; GitHub: needs-work | Restringe detalle de artículos a compañías autorizadas |
 | #1253 | #1649 | ⚠️ Implementado; evidencia y regresión en `b0d9003a`, `f995e0e0`; GitHub: needs-work | Define el alcance de lotes entre compañías |
