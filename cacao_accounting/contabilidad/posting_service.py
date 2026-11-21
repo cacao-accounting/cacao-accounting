@@ -1185,8 +1185,9 @@ def _append_tax_entries(
         if tax_line.is_inclusive or tax_line.amount == 0:
             continue
         default_account_id = getattr(defaults, default_account_attr, None) if defaults else None
-        account_id = _require_account(
+        account_id = _require_company_account(
             tax_line.account_id or default_account_id,
+            company,
             error_message,
         )
         amount = _signed_amount(document, tax_line.amount)

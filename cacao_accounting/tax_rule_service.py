@@ -101,6 +101,8 @@ def _validate_tax_rule_references(company: str | None, account_id: str | None, c
         account = database.session.get(Accounts, account_code)
         if account is None:
             raise TaxRuleServiceError(_("La cuenta contable de la regla fiscal no existe."))
+        if company is None:
+            raise TaxRuleServiceError(_("Una regla fiscal global no puede asociar una cuenta contable específica."))
         if company and account.entity != company:
             raise TaxRuleServiceError(_("La cuenta contable no pertenece a la compañía de la regla fiscal."))
     currency_code = _clean_text(currency)

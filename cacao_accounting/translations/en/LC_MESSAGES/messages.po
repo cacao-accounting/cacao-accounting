@@ -10685,6 +10685,9 @@ msgstr "The quotation request already has the comparison closed."
 msgid "El comparativo ya tiene una adjudicación o cierre registrado."
 msgstr "The comparison already has an award or close recorded."
 
+msgid "La columna %(column)s no pertenece al formato de importación."
+msgstr "Column %(column)s is not part of the import format."
+
 #: cacao_accounting/compras/routes.py:310 cacao_accounting/compras/services.py:209 cacao_accounting/document_flow/registry.py:340
 msgid "Costo de Importación"
 msgstr "Import Cost"
@@ -24209,3 +24212,6 @@ msgstr "Price tolerance cannot be negative."
 #: cacao_accounting/contabilidad/exchange_rate_import_service.py
 msgid "El archivo CSV debe estar codificado en UTF-8."
 msgstr "The CSV file must be encoded in UTF-8."
+
+msgid "Una regla fiscal global no puede asociar una cuenta contable específica."
+msgstr "A global tax rule cannot be assigned a company-specific account."

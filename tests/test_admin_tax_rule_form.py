@@ -6,13 +6,26 @@
 from datetime import date
 from dataclasses import replace
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
 from cacao_accounting.accounting_engine.common.context import CalculationContext, ItemContext
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
-from cacao_accounting.database import DocumentTaxLine, DocumentTaxSummary, Modules, TaxRule, database
+from cacao_accounting.database import (
+    Accounts,
+    CompanyParty,
+    DocumentTaxLine,
+    DocumentTaxSummary,
+    Entity,
+    Modules,
+    Party,
+    TaxRule,
+    database,
+)
+from cacao_accounting.accounting_engine.document_builders import PaymentBuildSpec, _configured_payment_withholding_rule
+from cacao_accounting.contabilidad.posting_service import PostingError, _append_tax_entries
 from cacao_accounting.fiscal_persistence_service import _canonical_tax_rule_amount, persist_document_fiscal_snapshot
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts
 
@@ -369,6 +382,184 @@ def _tax_rule_payload(name: str, **overrides) -> dict[str, str]:
     }
     data.update(overrides)
     return data
+
+
+def test_global_tax_rule_rejects_company_specific_account(app, authenticated_client, entorno_contable, active_admin_module):
+    """A global tax rule cannot persist an account scoped to one company."""
+    assert entorno_contable.app is app
+    suffix = uuid4().hex[:8]
+    rule_name = f"Regla global con cuenta {suffix}"
+    with app.app_context():
+        account_id = database.session.execute(
+            database.select(Accounts.id).where(Accounts.entity == "cacao").order_by(Accounts.code).limit(1)
+        ).scalar_one()
+
+    response = authenticated_client().post(
+        "/settings/tax-rules",
+        data=_tax_rule_payload(rule_name, company="", account_id=account_id),
+    )
+
+    assert response.status_code == 200
+    assert "regla fiscal global" in response.get_data(as_text=True).lower()
+    with app.app_context():
+        assert database.session.execute(database.select(TaxRule).filter_by(name=rule_name)).scalar_one_or_none() is None
+
+
+def test_tax_rule_update_cannot_move_company_account_to_global_scope(
+    app, authenticated_client, entorno_contable, active_admin_module
+):
+    """A rejected global conversion preserves the previously scoped rule."""
+    assert entorno_contable.app is app
+    suffix = uuid4().hex[:8]
+    rule_name = f"Regla que conserva compañía {suffix}"
+    client = authenticated_client()
+    assert client.post("/settings/tax-rules", data=_tax_rule_payload(rule_name)).status_code == 302
+    with app.app_context():
+        rule_id = database.session.execute(database.select(TaxRule.id).filter_by(name=rule_name)).scalar_one()
+        account_id = database.session.execute(
+            database.select(Accounts.id).where(Accounts.entity == "cacao").order_by(Accounts.code).limit(1)
+        ).scalar_one()
+
+    response = client.post(
+        f"/settings/tax-rules/{rule_id}/edit",
+        data=_tax_rule_payload(rule_name, company="", account_id=account_id),
+    )
+
+    assert response.status_code == 200
+    assert "regla fiscal global" in response.get_data(as_text=True).lower()
+    with app.app_context():
+        database.session.expire_all()
+        persisted = database.session.get(TaxRule, rule_id)
+        assert persisted is not None
+        assert persisted.company == "cacao"
+        assert persisted.account_id is None
+
+
+def test_payment_ignores_supplier_default_rule_from_another_company(app, entorno_contable, active_admin_module):
+    """A legacy cross-company supplier rule must not affect payment posting (#2018)."""
+    assert entorno_contable.app is app
+    foreign_company = f"x{uuid4().hex[:8]}"
+    with app.app_context():
+        database.session.add(
+            Entity(
+                code=foreign_company,
+                name="Otra compañía",
+                company_name="Otra compañía SA",
+                tax_id=f"TAX-{foreign_company}",
+                currency="NIO",
+                enabled=True,
+                status="activo",
+            )
+        )
+        database.session.flush()
+        rule = TaxRule(
+            company=foreign_company,
+            name=f"Retención ajena {foreign_company}",
+            concept="withholding",
+            applies_to="purchase",
+            tax_type="withholding",
+            recognition_event="payment_confirmed",
+            is_active=True,
+        )
+        database.session.add(rule)
+        database.session.flush()
+        supplier_id = database.session.execute(database.select(Party.id).filter_by(code="PRV001")).scalar_one()
+        supplier_link = database.session.execute(
+            database.select(CompanyParty).filter_by(company="cacao", party_id=supplier_id)
+        ).scalar_one()
+        supplier_link.default_tax_rule_id = rule.id
+        database.session.flush()
+
+        result = _configured_payment_withholding_rule(
+            SimpleNamespace(party_id=supplier_id),
+            PaymentBuildSpec(
+                payment_type="pay",
+                direction="purchase",
+                event_type="payment_confirmed",
+                amount_field="paid_amount",
+                base_amount_field="base_paid_amount",
+                party_type="supplier",
+            ),
+            "cacao",
+        )
+
+        assert result is None
+
+
+def test_tax_posting_rejects_account_owned_by_another_company(app, entorno_contable):
+    """Tax GL lines cannot post against an account from another company (#2018)."""
+    assert entorno_contable.app is app
+    foreign_company = f"x{uuid4().hex[:8]}"
+    with app.app_context():
+        database.session.add(
+            Entity(
+                code=foreign_company,
+                name="Otra compañía",
+                company_name="Otra compañía SA",
+                tax_id=f"TAX-{foreign_company}",
+                currency="NIO",
+                enabled=True,
+                status="activo",
+            )
+        )
+        database.session.flush()
+        account = Accounts(
+            entity=foreign_company,
+            code=f"TAX-{foreign_company}",
+            name="Cuenta fiscal ajena",
+            account_type="tax",
+            active=True,
+            enabled=True,
+            group=False,
+        )
+        database.session.add(account)
+        database.session.flush()
+
+        with pytest.raises(PostingError, match="pertenecer a la compañía del documento"):
+            _append_tax_entries(
+                entries=[],
+                context=None,
+                document=SimpleNamespace(company="cacao"),
+                tax_result=SimpleNamespace(
+                    lines=[
+                        SimpleNamespace(
+                            is_inclusive=False,
+                            amount=Decimal("10"),
+                            account_id=account.id,
+                            name="IVA",
+                            behavior="additive",
+                        )
+                    ]
+                ),
+                default_account_attr="default_sales_tax_account_id",
+                error_message="Falta cuenta fiscal.",
+            )
+
+
+def test_deleting_tax_rule_in_use_returns_controlled_response(
+    app, authenticated_client, entorno_contable, active_admin_module
+):
+    """A referenced rule survives deletion and the admin receives a controlled message (#2018)."""
+    assert entorno_contable.app is app
+    rule_name = f"Regla fiscal en uso {uuid4().hex[:8]}"
+    client = authenticated_client()
+    assert client.post("/settings/tax-rules", data=_tax_rule_payload(rule_name)).status_code == 302
+    with app.app_context():
+        rule = database.session.execute(database.select(TaxRule).filter_by(name=rule_name)).scalar_one()
+        supplier_id = database.session.execute(database.select(Party.id).filter_by(code="PRV001")).scalar_one()
+        supplier_link = database.session.execute(
+            database.select(CompanyParty).filter_by(company="cacao", party_id=supplier_id)
+        ).scalar_one()
+        supplier_link.default_tax_rule_id = rule.id
+        database.session.commit()
+        rule_id = rule.id
+
+    response = client.post(f"/settings/tax-rules/{rule_id}/delete", follow_redirects=True)
+
+    assert response.status_code == 200
+    assert "No se puede eliminar una regla fiscal en uso." in response.get_data(as_text=True)
+    with app.app_context():
+        assert database.session.get(TaxRule, rule_id) is not None
 
 
 @pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])
