@@ -82,6 +82,7 @@ from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 from cacao_accounting.fiscal_persistence_service import (
     calculate_document_total_with_taxes,
+    document_item_category_subtotals,
     persist_document_fiscal_snapshot,
 )
 
@@ -1978,7 +1979,7 @@ def _lock_flow_source_item(model: type[Any], item_id: str) -> Any | None:
 
 def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:
     """Persist the editable fiscal snapshot captured in the form."""
-    items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars()
+    items = list(database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars())
     subtotal = sum((Decimal(str(item.amount or "0")) for item in items), Decimal("0"))
     persist_document_fiscal_snapshot(
         company=str(invoice.company or ""),
@@ -1989,6 +1990,7 @@ def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:
         tax_summary=request.form.get("tax_summary_payload"),
         server_subtotal=subtotal,
         server_total=Decimal(str(invoice.grand_total or "0")),
+        category_subtotals=document_item_category_subtotals(items),
     )
 
 

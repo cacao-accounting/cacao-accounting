@@ -13,11 +13,66 @@ from cacao_accounting.accounting_engine.common.context import (
     CalculationContext,
     FiscalLine,
     FiscalResult,
+    ItemContext,
     TaxRuleContext,
 )
 from cacao_accounting.accounting_engine.common.rounding import RoundingManager
 from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment, find_duplicate_rule_id
 from cacao_accounting.i18n import _
+
+
+def _restricted_rule_errors(rules: list[TaxRuleContext]) -> list[str]:
+    """Rechaza configuraciones restringidas por categoría que fragmentarían la base.
+
+    El pool de conceptos del motor es por documento; una regla con categorías
+    permitidas solo puede calcularse sobre el subconjunto de líneas que
+    coinciden. Por eso no puede descomponer impuestos incluidos, participar en
+    la base siguiente ni calcular sobre conceptos acumulados (#1353).
+    """
+    errors: list[str] = []
+    for rule in rules:
+        if not rule.allowed_item_categories:
+            continue
+        if rule.included_in_price or rule.participates_in_next_base:
+            errors.append(
+                _(
+                    "La regla fiscal '%(rule)s' con categorías de artículo permitidas no puede "
+                    "participar en la base siguiente ni descomponer impuestos incluidos."
+                )
+                % {"rule": rule.name}
+            )
+            continue
+        if rule.base_mode != "goods" or rule.include_concepts:
+            errors.append(
+                _(
+                    "La regla fiscal '%(rule)s' con categorías de artículo permitidas debe calcular "
+                    "su base sobre la mercadería de las líneas que coinciden."
+                )
+                % {"rule": rule.name}
+            )
+    return errors
+
+
+def _allowed_categories(rule: TaxRuleContext) -> set[str]:
+    """Normaliza las categorías permitidas de una regla restringida."""
+    return {str(category) for category in rule.allowed_item_categories if str(category)}
+
+
+def _matching_item_ids(rule: TaxRuleContext, items: list[ItemContext]) -> list[str]:
+    """Devuelve las líneas a las que aplica la regla, sin categoría no coincide."""
+    if not rule.allowed_item_categories:
+        return [item.line_id for item in items]
+    allowed = _allowed_categories(rule)
+    return [item.line_id for item in items if item.item_category and str(item.item_category) in allowed]
+
+
+def _restricted_goods_total(rule: TaxRuleContext, items: list[ItemContext], goods_total: Decimal) -> Decimal:
+    """Calcula la base de mercadería restringida al subconjunto que coincide."""
+    if not rule.allowed_item_categories:
+        return goods_total
+    allowed = _allowed_categories(rule)
+    matching = (item for item in items if item.item_category and str(item.item_category) in allowed)
+    return sum((item.net_amount for item in matching), Decimal("0"))
 
 
 class FiscalEngine:
@@ -37,6 +92,10 @@ class FiscalEngine:
                 errors=[_("Las líneas fiscales no pueden repetir el identificador '%(rule)s'.") % {"rule": duplicate_rule_id}]
             )
 
+        restricted_errors = _restricted_rule_errors(context.tax_rules)
+        if restricted_errors:
+            return FiscalResult(errors=restricted_errors)
+
         sorted_rules = self._order_rules(context.tax_rules)
         if sorted_rules is None:
             return FiscalResult(errors=["Circular dependency detected in tax rules."])
@@ -51,13 +110,23 @@ class FiscalEngine:
 
         for rule in sorted_rules:
             try:
-                base_amount = self._calculate_base(rule, concept_amounts, goods_total)
+                rule_goods_total = _restricted_goods_total(rule, context.items, goods_total)
+                base_amount = self._calculate_base(rule, concept_amounts, rule_goods_total)
                 amount = self._calculate_amount(rule, base_amount, sorted_rules)
 
                 # Use rounding manager
                 amount = rounding_manager.round(amount, context_key="fiscal")
 
-                line = self._build_fiscal_line(rule, concept_amounts, goods_total, base_amount, amount, step_counter, context)
+                line = self._build_fiscal_line(
+                    rule,
+                    concept_amounts,
+                    goods_total,
+                    base_amount,
+                    amount,
+                    step_counter,
+                    context,
+                    applies_to_items=_matching_item_ids(rule, context.items),
+                )
                 tax_lines.append(line)
 
                 formula = self._get_formula(rule, base_amount)
@@ -88,6 +157,7 @@ class FiscalEngine:
         amount: Decimal,
         step_counter: int,
         context: CalculationContext,
+        applies_to_items: list[str] | None = None,
     ) -> FiscalLine:
         """Construyo la línea fiscal y sincronizo los conceptos acumulados."""
         if not (base_amount.is_finite() and amount.is_finite() and rule.rate.is_finite()):
@@ -117,7 +187,9 @@ class FiscalEngine:
             affects_document_total=rule.affects_document_total,
             included_in_price=rule.included_in_price,
             source_rule_id=rule.rule_id,
-            applies_to_items=[item.line_id for item in context.items],
+            applies_to_items=(
+                list(applies_to_items) if applies_to_items is not None else [item.line_id for item in context.items]
+            ),
             depends_on=rule.include_concepts,
             participates_in_next_base=rule.participates_in_next_base,
             allocation_method=rule.allocation_method,

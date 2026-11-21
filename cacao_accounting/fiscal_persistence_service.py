@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Mapping
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
@@ -132,6 +133,9 @@ def _document_total_from_active_rules(*, document: Any, items: list[Any], subtot
     )
     if not rules:
         return subtotal
+    from cacao_accounting.tax_rule_service import resolve_item_category_ids
+
+    item_categories = resolve_item_category_ids(getattr(item, "item_code", None) for item in items)
     contexts = [
         ItemContext(
             line_id=str(getattr(item, "id", index)),
@@ -141,6 +145,7 @@ def _document_total_from_active_rules(*, document: Any, items: list[Any], subtot
             unit_price=Decimal(str(getattr(item, "rate", 0) or 0)),
             gross_amount=Decimal(str(getattr(item, "amount", 0) or 0)),
             net_amount=Decimal(str(getattr(item, "amount", 0) or 0)),
+            item_category=item_categories.get(str(getattr(item, "item_code", ""))),
         )
         for index, item in enumerate(items, start=1)
     ]
@@ -179,8 +184,14 @@ def persist_document_fiscal_snapshot(
     tax_summary: Any,
     server_subtotal: Decimal | None = None,
     server_total: Decimal | None = None,
+    category_subtotals: Mapping[str, Decimal] | None = None,
 ) -> None:
-    """Reemplaza el snapshot fiscal persistido de un documento."""
+    """Reemplaza el snapshot fiscal persistido de un documento.
+
+    ``category_subtotals`` expone el subtotal por categoría de artículo del
+    documento para recalcular en servidor la base de una regla restringida por
+    categoría (#1353), sin confiar en el importe enviado por el cliente.
+    """
     lines_payload = _normalize_lines_payload(tax_lines)
     _reject_duplicate_tax_line_ids(lines_payload)
     summary_payload = _normalize_summary_payload(tax_summary)
@@ -206,6 +217,7 @@ def persist_document_fiscal_snapshot(
         summary_id=summary_row.id,
         lines_payload=lines_payload,
         server_subtotal=server_subtotal,
+        category_subtotals=category_subtotals,
     )
 
 
@@ -278,6 +290,7 @@ def _build_document_tax_line(
     server_subtotal: Decimal | None = None,
     concept_amounts: dict[str, Decimal] | None = None,
     tax_rule: TaxRule | None = None,
+    category_subtotals: Mapping[str, Decimal] | None = None,
 ) -> DocumentTaxLine:
     rule_id = _document_tax_line_rule_id(line_payload)
     if tax_rule is None:
@@ -288,6 +301,7 @@ def _build_document_tax_line(
         tax_rule=tax_rule,
         server_subtotal=server_subtotal,
         concept_amounts=concept_amounts or {},
+        category_subtotals=category_subtotals,
     )
     accounting_treatment = _document_tax_line_accounting_treatment(canonical_payload)
     return DocumentTaxLine(
@@ -314,7 +328,12 @@ def _build_document_tax_line(
 
 
 def _persist_document_tax_lines(
-    *, company: str, summary_id: str, lines_payload: list[dict[str, Any]], server_subtotal: Decimal | None = None
+    *,
+    company: str,
+    summary_id: str,
+    lines_payload: list[dict[str, Any]],
+    server_subtotal: Decimal | None = None,
+    category_subtotals: Mapping[str, Decimal] | None = None,
 ) -> None:
     _reject_duplicate_tax_line_ids(lines_payload)
     concept_amounts: dict[str, Decimal] = {}
@@ -330,6 +349,7 @@ def _persist_document_tax_lines(
             server_subtotal=server_subtotal,
             concept_amounts=concept_amounts,
             tax_rule=tax_rule,
+            category_subtotals=category_subtotals,
         )
         _acumula_importe_de_concepto(
             tax_rule=tax_rule,
@@ -369,6 +389,7 @@ def _document_tax_context_from_row(
         base_mode=str(snapshot.get("base_mode") or "goods"),
         include_concepts=_as_list(snapshot.get("include_concepts")),
         exclude_concepts=_as_list(snapshot.get("exclude_concepts")),
+        allowed_item_categories=_as_list(snapshot.get("allowed_item_categories")),
         participates_in_next_base=bool(snapshot.get("participates_in_next_base", False)),
         order=int(snapshot.get("sequence") or snapshot.get("order") or row.line_index),
         accounting_treatment=str(row.accounting_treatment or snapshot.get("accounting_treatment") or "tax"),
@@ -394,6 +415,7 @@ def _canonical_tax_line_payload(
     tax_rule: TaxRule | None,
     server_subtotal: Decimal | None,
     concept_amounts: dict[str, Decimal],
+    category_subtotals: Mapping[str, Decimal] | None = None,
 ) -> dict[str, Any]:
     """Build a fiscal line from the stored rule or a validated manual line."""
     rule_id = _document_tax_line_rule_id(line_payload)
@@ -404,7 +426,9 @@ def _canonical_tax_line_payload(
         )
 
     if tax_rule is not None:
-        base_amount = _canonical_tax_rule_base(tax_rule, server_subtotal, concept_amounts, line_payload)
+        base_amount = _canonical_tax_rule_base(
+            tax_rule, server_subtotal, concept_amounts, line_payload, category_subtotals
+        )
         rate = _to_decimal(tax_rule.rate)
         amount = _canonical_tax_rule_amount(tax_rule, base_amount, rate)
         if not base_amount.is_finite() or not amount.is_finite():
@@ -450,9 +474,12 @@ def _canonical_tax_rule_base(
     server_subtotal: Decimal | None,
     concept_amounts: dict[str, Decimal],
     line_payload: dict[str, Any],
+    category_subtotals: Mapping[str, Decimal] | None = None,
 ) -> Decimal:
     """Resolve a rule base from server totals and previously canonical lines."""
-    if server_subtotal is None:
+    if tax_rule.allowed_item_categories:
+        base_amount = _restricted_rule_base(tax_rule, line_payload, category_subtotals)
+    elif server_subtotal is None:
         base_amount = _decimal_or_none(line_payload.get("base_amount")) or Decimal("0")
     elif tax_rule.base_mode == "accumulated" and tax_rule.include_concepts:
         included = _as_list(tax_rule.include_concepts)
@@ -466,6 +493,47 @@ def _canonical_tax_rule_base(
     if base_amount < 0:
         raise ValueError(_("La regla fiscal '%(rule)s' produjo una base negativa.") % {"rule": tax_rule.id})
     return base_amount
+
+
+def _restricted_rule_base(
+    tax_rule: TaxRule,
+    line_payload: dict[str, Any],
+    category_subtotals: Mapping[str, Decimal] | None,
+) -> Decimal:
+    """Calcula en servidor la base de una regla restringida por categoría.
+
+    Cuando el llamador aporta el subtotal por categoría del documento, la base
+    es la suma de las categorías permitidas; los artículos sin categoría no
+    coinciden. Sin ese dato (p. ej. eventos de pago) se conserva la base
+    reportada por el motor en el payload.
+    """
+    if category_subtotals is None:
+        return _decimal_or_none(line_payload.get("base_amount")) or Decimal("0")
+    allowed = set(_as_list(tax_rule.allowed_item_categories))
+    return sum(
+        (value for category, value in category_subtotals.items() if str(category) in allowed),
+        Decimal("0"),
+    )
+
+
+def document_item_category_subtotals(items: Iterable[Any]) -> dict[str, Decimal]:
+    """Agrupa el importe de líneas de documento por categoría de artículo.
+
+    Resuelve las categorías con una sola consulta; las líneas sin categoría no
+    entran al mapa porque no coinciden con reglas restringidas (#1353).
+    """
+    from cacao_accounting.tax_rule_service import resolve_item_category_ids
+
+    item_list = list(items)
+    categories = resolve_item_category_ids(getattr(item, "item_code", None) for item in item_list)
+    totals: dict[str, Decimal] = {}
+    for item in item_list:
+        category_id = categories.get(str(getattr(item, "item_code", "")))
+        if not category_id:
+            continue
+        amount = Decimal(str(getattr(item, "amount", 0) or 0))
+        totals[category_id] = totals.get(category_id, Decimal("0")) + amount
+    return totals
 
 
 def _canonical_tax_rule_amount(tax_rule: TaxRule, base_amount: Decimal, rate: Decimal) -> Decimal:
@@ -579,6 +647,7 @@ def _tax_rule_snapshot(tax_rule: TaxRule) -> dict[str, Any]:
         "base_mode": tax_rule.base_mode,
         "include_concepts": _as_list(tax_rule.include_concepts),
         "exclude_concepts": _as_list(tax_rule.exclude_concepts),
+        "allowed_item_categories": _as_list(tax_rule.allowed_item_categories),
         "sequence": int(tax_rule.sequence or 0),
         "accounting_treatment": tax_rule.accounting_treatment,
         "recognition_event": tax_rule.recognition_event,

@@ -18,7 +18,7 @@ from cacao_accounting.accounting_engine.common.context import (
 )
 from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment, find_duplicate_rule_id
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
-from cacao_accounting.tax_rule_service import build_tax_rule_contexts
+from cacao_accounting.tax_rule_service import build_tax_rule_contexts, resolve_item_category_ids
 
 
 from cacao_accounting.i18n import LazyText, _, _l
@@ -342,20 +342,23 @@ def _build_item_contexts(lines_payload: list[dict[str, Any]]) -> list[ItemContex
             )
         ]
     items: list[ItemContext] = []
+    item_categories = resolve_item_category_ids(str(line.get("item_code") or "") for line in lines_payload)
     for index, line in enumerate(lines_payload, start=1):
         qty = _decimal_value(line.get("qty"), default="1")
         rate = _decimal_value(line.get("rate"), default="0")
         amount = _decimal_value(line.get("amount"), default=str(qty * rate))
+        item_code = str(line.get("item_code") or f"ITEM-{index:03}")
         items.append(
             ItemContext(
                 line_id=str(line.get("uid") or f"LINE-{index:03}"),
-                item_id=str(line.get("item_code") or f"ITEM-{index:03}"),
+                item_id=item_code,
                 description=str(line.get("item_name") or line.get("item_code") or f"Line {index}"),
                 quantity=qty,
                 unit_price=rate,
                 gross_amount=amount,
                 net_amount=amount,
                 item_type="inventory",
+                item_category=item_categories.get(item_code),
                 uom=str(line.get("uom") or "unit"),
             )
         )

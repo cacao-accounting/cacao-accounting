@@ -107,6 +107,7 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 
 from cacao_accounting.fiscal_persistence_service import (
     calculate_document_total_with_taxes,
+    document_item_category_subtotals,
     persist_document_fiscal_snapshot,
 )
 
@@ -1248,9 +1249,11 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
 
 def _persist_purchase_invoice_fiscal_snapshot(invoice: PurchaseInvoice) -> None:
     """Persist the editable fiscal snapshot captured in the form."""
-    items = database.session.execute(
-        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id, is_superseded=False)
-    ).scalars()
+    items = list(
+        database.session.execute(
+            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id, is_superseded=False)
+        ).scalars()
+    )
     subtotal = sum((Decimal(str(item.amount or "0")) for item in items), Decimal("0"))
     persist_document_fiscal_snapshot(
         company=str(invoice.company or ""),
@@ -1261,6 +1264,7 @@ def _persist_purchase_invoice_fiscal_snapshot(invoice: PurchaseInvoice) -> None:
         tax_summary=request.form.get("tax_summary_payload"),
         server_subtotal=subtotal,
         server_total=Decimal(str(invoice.grand_total or "0")),
+        category_subtotals=document_item_category_subtotals(items),
     )
 
 

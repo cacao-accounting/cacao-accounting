@@ -23,6 +23,7 @@ class ItemContext:
     discount_amount: Decimal = Decimal("0")
     net_amount: Decimal = Decimal("0")
     item_type: str = "inventory"  # inventory, service
+    item_category: Optional[str] = None
     uom: str = "unit"
     weight: Decimal = Decimal("0")
     volume: Decimal = Decimal("0")

@@ -58,6 +58,7 @@ from cacao_accounting.tax_rule_service import (
     build_tax_rule_context,
     build_tax_rule_contexts,
     get_tax_rule,
+    resolve_item_category_ids,
 )
 
 from cacao_accounting.i18n import _
@@ -269,6 +270,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
     variance_account_id = getattr(defaults, "purchase_settlement_variance_account_id", None)
     account_lines: list[AccountLineSpec] = []
     item_contexts: list[ItemContext] = []
+    item_categories = resolve_item_category_ids(item.item_code for item in items)
     inventory_side = "credit" if getattr(document, "is_return", False) else "debit"
     bridge_side = "debit" if getattr(document, "is_return", False) else "credit"
     for item in items:
@@ -287,7 +289,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         )
         if bridge_line is not None:
             account_lines.append(bridge_line)
-        item_contexts.append(_item_context_from_purchase_receipt_item(item))
+        item_contexts.append(_item_context_from_purchase_receipt_item(item, item_categories.get(str(item.item_code))))
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="purchase", event_type=event_type)
     return CalculationContext(
         company_id=company,
@@ -485,7 +487,10 @@ def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationCon
         raise CalculationContextBuilderError(_("La factura de compra no contiene líneas para cálculo."))
     event_type = "purchase_credit_note_confirmed" if _is_purchase_credit_note(document) else "purchase_invoice_confirmed"
     account_lines = _purchase_invoice_account_lines(document, items, company)
-    item_contexts = [_item_context_from_purchase_invoice_item(item) for item in items]
+    item_categories = resolve_item_category_ids(item.item_code for item in items)
+    item_contexts = [
+        _item_context_from_purchase_invoice_item(item, item_categories.get(str(item.item_code))) for item in items
+    ]
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="purchase", event_type=event_type)
     already_capitalized = _already_capitalized_component_ids(document, company)
     return CalculationContext(
@@ -575,7 +580,8 @@ def _build_sales_invoice_context(document: SalesInvoice) -> CalculationContext:
         )
         for item in items
     ]
-    item_contexts = [_item_context_from_sales_invoice_item(item) for item in items]
+    item_categories = resolve_item_category_ids(item.item_code for item in items)
+    item_contexts = [_item_context_from_sales_invoice_item(item, item_categories.get(str(item.item_code))) for item in items]
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="sales", event_type=event_type)
     return CalculationContext(
         company_id=company,
@@ -654,6 +660,7 @@ def _build_landed_cost_item_contexts(
 
     item_contexts: list[ItemContext] = []
     account_lines: list[AccountLineSpec] = []
+    item_categories = resolve_item_category_ids(item.item_code for item in items)
 
     for item in items:
         amount = _decimal_value(item.amount)
@@ -667,6 +674,7 @@ def _build_landed_cost_item_contexts(
                 gross_amount=amount,
                 net_amount=amount,
                 item_type="inventory",
+                item_category=item_categories.get(str(item.item_code)),
                 uom=item.uom or "unit",
                 weight=_decimal_value(item.weight),
                 volume=_decimal_value(item.volume),
@@ -1730,7 +1738,7 @@ def _payment_cash_account(document: PaymentEntry) -> str | None:
     return None
 
 
-def _item_context_from_purchase_receipt_item(item: PurchaseReceiptItem) -> ItemContext:
+def _item_context_from_purchase_receipt_item(item: PurchaseReceiptItem, item_category: str | None = None) -> ItemContext:
     """Convert a purchase receipt line into an item context."""
     return ItemContext(
         line_id=item.id,
@@ -1740,12 +1748,13 @@ def _item_context_from_purchase_receipt_item(item: PurchaseReceiptItem) -> ItemC
         unit_price=_decimal_value(item.rate),
         gross_amount=_line_amount(item),
         net_amount=_line_amount(item),
+        item_category=item_category,
         uom=item.uom or "unit",
         warehouse_id=item.warehouse,
     )
 
 
-def _item_context_from_purchase_invoice_item(item: PurchaseInvoiceItem) -> ItemContext:
+def _item_context_from_purchase_invoice_item(item: PurchaseInvoiceItem, item_category: str | None = None) -> ItemContext:
     """Convert a purchase invoice line into an item context."""
     return ItemContext(
         line_id=item.id,
@@ -1755,12 +1764,13 @@ def _item_context_from_purchase_invoice_item(item: PurchaseInvoiceItem) -> ItemC
         unit_price=_decimal_value(item.rate),
         gross_amount=_line_amount(item),
         net_amount=_line_amount(item),
+        item_category=item_category,
         uom=item.uom or "unit",
         warehouse_id=item.warehouse,
     )
 
 
-def _item_context_from_sales_invoice_item(item: SalesInvoiceItem) -> ItemContext:
+def _item_context_from_sales_invoice_item(item: SalesInvoiceItem, item_category: str | None = None) -> ItemContext:
     """Convert a sales invoice line into an item context."""
     return ItemContext(
         line_id=item.id,
@@ -1771,6 +1781,7 @@ def _item_context_from_sales_invoice_item(item: SalesInvoiceItem) -> ItemContext
         gross_amount=_line_amount(item),
         discount_amount=_decimal_value(getattr(item, "discount_amount", None)),
         net_amount=_line_amount(item),
+        item_category=item_category,
         uom=item.uom or "unit",
         warehouse_id=item.warehouse,
     )

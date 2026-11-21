@@ -24227,3 +24227,11 @@ msgstr "The tax rule item category %(category)s is not active."
 #: cacao_accounting/admin/templates/admin/tax_rules.html
 msgid "Categorías de artículo permitidas"
 msgstr "Allowed item categories"
+
+#: cacao_accounting/accounting_engine/fiscal/engine.py
+msgid "La regla fiscal '%(rule)s' con categorías de artículo permitidas no puede participar en la base siguiente ni descomponer impuestos incluidos."
+msgstr "The tax rule '%(rule)s' with allowed item categories cannot participate in the next base or decompose included taxes."
+
+#: cacao_accounting/accounting_engine/fiscal/engine.py
+msgid "La regla fiscal '%(rule)s' con categorías de artículo permitidas debe calcular su base sobre la mercadería de las líneas que coinciden."
+msgstr "The tax rule '%(rule)s' with allowed item categories must calculate its base on the matching lines' goods."
