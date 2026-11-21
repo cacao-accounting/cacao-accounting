@@ -221,7 +221,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1338 | #1649 | ⚠️ Fix parcial en `cbac6457`: query tools rechazan compañías deshabilitadas; sigue el bypass admin de `exige_acceso_compania`; GitHub: needs-work (triage 2026-11-20) | Rechaza compañías deshabilitadas en query tools |
 | #1354 | #1710 | ✅ QA1/QA2 local aprueban HEAD `45e38f2b`; GitHub: needs-work, sin cambiar estado | [Seguridad] Rechaza JWT y sesiones de usuarios deshabilitados |
 | #1357 | #1658 | ✅ QA1/QA2 local aprueban el retiro en `a93657fa`; búsqueda sin consumidores; GitHub: needs-work, sin cambiar estado | [Auditoría] Elimina el blueprint admin sin rutas |
-| #1433 | #1649 | ❌ QA1/QA2 rechazan independientemente re-revisión local; GitHub `needs-work` intacto | Precheck solo consulta `supplier_invoice_key`; grupos históricos activos duplicados se preservan con key NULL, así admite un tercer duplicado (alta o edición) en vez de dar error de negocio; falta regresión con fallback legados |
+| #1433 | #1649 | ✅ Precheck bloquea una tercera alta ante duplicados históricos con clave nula usando la normalización Python, sin reescribir filas; QA1/QA2 aprueban; commit `8f0c2149`; GitHub: fix-proposed | Valida claves normalizadas y grupos históricos activos entre compañías |
 | #2060 | Consumidor | ❌ QA1/QA2 rechazan independientemente la re-revisión local; GitHub `needs-work` intacto | El badge filtra por compañías del módulo accounting y estado, pero no aplica permisos/policy/nivel de `can_approve` ni `review_is_allowed`; puede sobrecontar solicitudes no visibles y omitir aprobables de otros módulos. Test solo compara compañías |
 
 ### Fase 2 — Persistencia y garantías transversales
