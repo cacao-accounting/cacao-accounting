@@ -214,7 +214,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1021 | #1649 | ✅ Regresión GET/POST 403 y ausencia de efectos secundarios; QA1/QA2 aprueban; commit `16eac22f`; GitHub: fix-proposed | Setup: el asistente solo requiere login; cualquier usuario autenticado cambia idioma/regional global y crea compañías |
 | #1181 | #1649 | ✅ Vínculo CompanyParty activo requerido; QA1/QA2 aprueban; commit `4eca88fb`; GitHub: fix-proposed | Restringe detalle de artículos a compañías autorizadas |
 | #1253 | #1649 | ⚠️ Implementado; evidencia y regresión en `b0d9003a`, `f995e0e0`; GitHub: needs-work | Define el alcance de lotes entre compañías |
-| #1283 | #1658 | ❌ QA1/QA2 rechazan; los helpers no tienen referencias, pero el guard de ausencia se eliminó en `0970476b`; GitHub: needs-work, etiqueta intacta | Elimina helpers de terceros sin llamadores y protege el contrato de retiro |
+| #1283 | #1658 | ✅ Regresión específica impide reintroducir los helpers retirados; QA1/QA2 aprueban; commit `914738f5`; GitHub: fix-proposed | Elimina helpers de terceros sin llamadores y protege el contrato de retiro |
 | #1299 | #1658 | ❌ QA1/QA2 rechazan tras QA3; GitHub: needs-work, sin cambiar etiqueta | Retira o integra preferencias CompanyParty sin consumidores; falta quitar rama/docs muertas y pruebas obsoletas |
 | #1301 | #1649 | ❌ QA1/QA2 confirman QA3; GitHub: needs-work, etiqueta intacta | Guard sigue la decisión de imagen global, pero la fixture da acceso de compañía a todos; falta probar lector/editor sin asignaciones |
 | #1332 | #1649 | ⚠️ Parcial: recepción de compra cubierta; Orden de Venta → entrega en conflicto sin resolver con #1515; GitHub: needs-work | Alinea permisos de líneas en flujos de inventario |
