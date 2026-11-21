@@ -242,7 +242,10 @@ class PrintService:
         """Validate template safety, syntax and sample rendering."""
         validate_template_security(template_body)
         validate_css_safety(stylesheet_body)
-        self._normalize_page_settings(paper_size, orientation)
+        try:
+            self._normalize_page_settings(paper_size, orientation)
+        except ValueError as exc:
+            raise TemplateValidationError(str(exc)) from exc
         doc_def = get_printable_document(document_type)
         if doc_def is None:
             raise TemplateValidationError(

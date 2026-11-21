@@ -9,6 +9,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from cacao_accounting.database import database
+from cacao_accounting.printing.exceptions import TemplateValidationError
+from cacao_accounting.printing.models import PrintTemplate
 from cacao_accounting.printing.service import PrintService
 
 
@@ -50,8 +53,50 @@ def test_valores_invalidos_se_rechazan(paper_size, orientation):
 
 def test_validate_template_rechaza_configuracion_invalida():
     """La validación de plantilla aplica el mismo contrato de página."""
-    with pytest.raises(ValueError, match="no soportad"):
+    with pytest.raises(TemplateValidationError, match="no soportad"):
         PrintService().validate_template("<p>Documento</p>", "", "unknown", paper_size="b5")
+
+
+@pytest.mark.parametrize("endpoint", ["/admin/print-templates/new", "/admin/print-templates/{template_id}/edit"])
+@pytest.mark.parametrize(("paper_size", "orientation"), [("b5", "portrait"), ("letter", "diagonal")])
+def test_rutas_admin_muestran_error_controlado_para_pagina_invalida(
+    app, authenticated_client, endpoint, paper_size, orientation
+):
+    """Alta y edición rechazan settings manipulados sin responder con HTTP 500."""
+    client = authenticated_client("admin")
+    with app.app_context():
+        template = PrintTemplate(
+            document_type="sales_invoice",
+            code=f"invalid-page-{endpoint.rsplit('/', 1)[-1]}-{id(app)}",
+            name="Invalid page setting test",
+            template_body="<p>Documento</p>",
+            stylesheet_body="",
+            created_by=None,
+        )
+        database.session.add(template)
+        database.session.commit()
+        template_id = template.id
+        code = template.code
+
+    response = client.post(
+        endpoint.format(template_id=template_id) if "{template_id}" in endpoint else endpoint,
+        data={
+            "document_type": "sales_invoice",
+            "code": code,
+            "name": "Invalid page setting test",
+            "template_body": "<p>Documento</p>",
+            "stylesheet_body": "",
+            "paper_size": paper_size,
+            "orientation": orientation,
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"no soportad" in response.data.lower()
+    with app.app_context():
+        persisted = database.session.get(PrintTemplate, template_id)
+        assert persisted is not None
+        assert persisted.paper_size == "letter"
 
 
 def test_render_pdf_usa_la_configuracion_de_la_plantilla(monkeypatch):
