@@ -10,6 +10,8 @@ Un usuario sin permiso no alcanza el recurso aunque conozca el código.
 
 from __future__ import annotations
 
+from base64 import b64decode
+from io import BytesIO
 from uuid import uuid4
 
 import pytest
@@ -30,9 +32,11 @@ from cacao_accounting.database import (
     database,
 )
 
+PNG_IMAGE = b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jUioAAAAASUVORK5CYII=")
+
 
 @pytest.fixture
-def item_image_permission_scenario():
+def item_image_permission_scenario(tmp_path):
     """Create a shared item and inventory users with and without permissions."""
     app = create_app(
         {
@@ -42,6 +46,7 @@ def item_image_permission_scenario():
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
             "MODO_ESCRITORIO": False,
+            "UPLOAD_FOLDER": str(tmp_path / "uploads"),
         }
     )
     suffix = uuid4().hex[:6]
@@ -94,6 +99,22 @@ def item_image_permission_scenario():
                     active=True,
                     company=company,
                 ),
+                User(
+                    id=f"global-viewer-{suffix}",
+                    user=f"global-viewer-{suffix}",
+                    name="Consulta global",
+                    password=b"unused",
+                    active=True,
+                    company=company,
+                ),
+                User(
+                    id=f"global-editor-{suffix}",
+                    user=f"global-editor-{suffix}",
+                    name="Edición global",
+                    password=b"unused",
+                    active=True,
+                    company=company,
+                ),
             ]
         )
         database.session.flush()
@@ -111,6 +132,8 @@ def item_image_permission_scenario():
                 RolesUser(user_id=f"access-only-{suffix}", role_id=access_role.id, active=True),
                 RolesUser(user_id=f"viewer-{suffix}", role_id=viewer_role.id, active=True),
                 RolesUser(user_id=f"editor-{suffix}", role_id=editor_role.id, active=True),
+                RolesUser(user_id=f"global-viewer-{suffix}", role_id=viewer_role.id, active=True),
+                RolesUser(user_id=f"global-editor-{suffix}", role_id=editor_role.id, active=True),
                 UserCompanyAccess(user_id=f"access-only-{suffix}", company_code=company),
                 UserCompanyAccess(user_id=f"viewer-{suffix}", company_code=company),
                 UserCompanyAccess(user_id=f"editor-{suffix}", company_code=company),
@@ -123,6 +146,8 @@ def item_image_permission_scenario():
             "access_only": f"access-only-{suffix}",
             "viewer": f"viewer-{suffix}",
             "editor": f"editor-{suffix}",
+            "global_viewer": f"global-viewer-{suffix}",
+            "global_editor": f"global-editor-{suffix}",
         }
 
     yield app, ids
@@ -142,7 +167,7 @@ def _authenticated_client(app, user_id: str):
 
 
 def test_item_image_read_requires_inventory_view(item_image_permission_scenario):
-    """Access without view cannot read the image nor learn whether it exists."""
+    """A role with module access but no view permission cannot read the image."""
     app, ids = item_image_permission_scenario
     client = _authenticated_client(app, ids["access_only"])
 
@@ -185,3 +210,25 @@ def test_item_image_reader_passes_the_read_guard(item_image_permission_scenario)
     response = client.get(f"/api/inventory/items/{ids['item_code']}/image")
 
     assert response.status_code == 404
+
+
+def test_global_image_permissions_do_not_require_company_assignment(item_image_permission_scenario):
+    """Module permissions authorize global image read and edits without company grants."""
+    app, ids = item_image_permission_scenario
+    reader = _authenticated_client(app, ids["global_viewer"])
+    editor = _authenticated_client(app, ids["global_editor"])
+    image_path = f"/api/inventory/items/{ids['item_code']}/image"
+
+    assert reader.get(image_path).status_code == 404
+
+    upload = editor.post(image_path, data={"file": (BytesIO(PNG_IMAGE), "item.png")})
+
+    assert upload.status_code == 200
+    visible_image = reader.get(image_path)
+    assert visible_image.status_code == 200
+    assert visible_image.data == PNG_IMAGE
+
+    deletion = editor.post(f"{image_path}/delete")
+
+    assert deletion.status_code == 200
+    assert reader.get(image_path).status_code == 404
