@@ -265,6 +265,45 @@ def test_revoking_module_role_hides_document_tasks(task_revocation_scenario):
         assert open_task_count(ids["assignee"]) == 0
 
 
+def test_inbox_and_badge_hide_task_when_document_company_is_missing(task_revocation_scenario):
+    """An authorized task company cannot substitute for a missing source company."""
+    app, ids = task_revocation_scenario
+    title = f"Tarea con documento sin compañía {uuid4().hex[:6]}"
+    with app.app_context():
+        document = DeliveryNote(
+            company=None,
+            document_no=f"DN-UNSCOPED-{uuid4().hex[:6]}",
+            customer_name="Documento sin compañía",
+            posting_date=date(2026, 5, 12),
+        )
+        database.session.add(document)
+        database.session.flush()
+        database.session.add(
+            DocumentTask(
+                document_type="delivery_note",
+                document_id=document.id,
+                document_no=document.document_no,
+                company=ids["company_alpha"],
+                title=title,
+                assigned_by=ids["assignee"],
+                assigned_to=ids["assignee"],
+            )
+        )
+        database.session.commit()
+
+    client = _authenticated_client(app, ids["assignee"])
+    response = client.get("/tasks/my")
+
+    assert response.status_code == 200
+    assert title not in response.get_data(as_text=True)
+    with app.test_request_context("/tasks/my"):
+        from flask_login import login_user
+
+        login_user(database.session.get(User, ids["assignee"]))
+        # The fixture's correctly scoped Alpha task remains; the unscoped source adds none.
+        assert open_task_count(ids["assignee"]) == 1
+
+
 def test_task_filters_do_not_reintroduce_revoked_tasks(task_revocation_scenario):
     """Los filtros de la bandeja tampoco devuelven tareas fuera de alcance (#1572).
 

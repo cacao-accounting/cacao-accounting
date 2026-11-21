@@ -317,7 +317,7 @@ def _document_matches_task_scope(doctype: str, document: Any, company: str) -> b
     if document is None or not document_matches_type(doctype, document):
         return False
     document_company = getattr(document, "company", None) or getattr(document, "entity", None)
-    return not document_company or str(document_company) == company
+    return bool(document_company) and str(document_company) == company
 
 
 def _visible_task_count(rows: Sequence[Any], authorized: Sequence[str]) -> int:
