@@ -50,7 +50,14 @@ def _utc_now_naive() -> datetime:
 
 IMPORT_SYNC_MAX_ROWS = 100
 REVALIDATABLE_IMPORT_STATUSES = {1, 2, 3, 7}
-STRUCTURAL_ERROR_TYPES = {"DUPLICATE_COLUMN", "PROHIBITED_COLUMN", "MISSING_COLUMN", "MISSING_HEADER", "EXTRA_CELLS"}
+STRUCTURAL_ERROR_TYPES = {
+    "DUPLICATE_COLUMN",
+    "UNKNOWN_COLUMN",
+    "PROHIBITED_COLUMN",
+    "MISSING_COLUMN",
+    "MISSING_HEADER",
+    "EXTRA_CELLS",
+}
 
 
 class _IndexedImportRow(dict[str, Any]):
@@ -121,7 +128,7 @@ class ImportService:
         """Map localized template headers to the adapter's canonical names."""
         expected_columns = getattr(adapter, "columns", None)
         if expected_columns is not None:
-            table.columns = canonical_columns(table.columns, expected_columns)
+            table.columns = canonical_columns(table.columns, expected_columns, getattr(adapter, "column_aliases", {}))
 
     def validate(self, batch_id: str) -> bool:
         """Valida estructuralmente y por reglas de negocio un lote de importación."""
@@ -210,17 +217,11 @@ class ImportService:
         return errors
 
     def _collect_header_errors(self, batch_id: str, columns: List[str], adapter: Any) -> List[ImportBatchError]:
-        """Valida encabezados duplicados, prohibidos y requeridos."""
+        """Valida encabezados duplicados, desconocidos, prohibidos y requeridos."""
         errors = []
         available_columns = set(columns)
         seen_columns = set()
-        journal_aliases = {
-            "document_ref": {"document_ref", "reference", "document_reference"},
-            "fecha": {"fecha", "posting_date", "date"},
-            "cuenta": {"cuenta", "account", "account_code"},
-            "debito": {"debito", "debe", "debit"},
-            "credito": {"credito", "haber", "credit"},
-        }
+        expected_columns = set(getattr(adapter, "columns", []))
         for col in columns:
             if not col:
                 continue
@@ -235,6 +236,15 @@ class ImportService:
                     )
                 )
             seen_columns.add(col)
+            if expected_columns and col not in expected_columns:
+                errors.append(
+                    ImportBatchError(
+                        batch_id=batch_id,
+                        field_name=col,
+                        error_type="UNKNOWN_COLUMN",
+                        message=_("La columna %(column)s no pertenece al formato de importación.") % {"column": col},
+                    )
+                )
             if col.lower() in self.FORBIDDEN_COLUMNS:
                 errors.append(
                     ImportBatchError(
@@ -246,8 +256,7 @@ class ImportService:
                 )
 
         for req_col in adapter.required_columns:
-            accepted = journal_aliases.get(req_col, {req_col}) if isinstance(adapter, JournalEntryAdapter) else {req_col}
-            if not available_columns.intersection(accepted):
+            if req_col not in available_columns:
                 errors.append(
                     ImportBatchError(
                         batch_id=batch_id,

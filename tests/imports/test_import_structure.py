@@ -19,6 +19,8 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Currency, Entity, Party, database
 from cacao_accounting.imports.adapters.customer import CustomerAdapter
+from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
+from cacao_accounting.imports.column_labels import canonical_columns
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.readers.base import NormalizedTable
 from cacao_accounting.imports.readers.ods_reader import ODSReader
@@ -118,7 +120,10 @@ def test_ods_without_header_row_fails_required_column_validation(app, tmp_path):
 
         errors = ImportBatchError.query.filter_by(batch_id=batch.id).all()
         assert batch.import_status == 7
-        assert [(error.error_type, error.field_name) for error in errors] == [("MISSING_COLUMN", "nombre")]
+        assert {(error.error_type, error.field_name) for error in errors} == {
+            ("UNKNOWN_COLUMN", "Structural Test Customer"),
+            ("MISSING_COLUMN", "nombre"),
+        }
         assert not Party.query.filter_by(name="Structural Test Customer").first()
 
         database.session.delete(batch)
@@ -287,6 +292,57 @@ def test_execution_revalidates_business_rules_for_changed_content(app, tmp_path)
 
         database.session.delete(batch)
         database.session.commit()
+
+
+def test_master_import_rejects_grouping_reference_column(app, tmp_path):
+    """Un maestro rechaza columnas de agrupación ajenas y no pierde filas (#1346)."""
+    with app.app_context():
+        path = tmp_path / "customers_with_reference.csv"
+        with path.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(["document_ref", "nombre"])
+            writer.writerow(["lote-1", "Cliente A"])
+            writer.writerow(["lote-1", "Cliente B"])
+        batch = _create_customer_batch(path, status=1)
+        service = ImportService()
+
+        assert service.validate(batch.id)
+
+        errors = ImportBatchError.query.filter_by(batch_id=batch.id).all()
+        assert batch.import_status == 7
+        assert batch.success_rows == 0
+        assert [(error.error_type, error.field_name) for error in errors] == [("UNKNOWN_COLUMN", "document_ref")]
+        assert not Party.query.filter_by(name="Cliente A").first()
+        assert not Party.query.filter_by(name="Cliente B").first()
+
+        database.session.delete(batch)
+        database.session.commit()
+
+
+def test_english_journal_template_keeps_document_and_reference_headers_distinct():
+    """La etiqueta ``reference`` no se redirige al campo ``document_ref`` (#1346)."""
+    adapter = JournalEntryAdapter()
+    visible = adapter.localized_columns("en")
+
+    canonical = canonical_columns(visible, adapter.columns)
+
+    assert canonical.count("document_ref") == 1
+    assert canonical.count("referencia") == 1
+    errors = ImportService()._collect_header_errors("batch-english-journal", canonical, adapter)
+    assert not [error for error in errors if error.error_type in {"DUPLICATE_COLUMN", "UNKNOWN_COLUMN", "MISSING_COLUMN"}]
+
+
+def test_journal_legacy_header_aliases_remain_available():
+    """Los aliases heredados siguen normalizando cuando no colisionan con etiquetas."""
+    adapter = JournalEntryAdapter()
+
+    canonical = canonical_columns(
+        ["document_reference", "posting_date", "account_code", "debit", "credit"],
+        adapter.columns,
+        adapter.column_aliases,
+    )
+
+    assert canonical == ["document_ref", "fecha", "cuenta", "debito", "credito"]
 
 
 def test_structural_error_detection_reports_unnamed_and_overflow_cells():

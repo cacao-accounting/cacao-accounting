@@ -42,6 +42,18 @@ class JournalEntryAdapter(BaseImportAdapter):
         "referencia",
     ]
     required_columns = ["document_ref", "fecha", "cuenta", "debito", "credito"]
+    column_aliases = {
+        "reference": "document_ref",
+        "document_reference": "document_ref",
+        "posting_date": "fecha",
+        "date": "fecha",
+        "account": "cuenta",
+        "account_code": "cuenta",
+        "debit": "debito",
+        "debe": "debito",
+        "credit": "credito",
+        "haber": "credito",
+    }
 
     @staticmethod
     def _value(row: Dict[str, Any], *keys: str, default: Any = None) -> Any:

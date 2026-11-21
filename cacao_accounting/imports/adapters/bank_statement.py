@@ -48,6 +48,7 @@ class BankStatementAdapter(BaseImportAdapter):
         "deposit",
         "withdrawal",
     ]
+    column_aliases = {"reference": "reference_number"}
     required_columns = ["bank_account_id", "posting_date"]
 
     @staticmethod

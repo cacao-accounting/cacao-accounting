@@ -13,6 +13,7 @@ class BaseImportAdapter:
 
     columns: List[str] = []
     required_columns: List[str] = []
+    column_aliases: dict[str, str] = {}
 
     def localized_columns(self, language: str | None) -> List[str]:
         """Return this adapter's headers in the requested language."""
