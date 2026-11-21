@@ -3109,8 +3109,8 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
         item_code = data.get("item_code", "").strip()
         if not item_code:
             continue
-        qty = Decimal(str(data.get("qty", "1")))
-        rate = Decimal(str(data.get("rate", "0")))
+        qty = coerce_decimal(data.get("qty", "1"), field_name=_("cantidad"), non_negative=True)
+        rate = coerce_decimal(data.get("rate", "0"), field_name=_("tarifa"), non_negative=True)
         if qty < 0 or rate < 0:
             raise ValueError(_("La cantidad y la tarifa de un costo de importación no pueden ser negativas."))
         item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
@@ -3159,10 +3159,12 @@ def _landed_cost_dimension(
     raw_value = data.get(field)
     raw_uom = data.get(f"{field}_uom")
     label = "peso" if field == "weight" else "volumen"
-    value = Decimal(str(raw_value)) if raw_value not in (None, "") else Decimal(str(getattr(item, field, 0) or 0))
+    value = coerce_decimal(
+        raw_value if raw_value not in (None, "") else getattr(item, field, 0) or 0,
+        field_name=_("peso") if field == "weight" else _("volumen"),
+        non_negative=True,
+    )
     uom = str(raw_uom or getattr(item, f"{field}_uom", "") or "").strip()
-    if value < 0:
-        raise ValueError(_("El %(field)s de una línea no puede ser negativo.") % {"field": label})
     if value > 0 and not uom:
         raise ValueError(_("El %(field)s de una línea requiere una unidad de medida.") % {"field": label})
     if uom and database.session.execute(database.select(UOM).filter_by(code=uom)).scalar_one_or_none() is None:

@@ -13,7 +13,7 @@ import pytest
 
 from cacao_accounting.accounting_engine.common.context import ItemContext
 from cacao_accounting.accounting_engine.landed_cost.engine import LandedCostEngine
-from cacao_accounting.compras.services import _save_import_landed_cost_items
+from cacao_accounting.compras.services import _landed_cost_dimension, _save_import_landed_cost_items
 from cacao_accounting.contabilidad.posting_service import PostingError, _post_with_calculation_engine_payload
 from cacao_accounting.database import ImportLandedCost, ImportLandedCostItem, Item, PurchaseInvoice, UOM, database
 
@@ -68,6 +68,14 @@ def test_el_motor_rechaza_una_base_vacia():
             [{"amount": Decimal("100"), "concept": "Flete", "allocation_method": "by_weight"}],
             allocation_method="by_weight",
         )
+
+
+@pytest.mark.parametrize("raw_value", ["NaN", "no-numérico"])
+def test_dimension_invalida_se_rechaza_como_error_de_validacion(app, raw_value):
+    """Entradas manipuladas no dejan escapar InvalidOperation ni valores no finitos."""
+    with app.app_context():
+        with pytest.raises(ValueError):
+            _landed_cost_dimension({"weight": raw_value}, None, "weight")
 
 
 def _seed_landed_cost() -> ImportLandedCost:
