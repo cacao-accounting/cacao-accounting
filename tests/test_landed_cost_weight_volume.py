@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 
 from cacao_accounting.accounting_engine.common.context import ItemContext
+from cacao_accounting.accounting_engine.document_builders import build_calculation_context
 from cacao_accounting.accounting_engine.landed_cost.engine import LandedCostEngine
 from cacao_accounting.compras.services import (
     _landed_cost_dimension,
@@ -214,6 +215,76 @@ def test_error_del_motor_se_traduce_a_posting_error(monkeypatch):
 
     with pytest.raises(PostingError, match="base positiva"):
         _post_with_calculation_engine_payload(object())
+
+
+def test_el_builder_real_alimenta_dimensiones_y_prorratea_por_peso(app, entorno_contable):
+    """El contexto del documento real lleva el peso persistido y prorratea 40/60.
+
+    La captura por línea usa el peso del formulario y, cuando falta, el default
+    del catálogo. Revertir el builder a dimensiones cero debe romper esta prueba.
+    """
+    with app.app_context():
+        suffix = uuid4().hex[:6].upper()
+        explicit_code = f"WGT-A-{suffix}"
+        catalog_code = f"WGT-B-{suffix}"
+        database.session.add_all(
+            [
+                Item(
+                    code=explicit_code,
+                    name="Artículo con peso de línea",
+                    item_type="goods",
+                    is_stock_item=True,
+                    default_uom="UND",
+                ),
+                Item(
+                    code=catalog_code,
+                    name="Artículo con peso de catálogo",
+                    item_type="goods",
+                    is_stock_item=True,
+                    default_uom="UND",
+                    weight=Decimal("3"),
+                    weight_uom="UND",
+                ),
+            ]
+        )
+        database.session.commit()
+        documento = _seed_landed_cost()
+
+        with app.test_request_context(
+            method="POST",
+            data={
+                "item_item_code_0": explicit_code,
+                "item_qty_0": "1",
+                "item_uom_0": "UND",
+                "item_rate_0": "10",
+                "item_weight_0": "2",
+                "item_weight_uom_0": "UND",
+                "item_item_code_1": catalog_code,
+                "item_qty_1": "1",
+                "item_uom_1": "UND",
+                "item_rate_1": "10",
+                "item_weight_1": "",
+                "item_weight_uom_1": "",
+            },
+        ):
+            _save_import_landed_cost_items(documento)
+            database.session.commit()
+
+        context = build_calculation_context(documento)
+        assert context is not None
+        weights = {item.item_id: item.weight for item in context.items}
+        assert weights == {explicit_code: Decimal("2"), catalog_code: Decimal("3")}
+
+        result = LandedCostEngine().calculate(
+            context.items,
+            [],
+            [{"amount": Decimal("100"), "concept": "Flete", "allocation_method": "by_weight"}],
+            allocation_method="by_weight",
+        )
+        line_by_item = {item.item_id: item.line_id for item in context.items}
+        costs = {allocation.item_line_id: allocation.final_inventory_cost for allocation in result.allocations}
+        assert costs[line_by_item[explicit_code]] == Decimal("50")
+        assert costs[line_by_item[catalog_code]] == Decimal("70")
 
 
 def test_el_formulario_habilita_las_dimensiones(client, reference_users):
