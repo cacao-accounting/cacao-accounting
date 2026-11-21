@@ -194,12 +194,12 @@ def check_desktop_mode():
 # --- INTERNAL VIEWS & ENDPOINTS (Require authentication and accounting module) ---
 
 
-def _confirmation_companies() -> list[tuple[str, str]]:
-    """Return companies where the current user may create confirmations."""
+def _confirmation_companies(action: str) -> list[tuple[str, str]]:
+    """Return companies where the current user has the requested action."""
     companies = []
     for code, name in obtener_lista_entidades_por_id_razonsocial():
         try:
-            exige_acceso_compania("accounting", code, "crear")
+            exige_acceso_compania("accounting", code, action)
         except Exception:
             continue
         companies.append((code, name))
@@ -304,18 +304,21 @@ def crear_confirmacion_form():
     party_id = request.args.get("party_id")
     party_type = request.args.get("party_type", "customer")  # customer | supplier
 
-    party = database.session.get(Party, party_id) if party_id else None
+    action = "consultar" if request.method == "GET" else "crear"
+    companies = _confirmation_companies(action)
+    if party_id:
+        companies = _party_allowed_companies(party_id, companies)
+        if not companies:
+            abort(403)
+        party = database.session.get(Party, party_id)
+    else:
+        party = None
     if not party:
         flash(_("Debe seleccionar un cliente o proveedor válido."), "warning")
         if party_type == "customer":
             return redirect(url_for("ventas.ventas_cliente_lista"))
-        else:
-            return redirect(url_for("compras.compras_proveedor_lista"))
+        return redirect(url_for("compras.compras_proveedor_lista"))
 
-    companies = _confirmation_companies()
-    companies = _party_allowed_companies(party_id, companies)
-    if not companies:
-        abort(403)
     suggested_emails = _party_suggested_emails(party_id, party)
 
     if request.method == "POST":
@@ -424,7 +427,9 @@ def enviar_confirmacion(confirmation_id: str):
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
-        body = _("""Estimado cliente/proveedor,
+        body = (
+            _(
+                """Estimado cliente/proveedor,
 
 La empresa %(company)s le solicita la confirmación externa del saldo de su cuenta al %(cutoff_date)s.
 
@@ -436,7 +441,10 @@ Para ver el detalle de los documentos y responder a esta solicitud, ingrese al s
 
 Atentamente,
 %(company)s
-""") % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
+"""
+            )
+            % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
+        )
         try:
             send_email(
                 to_email=inv.email,
@@ -514,7 +522,9 @@ def reenviar_confirmacion(confirmation_id: str):
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
-        body = _("""Estimado cliente/proveedor,
+        body = (
+            _(
+                """Estimado cliente/proveedor,
 
 Le reenviamos la solicitud de confirmación de saldo de %(company)s al %(cutoff_date)s.
 
@@ -526,7 +536,10 @@ Para ver el detalle de los documentos y responder a esta solicitud, ingrese al s
 
 Atentamente,
 %(company)s
-""") % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
+"""
+            )
+            % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
+        )
         try:
             send_email(
                 to_email=inv.email,

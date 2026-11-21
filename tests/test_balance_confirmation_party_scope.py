@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from uuid import uuid4
 
 import pytest
@@ -45,6 +46,7 @@ def confirmation_party_scope_scenario():
     alpha = f"a{suffix}"
     beta = f"b{suffix}"
     requester_id = f"confirmation-requester-{suffix}"
+    read_requester_id = f"confirmation-read-requester-{suffix}"
     denied_id = f"confirmation-denied-{suffix}"
     own_party_id = f"own-party-{suffix}"
     foreign_party_id = f"foreign-party-{suffix}"
@@ -76,6 +78,13 @@ def confirmation_party_scope_scenario():
                     enabled=True,
                 ),
                 User(id=requester_id, user=requester_id, name="Solicitante autorizado", password=b"unused", active=True),
+                User(
+                    id=read_requester_id,
+                    user=read_requester_id,
+                    name="Solicitante de solo lectura",
+                    password=b"unused",
+                    active=True,
+                ),
                 User(id=denied_id, user=denied_id, name="Usuario sin RBAC", password=b"unused", active=True),
                 Party(
                     id=own_party_id,
@@ -105,6 +114,7 @@ def confirmation_party_scope_scenario():
                 Contact(first_name="Ajeno", email=f"contact-{foreign_email}", is_active=True),
                 Contact(first_name="Sin vínculo", email=f"contact-{unassociated_email}", is_active=True),
                 UserCompanyAccess(user_id=requester_id, company_code=alpha),
+                UserCompanyAccess(user_id=read_requester_id, company_code=alpha),
             ]
         )
         database.session.flush()
@@ -125,14 +135,18 @@ def confirmation_party_scope_scenario():
         database.session.flush()
         module_id = database.session.execute(database.select(Modules.id).filter_by(module="accounting")).scalar_one()
         role = Roles(name=f"confirmation-requester-role-{suffix}", note="Crear confirmaciones")
+        read_role = Roles(name=f"confirmation-read-role-{suffix}", note="Consultar y solicitar confirmaciones")
         view_role = Roles(name=f"confirmation-view-role-{suffix}", note="Consultar clientes")
         database.session.add(role)
+        database.session.add(read_role)
         database.session.add(view_role)
         database.session.flush()
         database.session.add_all(
             [
                 RolesAccess(rol_id=role.id, module_id=module_id, access=True, view=True, create=True, request=True),
                 RolesUser(user_id=requester_id, role_id=role.id, active=True),
+                RolesAccess(rol_id=read_role.id, module_id=module_id, access=True, view=True, create=False, request=True),
+                RolesUser(user_id=read_requester_id, role_id=read_role.id, active=True),
                 RolesAccess(rol_id=view_role.id, module_id=module_id, access=True, view=True, create=False, request=False),
                 RolesUser(user_id=denied_id, role_id=view_role.id, active=True),
             ]
@@ -141,7 +155,9 @@ def confirmation_party_scope_scenario():
 
     yield application, {
         "requester": requester_id,
+        "read_requester": read_requester_id,
         "denied": denied_id,
+        "company": alpha,
         "own_party": own_party_id,
         "foreign_party": foreign_party_id,
         "unassociated_party": unassociated_party_id,
@@ -178,6 +194,24 @@ def test_confirmation_form_requires_rbac_before_party_lookup(confirmation_party_
 
     assert response.status_code == 403
     assert ids["own_email"] not in response.get_data(as_text=True)
+
+
+def test_confirmation_form_read_does_not_grant_creation_permission(confirmation_party_scope_scenario):
+    """A requester may read an in-scope form without create permission, but cannot submit it."""
+    application, ids = confirmation_party_scope_scenario
+    client = _authenticated_client(application, ids["read_requester"])
+
+    get_response = client.get(_form_url(ids["own_party"]))
+
+    assert get_response.status_code == 200
+    assert ids["own_email"] in get_response.get_data(as_text=True)
+
+    post_response = client.post(
+        _form_url(ids["own_party"]),
+        data={"company_id": ids["company"], "cutoff_date": date.today().isoformat(), "emails": ids["own_email"]},
+    )
+
+    assert post_response.status_code == 403
 
 
 @pytest.mark.parametrize("party_key", ["foreign_party", "unassociated_party"])
