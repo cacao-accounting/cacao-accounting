@@ -5,15 +5,15 @@
 
 import csv
 from typing import Any, TextIO
-from cacao_accounting.imports.readers.base import BaseReader, NormalizedTable
+from cacao_accounting.imports.readers.base import BaseReader, TabularBook
 from cacao_accounting.imports.readers.limits import ImportReadLimitError, ReadBudget, validate_file_size
 
 
 class CSVReader(BaseReader):
     """Lee archivos CSV."""
 
-    def read(self, file_path: str) -> NormalizedTable:
-        """Lee un archivo CSV y devuelve una NormalizedTable."""
+    def read(self, file_path: str) -> TabularBook:
+        """Lee un archivo CSV y devuelve un TabularBook canónico."""
         validate_file_size(file_path)
         with open(file_path, mode="r", encoding="utf-8-sig") as f:
             # Intentar detectar el delimitador (normalmente , o ;)
@@ -31,7 +31,7 @@ class CSVReader(BaseReader):
             try:
                 columns = next(reader)
             except StopIteration:
-                return NormalizedTable(source_format="csv", columns=[], rows=[])
+                return TabularBook(source_format="csv", columns=[], rows=[])
             except csv.Error as exc:
                 if str(exc).startswith("field larger than field limit"):
                     raise ImportReadLimitError() from exc
@@ -47,7 +47,7 @@ class CSVReader(BaseReader):
                 if str(exc).startswith("field larger than field limit"):
                     raise ImportReadLimitError() from exc
                 raise
-            return NormalizedTable(columns=columns, rows=rows, source_format="csv")
+            return TabularBook(columns=columns, rows=rows, source_format="csv")
 
 
 def _validate_shape(file: TextIO, dialect: Any) -> None:

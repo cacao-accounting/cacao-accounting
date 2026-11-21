@@ -9,7 +9,7 @@ from pathlib import Path
 
 import xlrd
 from xlrd import biffh, compdoc
-from cacao_accounting.imports.readers.base import BaseReader, NormalizedTable
+from cacao_accounting.imports.readers.base import BaseReader, TabularBook
 from cacao_accounting.imports.readers.limits import (
     MAX_IMPORT_CELLS,
     MAX_IMPORT_COLUMNS,
@@ -24,16 +24,17 @@ from cacao_accounting.imports.readers.limits import (
 class XLSReader(BaseReader):
     """Lee archivos XLS usando xlrd."""
 
-    def read(self, file_path: str) -> NormalizedTable:
-        """Lee un archivo XLS y devuelve una NormalizedTable."""
+    def read(self, file_path: str) -> TabularBook:
+        """Lee un archivo XLS y devuelve un TabularBook canónico."""
         validate_file_size(file_path)
-        _preflight_legacy_xls(file_path)
+        legacy_preflight_complete = _preflight_legacy_xls(file_path)
         wb = xlrd.open_workbook(file_path, on_demand=True)
         try:
-            _validate_sheet_extent(wb)
+            if not legacy_preflight_complete:
+                _validate_sheet_extent(wb)
             ws = wb.sheet_by_index(0)
             if ws.nrows == 0:
-                return NormalizedTable(source_format="xls")
+                return TabularBook(source_format="xls")
             if ws.nrows - 1 > MAX_IMPORT_ROWS or ws.ncols > MAX_IMPORT_COLUMNS:
                 raise ImportReadLimitError()
 
@@ -46,7 +47,7 @@ class XLSReader(BaseReader):
                 budget.consume_row(len(row))
                 rows.append(row)
 
-            return NormalizedTable(columns=columns, rows=rows, source_format="xls")
+            return TabularBook(columns=columns, rows=rows, source_format="xls")
         finally:
             wb.release_resources()
 
@@ -62,22 +63,25 @@ def _validate_sheet_extent(workbook: Any) -> None:
     extent.validate()
 
 
-def _preflight_legacy_xls(file_path: str) -> None:
+def _preflight_legacy_xls(file_path: str) -> bool:
     """Prevalida BIFF2–4 antes de xlrd, que carga esas hojas eager."""
     source = Path(file_path).read_bytes()
     memory, base, stream_length = _workbook_stream(source)
     stream_end = base + stream_length
     if base + 4 > stream_end:
-        return
+        return False
     record, data, position = _read_biff_record(memory, base, stream_end)
     if record not in biffh.bofcodes or record >> 8 == 0x08:
-        return
+        return False
     version = record >> 8
     stream_type = biffh.unpack("<H", data[2:4])[0]
     if version == 0x04 and stream_type == biffh.XL_WORKBOOK_GLOBALS_4W:
         _preflight_biff4w(memory, position, stream_end)
+        return True
     elif version in (0x00, 0x02, 0x04) and stream_type == biffh.XL_WORKSHEET:
         _scan_biff_extent(memory, base, stream_end).validate()
+        return True
+    return False
 
 
 def _workbook_stream(source: bytes) -> tuple[Any, int, int]:

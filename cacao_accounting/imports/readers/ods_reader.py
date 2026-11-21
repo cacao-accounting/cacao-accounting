@@ -8,7 +8,7 @@ from xml.sax.handler import ContentHandler, feature_external_ges, feature_namesp
 from xml.sax.xmlreader import AttributesNSImpl
 from zipfile import ZipFile
 
-from cacao_accounting.imports.readers.base import BaseReader, NormalizedTable
+from cacao_accounting.imports.readers.base import BaseReader, TabularBook
 from cacao_accounting.imports.readers.limits import (
     MAX_IMPORT_ARCHIVE_BYTES,
     MAX_IMPORT_TEXT_CHARS,
@@ -30,7 +30,7 @@ MAX_IMPORT_XML_DEPTH = 256
 class ODSReader(BaseReader):
     """Lee archivos ODS mediante el XML incremental del contenedor."""
 
-    def read(self, file_path: str) -> NormalizedTable:
+    def read(self, file_path: str) -> TabularBook:
         """Lee la primera tabla sin construir el árbol XML completo."""
         validate_archive_size(file_path)
         with ZipFile(file_path) as archive, archive.open("content.xml") as content:
@@ -40,7 +40,7 @@ class ODSReader(BaseReader):
             handler = _ODSContentParser()
             parser.setContentHandler(handler)
             parser.parse(content)
-            return NormalizedTable(columns=handler.columns, rows=handler.rows, source_format="ods")
+            return TabularBook(columns=handler.columns, rows=handler.rows, source_format="ods")
 
 
 class _ODSContentParser(ContentHandler):
