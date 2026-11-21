@@ -8,6 +8,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.database import SavedReportView, User, UserCompanyAccess, database
@@ -77,6 +78,32 @@ def test_no_permite_nombres_duplicados(app, entorno_contable):
         create_saved_view("account-movement", "cacao", admin, nombre, _filters())
         with pytest.raises(SavedReportViewError, match="Ya existe"):
             create_saved_view("account-movement", "cacao", admin, nombre, _filters())
+
+
+def test_colision_de_unicidad_al_confirmar_se_convierte_en_error_de_dominio(app, entorno_contable, monkeypatch):
+    """Una carrera contra la clave única revierte la sesión y da error controlado."""
+    with app.app_context():
+        admin = _admin_id()
+        monkeypatch.setattr(
+            database.session,
+            "commit",
+            lambda: (_ for _ in ()).throw(
+                IntegrityError(
+                    "insert",
+                    {},
+                    Exception(
+                        "UNIQUE constraint failed: saved_report_view.company, "
+                        "saved_report_view.user_id, saved_report_view.report_code, saved_report_view.name"
+                    ),
+                )
+            ),
+        )
+
+        with pytest.raises(SavedReportViewError, match="Ya existe"):
+            create_saved_view("account-movement", "cacao", admin, f"Carrera {uuid4().hex[:6]}", _filters())
+
+        assert not database.session.new
+        assert database.session.is_active
 
 
 def test_una_vista_ajena_no_es_visible(app, entorno_contable):

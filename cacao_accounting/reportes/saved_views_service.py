@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import SavedReportView, database
@@ -45,6 +46,18 @@ class SavedReportViewError(Exception):
     """Error de negocio o autorización en vistas guardadas."""
 
     _safe_for_display = True
+
+
+def _is_saved_view_name_conflict(error: IntegrityError) -> bool:
+    """Reconoce la restricción única del nombre entre los motores Tier 1."""
+    original = error.orig
+    constraint_name = getattr(getattr(original, "diag", None), "constraint_name", None)
+    if constraint_name == "uq_saved_report_view_name":
+        return True
+    return (
+        "UNIQUE constraint failed: saved_report_view.company, saved_report_view.user_id, "
+        "saved_report_view.report_code, saved_report_view.name" in str(original)
+    )
 
 
 def _require_access(company: str, user_id: str | None) -> None:
@@ -167,7 +180,13 @@ def create_saved_view(
         modified_by=user_id,
     )
     database.session.add(view)
-    database.session.commit()
+    try:
+        database.session.commit()
+    except IntegrityError as exc:
+        database.session.rollback()
+        if _is_saved_view_name_conflict(exc):
+            raise SavedReportViewError(_("Ya existe una vista guardada con ese nombre.")) from exc
+        raise
     return view
 
 
