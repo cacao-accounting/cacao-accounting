@@ -92,6 +92,30 @@ def verifica_permiso(modulo: str, accion: str):
     return decorator_verifica_permiso
 
 
+def verifica_permiso_cualquiera(modulos: tuple[str, ...], accion: str):
+    """Require the action permission in at least one of the given modules."""
+
+    def decorator_verifica_permiso_cualquiera(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not current_user.is_authenticated:
+                flash(_("No se encuentra autorizado para ejecutar esta acción."))
+                return abort(403)
+            for modulo in modulos:
+                module_id = obtener_id_modulo_por_nombre(modulo)
+                if module_id is None:
+                    continue
+                permisos = Permisos(modulo=module_id, usuario=current_user.id)
+                if getattr(permisos, accion, False):
+                    return func(*args, **kwargs)
+            flash(_("No se encuentra autorizado para ejecutar esta acción."))
+            return abort(403)
+
+        return wrapper
+
+    return decorator_verifica_permiso_cualquiera
+
+
 def exige_acceso_compania(
     modulo: str, company: str | None, accion: str = "consultar", allow_unauthenticated: bool = False
 ) -> None:

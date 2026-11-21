@@ -64,6 +64,7 @@ from cacao_accounting.decorators import (  # noqa: F401
     modulo_activo,
     verifica_acceso as verifica_acceso,
     verifica_permiso,
+    verifica_permiso_cualquiera,
 )
 
 
@@ -214,8 +215,14 @@ def _load_delivery_note_sources(from_order_id: str | None, from_note_id: str | N
     order_source = database.session.get(SalesOrder, from_order_id) if from_order_id else None
     delivery_source = database.session.get(DeliveryNote, from_note_id) if from_note_id else None
     for source in (order_source, delivery_source):
-        if source is not None:
-            _require_sales_document_access(source, "consultar")
+        if source is None:
+            continue
+        source_company = getattr(source, "company", None)
+        if not source_company:
+            abort(404)
+        # #1332: el flujo de entrega lo puede iniciar Inventario; los datos
+        # comerciales del origen se omiten en el contexto para ese perfil.
+        exige_acceso_compania_cualquiera(("sales", "inventory"), str(source_company), "crear")
     return order_source, delivery_source
 
 
@@ -267,6 +274,33 @@ def _build_delivery_note_transaction_config(
     }
 
 
+def _delivery_note_transaction_config_with_pricing(
+    items: list[dict[str, Any]],
+    uoms: list[dict[str, Any]],
+    warehouses: list[dict[str, Any]],
+    initial_source_type: str,
+    *,
+    show_pricing: bool,
+) -> dict[str, Any]:
+    """Build the delivery-note config hiding pricing for non-sales readers."""
+    config = _build_delivery_note_transaction_config(items, uoms, warehouses, initial_source_type)
+    config["showPricing"] = show_pricing
+    return config
+
+
+def _can_read_sales_company(company: str | None) -> bool:
+    """Return whether the current user may read commercial sales data."""
+    if not company:
+        return False
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("sales"), usuario=current_user.id)
+    if getattr(permisos, "administrador", False):
+        return True
+    return bool(getattr(permisos, "consultar", False) and permisos.tiene_acceso_compania(company))
+
+
 def _build_delivery_note_new_context() -> _DeliveryNoteNewContext:
     """Prepare form data, catalogs, and source defaults for a new delivery note."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
@@ -298,16 +332,27 @@ def _build_delivery_note_new_context() -> _DeliveryNoteNewContext:
         initial_source_type = "delivery_note"
     else:
         initial_source_type = ""
-    transaction_config = _build_delivery_note_transaction_config(items, uoms, warehouses, initial_source_type)
+    # #1332/#1515: el perfil de Inventario completa la entrega sin recibir
+    # precios ni datos comerciales del origen; el backend los resuelve.
+    can_read_sales = _can_read_sales_company(getattr(source_document, "company", selected_company))
+    transaction_config = _delivery_note_transaction_config_with_pricing(
+        items, uoms, warehouses, initial_source_type, show_pricing=can_read_sales
+    )
     if source_document:
-        transaction_config["initialHeader"] = {
+        initial_header = {
             "company": source_document.company or "",
             "currency": effective_currency(source_document) or "",
-            "party": source_document.customer_id or "",
-            "party_label": source_document.customer_name or "",
             "posting_date": str(date.today()),
-            **_sales_logistics_values(source_document),
         }
+        logistics = _sales_logistics_values(source_document)
+        if can_read_sales:
+            initial_header.update(
+                {"party": source_document.customer_id or "", "party_label": source_document.customer_name or ""}
+            )
+        else:
+            logistics = {field: value for field, value in logistics.items() if field in ("delivery_date", "delivery_place")}
+        initial_header.update(logistics)
+        transaction_config["initialHeader"] = initial_header
     return _DeliveryNoteNewContext(
         form=formulario,
         title="Nueva Nota de Entrega - " + APPNAME,
@@ -357,7 +402,9 @@ def _handle_delivery_note_new_post() -> ResponseReturnValue:
         request.form.get("company") or None,
         request.form.get("currency") or request.form.get("transaction_currency") or None,
     )
-    exige_acceso_compania("sales", company, "crear")
+    # #1332: el alta de entrega la puede ejecutar Inventario; el backend
+    # resuelve cliente y precio desde el origen sin exigir permisos de Ventas.
+    exige_acceso_compania_cualquiera(("sales", "inventory"), company, "crear")
     source_customer_id = getattr(source, "customer_id", None)
     if source_customer_id and customer_id and customer_id != source_customer_id:
         raise ValueError(_("El cliente debe coincidir con el documento origen."))
@@ -1864,10 +1911,9 @@ def ventas_orden_venta_close(order_id: str):
 
 
 @ventas.route("/delivery-note/new", methods=["GET", "POST"])
-@modulo_activo("inventory")
+@modulo_activo(("sales", "inventory"))
 @login_required
-@verifica_permiso("inventory", "crear")
-@verifica_permiso("sales", "crear")
+@verifica_permiso_cualquiera(("sales", "inventory"), "crear")
 def ventas_entrega_nuevo():
     """Formulario para crear una nota de entrega."""
     context = _build_delivery_note_new_context()
