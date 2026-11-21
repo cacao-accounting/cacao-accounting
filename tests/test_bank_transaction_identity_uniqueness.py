@@ -11,6 +11,7 @@ enmascarar otros errores de integridad ni invalidar la transacción externa.
 
 from __future__ import annotations
 
+import csv
 import os
 import sqlite3
 from datetime import date
@@ -25,6 +26,7 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AccountingPeriod,
     Bank,
     BankAccount,
     BankTransaction,
@@ -33,6 +35,8 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter, _is_bank_identity_conflict
+from cacao_accounting.imports.models import ImportBatch, ImportBatchError
+from cacao_accounting.imports.services.import_service import ImportService
 
 MOVEMENT_DATE = date(2026, 5, 15)
 DUPLICATE_MESSAGE = "La transacción bancaria ya existe en la base de datos."
@@ -70,6 +74,16 @@ def _seed_bank_scenario(app) -> tuple[str, str]:
         )
         database.session.add_all([currency, company])
         database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                entity=company_code,
+                name="Mayo 2026",
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+                enabled=True,
+                is_closed=False,
+            )
+        )
         bank = Bank(name=f"Banco {suffix}")
         database.session.add(bank)
         database.session.flush()
@@ -99,6 +113,8 @@ def _cleanup_bank_scenario(app, company_code: str, account_id: str) -> None:
             database.session.flush()
             if bank is not None:
                 database.session.delete(bank)
+        database.session.execute(database.delete(ImportBatch).where(ImportBatch.company_id == company_code))
+        database.session.execute(database.delete(AccountingPeriod).where(AccountingPeriod.entity == company_code))
         company = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
         currency_code = company.currency if company is not None else None
         if company is not None:
@@ -236,7 +252,7 @@ def test_adapter_rejects_a_sequential_duplicate_import(bank_identity_scenario):
             == 1
         )
 
-        # Control positivo: otra referencia sí se importa.
+        # Control positivo: otra identidad económica sí se importa.
         different = adapter.build_document([_movement(account_id, reference="IMP-2")], {"company_id": company_code})
         adapter.persist_document(different)
         database.session.commit()
@@ -248,6 +264,114 @@ def test_adapter_rejects_a_sequential_duplicate_import(bank_identity_scenario):
             ).scalar_one()
             == 2
         )
+
+
+def _write_bank_statement(path, account_id: str, rows: list[tuple[str, str]]) -> None:
+    """Escribe movimientos CSV con referencia informativa y monto de depósito."""
+    with path.open("w", encoding="utf-8", newline="") as source:
+        writer = csv.writer(source)
+        writer.writerow(["bank_account_id", "posting_date", "reference", "description", "deposit", "withdrawal"])
+        for reference, deposit in rows:
+            writer.writerow([account_id, MOVEMENT_DATE.isoformat(), reference, "Movimiento", deposit, ""])
+
+
+def _import_bank_statement(app, company_code: str, path) -> ImportBatch:
+    """Valida y ejecuta un CSV bancario por el servicio público de lotes."""
+    with app.app_context():
+        batch = ImportBatch(
+            company_id=company_code,
+            record_type="bank_statement",
+            source_format="csv",
+            source_filename=path.name,
+            source_path=str(path),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        service = ImportService()
+        assert service.validate(batch.id)
+        assert batch.import_status == 3
+        assert service.execute(batch.id)
+        database.session.refresh(batch)
+        return batch
+
+
+def test_csv_import_keeps_distinct_movements_with_the_same_reference(bank_identity_scenario, tmp_path):
+    """La referencia compartida no fusiona movimientos con importes distintos."""
+    app, company_code, account_id = bank_identity_scenario
+    path = tmp_path / "same-reference.csv"
+    _write_bank_statement(path, account_id, [("BANK-REF", "10.00"), ("BANK-REF", "5.00")])
+
+    batch = _import_bank_statement(app, company_code, path)
+
+    with app.app_context():
+        transactions = (
+            database.session.execute(
+                database.select(BankTransaction)
+                .where(BankTransaction.bank_account_id == account_id)
+                .order_by(BankTransaction.deposit.desc())
+            )
+            .scalars()
+            .all()
+        )
+        assert batch.import_status == 5
+        assert batch.success_rows == 2
+        assert batch.error_rows == 0
+        assert [(transaction.reference_number, transaction.deposit) for transaction in transactions] == [
+            ("BANK-REF", Decimal("10.00")),
+            ("BANK-REF", Decimal("5.00")),
+        ]
+
+
+def test_csv_import_rejects_identical_rows_within_one_batch(bank_identity_scenario, tmp_path):
+    """Dos filas idénticas producen un error de fila sin duplicar evidencia bancaria."""
+    app, company_code, account_id = bank_identity_scenario
+    path = tmp_path / "duplicate-rows.csv"
+    movement = ("BANK-REF", "10.00")
+    _write_bank_statement(path, account_id, [movement, movement])
+
+    batch = _import_bank_statement(app, company_code, path)
+
+    with app.app_context():
+        transactions = BankTransaction.query.filter_by(bank_account_id=account_id).all()
+        errors = ImportBatchError.query.filter_by(batch_id=batch.id).all()
+        assert batch.import_status == 6
+        assert batch.success_rows == 1
+        assert batch.error_rows == 1
+        assert len(transactions) == 1
+        assert transactions[0].reference_number == "BANK-REF"
+        assert len(errors) == 1
+        # La referencia puede repetirse; row_N identifica inequívocamente la fila rechazada.
+        assert errors[0].document_ref == "row_1"
+        assert errors[0].error_type == "IMPORT_ERROR"
+        assert "ya existe" in errors[0].message
+
+
+def test_csv_import_rejects_same_movement_across_batches(bank_identity_scenario, tmp_path):
+    """Reimportar el movimiento en otro lote no agrega una segunda transacción."""
+    app, company_code, account_id = bank_identity_scenario
+    movement = ("BANK-REF", "10.00")
+    first_path = tmp_path / "first-import.csv"
+    second_path = tmp_path / "second-import.csv"
+    _write_bank_statement(first_path, account_id, [movement])
+    _write_bank_statement(second_path, account_id, [movement])
+
+    first_batch = _import_bank_statement(app, company_code, first_path)
+    second_batch = _import_bank_statement(app, company_code, second_path)
+
+    with app.app_context():
+        transactions = BankTransaction.query.filter_by(bank_account_id=account_id).all()
+        errors = ImportBatchError.query.filter_by(batch_id=second_batch.id).all()
+        assert first_batch.import_status == 5
+        assert second_batch.import_status == 6
+        assert second_batch.success_rows == 0
+        assert second_batch.error_rows == 1
+        assert len(transactions) == 1
+        assert len(errors) == 1
+        assert errors[0].document_ref == "row_0"
+        assert errors[0].error_type == "IMPORT_ERROR"
+        assert "ya existe" in errors[0].message
 
 
 def test_identity_conflict_detection_ignores_other_integrity_errors():
@@ -282,12 +406,14 @@ def test_identity_conflict_detection_ignores_other_integrity_errors():
 def _legacy_bank_database(path, identities: tuple[str, ...]) -> None:
     """Crea una base previa al fix, sin restricción única en identity_key."""
     connection = sqlite3.connect(path)
-    connection.executescript("""
+    connection.executescript(
+        """
         CREATE TABLE bank_transaction (
             id VARCHAR(26) PRIMARY KEY,
             identity_key VARCHAR(64) NOT NULL
         );
-        """)
+        """
+    )
     connection.executemany(
         "INSERT INTO bank_transaction (id, identity_key) VALUES (?, ?)",
         [(f"LEGACY-{index}", identity) for index, identity in enumerate(identities, start=1)],
