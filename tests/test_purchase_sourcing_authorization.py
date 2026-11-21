@@ -10,26 +10,32 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
 from cacao_accounting.compras.purchase_sourcing_service import (
     PurchaseSourcingError,
+    close_purchase_quotation_comparison,
     _validate_award_authorization,
     create_purchase_quotation_award,
     is_purchase_manager,
     is_purchase_sourcing_authorizer,
+    open_negotiation_round,
+    _flush_award,
 )
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
     Entity,
     Item,
+    Modules,
     Party,
     PurchaseQuotation,
     PurchaseQuotationAward,
     PurchaseQuotationAwardItem,
     PurchaseQuotationItem,
+    PurchaseNegotiationRound,
     Roles,
     RolesUser,
     SupplierQuotation,
@@ -51,6 +57,7 @@ def purchase_roles(tmp_path: Path):
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "MODO_ESCRITORIO": True,
+            "WTF_CSRF_ENABLED": False,
         }
     )
     users = {
@@ -141,12 +148,14 @@ def sourcing_award(tmp_path: Path):
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "MODO_ESCRITORIO": True,
+            "WTF_CSRF_ENABLED": False,
         }
     )
     with application.app_context():
         database.create_all()
         database.session.add_all(
             [
+                Modules(module="purchases", default=True, enabled=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Entity(
                     code="cacao",
@@ -272,3 +281,94 @@ def test_adjudicacion_descarta_justificacion_vacia_sin_excepcion(sourcing_award)
         award = create_purchase_quotation_award(rfq, {ids["rfq_item"]: ids["SQ-CHEAP"]}, "admin", "   ")
         assert award.authorization_reason is None
         assert award.authorized_by is None
+
+
+def _close_rfq_manually(application, ids) -> None:
+    """Create a persisted manual close for the RFQ in the sourcing fixture."""
+    with application.app_context():
+        rfq = database.session.get(PurchaseQuotation, ids["rfq"])
+        close_purchase_quotation_comparison(rfq, "admin", "Cierre aprobado por falta de ofertas adecuadas")
+        database.session.commit()
+
+
+def _login_as_admin(client, application) -> None:
+    """Authenticate the fixture administrator in a test client session."""
+    with application.app_context():
+        user = database.session.get(User, "admin")
+        auth_version = user.auth_version
+    with client.session_transaction() as session:
+        session["_user_id"] = "admin"
+        session["_auth_version"] = auth_version
+        session["_fresh"] = True
+
+
+def test_manual_close_blocks_service_round_and_award_creation(sourcing_award):
+    """A manual close is terminal for service calls as well as for the UI."""
+    application, ids = sourcing_award
+    _close_rfq_manually(application, ids)
+
+    with application.app_context():
+        rfq = database.session.get(PurchaseQuotation, ids["rfq"])
+        with pytest.raises(PurchaseSourcingError, match="comparativo cerrado"):
+            open_negotiation_round(rfq.id, "admin")
+        with pytest.raises(PurchaseSourcingError, match="comparativo cerrado"):
+            create_purchase_quotation_award(rfq, {ids["rfq_item"]: ids["SQ-CHEAP"]}, "admin")
+
+        assert database.session.execute(database.select(PurchaseNegotiationRound)).scalars().all() == []
+        awards = database.session.execute(database.select(PurchaseQuotationAward)).scalars().all()
+        assert len(awards) == 1
+        assert awards[0].status == "closed"
+
+
+def test_award_unique_collision_is_translated_to_closed_domain_error(sourcing_award):
+    """The database uniqueness guard remains a controlled domain rejection."""
+    application, ids = sourcing_award
+    _close_rfq_manually(application, ids)
+
+    with application.app_context():
+        collision = PurchaseQuotationAward(
+            purchase_quotation_id=ids["rfq"],
+            company="cacao",
+            status="finalized",
+        )
+        with pytest.raises(PurchaseSourcingError, match="adjudicación o cierre registrado") as error:
+            _flush_award(collision)
+
+        awards = database.session.execute(database.select(PurchaseQuotationAward)).scalars().all()
+        assert len(awards) == 1
+        assert awards[0].status == "closed"
+        assert isinstance(error.value.__cause__, IntegrityError)
+        # The savepoint leaves the outer transaction available for caller rollback/commit.
+        assert database.session.is_active
+
+
+@pytest.mark.parametrize(
+    ("path_suffix", "form_data"),
+    [
+        ("negotiation-round", {}),
+        ("award", {"award_item_{item_id}": "{quotation_id}"}),
+    ],
+)
+def test_manual_close_blocks_round_and_award_post_routes(sourcing_award, path_suffix, form_data):
+    """Both POST entry points report the manual close and preserve one award."""
+    application, ids = sourcing_award
+    _close_rfq_manually(application, ids)
+    client = application.test_client()
+    _login_as_admin(client, application)
+    form = {
+        key.format(item_id=ids["rfq_item"], quotation_id=ids["SQ-CHEAP"]): value.format(
+            item_id=ids["rfq_item"], quotation_id=ids["SQ-CHEAP"]
+        )
+        for key, value in form_data.items()
+    }
+
+    response = client.post(f"/buying/request-for-quotation/{ids['rfq']}/{path_suffix}", data=form, follow_redirects=True)
+
+    assert response.status_code == 200
+    assert "comparativo cerrado" in response.get_data(as_text=True)
+    with application.app_context():
+        awards = database.session.execute(database.select(PurchaseQuotationAward)).scalars().all()
+        rounds = database.session.execute(database.select(PurchaseNegotiationRound)).scalars().all()
+        assert len(awards) == 1
+        assert awards[0].status == "closed"
+        assert rounds == []

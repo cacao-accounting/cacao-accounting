@@ -11,6 +11,8 @@ from collections.abc import Sequence
 from logging import getLogger
 from typing import cast
 
+from sqlalchemy.exc import IntegrityError
+
 from cacao_accounting.database import (
     CacaoConfig,
     PurchaseQuotation,
@@ -30,6 +32,7 @@ from cacao_accounting.i18n import _
 
 REQUIRE_COMPARISON_KEY = "PURCHASE_REQUIRE_OFFER_COMPARISON"
 MINIMUM_OFFERS_KEY = "PURCHASE_MINIMUM_REQUIRED_OFFERS"
+TERMINAL_AWARD_STATUSES = ("finalized", "used", "closed")
 logger = getLogger(__name__)
 
 
@@ -113,16 +116,60 @@ def current_negotiation_round(rfq_id: str) -> PurchaseNegotiationRound | None:
     ).scalar_one_or_none()
 
 
+def _terminal_award(rfq_id: str) -> PurchaseQuotationAward | None:
+    """Return an existing award that prevents further sourcing changes."""
+    return database.session.execute(
+        database.select(PurchaseQuotationAward)
+        .where(
+            PurchaseQuotationAward.purchase_quotation_id == rfq_id,
+            PurchaseQuotationAward.status.in_(TERMINAL_AWARD_STATUSES),
+        )
+        .order_by(PurchaseQuotationAward.created.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def _raise_if_terminal_award(award: PurchaseQuotationAward | None) -> None:
+    """Reject operations after a manual close or finalized award."""
+    if award is None:
+        return
+    if award.status == "closed":
+        raise PurchaseSourcingError(_("La solicitud de cotización ya tiene el comparativo cerrado."))
+    raise PurchaseSourcingError(_("La solicitud de cotización ya tiene un comparativo finalizado."))
+
+
+def _is_award_unique_conflict(exc: IntegrityError) -> bool:
+    """Recognize only the database guard that permits one award per RFQ."""
+    constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+    if constraint_name == "uq_purchase_quotation_award_quotation":
+        return True
+    message = str(exc.orig).lower()
+    return "uq_purchase_quotation_award_quotation" in message or (
+        "unique constraint failed: purchase_quotation_award.purchase_quotation_id" in message
+    )
+
+
+def _flush_award(award: PurchaseQuotationAward) -> None:
+    """Persist the award inside a savepoint and translate its unique race."""
+    # Flush caller work before the savepoint so only this award insert is caught.
+    database.session.flush()
+    try:
+        with database.session.begin_nested():
+            database.session.add(award)
+            database.session.flush()
+    except IntegrityError as exc:
+        if not _is_award_unique_conflict(exc):
+            raise
+        raise PurchaseSourcingError(_("El comparativo ya tiene una adjudicación o cierre registrado.")) from exc
+
+
 def open_negotiation_round(rfq_id: str, user_id: str | None) -> PurchaseNegotiationRound:
     """Close the previous round and open the next negotiation round."""
+    from cacao_accounting.default_scope import lock_default_scope
+
+    lock_default_scope("purchase_quotation_award", rfq_id)
+    _raise_if_terminal_award(_terminal_award(rfq_id))
     latest = current_negotiation_round(rfq_id)
-    if database.session.execute(
-        database.select(PurchaseQuotationAward.id).where(
-            PurchaseQuotationAward.purchase_quotation_id == rfq_id,
-            PurchaseQuotationAward.status.in_(("finalized", "used")),
-        )
-    ).scalar_one_or_none():
-        raise PurchaseSourcingError(_("No se puede abrir una ronda después de finalizar el comparativo."))
     if latest:
         latest.status = "closed"
     round_record = PurchaseNegotiationRound(
@@ -268,18 +315,7 @@ def create_purchase_quotation_award(
 
     reason = _normalize_authorization_reason(reason)
     lock_default_scope("purchase_quotation_award", rfq.id)
-    existing = (
-        database.session.execute(
-            database.select(PurchaseQuotationAward)
-            .filter_by(purchase_quotation_id=rfq.id)
-            .where(PurchaseQuotationAward.status.in_(("finalized", "used")))
-            .order_by(PurchaseQuotationAward.created.desc())
-        )
-        .scalars()
-        .first()
-    )
-    if existing:
-        raise PurchaseSourcingError(_("La solicitud de cotización ya tiene un comparativo finalizado."))
+    _raise_if_terminal_award(_terminal_award(rfq.id))
     items, _offers, manual_override_items = validate_award_request(rfq, selections, user_id, reason)
     negotiation_round = current_negotiation_round(rfq.id)
     award = PurchaseQuotationAward(
@@ -290,8 +326,7 @@ def create_purchase_quotation_award(
         authorized_by=user_id if reason else None,
         authorization_reason=reason,
     )
-    database.session.add(award)
-    database.session.flush()
+    _flush_award(award)
     for item in items:
         quotation_id = selections.get(item.id)
         if not quotation_id:
@@ -332,18 +367,7 @@ def close_purchase_quotation_comparison(
     from cacao_accounting.default_scope import lock_default_scope
 
     lock_default_scope("purchase_quotation_award", rfq.id)
-    existing = (
-        database.session.execute(
-            database.select(PurchaseQuotationAward)
-            .filter_by(purchase_quotation_id=rfq.id)
-            .where(PurchaseQuotationAward.status.in_(("finalized", "used", "closed")))
-            .order_by(PurchaseQuotationAward.created.desc())
-        )
-        .scalars()
-        .first()
-    )
-    if existing:
-        raise PurchaseSourcingError(_("La solicitud de cotización ya tiene el comparativo cerrado."))
+    _raise_if_terminal_award(_terminal_award(rfq.id))
     negotiation_round = current_negotiation_round(rfq.id)
     award = PurchaseQuotationAward(
         purchase_quotation_id=rfq.id,
@@ -354,7 +378,7 @@ def close_purchase_quotation_comparison(
         authorized_by=user_id,
         authorization_reason=reason.strip(),
     )
-    database.session.add(award)
+    _flush_award(award)
     if negotiation_round:
         negotiation_round.status = "closed"
     return award

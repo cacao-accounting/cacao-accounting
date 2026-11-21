@@ -10682,6 +10682,9 @@ msgstr "Manual closing of the comparison requires a justification."
 msgid "La solicitud de cotización ya tiene el comparativo cerrado."
 msgstr "The quotation request already has the comparison closed."
 
+msgid "El comparativo ya tiene una adjudicación o cierre registrado."
+msgstr "The comparison already has an award or close recorded."
+
 #: cacao_accounting/compras/routes.py:310 cacao_accounting/compras/services.py:209 cacao_accounting/document_flow/registry.py:340
 msgid "Costo de Importación"
 msgstr "Import Cost"
