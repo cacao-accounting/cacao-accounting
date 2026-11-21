@@ -15,6 +15,7 @@ from typing import Any, Mapping
 from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.exceptions import flash_error
+from cacao_accounting.numbers import coerce_decimal
 
 from flask import abort, flash, redirect, render_template, request, url_for
 
@@ -555,9 +556,9 @@ def _save_warehouse_company_rows(warehouse_code: str, rows: list[dict[str, str]]
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
-    """Convierte un valor de formulario a Decimal."""
+    """Convierte un valor de formulario a Decimal finito o lanza un error de validación."""
     value = request.form.get(field_name)
-    return Decimal(str(value if value not in (None, "") else default))
+    return coerce_decimal(value if value not in (None, "") else default, field_name)
 
 
 def _line_amount(index: int) -> Decimal:

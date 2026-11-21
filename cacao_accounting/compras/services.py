@@ -7,7 +7,7 @@ import json
 
 from datetime import date
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from logging import getLogger
 
@@ -16,6 +16,7 @@ from typing import Any, Sequence, cast
 from sqlalchemy import update
 
 from cacao_accounting.exceptions import flash_error
+from cacao_accounting.numbers import coerce_decimal
 from cacao_accounting.cache import invalidate_cache
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -778,13 +779,7 @@ def _form_decimal(field_name: str, default: str = "0") -> Decimal:
     """Convierte un valor de formulario a Decimal finito."""
     value = request.form.get(field_name)
     raw_value = value if value not in (None, "") else default
-    try:
-        parsed = Decimal(str(raw_value))
-    except (InvalidOperation, ValueError) as exc:
-        raise ValueError(_("El campo %(field)s debe ser un número válido.") % {"field": field_name}) from exc
-    if not parsed.is_finite():
-        raise ValueError(_("El campo %(field)s debe ser un número finito.") % {"field": field_name})
-    return parsed
+    return coerce_decimal(raw_value, field_name)
 
 
 def _line_amount(index: int) -> Decimal:

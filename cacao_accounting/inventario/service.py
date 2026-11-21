@@ -53,6 +53,7 @@ from cacao_accounting.decorators import exige_acceso_compania
 
 from cacao_accounting.i18n import _
 from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.numbers import coerce_decimal
 
 
 class InventoryServiceError(ValueError):
@@ -714,6 +715,7 @@ def update_item_with_uoms(
     item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
     if item is None:
         raise InventoryServiceError(_("El item '%(item_code)s' no existe.") % {"item_code": item_code})
+    standard_rate = _validated_standard_rate(params.standard_rate)
     if not default_uom_change_allowed(item_code, params.default_uom):
         raise InventoryServiceError(_("No se puede cambiar la UOM base si el item tiene transacciones."))
     resolved_uom_rows = params.uom_rows or []
@@ -731,7 +733,7 @@ def update_item_with_uoms(
         resolved_account_rows,
         action="editar",
     )
-    _aplica_campos_item(item, params, resolved_item_type, resolved_stock_flag)
+    _aplica_campos_item(item, params, resolved_item_type, resolved_stock_flag, standard_rate)
     database.session.flush()
     _reemplaza_conversiones_uom(item, resolved_uom_rows, params.default_uom)
     _reemplaza_cuentas_contables(item, resolved_account_rows)
@@ -753,6 +755,16 @@ def _validate_item_dimensions(params: ItemParams) -> None:
                 raise InventoryServiceError(_("La unidad de %(label)s no existe.") % {"label": label})
 
 
+def _validated_standard_rate(value: Decimal | None) -> Decimal | None:
+    """Rechaza tarifas estándar negativas o con precisión no persistible."""
+    if value is None:
+        return None
+    try:
+        return coerce_decimal(value, "tarifa estándar", non_negative=True, max_fractional_digits=4)
+    except ValueError as exc:
+        raise InventoryServiceError(str(exc)) from exc
+
+
 def _controles_de_inventario_cambiaron(item: Item, resolved_stock_flag: bool, params: ItemParams) -> bool:
     """Detecta si al menos un control de inventario cambia siendo el item ya usado."""
     return any(
@@ -765,7 +777,9 @@ def _controles_de_inventario_cambiaron(item: Item, resolved_stock_flag: bool, pa
     )
 
 
-def _aplica_campos_item(item: Item, params: ItemParams, resolved_item_type: str, resolved_stock_flag: bool) -> None:
+def _aplica_campos_item(
+    item: Item, params: ItemParams, resolved_item_type: str, resolved_stock_flag: bool, standard_rate: Decimal | None
+) -> None:
     """Escribe los campos de maestro del item y refresca la sesión."""
     item.name = params.name
     item.description = params.description
@@ -787,7 +801,7 @@ def _aplica_campos_item(item: Item, params: ItemParams, resolved_item_type: str,
     item.min_stock_qty = params.min_stock_qty
     item.max_stock_qty = params.max_stock_qty
     item.reorder_level = params.reorder_level
-    item.standard_rate = params.standard_rate
+    item.standard_rate = standard_rate
     item.last_purchase_rate = params.last_purchase_rate
     item.currency = params.currency
     item.brand = params.brand
@@ -933,6 +947,7 @@ def create_item_with_uoms(
     Si ``code`` no se proporciona, se genera automaticamente mediante
     :func:`~cacao_accounting.database.helpers.generate_identifier`.
     """
+    standard_rate = _validated_standard_rate(params.standard_rate)
     resolved_uom_rows = params.uom_rows or []
     resolved_account_rows = params.account_rows or []
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
@@ -974,7 +989,7 @@ def create_item_with_uoms(
         min_stock_qty=params.min_stock_qty,
         max_stock_qty=params.max_stock_qty,
         reorder_level=params.reorder_level,
-        standard_rate=params.standard_rate,
+        standard_rate=standard_rate,
         last_purchase_rate=params.last_purchase_rate,
         currency=params.currency,
         brand=params.brand,

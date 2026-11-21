@@ -3,7 +3,7 @@
 
 """Modulo administrativo."""
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from datetime import date
 
@@ -43,6 +43,7 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 
 from cacao_accounting.i18n import _, _l
 from cacao_accounting.internal_control_service import user_company_access_transition
+from cacao_accounting.numbers import coerce_decimal
 
 LISTA_MODULOS = "admin.lista_modulos"
 
@@ -217,14 +218,17 @@ def _would_leave_no_admin(
     return otros == 0 and _active_admin_count() > 0
 
 
-def _decimal_form(name: str, default: str = "0") -> Decimal:
+def _decimal_form(
+    name: str,
+    default: str = "0",
+    *,
+    non_negative: bool = False,
+    max_fractional_digits: int | None = None,
+) -> Decimal:
     """Convierte un campo decimal o lanza un error de validación legible."""
     value = request.form.get(name)
     decimal_text = value if value not in (None, "") else default
-    try:
-        return Decimal(str(decimal_text))
-    except (InvalidOperation, ValueError) as exc:
-        raise ValueError(_("El campo %(field)s debe ser un número válido.") % {"field": name}) from exc
+    return coerce_decimal(decimal_text, name, non_negative=non_negative, max_fractional_digits=max_fractional_digits)
 
 
 def _date_form(name: str) -> date | None:
@@ -575,14 +579,30 @@ def _approval_rule_from_form(company: str) -> ApprovalMatrix:
         raise ValueError(_("El usuario seleccionado no existe."))
     if not role_id and not user_id:
         raise ValueError(_("Seleccione un rol o un usuario para la regla de aprobación."))
+    min_value = coerce_decimal(
+        request.form.get("min_amount") or "0", "monto mínimo", non_negative=True, max_fractional_digits=4
+    )
+    max_value = (
+        coerce_decimal(max_amount, "monto máximo", non_negative=True, max_fractional_digits=4)
+        if max_amount and max_amount.strip()
+        else None
+    )
+    if max_value is not None and max_value < min_value:
+        raise ValueError(_("El monto máximo debe ser mayor o igual al monto mínimo."))
+    try:
+        approval_level = int(request.form.get("approval_level") or "1")
+    except (TypeError, ValueError) as exc:
+        raise ValueError(_("El nivel de aprobación debe ser un entero mayor o igual a uno.")) from exc
+    if approval_level < 1:
+        raise ValueError(_("El nivel de aprobación debe ser un entero mayor o igual a uno."))
     return ApprovalMatrix(
         company_id=company,
         document_type=request.form.get("document_type") or "",
         role_id=role_id,
         user_id=user_id,
-        min_amount=Decimal(request.form.get("min_amount") or "0"),
-        max_amount=Decimal(max_amount) if max_amount and max_amount.strip() else None,
-        approval_level=int(request.form.get("approval_level") or "1"),
+        min_amount=min_value,
+        max_amount=max_value,
+        approval_level=approval_level,
         enabled=True,
     )
 

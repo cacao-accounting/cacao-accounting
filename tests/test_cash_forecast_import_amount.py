@@ -112,6 +112,35 @@ def test_non_positive_amounts_are_rejected_in_validation(forecast_amount_scenari
     assert any("mayor que cero" in error for error in errors)
 
 
+@pytest.mark.parametrize("amount", [0, -1, 0.0, -1.0])
+def test_numeric_spreadsheet_amounts_are_rejected(forecast_amount_scenario, amount):
+    """Las celdas numéricas de XLS/XLSX no eluden la regla de importe positivo."""
+    app, ids = forecast_amount_scenario
+    adapter = CashForecastEntryAdapter()
+    row = _row(ids["forecast"], amount)
+
+    with app.app_context():
+        errors = adapter.validate_row(row)
+        with pytest.raises(ValueError, match="mayor que cero"):
+            adapter.build_document([row], {"company_id": "alpha"})
+
+    assert any("mayor que cero" in error for error in errors)
+
+
+def test_csv_negative_amount_with_leading_space_is_rejected(forecast_amount_scenario):
+    """Un signo con espacio inicial no evade la validación compartida del adaptador."""
+    app, ids = forecast_amount_scenario
+    adapter = CashForecastEntryAdapter()
+    row = _row(ids["forecast"], " -100")
+
+    with app.app_context():
+        errors = adapter.validate_row(row)
+        with pytest.raises(ValueError, match="mayor que cero"):
+            adapter.build_document([row], {"company_id": "alpha"})
+
+    assert any("mayor que cero" in error for error in errors)
+
+
 def test_persist_rechecks_positive_amount_before_inserting(forecast_amount_scenario):
     """A manually built document cannot bypass the amount rule."""
     app, ids = forecast_amount_scenario

@@ -5,7 +5,7 @@
 
 from datetime import date, timedelta
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 import json
 
@@ -14,13 +14,12 @@ from typing import Any, TypedDict, cast
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
-from cacao_accounting.exceptions import flash_error
-from cacao_accounting.default_scope import lock_default_scope
-
 from flask import Blueprint, flash, redirect, request, url_for
-
-
 from flask_login import current_user
+
+from cacao_accounting.exceptions import flash_error
+from cacao_accounting.numbers import coerce_decimal
+from cacao_accounting.default_scope import lock_default_scope
 
 from cacao_accounting.bancos.reconciliation_service import (
     BankReconciliationError,
@@ -2108,13 +2107,7 @@ def _form_decimal(field_name: str, default: str = "0") -> Decimal:
     """Convierte un valor finito de formulario a Decimal o falla de forma controlada."""
     value = request.form.get(field_name)
     raw = value if value not in (None, "") else default
-    try:
-        number = Decimal(str(raw))
-    except (InvalidOperation, ValueError) as exc:
-        raise ValueError(_("El campo %(field)s debe ser un número válido.") % {"field": field_name}) from exc
-    if not number.is_finite():
-        raise ValueError(_("El campo %(field)s debe ser un número finito.") % {"field": field_name})
-    return number
+    return coerce_decimal(raw, field_name)
 
 
 def _invoice_outstanding(invoice) -> Decimal:
@@ -2300,10 +2293,12 @@ def _payment_reference_amount_context(
     payment_rate: Decimal,
 ) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]:
     """Calcula importes documentales, de pago y diferencias de cambio."""
-    discount_amount = Decimal(str(line.get("discount_amount") or "0"))
-    gain_loss_amount = Decimal(str(line.get("gain_loss_amount") or "0"))
-    difference_amount = Decimal(str(line.get("difference_amount") or gain_loss_amount or "0"))
-    cross_rate = Decimal(str(line.get("payment_exchange_rate") or "0"))
+    discount_amount = coerce_decimal(
+        line.get("discount_amount") or "0", "descuento", non_negative=True, max_fractional_digits=4
+    )
+    gain_loss_amount = coerce_decimal(line.get("gain_loss_amount") or "0", "diferencia de cambio")
+    difference_amount = coerce_decimal(line.get("difference_amount") or gain_loss_amount or "0", "diferencia")
+    cross_rate = coerce_decimal(line.get("payment_exchange_rate") or "0", "tasa de cambio")
     if cross_rate <= 0:
         cross_rate = (document_rate / payment_rate).quantize(Decimal("0.000000001"))
     if cross_rate <= 0:
@@ -2399,21 +2394,21 @@ def _validate_payment_reference_line(
     """Valida una línea de referencia y devuelve sus valores normalizados."""
     reference_type = line.get("reference_type", "")
     reference_id = line.get("reference_id", "")
-    allocated = Decimal(str(line.get("allocated_amount", "0")))
-    discount = Decimal(str(line.get("discount_amount") or "0"))
-    gain_loss = Decimal(str(line.get("gain_loss_amount") or "0"))
+    allocated = coerce_decimal(line.get("allocated_amount", "0"), "monto asignado", max_fractional_digits=4)
+    discount = coerce_decimal(line.get("discount_amount") or "0", "descuento", non_negative=True, max_fractional_digits=4)
+    gain_loss = coerce_decimal(line.get("gain_loss_amount") or "0", "diferencia de cambio")
     requested_flow_source_type = str(line.get("flow_source_type") or reference_type)
     reference_key = (_physical_reference_type(reference_type, requested_flow_source_type), reference_id)
     if reference_key in processed_keys:
         from werkzeug.exceptions import Conflict
 
         raise Conflict(_("No se puede aplicar la misma factura dos veces en un pago."))
-    processed_keys.add(reference_key)
     if allocated <= 0:
         if allocated < 0:
             from werkzeug.exceptions import Conflict
 
             raise Conflict(_("El monto asignado no puede ser negativo."))
+        processed_keys.add(reference_key)
         return reference_type, reference_id, requested_flow_source_type, allocated, Decimal("0")
     if discount + gain_loss >= allocated:
         raise ValueError(
@@ -2423,6 +2418,7 @@ def _validate_payment_reference_line(
         )
     if normalize_doctype(requested_flow_source_type) in ("purchase_order", "sales_order") and not allow_order_references:
         raise ValueError(_("Las órdenes solo pueden referenciarse en flujo de anticipo."))
+    processed_keys.add(reference_key)
     return reference_type, reference_id, requested_flow_source_type, allocated, allocated
 
 

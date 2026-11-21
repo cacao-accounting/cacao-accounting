@@ -1015,7 +1015,7 @@ def precios_item():
             abort(404)
         _require_price_list_company_access(price_list)
         try:
-            price_value = _decimal_form("price")
+            price_value = _decimal_form("price", non_negative=True, max_fractional_digits=4)
             min_qty = _decimal_form("min_qty", "0")
             valid_from = _date_form("valid_from")
             valid_upto = _date_form("valid_upto")
@@ -1087,7 +1087,7 @@ def actualizar_precio_item(item_price_id: str):
         flash(reference_error, "danger")
         return redirect(url_for("admin.precios_item"))
     try:
-        price_value = _decimal_form("price")
+        price_value = _decimal_form("price", non_negative=True, max_fractional_digits=4)
         min_qty = _decimal_form("min_qty", "0")
         valid_from = _date_form("valid_from")
         valid_upto = _date_form("valid_upto")

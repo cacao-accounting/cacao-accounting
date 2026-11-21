@@ -16,6 +16,7 @@ from cacao_accounting.database import ItemPrice, Tax, TaxTemplate, TaxTemplateIt
 
 
 from cacao_accounting.i18n import _
+from cacao_accounting.numbers import coerce_decimal
 
 
 class TaxPricingError(ValueError):
@@ -222,6 +223,9 @@ def resolve_item_price_record(
     if uom:
         query = query.where((ItemPrice.uom.is_(None)) | (ItemPrice.uom == uom))
     price = database.session.execute(query).scalars().first()
-    if price is not None and not _decimal_value(price.price).is_finite():
-        return None
+    if price is not None:
+        try:
+            coerce_decimal(price.price, "precio", non_negative=True, max_fractional_digits=4)
+        except ValueError:
+            return None
     return price

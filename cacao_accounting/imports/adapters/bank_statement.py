@@ -9,6 +9,7 @@ from typing import List, Dict, Any
 from cacao_accounting.database import BankAccount, BankTransaction, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.imports.utils.dates import parse_import_date
+from cacao_accounting.numbers import coerce_decimal
 from sqlalchemy.exc import IntegrityError
 
 
@@ -75,9 +76,7 @@ class BankStatementAdapter(BaseImportAdapter):
             decimal_part = normalized.rsplit(".", 1)[1]
             if len(decimal_part) == 3:
                 raise InvalidOperation(_("Separador de miles ambiguo"))
-        amount = Decimal(normalized)
-        if not amount.is_finite():
-            raise ValueError(_("El monto debe ser finito."))
+        amount = coerce_decimal(normalized, "monto", max_fractional_digits=4)
         return amount if amount != 0 else None
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:

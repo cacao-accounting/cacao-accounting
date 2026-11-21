@@ -3,7 +3,7 @@
 
 """Adaptador para importación de entradas de pronóstico de caja."""
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import List, Dict, Any
 
 from cacao_accounting.bancos.cash_forecast_service import validate_forecast_entry_date
@@ -11,19 +11,13 @@ from cacao_accounting.database import CashForecast, CashForecastEntry, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.imports.utils.dates import parse_import_date
 from cacao_accounting.i18n import _
+from cacao_accounting.numbers import coerce_decimal
 
 
 def _finite_amount(value: Any) -> Decimal:
     """Convierte el monto del pronóstico y rechaza valores no finitos."""
-    try:
-        amount = Decimal(str(value if value not in (None, "") else "0"))
-    except (InvalidOperation, ValueError, TypeError) as exc:
-        raise ValueError(_("Monto inválido: %(value)s") % {"value": value}) from exc
-    if not amount.is_finite():
-        raise ValueError(_("El monto debe ser finito."))
-    if amount <= 0:
-        raise ValueError(_("El monto debe ser mayor que cero."))
-    return amount
+    raw_amount = value if value not in (None, "") else "0"
+    return coerce_decimal(raw_amount, "monto", positive=True, max_fractional_digits=4)
 
 
 def _text(value: Any, default: str = "") -> str:
