@@ -3180,9 +3180,11 @@ def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
         concept = data.get("concept", "").strip()
         if not concept:
             continue
-        amount = Decimal(str(data.get("amount", "0")))
-        if amount < 0:
-            raise ValueError(_("El importe de un cargo de importación no puede ser negativo."))
+        amount = coerce_decimal(
+            data.get("amount", "0"),
+            field_name=_("importe del cargo de importación"),
+            non_negative=True,
+        )
         exchange_rate = Decimal(str(registro.exchange_rate or "1"))
         base_amount = (amount * exchange_rate).quantize(Decimal("0.0001"))
         total += amount

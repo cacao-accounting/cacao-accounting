@@ -13,7 +13,11 @@ import pytest
 
 from cacao_accounting.accounting_engine.common.context import ItemContext
 from cacao_accounting.accounting_engine.landed_cost.engine import LandedCostEngine
-from cacao_accounting.compras.services import _landed_cost_dimension, _save_import_landed_cost_items
+from cacao_accounting.compras.services import (
+    _landed_cost_dimension,
+    _save_import_landed_cost_charges,
+    _save_import_landed_cost_items,
+)
 from cacao_accounting.contabilidad.posting_service import PostingError, _post_with_calculation_engine_payload
 from cacao_accounting.database import ImportLandedCost, ImportLandedCostItem, Item, PurchaseInvoice, UOM, database
 
@@ -76,6 +80,19 @@ def test_dimension_invalida_se_rechaza_como_error_de_validacion(app, raw_value):
     with app.app_context():
         with pytest.raises(ValueError):
             _landed_cost_dimension({"weight": raw_value}, None, "weight")
+
+
+@pytest.mark.parametrize("raw_amount", ["NaN", "Infinity", "no-numérico"])
+def test_importe_invalido_de_cargo_se_rechaza(app, entorno_contable, raw_amount):
+    """Cargos manipulados no aceptan valores no finitos ni escapan como 500."""
+    with app.app_context():
+        document = _seed_landed_cost()
+        with app.test_request_context(
+            method="POST",
+            data={"charge_concept_0": "Flete", "charge_amount_0": raw_amount},
+        ):
+            with pytest.raises(ValueError):
+                _save_import_landed_cost_charges(document)
 
 
 def _seed_landed_cost() -> ImportLandedCost:
