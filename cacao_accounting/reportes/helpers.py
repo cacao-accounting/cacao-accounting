@@ -21,7 +21,7 @@ from openpyxl.utils import get_column_letter
 from werkzeug.routing import BuildError
 
 from cacao_accounting.auth.permisos import Permisos
-from cacao_accounting.database import Accounts, AccountingPeriod, Book, Entity, database
+from cacao_accounting.database import Accounts, AccountingPeriod, Book, Entity, SavedReportView, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import resolve_required_company
 from cacao_accounting.reportes.services import (
@@ -1423,7 +1423,7 @@ def _render_financial_report(
     report,
     report_filters: FinancialReportFilters,
     saved_view: str,
-    saved_views: list[str],
+    saved_views: list[SavedReportView],
 ):
     from cacao_accounting.document_authorship import report_authorship
 
