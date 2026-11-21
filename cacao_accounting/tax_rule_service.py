@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Set
+from collections.abc import Iterable, Mapping, Set
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -13,7 +13,7 @@ from sqlalchemy import or_, select
 
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
 from cacao_accounting.accounting_engine.common.fiscal import SUPPORTED_TAX_CALCULATION_METHODS
-from cacao_accounting.database import Accounts, Currency, Entity, TaxRule, database
+from cacao_accounting.database import Accounts, Currency, Entity, Item, ItemCategory, TaxRule, database
 
 
 from cacao_accounting.i18n import _
@@ -160,6 +160,40 @@ def _validated_enum(values: Mapping[str, str | None], field: str) -> str:
     return raw
 
 
+def resolve_item_category_ids(item_codes: Iterable[str | None]) -> dict[str, str | None]:
+    """Resuelve la categoría de cada artículo con una sola consulta.
+
+    La condición fiscal por categoría (#1353) se evalúa por línea; resolver la
+    categoría en lote evita una consulta por artículo al construir contextos.
+    """
+    codes = sorted({str(code) for code in item_codes if code})
+    if not codes:
+        return {}
+    rows = database.session.execute(select(Item.code, Item.item_category_id).where(Item.code.in_(codes))).all()
+    return {str(code): category_id for code, category_id in rows}
+
+
+def _validated_item_categories(value: str | None) -> str | None:
+    """Valida y canonicaliza las categorías de artículo permitidas por la regla.
+
+    La condición fiscal por categoría usa ULID del catálogo existente
+    ``ItemCategory``; se exige que la categoría exista y esté activa al guardar.
+    El orden y la deduplicación hacen estable el snapshot fiscal posterior.
+    """
+    categories = sorted(set(_csv_to_list(value)))
+    for category_id in categories:
+        category = database.session.get(ItemCategory, category_id)
+        if category is None:
+            raise TaxRuleServiceError(
+                _("La categoría de artículo %(category)s de la regla fiscal no existe.") % {"category": category_id}
+            )
+        if not category.is_active:
+            raise TaxRuleServiceError(
+                _("La categoría de artículo %(category)s de la regla fiscal no está activa.") % {"category": category_id}
+            )
+    return ", ".join(categories) if categories else None
+
+
 def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> None:
     """Aplica datos validados a una regla fiscal ORM."""
     name = (values.get("name") or "").strip()
@@ -189,6 +223,7 @@ def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> N
     rule.base_mode = base_mode
     rule.include_concepts = _normalized_csv(values.get("include_concepts"))
     rule.exclude_concepts = _normalized_csv(values.get("exclude_concepts"))
+    rule.allowed_item_categories = _validated_item_categories(values.get("allowed_item_categories"))
     rule.sequence = _int_value(values.get("sequence"), default=10)
     rule.accounting_treatment = accounting_treatment
     rule.recognition_event = recognition_event
@@ -230,6 +265,7 @@ def _to_context(rule: TaxRule) -> TaxRuleContext:
         valid_from=rule.valid_from,
         valid_to=rule.valid_to,
         allowed_currencies=[rule.currency] if rule.currency else [],
+        allowed_item_categories=_csv_to_list(rule.allowed_item_categories),
         country=rule.country,
         account_id=rule.account_id,
     )

@@ -24215,3 +24215,15 @@ msgstr "The CSV file must be encoded in UTF-8."
 
 msgid "Una regla fiscal global no puede asociar una cuenta contable específica."
 msgstr "A global tax rule cannot be assigned a company-specific account."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La categoría de artículo %(category)s de la regla fiscal no existe."
+msgstr "The tax rule item category %(category)s does not exist."
+
+#: cacao_accounting/tax_rule_service.py
+msgid "La categoría de artículo %(category)s de la regla fiscal no está activa."
+msgstr "The tax rule item category %(category)s is not active."
+
+#: cacao_accounting/admin/templates/admin/tax_rules.html
+msgid "Categorías de artículo permitidas"
+msgstr "Allowed item categories"

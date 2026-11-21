@@ -600,6 +600,7 @@ def _tax_rule_form_state(rule: Any, form: Any) -> SimpleNamespace:
         "base_mode": "goods",
         "include_concepts": "",
         "exclude_concepts": "",
+        "allowed_item_categories": "",
         "sequence": "10",
         "accounting_treatment": "separate_tax_account",
         "recognition_event": "invoice",

@@ -4880,6 +4880,7 @@ class TaxRule(database.Model, BaseTabla):  # type: ignore[name-defined]
     base_mode = database.Column(database.String(30), default="goods", nullable=False)
     include_concepts = database.Column(database.Text(), nullable=True)
     exclude_concepts = database.Column(database.Text(), nullable=True)
+    allowed_item_categories = database.Column(database.Text(), nullable=True)
     sequence = database.Column(database.Integer(), default=10, nullable=False, index=True)
     accounting_treatment = database.Column(database.String(50), default="separate_tax_account", nullable=False)
     recognition_event = database.Column(database.String(30), default="invoice", nullable=False)

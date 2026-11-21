@@ -66,6 +66,7 @@
     <div class="col-md-2"><input class="form-control" name="account_id" placeholder="{{ _('Cuenta contable') }}" value="{{ rule.account_id if rule else '' }}"></div>
     <div class="col-md-2"><input class="form-control" name="currency" placeholder="{{ _('Moneda') }}" value="{{ rule.currency if rule else '' }}"></div>
     <div class="col-md-2"><input class="form-control" name="country" placeholder="{{ _('País') }}" value="{{ rule.country if rule else '' }}"></div>
+    <div class="col-md-2"><input class="form-control" name="allowed_item_categories" placeholder="{{ _('Categorías de artículo permitidas') }}" value="{{ rule.allowed_item_categories if rule else '' }}"></div>
     <div class="col-md-2"><input class="form-control" type="date" name="valid_from" value="{{ rule.valid_from.isoformat() if rule and rule.valid_from and rule.valid_from.isoformat is defined else (rule.valid_from or '' if rule else '') }}"></div>
     <div class="col-md-2"><input class="form-control" type="date" name="valid_to" value="{{ rule.valid_to.isoformat() if rule and rule.valid_to and rule.valid_to.isoformat is defined else (rule.valid_to or '' if rule else '') }}"></div>
     <div class="col-md-2"><input class="form-control" name="allocation_method" placeholder="{{ _('Método de prorrateo') }}" value="{{ rule.allocation_method if rule else '' }}"></div>
