@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Currency, Entity, Party, database
+from cacao_accounting.database import Accounts, Currency, Entity, Party, database
 from cacao_accounting.imports.adapters.customer import CustomerAdapter
 from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
 from cacao_accounting.imports.column_labels import canonical_columns
@@ -294,26 +294,65 @@ def test_execution_revalidates_business_rules_for_changed_content(app, tmp_path)
         database.session.commit()
 
 
-def test_master_import_rejects_grouping_reference_column(app, tmp_path):
-    """Un maestro rechaza columnas de agrupación ajenas y no pierde filas (#1346)."""
+@pytest.mark.parametrize(
+    ("record_type", "headers", "rows", "persisted_names"),
+    [
+        (
+            "customer",
+            ["document_ref", "nombre"],
+            [["lote-1", "Cliente A"], ["lote-1", "Cliente B"]],
+            ["Cliente A", "Cliente B"],
+        ),
+        (
+            "vendor",
+            ["document_ref", "nombre"],
+            [["lote-1", "Proveedor A"], ["lote-1", "Proveedor B"]],
+            ["Proveedor A", "Proveedor B"],
+        ),
+        (
+            "chart_of_accounts",
+            ["document_ref", "codigo", "nombre", "clasificacion"],
+            [["lote-1", "9001", "Cuenta A", "asset"], ["lote-1", "9002", "Cuenta B", "asset"]],
+            ["9001", "9002"],
+        ),
+    ],
+)
+def test_master_import_rejects_grouping_reference_column(app, tmp_path, record_type, headers, rows, persisted_names):
+    """Maestros rechazan referencias agrupadas antes de perder filas (#1346)."""
     with app.app_context():
-        path = tmp_path / "customers_with_reference.csv"
+        path = tmp_path / f"{record_type}_with_reference.csv"
         with path.open("w", encoding="utf-8", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(["document_ref", "nombre"])
-            writer.writerow(["lote-1", "Cliente A"])
-            writer.writerow(["lote-1", "Cliente B"])
-        batch = _create_customer_batch(path, status=1)
+            writer.writerow(headers)
+            writer.writerows(rows)
+        batch = ImportBatch(
+            company_id="cacao",
+            record_type=record_type,
+            source_format="csv",
+            source_filename=path.name,
+            source_path=str(path),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
         service = ImportService()
 
         assert service.validate(batch.id)
 
         errors = ImportBatchError.query.filter_by(batch_id=batch.id).all()
         assert batch.import_status == 7
-        assert batch.success_rows == 0
+        assert batch.success_rows == batch.processed_rows == batch.total_rows == 0
         assert [(error.error_type, error.field_name) for error in errors] == [("UNKNOWN_COLUMN", "document_ref")]
-        assert not Party.query.filter_by(name="Cliente A").first()
-        assert not Party.query.filter_by(name="Cliente B").first()
+        if record_type == "chart_of_accounts":
+            assert (
+                not database.session.execute(
+                    database.select(Accounts).where(Accounts.entity == "cacao", Accounts.code.in_(persisted_names))
+                )
+                .scalars()
+                .all()
+            )
+        else:
+            assert not database.session.execute(database.select(Party).where(Party.name.in_(persisted_names))).scalars().all()
 
         database.session.delete(batch)
         database.session.commit()
