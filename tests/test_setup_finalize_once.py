@@ -81,10 +81,17 @@ def setup_once_scenario(tmp_path):
                     active=True,
                     classification="admin",
                 ),
+                User(
+                    id=f"employee-{suffix}",
+                    user=f"employee-{suffix}",
+                    name="Empleado sin permisos administrativos",
+                    password=b"unused",
+                    active=True,
+                ),
             ]
         )
         database.session.commit()
-        ids = {"admin": f"admin-{suffix}"}
+        ids = {"admin": f"admin-{suffix}", "employee": f"employee-{suffix}"}
 
     yield app, ids
 
@@ -182,3 +189,23 @@ def test_setup_route_redirects_when_the_installation_is_complete(setup_once_scen
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/index")
+
+
+@pytest.mark.parametrize("method", ["get", "post"])
+def test_non_admin_cannot_access_setup_and_cannot_change_global_configuration(setup_once_scenario, method):
+    """An authenticated employee gets 403 on both methods without setup side effects."""
+    app, ids = setup_once_scenario
+    client = _authenticated_client(app, ids["employee"])
+
+    if method == "get":
+        response = client.get("/setup/")
+    else:
+        response = client.post("/setup/", data={"idioma": "en", "action": "next"})
+
+    assert response.status_code == 403
+    with app.app_context():
+        assert database.session.execute(database.select(Entity.id)).scalars().all() == []
+        assert (
+            database.session.execute(database.select(CacaoConfig.id).filter_by(key="SETUP_LANGUAGE")).scalar_one_or_none()
+            is None
+        )
