@@ -27,7 +27,7 @@ from cacao_accounting.database import (
 from cacao_accounting.accounting_engine.document_builders import PaymentBuildSpec, _configured_payment_withholding_rule
 from cacao_accounting.contabilidad.posting_service import PostingError, _append_tax_entries
 from cacao_accounting.fiscal_persistence_service import _canonical_tax_rule_amount, persist_document_fiscal_snapshot
-from cacao_accounting.tax_rule_service import build_tax_rule_contexts
+from cacao_accounting.tax_rule_service import TaxRuleServiceError, _validate_tax_rule_references, build_tax_rule_contexts
 
 
 @pytest.fixture
@@ -382,6 +382,138 @@ def _tax_rule_payload(name: str, **overrides) -> dict[str, str]:
     }
     data.update(overrides)
     return data
+
+
+def _create_foreign_tax_account(company_code: str) -> str:
+    """Create a real account owned by a different company for ownership regressions."""
+    database.session.add(
+        Entity(
+            code=company_code,
+            name=f"Otra compañía {company_code}",
+            company_name=f"Otra compañía {company_code} SA",
+            tax_id=f"TAX-{company_code}",
+            currency="NIO",
+            enabled=True,
+            status="activo",
+        )
+    )
+    database.session.flush()
+    account = Accounts(
+        entity=company_code,
+        code=f"TAX-{company_code}",
+        name="Cuenta fiscal ajena",
+        account_type="tax",
+        active=True,
+        enabled=True,
+        group=False,
+    )
+    database.session.add(account)
+    database.session.commit()
+    return account.id
+
+
+@pytest.mark.parametrize("invalid_reference", ["company", "currency", "foreign_account"])
+def test_tax_rule_creation_rejects_invalid_company_currency_and_account_ownership(
+    app, authenticated_client, entorno_contable, active_admin_module, invalid_reference
+):
+    """Creating a tax rule rejects missing references and accounts from another company (#2018)."""
+    assert entorno_contable.app is app
+    suffix = uuid4().hex[:8]
+    name = f"Referencia inválida {suffix}"
+    overrides = {}
+    with app.app_context():
+        if invalid_reference == "company":
+            overrides["company"] = f"MISSING-{suffix}"
+            expected_message = "La compañía de la regla fiscal no existe."
+        elif invalid_reference == "currency":
+            overrides["currency"] = f"ZZ{suffix[:1]}"
+            expected_message = "La moneda de la regla fiscal no existe."
+        else:
+            overrides["account_id"] = _create_foreign_tax_account(f"x{suffix}")
+            expected_message = "La cuenta contable no pertenece a la compañía de la regla fiscal."
+
+    client = authenticated_client()
+    response = client.post("/settings/tax-rules", data=_tax_rule_payload(name, **overrides))
+
+    assert response.status_code == 200
+    if invalid_reference == "foreign_account":
+        with app.app_context(), pytest.raises(TaxRuleServiceError) as error:
+            _validate_tax_rule_references("cacao", overrides["account_id"], "NIO")
+        assert str(error.value) == expected_message
+    else:
+        assert expected_message in response.get_data(as_text=True)
+    with app.app_context():
+        assert database.session.execute(database.select(TaxRule).filter_by(name=name)).scalar_one_or_none() is None
+
+
+@pytest.mark.parametrize("invalid_reference", ["company", "currency", "foreign_account"])
+def test_tax_rule_edit_preserves_existing_values_for_invalid_references(
+    app, authenticated_client, entorno_contable, active_admin_module, invalid_reference
+):
+    """An invalid company, currency or account cannot partially alter an existing rule (#2018)."""
+    assert entorno_contable.app is app
+    suffix = uuid4().hex[:8]
+    name = f"Regla preservada {suffix}"
+    client = authenticated_client()
+    assert client.post("/settings/tax-rules", data=_tax_rule_payload(name)).status_code == 302
+    overrides = {}
+    with app.app_context():
+        rule_id = database.session.execute(database.select(TaxRule.id).filter_by(name=name)).scalar_one()
+        if invalid_reference == "company":
+            overrides["company"] = f"MISSING-{suffix}"
+            expected_message = "La compañía de la regla fiscal no existe."
+        elif invalid_reference == "currency":
+            overrides["currency"] = f"ZZ{suffix[:1]}"
+            expected_message = "La moneda de la regla fiscal no existe."
+        else:
+            overrides["account_id"] = _create_foreign_tax_account(f"x{suffix}")
+            expected_message = "La cuenta contable no pertenece a la compañía de la regla fiscal."
+
+    response = client.post(f"/settings/tax-rules/{rule_id}/edit", data=_tax_rule_payload(name, **overrides))
+
+    assert response.status_code == 200
+    if invalid_reference == "foreign_account":
+        with app.app_context(), pytest.raises(TaxRuleServiceError) as error:
+            _validate_tax_rule_references("cacao", overrides["account_id"], "NIO")
+        assert str(error.value) == expected_message
+    else:
+        assert expected_message in response.get_data(as_text=True)
+    with app.app_context():
+        database.session.expire_all()
+        persisted = database.session.get(TaxRule, rule_id)
+        assert persisted is not None
+        assert persisted.company == "cacao"
+        assert persisted.currency == "NIO"
+        assert persisted.account_id is None
+
+
+def test_tax_rule_accepts_same_company_account_and_exposes_it_to_context(
+    app, authenticated_client, entorno_contable, active_admin_module
+):
+    """A valid company-owned account persists and remains available to fiscal builders."""
+    assert entorno_contable.app is app
+    rule_name = f"Regla con cuenta válida {uuid4().hex[:8]}"
+    with app.app_context():
+        account_id = database.session.execute(
+            database.select(Accounts.id).where(Accounts.entity == "cacao").order_by(Accounts.code).limit(1)
+        ).scalar_one()
+
+    response = authenticated_client().post(
+        "/settings/tax-rules",
+        data=_tax_rule_payload(rule_name, account_id=account_id),
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        contexts = build_tax_rule_contexts(
+            company="cacao",
+            applies_to="sales",
+            currency="NIO",
+            recognition_event="sales_invoice_confirmed",
+        )
+        matching = [rule for rule in contexts if rule.name == rule_name]
+        assert len(matching) == 1
+        assert matching[0].account_id == account_id
 
 
 def test_global_tax_rule_rejects_company_specific_account(app, authenticated_client, entorno_contable, active_admin_module):
