@@ -419,21 +419,10 @@ def pending_approval_count() -> int:
     """Return count of pending approval requests visible to the current user."""
     if not is_cloud_mode() or not current_user or not current_user.is_authenticated:
         return 0
-    from cacao_accounting.company_context import authorized_company_codes
-    from cacao_accounting.database import ApprovalRequest
-    from sqlalchemy import func, select
-
-    authorized = authorized_company_codes()
-    if not authorized:
-        return 0
     try:
-        count = database.session.execute(
-            select(func.count(ApprovalRequest.id)).where(
-                ApprovalRequest.status.in_({"Pending Approval", "Pending Cancellation"}),
-                ApprovalRequest.company_id.in_(authorized),
-            )
-        ).scalar_one()
-        return int(count or 0)
+        from cacao_accounting.admin.services import visible_pending_approval_items
+
+        return len(visible_pending_approval_items())
     except SQLAlchemyError:
         return 0
 

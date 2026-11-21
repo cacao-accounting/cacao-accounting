@@ -12,6 +12,7 @@ usuario, igual que el listado de ``/admin/me/pending-approvals``.
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -22,9 +23,14 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predete
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     ApprovalRequest,
+    ApprovalMatrix,
     Currency,
     Entity,
     Modules,
+    Roles,
+    RolesAccess,
+    RolesUser,
+    SalesInvoice,
     User,
     UserCompanyAccess,
     database,
@@ -53,6 +59,8 @@ def aprobaciones_cloud():
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="admin", default=False, enabled=True),
                 Modules(module="accounting", default=False, enabled=True),
+                Modules(module="sales", default=False, enabled=True),
+                Modules(module="purchases", default=False, enabled=True),
                 Entity(
                     code="alpha",
                     name="Alpha",
@@ -86,6 +94,13 @@ def aprobaciones_cloud():
                     active=True,
                 ),
                 User(
+                    id="sales-only",
+                    user="sales-only",
+                    name="Aprobador solo de ventas",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                ),
+                User(
                     id="admin",
                     user="admin",
                     name="Administrador",
@@ -94,14 +109,89 @@ def aprobaciones_cloud():
                     classification="admin",
                 ),
                 UserCompanyAccess(user_id="aprobador", company_code="alpha"),
+                UserCompanyAccess(user_id="sales-only", company_code="beta"),
             ]
         )
         database.session.flush()
+        sales_module_id = database.session.execute(database.select(Modules.id).filter_by(module="sales")).scalar_one()
+        admin_module_id = database.session.execute(database.select(Modules.id).filter_by(module="admin")).scalar_one()
+        approver_role = Roles(name="sales-approver-count-scope", note="Aprobador de ventas")
+        database.session.add(approver_role)
+        database.session.flush()
+        database.session.add_all(
+            [
+                RolesAccess(
+                    rol_id=approver_role.id,
+                    module_id=sales_module_id,
+                    access=True,
+                    view=True,
+                    approve=True,
+                    setup=True,
+                    approval_rank=1,
+                ),
+                RolesAccess(
+                    rol_id=approver_role.id,
+                    module_id=admin_module_id,
+                    access=True,
+                    view=True,
+                    edit=True,
+                    approve=True,
+                    approval_rank=1,
+                ),
+                RolesUser(user_id="aprobador", role_id=approver_role.id, active=True),
+                RolesUser(user_id="sales-only", role_id=approver_role.id, active=True),
+            ]
+        )
+        visible_invoice = SalesInvoice(
+            company="alpha",
+            posting_date=date(2026, 10, 31),
+            document_type="sales_invoice",
+            document_no="INV-ALPHA-VISIBLE",
+            grand_total=Decimal("50"),
+        )
+        out_of_range_invoice = SalesInvoice(
+            company="alpha",
+            posting_date=date(2026, 10, 31),
+            document_type="sales_invoice",
+            document_no="INV-ALPHA-OUT-OF-RANGE",
+            grand_total=Decimal("150"),
+        )
+        foreign_invoice = SalesInvoice(
+            company="beta",
+            posting_date=date(2026, 10, 31),
+            document_type="sales_invoice",
+            document_no="INV-BETA",
+            grand_total=Decimal("50"),
+        )
+        database.session.add_all([visible_invoice, out_of_range_invoice, foreign_invoice])
+        database.session.flush()
+        database.session.add(
+            ApprovalMatrix(
+                company_id="alpha",
+                document_type="sales_invoice",
+                user_id="aprobador",
+                min_amount=Decimal("0"),
+                max_amount=Decimal("100"),
+                approval_level=1,
+                enabled=True,
+            )
+        )
+        database.session.add(
+            ApprovalMatrix(
+                company_id="beta",
+                document_type="sales_invoice",
+                user_id="sales-only",
+                min_amount=Decimal("0"),
+                max_amount=Decimal("100"),
+                approval_level=1,
+                enabled=True,
+            )
+        )
         database.session.add_all(
             [
                 ApprovalRequest(
                     document_type="sales_invoice",
-                    document_id="INV-ALPHA",
+                    document_id=visible_invoice.id,
                     company_id="alpha",
                     requested_by="aprobador",
                     status="Pending Approval",
@@ -109,11 +199,45 @@ def aprobaciones_cloud():
                 ),
                 ApprovalRequest(
                     document_type="sales_invoice",
-                    document_id="INV-BETA",
+                    document_id=foreign_invoice.id,
                     company_id="beta",
                     requested_by="aprobador",
                     status="Pending Approval",
                     cancellation_date=date(2026, 10, 31),
+                ),
+                ApprovalRequest(
+                    document_type="sales_invoice",
+                    document_id=out_of_range_invoice.id,
+                    company_id="alpha",
+                    requested_by="aprobador",
+                    status="Pending Approval",
+                    cancellation_date=date(2026, 10, 31),
+                ),
+                ApprovalRequest(
+                    document_type="config_change",
+                    document_id="config-sales-alpha",
+                    company_id="alpha",
+                    requested_by="aprobador",
+                    status="Pending Approval",
+                    policy_snapshot={
+                        "requires_independent": True,
+                        "module": "admin",
+                        "preparers": [{"user_id": "otro", "rank": 1}],
+                    },
+                    review_payload={"model": "sales"},
+                ),
+                ApprovalRequest(
+                    document_type="config_change",
+                    document_id="config-purchases-alpha",
+                    company_id="alpha",
+                    requested_by="aprobador",
+                    status="Pending Approval",
+                    policy_snapshot={
+                        "requires_independent": True,
+                        "module": "purchases",
+                        "preparers": [{"user_id": "otro", "rank": 1}],
+                    },
+                    review_payload={"model": "purchases"},
                 ),
             ]
         )
@@ -140,9 +264,28 @@ def _contar(application, usuario: str):
         return pending_approval_count()
 
 
+def _authenticated_client(application, user_id: str):
+    """Authenticate a client against the isolated Cloud fixture."""
+    client = application.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_fresh"] = True
+    return client
+
+
 def test_aprobador_solo_cuenta_su_compania(aprobaciones_cloud):
-    """La insignia no suma solicitudes de compañías fuera del alcance."""
-    assert _contar(aprobaciones_cloud, "aprobador") == 1
+    """Badge and inbox include only reviews allowed by company and domain policy."""
+    assert _contar(aprobaciones_cloud, "aprobador") == 2
+    client = _authenticated_client(aprobaciones_cloud, "aprobador")
+    response = client.get("/me/pending-approvals")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "INV-ALPHA-VISIBLE" in body
+    assert "INV-ALPHA-OUT-OF-RANGE" not in body
+    assert "INV-BETA" not in body
+    assert "sales:alpha" in body
+    assert "purchases:alpha" not in body
 
 
 def test_usuario_sin_companias_no_ve_solicitudes(aprobaciones_cloud):
@@ -150,6 +293,11 @@ def test_usuario_sin_companias_no_ve_solicitudes(aprobaciones_cloud):
     assert _contar(aprobaciones_cloud, "sinacceso") == 0
 
 
+def test_sales_only_reviewer_keeps_other_module_company_scope(aprobaciones_cloud):
+    """Company candidates do not depend on the accounting module permission."""
+    assert _contar(aprobaciones_cloud, "sales-only") == 1
+
+
 def test_administrador_global_conserva_el_total(aprobaciones_cloud):
-    """Control positivo: el administrador sigue viendo ambas compañías."""
-    assert _contar(aprobaciones_cloud, "admin") == 2
+    """Control positivo: el administrador ve todas las revisiones habilitadas."""
+    assert _contar(aprobaciones_cloud, "admin") == 5

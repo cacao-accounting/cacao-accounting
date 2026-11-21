@@ -108,7 +108,6 @@ from cacao_accounting.admin.services import (
     _obtener_roles_disponibles,
     _obtener_roles_por_usuario,
     _obtener_usuario,
-    _pending_approval_info,
     _populate_portal_choices,
     _process_pending_approval_post,
     _require_system_admin,
@@ -116,6 +115,7 @@ from cacao_accounting.admin.services import (
     _set_user_active,
     _send_email_test,
     _user_email_is_taken,
+    visible_pending_approval_items,
     _validar_creacion_usuario,
     _validate_portal_fields,
     _would_leave_no_admin,
@@ -1876,23 +1876,13 @@ def config_approval_matrix():
 @login_required
 def pending_approvals():
     """Listado de documentos que requieren la aprobación del usuario actual."""
-    from cacao_accounting.approval_engine import ApprovalEngine, get_model_class
-    from cacao_accounting.database import ApprovalRequest, User
-    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+    from cacao_accounting.approval_engine import get_model_class
 
     if request.method == "POST":
         _process_pending_approval_post(ApprovalRequest, get_model_class)
         return redirect(url_for("admin.pending_approvals"))
 
-    stmt_all = (
-        database.select(ApprovalRequest)
-        .filter(ApprovalRequest.status.startswith("Pending"))
-        .order_by(ApprovalRequest.created_at.desc())
-    )
-    all_pending = database.session.execute(stmt_all).scalars().all()
-
-    my_pending = [_pending_approval_info(req, get_model_class, ApprovalEngine, User, DOCUMENT_TYPES) for req in all_pending]
-    my_pending = [item for item in my_pending if item is not None]
+    my_pending = visible_pending_approval_items()
 
     return render_template(
         "admin/pending_approvals.html",

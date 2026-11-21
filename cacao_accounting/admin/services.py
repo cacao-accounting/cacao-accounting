@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from datetime import date
 
-from flask import abort, flash, redirect, request, url_for
+from flask import abort, flash, g, redirect, request, url_for
 
 from flask_login import current_user
 
@@ -24,6 +24,7 @@ from cacao_accounting.auth.forms import (
 
 from cacao_accounting.database import (
     ApprovalMatrix,
+    ApprovalRequest,
     Entity,
     Modules,
     Party,
@@ -683,3 +684,55 @@ def _pending_approval_info(req, get_model_class, approval_engine, user_model, do
         }
     except (SQLAlchemyError, AttributeError, KeyError):
         return None
+
+
+def _pending_approval_company_codes() -> list[str]:
+    """Return the active tenant companies the current user can potentially review."""
+    from cacao_accounting.approval_policy import is_admin
+
+    if is_admin(current_user):
+        return list(database.session.execute(database.select(Entity.code).where(Entity.enabled.is_(True))).scalars().all())
+    return list(
+        database.session.execute(
+            database.select(UserCompanyAccess.company_code)
+            .join(Entity, Entity.code == UserCompanyAccess.company_code)
+            .where(UserCompanyAccess.user_id == current_user.id, Entity.enabled.is_(True))
+        )
+        .scalars()
+        .all()
+    )
+
+
+def visible_pending_approval_items():
+    """Return the pending approval items the current user can actually review.
+
+    The navigation badge and inbox share this predicate so the badge cannot
+    reveal counts for documents hidden by company, module, or approval policy.
+    The result is cached for the request because the navbar can render after
+    the inbox has already built the same collection.
+    """
+    cache_key = "_ca_visible_pending_approval_items"
+    if hasattr(g, cache_key):
+        return getattr(g, cache_key)
+
+    company_codes = _pending_approval_company_codes()
+    if not company_codes:
+        setattr(g, cache_key, [])
+        return []
+
+    from cacao_accounting.approval_engine import ApprovalEngine, get_model_class
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    pending = database.session.execute(
+        database.select(ApprovalRequest)
+        .filter(ApprovalRequest.status.startswith("Pending"))
+        .filter(ApprovalRequest.company_id.in_(company_codes))
+        .order_by(ApprovalRequest.created_at.desc())
+    ).scalars()
+    visible = [
+        item
+        for request_row in pending
+        if (item := _pending_approval_info(request_row, get_model_class, ApprovalEngine, User, DOCUMENT_TYPES)) is not None
+    ]
+    setattr(g, cache_key, visible)
+    return visible
