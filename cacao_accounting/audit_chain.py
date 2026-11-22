@@ -57,9 +57,6 @@ CHAIN_HASH_VERSION = 2
 _CHAIN_TAIL_INFO_KEY = "cacao_audit_chain_pending_tail"
 _V2_FIELDS = ("id",) + V1_FIELDS
 
-# Alias histórico compatibles con lecturas del módulo originales.
-_CHAIN_FIELDS = V1_FIELDS
-
 
 def _canonical_timestamp(value: Any) -> Any:
     """Devuelve una representación UTC estable del instante almacenado.
