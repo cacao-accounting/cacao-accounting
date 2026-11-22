@@ -52,23 +52,45 @@ class BankStatementAdapter(BaseImportAdapter):
     required_columns = ["bank_account_id", "posting_date"]
 
     @staticmethod
+    def _valid_grouped_integer(integer_part: str, thousands_sep: str) -> bool:
+        """Valida que la parte entera use agrupación de miles de tres dígitos.
+
+        Con ambos separadores presentes, el que no es decimal solo puede ser
+        separador de miles. ``1,234,567`` y ``1.234.567`` son inequívocos;
+        ``12,34`` no lo es y corrompería el importe si se elimina el separador.
+        """
+        body = integer_part[1:] if integer_part[:1] in "+-" else integer_part
+        groups = body.split(thousands_sep)
+        if len(groups) < 2:
+            return False
+        return (
+            groups[0].isdigit()
+            and 1 <= len(groups[0]) <= 3
+            and all(len(group) == 3 and group.isdigit() for group in groups[1:])
+        )
+
+    @staticmethod
     def _optional_amount(value: Any) -> Decimal | None:
         """Convierte una columna vacía o cero en un lado bancario ausente.
 
         Los importes con separadores ambiguos se rechazan en lugar de
         interpretarse: un importe con milés por convención europea que se
         lea como decimales corrompe el extracto por un factor de 1000.
-        ``1.000,00`` y ``1,234.56`` son inequívocos; ``1.000`` y ``1,000``
-        no lo son y abortan la fila con un error de negocio.
+        ``1.000,00`` y ``1,234.56`` son inequívocos; ``1.000``, ``1,000`` y
+        ``12,34.56`` no lo son y abortan la fila con un error de negocio.
         """
-        if value is None or (isinstance(value, str) and value == ""):
+        if value is None:
             return None
         normalized = str(value).strip().replace(" ", "")
+        if normalized == "":
+            return None
         if "," in normalized and "." in normalized:
-            if normalized.rfind(",") > normalized.rfind("."):
-                normalized = normalized.replace(".", "").replace(",", ".")
-            else:
-                normalized = normalized.replace(",", "")
+            decimal_sep = "," if normalized.rfind(",") > normalized.rfind(".") else "."
+            thousands_sep = "." if decimal_sep == "," else ","
+            integer_part, decimal_part = normalized.rsplit(decimal_sep, 1)
+            if not decimal_part.isdigit() or not BankStatementAdapter._valid_grouped_integer(integer_part, thousands_sep):
+                raise InvalidOperation(_("Separador de miles ambiguo"))
+            normalized = integer_part.replace(thousands_sep, "") + "." + decimal_part
         elif "," in normalized:
             decimal_part = normalized.rsplit(",", 1)[1]
             if len(decimal_part) > 2:
