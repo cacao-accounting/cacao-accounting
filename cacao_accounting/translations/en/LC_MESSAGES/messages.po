@@ -15268,6 +15268,10 @@ msgstr "The parent account must be active."
 msgid "La cuenta padre debe ser una cuenta de grupo."
 msgstr "The parent account must be a group account."
 
+#: cacao_accounting/imports/adapters/chart_of_accounts.py
+msgid "El código de cuenta padre aparece varias veces en el archivo."
+msgstr "The parent account code appears more than once in the file."
+
 #: cacao_accounting/contabilidad/services.py:298
 msgid "La cuenta padre seleccionada genera un ciclo jerarquico."
 msgstr "The selected parent account generates a hierarchical cycle."
