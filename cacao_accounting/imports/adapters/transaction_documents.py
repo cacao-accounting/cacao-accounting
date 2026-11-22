@@ -38,7 +38,6 @@ from cacao_accounting.database import (
     SalesRequestItem,
     SupplierQuotation,
     SupplierQuotationItem,
-    Warehouse,
     database,
 )
 from cacao_accounting.document_identifiers import assign_document_identifier
@@ -50,7 +49,13 @@ from cacao_accounting.imports.adapters.base import (
     normalize_header_decimal,
     normalize_header_text,
 )
-from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.imports.utils.validation import (
+    is_period_open,
+    item_import_uom,
+    validate_import_item,
+    validate_import_uom,
+    validate_import_warehouse,
+)
 from cacao_accounting.imports.utils.dates import parse_import_date
 
 
@@ -313,20 +318,21 @@ class TransactionDocumentAdapter(BaseImportAdapter):
 
     def _validate_document_row(self, row: dict[str, Any], company_id: str, errors: list[str]) -> None:
         """Validate warehouse, stock-item and batch constraints for one row."""
+        item, item_error = validate_import_item(row.get("producto"), self.config.entity_type)
+        if item_error:
+            errors.append(item_error)
+        if item is not None:
+            uom_error = validate_import_uom(item_import_uom(item, row.get("uom")))
+            if uom_error:
+                errors.append(uom_error)
         try:
             qty_in_base_uom(row.get("producto"), self._finite_decimal(row.get("cantidad"), "cantidad"), row.get("uom"))
         except ValueError as exc:
             errors.append(str(exc))
         warehouse_code = row.get("bodega")
-        if warehouse_code:
-            warehouse = database.session.execute(
-                database.select(Warehouse).filter_by(code=warehouse_code)
-            ).scalar_one_or_none()
-            if warehouse is None or warehouse.company != company_id or not warehouse.is_active:
-                errors.append(
-                    _("La bodega '%(warehouse)s' no pertenece a la compañía o está inactiva.") % {"warehouse": warehouse_code}
-                )
-        item = database.session.get(Item, row.get("producto"))
+        warehouse_error = validate_import_warehouse(warehouse_code, company_id)
+        if warehouse_error:
+            errors.append(warehouse_error)
         if (
             item is not None
             and item.is_stock_item
@@ -441,6 +447,15 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         total_qty = Decimal("0")
         total = Decimal("0")
         for row in document_data:
+            item, item_error = validate_import_item(row.get("producto"), self.config.entity_type)
+            if item_error:
+                raise ValueError(item_error)
+            if item is None:
+                raise ValueError(_("El artículo no existe."))
+            effective_uom = item_import_uom(item, row.get("uom"))
+            uom_error = validate_import_uom(effective_uom)
+            if uom_error:
+                raise ValueError(uom_error)
             qty = self._finite_decimal(row.get("cantidad"), "cantidad")
             rate = self._finite_decimal(row.get("precio_unitario"), "precio_unitario")
             if rate < 0:
@@ -450,8 +465,8 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 item_code=row.get("producto"),
                 item_name=row.get("descripcion") or "",
                 qty=qty,
-                uom=row.get("uom") or None,
-                qty_in_base_uom=qty_in_base_uom(row.get("producto"), qty, row.get("uom")),
+                uom=effective_uom,
+                qty_in_base_uom=qty_in_base_uom(row.get("producto"), qty, effective_uom),
                 rate=rate,
                 amount=amount,
                 warehouse=row.get("bodega") or None,

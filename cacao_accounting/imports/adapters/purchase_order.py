@@ -6,14 +6,20 @@
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any, cast
-from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.imports.utils.validation import (
+    is_period_open,
+    item_import_uom,
+    validate_import_item,
+    validate_import_uom,
+    validate_import_warehouse,
+)
 from cacao_accounting.imports.utils.dates import parse_import_date
 from cacao_accounting.imports.adapters.base import (
     BaseImportAdapter,
     COMMON_DOCUMENT_HEADER_FIELDS,
     normalize_header_text,
 )
-from cacao_accounting.database import CompanyParty, PurchaseOrder, PurchaseOrderItem, Party, Warehouse, database
+from cacao_accounting.database import CompanyParty, PurchaseOrder, PurchaseOrderItem, Party, database
 from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_flow.service import qty_in_base_uom
 from cacao_accounting.document_identifiers import assign_document_identifier
@@ -35,13 +41,17 @@ def _validate_purchase_order_rows(rows: List[Dict[str, Any]], company_id: str) -
     """Validate warehouse ownership and numeric purchase row values."""
     errors = []
     for row in rows:
+        item, item_error = validate_import_item(row.get("producto"), "purchase_order")
+        if item_error:
+            errors.append(item_error)
+        if item is not None:
+            uom_error = validate_import_uom(item_import_uom(item))
+            if uom_error:
+                errors.append(uom_error)
         warehouse_code = row.get("bodega")
-        if warehouse_code:
-            warehouse = database.session.execute(
-                database.select(Warehouse).filter_by(code=warehouse_code)
-            ).scalar_one_or_none()
-            if warehouse is None or warehouse.company != company_id or not warehouse.is_active:
-                errors.append(f"La bodega '{warehouse_code}' no pertenece a la compañía o está inactiva.")
+        warehouse_error = validate_import_warehouse(warehouse_code, company_id)
+        if warehouse_error:
+            errors.append(warehouse_error)
         try:
             quantity = _finite_decimal(row.get("cantidad"), "cantidad")
             rate = _finite_decimal(row.get("precio_unitario"), "precio_unitario")
@@ -61,6 +71,15 @@ def _build_purchase_order_items(
     total_qty = Decimal("0")
     total = Decimal("0")
     for row in document_data:
+        item, item_error = validate_import_item(row.get("producto"), "purchase_order")
+        if item_error:
+            raise ValueError(item_error)
+        if item is None:
+            raise ValueError(_("El artículo no existe."))
+        effective_uom = item_import_uom(item)
+        uom_error = validate_import_uom(effective_uom)
+        if uom_error:
+            raise ValueError(uom_error)
         qty = _finite_decimal(row.get("cantidad"), "cantidad")
         rate = _finite_decimal(row.get("precio_unitario"), "precio_unitario")
         if rate < 0:
@@ -71,7 +90,8 @@ def _build_purchase_order_items(
                 item_code=row.get("producto"),
                 item_name=row.get("descripcion") or "",
                 qty=qty,
-                qty_in_base_uom=qty_in_base_uom(row.get("producto"), qty, None),
+                uom=effective_uom,
+                qty_in_base_uom=qty_in_base_uom(row.get("producto"), qty, effective_uom),
                 rate=rate,
                 amount=amount,
                 base_rate=(rate * exchange_rate).quantize(Decimal("0.0001")),

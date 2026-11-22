@@ -24394,6 +24394,22 @@ msgstr "The party must exist, be active, have the required role, and be enabled 
 msgid "El proveedor debe existir, estar activo y habilitado para la compañía."
 msgstr "The supplier must exist, be active, and be enabled for the company."
 
+#: cacao_accounting/imports/utils/validation.py
+msgid "El artículo '%(item)s' está inactivo."
+msgstr "Item '%(item)s' is inactive."
+
+#: cacao_accounting/imports/utils/validation.py
+msgid "El artículo '%(item)s' no está habilitado para compra."
+msgstr "Item '%(item)s' is not enabled for purchasing."
+
+#: cacao_accounting/imports/utils/validation.py
+msgid "El artículo '%(item)s' no está habilitado para venta."
+msgstr "Item '%(item)s' is not enabled for sales."
+
+#: cacao_accounting/imports/utils/validation.py
+msgid "La unidad de medida está inactiva."
+msgstr "The unit of measure is inactive."
+
 #: cacao_accounting/imports/services/import_service.py
 msgid "No se pudo leer el archivo de importación."
 msgstr "The import file could not be read."

@@ -36,13 +36,14 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     Project,
     SalesInvoice,
-    UOM,
     Unit,
     Warehouse,
     database,
 )
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.document_flow.registry import normalize_doctype
+from cacao_accounting.document_flow.service import qty_in_base_uom
+from cacao_accounting.imports.utils.validation import item_import_uom, validate_import_item, validate_import_uom
 
 from cacao_accounting.i18n import _
 
@@ -547,7 +548,7 @@ def _validate_import_row(
     errors: list[dict[str, Any]] = []
     validated_row = row.copy()
     _validate_schema_columns(row, row_no, schema, errors)
-    _enrich_and_validate_master_data(row, validated_row, row_no, company_id, errors)
+    _enrich_and_validate_master_data(row, validated_row, row_no, company_id, doctype, errors)
     if doctype == "journal_entry":
         _validate_journal_entry_row(row, row_no, errors)
     elif doctype == "payment_reconciliation":
@@ -639,11 +640,12 @@ def _enrich_and_validate_master_data(
     validated_row: dict[str, Any],
     row_no: int,
     company_id: str,
+    doctype: str,
     errors: list[dict[str, Any]],
 ) -> None:
     """Validate master-data references and enrich the imported row."""
-    _validate_item_reference(row, validated_row, row_no, errors)
-    _validate_uom_reference(row, row_no, errors)
+    item = _validate_item_reference(row, validated_row, row_no, doctype, errors)
+    _validate_uom_reference(row, row_no, item, errors)
     _validate_account_reference(row, validated_row, row_no, company_id, errors)
     _validate_bank_account_reference(row, validated_row, row_no, company_id, errors)
     _validate_cost_center_reference(row, row_no, company_id, errors)
@@ -686,23 +688,36 @@ def _validate_item_reference(
     row: dict[str, Any],
     validated_row: dict[str, Any],
     row_no: int,
+    doctype: str,
     errors: list[dict[str, Any]],
-) -> None:
+) -> Item | None:
     """Validate and enrich an item reference."""
     if not row.get("item_code"):
-        return
-    item = database.session.query(Item).filter_by(code=row["item_code"]).first()
-    if not item:
-        errors.append({"row": row_no, "field": "item_code", "message": _("El artículo no existe.")})
-        return
+        return None
+    item, item_error = validate_import_item(row["item_code"], doctype)
+    if item_error:
+        errors.append({"row": row_no, "field": "item_code", "message": item_error})
+        return None
+    if item is None:
+        return None
     validated_row["item_name"] = item.name
     validated_row["item_id"] = item.id
+    return item
 
 
-def _validate_uom_reference(row: dict[str, Any], row_no: int, errors: list[dict[str, Any]]) -> None:
+def _validate_uom_reference(row: dict[str, Any], row_no: int, item: Item | None, errors: list[dict[str, Any]]) -> None:
     """Validate a UOM reference."""
-    if row.get("uom") and not database.session.query(UOM).filter_by(code=row["uom"]).first():
-        errors.append({"row": row_no, "field": "uom", "message": _("La unidad de medida no existe.")})
+    effective_uom = item_import_uom(item, row.get("uom")) if item else row.get("uom")
+    uom_error = validate_import_uom(effective_uom)
+    if uom_error:
+        errors.append({"row": row_no, "field": "uom", "message": uom_error})
+        return
+    if item is None or not effective_uom:
+        return
+    try:
+        qty_in_base_uom(item.code, Decimal("1"), effective_uom)
+    except ValueError as exc:
+        errors.append({"row": row_no, "field": "uom", "message": str(exc)})
 
 
 def _validate_account_reference(
