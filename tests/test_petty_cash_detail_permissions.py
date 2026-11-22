@@ -95,7 +95,12 @@ def caja_detalle():
             )
         )
         database.session.flush()
-        database.session.add(UserCompanyAccess(user_id="consulta-detalle", company_code="cacao"))
+        database.session.add_all(
+            [
+                UserCompanyAccess(user_id="consulta-detalle", company_code="cacao"),
+                UserCompanyAccess(user_id="administrador-caja", company_code="cacao"),
+            ]
+        )
         database.session.flush()
         cuenta = Accounts(
             code="1.01.05.001",
@@ -197,3 +202,56 @@ def test_toggle_rechaza_usuario_solo_consulta(caja_detalle):
     with application.app_context():
         fondo = database.session.get(PettyCashAccount, ids["fondo"])
         assert fondo is not None and fondo.is_active is True
+
+
+def test_editar_caja_chica_persiste_nombre(caja_detalle):
+    """El nombre enviado por el formulario actualiza el mismo fondo."""
+    application, ids = caja_detalle
+    client = application.test_client()
+    _iniciar(client, "administrador-caja")
+
+    response = client.post(
+        f"/cash_management/petty-cash/{ids['fondo']}/edit",
+        data={"name": "Fondo Operativo Renombrado"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    with application.app_context():
+        fondo = database.session.get(PettyCashAccount, ids["fondo"])
+        assert fondo is not None and fondo.name == "Fondo Operativo Renombrado"
+
+
+@pytest.mark.parametrize("new_name", ["", "Fondo Duplicado"])
+def test_editar_caja_chica_rechaza_nombre_vacio_o_duplicado(caja_detalle, new_name):
+    """La edición conserva nombre válido ante vacío o duplicado en la compañía."""
+    application, ids = caja_detalle
+    if new_name == "Fondo Duplicado":
+        with application.app_context():
+            fondo = database.session.get(PettyCashAccount, ids["fondo"])
+            assert fondo is not None
+            database.session.add(
+                PettyCashAccount(
+                    company=fondo.company,
+                    account_id=fondo.account_id,
+                    name=new_name,
+                    currency=fondo.currency,
+                    float_amount=Decimal("0"),
+                    is_default=False,
+                    is_active=True,
+                )
+            )
+            database.session.commit()
+
+    client = application.test_client()
+    _iniciar(client, "administrador-caja")
+    response = client.post(
+        f"/cash_management/petty-cash/{ids['fondo']}/edit",
+        data={"name": new_name},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    with application.app_context():
+        fondo = database.session.get(PettyCashAccount, ids["fondo"])
+        assert fondo is not None and fondo.name == "Fondo Detalle Permisos"

@@ -1177,6 +1177,7 @@ def caja_chica_editar(pc_id):
         try:
             update_petty_cash_account(
                 registro,
+                name=request.form.get("name"),
                 account_id=request.form.get("account_id") or None,
                 currency=request.form.get("currency") or None,
                 custodian_id=request.form.get("custodian_id") or None,
