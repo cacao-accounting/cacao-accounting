@@ -11,12 +11,16 @@ legacy no deben seguir simulando una pantalla funcional.
 
 from __future__ import annotations
 
+import json
+from uuid import uuid4
+
 import pytest
+from sqlalchemy import select
 
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Currency, Entity, Modules, User, database
+from cacao_accounting.database import Book, Currency, Entity, Modules, User, database
 
 CONTRASENA = "gl-legacy-2026"
 
@@ -90,3 +94,44 @@ def test_flujo_canonico_de_comprobantes_sigue_disponible(contabilidad_admin, rut
     response = client.get(ruta)
 
     assert response.status_code == 200
+
+
+def test_flujo_canonico_crea_y_contabiliza_comprobante_por_http(app, entorno_contable, authenticated_client):
+    """La ruta canónica permite crear un borrador y publicarlo en GL."""
+    from cacao_accounting.database import ComprobanteContable, GLEntry
+
+    client = authenticated_client("admin")
+    reference = f"GL-HTTP-{uuid4().hex[:8]}"
+    payload = {
+        "company": "cacao",
+        "posting_date": "2026-05-15",
+        "books": ["DEFAULT_BOOK"],
+        "reference": reference,
+        "transaction_currency": "NIO",
+        "base_currency": "NIO",
+        "exchange_rate": "1",
+        "lines": [
+            {"order": 1, "account": "1101", "debit": "100", "credit": ""},
+            {"order": 2, "account": "4101", "debit": "", "credit": "100"},
+        ],
+    }
+
+    response = client.post("/accounting/journal/new", data={"journal_payload": json.dumps(payload)})
+
+    assert response.status_code == 302
+    with app.app_context():
+        journal = database.session.execute(
+            select(ComprobanteContable).where(ComprobanteContable.reference == reference)
+        ).scalar_one()
+        assert journal.status == "draft"
+
+    post_response = client.post(f"/accounting/journal/{journal.id}/submit")
+
+    assert post_response.status_code == 302
+    with app.app_context():
+        journal = database.session.get(ComprobanteContable, journal.id)
+        primary_book_id = database.session.execute(select(Book.id).where(Book.code == "DEFAULT_BOOK")).scalar_one()
+        entries = database.session.execute(select(GLEntry).where(GLEntry.voucher_id == journal.id)).scalars().all()
+        assert journal.status == "submitted"
+        assert len(entries) == 2
+        assert {entry.ledger_id for entry in entries} == {primary_book_id}
