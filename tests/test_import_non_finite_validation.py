@@ -10,13 +10,11 @@ importes; el adaptador devuelve errores accionables por fila.
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 
 from cacao_accounting import create_app
-from cacao_accounting.bancos.statement_service import BankStatementError, _decimal_value
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Currency, Entity, database
 from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
@@ -114,13 +112,6 @@ def test_bank_row_amounts_reject_non_finite_values(non_finite_scenario, value):
         )
 
     assert any("Monto bancario inválido en columna 'deposit'" in error for error in errors)
-
-
-@pytest.mark.parametrize("value", [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")])
-def test_statement_service_rejects_non_finite_decimals(value):
-    """The statement parser rejects a non-finite Decimal before persisting."""
-    with pytest.raises(BankStatementError):
-        _decimal_value(value)
 
 
 def test_purchase_order_adapter_rejects_non_finite_quantity_and_price(non_finite_scenario):

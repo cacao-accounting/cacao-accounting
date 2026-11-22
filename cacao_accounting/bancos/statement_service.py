@@ -8,8 +8,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
-from typing import Any
+from decimal import Decimal
 
 from sqlalchemy import select
 
@@ -209,46 +208,6 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
         reason=None if fully_reconciled else "partial_match",
         reconciliation_id=reconciliation.id,
     )
-
-
-def _decimal_value(value: Any) -> Decimal:
-    if value is None or (isinstance(value, str) and value == ""):
-        return Decimal("0")
-    if isinstance(value, Decimal):
-        if not value.is_finite():
-            raise BankStatementError(_("El monto del extracto debe ser finito: %(value)s") % {"value": value})
-        return value
-    normalized = str(value).strip().replace(" ", "")
-    if "," in normalized and "." in normalized:
-        if normalized.rfind(",") > normalized.rfind("."):
-            normalized = normalized.replace(".", "").replace(",", ".")
-        else:
-            normalized = normalized.replace(",", "")
-    elif "," in normalized:
-        decimal_part = normalized.rsplit(",", 1)[1]
-        if len(decimal_part) > 2:
-            raise InvalidOperation(_("Separador de miles ambiguo"))
-        normalized = normalized.replace(",", ".")
-    elif normalized.count(".") > 1:
-        raise InvalidOperation(_("Separador de miles ambiguo"))
-    try:
-        amount = Decimal(normalized)
-    except InvalidOperation as exc:
-        raise BankStatementError(_("El monto del extracto no es válido: %(value)s") % {"value": value}) from exc
-    if not amount.is_finite():
-        raise BankStatementError(_("El monto del extracto debe ser finito: %(value)s") % {"value": value})
-    return amount
-
-
-def _parse_date(value: str) -> date:
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
-        try:
-            from datetime import datetime
-
-            return datetime.strptime(value, fmt).date()
-        except ValueError:
-            continue
-    raise BankStatementError(_("La fecha del extracto no tiene un formato soportado."))
 
 
 def apply_bank_matching_rule(rule_id: str, bank_account_id: str, date_range: tuple[date, date]) -> BankMatchingRun:
