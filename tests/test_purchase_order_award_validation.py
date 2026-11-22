@@ -559,3 +559,34 @@ def test_edicion_valida_conserva_articulo_fuente_y_cantidad(adjudicaciones, monk
         assert linea.item_code == "ART-1"
         assert linea.qty == Decimal("3")
         assert linea.uom == "UND"
+
+
+def test_edicion_con_tarifa_no_finita_preserva_orden(adjudicaciones, monkeypatch):
+    """#1544: una tarifa Infinity en edición devuelve validación sin 500.
+
+    El rollback debe restaurar líneas y relaciones ya marcadas y conservar la
+    orden original.
+    """
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch)
+    orden_id = _orden_creada(application)
+
+    form = _form_orden(ids, rate_0="Infinity")
+    with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
+        from flask_login import login_user
+
+        login_user(database.session.get(User, "admin"))
+        orden = database.session.get(PurchaseOrder, orden_id)
+        response = _update_purchase_order_from_request(orden)
+
+    # Sin 500: la ruta re-renderiza (retorno None) y conserva la orden.
+    assert response is None
+    with application.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        assert orden.docstatus == 0
+        lineas = (
+            database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=orden_id)).scalars().all()
+        )
+        assert len(lineas) == 1
+        assert Decimal(str(lineas[0].rate)) == Decimal("10")
+        assert orden.purchase_award_id == ids["award"]

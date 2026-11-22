@@ -1739,7 +1739,15 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
         database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)
     ).scalars():
         database.session.delete(item)
-    total_qty, total = _save_purchase_order_items(registro.id)
+    try:
+        total_qty, total = _save_purchase_order_items(registro.id)
+    except ValueError as error:
+        # #1544: una tarifa/cantidad no finita o inválida se presenta como
+        # validación; el rollback restaura relaciones y líneas ya marcadas y
+        # conserva la orden intacta.
+        database.session.rollback()
+        flash_error(error)
+        return None
     registro.total_qty = total_qty
     registro.total = total
     registro.net_total = total
