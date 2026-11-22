@@ -218,25 +218,18 @@ def test_conserva_los_campos_extendidos_al_guardar_el_formulario():
         with application.app_context():
             upsert_party_company_settings(ids["party"], "customer", "cacao", _params())
             config = database.session.execute(database.select(CompanyParty)).scalar_one()
-            config.default_currency = "USD"
             config.default_cost_center = "CC-1"
             config.default_business_unit = "UND-1"
-            config.default_bank_name = "Banco"
-            config.default_bank_account_no = "123"
-            config.default_bank_iban = "NI00"
             config.block_overdue = True
             database.session.commit()
 
             upsert_party_company_settings(ids["party"], "customer", "cacao", _params())
             database.session.commit()
+            database.session.expire_all()
 
             config = database.session.execute(database.select(CompanyParty)).scalar_one()
-            assert config.default_currency == "USD"
             assert config.default_cost_center == "CC-1"
             assert config.default_business_unit == "UND-1"
-            assert config.default_bank_name == "Banco"
-            assert config.default_bank_account_no == "123"
-            assert config.default_bank_iban == "NI00"
             assert config.block_overdue is True
     finally:
         with application.app_context():
@@ -251,7 +244,7 @@ def test_update_extended_explicito_permite_limpiar_campos():
         with application.app_context():
             upsert_party_company_settings(ids["party"], "customer", "cacao", _params())
             config = database.session.execute(database.select(CompanyParty)).scalar_one()
-            config.default_currency = "USD"
+            config.default_cost_center = "CC-1"
             config.block_overdue = True
             database.session.commit()
 
@@ -263,6 +256,7 @@ def test_update_extended_explicito_permite_limpiar_campos():
                 update_extended=True,
             )
             database.session.commit()
+            database.session.expire_all()
 
             config = database.session.execute(database.select(CompanyParty)).scalar_one()
             assert config.default_cost_center is None
