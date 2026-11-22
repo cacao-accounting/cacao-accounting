@@ -23216,6 +23216,105 @@ msgstr "List of sales requests."
 msgid "Nuevo Pedido"
 msgstr "New Order"
 
+msgid "Nombre de la cuenta"
+msgstr "Account Name"
+
+msgid "Tipo de cuenta"
+msgstr "Account Type"
+
+msgid "Sección"
+msgstr "Section"
+
+msgid "Saldo final"
+msgstr "Ending Balance"
+
+msgid "Saldo inicial"
+msgstr "Opening Balance"
+
+msgid "Unidad"
+msgstr "Unit"
+
+msgid "Primer movimiento"
+msgstr "First Movement"
+
+msgid "Último movimiento"
+msgstr "Last Movement"
+
+msgid "Es reversa"
+msgstr "Is Reversal"
+
+msgid "Reversa de"
+msgstr "Reversal Of"
+
+msgid "Fecha de anulación"
+msgstr "Cancellation Date"
+
+msgid "Solicitud de anulación"
+msgstr "Cancellation Requested At"
+
+msgid "Ejecución de anulación"
+msgstr "Cancellation Executed At"
+
+msgid "Responsable de anulación"
+msgstr "Cancellation Actor"
+
+msgid "Motivo de anulación"
+msgstr "Cancellation Reason"
+
+msgid "Margen bruto (%)"
+msgstr "Gross Margin (%)"
+
+msgid "Certificado"
+msgstr "Certificate No."
+
+msgid "Identificación fiscal del proveedor"
+msgstr "Supplier Tax ID"
+
+msgid "Concepto de retención"
+msgstr "Withholding Concept"
+
+msgid "Base imponible"
+msgstr "Taxable Base"
+
+msgid "Importe retenido"
+msgstr "Withheld Amount"
+
+msgid "Importe entrante"
+msgstr "Incoming Amount"
+
+msgid "Importe saliente"
+msgstr "Outgoing Amount"
+
+msgid "Cobros"
+msgstr "Receipts"
+
+msgid "Pagos"
+msgstr "Payments"
+
+msgid "Nombre del artículo"
+msgstr "Item Name"
+
+msgid "Cantidad de saldo"
+msgstr "Balance Quantity"
+
+msgid "Cantidad entrante"
+msgstr "Incoming Quantity"
+
+msgid "Cantidad saliente"
+msgstr "Outgoing Quantity"
+
+msgid "Variación de valor"
+msgstr "Value Change"
+
+msgid "Importe original"
+msgstr "Original Amount"
+
+msgid "Importe pagado"
+msgstr "Paid Amount"
+
+msgid "Tramo"
+msgstr "Bucket"
+
 #~ msgid "Debe indicar el motivo de la anulacion."
 #~ msgstr "You must provide the reason for the cancellation."
 
