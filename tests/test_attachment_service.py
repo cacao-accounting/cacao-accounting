@@ -582,3 +582,46 @@ def test_metadatos_sin_cambios_no_duplican_auditoria(attachment_app, party_id):
             .all()
         )
         assert events == []
+
+
+def test_endpoint_de_carga_acepta_multipart_valido(attachment_app, party_id, users):
+    """El endpoint activo persiste el archivo enviado como multipart real."""
+    client = _login(attachment_app, users["admin"])
+
+    response = client.post(
+        f"/api/attachments/supplier/{party_id}/upload",
+        data={"file": (BytesIO(PDF), "factura.pdf"), "remarks": "evidencia http"},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 201, response.get_data(as_text=True)
+    payload = response.get_json()
+    assert payload["sha256"] == hashlib.sha256(PDF).hexdigest()
+    assert payload["remarks"] == "evidencia http"
+    with attachment_app.app_context():
+        file_record = database.session.get(File, payload["file_id"])
+        attachment = database.session.execute(
+            database.select(FileAttachment).filter_by(file_id=payload["file_id"])
+        ).scalar_one()
+        assert file_record is not None
+        assert attachment.reference_type == "supplier"
+        assert attachment.reference_id == party_id
+
+    download = client.get(f"/attachments/download/{payload['file_id']}")
+    assert download.status_code == 200
+    assert download.data == PDF
+
+
+def test_endpoint_de_carga_rechaza_multipart_invalido(attachment_app, party_id, users):
+    """El endpoint activo rechaza contenido no permitido sin persistir filas."""
+    client = _login(attachment_app, users["admin"])
+
+    response = client.post(
+        f"/api/attachments/supplier/{party_id}/upload",
+        data={"file": (BytesIO(b"MZ\x90\x00"), "malware.exe")},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    with attachment_app.app_context():
+        assert database.session.execute(database.select(File)).scalars().all() == []
