@@ -24,11 +24,20 @@ def _firma() -> str:
     return coincidencia.group("args")
 
 
-def _argumentos_de_llamada(texto: str) -> str:
-    """Extrae los argumentos de una invocación de la macro."""
-    coincidencia = PATRON_LLAMADA.search(texto)
-    assert coincidencia is not None
-    return coincidencia.group("args")
+def _argumentos_de_llamada(texto: str) -> list[str]:
+    """Extrae los argumentos de todas las invocaciones de la macro."""
+    return [coincidencia.group("args") for coincidencia in PATRON_LLAMADA.finditer(texto)]
+
+
+def _consumidores() -> list[Path]:
+    """Devuelve las plantillas que invocan la macro compartida."""
+    consumidores: list[Path] = []
+    for plantilla in RAIZ.rglob("*.html"):
+        if plantilla == MACROS:
+            continue
+        if "transaction_grid(" in plantilla.read_text(encoding="utf-8", errors="ignore"):
+            consumidores.append(plantilla)
+    return consumidores
 
 
 def test_la_firma_conserva_solo_los_parametros_consumidos():
@@ -41,16 +50,23 @@ def test_la_firma_conserva_solo_los_parametros_consumidos():
 
 
 def test_ningun_consumidor_envia_los_parametros_retirados():
-    """Los formularios de Ventas, Compras e Inventario usan el contrato vigente."""
-    for plantilla in RAIZ.rglob("*.html"):
-        if plantilla == MACROS:
-            continue
+    """Todas las invocaciones de Ventas, Compras e Inventario usan el contrato vigente."""
+    for plantilla in _consumidores():
         texto = plantilla.read_text(encoding="utf-8", errors="ignore")
-        if "transaction_grid(" not in texto:
-            continue
-        argumentos = _argumentos_de_llamada(texto)
-        for retirado in RETIRADOS:
-            assert f"{retirado}=" not in argumentos, f"{plantilla} conserva {retirado}"
+        invocaciones = _argumentos_de_llamada(texto)
+        assert invocaciones, f"{plantilla} no declara invocaciones reconocibles"
+        for argumentos in invocaciones:
+            for retirado in RETIRADOS:
+                assert f"{retirado}=" not in argumentos, f"{plantilla} conserva {retirado}"
+
+
+def test_todos_los_consumidores_compilan_en_jinja(app):
+    """Cada plantilla que invoca la macro es válida para el entorno Jinja."""
+    with app.app_context():
+        for plantilla in _consumidores():
+            partes = plantilla.parts
+            nombre = "/".join(partes[partes.index("templates") + 1 :])
+            app.jinja_env.get_template(nombre)
 
 
 def test_la_macro_compila_en_jinja(app):
