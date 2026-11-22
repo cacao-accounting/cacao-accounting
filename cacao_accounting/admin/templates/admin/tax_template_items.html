@@ -2,6 +2,7 @@
 {% block contenido %}
 <div class="ca-page-header"><h4>{{ _("Líneas de Plantilla") }}: {{ template.name }}</h4></div>
 <form method="post" class="mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="row g-2">
     <div class="col-md-3"><select class="form-select" name="tax_id">{% for tax in taxes %}<option value="{{ tax.id }}">{{ tax.name }}</option>{% endfor %}</select></div>
     <div class="col-md-1"><input class="form-control" type="number" step="1" name="sequence" value="10"></div>
