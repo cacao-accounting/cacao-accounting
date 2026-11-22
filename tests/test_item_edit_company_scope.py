@@ -23,6 +23,7 @@ from cacao_accounting.database import (
     Entity,
     Item,
     ItemAccount,
+    ItemUOMConversion,
     Modules,
     Roles,
     RolesAccess,
@@ -76,6 +77,7 @@ def item_edit_scope_scenario():
                     enabled=True,
                 ),
                 UOM(code="EA", name="Each", is_active=True),
+                UOM(code="BOX", name="Box", is_active=True),
             ]
         )
         database.session.commit()
@@ -257,3 +259,25 @@ def test_item_edit_form_does_not_render_foreign_company_rows(item_edit_scope_sce
     assert ids["local_account"] in body
     assert ids["secret_account"] not in body
     assert ids["secret_company"] not in body
+
+
+@pytest.mark.parametrize("factor", ["NaN", "Infinity", "0.0000000001"])
+def test_item_edit_renders_invalid_uom_factor_as_validation_error(item_edit_scope_scenario, factor):
+    """A non-finite or unrepresentable UOM factor stays in handled validation."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+
+    response = client.post(
+        f"/inventory/item/{ids['item_code']}/edit",
+        data=_valid_item_form(uom_code="BOX", uom_conversion_factor=factor),
+    )
+
+    assert response.status_code == 200
+    assert "Artículo compartido" in response.get_data(as_text=True)
+    with app.app_context():
+        item = database.session.execute(database.select(Item).filter_by(code=ids["item_code"])).scalar_one()
+        conversions = (
+            database.session.execute(database.select(ItemUOMConversion).filter_by(item_code=ids["item_code"])).scalars().all()
+        )
+        assert item.name == "Artículo compartido"
+        assert conversions == []

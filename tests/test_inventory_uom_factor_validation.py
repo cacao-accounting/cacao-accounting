@@ -101,9 +101,9 @@ def test_validacion_rechaza_factor_no_finito(catalogo_uom, factor):
             validate_item_uom_rows("UND", [ItemUOMRow(uom_code=CAJA, conversion_factor=factor)])
 
 
-@pytest.mark.parametrize("texto", ["Infinity", "-Infinity", "NaN"])
-def test_parseo_rechaza_factor_no_finito(catalogo_uom, texto):
-    """El formulario no convierte un factor no finito en una fila persistible."""
+@pytest.mark.parametrize("texto", ["Infinity", "-Infinity", "NaN", "0.0000000001"])
+def test_parseo_rechaza_factor_no_finito_o_no_representable(catalogo_uom, texto):
+    """El formulario no convierte factores no finitos o no representables en filas."""
     application = catalogo_uom
     with application.app_context():
         from cacao_accounting.inventario.service import InventoryServiceError, parse_item_uom_rows
@@ -112,9 +112,9 @@ def test_parseo_rechaza_factor_no_finito(catalogo_uom, texto):
             parse_item_uom_rows({"uom_code": [CAJA], "uom_conversion_factor": [texto]})
 
 
-@pytest.mark.parametrize("factor", [Decimal("Infinity"), Decimal("NaN")])
-def test_alta_de_articulo_no_persiste_factor_no_finito(catalogo_uom, factor):
-    """El alta real rechaza la conversión y no deja artículo ni conversión persistidos."""
+@pytest.mark.parametrize("factor", [Decimal("Infinity"), Decimal("NaN"), Decimal("0.0000000001")])
+def test_alta_de_articulo_no_persiste_factor_no_valido(catalogo_uom, factor):
+    """The item writer rejects invalid factors without leaving item or conversion rows."""
     application = catalogo_uom
     with application.app_context():
         from cacao_accounting.database import Item, ItemUOMConversion
@@ -164,9 +164,9 @@ def test_conversion_finita_directa_e_inversa_operan(catalogo_uom):
         assert item_qty_in_base_uom(ITEM, Decimal("3"), CAJA) == Decimal("36")
 
 
-@pytest.mark.parametrize("factor", [Decimal("0"), Decimal("-12")])
-def test_validacion_rechaza_factor_cero_o_negativo(catalogo_uom, factor):
-    """#1034: un factor cero o negativo no puede persistirse como conversión."""
+@pytest.mark.parametrize("factor", [Decimal("0"), Decimal("-12"), Decimal("0.0000000001")])
+def test_validacion_rechaza_factor_cero_negativo_o_no_representable(catalogo_uom, factor):
+    """Zero, negative, or rounded-to-zero factors cannot be stored as conversions."""
     application = catalogo_uom
     with application.app_context():
         from cacao_accounting.inventario.service import (
@@ -199,3 +199,13 @@ def test_conversion_persistida_cero_o_negativa_falla_en_ambas_direcciones(catalo
             convert_item_qty(ITEM, Decimal("2"), CAJA, "UND")
         with pytest.raises(InventoryServiceError):
             convert_item_qty(ITEM, Decimal("24"), "UND", CAJA)
+
+
+@pytest.mark.parametrize("factor", [Decimal("0.000000001"), Decimal("99999999999.999999999")])
+def test_factor_en_limites_de_precision_puede_validarse(catalogo_uom, factor):
+    """Finite positive factors representable by Numeric(20, 9) remain accepted."""
+    application = catalogo_uom
+    with application.app_context():
+        from cacao_accounting.inventario.service import ItemUOMRow, validate_item_uom_rows
+
+        validate_item_uom_rows("UND", [ItemUOMRow(uom_code=CAJA, conversion_factor=factor)])

@@ -24316,3 +24316,7 @@ msgstr "The matching rule contains invalid tolerances."
 msgid "El valor de configuración de matching no es válido."
 msgstr "The matching configuration value is invalid."
 
+#: cacao_accounting/inventario/service.py
+msgid "El factor de conversión excede la precisión admitida por la base de datos."
+msgstr "The conversion factor exceeds the precision supported by the database."
+

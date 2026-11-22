@@ -402,10 +402,29 @@ def _lote_item_choices() -> list[tuple[str, str]]:
 
 def _item_uom_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[str, str]]:
     """Normaliza filas de UOM para re-renderizar el formulario."""
-    parsed_rows = parse_item_uom_rows(form_data)
-    if not parsed_rows:
+    codes = _form_values(form_data, "uom_code")
+    factors = _form_values(form_data, "uom_conversion_factor")
+    if not codes and not factors:
         return [{"uom_code": "", "conversion_factor": ""}]
-    return [{"uom_code": row.uom_code, "conversion_factor": str(row.conversion_factor)} for row in parsed_rows]
+    rows = []
+    for index, code in enumerate(codes):
+        factor = factors[index] if index < len(factors) else ""
+        cleaned_code = str(code or "").strip()
+        cleaned_factor = str(factor or "").strip()
+        if cleaned_code or cleaned_factor:
+            rows.append({"uom_code": cleaned_code, "conversion_factor": cleaned_factor})
+    return rows or [{"uom_code": "", "conversion_factor": ""}]
+
+
+def _form_values(form_data: Mapping[str, Any], field_name: str) -> list[Any]:
+    """Read repeated form fields from Flask forms or plain mapping fixtures."""
+    getlist = getattr(form_data, "getlist", None)
+    values = getlist(field_name) if callable(getlist) else form_data.get(field_name)
+    if values is None:
+        return []
+    if isinstance(values, (list, tuple)):
+        return list(values)
+    return [values]
 
 
 def _company_choices() -> list[tuple[str, str]]:

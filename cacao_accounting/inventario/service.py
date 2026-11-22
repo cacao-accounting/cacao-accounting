@@ -149,6 +149,17 @@ def _decimal_value(value: Any) -> Decimal:
         raise InventoryServiceError(_("La conversion UOM debe ser un numero valido.")) from exc
 
 
+def _positive_uom_factor(value: Any) -> Decimal:
+    """Validate a positive UOM factor within the storage column's precision."""
+    try:
+        factor = coerce_decimal(value, "factor de conversión UOM", positive=True, max_fractional_digits=9)
+    except ValueError as exc:
+        raise InventoryServiceError(str(exc)) from exc
+    if factor.adjusted() > 10:
+        raise InventoryServiceError(_("El factor de conversión excede la precisión admitida por la base de datos."))
+    return factor
+
+
 @dataclass(frozen=True)
 class BatchParams:
     """Parametros para crear un lote de inventario."""
@@ -907,9 +918,7 @@ def parse_item_uom_rows(form: Mapping[str, Any]) -> list[ItemUOMRow]:
         cleaned_factor = str(factor or "").strip()
         if not cleaned_code and not cleaned_factor:
             continue
-        parsed_factor = _decimal_value(cleaned_factor)
-        if not parsed_factor.is_finite():
-            raise InventoryServiceError(_("La conversión UOM debe ser un número finito."))
+        parsed_factor = _positive_uom_factor(_decimal_value(cleaned_factor))
         rows.append(ItemUOMRow(uom_code=cleaned_code, conversion_factor=parsed_factor))
     return rows
 
@@ -930,10 +939,7 @@ def validate_item_uom_rows(default_uom: str, rows: list[ItemUOMRow]) -> None:
             raise InventoryServiceError(_("No se puede repetir la misma UOM adicional."))
         if database.session.execute(select(UOM).filter_by(code=row.uom_code)).scalar_one_or_none() is None:
             raise InventoryServiceError(_("La UOM '%(uom_code)s' no existe.") % {"uom_code": row.uom_code})
-        if not row.conversion_factor.is_finite():
-            raise InventoryServiceError(_("El factor de conversión de UOM debe ser finito."))
-        if row.conversion_factor <= 0:
-            raise InventoryServiceError(_("La conversión a la unidad predeterminada debe ser mayor que cero."))
+        _positive_uom_factor(row.conversion_factor)
         seen.add(row.uom_code)
 
 
