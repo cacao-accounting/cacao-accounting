@@ -455,12 +455,16 @@ class ImportService:
             self._execute_task(current_app._get_current_object(), batch_id)  # type: ignore[attr-defined]
         return True
 
-    def cancel(self, batch_id: str):
-        """Solicita la cancelación de un lote de importación."""
-        batch = database.session.get(ImportBatch, batch_id)
-        if batch:
-            batch.cancel_requested = True
-            database.session.commit()
+    def cancel(self, batch_id: str) -> bool:
+        """Solicita cancelación solo mientras el worker conserva el lote."""
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+            .values(cancel_requested=True)
+            .execution_options(synchronize_session=False)
+        )
+        database.session.commit()
+        return (getattr(result, "rowcount", 0) or 0) == 1
 
     def _process_document(
         self,
@@ -526,6 +530,8 @@ class ImportService:
                 adapter = self._get_adapter(batch.record_type)
                 table = reader.read(batch.source_path)
                 self._canonicalize_table_headers(table, adapter)
+                if self._check_batch_cancellation(batch, batch_id):
+                    return
                 # El archivo puede cambiar entre la validación de `execute()` y
                 # esta segunda lectura del worker. Nunca se anuncia éxito para
                 # cero datos (#1200).
@@ -534,8 +540,7 @@ class ImportService:
                     return
                 structural_errors = self._collect_structural_errors(batch_id, table, adapter)
                 if structural_errors:
-                    ImportBatchError.query.filter_by(batch_id=batch_id).delete()
-                    self._commit_structural_errors(batch, batch_id, structural_errors)
+                    self._commit_execution_structural_errors(batch_id, structural_errors)
                     return
 
                 normalized_rows = self._normalize_rows(table.columns, table.rows)
@@ -544,8 +549,7 @@ class ImportService:
                 batch.total_rows = len(normalized_rows)
                 business_errors_count = self._collect_business_errors(adapter, batch_id, batch.company_id, docs)
                 if business_errors_count:
-                    batch.import_status = 2
-                    batch.started_at = None
+                    self._transition_execution_status(batch_id, 2)
                     database.session.commit()
                     return
 
@@ -600,12 +604,55 @@ class ImportService:
         if not current_batch:
             return True
         if current_batch.cancel_requested:
-            current_batch.import_status = 8
+            result = database.session.execute(
+                update(ImportBatch)
+                .where(
+                    ImportBatch.id == batch_id,
+                    ImportBatch.import_status == 4,
+                    ImportBatch.cancel_requested.is_(True),
+                )
+                .values(import_status=8, started_at=None, completed_at=_utc_now_naive())
+                .execution_options(synchronize_session=False)
+            )
             database.session.commit()
-            return True
+            if (getattr(result, "rowcount", 0) or 0) == 1:
+                database.session.expire_all()
+                return True
+            database.session.expire_all()
+            current_batch = database.session.get(ImportBatch, batch_id)
+            return current_batch is None or current_batch.import_status != 4 or current_batch.cancel_requested
         if current_batch.import_status != 4:
             return True
         return False
+
+    @staticmethod
+    def _transition_execution_status(batch_id: str, target_status: int) -> tuple[bool, int | None]:
+        """Cierra un atajo del worker sin pisar cancelación o recuperación."""
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+            .values(
+                import_status=case((ImportBatch.cancel_requested.is_(True), 8), else_=target_status),
+                started_at=None,
+                completed_at=case(
+                    (ImportBatch.cancel_requested.is_(True), _utc_now_naive()),
+                    else_=ImportBatch.completed_at,
+                ),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        transitioned = (getattr(result, "rowcount", 0) or 0) == 1
+        database.session.expire_all()
+        batch = database.session.get(ImportBatch, batch_id)
+        return transitioned, batch.import_status if batch else None
+
+    def _commit_execution_structural_errors(self, batch_id: str, errors: list[ImportBatchError]) -> None:
+        """Registra errores solo si el worker conserva el lote frente a cancelación/recovery."""
+        transitioned, final_status = self._transition_execution_status(batch_id, 7)
+        if transitioned and final_status == 7:
+            ImportBatchError.query.filter_by(batch_id=batch_id).delete()
+            database.session.add_all(errors)
+        database.session.commit()
 
     def _handle_document_error(
         self, batch_id: str, batch: Any, ref: str, exc: Exception, error_count: int, row_count: int
@@ -649,6 +696,7 @@ class ImportService:
             .values(
                 success_rows=success_count,
                 error_rows=error_count,
+                started_at=None,
                 completed_at=completed_at,
                 import_status=case(
                     (ImportBatch.cancel_requested.is_(True), 8),
@@ -660,21 +708,48 @@ class ImportService:
         database.session.commit()
         # rowcount == 0 significa que recovery ganó la carrera: el estado 7
         # permanece intacto. La cancelación no produce rowcount 0 porque la
-        # propia transición la resuelve a 8.
+        # propia transición la resuelve a 8. Si el checkpoint ya fijó estado 8,
+        # conserva los contadores parciales sin modificar el estado terminal.
         if (getattr(result, "rowcount", 0) or 0) == 0:
             database.session.expire_all()
+            current_batch = database.session.get(ImportBatch, batch_id)
+            if current_batch and current_batch.import_status == 8 and current_batch.cancel_requested:
+                database.session.execute(
+                    update(ImportBatch)
+                    .where(
+                        ImportBatch.id == batch_id,
+                        ImportBatch.import_status == 8,
+                        ImportBatch.cancel_requested.is_(True),
+                    )
+                    .values(success_rows=success_count, error_rows=error_count)
+                    .execution_options(synchronize_session=False)
+                )
+                database.session.commit()
 
     def _handle_execution_error(self, batch_id: str, e: Exception) -> None:
         """Maneja errores fatales durante la ejecución."""
         database.session.rollback()
-        current_batch = database.session.get(ImportBatch, batch_id)
-        if current_batch:
-            current_batch.import_status = 7
-            current_batch.started_at = None
-            error_type = "RESOURCE_LIMIT" if isinstance(e, ImportReadLimitError) else "FATAL_ERROR"
-            err_record = ImportBatchError(batch_id=batch_id, error_type=error_type, message=str(e))
-            database.session.add(err_record)
-            database.session.commit()
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+            .values(
+                import_status=case((ImportBatch.cancel_requested.is_(True), 8), else_=7),
+                started_at=None,
+                completed_at=case(
+                    (ImportBatch.cancel_requested.is_(True), _utc_now_naive()),
+                    else_=ImportBatch.completed_at,
+                ),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if (getattr(result, "rowcount", 0) or 0) == 1:
+            database.session.expire_all()
+            current_batch = database.session.get(ImportBatch, batch_id)
+            if current_batch and current_batch.import_status != 8:
+                error_type = "RESOURCE_LIMIT" if isinstance(e, ImportReadLimitError) else "FATAL_ERROR"
+                err_record = ImportBatchError(batch_id=batch_id, error_type=error_type, message=str(e))
+                database.session.add(err_record)
+        database.session.commit()
 
     def _group_by_reference(
         self, columns: List[str], rows: List[Dict[str, Any]], adapter: Any | None = None

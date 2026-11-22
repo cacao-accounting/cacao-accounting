@@ -389,8 +389,10 @@ def cancel(batch_id):
     check_permission("anular")
     _batch_or_404(batch_id, "anular")
     service = ImportService()
-    service.cancel(batch_id)
-    flash(_("Cancelación solicitada"), "warning")
+    if service.cancel(batch_id):
+        flash(_("Cancelación solicitada"), "warning")
+    else:
+        flash(_("El estado actual del lote no permite esta acción."), "warning")
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 

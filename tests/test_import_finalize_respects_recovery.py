@@ -13,13 +13,15 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import uuid4
 
+from sqlalchemy import update
+
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Currency, Entity, database
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
+from cacao_accounting.imports.readers.base import TabularBook
 from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.imports.utils import recovery
-from sqlalchemy import update
 
 
 def _app(tmp_path):
@@ -210,6 +212,174 @@ def test_finalize_resuelve_cancelacion_llegada_entre_lectura_y_update(tmp_path, 
             assert notified["done"] is True
             assert final.cancel_requested is True
             assert final.import_status == 8
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_worker_cancelled_con_archivo_vacio_termina_en_estado_terminal(tmp_path, monkeypatch):
+    """#1032: una cancelación durante la lectura vacía no queda en procesamiento."""
+    app = _app(tmp_path)
+    try:
+        batch_id = _batch(app)
+        with app.app_context():
+
+            class _Reader:  # pylint: disable=too-few-public-methods
+                """Reader that submits cancellation while reading an empty file."""
+
+                def read(self, _file_path):
+                    """Set the cancellation flag before returning no rows."""
+                    database.session.execute(
+                        update(ImportBatch).where(ImportBatch.id == batch_id).values(cancel_requested=True)
+                    )
+                    database.session.commit()
+                    return TabularBook(columns=["nombre"], rows=[], source_format="csv")
+
+            monkeypatch.setattr(ImportService, "_get_reader", lambda _self, _format: _Reader())
+            ImportService()._execute_task(app, batch_id)
+
+            database.session.expire_all()
+            final = database.session.get(ImportBatch, batch_id)
+            assert final.import_status == 8
+            assert final.cancel_requested is True
+            assert final.started_at is None
+            assert final.completed_at is not None
+            assert (
+                database.session.execute(database.select(ImportBatchError).filter_by(batch_id=batch_id)).scalars().all() == []
+            )
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_recovery_conserva_estado_si_gana_antes_de_confirmar_cancelacion(tmp_path, monkeypatch):
+    """#1032: una cancelación no sobrescribe el estado 7 que ganó recovery."""
+    from cacao_accounting.imports.services import import_service as import_service_module
+
+    app = _app(tmp_path)
+    try:
+        batch_id = _batch(app)
+        with app.app_context():
+            batch = database.session.get(ImportBatch, batch_id)
+            database.session.execute(update(ImportBatch).where(ImportBatch.id == batch_id).values(cancel_requested=True))
+            database.session.commit()
+            original_execute = database.session.execute
+            interleaving = {"done": False}
+
+            def racing_execute(statement, *args, **kwargs):
+                if not interleaving["done"] and getattr(statement, "is_update", False):
+                    interleaving["done"] = True
+                    with app.app_context():
+                        assert recovery._claim_expired_batch(batch_id, datetime.now()) is True
+                        database.session.commit()
+                        database.session.remove()
+                return original_execute(statement, *args, **kwargs)
+
+            monkeypatch.setattr(import_service_module.database.session, "execute", racing_execute)
+            assert ImportService()._check_batch_cancellation(batch, batch_id) is True
+            monkeypatch.undo()
+
+            database.session.expire_all()
+            final = database.session.get(ImportBatch, batch_id)
+            assert interleaving["done"] is True
+            assert final.cancel_requested is True
+            assert final.import_status == 7
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_error_fatal_coincidente_con_cancelacion_cierra_en_estado_terminal(tmp_path):
+    """#1032: un error fatal concurrente no reabre ni deja incompleta la cancelación."""
+    app = _app(tmp_path)
+    try:
+        batch_id = _batch(app)
+        with app.app_context():
+            database.session.execute(update(ImportBatch).where(ImportBatch.id == batch_id).values(cancel_requested=True))
+            database.session.commit()
+
+            ImportService()._handle_execution_error(batch_id, ValueError("archivo vacío"))
+
+            database.session.expire_all()
+            final = database.session.get(ImportBatch, batch_id)
+            assert final.import_status == 8
+            assert final.started_at is None
+            assert final.completed_at is not None
+            assert not database.session.execute(database.select(ImportBatchError).filter_by(batch_id=batch_id)).scalars().all()
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_cancel_solo_se_acepta_para_worker_activo(tmp_path):
+    """Un lote terminal no puede aceptar una cancelación tardía."""
+    app = _app(tmp_path)
+    try:
+        running_batch_id = _batch(app)
+        terminal_batch_id = _batch(app, status=5)
+        with app.app_context():
+            service = ImportService()
+            assert service.cancel(running_batch_id) is True
+            assert service.cancel(terminal_batch_id) is False
+
+            running_batch = database.session.get(ImportBatch, running_batch_id)
+            terminal_batch = database.session.get(ImportBatch, terminal_batch_id)
+            assert running_batch.cancel_requested is True
+            assert terminal_batch.cancel_requested is False
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_cancel_despues_de_un_documento_conserva_contadores_parciales(tmp_path):
+    """#1032: el estado cancelado refleja documentos ya confirmados antes del corte."""
+    app = _app(tmp_path)
+    try:
+        batch_id = _batch(app)
+        with app.app_context():
+            batch = database.session.get(ImportBatch, batch_id)
+            batch.total_rows = 2
+            database.session.commit()
+            service = ImportService()
+            processed = []
+
+            class _Adapter:
+                """Adapter that requests cancellation after the first persisted document."""
+
+                def build_document(self, rows, _context):
+                    """Return the document rows for the test service."""
+                    return {"rows": list(rows)}
+
+                def persist_document(self, _document):
+                    """Commit cancellation after the first document."""
+                    processed.append("document")
+                    if len(processed) == 1:
+                        database.session.execute(
+                            update(ImportBatch).where(ImportBatch.id == batch_id).values(cancel_requested=True)
+                        )
+
+            success, errors = service._process_all_documents(
+                batch,
+                batch_id,
+                _Adapter(),
+                {"one": [{"row": 1}], "two": [{"row": 2}]},
+                {"company_id": "alpha"},
+            )
+            assert processed == ["document"]
+            service._finalize_execution(batch, batch_id, success, errors)
+
+            database.session.expire_all()
+            final = database.session.get(ImportBatch, batch_id)
+            assert final.import_status == 8
+            assert final.success_rows == 1
+            assert final.error_rows == 0
+            assert final.processed_rows == 1
+            assert final.completed_at is not None
     finally:
         with app.app_context():
             database.session.remove()
