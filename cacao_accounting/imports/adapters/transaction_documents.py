@@ -364,11 +364,10 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         self._validate_source_document(first_row, source, company_id, errors)
         self._validate_source_lines(document_data, company_id, errors)
         if self.config.party_field and first_row.get("tercero"):
-            membership = database.session.execute(
-                database.select(CompanyParty).filter_by(party_id=first_row.get("tercero"), company=company_id, is_active=True)
-            ).scalar_one_or_none()
-            if membership is None:
-                errors.append(_("El tercero no está habilitado para la compañía de la importación."))
+            if self._eligible_party(first_row.get("tercero"), company_id) is None:
+                errors.append(
+                    _("El tercero debe existir, estar activo, tener el rol requerido y estar habilitado para la compañía.")
+                )
         for row in document_data:
             self._validate_document_row(row, company_id, errors)
         try:
@@ -401,9 +400,13 @@ class TransactionDocumentAdapter(BaseImportAdapter):
     def build_document(self, document_data: list[dict[str, Any]], context: dict[str, Any]) -> dict[str, Any]:
         """Construye encabezado e ítems desde las filas del archivo."""
         first_row = document_data[0]
+        company_id = str(context.get("company_id") or "")
+        if self.config.party_field and self._eligible_party(first_row.get("tercero"), company_id) is None:
+            raise ValueError(
+                _("El tercero debe existir, estar activo, tener el rol requerido y estar habilitado para la compañía.")
+            )
         posting_date = parse_import_date(first_row.get("fecha"))
         source = self._source_document(first_row.get("documento_origen"))
-        company_id = str(context.get("company_id") or "")
         transaction_currency, base_currency, exchange_rate = self._currency_and_rate(
             first_row, source, company_id, posting_date
         )
@@ -499,23 +502,32 @@ class TransactionDocumentAdapter(BaseImportAdapter):
     def _apply_party(self, header: Any, party_id: Any) -> None:
         if not self.config.party_field:
             return
+        party = self._eligible_party(party_id, str(getattr(header, "company", "")))
+        if party is None:
+            raise ValueError(
+                _("El tercero debe existir, estar activo, tener el rol requerido y estar habilitado para la compañía.")
+            )
         setattr(header, self.config.party_field, party_id or None)
-        party = None
-        if party_id:
-            if self.config.party_type == "customer":
-                party_filter = Party.is_customer.is_(True)
-            elif self.config.party_type == "supplier":
-                party_filter = Party.is_supplier.is_(True)
-            else:
-                party_filter = None
-            if party_filter is not None:
-                party = database.session.execute(
-                    database.select(Party).filter(Party.id == party_id, party_filter)
-                ).scalar_one_or_none()
-            else:
-                party = database.session.execute(database.select(Party).filter_by(id=party_id)).scalar_one_or_none()
         if self.config.party_name_field:
             setattr(header, self.config.party_name_field, party.name if party else None)
+
+    def _eligible_party(self, party_id: Any, company_id: str) -> Party | None:
+        """Resolve a party with its configured role and active company membership."""
+        if not party_id:
+            return None
+        query = database.select(Party).filter(Party.id == party_id, Party.is_active.is_(True))
+        if self.config.party_type == "customer":
+            query = query.filter(Party.is_customer.is_(True))
+        elif self.config.party_type == "supplier":
+            query = query.filter(Party.is_supplier.is_(True))
+        if self.config.party_type:
+            if not company_id:
+                return None
+            query = query.join(CompanyParty, CompanyParty.party_id == Party.id).filter(
+                CompanyParty.company == company_id,
+                CompanyParty.is_active.is_(True),
+            )
+        return database.session.execute(query).scalar_one_or_none()
 
     def _apply_source(self, header: Any, source_id: Any) -> None:
         if self.config.source_field and source_id:

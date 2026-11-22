@@ -24386,6 +24386,14 @@ msgstr "The transaction currency '%(currency)s' does not exist in the catalog."
 msgid "La moneda transaccional '%(currency)s' está inactiva."
 msgstr "The transaction currency '%(currency)s' is inactive."
 
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El tercero debe existir, estar activo, tener el rol requerido y estar habilitado para la compañía."
+msgstr "The party must exist, be active, have the required role, and be enabled for the company."
+
+#: cacao_accounting/imports/adapters/purchase_order.py
+msgid "El proveedor debe existir, estar activo y habilitado para la compañía."
+msgstr "The supplier must exist, be active, and be enabled for the company."
+
 #: cacao_accounting/imports/services/import_service.py
 msgid "No se pudo leer el archivo de importación."
 msgstr "The import file could not be read."
