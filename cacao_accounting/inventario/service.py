@@ -748,6 +748,7 @@ def update_item_with_uoms(
     resolved_item_type = params.item_type or "goods"
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
+    validate_item_operational_uoms(params.default_uom, params.purchase_uom, params.sale_uom, resolved_uom_rows)
     validate_default_warehouse(params.default_warehouse_id, action="editar")
     _validate_item_dimensions(params)
     if _item_has_records(item_code) and _controles_de_inventario_cambiaron(item, resolved_stock_flag, params):
@@ -957,6 +958,28 @@ def validate_item_uom_rows(default_uom: str, rows: list[ItemUOMRow]) -> None:
         seen.add(row.uom_code)
 
 
+def validate_item_operational_uoms(
+    default_uom: str,
+    purchase_uom: str | None,
+    sale_uom: str | None,
+    rows: list[ItemUOMRow],
+) -> None:
+    """Exige conversión para UOM de compra/venta distintas de la base (#1737).
+
+    Una UOM operativa distinta de la predeterminada debe estar entre las
+    conversiones del artículo; de lo contrario los flujos de compra/venta no
+    podrán normalizarla a la cantidad base.
+    """
+    available = {row.uom_code for row in rows if row.uom_code}
+    for label, uom in (("compra", purchase_uom), ("venta", sale_uom)):
+        if not uom or uom == default_uom:
+            continue
+        if uom not in available:
+            raise InventoryServiceError(
+                _("La UOM de %(label)s '%(uom)s' requiere una conversión configurada.") % {"label": label, "uom": uom}
+            )
+
+
 def create_item_with_uoms(
     params: ItemParams,
     *,
@@ -971,6 +994,7 @@ def create_item_with_uoms(
     resolved_uom_rows = params.uom_rows or []
     resolved_account_rows = params.account_rows or []
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
+    validate_item_operational_uoms(params.default_uom, params.purchase_uom, params.sale_uom, resolved_uom_rows)
     _validate_item_dimensions(params)
     resolved_item_type = params.item_type or "goods"
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
