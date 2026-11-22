@@ -11,6 +11,7 @@ la persistencia.
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 
 from flask import render_template
@@ -21,6 +22,21 @@ from cacao_accounting.database import LedgerMappingRule, PriceList, PurchaseMatc
 def _tabla(html: str) -> str:
     """Extrae la primera tabla de resultados del HTML renderizado."""
     return html.split("<table", 1)[1].split("</table>", 1)[0]
+
+
+def _filas(tabla: str) -> list[str]:
+    """Devuelve las filas de datos, sin el encabezado."""
+    return re.findall(r"<tr[^>]*>(.*?)</tr>", tabla, re.S)[1:]
+
+
+def _celdas(fila: str) -> list[str]:
+    """Extrae el texto plano de las celdas de una fila."""
+    return [re.sub(r"<[^>]+>", "", celda).strip() for celda in re.findall(r"<td[^>]*>(.*?)</td>", fila, re.S)]
+
+
+def _nombre_fila(fila: str) -> str:
+    """Devuelve la primera celda de la fila como identificador."""
+    return _celdas(fila)[0]
 
 
 def test_ledger_mapping_renderiza_estado_localizado(app):
@@ -37,11 +53,12 @@ def test_ledger_mapping_renderiza_estado_localizado(app):
     with app.test_request_context("/settings/ledger-mapping-rules"):
         html = render_template("admin/ledger_mapping_rules.html", rules=reglas, books=[], accounts=[])
 
-    tabla = _tabla(html)
-    assert "Activo" in tabla
-    assert "Inactivo" in tabla
-    assert ">True<" not in tabla
-    assert ">False<" not in tabla
+    filas = _filas(_tabla(html))
+    assert len(filas) == 2
+    assert "Activo" in filas[0] and "Inactivo" not in filas[0]
+    assert "Desactivar" in filas[0]
+    assert "Inactivo" in filas[1] and ">Activo<" not in filas[1]
+    assert "Desactivar" not in filas[1]
 
 
 def test_price_lists_renderiza_booleanos_localizados(app):
@@ -54,13 +71,11 @@ def test_price_lists_renderiza_booleanos_localizados(app):
     with app.test_request_context("/settings/price-lists"):
         html = render_template("admin/price_lists.html", price_lists=listas, titulo="Listas de Precios")
 
-    tabla = _tabla(html)
-    assert "Lista compra" in tabla
-    assert "Lista venta" in tabla
-    assert "Sí" in tabla
-    assert "No" in tabla
-    assert ">True<" not in tabla
-    assert ">False<" not in tabla
+    filas = {_nombre_fila(fila): fila for fila in _filas(_tabla(html))}
+    assert _celdas(filas["Lista compra"])[3:] == ["Sí", "No", "Sí"]
+    assert _celdas(filas["Lista venta"])[3:] == ["No", "Sí", "No"]
+    assert ">True<" not in "".join(filas.values())
+    assert ">False<" not in "".join(filas.values())
 
 
 def test_compra_renderiza_tipos_de_tolerancia_localizados(app):
