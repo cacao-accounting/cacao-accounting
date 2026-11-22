@@ -417,6 +417,34 @@ describe('smart-select', function () {
     assert.deepStrictEqual(events, ['input', 'change', 'input', 'change']);
   });
 
+  it('clears copied consumer state when typing invalidates or explicitly clears a selection', function () {
+    const create = loadSmartSelect();
+    const model = { accountCode: '1101', accountLabel: 'Cash' };
+    const component = create({
+      doctype: 'account',
+      initialValue: model.accountCode,
+      initialLabel: model.accountLabel,
+      onClear: () => {
+        model.accountCode = '';
+        model.accountLabel = '';
+      },
+    });
+
+    component.onInput({ target: { value: 'Expense' } });
+
+    assert.deepStrictEqual(model, { accountCode: '', accountLabel: '' });
+    assert.strictEqual(component.search, 'Expense');
+
+    model.accountCode = '5201';
+    model.accountLabel = 'Expense';
+    component.selectedValue = '5201';
+    component.selectedLabel = 'Expense';
+    component.clearSelection();
+
+    assert.deepStrictEqual(model, { accountCode: '', accountLabel: '' });
+    assert.strictEqual(component.search, '');
+  });
+
   it('notifies dependent selectors when typing invalidates a selected filter', function () {
     const companyInput = {
       value: 'cacao',

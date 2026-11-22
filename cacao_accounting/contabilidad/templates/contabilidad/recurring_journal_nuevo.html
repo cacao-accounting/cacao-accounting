@@ -222,6 +222,7 @@
           initialValue: header.company,
           initialLabel: header.company_label,
           onSelect: function(opt) { header.company = opt.value; loadBooks(opt.value); },
+          onClear: function() { header.company = ''; loadBooks(''); },
           messages: { placeholder: "{{ _('Buscar compañía') }}" }
         })'>
           <input type="hidden" id="company" name="company" x-model="selectedValue">
@@ -317,7 +318,8 @@
           name: "currency",
           initialValue: header.currency,
           initialLabel: header.currency_label,
-          onSelect: function(opt) { header.currency = opt.value; }
+          onSelect: function(opt) { header.currency = opt.value; },
+          onClear: function() { header.currency = ''; }
         })'>
           <input type="hidden" name="currency" x-model="selectedValue">
           <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon">
@@ -359,7 +361,8 @@
                   filters: { company: function() { return header.company; } },
                   initialValue: line.account_code,
                   initialLabel: line.account_label,
-                  onSelect: function(opt) { line.account_code = opt.value; line.account_label = opt.display_name; }
+                  onSelect: function(opt) { line.account_code = opt.value; line.account_label = opt.display_name; },
+                  onClear: function() { line.account_code = ''; line.account_label = ''; }
                 })'>
                   <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon" placeholder="{{ _('Buscar cuenta') }}">
                   <div class="ca-smart-select-menu" x-show="open" x-cloak>
@@ -418,7 +421,8 @@
                 doctype: "cost_center",
                 filters: { company: function() { return header.company; } },
                 initialValue: modalLine.cost_center,
-                onSelect: function(opt) { modalLine.cost_center = opt.value; }
+                onSelect: function(opt) { modalLine.cost_center = opt.value; },
+                onClear: function() { modalLine.cost_center = ''; }
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
@@ -432,7 +436,8 @@
                 doctype: "unit",
                 filters: { company: function() { return header.company; } },
                 initialValue: modalLine.unit,
-                onSelect: function(opt) { modalLine.unit = opt.value; }
+                onSelect: function(opt) { modalLine.unit = opt.value; },
+                onClear: function() { modalLine.unit = ''; }
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
@@ -446,7 +451,8 @@
                 doctype: "project",
                 filters: { company: function() { return header.company; } },
                 initialValue: modalLine.project,
-                onSelect: function(opt) { modalLine.project = opt.value; }
+                onSelect: function(opt) { modalLine.project = opt.value; },
+                onClear: function() { modalLine.project = ''; }
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>
@@ -468,7 +474,8 @@
                 doctype: "party",
                 filters: { company: function() { return header.company; }, party_type: function() { return modalLine.party_type; } },
                 initialValue: modalLine.party_id,
-                onSelect: function(opt) { modalLine.party_id = opt.value; }
+                onSelect: function(opt) { modalLine.party_id = opt.value; },
+                onClear: function() { modalLine.party_id = ''; }
               })'>
                 <input type="text" class="form-control form-control-sm ca-smart-select-input" x-model="search" @input="onInput" @blur="closeSoon">
                 <div class="ca-smart-select-menu" x-show="open" x-cloak>

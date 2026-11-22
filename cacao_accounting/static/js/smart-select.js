@@ -100,6 +100,7 @@
         invalid: false,
         lastFilterSignature: '',
         onSelect: config.onSelect || null,
+        onClear: config.onClear || null,
         _positionHandler: null,
         _filterSourceListeners: [],
         _defaultTimer: null,
@@ -207,6 +208,7 @@
           if (this.selectedLabel && this.search !== this.selectedLabel) {
             this.selectedValue = '';
             this.selectedLabel = '';
+            this._safeCallOnClear();
             this.notifyValueChange();
           }
           this.invalid = false;
@@ -435,6 +437,15 @@
           }
         },
 
+        _safeCallOnClear() {
+          if (typeof this.onClear !== 'function') return;
+          try {
+            this.onClear();
+          } catch (error) {
+            console.warn('Error in onClear callback:', error);
+          }
+        },
+
         requiredFiltersPresent() {
           const currentFilters = this.resolvedFilters();
           return !this._hasEmptyRequiredFilter(currentFilters);
@@ -451,6 +462,7 @@
         clearSelection() {
           if (this.locked) return;
           this._invalidatePendingRequest();
+          const hadSelection = Boolean(this.selectedValue || this.selectedLabel);
           this.selectedValue = '';
           this.selectedLabel = '';
           this.search = '';
@@ -458,6 +470,7 @@
           this.closeMenu();
           this.invalid = false;
           this.error = '';
+          if (hadSelection) this._safeCallOnClear();
           this.notifyValueChange();
         },
 
