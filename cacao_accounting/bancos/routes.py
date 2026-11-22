@@ -1327,6 +1327,7 @@ def caja_chica_vale_nuevo():
                 unit_code=request.form.get("unit_code") or None,
                 project_code=request.form.get("project_code") or None,
                 comments=request.form.get("comments") or None,
+                naming_series_id=request.form.get("naming_series") or None,
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")

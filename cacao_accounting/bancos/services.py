@@ -755,6 +755,16 @@ def create_petty_cash_voucher(
     if amount is None or amount <= 0:
         raise ValueError(_("El importe del vale debe ser mayor a cero."))
     _validate_petty_cash_dimensions(company, cost_center_code, unit_code, project_code)
+    # #1992: honrar la serie elegida por el usuario; rechazarla si no es una
+    # serie activa de vales de la compañía, sin consumir el contador default.
+    if naming_series_id:
+        _validate_naming_series_default(
+            company=company,
+            naming_series_id=naming_series_id,
+            entity_type="petty_cash_voucher",
+            error_prefix="La serie del vale",
+            entity_type_error="La serie seleccionada debe ser para vales de caja chica.",
+        )
 
     voucher = PettyCashVoucher(
         company=company,
