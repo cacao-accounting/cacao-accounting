@@ -8,6 +8,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from types import SimpleNamespace
+from typing import Any
 
 import json
 
@@ -1679,6 +1680,48 @@ def _petty_cash_fund_labels(fund_ids: set[str]) -> dict[str, tuple[str, str]]:
     return {fila[0]: (fila[1], fila[2]) for fila in filas}
 
 
+def _replenishment_fund_context(fondos: list[Any], selected_fund: str | None) -> dict[str, str]:
+    """Resuelve etiquetas de compañía/fondo/moneda para la reposición."""
+    contexto = {"company": "", "company_label": "", "fund_label": "", "currency": ""}
+    if not selected_fund:
+        return contexto
+    fondo = next((registro for registro in fondos if registro.id == selected_fund), None)
+    if not fondo:
+        return contexto
+    selected_company = fondo.company or ""
+    entidad = database.session.execute(database.select(Entity).filter_by(code=selected_company)).scalar_one_or_none()
+    contexto.update(
+        {
+            "company": selected_company,
+            "company_label": f"{selected_company} - {entidad.name}" if entidad else selected_company,
+            "fund_label": f"{fondo.company} - {fondo.name}",
+            "currency": fondo.currency or "",
+        }
+    )
+    return contexto
+
+
+def _post_replenishment() -> Any:
+    """Procesa el POST de reposición; devuelve la respuesta si tuvo éxito."""
+    company = request.form.get("company") or ""
+    exige_acceso_compania("cash", company, "crear")
+    try:
+        create_petty_cash_replenishment(
+            company=company,
+            petty_cash_id=request.form.get("petty_cash_id") or "",
+            expense_ids=request.form.getlist("expense_ids"),
+            request_date=date.fromisoformat(request.form.get("request_date") or date.today().isoformat()),
+            notes=request.form.get("notes") or None,
+            actor_id=str(current_user.id),
+            naming_series_id=request.form.get("naming_series") or None,
+        )
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+        return None
+    flash(_("Solicitud de reposición creada."), "success")
+    return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
+
+
 @bancos.route("/petty-cash-replenishment/new", methods=["GET", "POST"])
 @modulo_activo("cash")
 @login_required
@@ -1693,45 +1736,20 @@ def caja_chica_reposicion_nueva():
     if selected_fund and selected_fund not in {fondo.id for fondo in fondos}:
         abort(403)
     gastos = petty_cash_expenses_available_for_replenishment(selected_fund) if selected_fund else []
-    selected_company = ""
-    company_label = ""
-    selected_fund_label = ""
-    selected_currency = ""
-    if selected_fund:
-        fondo = next((registro for registro in fondos if registro.id == selected_fund), None)
-        if fondo:
-            selected_company = fondo.company or ""
-            selected_fund_label = f"{fondo.company} - {fondo.name}"
-            selected_currency = fondo.currency or ""
-            entidad = database.session.execute(database.select(Entity).filter_by(code=selected_company)).scalar_one_or_none()
-            company_label = f"{selected_company} - {entidad.name}" if entidad else selected_company
+    contexto = _replenishment_fund_context(fondos, selected_fund)
     if request.method == "POST":
-        company = request.form.get("company") or ""
-        exige_acceso_compania("cash", company, "crear")
-        try:
-            create_petty_cash_replenishment(
-                company=company,
-                petty_cash_id=request.form.get("petty_cash_id") or "",
-                expense_ids=request.form.getlist("expense_ids"),
-                request_date=date.fromisoformat(request.form.get("request_date") or date.today().isoformat()),
-                notes=request.form.get("notes") or None,
-                actor_id=str(current_user.id),
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-        except ValueError as exc:
-            flash(_(str(exc)), "danger")
-        else:
-            flash(_("Solicitud de reposición creada."), "success")
-            return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
+        respuesta = _post_replenishment()
+        if respuesta is not None:
+            return respuesta
     return render_template(
         "bancos/caja_chica_reposicion_nueva.html",
         fondos=fondos,
         gastos=gastos,
         selected_fund=selected_fund,
-        selected_company=selected_company,
-        company_label=company_label,
-        selected_fund_label=selected_fund_label,
-        selected_currency=selected_currency,
+        selected_company=contexto["company"],
+        company_label=contexto["company_label"],
+        selected_fund_label=contexto["fund_label"],
+        selected_currency=contexto["currency"],
         titulo=_("Nueva Reposición de Caja Chica") + " - " + APPNAME,
     )
 

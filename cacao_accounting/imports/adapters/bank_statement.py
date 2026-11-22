@@ -210,72 +210,86 @@ class BankStatementAdapter(BaseImportAdapter):
                 .execution_options(populate_existing=True)
             ).scalar_one_or_none()
         for tx_data in document:
-            bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
-            if bank_account is None:
-                raise ValueError(_("Cuenta bancaria no encontrada: %(account)s") % {"account": tx_data["bank_account_id"]})
-            company_id = tx_data.get("company_id")
-            if company_id and bank_account.company != company_id:
-                raise ValueError(
-                    _(
-                        "La cuenta bancaria %(bank_account_id)s pertenece a la compañía %(bank_company)s, "
-                        "no a %(company_id)s."
-                    )
-                    % {
-                        "bank_account_id": bank_account.id,
-                        "bank_company": bank_account.company,
-                        "company_id": company_id,
-                    }
-                )
+            self._validate_row_account(tx_data)
             reference_number = str(tx_data.get("reference_number") or "")
-            # Política de identidad (#1262): con referencia bancaria se
-            # deduplica por identidad económica; sin referencia, fecha e importe
-            # no identifican de forma segura un movimiento, así que la identidad
-            # se apoya en la procedencia (huella de archivo + fila) y no se
-            # rechaza un cargo legítimo repetido.
-            existing = None
-            if reference_number:
-                existing = (
-                    database.session.execute(
-                        database.select(BankTransaction)
-                        .filter_by(
-                            bank_account_id=tx_data["bank_account_id"],
-                            posting_date=tx_data["posting_date"],
-                            reference_number=reference_number,
-                            deposit=tx_data.get("deposit"),
-                            withdrawal=tx_data.get("withdrawal"),
-                        )
-                        .filter(~BankTransaction.id.in_(list(seen_in_batch)))
-                    )
-                    .scalars()
-                    .first()
-                )
-            if existing:
+            if reference_number and self._has_existing_reference(tx_data, reference_number, seen_in_batch):
                 raise ValueError(_("La transacción bancaria ya existe en la base de datos."))
-            tx = BankTransaction(
-                bank_account_id=tx_data["bank_account_id"],
-                posting_date=tx_data["posting_date"],
-                reference_number=reference_number,
-                description=tx_data.get("description", ""),
-                deposit=tx_data.get("deposit"),
-                withdrawal=tx_data.get("withdrawal"),
-                import_reference=(None if reference_number else (tx_data.get("import_discriminator") or None)),
-            )
-            try:
-                with database.session.begin_nested():
-                    database.session.add(tx)
-                    database.session.flush()
-            except IntegrityError as exc:
-                if not _is_bank_identity_conflict(exc):
-                    raise
-                if not reference_number:
-                    # Reimportar exactamente el mismo archivo (misma huella y
-                    # fila) es idempotente: la fila ya existe, no es un
-                    # duplicado nuevo (#1262).
-                    continue
-                raise ValueError(_("La transacción bancaria ya existe en la base de datos.")) from exc
+            tx = self._build_transaction(tx_data, reference_number)
+            if not self._insert_transaction(tx, reference_number):
+                continue
             seen_in_batch.add(str(tx.id))
             persisted_ids.append(str(tx.id))
         self._auto_reconcile(persisted_ids)
+
+    @staticmethod
+    def _validate_row_account(tx_data: dict[str, Any]) -> None:
+        """Valida que la cuenta bancaria exista y pertenezca a la compañía."""
+        bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
+        if bank_account is None:
+            raise ValueError(_("Cuenta bancaria no encontrada: %(account)s") % {"account": tx_data["bank_account_id"]})
+        company_id = tx_data.get("company_id")
+        if company_id and bank_account.company != company_id:
+            raise ValueError(
+                _("La cuenta bancaria %(bank_account_id)s pertenece a la compañía %(bank_company)s, " "no a %(company_id)s.")
+                % {
+                    "bank_account_id": bank_account.id,
+                    "bank_company": bank_account.company,
+                    "company_id": company_id,
+                }
+            )
+
+    @staticmethod
+    def _has_existing_reference(tx_data: dict[str, Any], reference_number: str, seen_in_batch: set[str]) -> bool:
+        """Indica si ya existe un movimiento con la misma identidad económica.
+
+        Solo aplica con referencia bancaria (#1262): sin referencia, fecha e
+        importe no identifican de forma segura un movimiento.
+        """
+        return (
+            database.session.execute(
+                database.select(BankTransaction)
+                .filter_by(
+                    bank_account_id=tx_data["bank_account_id"],
+                    posting_date=tx_data["posting_date"],
+                    reference_number=reference_number,
+                    deposit=tx_data.get("deposit"),
+                    withdrawal=tx_data.get("withdrawal"),
+                )
+                .filter(~BankTransaction.id.in_(list(seen_in_batch)))
+            )
+            .scalars()
+            .first()
+        ) is not None
+
+    @staticmethod
+    def _build_transaction(tx_data: dict[str, Any], reference_number: str) -> Any:
+        """Construye la transacción; sin referencia conserva su procedencia."""
+        return BankTransaction(
+            bank_account_id=tx_data["bank_account_id"],
+            posting_date=tx_data["posting_date"],
+            reference_number=reference_number,
+            description=tx_data.get("description", ""),
+            deposit=tx_data.get("deposit"),
+            withdrawal=tx_data.get("withdrawal"),
+            import_reference=(None if reference_number else (tx_data.get("import_discriminator") or None)),
+        )
+
+    @staticmethod
+    def _insert_transaction(tx: Any, reference_number: str) -> bool:
+        """Inserta la transacción; devuelve ``False`` si fue un reimport idempotente."""
+        try:
+            with database.session.begin_nested():
+                database.session.add(tx)
+                database.session.flush()
+        except IntegrityError as exc:
+            if not _is_bank_identity_conflict(exc):
+                raise
+            if not reference_number:
+                # Reimportar exactamente el mismo archivo (misma huella y fila)
+                # es idempotente: la fila ya existe, no es un duplicado (#1262).
+                return False
+            raise ValueError(_("La transacción bancaria ya existe en la base de datos.")) from exc
+        return True
 
     def _auto_reconcile(self, persisted_ids: list[str]) -> None:
         """Intenta la conciliación automática opcional de las filas importadas.
