@@ -59,7 +59,9 @@ COPY --from=python-builder /install/lib64/python3.12/site-packages /usr/lib64/py
 COPY --from=python-builder /install/bin /usr/local/bin
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 
-RUN useradd -r -s /bin/false -d /home/appuser -m appuser
+RUN useradd -r -s /bin/false -d /home/appuser -m appuser \
+    && mkdir -p /config /data /etc/caddy \
+    && chown -R appuser:appuser /config /data
 
 WORKDIR /app
 
@@ -78,8 +80,11 @@ USER appuser
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
-# Caddy (no root) escribe su configuración y certificados bajo $HOME.
+# Caddy (no root) escribe su configuración y certificados en estos directorios;
+# son las rutas que expone la imagen oficial de Caddy.
 ENV HOME=/home/appuser
+ENV XDG_CONFIG_HOME=/config
+ENV XDG_DATA_HOME=/data
 ENV FLASK_APP="cacao_accounting"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

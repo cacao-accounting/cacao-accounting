@@ -34,6 +34,10 @@ def test_dockerfile_define_home_para_caddy():
     contenido = DOCKERFILE.read_text(encoding="utf-8")
     assert re.search(r"useradd .*-d /home/appuser", contenido), "falta -d /home/appuser"
     assert "ENV HOME=/home/appuser" in contenido
+    # Directorios de Caddy declarados y asignados al usuario no root.
+    assert "ENV XDG_CONFIG_HOME=/config" in contenido
+    assert "ENV XDG_DATA_HOME=/data" in contenido
+    assert re.search(r"chown -R appuser:appuser /config /data", contenido)
 
 
 def test_caddyfile_montado_y_valido():
