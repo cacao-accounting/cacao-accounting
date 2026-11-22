@@ -210,6 +210,7 @@ LISTA_USUARIOS = "admin.lista_usuarios"
 LISTA_ROLES = "admin.lista_roles"
 
 ADMIN_LISTA_GRUPOS_TERCEROS = "admin.lista_grupos_terceros"
+_PARTY_GROUP_TYPES = frozenset({"customer", "supplier"})
 
 DESKTOP_SINGLE_ADMIN_MESSAGE = _l("En modo escritorio solo se permite un usuario administrador.")
 
@@ -661,24 +662,28 @@ def lista_grupos_terceros():
     """Administra tipos globales de clientes y proveedores."""
     _require_system_admin()
     group_type = request.args.get("group_type") or request.form.get("group_type") or ""
-    if group_type not in ("customer", "supplier"):
+    if group_type not in _PARTY_GROUP_TYPES:
         group_type = ""
     if request.method == "POST":
-        group = PartyGroup(
-            group_type=request.form.get("group_type") or "customer",
-            name=request.form.get("name") or "",
-            description=request.form.get("description") or None,
-            is_active=request.form.get("is_active") is not None,
-        )
-        database.session.add(group)
-        try:
-            database.session.commit()
-        except IntegrityError:
-            database.session.rollback()
-            flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+        submitted_type = request.form.get("group_type") or "customer"
+        if submitted_type not in _PARTY_GROUP_TYPES:
+            flash(_("El tipo de grupo de terceros debe ser cliente o proveedor."), "danger")
         else:
-            flash(_("Tipo de tercero creado correctamente."), "success")
-            return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
+            group = PartyGroup(
+                group_type=submitted_type,
+                name=request.form.get("name") or "",
+                description=request.form.get("description") or None,
+                is_active=request.form.get("is_active") is not None,
+            )
+            database.session.add(group)
+            try:
+                database.session.commit()
+            except IntegrityError:
+                database.session.rollback()
+                flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+            else:
+                flash(_("Tipo de tercero creado correctamente."), "success")
+                return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
     query = database.select(PartyGroup)
     if group_type:
         query = query.filter(PartyGroup.group_type == group_type)
@@ -696,18 +701,22 @@ def editar_grupo_tercero(group_id: str):
     if not group:
         abort(404)
     if request.method == "POST":
-        group.group_type = request.form.get("group_type") or group.group_type
-        group.name = request.form.get("name") or ""
-        group.description = request.form.get("description") or None
-        group.is_active = request.form.get("is_active") is not None
-        try:
-            database.session.commit()
-        except IntegrityError:
-            database.session.rollback()
-            flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+        submitted_type = request.form.get("group_type") or group.group_type
+        if submitted_type not in _PARTY_GROUP_TYPES:
+            flash(_("El tipo de grupo de terceros debe ser cliente o proveedor."), "danger")
         else:
-            flash(_("Tipo de tercero actualizado correctamente."), "success")
-            return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
+            group.group_type = submitted_type
+            group.name = request.form.get("name") or ""
+            group.description = request.form.get("description") or None
+            group.is_active = request.form.get("is_active") is not None
+            try:
+                database.session.commit()
+            except IntegrityError:
+                database.session.rollback()
+                flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+            else:
+                flash(_("Tipo de tercero actualizado correctamente."), "success")
+                return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
     groups = (
         database.session.execute(database.select(PartyGroup).order_by(PartyGroup.group_type, PartyGroup.name)).scalars().all()
     )

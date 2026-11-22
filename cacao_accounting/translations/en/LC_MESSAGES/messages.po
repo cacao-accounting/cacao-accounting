@@ -24324,3 +24324,7 @@ msgstr "The conversion factor exceeds the precision supported by the database."
 msgid "El campo %(field)s excede la precisión admitida."
 msgstr "The %(field)s field exceeds the supported precision."
 
+#: cacao_accounting/admin/routes.py
+msgid "El tipo de grupo de terceros debe ser cliente o proveedor."
+msgstr "The party group type must be customer or supplier."
+
