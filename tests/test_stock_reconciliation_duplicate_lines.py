@@ -133,3 +133,24 @@ def test_posting_rechaza_lineas_duplicadas_heredadas(app, entorno_contable, monk
 
         with pytest.raises(ValueError, match="no puede repetir"):
             posting_service._create_stock_ledger(entry)
+
+
+def test_creacion_conciliacion_sin_moneda_deriva_la_funcional(app, entorno_contable, authenticated_client):
+    """#1811: el formulario de conciliación no envía moneda; se deriva la funcional."""
+    marker = f"NOCUR-{uuid4().hex}"
+    client = authenticated_client()
+    data = {
+        "purpose": "stock_reconciliation",
+        "company": "cacao",
+        "naming_series": _series_id(app),
+        "posting_date": date(2026, 5, 15).isoformat(),
+        "remarks": marker,
+    }
+    data.update(_line(0, "BOD01"))
+    response = client.post("/inventory/stock-entry/reconciliation/new", data=data)
+
+    assert response.status_code == 302, response.get_data(as_text=True)
+    with app.app_context():
+        entry = database.session.execute(database.select(StockEntry).filter_by(remarks=marker)).scalar_one()
+        assert entry.transaction_currency == "NIO"
+        assert entry.base_currency == "NIO"

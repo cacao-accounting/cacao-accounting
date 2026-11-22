@@ -904,6 +904,10 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
         if not base_currency_value:
             raise ValueError(_("La compañía requiere una moneda funcional configurada."))
         raw_currency = form_data.get("transaction_currency") or form_data.get("currency") or ""
+        if not raw_currency and posted_purpose == "stock_reconciliation":
+            # #1811: el formulario de conciliación no presenta moneda; se deriva
+            # explícitamente de la moneda funcional ya validada de la compañía.
+            raw_currency = base_currency_value
         if not raw_currency:
             raise ValueError(_("La entrada de inventario requiere una moneda transaccional explicita."))
         entry = StockEntry(
