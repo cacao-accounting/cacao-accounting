@@ -1,14 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#1002: la evidencia de auditoría es inmutable también en Desktop.
+"""Evidencia estructural inmutable en Desktop y Cloud.
 
-Los guardas estructurales deben permitir el INSERT auditado y rechazar
-UPDATE/DELETE por ORM, Core y SQL textual, conservando la cadena íntegra.
+Protege los invariantes de #1002 (bitácoras de auditoría) y #759 (eventos
+económicos y transiciones documentales): el INSERT auditado está permitido y
+UPDATE/DELETE se rechazan por ORM, Core y SQL textual, conservando la fila.
 """
 
 from __future__ import annotations
 
+from datetime import date
 from uuid import uuid4
 
 import pytest
@@ -18,14 +20,20 @@ from cacao_accounting import create_app
 from cacao_accounting.audit_chain import verify_audit_trail_chain
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AccountingPeriod,
     ApprovalAction,
     ApprovalRequest,
     AuditLog,
     AuditTrail,
     Currency,
+    DocumentTransition,
     Entity,
+    ExchangeRevaluation,
+    ExchangeRevaluationItem,
     ExternalCounter,
     ExternalCounterAuditLog,
+    FiscalYear,
+    PurchaseEconomicEvent,
     User,
     database,
 )
@@ -174,6 +182,64 @@ def _seed_all_evidence(app) -> dict[str, tuple[type, str, str]]:
         )
         database.session.add(request)
         database.session.flush()
+        fiscal_year = FiscalYear(
+            id=f"FY-{suffix}",
+            entity=company.code,
+            name=f"Ejercicio {suffix}",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+        )
+        database.session.add(fiscal_year)
+        database.session.flush()
+        period = AccountingPeriod(
+            id=f"PER-{suffix}",
+            entity=company.code,
+            fiscal_year_id=fiscal_year.id,
+            name=f"Periodo {suffix}",
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+            enabled=True,
+            is_closed=False,
+        )
+        database.session.add(period)
+        database.session.flush()
+        revaluation = ExchangeRevaluation(
+            company=company.code,
+            document_no=f"REV-{suffix}",
+            posting_date=date(2026, 5, 31),
+            docstatus=1,
+        )
+        database.session.add(revaluation)
+        database.session.flush()
+        revaluation_item = ExchangeRevaluationItem(
+            revaluation_id=revaluation.id,
+            reference_type="party",
+            reference_id=user.id,
+            source_document_type="sales_invoice",
+            source_document_id=f"DOC-{suffix}",
+            source_document_no=f"INV-ORIG-{suffix}",
+        )
+        economic_event = PurchaseEconomicEvent(
+            event_type="GOODS_RECEIVED",
+            company=company.code,
+            document_type="purchase_receipt",
+            document_id=f"REC-{suffix}",
+            payload='{"matched_qty": "1"}',
+            idempotency_key=f"event-{suffix}",
+        )
+        transition = DocumentTransition(
+            source_type="sales_invoice",
+            source_id=f"DOC-{suffix}",
+            transition_type="cancel",
+            company=company.code,
+            posting_date=date(2026, 5, 20),
+            accounting_period_id=period.id,
+            actor_user_id=user.id,
+            reason="Anulación documentada",
+        )
+        database.session.add_all([revaluation_item, economic_event, transition])
+        database.session.flush()
         audit_log = AuditLog(entity_type="sales_invoice", entity_id=f"DOC-{suffix}", action="insert")
         audit_trail = AuditTrail(
             document_type="sales_invoice",
@@ -200,15 +266,29 @@ def _seed_all_evidence(app) -> dict[str, tuple[type, str, str]]:
             "audit_trail": (AuditTrail, audit_trail.id, "action"),
             "approval_action": (ApprovalAction, approval_action.id, "comments"),
             "external_counter_audit_log": (ExternalCounterAuditLog, counter_audit.id, "reason"),
+            "exchange_revaluation_item": (ExchangeRevaluationItem, revaluation_item.id, "source_document_no"),
+            "purchase_economic_event": (PurchaseEconomicEvent, economic_event.id, "payload"),
+            "document_transition": (DocumentTransition, transition.id, "reason"),
         }
 
 
 @pytest.mark.parametrize("channel", ["orm", "core", "textual"])
 @pytest.mark.parametrize("operation", ["update", "delete"])
-@pytest.mark.parametrize("table_name", ["audit_log", "audit_trail", "approval_action", "external_counter_audit_log"])
+@pytest.mark.parametrize(
+    "table_name",
+    [
+        "audit_log",
+        "audit_trail",
+        "approval_action",
+        "external_counter_audit_log",
+        "exchange_revaluation_item",
+        "purchase_economic_event",
+        "document_transition",
+    ],
+)
 @pytest.mark.parametrize("desktop", [True, False])
 def test_every_audit_evidence_table_rejects_mutation(channel, operation, table_name, desktop):
-    """ORM, Core, and textual SQL preserve audit evidence in Desktop and Cloud."""
+    """ORM, Core, and textual SQL preserve structural evidence in Desktop and Cloud."""
     app = _build_app(desktop=desktop)
     evidence = _seed_all_evidence(app)
     model, row_id, field_name = evidence[table_name]
