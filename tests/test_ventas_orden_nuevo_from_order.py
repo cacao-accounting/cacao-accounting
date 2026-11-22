@@ -26,3 +26,7 @@ def test_alta_orden_ignora_from_order_legacy(app, authenticated_client):
     response = authenticated_client().get(f"/sales/sales-order/new?from_order={order_id}")
 
     assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    # El alta no debe presentar la orden legacy como origen ni su cliente.
+    assert "SO-2045" not in body
+    assert "Cliente 2045" not in body
