@@ -162,3 +162,40 @@ def test_conversion_finita_directa_e_inversa_operan(catalogo_uom):
         assert convert_item_qty(ITEM, Decimal("2"), CAJA, "UND") == Decimal("24")
         assert convert_item_qty(ITEM, Decimal("24"), "UND", CAJA) == Decimal("2")
         assert item_qty_in_base_uom(ITEM, Decimal("3"), CAJA) == Decimal("36")
+
+
+@pytest.mark.parametrize("factor", [Decimal("0"), Decimal("-12")])
+def test_validacion_rechaza_factor_cero_o_negativo(catalogo_uom, factor):
+    """#1034: un factor cero o negativo no puede persistirse como conversión."""
+    application = catalogo_uom
+    with application.app_context():
+        from cacao_accounting.inventario.service import (
+            InventoryServiceError,
+            ItemUOMRow,
+            validate_item_uom_rows,
+        )
+
+        with pytest.raises(InventoryServiceError):
+            validate_item_uom_rows("UND", [ItemUOMRow(uom_code=CAJA, conversion_factor=factor)])
+
+
+@pytest.mark.parametrize("factor", [Decimal("0"), Decimal("-12")])
+def test_conversion_persistida_cero_o_negativa_falla_en_ambas_direcciones(catalogo_uom, factor):
+    """#1034: la guarda cubre la conversión directa y la inversa por igual.
+
+    La fila se inserta directamente para simular datos heredados o de API que
+    eludieron el alta; leerla no debe producir cantidades anuladas ni con signo
+    invertido en ninguna de las dos direcciones.
+    """
+    application = catalogo_uom
+    with application.app_context():
+        from cacao_accounting.database import ItemUOMConversion
+        from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
+
+        database.session.add(ItemUOMConversion(item_code=ITEM, from_uom=CAJA, to_uom="UND", conversion_factor=factor))
+        database.session.commit()
+
+        with pytest.raises(InventoryServiceError):
+            convert_item_qty(ITEM, Decimal("2"), CAJA, "UND")
+        with pytest.raises(InventoryServiceError):
+            convert_item_qty(ITEM, Decimal("24"), "UND", CAJA)
