@@ -44,6 +44,13 @@ CONFIG_FIELDS = {
     ),
 }
 _DECIMAL_FIELDS = frozenset({"price_tolerance_value", "qty_tolerance_value"})
+_MATCHING_TYPES = frozenset({"2-way", "3-way"})
+_TOLERANCE_TYPES = frozenset({"percentage", "absolute"})
+_ENUM_FIELDS = {
+    "matching_type": _MATCHING_TYPES,
+    "price_tolerance_type": _TOLERANCE_TYPES,
+    "qty_tolerance_type": _TOLERANCE_TYPES,
+}
 
 
 def _plain(value: Any) -> Any:
@@ -56,6 +63,16 @@ def _normalize(field: str, value: Any) -> Any:
     if field in _DECIMAL_FIELDS and value is not None and value != "":
         return coerce_decimal(value, field, max_fractional_digits=4)
     return value
+
+
+def _validate_enum_values(model: str, values: dict[str, Any]) -> None:
+    """Reject unknown matching modes before applying or requesting review."""
+    for field, allowed_values in _ENUM_FIELDS.items():
+        if field not in CONFIG_FIELDS[model]:
+            continue
+        value = values.get(field)
+        if not isinstance(value, str) or value not in allowed_values:
+            raise ValueError(_("El valor de configuración de matching no es válido."))
 
 
 def update_matching_config(
@@ -85,6 +102,7 @@ def update_matching_config(
     if config is None:
         raise ValueError(_("La configuración de matching no existe para la compañía solicitada."))
     fields = CONFIG_FIELDS[model]
+    _validate_enum_values(model, values)
     typed_after = {field: _normalize(field, values.get(field)) for field in fields}
     if model == "sales" and typed_after.get("price_tolerance_value") is not None:
         if typed_after["price_tolerance_value"] < 0:

@@ -24312,3 +24312,7 @@ msgstr "Document is not available for this party."
 msgid "La regla de matching contiene tolerancias inválidas."
 msgstr "The matching rule contains invalid tolerances."
 
+#: cacao_accounting/matching_config_service.py
+msgid "El valor de configuración de matching no es válido."
+msgstr "The matching configuration value is invalid."
+
