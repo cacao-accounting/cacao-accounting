@@ -629,6 +629,24 @@ class PrintService:
         if not party_id or getattr(document, party_column, None) != party_id:
             verb = "customer" if classification == "customer" else "supplier"
             raise PrintPermissionError(_("Document is not available for this %(verb)s.") % {"verb": verb})
+        self._require_active_portal_party(party_id, user_company)
+
+    def _require_active_portal_party(self, party_id: str, company_code: str) -> None:
+        """Exige tercero y vínculo activos para imprimir desde el portal (#1919)."""
+        from cacao_accounting.database import CompanyParty, Party
+
+        party = database.session.get(Party, party_id)
+        if party is None or not party.is_active:
+            raise PrintPermissionError(_("El documento no está disponible para este tercero."))
+        link = database.session.execute(
+            select(CompanyParty.id).where(
+                CompanyParty.company == str(company_code),
+                CompanyParty.party_id == party_id,
+                CompanyParty.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        if link is None:
+            raise PrintPermissionError(_("El documento no está disponible para este tercero."))
 
     def _resolve_template_by_id(
         self,

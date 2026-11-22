@@ -18,6 +18,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    CompanyParty,
     Currency,
     Entity,
     Party,
@@ -84,6 +85,13 @@ def portal_print_scenario():
             is_active=True,
         )
         database.session.add_all([customer, supplier])
+        database.session.flush()
+        database.session.add_all(
+            [
+                CompanyParty(company="alpha", party_id=customer.id, is_active=True),
+                CompanyParty(company="alpha", party_id=supplier.id, is_active=True),
+            ]
+        )
         database.session.flush()
         database.session.add_all(
             [
@@ -236,3 +244,73 @@ def test_portal_preview_renders_its_own_company_invoice(portal_print_scenario):
 
     assert response.status_code == 200
     assert b"<html" in response.data.lower()
+
+
+def _desactivar_tercero(app, party_id: str) -> None:
+    """Desactiva el tercero conservando sus documentos."""
+    with app.app_context():
+        party = database.session.get(Party, party_id)
+        party.is_active = False
+        database.session.commit()
+
+
+def _desactivar_vinculo(app, company_code: str, party_id: str) -> None:
+    """Desactiva el vínculo del tercero con la compañía."""
+    with app.app_context():
+        link = database.session.execute(
+            database.select(CompanyParty).filter_by(company=company_code, party_id=party_id)
+        ).scalar_one()
+        link.is_active = False
+        database.session.commit()
+
+
+def test_portal_preview_rechaza_tercero_inactivo(portal_print_scenario):
+    """Un cliente inactivo no puede previsualizar su propia factura."""
+    app, ids = portal_print_scenario
+    client = _authenticated_client(app, ids["customer_user"])
+    with app.app_context():
+        party_id = database.session.get(User, ids["customer_user"]).party_id
+    _desactivar_tercero(app, party_id)
+
+    response = client.get(f"/print/sales_invoice/{ids['sales_alpha']}/preview?company=alpha")
+
+    assert response.status_code == 404
+
+
+def test_portal_preview_rechaza_vinculo_inactivo(portal_print_scenario):
+    """Un vínculo CompanyParty inactivo revoca también la previsualización."""
+    app, ids = portal_print_scenario
+    client = _authenticated_client(app, ids["customer_user"])
+    with app.app_context():
+        party_id = database.session.get(User, ids["customer_user"]).party_id
+    _desactivar_vinculo(app, "alpha", party_id)
+
+    response = client.get(f"/print/sales_invoice/{ids['sales_alpha']}/preview?company=alpha")
+
+    assert response.status_code == 404
+
+
+def test_portal_pdf_rechaza_tercero_inactivo(portal_print_scenario):
+    """La exportación PDF aplica la misma revocación que la vista previa."""
+    app, ids = portal_print_scenario
+    client = _authenticated_client(app, ids["customer_user"])
+    with app.app_context():
+        party_id = database.session.get(User, ids["customer_user"]).party_id
+    _desactivar_tercero(app, party_id)
+
+    response = client.get(f"/print/sales_invoice/{ids['sales_alpha']}/pdf?company=alpha")
+
+    assert response.status_code == 404
+
+
+def test_portal_proveedor_preview_rechaza_vinculo_inactivo(portal_print_scenario):
+    """El proveedor con vínculo inactivo no imprime su factura de compra."""
+    app, ids = portal_print_scenario
+    client = _authenticated_client(app, ids["supplier_user"])
+    with app.app_context():
+        party_id = database.session.get(User, ids["supplier_user"]).party_id
+    _desactivar_vinculo(app, "alpha", party_id)
+
+    response = client.get(f"/print/purchase_invoice/{ids['purchase_alpha']}/preview?company=alpha")
+
+    assert response.status_code == 404

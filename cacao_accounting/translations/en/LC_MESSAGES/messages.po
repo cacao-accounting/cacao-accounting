@@ -24201,3 +24201,7 @@ msgstr "Change note"
 msgid "El ajuste de inventario histórico no se puede duplicar. Cree un ajuste positivo o negativo."
 msgstr "The historical inventory adjustment cannot be duplicated. Create a positive or negative adjustment."
 
+#: cacao_accounting/printing/service.py
+msgid "El documento no está disponible para este tercero."
+msgstr "Document is not available for this party."
+
