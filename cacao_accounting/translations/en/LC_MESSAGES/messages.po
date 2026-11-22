@@ -4066,6 +4066,10 @@ msgstr "Fallback: %(fallback)s"
 msgid "Método de valuación"
 msgstr "Valuation method"
 
+#: cacao_accounting/inventario/valuation_settings.py:15
+msgid "Costo promedio"
+msgstr "Average cost"
+
 #: cacao_accounting/admin/templates/admin/inventory_valuation.html:62
 msgid "Costo promedio recalcula el costo unitario global; FIFO consume las capas más antiguas primero."
 msgstr "Average cost recalculates the global unit cost; FIFO consumes the oldest layers first."

@@ -6,23 +6,23 @@ from __future__ import annotations
 
 from cacao_accounting.database import Entity, StockLedgerEntry, StockValuationLayer, database
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l, LazyText
 
 MOVING_AVERAGE = "moving_average"
 FIFO = "fifo"
-VALUATION_METHOD_CHOICES = (
-    (MOVING_AVERAGE, "Costo promedio"),
-    (FIFO, "FIFO"),
+VALUATION_METHOD_CHOICES: tuple[tuple[str, LazyText], ...] = (
+    (MOVING_AVERAGE, _l("Costo promedio")),
+    (FIFO, _l("FIFO")),
 )
 VALUATION_METHOD_LABELS = dict(VALUATION_METHOD_CHOICES)
 
 
-def valuation_method_choices() -> list[tuple[str, str]]:
+def valuation_method_choices() -> list[tuple[str, LazyText]]:
     """Devuelve las opciones permitidas para la valuacion global."""
     return list(VALUATION_METHOD_CHOICES)
 
 
-def valuation_method_label(method: str | None) -> str:
+def valuation_method_label(method: str | None) -> LazyText:
     """Devuelve la etiqueta visible del metodo de valuacion."""
     return VALUATION_METHOD_LABELS.get(normalize_valuation_method(method), VALUATION_METHOD_LABELS[MOVING_AVERAGE])
 
@@ -82,7 +82,7 @@ def update_company_valuation_method(company_code: str, method: str) -> Entity:
     return entity
 
 
-def list_companies_with_valuation() -> list[dict[str, str]]:
+def list_companies_with_valuation() -> list[dict[str, str | LazyText]]:
     """Lista companias con su metodo actual de valuacion para la vista admin."""
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     return [
