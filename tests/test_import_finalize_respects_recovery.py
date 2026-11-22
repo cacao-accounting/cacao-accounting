@@ -214,3 +214,37 @@ def test_finalize_resuelve_cancelacion_llegada_entre_lectura_y_update(tmp_path, 
         with app.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_worker_se_detiene_cuando_recovery_reclama_entre_documentos(tmp_path):
+    """#1203: si recovery reclama el lote entre documentos, el siguiente no se crea."""
+    app = _app(tmp_path)
+    try:
+        batch_id = _batch(app)
+        with app.app_context():
+            batch = database.session.get(ImportBatch, batch_id)
+            service = ImportService()
+            processed: list[str] = []
+
+            class _Adapter:
+                def build_document(self, rows, context):
+                    return {"rows": list(rows)}
+
+                def persist_document(self, document):
+                    processed.append("doc")
+                    # Tras el primer documento, recovery reclama el lote vencido.
+                    if len(processed) == 1:
+                        assert recovery._claim_expired_batch(batch_id, datetime.now()) is True
+                        database.session.commit()
+
+            docs = {"doc_1": [{"row": 1}], "doc_2": [{"row": 2}]}
+            success, error = service._process_all_documents(batch, batch_id, _Adapter(), docs, {"company_id": "alpha"})
+
+            assert processed == ["doc"]
+            assert success == 1
+            database.session.expire_all()
+            assert database.session.get(ImportBatch, batch_id).import_status == 7
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()

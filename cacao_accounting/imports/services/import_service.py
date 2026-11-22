@@ -572,7 +572,14 @@ class ImportService:
         return success_count, error_count
 
     def _check_batch_cancellation(self, batch: Any, batch_id: str) -> bool:
-        """Verifica si el batch fue cancelado."""
+        """Detiene el worker si el lote ya no le pertenece.
+
+        Devuelve ``True`` cuando debe abandonar el procesamiento: cancelación
+        solicitada (estado terminal 8) o pérdida de propiedad porque otra ruta
+        (recovery) dejó de tener el lote en proceso (estado 4). Sin este último
+        control, un worker aún activo podría seguir creando documentos y
+        asientos después de que recovery marcara el lote como fallido (#1203).
+        """
         database.session.expire(batch)
         current_batch = database.session.get(ImportBatch, batch_id)
         if not current_batch:
@@ -580,6 +587,8 @@ class ImportService:
         if current_batch.cancel_requested:
             current_batch.import_status = 8
             database.session.commit()
+            return True
+        if current_batch.import_status != 4:
             return True
         return False
 
