@@ -32,6 +32,7 @@ from cacao_accounting.database import (
     Roles,
     RolesUser,
     User,
+    UserCompanyAccess,
     database,
 )
 
@@ -138,6 +139,8 @@ def monthly_close_scenario(tmp_path, request):
             database.session.add(admin_role)
         database.session.flush()
         database.session.add(RolesUser(user_id=user.id, role_id=admin_role.id, active=True))
+        # #1828: en Cloud la clasificación admin no concede compañías por sí sola.
+        database.session.add(UserCompanyAccess(user_id=user.id, company_code=company.code))
         company_code = company.code
         database.session.commit()
         period_id = period.id

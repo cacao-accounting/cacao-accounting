@@ -62,7 +62,18 @@ def test_creacion_rechaza_dos_conteos_del_mismo_articulo_y_bodega(app, entorno_c
     assert response.status_code == 200
     with app.app_context():
         assert database.session.execute(database.select(StockEntry).filter_by(remarks=marker)).scalar_one_or_none() is None
-        assert database.session.execute(database.select(StockEntryItem)).scalars().all() == []
+        # La base de pruebas del worker es compartida: se verifica que ninguna
+        # línea quede asociada a este marcador, no la tabla completa.
+        orphan_lines = (
+            database.session.execute(
+                database.select(StockEntryItem)
+                .join(StockEntry, StockEntryItem.stock_entry_id == StockEntry.id)
+                .where(StockEntry.remarks == marker)
+            )
+            .scalars()
+            .all()
+        )
+        assert orphan_lines == []
 
 
 def test_creacion_permite_el_mismo_articulo_en_bodegas_distintas(app, entorno_contable, authenticated_client):

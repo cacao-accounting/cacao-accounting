@@ -53,6 +53,7 @@ from cacao_accounting.database import (
     NamingSeries,
     PettyCashExpense,
     User,
+    UserCompanyAccess,
     database,
 )
 
@@ -168,6 +169,13 @@ def _create_fiscal_year_closing_case(company: str) -> dict[str, str]:
         ]
     )
     database.session.flush()
+    # #1828: en Cloud la clasificación admin no concede compañías por sí sola.
+    database.session.add_all(
+        [
+            UserCompanyAccess(user_id=requester_id, company_code=company),
+            UserCompanyAccess(user_id=approver_id, company_code=company),
+        ]
+    )
 
     book = Book(
         code=f"B{company[1:8]}",

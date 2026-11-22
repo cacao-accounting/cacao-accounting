@@ -15,7 +15,16 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import AccountingPeriod, Entity, FiscalYear, database
+from sqlalchemy import select
+
+from cacao_accounting.database import (
+    AccountingPeriod,
+    Entity,
+    FiscalYear,
+    User,
+    UserCompanyAccess,
+    database,
+)
 
 
 @pytest.fixture
@@ -61,9 +70,19 @@ def periodo_cerrado_aislado(app, entorno_contable):
                 status="habilitado_cerrado",
             )
         )
+        # #1828: en Cloud la clasificación admin no concede compañías por sí sola.
+        admin = database.session.execute(select(User).filter_by(user="admin")).scalar_one()
+        database.session.add(UserCompanyAccess(user_id=admin.id, company_code=company))
         database.session.commit()
     yield {"company": company, "fiscal_year": fiscal_year_id, "period": period_id, "suffix": sufijo}
     with app.app_context():
+        admin = database.session.execute(select(User).filter_by(user="admin")).scalar_one()
+        access = database.session.execute(
+            select(UserCompanyAccess).filter_by(user_id=admin.id, company_code=company)
+        ).scalar_one_or_none()
+        if access is not None:
+            database.session.delete(access)
+        database.session.flush()
         period = database.session.get(AccountingPeriod, period_id)
         if period is not None:
             database.session.delete(period)

@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     Modules,
     SalesInvoice,
     User,
+    UserCompanyAccess,
     database,
 )
 from cacao_accounting.document_flow import service as flow_service
@@ -73,6 +74,8 @@ def document_subtype_scenario(monkeypatch):
             ]
         )
         database.session.flush()
+        # #1828: en Cloud la clasificación admin no concede compañías por sí sola.
+        database.session.add(UserCompanyAccess(user_id=f"admin-{suffix}", company_code="alpha"))
         invoice = SalesInvoice(
             company="alpha",
             posting_date=date(2026, 5, 10),

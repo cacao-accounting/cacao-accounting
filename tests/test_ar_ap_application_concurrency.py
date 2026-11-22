@@ -48,6 +48,7 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     SalesInvoice,
     User,
+    UserCompanyAccess,
     database,
 )
 from cacao_accounting.internal_control_service import audit_actor
@@ -274,6 +275,8 @@ def arap_application(tmp_path):
         )
         database.session.add_all([fiscal_year, period, receivable, payable, sales, returns, bank, cost_center, user])
         database.session.flush()
+        # #1828: en Cloud la clasificación admin no concede compañías por sí sola.
+        database.session.add(UserCompanyAccess(user_id=user.id, company_code=company_code))
         database.session.add_all(
             [
                 CompanyParty(company=company_code, party_id=customer.id, is_active=True),

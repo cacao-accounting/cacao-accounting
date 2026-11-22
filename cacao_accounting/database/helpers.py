@@ -49,9 +49,14 @@ def verifica_coneccion_db(app):
     """
     import time
 
+    # Con ``CACAO_TEST`` la espera es cero, así que la condición del ``while``
+    # nunca se cumpliría y ``DB_CONN`` quedaría sin definir. Se fuerza al menos
+    # un intento para que la verificación sea real en pruebas.
+    intentos_restantes = 1 if TIEMPO_ESPERA <= 0 else None
+
     with app.app_context():
         __inicio = time.time()
-        while (time.time() - __inicio) < TIEMPO_ESPERA:
+        while (time.time() - __inicio) < TIEMPO_ESPERA or intentos_restantes:
             log.info("Verificando conexión a la base de datos.")
             try:
                 from cacao_accounting.database import User
@@ -76,6 +81,8 @@ def verifica_coneccion_db(app):
 
             if not environ.get("CACAO_TEST", None):
                 time.sleep(2)
+            elif intentos_restantes:
+                intentos_restantes = 0
 
         try:
             if not DB_CONN:

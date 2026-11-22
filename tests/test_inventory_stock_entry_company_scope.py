@@ -128,6 +128,10 @@ def stock_entry_scope_scenario():
                 UserCompanyAccess(user_id=reader_id, company_code=company_alpha),
                 UserCompanyAccess(user_id=editor_id, company_code=company_alpha),
                 UserCompanyAccess(user_id=denied_id, company_code=company_alpha),
+                # #1828: en Cloud el admin no bypasea compañías; el escenario
+                # "admin ve todas" requiere asignarle ambas explícitamente.
+                UserCompanyAccess(user_id=admin_id, company_code=company_alpha),
+                UserCompanyAccess(user_id=admin_id, company_code=company_beta),
                 StockEntry(
                     company=company_alpha,
                     purpose="material_receipt",

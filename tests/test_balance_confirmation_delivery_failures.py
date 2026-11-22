@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     Modules,
     Party,
     User,
+    UserCompanyAccess,
     database,
 )
 from cacao_accounting.messaging.email import EmailError
@@ -82,6 +83,8 @@ def _crear_app(confirmation_status: str, resend: bool):
             ]
         )
         database.session.flush()
+        # #1828: en Cloud la clasificación admin no concede compañías por sí sola.
+        database.session.add(UserCompanyAccess(user_id="admin", company_code="cacao"))
         confirmation = BalanceConfirmation(
             company="cacao",
             document_no="CONF-1",

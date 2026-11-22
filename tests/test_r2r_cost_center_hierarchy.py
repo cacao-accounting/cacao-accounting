@@ -17,13 +17,23 @@ from cacao_accounting.contabilidad.services import (
     _lock_cost_center,
     _validate_cost_center_parent,
 )
-from cacao_accounting.database import CostCenter, Currency, Entity, Modules, database
+from cacao_accounting.database import CostCenter, Currency, Entity, Modules, User, UserCompanyAccess, database
 
 
 @pytest.fixture
 def cost_center_hierarchy(app):
     """Provide a real group center and a child in the same company."""
     with app.app_context():
+        # #1828: la prueba intenta mover el centro a alpha con el admin, que en
+        # Cloud necesita acceso explícito a esa compañía.
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        for company_code in ("cacao", "alpha"):
+            access = database.session.execute(
+                database.select(UserCompanyAccess).filter_by(user_id=admin.id, company_code=company_code)
+            ).scalar_one_or_none()
+            if access is None:
+                database.session.add(UserCompanyAccess(user_id=admin.id, company_code=company_code))
+        database.session.flush()
         suffix = uuid4().hex[:7].upper()
         parent = CostCenter(
             entity="cacao",
@@ -59,6 +69,13 @@ def cost_center_hierarchy(app):
     yield scenario
 
     with app.app_context():
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        access = database.session.execute(
+            database.select(UserCompanyAccess).filter_by(user_id=admin.id, company_code="alpha")
+        ).scalar_one_or_none()
+        if access is not None:
+            database.session.delete(access)
+        database.session.flush()
         parent_code, child_code, _parent_id, _child_id, was_enabled = scenario
         accounting_module = database.session.execute(
             database.select(Modules).filter_by(module="accounting")

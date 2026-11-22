@@ -9,6 +9,8 @@ con un reporte sin filas, indistinguible de un período sin movimientos.
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 from cacao_accounting.database import Book, Currency, Entity, database
 from cacao_accounting.reportes.helpers import _validate_requested_ledger
 
@@ -35,7 +37,7 @@ def _company(app) -> None:
                     code="cafe",
                     name="Cafe",
                     company_name="Cafe SA",
-                    tax_id="J0002",
+                    tax_id=f"JE{uuid4().hex[:8].upper()}",
                     currency="NIO",
                     enabled=True,
                     status="activo",

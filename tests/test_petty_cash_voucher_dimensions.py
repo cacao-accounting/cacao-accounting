@@ -40,6 +40,7 @@ from cacao_accounting.database import (
     Unit,
     GLEntry,
     User,
+    UserCompanyAccess,
     database,
 )
 
@@ -96,6 +97,13 @@ def caja_dimensiones():
             ]
         )
         database.session.flush()
+        # #1828: en Cloud la clasificación admin no concede compañías por sí sola.
+        database.session.add_all(
+            [
+                UserCompanyAccess(user_id="admin", company_code="cacao"),
+                UserCompanyAccess(user_id="admin", company_code="alpha"),
+            ]
+        )
         database.session.add_all(
             [
                 Book(

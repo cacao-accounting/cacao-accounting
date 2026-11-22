@@ -17,6 +17,7 @@ from cacao_accounting.database import (
     DeliveryNote,
     DeliveryNoteItem,
     Item,
+    Modules,
     Party,
     SalesInvoice,
     SalesInvoiceItem,
@@ -26,6 +27,8 @@ from cacao_accounting.database import (
     SalesQuotationItem,
     SalesRequest,
     SalesRequestItem,
+    User,
+    UserCompanyAccess,
     database,
 )
 
@@ -154,10 +157,39 @@ def _flash_del_cliente(cliente) -> str:
     return mensajes
 
 
+def _reparar_estado_compartido(entorno_contable) -> None:
+    """Restaura el estado compartido del worker que otras pruebas pueden alterar.
+
+    Bajo ``pytest -n auto`` la base SQLite en memoria se comparte dentro del
+    worker. Otras pruebas deshabilitan el módulo de ventas o retiran el acceso a
+    la compañía, lo que haría que el alta responda 403 antes de validar el
+    artículo y el caso perdería su propósito (#2124). Cada ejecución repara el
+    estado que necesita en lugar de depender del orden de ejecución.
+    """
+    app = entorno_contable.app
+    with app.app_context():
+        modulo = database.session.execute(select(Modules).filter_by(module="sales")).scalar_one_or_none()
+        if modulo is None:
+            modulo = Modules(module="sales", default=False, enabled=True)
+            database.session.add(modulo)
+        elif modulo.enabled is not True:
+            modulo.enabled = True
+
+        admin_id = database.session.execute(select(User.id).filter_by(user="admin")).scalar_one()
+        acceso = database.session.execute(
+            select(UserCompanyAccess).filter_by(user_id=admin_id, company_code="cacao")
+        ).scalar_one_or_none()
+        if acceso is None:
+            database.session.add(UserCompanyAccess(user_id=admin_id, company_code="cacao"))
+
+        database.session.commit()
+
+
 @pytest.mark.parametrize("especificacion", ESPECIFICACIONES)
 @pytest.mark.parametrize("vendible,activo", [(False, True), (True, False)], ids=["sin_rol_venta", "inactivo"])
 def test_alta_manual_rechaza_articulo_no_vendible(entorno_contable, authenticated_client, especificacion, vendible, activo):
     """Un artículo inactivo o sin rol de venta produce error controlado y no persiste el documento (#2124)."""
+    _reparar_estado_compartido(entorno_contable)
     app = entorno_contable.app
     codigo_item = _crear_item_no_vendible(entorno_contable, activo=activo, vendible=vendible)
     marcador = f"ALTA-RECHAZADA-{uuid4().hex[:10]}"

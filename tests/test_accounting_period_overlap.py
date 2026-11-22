@@ -13,8 +13,9 @@ from datetime import date
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
-from cacao_accounting.database import AccountingPeriod, Entity, FiscalYear, database
+from cacao_accounting.database import AccountingPeriod, Entity, FiscalYear, User, UserCompanyAccess, database
 
 FECHA_INICIO = date(2026, 1, 1)
 FECHA_FIN = date(2026, 12, 31)
@@ -73,9 +74,28 @@ def periodos_aislados(app, entorno_contable):
                 ),
             ]
         )
+        # #1828: en Cloud la clasificación admin no concede compañías por sí
+        # sola; el formulario publica como admin y debe alcanzar ambas compañías.
+        admin_user = database.session.execute(select(User).filter_by(user="admin")).scalar_one()
+        for entity_code in creados["entities"]:
+            if (
+                database.session.execute(
+                    select(UserCompanyAccess).filter_by(user_id=admin_user.id, company_code=entity_code)
+                ).scalar_one_or_none()
+                is None
+            ):
+                database.session.add(UserCompanyAccess(user_id=admin_user.id, company_code=entity_code))
         database.session.commit()
     yield creados
     with app.app_context():
+        admin_user = database.session.execute(select(User).filter_by(user="admin")).scalar_one()
+        for entity_code in creados["entities"]:
+            access = database.session.execute(
+                select(UserCompanyAccess).filter_by(user_id=admin_user.id, company_code=entity_code)
+            ).scalar_one_or_none()
+            if access is not None:
+                database.session.delete(access)
+        database.session.flush()
         for period_id in creados["periods"]:
             period = database.session.get(AccountingPeriod, period_id)
             if period is not None:

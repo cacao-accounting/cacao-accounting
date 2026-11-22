@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     Entity,
     Modules,
     User,
+    UserCompanyAccess,
     database,
 )
 
@@ -108,6 +109,8 @@ def bank_rule_scope_scenario():
                 classification="admin",
             )
         )
+        # #1828: en Cloud la clasificación admin no concede compañías por sí sola.
+        database.session.add(UserCompanyAccess(user_id=f"admin-{suffix}", company_code="alpha"))
         database.session.commit()
         ids = {
             "account_a": account_a.id,

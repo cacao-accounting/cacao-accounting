@@ -144,6 +144,8 @@ def home_periods_scenario():
                 RolesUser(user_id=f"reader-{suffix}", role_id=role.id, active=True),
                 UserCompanyAccess(user_id=f"reader-{suffix}", company_code="alpha"),
                 UserCompanyAccess(user_id=f"admin-{suffix}", company_code="alpha"),
+                # #1828: el escenario "admin ve todas" exige acceso explícito.
+                UserCompanyAccess(user_id=f"admin-{suffix}", company_code="beta"),
             ]
         )
         database.session.commit()

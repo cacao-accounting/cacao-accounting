@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 
-from cacao_accounting.database import AccountingPeriod, Entity, database
+from cacao_accounting.database import AccountingPeriod, Entity, User, UserCompanyAccess, database
 
 BUSQUEDA = "XQ-TEST"
 ESTADO = "draft"
@@ -80,6 +80,17 @@ def test_formulario_de_periodo_no_se_emite_sin_periodos(app, authenticated_clien
         assert (
             database.session.execute(database.select(AccountingPeriod).filter_by(entity=company)).scalars().first() is None
         ), "La compañía alpha no debe tener períodos para este escenario."
+
+    # #1828: en Cloud el admin necesita acceso explícito a la compañía consultada.
+    admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+    if (
+        database.session.execute(
+            database.select(UserCompanyAccess).filter_by(user_id=admin.id, company_code=company)
+        ).scalar_one_or_none()
+        is None
+    ):
+        database.session.add(UserCompanyAccess(user_id=admin.id, company_code=company))
+        database.session.commit()
 
     cliente = authenticated_client()
     respuesta = cliente.get(f"/cash_management/payment/list?search={BUSQUEDA}&company={company}")

@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from cacao_accounting.database import Project, Unit, database
+from cacao_accounting.database import Project, Unit, User, UserCompanyAccess, database
 
 
 @pytest.fixture
@@ -23,6 +23,16 @@ def hierarchy_company_scenario(app, reference_users):
         "project_child": f"PC{suffix}",
     }
     with app.app_context():
+        # #1828: el escenario mueve hojas entre cacao y alpha con el admin, así
+        # que éste necesita acceso explícito a ambas compañías en Cloud.
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        for company_code in ("cacao", "alpha"):
+            access = database.session.execute(
+                database.select(UserCompanyAccess).filter_by(user_id=admin.id, company_code=company_code)
+            ).scalar_one_or_none()
+            if access is None:
+                database.session.add(UserCompanyAccess(user_id=admin.id, company_code=company_code))
+        database.session.flush()
         records = [
             Unit(code=codes["unit_local"], name="Unidad local", entity="cacao", enabled=True),
             Unit(code=codes["unit_foreign"], name="Unidad extranjera", entity="alpha", enabled=True),
@@ -57,6 +67,13 @@ def hierarchy_company_scenario(app, reference_users):
     yield app, codes, ids
 
     with app.app_context():
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        access = database.session.execute(
+            database.select(UserCompanyAccess).filter_by(user_id=admin.id, company_code="alpha")
+        ).scalar_one_or_none()
+        if access is not None:
+            database.session.delete(access)
+        database.session.flush()
         for model, keys in (
             (Unit, ("unit_child", "unit_local", "unit_foreign")),
             (Project, ("project_child", "project_local", "project_foreign")),

@@ -213,6 +213,7 @@ def print_scope_app():
                 RolesAccess(rol_id=role.id, module_id=sales_module.id, view=True),
                 RolesUser(user_id=user.id, role_id=role.id, active=True),
                 UserCompanyAccess(user_id=user.id, company_code=authorized_company),
+                UserCompanyAccess(user_id=admin.id, company_code=authorized_company),
             ]
         )
         database.session.commit()
@@ -241,7 +242,7 @@ def print_scope_app():
             database.delete(RolesAccess).where(RolesAccess.rol_id == role_id, RolesAccess.module_id == sales_module_id)
         )
         database.session.execute(database.delete(RolesUser).where(RolesUser.user_id.in_([user_id, admin_id])))
-        database.session.execute(database.delete(UserCompanyAccess).where(UserCompanyAccess.user_id == user_id))
+        database.session.execute(database.delete(UserCompanyAccess).where(UserCompanyAccess.user_id.in_([user_id, admin_id])))
         database.session.execute(database.delete(User).where(User.id.in_([user_id, admin_id])))
         database.session.execute(database.delete(Roles).where(Roles.id == role_id))
         database.session.execute(database.delete(Entity).where(Entity.code.in_([authorized_company, unauthorized_company])))
@@ -365,7 +366,11 @@ def test_tipo_desconocido_de_admin_con_compania_inexistente_no_falla_al_auditar(
     response = client.get(f"/print/{document_type}/document-1/preview?company={nonexistent_company}")
     registered_response = client.get(f"/print/sales_invoice/missing-document/preview?company={nonexistent_company}")
 
-    assert response.status_code == 404
+    # #1828: en Cloud el admin no bypasea compañías. Para un tipo desconocido la
+    # autorización se evalúa antes de la existencia de la compañía (#1925), por
+    # eso responde 403; un tipo registrado responde 404 al no existir la compañía.
+    # El invariante relevante es que ninguna de las dos rutas cree auditoría.
+    assert response.status_code == 403
     assert registered_response.status_code == 404
     with application.app_context():
         jobs = database.session.execute(select(PrintJobLog).filter_by(document_type=document_type)).scalars().all()

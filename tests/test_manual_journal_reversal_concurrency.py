@@ -32,6 +32,7 @@ from cacao_accounting.database import (
     FiscalYear,
     Modules,
     User,
+    UserCompanyAccess,
     database,
 )
 
@@ -116,6 +117,8 @@ def concurrent_reversal_scenario(tmp_path):
         )
         database.session.add_all([book, fiscal_year, user])
         database.session.flush()
+        # #1828: en Cloud la clasificación admin no concede compañías por sí sola.
+        database.session.add(UserCompanyAccess(user_id=user_id, company_code=company_code))
         source_period = AccountingPeriod(
             entity=company_code,
             fiscal_year_id=fiscal_year.id,
