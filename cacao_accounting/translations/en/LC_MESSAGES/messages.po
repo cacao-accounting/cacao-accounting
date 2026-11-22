@@ -2585,7 +2585,6 @@ msgstr "Document rejected successfully."
 #: cacao_accounting/bancos/templates/bancos/transaccion_lista.html:9 cacao_accounting/compras/templates/compras.html:11
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:9
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html:8
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:2
 #: cacao_accounting/compras/templates/compras/comparativo_ordenes_seleccionar.html:2
 #: cacao_accounting/compras/templates/compras/comparativo_solicitud.html:4
 #: cacao_accounting/compras/templates/compras/cotizacion_proveedor.html:8
@@ -4102,7 +4101,6 @@ msgstr "No companies configured."
 #: cacao_accounting/admin/templates/admin/item_prices.html:6 cacao_accounting/admin/templates/admin/item_prices.html:19
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:81
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:138
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:68
 #: cacao_accounting/compras/templates/compras/comparativo_solicitud.html:122
 #: cacao_accounting/compras/templates/compras/gr_ir.html:32
 #: cacao_accounting/compras/templates/compras/purchase_reconciliation.html:237 cacao_accounting/inventario/forms.py:65
@@ -4771,8 +4769,6 @@ msgstr "There are no configurations registered. When creating a company, the str
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:20
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html:19
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html:28
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:8
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:20
 #: cacao_accounting/compras/templates/compras/comparativo_ordenes_seleccionar.html:16
 #: cacao_accounting/compras/templates/compras/comparativo_solicitud.html:18
 #: cacao_accounting/compras/templates/compras/comparativo_solicitud.html:33
@@ -10329,10 +10325,6 @@ msgstr "By Volume"
 msgid "Equitativo"
 msgstr "Equal"
 
-#: cacao_accounting/compras/purchase_order_comparison_service.py:172
-msgid "Solo se pueden comparar órdenes de compra del mismo origen y compañía."
-msgstr "Only purchase orders from the same origin and company can be compared."
-
 #: cacao_accounting/compras/purchase_reconciliation_service.py:208 cacao_accounting/document_flow/service.py:151
 #, python-format
 msgid "La línea %(item)s no tiene cantidad en la UOM base del artículo."
@@ -11457,7 +11449,6 @@ msgid "Total de la solicitud de cotización"
 msgstr "RFQ total"
 
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:39
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:37
 #: cacao_accounting/compras/templates/compras/comparativo_solicitud.html:77
 #, python-format
 msgid "Ronda %(number)s"
@@ -11534,7 +11525,6 @@ msgid "Selección de ofertas por artículo."
 msgstr "Offer selection per item."
 
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:152
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:94
 #: cacao_accounting/compras/templates/compras/comparativo_solicitud.html:193
 msgid "Sin cobertura"
 msgstr "No coverage"
@@ -11590,53 +11580,10 @@ msgstr "Create comparison"
 msgid "No hay Solicitudes de Compra aprobadas."
 msgstr "There are no approved Purchase Requests."
 
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:23
 #: cacao_accounting/compras/templates/compras/comparativo_ordenes_seleccionar.html:29
 #: cacao_accounting/compras/templates/compras/comparativo_solicitud.html:36
 msgid "Solicitud de Compra:"
 msgstr "Purchase Request:"
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:25
-msgid "Comparativo legacy sin Solicitud de Compra reconstruible"
-msgstr "Legacy comparison without reconstructible Purchase Request"
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:26
-msgid "Orden base:"
-msgstr "Base order:"
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:27
-#, python-format
-msgid "Ofertas participantes: %(count)s"
-msgstr "Participating offers: %(count)s"
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:28
-#, python-format
-msgid "Ronda %(number)s (%(status)s)"
-msgstr "Round %(number)s (%(status)s)"
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:34
-msgid "Histórico de rondas:"
-msgstr "Round history:"
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:45
-msgid "Abrir nueva ronda"
-msgstr "Open new round"
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:46
-msgid "Seleccione explícitamente las órdenes que participarán. La ronda actual quedará cerrada e inmutable."
-msgstr "Explicitly select the orders that will participate. The current round will become closed and immutable."
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:58
-msgid "Abrir ronda"
-msgstr "Open round"
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:64
-msgid "Comparación de líneas entre órdenes de compra participantes."
-msgstr "Line comparison between participating purchase orders."
-
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:101
-msgid "Las órdenes no tienen líneas para comparar."
-msgstr "The orders have no lines to compare."
 
 #: cacao_accounting/compras/templates/compras/comparativo_ordenes_seleccionar.html:20
 msgid "Seleccionar ofertas"
