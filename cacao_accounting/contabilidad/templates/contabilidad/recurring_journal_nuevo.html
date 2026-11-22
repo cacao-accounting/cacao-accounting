@@ -359,6 +359,7 @@
                 <div class="ca-smart-select" x-data='smartSelect({
                   doctype: "account",
                   filters: { company: function() { return header.company; } },
+                  filterSources: ["#company"],
                   initialValue: line.account_code,
                   initialLabel: line.account_label,
                   onSelect: function(opt) { line.account_code = opt.value; line.account_label = opt.display_name; },
@@ -420,6 +421,7 @@
               <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "cost_center",
                 filters: { company: function() { return header.company; } },
+                filterSources: ["#company"],
                 initialValue: modalLine.cost_center,
                 onSelect: function(opt) { modalLine.cost_center = opt.value; },
                 onClear: function() { modalLine.cost_center = ''; }
@@ -435,6 +437,7 @@
               <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "unit",
                 filters: { company: function() { return header.company; } },
+                filterSources: ["#company"],
                 initialValue: modalLine.unit,
                 onSelect: function(opt) { modalLine.unit = opt.value; },
                 onClear: function() { modalLine.unit = ''; }
@@ -450,6 +453,7 @@
               <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "project",
                 filters: { company: function() { return header.company; } },
+                filterSources: ["#company"],
                 initialValue: modalLine.project,
                 onSelect: function(opt) { modalLine.project = opt.value; },
                 onClear: function() { modalLine.project = ''; }
@@ -473,6 +477,7 @@
               <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "party",
                 filters: { company: function() { return header.company; }, party_type: function() { return modalLine.party_type; } },
+                filterSources: ["#company"],
                 initialValue: modalLine.party_id,
                 onSelect: function(opt) { modalLine.party_id = opt.value; },
                 onClear: function() { modalLine.party_id = ''; }

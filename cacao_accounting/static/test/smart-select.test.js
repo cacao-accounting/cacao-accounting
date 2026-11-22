@@ -234,6 +234,45 @@ describe('smart-select', function () {
     window.close();
   });
 
+  it('clears the selected value and copied model when its company filter changes', async function () {
+    const environment = createEnvironment();
+    const { window, document } = environment;
+    const company = document.createElement('input');
+    company.id = 'party-company-0';
+    company.value = 'alpha';
+    document.body.appendChild(company);
+
+    const row = {
+      company: 'alpha',
+      accountId: 'AR-ALPHA',
+      accountLabel: 'Receivable Alpha',
+    };
+    const component = environment.factory({
+      doctype: 'account',
+      name: 'receivable_account_id',
+      initialValue: row.accountId,
+      initialLabel: row.accountLabel,
+      filters: { company: () => row.company },
+      filterSources: ['#party-company-0'],
+      requiredFilters: ['company'],
+      onClear: () => {
+        row.accountId = '';
+        row.accountLabel = '';
+      },
+    });
+    component.init();
+
+    row.company = 'beta';
+    company.value = 'beta';
+    company.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await flushPromises();
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(component.selectedLabel, '');
+    assert.deepStrictEqual(row, { company: 'beta', accountId: '', accountLabel: '' });
+    window.close();
+  });
+
   it('removes external filter listeners when a component is destroyed', async function () {
     const environment = createEnvironment();
     const { window, document } = environment;

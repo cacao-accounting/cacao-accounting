@@ -82,6 +82,10 @@
                       row.company = option.value || option.id || "";
                       row.company_label = option.display_name || option.label || row.company;
                     },
+                    onClear() {
+                      row.company = "";
+                      row.company_label = "";
+                    },
                     messages: {
                       placeholder: {{ _('Buscar compañía')|tojson }},
                       loading: {{ _('Cargando...')|tojson }},
@@ -92,7 +96,7 @@
                       error: {{ _('No se pudieron cargar las opciones')|tojson }}
                     }
                   })'>
-                    <input type="hidden" name="company" x-model="row.company">
+                    <input type="hidden" :id="'party-company-' + index" name="company" x-model="row.company">
                     <div x-effect="if (!selectedValue) { row.company = ''; row.company_label = ''; }"></div>
                     <div class="ca-smart-select-input-wrap">
                       <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
@@ -129,10 +133,15 @@
                       account_type: [{{ account_type|tojson }}],
                       is_active: true
                     },
+                    filterSources: ["#party-company-" + index],
                     requiredFilters: ["company"],
                     onSelect(option) {
                       row[{{ account_field|tojson }}] = option.value || option.id || "";
                       row[{{ account_label_field|tojson }}] = option.display_name || option.label || row[{{ account_field|tojson }}];
+                    },
+                    onClear() {
+                      row[{{ account_field|tojson }}] = "";
+                      row[{{ account_label_field|tojson }}] = "";
                     },
                     messages: {
                       placeholder: {% if party_role == "customer" %}{{ _('Buscar cuenta por cobrar')|tojson }}{% else %}{{ _('Buscar cuenta por pagar')|tojson }}{% endif %},
@@ -171,10 +180,15 @@
                       {% if party_role == "customer" %}is_selling: true,{% else %}is_buying: true,{% endif %}
                       is_active: true
                     },
+                    filterSources: ["#party-company-" + index],
                     requiredFilters: ["company"],
                     onSelect(option) {
                       row.default_price_list_id = option.value || option.id || "";
                       row.default_price_list_label = option.display_name || option.label || row.default_price_list_id;
+                    },
+                    onClear() {
+                      row.default_price_list_id = "";
+                      row.default_price_list_label = "";
                     },
                     messages: {
                       placeholder: {{ _('Buscar lista de precio')|tojson }},
@@ -217,10 +231,15 @@
                       {% endif %}
                       is_active: true
                     },
+                    filterSources: ["#party-company-" + index],
                     requiredFilters: ["company"],
                     onSelect(option) {
                       row.default_tax_rule_id = option.value || option.id || "";
                       row.default_tax_rule_label = option.display_name || option.label || row.default_tax_rule_id;
+                    },
+                    onClear() {
+                      row.default_tax_rule_id = "";
+                      row.default_tax_rule_label = "";
                     },
                     messages: {
                       placeholder: {{ _('Buscar regla fiscal')|tojson }},
@@ -259,10 +278,15 @@
                       template_type: [{% if party_role == "customer" %}"selling"{% else %}"buying"{% endif %}],
                       is_active: true
                     },
+                    filterSources: ["#party-company-" + index],
                     requiredFilters: ["company"],
                     onSelect(option) {
                       row.tax_template_id = option.value || option.id || "";
                       row.tax_template_label = option.display_name || option.label || row.tax_template_id;
+                    },
+                    onClear() {
+                      row.tax_template_id = "";
+                      row.tax_template_label = "";
                     },
                     messages: {
                       placeholder: {{ _('Buscar plantilla de impuestos')|tojson }},
