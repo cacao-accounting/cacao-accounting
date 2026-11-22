@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from cacao_accounting import audit_chain, document_identifiers
+from cacao_accounting.bancos import cash_forecast_service
 from cacao_accounting.admin import services as admin_services
 from cacao_accounting.api import dashboard as api_dashboard
 from cacao_accounting.contabilidad import default_accounts, exchange_revaluation_service
@@ -35,6 +36,7 @@ def test_admin_services_no_reintroduce_blueprint_sin_rutas():
         (api_dashboard, "_sum_query", "#2071"),
         (exchange_revaluation_service, "MONETARY_ACCOUNT_TYPES", "#1162"),
         (audit_chain, "_CHAIN_FIELDS", "#2079"),
+        (cash_forecast_service, "_query_gl_sum", "#1260"),
     ],
 )
 def test_simbolos_retirados_no_reaparecen(modulo, simbolo, issue):  # noqa: ANN001 - parametrizado
@@ -53,3 +55,10 @@ def test_formularios_de_setup_no_reintroducen_step_oculto(app):
 def test_hojas_css_retiradas_no_reaparecen(hoja):
     """#1899: las hojas sin consumidor no vuelven al paquete."""
     assert not (RAIZ / "cacao_accounting" / "static" / "css" / hoja).exists()
+
+
+def test_inventario_services_no_reexporta_company_currency():
+    """#1308: la moneda canónica se consume desde document_flow.context."""
+    from cacao_accounting.inventario import services as inventario_services
+
+    assert not hasattr(inventario_services, "company_currency")
