@@ -1,3 +1,14 @@
+# Dependencias completas: requirements-base.txt (desktop) + extras Cloud.
+#
+# Este archivo es la suma de `requirements-base.txt` y los paquetes del extra
+# `cloud` de pyproject.toml (PostgreSQL/MySQL, caché y validación de MIME).
+# Se mantiene como lista explícita, sin directiva `-r`, porque herramientas de
+# despliegue (por ejemplo `pip install -r` sobre un archivo copiado a otro
+# directorio) resuelven los `-r` relativos al archivo que los incluye.
+#
+# El buildpack Cloud Native de Heroku instala exactamente este archivo.
+
+# --- Base (idéntico a requirements-base.txt) ---
 alembic==1.18.5
 argon2-cffi==25.1.0
 argon2-cffi-bindings==25.1.0
@@ -24,3 +35,11 @@ waitress==3.0.2
 weasyprint==70.0
 wtforms==3.2.2
 xlrd==2.0.2
+
+# --- Cloud ---
+Flask-Limiter[redis]>=3.8.0
+flask-caching>=2.4.0
+python-magic>=0.4.27
+redis>=7.4.0
+psycopg>=3.2,<4
+PyMySQL>=1.1.3

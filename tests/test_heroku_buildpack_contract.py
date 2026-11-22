@@ -74,7 +74,7 @@ def test_aptfile_incluye_las_bibliotecas_de_sistema():
 def test_post_compile_instala_paquete_assets_y_traducciones():
     """El hook completa el slug con lo que el buildpack de Python no instala."""
     contenido = POST_COMPILE.read_text(encoding="utf-8")
-    assert "'.[cloud]'" in contenido, "falta instalar el paquete con el extra cloud"
+    assert "pip install --no-cache-dir --no-input ." in contenido, "falta instalar el paquete"
     assert "npm ci" in contenido, "faltan los assets estáticos"
     assert "write_mo" in contenido, "faltan los catálogos de traducción compilados"
     assert "set -euo pipefail" in contenido, "el hook debe abortar el build ante un error"
@@ -89,6 +89,38 @@ def test_app_json_declara_buildpacks_y_variables_requeridas():
     assert manifesto["env"]["CACAO_USER"]["required"] is True
     assert manifesto["env"]["CACAO_PSWD"]["required"] is True
     assert "DATABASE" in {addon["as"] for addon in manifesto["addons"]}
+
+
+def test_requirements_separa_base_y_cloud():
+    """La base (desktop) vive aparte y requirements.txt la incluye con Cloud.
+
+    El buildpack CNB instala solo ``requirements.txt``, así que los drivers de
+    base de datos deben estar en ese archivo y no únicamente en el extra cloud.
+    """
+    base = (RAIZ / "requirements-base.txt").read_text(encoding="utf-8")
+    completo = (RAIZ / "requirements.txt").read_text(encoding="utf-8")
+
+    paquetes_base = {
+        linea.strip().split("==")[0] for linea in base.splitlines() if linea.strip() and not linea.strip().startswith("#")
+    }
+    assert "psycopg" not in paquetes_base, "desktop no requiere el driver PostgreSQL"
+    assert "sqlalchemy" in paquetes_base
+
+    paquetes_completos = {
+        linea.strip().split("==")[0].split(">")[0].split("[")[0]
+        for linea in completo.splitlines()
+        if linea.strip() and not linea.strip().startswith("#")
+    }
+    # requirements.txt es la base + los extras cloud.
+    assert paquetes_base.issubset(paquetes_completos)
+    for extra in ("psycopg", "PyMySQL", "Flask-Limiter", "flask-caching", "redis"):
+        assert extra in paquetes_completos, f"falta {extra} en requirements.txt"
+
+
+def test_pyproject_declara_dependencias_desde_la_base():
+    """El paquete se construye con las dependencias de escritorio."""
+    contenido = (RAIZ / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'dependencies = {file = ["requirements-base.txt"]}' in contenido
 
 
 def test_slugignore_excluye_un_segundo_gestor_de_dependencias():

@@ -44,7 +44,7 @@ cacaoctl="cacao_accounting:command"
 include-package-data = true
 
 [tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+dependencies = {file = ["requirements-base.txt"]}
 version = {attr = "cacao_accounting.version.VERSION"}
 
 [tool.setuptools.packages.find]
