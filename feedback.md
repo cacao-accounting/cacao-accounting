@@ -31,6 +31,21 @@ estática únicamente; no ejecuté pruebas ni linters.
 
 Refs: #1053
 
+## QA1 — #547 (2026-11-22)
+
+Primera revisión: rechazada porque los casos nuevos llamaban directamente a
+`_currency_and_rate()` y no cubrían la ruta reportada de `validate_document()`.
+Se pidió verificar errores de prevalidación para moneda inactiva e inexistente.
+
+Segunda revisión: aprobada tras cambiar los casos para llamar
+`validate_document()` con `OFF` inactiva y `NOPE` desconocida, ambas con tasa
+explícita positiva. La consulta al catálogo ocurre antes de aceptar la tasa o
+el atajo de moneda funcional; el adaptador captura el error y bloquea el
+preflight. No ejecuté pruebas ni linters. El issue permanece abierto en
+`fix-proposed`.
+
+Refs: #547
+
 ## Tercera revisión QA1 — 2026-11-22
 
 ### Veredicto: aprobado para `fix-proposed`

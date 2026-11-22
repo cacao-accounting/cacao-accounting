@@ -9,6 +9,8 @@ habilitar la ejecución y no dejar documentos parcialmente confirmados.
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -102,3 +104,47 @@ def test_purchase_order_validation_rejects_negative_price(negative_rate_scenario
             PurchaseOrderAdapter().build_document([row], {"company_id": "alpha"})
 
     assert any("negativo" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("currency_code", "active", "message"),
+    [
+        ("OFF", False, "inactiva"),
+        ("NOPE", None, "no existe"),
+    ],
+)
+def test_transaction_currency_must_exist_and_be_active(negative_rate_scenario, currency_code, active, message):
+    """Explicit exchange rates cannot bypass the active currency catalog."""
+    app = negative_rate_scenario
+    with app.app_context():
+        if active is not None:
+            database.session.add(Currency(code=currency_code, name="Moneda deshabilitada", decimals=2, active=active))
+            database.session.commit()
+
+        errors = _transaction_adapter().validate_document(
+            [
+                {
+                    "document_ref": "PR-CURRENCY",
+                    "fecha": "2026-05-10",
+                    "producto": "ITEM-1",
+                    "cantidad": "1",
+                    "precio_unitario": "1",
+                    "moneda": currency_code,
+                    "tipo_cambio": "1.2",
+                }
+            ],
+            {"company_id": "alpha"},
+        )
+
+    assert any(message in error for error in errors)
+
+
+def test_active_functional_currency_is_validated_before_same_currency_shortcut(negative_rate_scenario):
+    """A valid active functional currency still resolves to a unit rate."""
+    app = negative_rate_scenario
+    with app.app_context():
+        result = _transaction_adapter()._currency_and_rate(
+            {"moneda": "NIO", "tipo_cambio": "99"}, None, "alpha", date(2026, 5, 10)
+        )
+
+    assert result == ("NIO", "NIO", Decimal("1"))

@@ -13,6 +13,7 @@ from typing import Any
 from cacao_accounting.database import (
     Batch,
     CompanyParty,
+    Currency,
     DeliveryNote,
     DeliveryNoteItem,
     Item,
@@ -570,6 +571,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                     "o un documento origen con moneda transaccional persistida."
                 )
             )
+        self._validate_transaction_currency(transaction_currency)
         explicit_rate = first_row.get("tipo_cambio") or first_row.get("exchange_rate")
         explicit_decimal = self._finite_decimal(explicit_rate, "tipo de cambio") if explicit_rate not in (None, "") else None
         if transaction_currency == base_currency:
@@ -597,6 +599,19 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         if rate <= 0:
             raise ValueError(_("El tipo de cambio debe ser positivo."))
         return transaction_currency, base_currency, rate
+
+    @staticmethod
+    def _validate_transaction_currency(transaction_currency: str) -> None:
+        """Rechaza códigos de moneda inexistentes o inactivos antes de importar."""
+        currency = database.session.execute(
+            database.select(Currency).filter_by(code=transaction_currency)
+        ).scalar_one_or_none()
+        if currency is None:
+            raise ValueError(
+                _("La moneda transaccional '%(currency)s' no existe en el catálogo.") % {"currency": transaction_currency}
+            )
+        if not currency.active:
+            raise ValueError(_("La moneda transaccional '%(currency)s' está inactiva.") % {"currency": transaction_currency})
 
     def _apply_totals(self, header: Any, total_qty: Decimal, total: Decimal, exchange_rate: Decimal = Decimal("1")) -> None:
         if hasattr(header, "total_qty"):

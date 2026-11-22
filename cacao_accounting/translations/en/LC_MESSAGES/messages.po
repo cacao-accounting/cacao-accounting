@@ -24377,3 +24377,11 @@ msgstr "The imported quantity exceeds the source line's pending quantity."
 #: cacao_accounting/imports/adapters/transaction_documents.py
 msgid "La cantidad importada en el archivo excede el pendiente de una línea origen."
 msgstr "The quantity imported in the file exceeds the pending quantity of a source line."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "La moneda transaccional '%(currency)s' no existe en el catálogo."
+msgstr "The transaction currency '%(currency)s' does not exist in the catalog."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "La moneda transaccional '%(currency)s' está inactiva."
+msgstr "The transaction currency '%(currency)s' is inactive."

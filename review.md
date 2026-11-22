@@ -74,3 +74,11 @@ El resto de la implementación cubre las condiciones del issue: cada fila vincul
 Inspeccioné además la versión actualizada de `tests/test_import_source_line_relations.py` y el hook `_collect_business_errors()`. La prueba de sobreasignación entre referencias distintas ahora recorre el hook de `ImportService`, verifica que se inserte `ImportBatchError` y por ello cubre la validación previa que el worker consulta antes de llamar `_process_all_documents()`. Revisé también los nuevos casos de cantidad inválida y de fuente que se vuelve inválida entre preflight y persistencia: el primero no se incorpora al agregado batch, y el segundo causa excepción antes de terminar la transacción del documento, que se revierte en el caller.
 
 La evidencia añadida cubre los dos hallazgos anteriores y mejora la verificación del requisito “rechazar antes de persistir”. Mantengo el veredicto **aprobado estáticamente** para el diff actual. Revisión solamente estática; no ejecuté tests/linters ni cambié estado/etiqueta. El issue debe quedar en `fix-proposed` según instrucción del usuario.
+
+## QA2 independiente — #547 (2026-11-22)
+
+**Veredicto: aprobado estáticamente.** Revisé el diff actual de `_currency_and_rate()`, la ruta `ImportService` que registra `TransactionDocumentAdapter`, las nuevas regresiones en `tests/test_import_negative_rates.py` y el catálogo de traducciones. No ejecuté pruebas ni linters y no modifiqué código.
+
+La validación consulta `Currency` por el código transaccional resuelto antes del atajo de moneda funcional y antes de aceptar la tasa explícita; rechaza tanto códigos ausentes como monedas inactivas. Esto bloquea ambas rutas documentadas: el borrador con una moneda inactiva y el error de FK durante persistencia con una moneda inexistente. La prueba cubre ambas condiciones con tasa explícita positiva y cubre además la moneda funcional activa con tasa unitaria. La clase antigua de órdenes de compra que no está registrada en `ImportService` no sustituye al adaptador transaccional activo revisado.
+
+Verifiqué que ambos nuevos mensajes visibles tienen traducción inglesa en `messages.po`; los workflows de publicación compilan el catálogo `.mo`. No encontré defectos bloqueantes pendientes en este diff. No cambio estado ni etiquetas; conforme a la instrucción del usuario, el issue debe detenerse en `fix-proposed`.
