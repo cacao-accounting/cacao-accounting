@@ -18450,6 +18450,11 @@ msgstr "No exchange rate exists from %(transaction_currency)s to %(base_currency
 msgid "Valor numérico inválido en columna '%(field)s'."
 msgstr "Invalid numeric value in column '%(field)s'."
 
+#: cacao_accounting/imports/adapters/base.py
+#, python-format
+msgid "El campo '%(field)s' no coincide en la fila %(row)s del documento '%(document)s'."
+msgstr "The '%(field)s' field conflicts on row %(row)s of document '%(document)s'."
+
 #: cacao_accounting/imports/adapters/transaction_documents.py:131
 msgid "El documento origen no existe o no corresponde al flujo importado."
 msgstr "The source document does not exist or does not match the imported flow."

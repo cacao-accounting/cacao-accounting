@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 from sqlalchemy import or_, select
 
 from cacao_accounting.database import Book, database
-from cacao_accounting.imports.adapters.base import BaseImportAdapter
+from cacao_accounting.imports.adapters.base import BaseImportAdapter, normalize_header_date
 from cacao_accounting.contabilidad.journal_service import create_journal_draft
 from cacao_accounting.imports.utils.validation import is_period_open
 from cacao_accounting.imports.utils.dates import parse_import_date
@@ -118,7 +118,11 @@ class JournalEntryAdapter(BaseImportAdapter):
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
         """Valida que el comprobante tenga al menos dos líneas y esté balanceado."""
-        errors = self._validate_amounts(document_data)
+        errors = self.validate_header_consistency(
+            document_data,
+            {"fecha": (("fecha", "posting_date"), normalize_header_date)},
+        )
+        errors.extend(self._validate_amounts(document_data))
         errors.extend(self._validate_period(document_data, context))
         if not errors:
             errors.extend(self._validate_accounting_lines(document_data, context))

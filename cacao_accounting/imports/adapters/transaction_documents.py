@@ -43,7 +43,12 @@ from cacao_accounting.database import (
 from cacao_accounting.document_identifiers import assign_document_identifier
 from cacao_accounting.document_flow.context import company_currency, effective_currency
 from cacao_accounting.document_flow.service import qty_in_base_uom
-from cacao_accounting.imports.adapters.base import BaseImportAdapter
+from cacao_accounting.imports.adapters.base import (
+    BaseImportAdapter,
+    COMMON_DOCUMENT_HEADER_FIELDS,
+    normalize_header_decimal,
+    normalize_header_text,
+)
 from cacao_accounting.imports.utils.validation import is_period_open
 from cacao_accounting.imports.utils.dates import parse_import_date
 
@@ -163,7 +168,17 @@ class TransactionDocumentAdapter(BaseImportAdapter):
 
     def validate_document(self, document_data: list[dict[str, Any]], context: dict[str, Any] | None = None) -> list[str]:
         """Valida fecha, período, origen, bodega, tercero y moneda del documento."""
-        errors: list[str] = []
+        header_fields = dict(COMMON_DOCUMENT_HEADER_FIELDS)
+        header_fields.update(
+            {
+                "moneda": (("moneda", "transaction_currency"), normalize_header_text),
+                "tipo_cambio": (("tipo_cambio", "exchange_rate"), normalize_header_decimal),
+                "tercero": (("tercero",), normalize_header_text),
+                "documento_origen": (("documento_origen",), normalize_header_text),
+                "notas": (("notas",), normalize_header_text),
+            }
+        )
+        errors = self.validate_header_consistency(document_data, header_fields)
         first_row = document_data[0]
         if self.config.party_field and not first_row.get("tercero"):
             errors.append(_("La columna tercero es obligatoria para este tipo de registro."))

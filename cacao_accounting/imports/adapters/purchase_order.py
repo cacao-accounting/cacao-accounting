@@ -8,7 +8,11 @@ from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any, cast
 from cacao_accounting.imports.utils.validation import is_period_open
 from cacao_accounting.imports.utils.dates import parse_import_date
-from cacao_accounting.imports.adapters.base import BaseImportAdapter
+from cacao_accounting.imports.adapters.base import (
+    BaseImportAdapter,
+    COMMON_DOCUMENT_HEADER_FIELDS,
+    normalize_header_text,
+)
 from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party, Warehouse, database
 from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_flow.service import qty_in_base_uom
@@ -47,7 +51,9 @@ class PurchaseOrderAdapter(BaseImportAdapter):
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
         """Validate purchase order document."""
-        errors = []
+        header_fields = dict(COMMON_DOCUMENT_HEADER_FIELDS)
+        header_fields["proveedor"] = (("proveedor",), normalize_header_text)
+        errors = self.validate_header_consistency(document_data, header_fields)
         company_id = (context or {}).get("company_id") or ""
         posting_date = None
         try:
