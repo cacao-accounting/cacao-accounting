@@ -104,3 +104,13 @@ def test_detalle_renderiza_el_comparativo_de_solicitud(app, entorno_contable, au
     body = response.get_data(as_text=True)
     assert document_no in body
     assert f"Proveedor Detalle {suffix}" in body
+
+
+def test_listado_no_ofrece_filtro_de_estado_inoperante(app, entorno_contable, authenticated_client):
+    """El comparativo de solicitudes no muestra un filtro de estado sin efecto (#2141)."""
+    response = authenticated_client().get("/buying/request-for-quotation/comparison")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'id="list-status"' not in body
+    assert 'name="status"' not in body
