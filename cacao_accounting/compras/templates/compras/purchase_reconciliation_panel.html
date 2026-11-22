@@ -147,7 +147,7 @@ groups %}
             <td>
               {% if rec.purchase_invoice_id %}
               <a
-                href="{{ url_for('compras.compras_factura', id=rec.purchase_invoice_id) }}"
+                href="{{ url_for('compras.compras_factura_compra', invoice_id=rec.purchase_invoice_id) }}"
                 class="link-dark"
               >
                 <i class="bi bi-receipt me-1 text-muted"></i>{{

@@ -55,6 +55,17 @@ def test_purchase_reconciliation_labels_order_invoice_receipt_and_panel_amounts(
             transaction_currency="USD",
             grand_total=Decimal("100"),
         )
+        invoice_two_way = PurchaseInvoice(
+            company="cacao",
+            document_type="purchase_invoice",
+            document_no=f"PI-2W-{suffix}",
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            transaction_currency="USD",
+            grand_total=Decimal("80"),
+        )
         receipt = PurchaseReceipt(
             company="cacao",
             document_no=f"PR-{suffix}",
@@ -66,7 +77,7 @@ def test_purchase_reconciliation_labels_order_invoice_receipt_and_panel_amounts(
             transaction_currency="EUR",
             grand_total=Decimal("100"),
         )
-        database.session.add_all([order, invoice, receipt])
+        database.session.add_all([order, invoice, invoice_two_way, receipt])
         database.session.flush()
         database.session.add(
             PurchaseReceiptItem(
@@ -86,11 +97,28 @@ def test_purchase_reconciliation_labels_order_invoice_receipt_and_panel_amounts(
                 company="cacao",
                 purchase_order_id=order.id,
                 purchase_receipt_id=receipt.id,
+                purchase_invoice_id=invoice.id,
                 matched_amount=Decimal("25"),
                 status="partial",
+                matching_type="3-way",
+            )
+        )
+        database.session.add(
+            PurchaseReconciliation(
+                company="cacao",
+                purchase_order_id=order.id,
+                purchase_invoice_id=invoice_two_way.id,
+                matched_amount=Decimal("15"),
+                status="partial",
+                matching_type="2-way",
             )
         )
         database.session.commit()
+        document_ids = {
+            "receipt": receipt.id,
+            "invoice": invoice.id,
+            "invoice_two_way": invoice_two_way.id,
+        }
 
     client = authenticated_client("admin")
     report = client.get("/buying/purchase-reconciliation?company=cacao")
@@ -104,4 +132,8 @@ def test_purchase_reconciliation_labels_order_invoice_receipt_and_panel_amounts(
     panel = client.get("/buying/purchase-reconciliation/panel?company=cacao")
 
     assert panel.status_code == 200
-    assert "EUR 25.00" in panel.get_data(as_text=True)
+    panel_html = panel.get_data(as_text=True)
+    assert "USD 25.00" in panel_html
+    assert f'href="/buying/purchase-receipt/{document_ids["receipt"]}"' in panel_html
+    assert f'href="/buying/purchase-invoice/{document_ids["invoice"]}"' in panel_html
+    assert f'href="/buying/purchase-invoice/{document_ids["invoice_two_way"]}"' in panel_html
