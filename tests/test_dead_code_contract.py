@@ -77,3 +77,11 @@ def test_inventario_services_no_reexporta_company_currency():
 def test_orchestrator_no_reexpone_reversion_de_snapshot():
     """#1352: la reversión real vive en posting_service, no en un helper sin caller."""
     assert not hasattr(BusinessEventOrchestrator, "reverse_from_snapshot")
+
+
+def test_modelos_workflow_sin_consumidor_no_reaparecen():
+    """#1916: la familia de modelos workflow sin consumidor no vuelve al esquema."""
+    from cacao_accounting import database as cacao_database
+
+    for symbol in ("WorkflowActionLog", "WorkflowInstance", "WorkflowState", "WorkflowTransition"):
+        assert not hasattr(cacao_database, symbol), f"#1916: {symbol} reapareció"
