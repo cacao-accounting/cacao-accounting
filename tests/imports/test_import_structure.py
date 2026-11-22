@@ -384,6 +384,38 @@ def test_journal_legacy_header_aliases_remain_available():
     assert canonical == ["document_ref", "fecha", "cuenta", "debito", "credito"]
 
 
+def test_journal_batch_with_invalid_date_fails_validation_before_import(app, tmp_path):
+    """A malformed journal date becomes a validation error, not a ready batch."""
+    with app.app_context():
+        path = tmp_path / "journal-invalid-date.csv"
+        with path.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(JournalEntryAdapter.columns)
+            writer.writerow(["JV-INVALID-DATE", "not-a-date", "1101", "", "", "", "10", "0", ""])
+            writer.writerow(["JV-INVALID-DATE", "not-a-date", "4101", "", "", "", "0", "10", ""])
+        batch = ImportBatch(
+            company_id="cacao",
+            record_type="journal_entry",
+            source_format="csv",
+            source_filename=path.name,
+            source_path=str(path),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        assert ImportService().validate(batch.id)
+
+        errors = ImportBatchError.query.filter_by(batch_id=batch.id).all()
+        assert batch.import_status == 2
+        assert len(errors) == 1
+        assert errors[0].error_type == "BUSINESS_RULE"
+        assert "fecha" in errors[0].message.lower() and "válid" in errors[0].message.lower()
+
+        database.session.delete(batch)
+        database.session.commit()
+
+
 def test_structural_error_detection_reports_unnamed_and_overflow_cells():
     """Los errores identifican filas con datos sin título o fuera del esquema."""
     table = NormalizedTable(columns=["nombre", ""], rows=[["Ana", "extra", "overflow"]])
