@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, primary_ledger_id
+from cacao_accounting.numbers import coerce_decimal
 
 
 from cacao_accounting.i18n import _
@@ -541,11 +542,20 @@ def _resolve_rule_tolerances(transaction: BankTransaction, company: str) -> tupl
     days = 7
     amount_tolerance = Decimal("0")
     for rule_days, rule_amount in rows:
-        if rule_days is not None and int(rule_days) > days:
-            days = int(rule_days)
-        tolerance = _decimal_value(rule_amount)
-        if tolerance > amount_tolerance:
-            amount_tolerance = tolerance
+        try:
+            rule_day_value = int(rule_days) if rule_days is not None else 7
+            if rule_day_value < 0:
+                raise ValueError("negative days tolerance")
+            tolerance = coerce_decimal(
+                rule_amount if rule_amount is not None else 0,
+                "tolerancia de monto",
+                non_negative=True,
+                max_fractional_digits=4,
+            )
+        except (TypeError, ValueError) as exc:
+            raise BankReconciliationError(_("La regla de matching contiene tolerancias inválidas.")) from exc
+        days = max(days, rule_day_value)
+        amount_tolerance = max(amount_tolerance, tolerance)
     return days, amount_tolerance
 
 
@@ -557,7 +567,19 @@ def _candidate_tolerances(
         resolved_days, resolved_amount = _resolve_rule_tolerances(transaction, company)
         days_tolerance = resolved_days if days_tolerance is None else days_tolerance
         amount_tolerance = resolved_amount if amount_tolerance is None else amount_tolerance
-    return days_tolerance, amount_tolerance
+    try:
+        days = int(days_tolerance)
+        if days < 0:
+            raise ValueError("negative days tolerance")
+        amount = coerce_decimal(
+            amount_tolerance,
+            "tolerancia de monto",
+            non_negative=True,
+            max_fractional_digits=4,
+        )
+    except (TypeError, ValueError) as exc:
+        raise BankReconciliationError(_("La regla de matching contiene tolerancias inválidas.")) from exc
+    return days, amount
 
 
 def _candidate_payment_amount(

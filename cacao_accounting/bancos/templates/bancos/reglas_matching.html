@@ -7,8 +7,8 @@
     <div class="col-md-2"><input class="form-control" name="company" placeholder="{{ _('Compañía') }}" required></div>
     <div class="col-md-2"><select class="form-select" name="bank_account_id"><option value="">{{ _("Todas") }}</option>{% for account in accounts %}<option value="{{ account.id }}">{{ account.account_name }}</option>{% endfor %}</select></div>
     <div class="col-md-2"><input class="form-control" name="name" placeholder="{{ _('Nombre') }}" required></div>
-    <div class="col-md-1"><input class="form-control" name="days_tolerance" value="7"></div>
-    <div class="col-md-1"><input class="form-control" name="amount_tolerance" value="0"></div>
+    <div class="col-md-1"><input class="form-control" type="number" min="0" step="1" name="days_tolerance" value="7"></div>
+    <div class="col-md-1"><input class="form-control" type="number" min="0" step="0.0001" name="amount_tolerance" value="0"></div>
     <div class="col-md-1"><input class="form-control" name="reference_contains" placeholder="{{ _('Referencia') }}"></div>
     <div class="col-md-1"><input class="form-control" name="priority" value="100"></div>
     <div class="col-md-1 form-check ms-2">

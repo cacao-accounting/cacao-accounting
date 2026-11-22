@@ -24308,3 +24308,7 @@ msgstr "The historical inventory adjustment cannot be duplicated. Create a posit
 msgid "El documento no está disponible para este tercero."
 msgstr "Document is not available for this party."
 
+#: cacao_accounting/bancos/reconciliation_service.py
+msgid "La regla de matching contiene tolerancias inválidas."
+msgstr "The matching rule contains invalid tolerances."
+

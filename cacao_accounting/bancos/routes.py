@@ -56,6 +56,7 @@ from cacao_accounting.database import (
     User,
     database,
 )
+from cacao_accounting.numbers import coerce_decimal
 
 from cacao_accounting.auth.permisos import Permisos
 
@@ -694,12 +695,17 @@ def bancos_reglas_matching():
             if bank_account.company != company:
                 flash(_("La cuenta bancaria no pertenece a la compañía de la regla."), "danger")
                 return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
+        try:
+            days_tolerance, amount_tolerance = _matching_tolerances_from_form(request.form)
+        except (TypeError, ValueError):
+            flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
+            return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
         rule = BankMatchingRule(
             company=company,
             bank_account_id=bank_account_id,
             name=request.form.get("name") or "",
-            days_tolerance=int(request.form.get("days_tolerance") or 7),
-            amount_tolerance=Decimal(request.form.get("amount_tolerance") or "0"),
+            days_tolerance=days_tolerance,
+            amount_tolerance=amount_tolerance,
             reference_contains=request.form.get("reference_contains") or None,
             priority=int(request.form.get("priority") or 100),
             is_active=request.form.get("is_active") is not None,
@@ -713,6 +719,20 @@ def bancos_reglas_matching():
     return render_template(
         "bancos/reglas_matching.html", accounts=accounts, rules=rules, titulo=_("Reglas de Matching Bancario")
     )
+
+
+def _matching_tolerances_from_form(form) -> tuple[int, Decimal]:
+    """Parse finite, non-negative matching tolerances at the HTTP boundary."""
+    days = int(form.get("days_tolerance") or 7)
+    if days < 0:
+        raise ValueError("negative days tolerance")
+    amount = coerce_decimal(
+        form.get("amount_tolerance") or "0",
+        "tolerancia de monto",
+        non_negative=True,
+        max_fractional_digits=4,
+    )
+    return days, amount
 
 
 @bancos.route("/bank-matching-rules/<rule_id>/run", methods=["POST"])
@@ -742,6 +762,8 @@ def bancos_regla_matching_ejecutar(rule_id: str):
             "success",
         )
     except BankStatementError as exc:
+        flash(_(str(exc)), "danger")
+    except BankReconciliationError as exc:
         flash(_(str(exc)), "danger")
     return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
 
