@@ -97,7 +97,7 @@ def get_document_flow(
             "relation_type": r.relation_type,
             "status": r.status,
             "qty": str(r.qty),
-            "amount": str(r.amount) if r.amount else None,
+            "amount": str(r.amount) if r.amount is not None else None,
             "company": r.company,
             "created": r.created.isoformat() if r.created else None,
         }

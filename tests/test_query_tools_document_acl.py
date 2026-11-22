@@ -116,6 +116,7 @@ def document_acl_scenario():
                 target_id=payment.id,
                 company="alpha",
                 qty=Decimal("1"),
+                amount=Decimal("0"),
                 relation_type="payment",
                 status="active",
             )
@@ -212,6 +213,18 @@ def test_flow_hides_relations_to_modules_without_permission(document_acl_scenari
             document_id=ids["sale"],
         )
         assert len(visible["items"]) == 1
+        assert visible["items"][0]["amount"] == "0.0000"
+
+        relation = database.session.execute(database.select(DocumentRelation).filter_by(source_id=ids["sale"])).scalar_one()
+        relation.amount = None
+        database.session.commit()
+        missing_amount = get_document_flow.handler(
+            context=cash_context,
+            company_id="alpha",
+            document_type="sales_invoice",
+            document_id=ids["sale"],
+        )
+        assert missing_amount["items"][0]["amount"] is None
 
 
 def test_search_relations_filters_by_readable_modules(document_acl_scenario):
