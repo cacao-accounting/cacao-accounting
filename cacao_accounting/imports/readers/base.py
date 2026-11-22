@@ -10,6 +10,25 @@ from typing import Any
 
 from cacao_accounting.i18n import _
 
+DATE_COLUMN_HEADERS = {
+    "date",
+    "estimated_date",
+    "estimated date",
+    "fecha",
+    "fecha_contabilizacion",
+    "fecha contabilizacion",
+    "fecha_estimada",
+    "fecha estimada",
+    "posting_date",
+    "posting date",
+}
+
+
+def is_import_date_column(header: str) -> bool:
+    """Indica si el encabezado identifica una fecha consumida por un adaptador."""
+    normalized = header.removeprefix("\ufeff").strip().lower()
+    return normalized in DATE_COLUMN_HEADERS
+
 
 class NumericCellValue(str):
     """Texto numérico canónico que conserva que la celda de origen era numérica."""

@@ -3,8 +3,12 @@
 
 """Lector de archivos XLSX."""
 
+from datetime import datetime
+from typing import Any
+
 import openpyxl
-from cacao_accounting.imports.readers.base import BaseReader, TabularBook
+from openpyxl.utils.datetime import from_excel
+from cacao_accounting.imports.readers.base import BaseReader, TabularBook, is_import_date_column
 from cacao_accounting.imports.readers.limits import (
     ReadBudget,
     validate_archive_size,
@@ -30,12 +34,26 @@ class XLSXReader(BaseReader):
 
             budget = ReadBudget()
             budget.consume_header(len(columns))
+            date_columns = {index for index, column in enumerate(columns) if is_import_date_column(column)}
             rows = []
             for row in rows_iter:
-                values = list(row)
+                values = [
+                    _normalize_date_serial(value, wb.epoch) if index in date_columns else value
+                    for index, value in enumerate(row)
+                ]
                 budget.consume_row(len(values))
                 rows.append(values)
 
             return TabularBook(columns=columns, rows=rows, source_format="xlsx")
         finally:
             wb.close()
+
+
+def _normalize_date_serial(value: Any, epoch: datetime) -> Any:
+    """Convierte seriales numéricos solo en columnas reconocidas como fecha."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return value
+    try:
+        return from_excel(value, epoch=epoch)
+    except (OverflowError, ValueError):
+        return value

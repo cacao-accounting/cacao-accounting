@@ -9,7 +9,7 @@ from pathlib import Path
 
 import xlrd
 from xlrd import biffh, compdoc
-from cacao_accounting.imports.readers.base import BaseReader, TabularBook
+from cacao_accounting.imports.readers.base import BaseReader, TabularBook, is_import_date_column
 from cacao_accounting.imports.readers.limits import (
     MAX_IMPORT_CELLS,
     MAX_IMPORT_COLUMNS,
@@ -41,9 +41,18 @@ class XLSReader(BaseReader):
             budget = ReadBudget()
             budget.consume_header(ws.ncols)
             columns = [str(ws.cell_value(0, col)) for col in range(ws.ncols)]
+            date_columns = {index for index, column in enumerate(columns) if is_import_date_column(column)}
             rows = []
             for row_idx in range(1, ws.nrows):
-                row = [_cell_value(wb, ws.cell_type(row_idx, col), ws.cell_value(row_idx, col)) for col in range(ws.ncols)]
+                row = [
+                    _cell_value(
+                        wb,
+                        ws.cell_type(row_idx, col),
+                        ws.cell_value(row_idx, col),
+                        is_date_column=col in date_columns,
+                    )
+                    for col in range(ws.ncols)
+                ]
                 budget.consume_row(len(row))
                 rows.append(row)
 
@@ -52,7 +61,7 @@ class XLSReader(BaseReader):
             wb.release_resources()
 
 
-def _cell_value(workbook: Any, cell_type: int, value: Any) -> Any:
+def _cell_value(workbook: Any, cell_type: int, value: Any, *, is_date_column: bool = False) -> Any:
     """Convierte una celda XLS respetando el sistema de fechas del libro.
 
     Los archivos guardados con el sistema de 1904 usan un epoch distinto al
@@ -60,8 +69,15 @@ def _cell_value(workbook: Any, cell_type: int, value: Any) -> Any:
     fechas 1462 días, así que las celdas de fecha se convierten aquí con el
     ``datemode`` real del libro; el resto de valores se entrega sin cambios.
     """
-    if cell_type == xlrd.XL_CELL_DATE:
-        return xlrd.xldate_as_datetime(float(value), workbook.datemode)
+    is_numeric_date = is_date_column and cell_type == xlrd.XL_CELL_NUMBER
+    if cell_type == xlrd.XL_CELL_DATE or is_numeric_date:
+        try:
+            serial = float(value)
+            if serial <= 0:
+                return value
+            return xlrd.xldate_as_datetime(serial, workbook.datemode)
+        except (TypeError, ValueError, OverflowError):
+            return value
     return value
 
 
