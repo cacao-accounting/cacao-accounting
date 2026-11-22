@@ -338,6 +338,16 @@ def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
         admin_user = database.session.execute(select(User).filter_by(user="admin")).scalar_one()
         book_primary = database.session.execute(select(Book).filter_by(code="DEFAULT_BOOK")).scalar_one()
 
+        # #1828: en Cloud la clasificación admin no concede compañías por sí
+        # sola; las pruebas que ejercen servicios con Permisos necesitan el
+        # acceso explícito a la compañía del escenario.
+        access = database.session.execute(
+            select(UserCompanyAccess).filter_by(user_id=admin_user.id, company_code="cacao")
+        ).scalar_one_or_none()
+        if access is None:
+            database.session.add(UserCompanyAccess(user_id=admin_user.id, company_code="cacao"))
+            database.session.commit()
+
         book_secondary = database.session.execute(select(Book).filter_by(code="NIIF")).scalar_one_or_none()
         if book_secondary is None:
             book_secondary = Book(
