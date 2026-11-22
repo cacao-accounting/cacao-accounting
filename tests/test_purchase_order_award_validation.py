@@ -25,6 +25,7 @@ from cacao_accounting.compras.services import (
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     CompanyParty,
+    DocumentRelation,
     Currency,
     Entity,
     Item,
@@ -239,6 +240,7 @@ def test_adjudicacion_rechaza_proveedor_ajeno(adjudicaciones):
             application,
             ids["award"],
             "cacao",
+            source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=ids["proveedor_b"],
             form=_form(ids, supplier_id=ids["proveedor_b"]),
         )
@@ -269,6 +271,7 @@ def test_adjudicacion_rechaza_linea_no_adjudicada(adjudicaciones):
             application,
             ids["award"],
             "cacao",
+            source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=ids["proveedor_a"],
             form=_form(ids, item_code_0="OTRO"),
         )
@@ -501,21 +504,42 @@ def test_edicion_rechaza_exceder_cantidad_adjudicada(adjudicaciones, monkeypatch
         assert linea.qty == Decimal("1")
 
 
+def _relaciones_de_orden(application, orden_id: str) -> set[tuple[str | None, str | None]]:  # noqa: ANN001 - helper
+    """Devuelve las relaciones activas de origen de la orden."""
+    with application.app_context():
+        relaciones = database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                target_type="purchase_order",
+                target_id=orden_id,
+                status="active",
+            )
+        ).scalars()
+        return {(relacion.source_id, relacion.source_item_id) for relacion in relaciones}
+
+
 def test_edicion_rechaza_linea_de_fuente_no_adjudicada(adjudicaciones, monkeypatch):
-    """Una edición que cambia la fuente de la línea no rompe la adjudicación."""
+    """Una edición con fuente coherente de otra cotización no rompe la adjudicación."""
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
     orden_id = _orden_creada(application)
+    linea_id = _linea_orden(application, orden_id).id
+    relaciones = _relaciones_de_orden(application, orden_id)
 
-    _editar_orden(application, orden_id, _form_orden(ids, source_item_id_0=ids["sq_b_item"]))
+    _editar_orden(
+        application,
+        orden_id,
+        _form_orden(ids, source_id_0=ids["sq_b"], source_item_id_0=ids["sq_b_item"]),
+    )
 
     with application.app_context():
         orden = database.session.get(PurchaseOrder, orden_id)
         linea = _linea_orden(application, orden_id)
         assert orden.purchase_award_id == ids["award"]
         assert orden.supplier_id == ids["proveedor_a"]
+        assert linea.id == linea_id
         assert linea.item_code == "ART-1"
         assert linea.qty == Decimal("1")
+    assert _relaciones_de_orden(application, orden_id) == relaciones
 
 
 def test_edicion_valida_conserva_articulo_fuente_y_cantidad(adjudicaciones, monkeypatch):

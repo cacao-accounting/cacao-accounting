@@ -187,3 +187,25 @@ def test_linea_fiscal_persiste_con_token_valido(admin_csrf_scenario):
             ).scalar_one_or_none()
             is not None
         )
+
+
+def test_validacion_externa_persiste_con_token_valido(admin_csrf_scenario):
+    """El POST de validación externa exige token y persiste la configuración."""
+    from cacao_accounting.printing.settings import external_validation_base_url, external_validation_enabled
+
+    application, user_id, _ = admin_csrf_scenario
+    client = _cliente(application, user_id)
+    ruta = "/settings/external-document-validation"
+    token = _token(client, ruta, "base_url")
+
+    sin_token = client.post(ruta, data={"enabled": "on", "base_url": "https://validacion.example"})
+    assert sin_token.status_code == 400
+
+    con_token = client.post(
+        ruta,
+        data={"csrf_token": token, "enabled": "on", "base_url": "https://validacion.example"},
+    )
+    assert con_token.status_code == 302
+    with application.app_context():
+        assert external_validation_enabled() is True
+        assert external_validation_base_url() == "https://validacion.example"
