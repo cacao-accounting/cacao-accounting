@@ -45,6 +45,7 @@ _LEDGER_CANCELLATION_ACTIVE: ContextVar[tuple[str, str] | None] = ContextVar("ic
 _BALANCE_CONFIRMATION_RESPONSE_TRANSITION: ContextVar[frozenset[str]] = ContextVar(
     "icfr_balance_confirmation_response_transition", default=frozenset()
 )
+_POSTING_AUTHORIZATION: ContextVar[bool] = ContextVar("icfr_posting_authorization", default=False)
 _POSTED_DOCUMENTS_IN_TRANSACTION = "icfr_posted_documents"
 BALANCE_CONFIRMATION_SNAPSHOT_FIELDS = frozenset(
     {
@@ -593,9 +594,27 @@ def _remember_inserted_posted_document(mapper: Any, connection: Any, target: Any
     _remember_posted_document(target)
 
 
+@contextmanager
+def authorized_posting() -> Iterator[None]:
+    """Autoriza únicamente las escrituras internas del servicio de posting.
+
+    El allowance de líneas de un documento posteado no se concede por una
+    transición ORM arbitraria: solo mientras el servicio de posting ejecuta
+    su unidad de trabajo. Fuera del alcance, cualquier draft→posted por ORM
+    queda sin permiso y las líneas siguen protegidas (#1877).
+    """
+    token = _POSTING_AUTHORIZATION.set(True)
+    try:
+        yield
+    finally:
+        _POSTING_AUTHORIZATION.reset(token)
+
+
 def _remember_document_posting_transition(mapper: Any, connection: Any, target: Any) -> None:
-    """Remember a draft-to-posted transition inside the active transaction."""
+    """Remember a draft-to-posted transition inside an authorized posting scope."""
     del mapper, connection
+    if not _POSTING_AUTHORIZATION.get():
+        return
     if _is_currently_posted(target) and not _posted(target):
         _remember_posted_document(target)
 

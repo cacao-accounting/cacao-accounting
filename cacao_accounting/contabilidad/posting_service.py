@@ -5004,7 +5004,11 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
         raise PostingError(_("Solo se puede aprobar un documento en borrador."))
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
-    with database.session.begin_nested():
+    from cacao_accounting.internal_control_service import authorized_posting
+
+    # #1877: el allowance para escribir líneas internas solo existe dentro
+    # del alcance del servicio de posting, no por una transición ORM cualquiera.
+    with authorized_posting(), database.session.begin_nested():
         document.docstatus = 1
         entries = post_document_to_gl(document, ledger_code=ledger_code)
         _validate_arap_gl_transition(document)

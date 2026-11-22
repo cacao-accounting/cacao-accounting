@@ -1,8 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#1877: durante el posting, la escritura interna de líneas del movimiento está permitida."""
+"""#1877: el allowance de líneas solo existe dentro del servicio de posting.
 
+Una transición ORM ``draft -> posted`` no debe habilitar por sí sola la
+reescritura de líneas. La autorización se abre únicamente mientras
+``submit_document()`` ejecuta su unidad de trabajo, y se limpia al terminar
+o revertir. La prueba usa el servicio real y sustituye solo el escritor GL,
+cuyo detalle contable no es el contrato de este issue.
+"""
+
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -10,6 +18,8 @@ from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
+from cacao_accounting.contabilidad import posting_service
+from cacao_accounting.contabilidad.posting_service import submit_document
 from cacao_accounting.database import Currency, Entity, Item, StockEntry, StockEntryItem, UOM, database
 
 
@@ -53,16 +63,16 @@ def app_controles():
         database.engine.dispose()
 
 
-def test_updates_on_posted_lines_allowed_only_during_posting(app_controles):
-    """Los cambios internos de posting quedan bloqueados después de la transacción (#1877)."""
-    with app_controles.app_context():
+def _seed_draft(app) -> tuple[str, str]:
+    """Crea un movimiento en borrador con una línea editable por el posting."""
+    with app.app_context():
         database.session.add(UOM(code="UNI-X", name="Unidad X"))
         database.session.flush()
         database.session.add(
             Item(code="ART-X", name="Articulo X", item_type="goods", is_stock_item=False, default_uom="UNI-X")
         )
         database.session.flush()
-        entry = StockEntry(company="cacao", purpose="stock_reconciliation", docstatus=0)
+        entry = StockEntry(company="cacao", purpose="stock_reconciliation", posting_date=date(2026, 5, 15), docstatus=0)
         database.session.add(entry)
         database.session.flush()
         item = StockEntryItem(
@@ -74,23 +84,81 @@ def test_updates_on_posted_lines_allowed_only_during_posting(app_controles):
         )
         database.session.add(item)
         database.session.commit()
+        return entry.id, item.id
 
+
+def _posting_writer(document, ledger_code=None):
+    """Simula la escritura interna de snapshots que realiza el posting real."""
+    del ledger_code
+    item = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalar_one()
+    item.current_qty = Decimal("10")
+    item.counted_qty = Decimal("8")
+    item.qty = Decimal("2")
+    database.session.flush()
+    return []
+
+
+def test_transicion_orm_sin_posting_no_autoriza_editar_lineas(app_controles):
+    """Un draft->posted directo no obtiene el allowance del servicio."""
+    entry_id, item_id = _seed_draft(app_controles)
+
+    with app_controles.app_context():
+        entry = database.session.get(StockEntry, entry_id)
+        item = database.session.get(StockEntryItem, item_id)
         entry.docstatus = 1
         database.session.flush()
 
-        item.current_qty = Decimal("10")
-        item.counted_qty = Decimal("8")
-        item.qty = Decimal("2")
-        database.session.flush()
-
-        persisted = database.session.get(StockEntryItem, item.id)
-        assert persisted is not None
-        assert persisted.current_qty == Decimal("10")
-        assert persisted.counted_qty == Decimal("8")
-
-        database.session.commit()
-
-        item = database.session.get(StockEntryItem, item.id)
         item.current_qty = Decimal("5")
         with pytest.raises(ValueError, match="inmutables"):
             database.session.flush()
+        database.session.rollback()
+
+
+def test_submit_document_permite_sus_escrituras_y_bloquea_las_externas(app_controles, monkeypatch):
+    """El posting real escribe sus líneas; después del commit quedan bloqueadas."""
+    entry_id, item_id = _seed_draft(app_controles)
+    monkeypatch.setattr(posting_service, "post_document_to_gl", _posting_writer)
+
+    with app_controles.app_context():
+        entry = database.session.get(StockEntry, entry_id)
+        assert submit_document(entry) == []
+        assert entry.docstatus == 1
+        database.session.commit()
+
+        item = database.session.get(StockEntryItem, item_id)
+        assert item.current_qty == Decimal("10")
+        assert item.counted_qty == Decimal("8")
+        item.current_qty = Decimal("5")
+        with pytest.raises(ValueError, match="inmutables"):
+            database.session.flush()
+        database.session.rollback()
+
+
+def test_fallo_del_posting_revierte_estado_y_limpia_el_allowance(app_controles, monkeypatch):
+    """Si el posting falla, no queda docstatus posteado ni permiso residual."""
+    entry_id, item_id = _seed_draft(app_controles)
+
+    def _falla(document, ledger_code=None):
+        del ledger_code
+        item = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalar_one()
+        item.current_qty = Decimal("99")
+        database.session.flush()
+        raise RuntimeError("fallo de posting")
+
+    monkeypatch.setattr(posting_service, "post_document_to_gl", _falla)
+
+    with app_controles.app_context():
+        entry = database.session.get(StockEntry, entry_id)
+        with pytest.raises(RuntimeError, match="fallo de posting"):
+            submit_document(entry)
+        database.session.rollback()
+
+    with app_controles.app_context():
+        entry = database.session.get(StockEntry, entry_id)
+        item = database.session.get(StockEntryItem, item_id)
+        assert entry.docstatus == 0
+        assert item.current_qty != Decimal("99")
+
+        monkeypatch.setattr(posting_service, "post_document_to_gl", _posting_writer)
+        assert submit_document(entry) == []
+        assert entry.docstatus == 1
