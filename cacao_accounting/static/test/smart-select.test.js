@@ -359,6 +359,96 @@ describe('smart-select', function () {
     assert.strictEqual(component.selectedValue, 'cacao');
   });
 
+  it('does not call onSelect for values offered to a locked selector', function () {
+    let selected = null;
+    const create = loadSmartSelect();
+    const component = create({
+      doctype: 'company',
+      name: 'company',
+      locked: true,
+      initialValue: 'cacao',
+      onSelect: (option) => {
+        selected = option;
+      },
+    });
+
+    component.selectOptionFromValues('cafe', 'Cafe SA', { value: 'cafe', display_name: 'Cafe SA' });
+
+    assert.strictEqual(component.selectedValue, 'cacao');
+    assert.strictEqual(selected, null);
+  });
+
+  it('keeps typed or pasted text after the selected-value watcher clears the old option', function () {
+    const events = [];
+    const hiddenInput = {
+      value: 'cust-old',
+      dispatchEvent: (event) => events.push(event.type),
+    };
+    const create = loadSmartSelect();
+    const component = create({ doctype: 'party', name: 'party_id', initialValue: 'cust-old' });
+    let watchSelectedValue;
+    component.$root = {
+      classList: { toggle() {} },
+      querySelector: () => hiddenInput,
+    };
+    component.$watch = (property, callback) => {
+      if (property === 'selectedValue') watchSelectedValue = callback;
+    };
+    component.selectedLabel = 'Old Customer';
+    component.search = 'Old Customer';
+    component.init();
+
+    component.onInput({ target: { value: 'New Customer' } });
+    watchSelectedValue('');
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(component.search, 'New Customer');
+    assert.strictEqual(hiddenInput.value, '');
+    assert.deepStrictEqual(events, ['input', 'change']);
+
+    component.selectedValue = 'cust-old';
+    component.selectedLabel = 'Old Customer';
+    component.search = 'Old Customer';
+    component.onInput({ target: { value: 'Pasted Customer' } });
+    watchSelectedValue('');
+
+    assert.strictEqual(component.search, 'Pasted Customer');
+    assert.strictEqual(hiddenInput.value, '');
+    assert.deepStrictEqual(events, ['input', 'change', 'input', 'change']);
+  });
+
+  it('notifies dependent selectors when typing invalidates a selected filter', function () {
+    const companyInput = {
+      value: 'cacao',
+      listeners: {},
+      addEventListener(eventName, handler) {
+        (this.listeners[eventName] ||= []).push(handler);
+      },
+      removeEventListener() {},
+      dispatchEvent(event) {
+        for (const handler of this.listeners[event.type] || []) handler(event);
+      },
+    };
+    const create = loadSmartSelect({ elements: { '#company': companyInput } });
+    const company = create({ doctype: 'company', name: 'company', initialValue: 'cacao' });
+    company.$root = { querySelector: () => companyInput, classList: { toggle() {} } };
+    company.selectedLabel = 'Cacao SA';
+    company.search = 'Cacao SA';
+    const sequence = create({
+      doctype: 'naming_series',
+      name: 'sequence_id',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      initialValue: 'SER-CACAO',
+    });
+    sequence.init();
+
+    company.onInput({ target: { value: 'Ca' } });
+
+    assert.strictEqual(sequence.selectedValue, '');
+    assert.strictEqual(sequence.options.length, 0);
+  });
+
   it('selectOption updates hidden input and dispatches input/change events', function () {
     const create = loadSmartSelect();
     const component = create({

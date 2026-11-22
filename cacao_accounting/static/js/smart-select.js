@@ -150,7 +150,6 @@
           if (normalized) {
             this.updateLabelFromOptions(normalized);
           } else {
-            this.search = '';
             this.selectedLabel = '';
           }
           this.syncFilledState();
@@ -208,6 +207,7 @@
           if (this.selectedLabel && this.search !== this.selectedLabel) {
             this.selectedValue = '';
             this.selectedLabel = '';
+            this.notifyValueChange();
           }
           this.invalid = false;
           void this.fetchOptions();
@@ -400,6 +400,7 @@
         },
 
         selectOptionFromValues(value, label, option) {
+          if (this.locked) return;
           this.selectOptionValue(value, label);
           if (typeof this.onSelect === 'function') {
             try {

@@ -68,6 +68,28 @@ describe('document-flow-tree', function () {
     assert.ok(!html.includes('documento(s)'));
   });
 
+  it('uses stable status codes to keep semantic badges across languages', function () {
+    const statuses = [
+      { code: 'approved', label: 'Approved', badge: 'ca-flow-badge--approved' },
+      { code: 'paid', label: 'Paid', badge: 'ca-flow-badge--approved' },
+      { code: 'pending_collection', label: 'Pending Collection', badge: 'ca-flow-badge--partial' },
+      { code: 'partially_paid', label: 'Partially Paid', badge: 'ca-flow-badge--partial' },
+      { code: 'approved', label: 'Aprobado', badge: 'ca-flow-badge--approved' },
+      { code: 'paid', label: 'Pagado', badge: 'ca-flow-badge--approved' },
+      { code: 'pending_collection', label: 'Pendiente Cobrar', badge: 'ca-flow-badge--partial' },
+      { code: 'partially_paid', label: 'Pagado Parcialmente', badge: 'ca-flow-badge--partial' },
+    ];
+
+    for (const [index, status] of statuses.entries()) {
+      const html = renderTree(
+        [{ document_type: 'sales_invoice', document_id: `INV-${index}`, status }],
+        null,
+        true
+      );
+      assert.ok(html.includes(status.badge), `${status.label} should use ${status.badge}`);
+    }
+  });
+
   it('translates count labels, payment summary and tree limits', function () {
     const tree = documentFlowTree({ messages: englishMessages });
     const current = {
