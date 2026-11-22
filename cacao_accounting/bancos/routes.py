@@ -947,6 +947,13 @@ def bancos_cuenta_bancaria(account_id):
         abort(404)
     exige_acceso_compania("cash", registro.company, "consultar")
     titulo = registro.account_name + " - " + APPNAME
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    puede_editar_numeracion = Permisos(
+        modulo=obtener_id_modulo_por_nombre("cash"),
+        usuario=current_user.id,
+    ).editar
 
     from cacao_accounting.document_identifiers import PAYMENT_TYPE_TO_ENTITY_TYPE as ENTITY_MAP
 
@@ -1031,6 +1038,7 @@ def bancos_cuenta_bancaria(account_id):
         naming_series_options=naming_series_options,
         external_counter_options=external_counter_options,
         PAYMENT_TYPES=PAYMENT_TYPES,
+        puede_editar_numeracion=puede_editar_numeracion,
     )
 
 
