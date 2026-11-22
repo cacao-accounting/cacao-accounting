@@ -2581,7 +2581,7 @@ msgstr "Document rejected successfully."
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_nuevo.html:8
 #: cacao_accounting/bancos/templates/bancos/conciliacion_bancaria.html:4
 #: cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html:9
-#: cacao_accounting/bancos/templates/bancos/extracto_importar.html:5 cacao_accounting/bancos/templates/bancos/pago_lista.html:9
+#: cacao_accounting/bancos/templates/bancos/pago_lista.html:9
 #: cacao_accounting/bancos/templates/bancos/transaccion_lista.html:9 cacao_accounting/compras/templates/compras.html:11
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:9
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html:8
@@ -2722,7 +2722,7 @@ msgstr "Breadcrumb"
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_nuevo.html:10
 #: cacao_accounting/bancos/templates/bancos/conciliacion_bancaria.html:6
 #: cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html:11
-#: cacao_accounting/bancos/templates/bancos/extracto_importar.html:7 cacao_accounting/bancos/templates/bancos/nota_nueva.html:8
+#: cacao_accounting/bancos/templates/bancos/nota_nueva.html:8
 #: cacao_accounting/bancos/templates/bancos/pago.html:37 cacao_accounting/bancos/templates/bancos/pago_lista.html:11
 #: cacao_accounting/bancos/templates/bancos/pago_nuevo.html:121 cacao_accounting/bancos/templates/bancos/transaccion_lista.html:11
 #: cacao_accounting/bancos/templates/bancos/transferencia_nueva.html:8 cacao_accounting/compras/templates/compras.html:15
@@ -8160,7 +8160,7 @@ msgstr "Could not determine the bank account currency."
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_entradas.html:13
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_lista.html:12
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_nuevo.html:11
-#: cacao_accounting/bancos/templates/bancos/extracto_importar.html:8 cacao_accounting/bancos/templates/bancos/pago.html:41
+#: cacao_accounting/bancos/templates/bancos/pago.html:41
 #: cacao_accounting/imports/routes.py:191 cacao_accounting/templates/macros.html:140
 msgid "Caja y Bancos"
 msgstr "Cash Management"
@@ -8226,8 +8226,7 @@ msgstr "Bank Credit Notes"
 msgid "Transacciones Bancarias"
 msgstr "Bank Transactions"
 
-#: cacao_accounting/bancos/templates/bancos.html:126 cacao_accounting/bancos/templates/bancos/extracto_importar.html:9
-#: cacao_accounting/bancos/templates/bancos/extracto_importar.html:14
+#: cacao_accounting/bancos/templates/bancos.html:126
 msgid "Importar Extracto Bancario"
 msgstr "Import Bank Statement"
 
@@ -9201,7 +9200,6 @@ msgstr "Use the shared import wizard with downloadable template, preview and val
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:158
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_entradas.html:108
-#: cacao_accounting/bancos/templates/bancos/extracto_importar.html:26
 #: cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html:1500
 msgid "Ir al Asistente de Importación"
 msgstr "Go to Import Wizard"
@@ -9531,22 +9529,6 @@ msgstr "Could not load candidates."
 #: cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html:271
 msgid "No se pudo validar el archivo."
 msgstr "The file could not be validated."
-
-#: cacao_accounting/bancos/templates/bancos/extracto_importar.html:20
-msgid "Use el asistente de importación"
-msgstr "Use the import wizard"
-
-#: cacao_accounting/bancos/templates/bancos/extracto_importar.html:22
-msgid ""
-"La importación de extractos bancarios ahora se realiza a través del asistente compartido de importación, que ofrece "
-"plantilla descargable, vista previa y validación."
-msgstr ""
-"Importing bank statements is now done through the shared import wizard, which offers downloadable template, preview and "
-"validation."
-
-#: cacao_accounting/bancos/templates/bancos/extracto_importar.html:31
-msgid "Volver a Transacciones"
-msgstr "Back to Transactions"
 
 #: cacao_accounting/bancos/templates/bancos/nota_nueva.html:53 cacao_accounting/bancos/templates/bancos/pago_nuevo.html:531
 #: cacao_accounting/bancos/templates/bancos/transferencia_nueva.html:57
