@@ -176,3 +176,23 @@ def test_lector_no_puede_borrar_ni_alterar_el_mapeo(escenario_efe):
             ).scalar_one_or_none()
             is None
         )
+
+
+def test_post_vacio_conserva_mapeos_existentes(escenario_efe):
+    """Un POST sin account_ids no borra la clasificación ya guardada (#1789)."""
+    application, ids = escenario_efe
+    with application.app_context():
+        database.session.add(
+            CashFlowAccountMapping(company="cacao", account_id=ids["account"], flow_section="investing")
+        )
+        database.session.commit()
+    client = _login(application, ids["editor"])
+
+    response = client.post(RUTA.format("cacao"), data={})
+
+    assert response.status_code == 302
+    with application.app_context():
+        mapping = database.session.execute(
+            database.select(CashFlowAccountMapping).filter_by(company="cacao", account_id=ids["account"])
+        ).scalar_one()
+        assert mapping.flow_section == "investing"
