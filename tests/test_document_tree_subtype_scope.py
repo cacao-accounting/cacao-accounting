@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -82,7 +83,15 @@ def tree_subtype_scenario():
             document_type="sales_invoice",
             customer_name="Cliente Alfa",
         )
-        database.session.add_all([credit_note, invoice])
+        second_credit_note = SalesInvoice(
+            company="alpha",
+            posting_date=date(2026, 5, 10),
+            docstatus=1,
+            document_no=f"CN2-{suffix}",
+            document_type="sales_credit_note",
+            customer_name="Cliente Alfa",
+        )
+        database.session.add_all([credit_note, invoice, second_credit_note])
         database.session.flush()
         database.session.add(
             DocumentRelation(
@@ -96,6 +105,19 @@ def tree_subtype_scenario():
                 status="active",
             )
         )
+        for related_credit_note in (credit_note, second_credit_note):
+            database.session.add(
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id=invoice.id,
+                    target_type="sales_credit_note",
+                    target_id=related_credit_note.id,
+                    company="alpha",
+                    qty=Decimal("1"),
+                    relation_type="reference",
+                    status="active",
+                )
+            )
         database.session.add(
             User(
                 id=f"seller-{suffix}",
@@ -163,3 +185,26 @@ def test_document_node_does_not_render_metadata_of_another_subtype(tree_subtype_
     assert node["document_no"] != ids["invoice_no"]
     assert node["status"] is None
     assert node["party_name"] in (None, "")
+
+
+def test_tree_reports_node_truncation_only_when_an_extra_document_exists(tree_subtype_scenario):
+    """Exactly-at-limit trees stay untruncated; an omitted child sets the marker."""
+    app, ids = tree_subtype_scenario
+
+    with app.test_request_context("/"):
+        _login(app, ids["seller"])
+        complete = build_document_flow_tree("sales_invoice", ids["invoice"], direction="downstream", max_nodes=2)
+        truncated = build_document_flow_tree("sales_invoice", ids["invoice"], direction="downstream", max_nodes=1)
+
+    assert complete["meta"]["node_count"] == 2
+    assert complete["meta"]["max_nodes_reached"] is False
+    assert truncated["meta"]["node_count"] == 1
+    assert truncated["meta"]["max_nodes_reached"] is True
+    assert any(node.get("max_nodes_reached") for node in truncated["downstream"])
+
+
+def test_document_flow_macro_uses_the_explicit_truncation_flag():
+    """The UI does not infer omitted documents from a node count equal to the cap."""
+    macros = Path(__file__).resolve().parents[1] / "cacao_accounting" / "templates" / "macros.html"
+
+    assert 'x-if="meta && meta.max_nodes_reached"' in macros.read_text(encoding="utf-8")

@@ -385,6 +385,7 @@ def build_document_flow_tree(
 
     node_counter: list[int] = [0]
     cycle_detected = False
+    max_nodes_reached = False
 
     upstream: list[dict[str, Any]] = []
     downstream: list[dict[str, Any]] = []
@@ -398,6 +399,7 @@ def build_document_flow_tree(
             max_nodes=max_nodes,
         )
         cycle_detected = cycle_detected or _has_cycle_flag(upstream)
+        max_nodes_reached = max_nodes_reached or _has_node_limit_flag(upstream)
 
     if direction in ("all", "downstream"):
         downstream = get_downstream_tree(
@@ -408,6 +410,7 @@ def build_document_flow_tree(
             max_nodes=max_nodes,
         )
         cycle_detected = cycle_detected or _has_cycle_flag(downstream)
+        max_nodes_reached = max_nodes_reached or _has_node_limit_flag(downstream)
 
     return {
         "current": current,
@@ -419,6 +422,7 @@ def build_document_flow_tree(
             "max_nodes": max_nodes,
             "node_count": node_counter[0],
             "cycle_detected": cycle_detected,
+            "max_nodes_reached": max_nodes_reached,
         },
     }
 
@@ -564,6 +568,16 @@ def _has_cycle_flag(nodes: list[dict[str, Any]]) -> bool:
         if node.get("cycle_detected"):
             return True
         if _has_cycle_flag(node.get("children") or []):
+            return True
+    return False
+
+
+def _has_node_limit_flag(nodes: list[dict[str, Any]]) -> bool:
+    """Indica si algún nodo representa documentos omitidos por el límite."""
+    for node in nodes:
+        if node.get("max_nodes_reached"):
+            return True
+        if _has_node_limit_flag(node.get("children") or []):
             return True
     return False
 
