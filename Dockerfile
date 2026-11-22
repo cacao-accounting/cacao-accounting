@@ -24,6 +24,10 @@ RUN microdnf install -y --nodocs --best --refresh \
 
 WORKDIR /build
 COPY requirements.txt .
+# En UBI9/RHEL `pip --prefix` separa purelib (`lib/.../site-packages`) de
+# platlib (`lib64/.../site-packages`): los paquetes puros van a `lib` y las
+# extensiones compiladas (psycopg-c) a `lib64`. Ambos árboles se copian a la
+# imagen final y ambos están en `sys.path`, por eso NO se unifican con symlink.
 RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install -r requirements.txt 
 RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install \
         "Flask-Limiter[redis]==3.8.0" "flask-caching==2.4.0" \
@@ -36,7 +40,7 @@ RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install \
 # build falla aquí y no en runtime.
 RUN /usr/bin/python3.12 -m pip --no-cache-dir install --prefix=/install \
         --no-binary psycopg-c "psycopg[c]==3.3.9" \
-    && PYTHONPATH=/install/lib/python3.12/site-packages \
+    && PYTHONPATH=/install/lib/python3.12/site-packages:/install/lib64/python3.12/site-packages \
        /usr/bin/python3.12 -c "from psycopg import pq; assert pq.__impl__ == 'c', pq.__impl__" \
     && find /install -type d \( \
         -name "test" -o -name "tests" -o -name "testing" \
@@ -68,6 +72,8 @@ RUN chmod +x /usr/bin/tini \
 
 COPY --from=python-builder /install/lib/python3.12/site-packages /usr/lib/python3.12/site-packages
 COPY --from=python-builder /install/lib64/python3.12/site-packages /usr/lib64/python3.12/site-packages
+# Verifica en la imagen final que la extensión C compilada resuelve su backend.
+RUN /usr/bin/python3.12 -c "from psycopg import pq; assert pq.__impl__ == 'c', pq.__impl__"
 COPY --from=python-builder /install/bin /usr/local/bin
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 

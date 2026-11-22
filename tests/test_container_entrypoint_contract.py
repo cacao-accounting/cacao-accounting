@@ -68,6 +68,8 @@ def test_driver_postgresql_es_psycopg_compilado():
     assert "--no-binary psycopg-c" in contenido, "falta forzar la compilación desde sdist"
     assert "psycopg[c]==3.3.9" in contenido
     assert "pq.__impl__ == 'c'" in contenido, "falta la verificación del backend C"
+    # purelib (lib) y platlib (lib64) se copian ambos: la extensión C reside en lib64.
+    assert "/install/lib64/python3.12/site-packages /usr/lib64/python3.12/site-packages" in contenido
     # libpq en runtime para la extensión compilada.
     runtime = contenido.split("FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1782797275\n", 1)[-1]
     assert "libpq" in runtime
