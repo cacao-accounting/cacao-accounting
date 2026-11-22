@@ -134,6 +134,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_purchase_line_version_columns()
             _ensure_audit_trail_hash_version_column()
             _ensure_file_sha256_column()
+            _ensure_bank_transaction_import_reference_column()
             _ensure_monthly_close_run_unique_constraint()
             _ensure_bank_transaction_identity_unique()
             _ensure_cacao_config_key_unique()
@@ -962,6 +963,39 @@ def _ensure_file_sha256_column() -> None:
     except Exception as exc:
         database.session.rollback()
         log.warning("Could not ensure file.sha256 during initialization: {}", exc)
+
+
+def _ensure_bank_transaction_import_reference_column() -> None:
+    """Suple idempotentemente ``bank_transaction.import_reference`` (#1262).
+
+    Identifica la procedencia de importación de movimientos sin referencia
+    bancaria. ``create_all`` la crea en esquemas nuevos; esta rutina la agrega
+    en bases existentes. Las filas históricas quedan con ``NULL`` y conservan
+    su identidad previa.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    from cacao_accounting.database import BankTransaction
+
+    try:
+        inspector = sa_inspect(database.engine)
+        if not inspector.has_table(BankTransaction.__tablename__):
+            return
+        columns = {column["name"] for column in inspector.get_columns(BankTransaction.__tablename__)}
+        if "import_reference" not in columns:
+            database.session.execute(database.text("ALTER TABLE bank_transaction ADD COLUMN import_reference VARCHAR(120)"))
+            log.info("Columna import_reference agregada a bank_transaction.")
+        database.session.execute(
+            database.text(
+                "CREATE INDEX IF NOT EXISTS ix_bank_transaction_import_reference ON bank_transaction (import_reference)"
+            )
+        )
+        database.session.commit()
+    except (OperationalError, ProgrammingError, InterfaceError):
+        database.session.rollback()
+    except Exception as exc:
+        database.session.rollback()
+        log.warning("Could not ensure bank_transaction.import_reference during initialization: {}", exc)
 
 
 def _ensure_monthly_close_run_unique_constraint() -> None:

@@ -3,6 +3,7 @@
 
 """Servicio centralizado de importación."""
 
+import hashlib
 import threading
 from datetime import UTC, datetime
 from typing import Dict, Type, List, Any
@@ -46,6 +47,17 @@ from cacao_accounting.i18n import _
 def _utc_now_naive() -> datetime:
     """Devuelve la hora UTC actual sin información de zona."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _source_fingerprint(path: str | None) -> str:
+    """Devuelve una huella estable del archivo fuente para identidad de importación."""
+    if not path:
+        return ""
+    try:
+        with open(path, "rb") as source:
+            return hashlib.sha256(source.read()).hexdigest()
+    except OSError:
+        return ""
 
 
 IMPORT_SYNC_MAX_ROWS = 100
@@ -528,6 +540,7 @@ class ImportService:
                     "accounting_book_id": batch.accounting_book_id,
                     "record_type": batch.record_type,
                     "created_by": batch.created_by,
+                    "import_fingerprint": _source_fingerprint(batch.source_path),
                 }
 
                 success_count, error_count = self._process_all_documents(batch, batch_id, adapter, docs, context)

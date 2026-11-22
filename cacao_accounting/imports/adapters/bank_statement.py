@@ -163,7 +163,8 @@ class BankStatementAdapter(BaseImportAdapter):
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
         """Build bank transactions from the imported data."""
         transactions = []
-        for row in document_data:
+        fingerprint = str(context.get("import_fingerprint") or "")
+        for position, row in enumerate(document_data, start=1):
             posting_date = row.get("posting_date")
             try:
                 posting_date = parse_import_date(posting_date, field="fecha bancaria")
@@ -173,6 +174,7 @@ class BankStatementAdapter(BaseImportAdapter):
             withdrawal = self._optional_amount(row.get("withdrawal"))
             if (deposit is not None and deposit < 0) or (withdrawal is not None and withdrawal < 0):
                 raise ValueError(_("El monto bancario no puede ser negativo."))
+            row_number = getattr(row, "row_number", position)
             transactions.append(
                 {
                     "bank_account_id": _text(row.get("bank_account_id")),
@@ -182,6 +184,7 @@ class BankStatementAdapter(BaseImportAdapter):
                     "description": _text(row.get("description")),
                     "deposit": deposit,
                     "withdrawal": withdrawal,
+                    "import_discriminator": f"{fingerprint}:{row_number}" if fingerprint else "",
                 }
             )
             if deposit is not None and withdrawal is not None:
@@ -223,30 +226,39 @@ class BankStatementAdapter(BaseImportAdapter):
                         "company_id": company_id,
                     }
                 )
-            existing = (
-                database.session.execute(
-                    database.select(BankTransaction)
-                    .filter_by(
-                        bank_account_id=tx_data["bank_account_id"],
-                        posting_date=tx_data["posting_date"],
-                        reference_number=tx_data.get("reference_number", ""),
-                        deposit=tx_data.get("deposit"),
-                        withdrawal=tx_data.get("withdrawal"),
+            reference_number = str(tx_data.get("reference_number") or "")
+            # Política de identidad (#1262): con referencia bancaria se
+            # deduplica por identidad económica; sin referencia, fecha e importe
+            # no identifican de forma segura un movimiento, así que la identidad
+            # se apoya en la procedencia (huella de archivo + fila) y no se
+            # rechaza un cargo legítimo repetido.
+            existing = None
+            if reference_number:
+                existing = (
+                    database.session.execute(
+                        database.select(BankTransaction)
+                        .filter_by(
+                            bank_account_id=tx_data["bank_account_id"],
+                            posting_date=tx_data["posting_date"],
+                            reference_number=reference_number,
+                            deposit=tx_data.get("deposit"),
+                            withdrawal=tx_data.get("withdrawal"),
+                        )
+                        .filter(~BankTransaction.id.in_(list(seen_in_batch)))
                     )
-                    .filter(~BankTransaction.id.in_(list(seen_in_batch)))
+                    .scalars()
+                    .first()
                 )
-                .scalars()
-                .first()
-            )
             if existing:
                 raise ValueError(_("La transacción bancaria ya existe en la base de datos."))
             tx = BankTransaction(
                 bank_account_id=tx_data["bank_account_id"],
                 posting_date=tx_data["posting_date"],
-                reference_number=tx_data.get("reference_number", ""),
+                reference_number=reference_number,
                 description=tx_data.get("description", ""),
                 deposit=tx_data.get("deposit"),
                 withdrawal=tx_data.get("withdrawal"),
+                import_reference=(None if reference_number else (tx_data.get("import_discriminator") or None)),
             )
             try:
                 with database.session.begin_nested():
@@ -255,6 +267,11 @@ class BankStatementAdapter(BaseImportAdapter):
             except IntegrityError as exc:
                 if not _is_bank_identity_conflict(exc):
                     raise
+                if not reference_number:
+                    # Reimportar exactamente el mismo archivo (misma huella y
+                    # fila) es idempotente: la fila ya existe, no es un
+                    # duplicado nuevo (#1262).
+                    continue
                 raise ValueError(_("La transacción bancaria ya existe en la base de datos.")) from exc
             seen_in_batch.add(str(tx.id))
             persisted_ids.append(str(tx.id))

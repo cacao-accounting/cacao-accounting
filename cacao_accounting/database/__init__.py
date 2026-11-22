@@ -4047,6 +4047,10 @@ class BankTransaction(database.Model, BaseTabla):  # type: ignore[name-defined]
     withdrawal = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     description = database.Column(database.Text(), nullable=True)
     reference_number = database.Column(database.String(100), nullable=True)
+    # Procedencia de importación para movimientos sin referencia bancaria:
+    # permite distinguir cargos legítimos repetidos y conservar idempotencia
+    # por archivo/fila (#1262).
+    import_reference = database.Column(database.String(120), nullable=True, index=True)
     is_reconciled = database.Column(database.Boolean(), default=False, nullable=False)
     payment_entry_id = database.Column(
         database.String(26),
@@ -4069,13 +4073,22 @@ def _validate_bank_transaction_amounts(mapper, connection, target: BankTransacti
 
 
 def _bank_transaction_identity(transaction: BankTransaction) -> str:
-    """Build a deterministic identity independent of nullable amount columns."""
+    """Build a deterministic identity for a bank movement.
+
+    Con referencia bancaria la identidad es la económica
+    (cuenta/fecha/referencia/importes). Sin referencia, fecha e importe no
+    identifican de forma segura un movimiento (#1262), así que la identidad
+    incorpora la procedencia de importación (huella del archivo y posición de
+    la fila) para permitir cargos legítimos repetidos sin perder idempotencia.
+    """
+    discriminator = str(getattr(transaction, "import_reference", "") or "")
     values = (
         str(transaction.bank_account_id or ""),
         transaction.posting_date.isoformat() if transaction.posting_date else "",
         str(transaction.reference_number or ""),
         str(transaction.deposit if transaction.deposit is not None else ""),
         str(transaction.withdrawal if transaction.withdrawal is not None else ""),
+        discriminator,
     )
     return hashlib.sha256("|".join(values).encode("utf-8")).hexdigest()
 
