@@ -636,7 +636,9 @@ def create_default_petty_cash(company: str, custodian_id: str | None = None) -> 
 
     primera_cuenta = (
         database.session.execute(
-            database.select(Accounts).filter_by(entity=company, account_type="petty_cash", group=False).order_by(Accounts.code)
+            database.select(Accounts)
+            .filter_by(entity=company, account_type="petty_cash", group=False, active=True, enabled=True)
+            .order_by(Accounts.code)
         )
         .scalars()
         .first()
