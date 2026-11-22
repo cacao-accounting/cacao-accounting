@@ -53,3 +53,14 @@ def test_dockerignore_no_copia_node_modules_local():
     """node_modules se instala en la etapa frontend; no se copia el local."""
     contenido = (RAIZ / ".dockerignore").read_text(encoding="utf-8")
     assert "cacao_accounting/static/node_modules" in contenido
+
+
+def test_pg8000_pin_es_compatible_con_scramp():
+    """pg8000 1.31.5 usa `scramp.make_channel_binding`, eliminado en scramp 1.5.
+
+    El contenedor instala la última scramp (no fijada), por lo que hay que
+    fijar pg8000 a una versión que declare `scramp==1.5.0`.
+    """
+    contenido = DOCKERFILE.read_text(encoding="utf-8")
+    assert "pg8000==1.31.5" not in contenido, "pg8000 1.31.5 rompe con scramp 1.5"
+    assert "pg8000==1.31.6" in contenido
