@@ -30,6 +30,7 @@ from cacao_accounting.database import (
     Item,
     Modules,
     Party,
+    PartyAccount,
     Roles,
     RolesUser,
     UOM,
@@ -417,16 +418,17 @@ def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
 
         defaults = database.session.execute(select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one_or_none()
         if defaults is None:
-            defaults = CompanyDefaultAccount(
-                company="cacao",
-                default_receivable=cxc.id,
-                default_payable=cxp.id,
-                default_cash=caja.id,
-                default_bank=banco.id,
-                default_income=ventas.id,
-                default_expense=gastos.id,
-            )
+            defaults = CompanyDefaultAccount(company="cacao")
             database.session.add(defaults)
+        # Repara los valores canónicos en cada prueba: una prueba previa no debe
+        # poder dejar la app compartida con, por ejemplo, la caja como cuenta de
+        # cartera y romper el posting de otra prueba por orden de ejecución.
+        defaults.default_receivable = cxc.id
+        defaults.default_payable = cxp.id
+        defaults.default_cash = caja.id
+        defaults.default_bank = banco.id
+        defaults.default_income = ventas.id
+        defaults.default_expense = gastos.id
 
         if database.session.execute(select(UOM).filter_by(code="UND")).scalar_one_or_none() is None:
             database.session.add(UOM(code="UND", name="Unidad"))
@@ -448,6 +450,18 @@ def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
             ).scalar_one_or_none()
             if link is None:
                 database.session.add(CompanyParty(company="cacao", party_id=party.id, is_active=active))
+
+        # Repara también los mapeos por tercero: una cuenta de caja asignada por
+        # error como cartera haría fallar el posting de cualquier prueba posterior.
+        for party in (customer, supplier):
+            mapping = database.session.execute(
+                select(PartyAccount).filter_by(party_id=party.id, company="cacao")
+            ).scalar_one_or_none()
+            if mapping is None:
+                mapping = PartyAccount(party_id=party.id, company="cacao")
+                database.session.add(mapping)
+            mapping.receivable_account_id = cxc.id
+            mapping.payable_account_id = cxp.id
 
         warehouse = database.session.execute(select(Warehouse).filter_by(code="BOD01")).scalar_one_or_none()
         if warehouse is None:
