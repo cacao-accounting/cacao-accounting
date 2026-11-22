@@ -6,6 +6,7 @@
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from copy import deepcopy
 import os
 import tempfile
 import unicodedata
@@ -115,7 +116,11 @@ def get_schema() -> ResponseReturnValue:
     schema = LineImportSchemaRegistry.get_schema(doctype)
     if not schema:
         return jsonify({"error": _("Doctype no soportado")}), 400
-    return jsonify(schema)
+    localized_schema = deepcopy(schema)
+    localized_schema["label"] = _(localized_schema["label"])
+    for column in localized_schema.get("columns", []):
+        column["label"] = _(column["label"])
+    return jsonify(localized_schema)
 
 
 @line_import_bp.route("/api/line-import/open-items")
