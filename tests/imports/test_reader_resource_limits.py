@@ -10,6 +10,7 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 import openpyxl
 import pytest
+import xlrd
 from odf.opendocument import OpenDocumentSpreadsheet
 from odf.table import Table, TableCell, TableRow
 from odf.text import P, S
@@ -522,6 +523,11 @@ def test_xls_reader_reads_rows_incrementally_and_releases_workbook(tmp_path, mon
         def cell_value(self, row, column):
             """Devuelve la celda solicitada."""
             return self.values[(row, column)]
+
+        def cell_type(self, row, column):
+            """Declara las celdas como texto, igual que un XLS real."""
+            del row, column
+            return xlrd.XL_CELL_TEXT
 
     class Workbook:
         """Libro mínimo que confirma la liberación de recursos."""

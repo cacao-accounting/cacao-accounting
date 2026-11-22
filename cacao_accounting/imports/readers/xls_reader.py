@@ -43,13 +43,26 @@ class XLSReader(BaseReader):
             columns = [str(ws.cell_value(0, col)) for col in range(ws.ncols)]
             rows = []
             for row_idx in range(1, ws.nrows):
-                row = [ws.cell_value(row_idx, col) for col in range(ws.ncols)]
+                row = [_cell_value(wb, ws.cell_type(row_idx, col), ws.cell_value(row_idx, col)) for col in range(ws.ncols)]
                 budget.consume_row(len(row))
                 rows.append(row)
 
             return TabularBook(columns=columns, rows=rows, source_format="xls")
         finally:
             wb.release_resources()
+
+
+def _cell_value(workbook: Any, cell_type: int, value: Any) -> Any:
+    """Convierte una celda XLS respetando el sistema de fechas del libro.
+
+    Los archivos guardados con el sistema de 1904 usan un epoch distinto al
+    convencional de 1899-12-30. Interpretarlos con un epoch fijo desplaza las
+    fechas 1462 días, así que las celdas de fecha se convierten aquí con el
+    ``datemode`` real del libro; el resto de valores se entrega sin cambios.
+    """
+    if cell_type == xlrd.XL_CELL_DATE:
+        return xlrd.xldate_as_datetime(float(value), workbook.datemode)
+    return value
 
 
 def _validate_sheet_extent(workbook: Any) -> None:
