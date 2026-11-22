@@ -46,6 +46,26 @@ def coerce_decimal(
     return number
 
 
+def coerce_boolean(value: Any, field_name: str) -> bool:
+    """Convierte un booleano o su representación textual aceptada.
+
+    Acepta ``True``/``False`` nativos y las formas textuales inequívocas
+    (``true``/``false``, ``1``/``0``, ``yes``/``no``, ``si``/``sí``,
+    ``on``/``off``). Un valor desconocido es un error de validación en vez
+    de asumirse verdadero.
+    """
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "yes", "si", "sí", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off", ""}:
+        return False
+    raise ValueError(_("El campo %(field)s debe ser un valor booleano válido.") % {"field": field_name})
+
+
 def _fractional_digits(number: Decimal) -> int:
     """Cuenta los decimales significativos sin redondear ni alterar el valor."""
     digits = number.as_tuple().digits

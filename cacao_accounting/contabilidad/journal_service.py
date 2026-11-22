@@ -61,6 +61,7 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 from cacao_accounting.i18n import _
+from cacao_accounting.numbers import coerce_boolean
 
 JOURNAL_ENTITY_TYPE = "journal_entry"
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
@@ -919,6 +920,10 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
         order = int(raw_order) if raw_order not in (None, "") else fallback_order
     except (TypeError, ValueError) as exc:
         raise JournalValidationError(_("El orden de la línea debe ser un número entero.")) from exc
+    try:
+        is_advance = coerce_boolean(raw_line.get("is_advance"), "is_advance")
+    except ValueError as exc:
+        raise JournalValidationError(str(exc)) from exc
     return JournalLineInput(
         order=order,
         book=_optional_text(raw_line.get("book")),
@@ -939,7 +944,7 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
         reference1=_optional_text(raw_line.get("reference1")),
         reference2=_optional_text(raw_line.get("reference2")),
         remarks=_optional_text(raw_line.get("remarks")),
-        is_advance=bool(raw_line.get("is_advance")),
+        is_advance=is_advance,
         bank_account_id=_optional_text(raw_line.get("bank_account") or raw_line.get("bank_account_id")),
     )
 
