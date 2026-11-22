@@ -619,14 +619,14 @@
             line.volume = item.volume;
             line.volume_uom = item.volume_uom || line.volume_uom;
           }
-          line.has_batch = Boolean(line.has_batch || line.batch_id || item.has_batch || item.has_expiry_date);
-          line.has_serial_no = Boolean(line.has_serial_no || line.serial_no || item.has_serial_no);
-          line.has_expiry_date = Boolean(item.has_expiry_date || line.has_expiry_date || false);
-          if (!keepCustomName && !line.batch_id && !line.serial_no) {
+          line.has_batch = Boolean(item.has_batch || item.has_expiry_date);
+          line.has_serial_no = Boolean(item.has_serial_no);
+          line.has_expiry_date = Boolean(item.has_expiry_date);
+          if (!line.has_batch) {
             line.batch_id = '';
-            line.serial_no = '';
             line.batch_no = '';
           }
+          if (!line.has_serial_no) line.serial_no = '';
         },
 
         _applyItemUom(line, item) {
@@ -640,6 +640,12 @@
         },
 
         onItemChange(line) {
+          line.batch_id = '';
+          line.batch_no = '';
+          line.serial_no = '';
+          line.has_batch = false;
+          line.has_serial_no = false;
+          line.has_expiry_date = false;
           this.syncLineFromItem(line, false);
           this.calcAmount(line);
           void this.refreshCatalogPrice(line);
