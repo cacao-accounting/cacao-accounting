@@ -5,7 +5,7 @@
 
 from datetime import date
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from typing import Any, NoReturn, Sequence, cast
 
@@ -125,6 +125,8 @@ from cacao_accounting.logistics import copy_logistics, logistics_values
 
 
 from cacao_accounting.i18n import LazyText, _, _l
+
+from cacao_accounting.numbers import coerce_decimal
 
 
 def _raise_posting_error(message: str) -> NoReturn:
@@ -991,13 +993,10 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
 
 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
-    """Convierte un valor de formulario a Decimal."""
+    """Convierte un valor de formulario a Decimal finito."""
     value = request.form.get(field_name)
     raw_value = value if value not in (None, "") else default
-    try:
-        return Decimal(str(raw_value))
-    except InvalidOperation as exc:
-        raise ValueError(_("El campo {} debe contener un número válido.").format(field_name)) from exc
+    return coerce_decimal(raw_value, field_name)
 
 
 def _line_amount(index: int) -> Decimal:
