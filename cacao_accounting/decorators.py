@@ -140,7 +140,7 @@ def exige_acceso_compania(
         return
     module_id = obtener_id_modulo_por_nombre(modulo)
     permisos = Permisos(modulo=module_id, usuario=current_user.id)
-    if permisos.administrador:
+    if permisos.administrador and is_desktop_mode():
         return
     # #1781: validar la acción contra el mapa canónico y leer el atributo
     # homónimo de Permisos. Antes, cerrar/importar/eliminar degradaban a

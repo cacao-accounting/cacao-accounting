@@ -1564,12 +1564,19 @@ def compras_proveedor_lista():
     """Listado de proveedores."""
     from cacao_accounting.party_management import filtrar_parties_por_companias
 
+    authorized = _authorized_companies(("purchases",))
+    requested_company = request.args.get("company")
+    if requested_company:
+        # #1828: mismo contrato que las listas documentales: el parámetro debe
+        # estar autorizado y acota el resultado, en vez de ignorarse.
+        exige_acceso_compania("purchases", requested_company, "consultar")
+        authorized = {requested_company}
     consulta = _paginate_list(
         Party,
         (Party.code, Party.name, Party.comercial_name, Party.tax_id),
         filtrar_parties_por_companias(
             database.select(Party).filter(Party.is_supplier.is_(True)),
-            _authorized_companies(("purchases",)),
+            authorized,
         ),
         include_status=False,
     )

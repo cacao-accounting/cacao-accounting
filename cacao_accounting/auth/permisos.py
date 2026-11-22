@@ -197,13 +197,20 @@ class Permisos:
         return False
 
     def tiene_acceso_compania(self, company: str | None) -> bool:
-        """Indica si el usuario puede operar dentro de una compañía."""
+        """Indica si el usuario puede operar dentro de una compañía.
+
+        #1828: en Cloud la clasificación admin no concede compañías por sí
+        sola; el acceso debe estar en ``UserCompanyAccess``. Desktop conserva
+        el bypass de administrador porque opera con una sola compañía.
+        """
+        from cacao_accounting.runtime_mode import is_desktop_mode
+
         if not company or not self.usuario:
             return False
         entity = database.session.execute(select(Entity).where(Entity.code == company)).scalar_one_or_none()
         if entity is None or not entity.enabled:
             return False
-        if self.administrador:
+        if self.administrador and is_desktop_mode():
             return True
         return (
             database.session.execute(
@@ -220,7 +227,9 @@ class Permisos:
 
     def obtener_companias_autorizadas(self) -> list[str]:
         """Retorna los códigos de compañía asignados al usuario actual."""
-        if self.administrador:
+        from cacao_accounting.runtime_mode import is_desktop_mode
+
+        if self.administrador and is_desktop_mode():
             return list(
                 database.session.execute(select(Entity.code).where(Entity.enabled.is_(True)).order_by(Entity.code)).scalars()
             )
