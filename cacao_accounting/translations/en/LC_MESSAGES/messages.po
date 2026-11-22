@@ -24385,3 +24385,7 @@ msgstr "The transaction currency '%(currency)s' does not exist in the catalog."
 #: cacao_accounting/imports/adapters/transaction_documents.py
 msgid "La moneda transaccional '%(currency)s' está inactiva."
 msgstr "The transaction currency '%(currency)s' is inactive."
+
+#: cacao_accounting/imports/services/import_service.py
+msgid "No se pudo leer el archivo de importación."
+msgstr "The import file could not be read."

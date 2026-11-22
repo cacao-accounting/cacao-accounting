@@ -105,6 +105,37 @@ def test_corrupt_reader_marks_the_batch_failed(corrupt_reader_scenario):
     assert errors[0].error_type == "SYSTEM_ERROR"
 
 
+def test_preview_reports_the_corrupt_file_after_validation(corrupt_reader_scenario):
+    """A failed batch detail can render its error without rereading into an exception."""
+    app, ids = corrupt_reader_scenario
+    with app.app_context():
+        service = ImportService()
+        assert service.validate(ids["batch"])
+        persisted_errors_before = _errors(app, ids["batch"])
+
+        preview = service.preview(ids["batch"])
+
+    assert preview["columns"] == []
+    assert preview["sample_rows"] == []
+    assert preview["total_documents"] == 0
+    assert [(error.error_type, error.message) for error in preview["errors"]] == [
+        ("SYSTEM_ERROR", "No se pudo leer el archivo de importación.")
+    ]
+    assert len(persisted_errors_before) == 1
+    assert persisted_errors_before[0].error_type == "SYSTEM_ERROR"
+
+
+def test_preview_reports_reader_error_before_validation_without_persisting(corrupt_reader_scenario):
+    """Opening a corrupt uploaded file is recoverable even before its validation run."""
+    app, ids = corrupt_reader_scenario
+    with app.app_context():
+        preview = ImportService().preview(ids["batch"])
+
+    assert [error.error_type for error in preview["errors"]] == ["SYSTEM_ERROR"]
+    assert preview["errors"][0].message == "No se pudo leer el archivo de importación."
+    assert not _errors(app, ids["batch"])
+
+
 def test_recovery_includes_batches_with_a_null_started_at(corrupt_reader_scenario):
     """A zombie in state 4 without started_at is recovered."""
     app, ids = corrupt_reader_scenario

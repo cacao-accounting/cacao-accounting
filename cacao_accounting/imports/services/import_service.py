@@ -384,20 +384,8 @@ class ImportService:
         persisted_errors = ImportBatchError.query.filter_by(batch_id=batch_id).all()
         try:
             table = reader.read(batch.source_path)
-        except ImportReadLimitError as exc:
-            errors = [
-                error
-                for error in persisted_errors
-                if error.error_type not in STRUCTURAL_ERROR_TYPES and error.error_type != "RESOURCE_LIMIT"
-            ]
-            errors.append(ImportBatchError(batch_id=batch_id, error_type="RESOURCE_LIMIT", message=str(exc)))
-            return {
-                "batch": batch,
-                "columns": [],
-                "sample_rows": [],
-                "total_documents": 0,
-                "errors": errors,
-            }
+        except Exception as exc:  # pylint: disable=broad-exception-caught  # Readers raise format-specific exceptions.
+            return self._reader_preview_error(batch, persisted_errors, exc)
         self._canonicalize_table_headers(table, adapter)
         structural_errors = self._collect_structural_errors(batch_id, table, adapter)
         errors = [error for error in persisted_errors if error.error_type not in STRUCTURAL_ERROR_TYPES]
@@ -417,6 +405,22 @@ class ImportService:
             "total_documents": len(docs),
             "errors": errors,
         }
+
+    @staticmethod
+    def _reader_preview_error(
+        batch: ImportBatch, persisted_errors: list[ImportBatchError], error: Exception
+    ) -> Dict[str, Any]:
+        """Devuelve el detalle del lote cuando el lector no puede abrir la fuente."""
+        is_resource_limit = isinstance(error, ImportReadLimitError)
+        error_type = "RESOURCE_LIMIT" if is_resource_limit else "SYSTEM_ERROR"
+        message = str(error) if is_resource_limit else _("No se pudo leer el archivo de importación.")
+        errors = [
+            item
+            for item in persisted_errors
+            if item.error_type not in STRUCTURAL_ERROR_TYPES | {"RESOURCE_LIMIT", "SYSTEM_ERROR"}
+        ]
+        errors.append(ImportBatchError(batch_id=batch.id, error_type=error_type, message=message))
+        return {"batch": batch, "columns": [], "sample_rows": [], "total_documents": 0, "errors": errors}
 
     def execute(self, batch_id: str) -> bool:
         """Ejecuta la importación del lote de forma síncrona o asíncrona."""
