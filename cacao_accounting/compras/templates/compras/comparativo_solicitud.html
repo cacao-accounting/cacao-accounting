@@ -183,7 +183,7 @@ macros %}
                 />
                 {% endif %}
                 <span>
-                  <strong>{{ candidate.rate }}</strong
+                  <strong>{{ format_money_with_currency(candidate.rate, offer.transaction_currency or offer.base_currency) }}</strong
                   ><small class="d-block text-muted"
                     >{{ candidate.line.qty }} {{ candidate.line.uom or ''
                     }}</small

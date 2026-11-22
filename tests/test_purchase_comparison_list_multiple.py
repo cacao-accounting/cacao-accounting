@@ -255,3 +255,99 @@ def test_ordenes_canceladas_no_aparecen_como_candidatas(app, entorno_contable, a
         .get_data(as_text=True)
     )
     assert f"Proveedor Cancelado {suffix}" not in body
+
+
+def test_detalle_muestra_tarifa_por_linea_con_su_moneda(app, entorno_contable, authenticated_client):
+    """#2141.6: el comparativo principal etiqueta la tarifa con la moneda de cada oferta."""
+    suffix = uuid4().hex[:6]
+    with app.app_context():
+        from cacao_accounting.database import DocumentRelation, Item, PurchaseRequestItem, SupplierQuotationItem
+
+        if database.session.execute(database.select(Item).filter_by(code="ART01")).scalar_one_or_none() is None:
+            database.session.add(
+                Item(
+                    code="ART01",
+                    name="Articulo comparativo",
+                    item_type="goods",
+                    is_stock_item=True,
+                    is_purchase_item=True,
+                    is_sale_item=True,
+                    default_uom="UND",
+                )
+            )
+        request = PurchaseRequest(
+            company="cacao",
+            document_no=f"REQ-CUR-{suffix}",
+            requested_by="admin",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+        )
+        database.session.add(request)
+        database.session.flush()
+        item = PurchaseRequestItem(
+            purchase_request_id=request.id,
+            item_code="ART01",
+            item_name="Articulo comparativo",
+            qty=Decimal("1"),
+            uom="UND",
+        )
+        database.session.add(item)
+        comparison = PurchaseRequestComparison(
+            company="cacao",
+            purchase_request_id=request.id,
+            document_no=f"CMP-CUR-{suffix}",
+            posting_date=date(2026, 5, 15),
+            status="draft",
+        )
+        database.session.add(comparison)
+        database.session.flush()
+        offers = []
+        for currency, rate in (("NIO", "100"), ("USD", "5")):
+            quotation = SupplierQuotation(
+                company="cacao",
+                posting_date=date(2026, 5, 15),
+                docstatus=1,
+                document_no=f"SC-{currency}-{suffix}",
+                supplier_name=f"Proveedor {currency} {suffix}",
+                transaction_currency=currency,
+                exchange_rate=Decimal("36.5") if currency == "USD" else Decimal("1"),
+            )
+            database.session.add(quotation)
+            database.session.flush()
+            database.session.add(
+                SupplierQuotationItem(
+                    supplier_quotation_id=quotation.id,
+                    item_code="ART01",
+                    item_name="Articulo comparativo",
+                    qty=Decimal("1"),
+                    uom="UND",
+                    rate=Decimal(rate),
+                )
+            )
+            database.session.add(
+                PurchaseRequestComparisonOffer(
+                    comparison_id=comparison.id,
+                    supplier_quotation_id=quotation.id,
+                )
+            )
+            database.session.add(
+                DocumentRelation(
+                    source_type="purchase_request",
+                    source_id=request.id,
+                    target_type="supplier_quotation",
+                    target_id=quotation.id,
+                    company="cacao",
+                    qty=Decimal("1"),
+                    qty_in_base_uom=Decimal("1"),
+                    uom="UND",
+                    relation_type="quotation",
+                    status="active",
+                )
+            )
+            offers.append(currency)
+        database.session.commit()
+        comparison_id = comparison.id
+
+    body = authenticated_client().get(f"/buying/request-for-quotation/comparison/{comparison_id}").get_data(as_text=True)
+    assert "NIO 100.00" in body
+    assert "USD 5.00" in body
