@@ -670,18 +670,6 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
     return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
 
 
-@bancos.route("/bank-statement/import", methods=["GET", "POST"])
-@modulo_activo("cash")
-@login_required
-def bancos_extracto_importar():
-    """Redirige al asistente de importación compartido."""
-    flash(
-        _("La importación de extractos bancarios ahora se realiza a través del asistente de importación compartido."),
-        "info",
-    )
-    return redirect(url_for("imports.new"))
-
-
 @bancos.route("/bank-matching-rules", methods=["GET", "POST"])
 @modulo_activo("cash")
 @login_required

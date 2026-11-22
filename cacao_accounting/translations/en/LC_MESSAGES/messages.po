@@ -7353,10 +7353,6 @@ msgstr "The reconciled amount plus the difference must match the bank amount."
 msgid "Conciliación bancaria y diferencia aplicadas correctamente."
 msgstr "Bank reconciliation and difference applied correctly."
 
-#: cacao_accounting/bancos/routes.py:679
-msgid "La importación de extractos bancarios ahora se realiza a través del asistente de importación compartido."
-msgstr "The import of bank statements is now done through the shared import wizard."
-
 #: cacao_accounting/bancos/routes.py:704 cacao_accounting/bancos/services.py:2664 cacao_accounting/printing/admin_routes.py:327
 msgid "La cuenta bancaria seleccionada no existe."
 msgstr "The selected bank account does not exist."
