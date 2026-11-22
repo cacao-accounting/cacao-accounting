@@ -1302,24 +1302,6 @@ def _get_reference_document(flow_source_type: str, document_id: str, company: st
     return document
 
 
-def _validate_payment_currency_match(payment: Any, document: Any, *, infer_missing: bool = False) -> None:
-    """CAS-03: Valida que la moneda del pago coincida con la moneda del documento referenciado."""
-    payment_currency = getattr(payment, "currency", None)
-    document_currency = _document_transaction_currency(document)
-    if infer_missing and not payment_currency and document_currency:
-        payment.currency = document_currency
-        payment.transaction_currency = document_currency
-        payment_currency = document_currency
-    if payment_currency and document_currency and payment_currency != document_currency:
-        raise _document_flow_error(
-            _(
-                "La moneda del pago ({0}) no coincide con la moneda del documento referenciado "
-                "({1}). No se permiten aplicaciones cruzadas de moneda."
-            ).format(payment_currency, document_currency),
-            409,
-        )
-
-
 def _check_duplicate_application(payment_id: str, flow_source_type: str, document_id: str) -> None:
     existing = database.session.execute(
         select(PaymentReference.id)

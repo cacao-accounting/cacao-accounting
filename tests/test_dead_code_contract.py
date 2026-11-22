@@ -17,7 +17,10 @@ from cacao_accounting import audit_chain, document_identifiers
 from cacao_accounting.bancos import cash_forecast_service
 from cacao_accounting.admin import services as admin_services
 from cacao_accounting.api import dashboard as api_dashboard
+from cacao_accounting import tax_pricing_service
+from cacao_accounting.bancos import services as bancos_services
 from cacao_accounting.contabilidad import default_accounts, exchange_revaluation_service
+from cacao_accounting.document_flow import payment as document_flow_payment
 from cacao_accounting.setup import forms as setup_forms
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -37,6 +40,12 @@ def test_admin_services_no_reintroduce_blueprint_sin_rutas():
         (exchange_revaluation_service, "MONETARY_ACCOUNT_TYPES", "#1162"),
         (audit_chain, "_CHAIN_FIELDS", "#2079"),
         (cash_forecast_service, "_query_gl_sum", "#1260"),
+        (tax_pricing_service, "get_item_price", "#1277"),
+        (tax_pricing_service, "validate_price_tolerance", "#1278"),
+        (document_flow_payment, "_validate_payment_currency_match", "#1099"),
+        (bancos_services, "_get_default_entity_type_for_payment_type", "#1100"),
+        (bancos_services, "_bank_account_for_note", "#1100"),
+        (bancos_services, "_payment_identifier_inputs", "#1100"),
     ],
 )
 def test_simbolos_retirados_no_reaparecen(modulo, simbolo, issue):  # noqa: ANN001 - parametrizado
