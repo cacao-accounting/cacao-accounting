@@ -11,6 +11,15 @@ from typing import Any
 from cacao_accounting.i18n import _
 
 
+class NumericCellValue(str):
+    """Texto numérico canónico que conserva que la celda de origen era numérica."""
+
+    @classmethod
+    def from_number(cls, normalized_value: str) -> "NumericCellValue":
+        """Crea el marcador para una celda con valor numérico real."""
+        return cls(normalized_value)
+
+
 def normalize_cell_value(value: Any) -> str:
     """Devuelve cada celda como texto canónico sin interpretar formatos de negocio."""
     if value is None:
@@ -27,7 +36,7 @@ def normalize_cell_value(value: Any) -> str:
         except (InvalidOperation, ValueError):
             return str(value)
         if number.is_finite():
-            return format(number.normalize(), "f")
+            return NumericCellValue.from_number(format(number.normalize(), "f"))
     return str(value)
 
 

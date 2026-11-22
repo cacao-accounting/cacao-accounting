@@ -16,6 +16,7 @@ from decimal import Decimal, InvalidOperation
 import pytest
 
 from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
+from cacao_accounting.imports.readers.xlsx_reader import XLSXReader
 
 conversion = BankStatementAdapter._optional_amount
 
@@ -52,3 +53,23 @@ def test_celda_vacia_se_normaliza_a_ausente(texto):
 def test_importe_cero_se_normaliza_a_ausente():
     """Un cero no registra movimiento bancario en ese lado."""
     assert conversion("0,00") is None
+
+
+def test_xlsx_numeric_decimal_is_distinguished_from_ambiguous_text(tmp_path):
+    """Numeric XLSX cells retain numeric meaning while equivalent text stays ambiguous."""
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(["deposit"])
+    worksheet.append([1.234])
+    worksheet.append(["1.234"])
+    path = tmp_path / "bank_amounts.xlsx"
+    workbook.save(path)
+    workbook.close()
+
+    table = XLSXReader().read(str(path))
+
+    assert conversion(table.rows[0][0]) == Decimal("1.234")
+    with pytest.raises(InvalidOperation, match="ambiguo"):
+        conversion(table.rows[1][0])

@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 
 from cacao_accounting.database import BankAccount, BankTransaction, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
+from cacao_accounting.imports.readers.base import NumericCellValue
 from cacao_accounting.imports.utils.dates import parse_import_date
 from cacao_accounting.numbers import coerce_decimal
 from sqlalchemy.exc import IntegrityError
@@ -70,6 +71,12 @@ class BankStatementAdapter(BaseImportAdapter):
         )
 
     @staticmethod
+    def _numeric_cell_amount(value: NumericCellValue) -> Decimal | None:
+        """Convierte una celda numérica sin interpretar separadores de texto."""
+        amount = coerce_decimal(str(value), "monto", max_fractional_digits=4)
+        return amount if amount != 0 else None
+
+    @staticmethod
     def _optional_amount(value: Any) -> Decimal | None:
         """Convierte una columna vacía o cero en un lado bancario ausente.
 
@@ -81,6 +88,8 @@ class BankStatementAdapter(BaseImportAdapter):
         """
         if value is None:
             return None
+        if isinstance(value, NumericCellValue):
+            return BankStatementAdapter._numeric_cell_amount(value)
         normalized = str(value).strip().replace(" ", "")
         if normalized == "":
             return None
