@@ -340,6 +340,11 @@ class ImportService:
                 database.session.add(
                     ImportBatchError(batch_id=batch_id, document_ref=ref, error_type="BUSINESS_RULE", message=err_msg)
                 )
+        batch_validator = getattr(adapter, "validate_batch_documents", None)
+        if callable(batch_validator):
+            for err_msg in batch_validator(docs, {"company_id": company_id}):
+                errors_count += 1
+                database.session.add(ImportBatchError(batch_id=batch_id, error_type="BUSINESS_RULE", message=err_msg))
         return errors_count
 
     def _commit_empty_file_error(self, batch: ImportBatch, batch_id: str) -> None:

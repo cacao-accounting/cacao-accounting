@@ -51,3 +51,26 @@
 - Linters ejecutados (CI-local): flake8/ruff/pydocstyle/mypy/complexipy/bandit OK en `cacao_accounting/`; pruebas focales re-ejecutadas: `test_admin_tax_rule_form.py` + `test_balance_confirmation_party_scope.py` (33 passed).
 
 Estado final: todos los 18 issues listados como `fix-proposed` en este lote quedaron con `fix-confirmed` y comentario QA2. EOF
+## QA2 independiente — #1053 (2026-11-22)
+
+**Veredicto: no aprobado; permanece `needs-work`.** Revisión estática independiente del diff actual, issue #1053, sus diez comentarios y el criterio aplicable del paraguas #1652. No ejecuté pruebas ni linters y no modifiqué código.
+
+La solución incorpora `linea_origen_id`, rechaza referencias sin pareja documento/línea, verifica pertenencia de línea al documento, estado aprobado, compañía y artículo, y crea las relaciones mediante `create_document_relation`. La agregación entre grupos de documento es necesaria para evitar aceptar sobreasignación durante la validación del lote. El uso del servicio central también vuelve a comprobar y serializa el consumo al persistir.
+
+**Hallazgo bloqueante:** las validaciones previas de cantidad llaman `pending_qty()` sin `exclude_draft_targets=True` (`_validate_source_quantities` y `validate_batch_documents`). La propia creación centralizada de relaciones usa `exclude_draft_targets=True`, y `consumed_qty_for_source()` documenta que ese parámetro excluye destinos en borrador. Por tanto, una línea fuente con relaciones activas a documentos destino en borrador puede ser rechazada falsamente por la importación aunque el servicio central permitiría la relación. Alinear ambas lecturas con la semántica del servicio de creación.
+
+**Hallazgo adicional:** el `pending_qty()` del hook `validate_batch_documents()` no captura `ValueError`/`DocumentFlowError`. `_validate_source_quantities()` sí captura `ValueError`, por lo que un dato de relación corrupto (por ejemplo, evidencia activa sin `qty_in_base_uom`) puede registrarse como error de negocio y luego volver a propagar desde el hook, convirtiendo la validación del lote en error fatal. Capturar y convertir esa condición en error de validación de lote, o evitar repetir la consulta si ya falló en la validación por documento.
+
+La etiqueta permanece sin cambios; no apliqué `fix-confirmed` ni cierre, conforme a la instrucción del usuario de detener el avance en `fix-proposed`.
+
+### Re-revisión QA2 tras correcciones
+
+**Veredicto: aprobado estáticamente.** El implementador alineó ambas consultas de cantidad con `exclude_draft_targets=True`, añadió captura de `ValueError` en la validación batch y agregó una regresión para relaciones activas a destinos en borrador. Volví a contrastar estas rutas con `create_document_relation()` y `consumed_qty_for_source()`: la validación previa usa ahora la misma convención de consumo que la creación y la condición de evidencia inválida se comunica como error de validación en lugar de propagarse como error fatal.
+
+El resto de la implementación cubre las condiciones del issue: cada fila vinculada necesita ID de línea estable; el ID se resuelve dentro del documento declarado y se comprueba estado, compañía, tercero y artículo; el servicio central crea y revalida la relación real para la línea destino; las cantidades parciales y artículos repetidos conservan el ID explícito; y la suma entre grupos del mismo archivo se valida antes de persistir. No encontré defectos bloqueantes pendientes en la inspección estática actual. No ejecuté pruebas ni linters. Conforme a la instrucción explícita del usuario, no cambié estado ni etiqueta; el flujo debe detenerse en `fix-proposed`.
+
+### Revisión estática del lote de regresiones ampliado
+
+Inspeccioné además la versión actualizada de `tests/test_import_source_line_relations.py` y el hook `_collect_business_errors()`. La prueba de sobreasignación entre referencias distintas ahora recorre el hook de `ImportService`, verifica que se inserte `ImportBatchError` y por ello cubre la validación previa que el worker consulta antes de llamar `_process_all_documents()`. Revisé también los nuevos casos de cantidad inválida y de fuente que se vuelve inválida entre preflight y persistencia: el primero no se incorpora al agregado batch, y el segundo causa excepción antes de terminar la transacción del documento, que se revierte en el caller.
+
+La evidencia añadida cubre los dos hallazgos anteriores y mejora la verificación del requisito “rechazar antes de persistir”. Mantengo el veredicto **aprobado estáticamente** para el diff actual. Revisión solamente estática; no ejecuté tests/linters ni cambié estado/etiqueta. El issue debe quedar en `fix-proposed` según instrucción del usuario.

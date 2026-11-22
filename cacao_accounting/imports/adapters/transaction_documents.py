@@ -42,7 +42,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_identifiers import assign_document_identifier
 from cacao_accounting.document_flow.context import company_currency, effective_currency
-from cacao_accounting.document_flow.service import qty_in_base_uom
+from cacao_accounting.document_flow.service import create_document_relation, pending_qty, qty_in_base_uom
 from cacao_accounting.imports.adapters.base import (
     BaseImportAdapter,
     COMMON_DOCUMENT_HEADER_FIELDS,
@@ -84,6 +84,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         "tipo_cambio",
         "tercero",
         "documento_origen",
+        "linea_origen_id",
         "producto",
         "descripcion",
         "uom",
@@ -95,6 +96,21 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         "notas",
     ]
     required_columns = ["document_ref", "fecha", "producto", "cantidad", "precio_unitario"]
+
+    SOURCE_LINE_SPECS: dict[str, tuple[tuple[str, type[Any], str], ...]] = {
+        "supplier_quotation": (("purchase_quotation", PurchaseQuotationItem, "purchase_quotation_id"),),
+        "purchase_receipt": (("purchase_order", PurchaseOrderItem, "purchase_order_id"),),
+        "purchase_invoice": (("purchase_order", PurchaseOrderItem, "purchase_order_id"),),
+        "sales_quotation": (("sales_request", SalesRequestItem, "sales_request_id"),),
+        "sales_order": (("sales_quotation", SalesQuotationItem, "sales_quotation_id"),),
+        "delivery_note": (("sales_order", SalesOrderItem, "sales_order_id"),),
+        "sales_invoice": (("sales_order", SalesOrderItem, "sales_order_id"),),
+        "purchase_order": (
+            ("purchase_request", PurchaseRequestItem, "purchase_request_id"),
+            ("purchase_quotation", PurchaseQuotationItem, "purchase_quotation_id"),
+            ("supplier_quotation", SupplierQuotationItem, "supplier_quotation_id"),
+        ),
+    }
 
     def __init__(self, config: TransactionImportConfig) -> None:
         """Inicializa el adaptador con la configuración del documento."""
@@ -130,7 +146,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
 
     def _validate_source_document(self, first_row: dict[str, Any], source: Any, company_id: str, errors: list[str]) -> None:
         """Validate the optional upstream document and its party/company scope."""
-        if not (first_row.get("documento_origen") and self.config.source_field):
+        if not first_row.get("documento_origen"):
             return
         if source is None:
             errors.append(_("El documento origen no existe o no corresponde al flujo importado."))
@@ -138,8 +154,161 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             errors.append(_("El documento origen debe estar aprobado."))
         elif source.company != company_id:
             errors.append(_("El documento origen debe pertenecer a la compañía de la importación."))
-        elif self.config.party_field and getattr(source, self.config.party_field, None) != first_row.get("tercero"):
+        elif getattr(source, "supplier_id", None) and getattr(source, "supplier_id") != first_row.get("tercero"):
             errors.append(_("El tercero del documento origen no coincide con la fila importada."))
+        elif getattr(source, "customer_id", None) and getattr(source, "customer_id") != first_row.get("tercero"):
+            errors.append(_("El tercero del documento origen no coincide con la fila importada."))
+
+    @staticmethod
+    def _source_model(source_type: str, source_id: str) -> Any | None:
+        """Load a source document for an explicitly recognized flow type."""
+        source_models = {
+            "purchase_request": PurchaseRequest,
+            "purchase_quotation": PurchaseQuotation,
+            "supplier_quotation": SupplierQuotation,
+            "purchase_order": PurchaseOrder,
+            "sales_request": SalesRequest,
+            "sales_quotation": SalesQuotation,
+            "sales_order": SalesOrder,
+        }
+        model = source_models.get(source_type)
+        return database.session.get(model, source_id) if model else None
+
+    def _source_matches(self, source_id: Any, source_line_id: Any) -> list[tuple[str, Any, Any]]:
+        """Resolve a source document and line only when the pair is unique."""
+        if not source_id or not source_line_id:
+            return []
+        matches = []
+        for source_type, item_model, parent_field in self.SOURCE_LINE_SPECS.get(self.config.entity_type, ()):
+            source_item = database.session.get(item_model, str(source_line_id))
+            if source_item is None or str(getattr(source_item, parent_field, "")) != str(source_id):
+                continue
+            source = self._source_model(source_type, str(source_id))
+            if source is not None:
+                matches.append((source_type, source, source_item))
+        return matches
+
+    def _source_line_allocation(
+        self, row: dict[str, Any], company_id: str
+    ) -> tuple[tuple[str, str, str], Decimal] | str | None:
+        """Validate one explicit source-line mapping and return its base quantity."""
+        source_id = row.get("documento_origen")
+        source_line_id = row.get("linea_origen_id")
+        if not source_id and not source_line_id:
+            return None
+        matches = self._source_matches(source_id, source_line_id)
+        validation_error = self._source_line_validation_error(row, company_id, (source_id, source_line_id, matches))
+        if validation_error:
+            return validation_error
+        try:
+            qty = self._finite_decimal(row.get("cantidad"), "cantidad")
+            base_qty = qty_in_base_uom(row.get("producto"), qty, row.get("uom"))
+        except ValueError as exc:
+            return str(exc)
+        source_type = matches[0][0]
+        return ((source_type, str(source_id), str(source_line_id)), base_qty)
+
+    def _source_line_validation_error(
+        self,
+        row: dict[str, Any],
+        company_id: str,
+        source_reference: tuple[Any, Any, list[tuple[str, Any, Any]]],
+    ) -> str | None:
+        """Return the first integrity error for a source document and line pair."""
+        source_id, source_line_id, matches = source_reference
+        if not source_id or not source_line_id:
+            return _("Cada fila con origen requiere documento_origen y linea_origen_id.")
+        if len(matches) != 1:
+            return _("La línea origen no existe, no pertenece al documento indicado o es ambigua.")
+        _source_type, source, source_item = matches[0]
+        if source.docstatus != 1 or source.company != company_id:
+            return _("El documento origen debe estar aprobado y pertenecer a la compañía importada.")
+        source_party = getattr(source, "supplier_id", None) or getattr(source, "customer_id", None)
+        if source_party and source_party != row.get("tercero"):
+            return _("El tercero del documento origen no coincide con la fila importada.")
+        if getattr(source_item, "item_code", None) != row.get("producto"):
+            return _("La línea destino usa un artículo distinto al de la línea origen.")
+        return None
+
+    def _validate_source_quantities(self, accumulated: dict[tuple[str, str, str], Decimal], errors: list[str]) -> None:
+        """Check aggregate imported quantities against each source line's balance."""
+        for (source_type, source_id, source_line_id), imported_qty in accumulated.items():
+            try:
+                available_qty = pending_qty(
+                    source_type, source_id, source_line_id, self.config.entity_type, exclude_draft_targets=True
+                )
+            except (TypeError, ValueError) as exc:
+                errors.append(str(exc))
+                continue
+            if imported_qty > available_qty:
+                errors.append(_("La cantidad importada excede el pendiente de la línea origen."))
+
+    def _validate_source_lines(self, rows: list[dict[str, Any]], company_id: str, errors: list[str]) -> None:
+        """Require each imported source reference to identify one valid source line."""
+        accumulated: dict[tuple[str, str, str], Decimal] = {}
+        for row in rows:
+            allocation = self._source_line_allocation(row, company_id)
+            if isinstance(allocation, str):
+                errors.append(allocation)
+            elif allocation:
+                key, base_qty = allocation
+                accumulated[key] = accumulated.get(key, Decimal("0")) + base_qty
+        self._validate_source_quantities(accumulated, errors)
+
+    def validate_batch_documents(self, documents: dict[str, list[dict[str, Any]]], context: dict[str, Any]) -> list[str]:
+        """Reject combined source-line over-allocation across documents in one file."""
+        required_by_source = self._batch_source_quantities(documents, context.get("company_id") or "")
+        errors = []
+        for (source_type, source_id, source_line_id), required_qty in required_by_source.items():
+            try:
+                available_qty = pending_qty(
+                    source_type, source_id, source_line_id, self.config.entity_type, exclude_draft_targets=True
+                )
+            except (TypeError, ValueError) as exc:
+                errors.append(str(exc))
+                continue
+            if required_qty > available_qty:
+                errors.append(_("La cantidad importada en el archivo excede el pendiente de una línea origen."))
+        return errors
+
+    def _batch_source_quantities(
+        self, documents: dict[str, list[dict[str, Any]]], company_id: str
+    ) -> dict[tuple[str, str, str], Decimal]:
+        """Collect the file-wide quantities for valid source-line references."""
+        required_by_source: dict[tuple[str, str, str], Decimal] = {}
+        for rows in documents.values():
+            for row in rows:
+                allocation = self._batch_source_line_allocation(row, company_id)
+                if allocation:
+                    key, base_qty = allocation
+                    required_by_source[key] = required_by_source.get(key, Decimal("0")) + base_qty
+        return required_by_source
+
+    def _batch_source_line_allocation(
+        self, row: dict[str, Any], company_id: str
+    ) -> tuple[tuple[str, str, str], Decimal] | None:
+        """Return a valid source-line quantity for file-wide allocation checks."""
+        source_id = row.get("documento_origen")
+        source_line_id = row.get("linea_origen_id")
+        if not source_id or not source_line_id:
+            return None
+        matches = self._source_matches(source_id, source_line_id)
+        if len(matches) != 1:
+            return None
+        source_type, source, source_item = matches[0]
+        source_party = getattr(source, "supplier_id", None) or getattr(source, "customer_id", None)
+        if source.company != company_id or source.docstatus != 1:
+            return None
+        if (source_party and source_party != row.get("tercero")) or getattr(source_item, "item_code", None) != row.get(
+            "producto"
+        ):
+            return None
+        try:
+            qty = self._finite_decimal(row.get("cantidad"), "cantidad")
+            base_qty = qty_in_base_uom(row.get("producto"), qty, row.get("uom"))
+        except ValueError:
+            return None
+        return ((source_type, str(source_id), str(source_line_id)), base_qty)
 
     def _validate_document_row(self, row: dict[str, Any], company_id: str, errors: list[str]) -> None:
         """Validate warehouse, stock-item and batch constraints for one row."""
@@ -192,6 +361,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             errors.append(_("El periodo contable para la fecha %(date)s está cerrado o no existe.") % {"date": posting_date})
         source = self._source_document(first_row.get("documento_origen"))
         self._validate_source_document(first_row, source, company_id, errors)
+        self._validate_source_lines(document_data, company_id, errors)
         if self.config.party_field and first_row.get("tercero"):
             membership = database.session.execute(
                 database.select(CompanyParty).filter_by(party_id=first_row.get("tercero"), company=company_id, is_active=True)
@@ -249,6 +419,20 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         self._apply_party(header, first_row.get("tercero"))
         self._apply_source(header, first_row.get("documento_origen"))
 
+        items, total_qty, total = self._build_document_items(document_data, exchange_rate)
+        self._apply_totals(header, total_qty, total, exchange_rate)
+        return {
+            "header": header,
+            "items": items,
+            "source_lines": [(row.get("documento_origen"), row.get("linea_origen_id")) for row in document_data],
+            "entity_type": self.config.entity_type,
+            "naming_series_id": context.get("sequence_id"),
+        }
+
+    def _build_document_items(
+        self, document_data: list[dict[str, Any]], exchange_rate: Decimal
+    ) -> tuple[list[Any], Decimal, Decimal]:
+        """Build imported lines and compute their transaction-currency totals."""
         items = []
         total_qty = Decimal("0")
         total = Decimal("0")
@@ -272,14 +456,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             items.append(item)
             total_qty += qty
             total += amount
-
-        self._apply_totals(header, total_qty, total, exchange_rate)
-        return {
-            "header": header,
-            "items": items,
-            "entity_type": self.config.entity_type,
-            "naming_series_id": context.get("sequence_id"),
-        }
+        return items, total_qty, total
 
     def persist_document(self, document: Any) -> None:
         """Persist header, assign identifier, and save document lines."""
@@ -297,6 +474,26 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         for item in document["items"]:
             setattr(item, self.config.parent_field, header.id)
             database.session.add(item)
+        database.session.flush()
+        for item, (source_id, source_line_id) in zip(document["items"], document.get("source_lines", [])):
+            if not source_id and not source_line_id:
+                continue
+            matches = self._source_matches(source_id, source_line_id)
+            if len(matches) != 1:
+                raise ValueError(_("La línea origen no existe, no pertenece al documento indicado o es ambigua."))
+            source_type = matches[0][0]
+            create_document_relation(
+                source_type=source_type,
+                source_id=str(source_id),
+                source_item_id=str(source_line_id),
+                target_type=document["entity_type"],
+                target_id=header.id,
+                target_item_id=item.id,
+                qty=item.qty,
+                uom=getattr(item, "uom", None),
+                rate=getattr(item, "rate", None),
+                amount=getattr(item, "amount", None),
+            )
 
     def _apply_party(self, header: Any, party_id: Any) -> None:
         if not self.config.party_field:
@@ -325,7 +522,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
 
     def _source_document(self, source_id: Any) -> Any | None:
         """Resuelve el documento origen permitido por el tipo importado."""
-        if not source_id or not self.config.source_field:
+        if not source_id:
             return None
         source_models = {
             "supplier_quotation": PurchaseQuotation,
@@ -337,7 +534,16 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             "sales_invoice": SalesOrder,
         }
         source_model = source_models.get(self.config.entity_type)
-        return database.session.get(source_model, source_id) if source_model else None
+        if source_model:
+            return database.session.get(source_model, source_id)
+        if self.config.entity_type == "purchase_order" and source_id:
+            candidates = [
+                self._source_model(source_type, str(source_id))
+                for source_type, _item_model, _parent_field in self.SOURCE_LINE_SPECS["purchase_order"]
+            ]
+            matches = [candidate for candidate in candidates if candidate is not None]
+            return matches[0] if len(matches) == 1 else None
+        return None
 
     def _currency_and_rate(
         self, first_row: dict[str, Any], source: Any | None, company: str, posting_date: date

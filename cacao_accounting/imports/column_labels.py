@@ -18,6 +18,7 @@ COLUMN_LABELS: dict[str, dict[str, str]] = {
     "moneda": {"es": "moneda", "en": "currency"},
     "tipo_cambio": {"es": "tipo_cambio", "en": "exchange_rate"},
     "documento_origen": {"es": "documento_origen", "en": "source_document"},
+    "linea_origen_id": {"es": "linea_origen_id", "en": "source_line_id"},
     "producto": {"es": "producto", "en": "item"},
     "uom": {"es": "unidad_medida", "en": "uom"},
     "cantidad": {"es": "cantidad", "en": "quantity"},
