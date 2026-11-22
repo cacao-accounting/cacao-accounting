@@ -24328,3 +24328,7 @@ msgstr "The %(field)s field exceeds the supported precision."
 msgid "El tipo de grupo de terceros debe ser cliente o proveedor."
 msgstr "The party group type must be customer or supplier."
 
+#: cacao_accounting/document_flow/validation.py
+msgid "El tipo de documento de venta no es válido."
+msgstr "The sales document type is invalid."
+

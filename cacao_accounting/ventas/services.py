@@ -63,6 +63,7 @@ from cacao_accounting.document_flow import (
 )
 
 from cacao_accounting.document_flow.context import company_currency, effective_currency, validate_immutable_header
+from cacao_accounting.document_flow.validation import validate_sales_invoice_document_type
 
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, next_relation_revision
 from cacao_accounting.document_flow.service import qty_in_base_uom, source_qty_in_base_uom
@@ -2261,6 +2262,7 @@ def _sales_invoice_source(invoice: SalesInvoice, reversal_of: str | None) -> Sal
 def _prepare_sales_invoice_creation() -> dict[str, Any]:
     """Resuelve origen, tipo documental y permisos para una factura de venta."""
     document_type = request.form.get("document_type") or "sales_invoice"
+    validate_sales_invoice_document_type(document_type)
     posting_date = _parse_date(request.form.get("posting_date"))
     reversal_of = _sales_reversal_source(document_type)
     source_company = request.form.get("company") or None

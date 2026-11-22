@@ -150,6 +150,7 @@ from cacao_accounting.ventas.services import (
 )
 
 from cacao_accounting.i18n import _, _l
+from cacao_accounting.document_flow.validation import validate_sales_invoice_document_type
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
@@ -2547,6 +2548,7 @@ def ventas_factura_venta_submit(invoice_id: str):
     if registro.docstatus != 0:
         abort(400)
     try:
+        validate_sales_invoice_document_type(registro.document_type)
         items = (
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
         )

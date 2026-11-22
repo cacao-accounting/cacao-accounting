@@ -1238,8 +1238,10 @@ def _append_purchase_tax_entries(
 def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para una factura o nota de venta aprobada."""
     from cacao_accounting.approval_engine import assert_execution_authorized
+    from cacao_accounting.document_flow.validation import validate_sales_invoice_document_type
 
     assert_execution_authorized(document)
+    validate_sales_invoice_document_type(document.document_type)
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:

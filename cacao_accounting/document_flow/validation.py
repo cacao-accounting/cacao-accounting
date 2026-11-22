@@ -20,6 +20,14 @@ from cacao_accounting.numbers import coerce_decimal
 
 from cacao_accounting.i18n import _
 
+SALES_INVOICE_DOCUMENT_TYPES = frozenset({"sales_invoice", "sales_credit_note", "sales_debit_note", "sales_return"})
+
+
+def validate_sales_invoice_document_type(document_type: Any) -> None:
+    """Exige que una factura de venta use uno de sus subtipos registrados."""
+    if not isinstance(document_type, str) or document_type not in SALES_INVOICE_DOCUMENT_TYPES:
+        raise ValueError(_("El tipo de documento de venta no es válido."))
+
 
 def _collect_currency_sources(registro: Any) -> list[Any]:
     """Devuelve los documentos origen asociados a un documento via relaciones activas.
@@ -242,6 +250,10 @@ def validate_submit_prerequisites(
     Raises:
         ValueError: Si alguna validacion falla.
     """
+    from cacao_accounting.database import SalesInvoice
+
+    if isinstance(registro, SalesInvoice):
+        validate_sales_invoice_document_type(registro.document_type)
     _validate_basic_document_fields(registro)
     if require_party:
         _validate_party(registro)
