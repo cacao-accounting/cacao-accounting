@@ -152,6 +152,16 @@ def adjudicaciones():
         )
         database.session.add_all([pq_item, sq_item])
         database.session.flush()
+        sq_b_item = SupplierQuotationItem(
+            supplier_quotation_id=sq_b.id,
+            item_code="ART-1",
+            qty=Decimal("5"),
+            uom="UND",
+            qty_in_base_uom=Decimal("5"),
+            rate=Decimal("12"),
+        )
+        database.session.add(sq_b_item)
+        database.session.flush()
         award = PurchaseQuotationAward(
             purchase_quotation_id=q1.id,
             company="cacao",
@@ -179,6 +189,7 @@ def adjudicaciones():
             "proveedor_a": proveedor_a.id,
             "proveedor_b": proveedor_b.id,
             "sq_item": sq_item.id,
+            "sq_b_item": sq_b_item.id,
         }
     yield application, ids
     with application.app_context():
@@ -449,3 +460,78 @@ def test_edicion_conserva_orden_con_linea_adjudicada(adjudicaciones, monkeypatch
         orden = database.session.get(PurchaseOrder, orden_id)
         assert orden.purchase_award_id == ids["award"]
         assert orden.remarks == "Actualizada"
+
+
+def _orden_creada(application) -> str:  # noqa: ANN001 - fixture helper
+    """Devuelve el identificador de la única orden persistida."""
+    with application.app_context():
+        return database.session.execute(database.select(PurchaseOrder)).scalar_one().id
+
+
+def _linea_orden(application, orden_id: str) -> PurchaseOrderItem:  # noqa: ANN001 - fixture helper
+    """Carga la única línea persistida de la orden."""
+    with application.app_context():
+        return database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=orden_id)).scalar_one()
+
+
+def _editar_orden(application, orden_id: str, form: dict) -> None:  # noqa: ANN001 - fixture helper
+    """Ejecuta el POST de edición de la orden con el formulario indicado."""
+    from flask_login import login_user
+
+    with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
+        login_user(database.session.get(User, "admin"))
+        orden = database.session.get(PurchaseOrder, orden_id)
+        _update_purchase_order_from_request(orden)
+
+
+def test_edicion_rechaza_exceder_cantidad_adjudicada(adjudicaciones, monkeypatch):
+    """La edición no puede pedir más cantidad de la adjudicada."""
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch)
+    orden_id = _orden_creada(application)
+
+    _editar_orden(application, orden_id, _form_orden(ids, qty_0="6"))
+
+    with application.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        linea = _linea_orden(application, orden_id)
+        assert orden.purchase_award_id == ids["award"]
+        assert orden.supplier_id == ids["proveedor_a"]
+        assert linea.item_code == "ART-1"
+        assert linea.qty == Decimal("1")
+
+
+def test_edicion_rechaza_linea_de_fuente_no_adjudicada(adjudicaciones, monkeypatch):
+    """Una edición que cambia la fuente de la línea no rompe la adjudicación."""
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch)
+    orden_id = _orden_creada(application)
+
+    _editar_orden(application, orden_id, _form_orden(ids, source_item_id_0=ids["sq_b_item"]))
+
+    with application.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        linea = _linea_orden(application, orden_id)
+        assert orden.purchase_award_id == ids["award"]
+        assert orden.supplier_id == ids["proveedor_a"]
+        assert linea.item_code == "ART-1"
+        assert linea.qty == Decimal("1")
+
+
+def test_edicion_valida_conserva_articulo_fuente_y_cantidad(adjudicaciones, monkeypatch):
+    """Una edición dentro de lo adjudicado persiste artículo, fuente y cantidad."""
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch)
+    orden_id = _orden_creada(application)
+
+    _editar_orden(application, orden_id, _form_orden(ids, qty_0="3", remarks="Cantidad ajustada"))
+
+    with application.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        linea = _linea_orden(application, orden_id)
+        assert orden.purchase_award_id == ids["award"]
+        assert orden.supplier_id == ids["proveedor_a"]
+        assert orden.remarks == "Cantidad ajustada"
+        assert linea.item_code == "ART-1"
+        assert linea.qty == Decimal("3")
+        assert linea.uom == "UND"
