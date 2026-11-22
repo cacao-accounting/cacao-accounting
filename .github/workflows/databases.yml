@@ -58,6 +58,7 @@ jobs:
           CHECK_DATABASE: "true"
           DATABASE_URL: "postgresql+psycopg://cacao:cacao@localhost/cacao"
         run: |
+          sudo systemctl start postgresql.service
           sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON SCHEMA public TO cacao;"
           sudo -u postgres psql -c "CREATE DATABASE cacao;"

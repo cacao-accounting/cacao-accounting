@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Hook `post_compile` del buildpack de Python de Heroku.
+#
+# El buildpack instala las dependencias de `requirements.txt`, pero no instala
+# el paquete en sí ni los assets del frontend. Aquí se completa el slug:
+#
+#   1. `pip install .[cloud]` instala Cacao Accounting y sus dependencias de
+#      nube (psycopg 3 se compila contra la libpq instalada por Aptfile), lo
+#      que además deja disponible el comando `cacaoctl` usado en el Procfile.
+#   2. `npm ci` instala bootstrap, bootstrap-icons, chart.js y exceljs en
+#      `cacao_accounting/static/node_modules`, que las plantillas sirven como
+#      estáticos. `node_modules` no se versiona, por eso se instala en el build.
+#   3. Se compilan los catálogos de traducción para no servir msgid en crudo.
+
+set -euo pipefail
+
+echo "-----> Instalando Cacao Accounting con dependencias de nube"
+pip install --no-cache-dir --no-input '.[cloud]'
+
+echo "-----> Instalando assets estáticos"
+(
+  cd cacao_accounting/static
+  npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+)
+
+echo "-----> Compilando catálogos de traducción"
+python - <<'PY'
+from pathlib import Path
+
+from babel.messages.mofile import write_mo
+from babel.messages.pofile import read_po
+
+for po_path in Path("cacao_accounting/translations").glob("*/LC_MESSAGES/messages.po"):
+    with po_path.open("rb") as source:
+        catalog = read_po(source)
+    with po_path.with_suffix(".mo").open("wb") as target:
+        write_mo(target, catalog)
+    print(f"compiled {po_path}")
+PY

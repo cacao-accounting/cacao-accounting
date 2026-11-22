@@ -1,0 +1,43 @@
+# Archivos que no son necesarios para ejecutar la aplicación en Heroku.
+#
+# El buildpack de Python aborta si encuentra más de un gestor de dependencias;
+# `uv.lock` está en .gitignore, pero se excluye aquí como salvaguarda.
+
+uv.lock
+
+# Desarrollo, pruebas y calidad de código
+tests/
+development.txt
+docs.txt
+codecov.yml
+pytest.ini
+test-plan.md
+plan.md
+review.md
+SESSIONS.md
+
+# Documentación y configuración local
+docs/
+mkdocs.yml
+Dockerfile
+docker-compose.yml
+.dockerignore
+.replit
+.gitpod.yml
+.gitpod.sh
+run_server.sh
+run_test.sh
+
+# Artefactos locales
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+**/__pycache__/
+**/*.pyc
+*.db
+cacaoaccounting.db
+instance/
+node_modules/
+cacao_accounting/static/test/
