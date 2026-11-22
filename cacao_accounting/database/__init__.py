@@ -1229,6 +1229,15 @@ class PartyContact(database.Model, BaseTabla):  # type: ignore[name-defined]
         nullable=False,
         index=True,
     )
+    # #1777: el contacto es global, pero su visibilidad operativa se asocia a
+    # la compañía del vínculo. NULL en filas legacy: no se exponen hasta migrar
+    # con una regla explícita.
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     # billing, sales, purchasing, logistics, support, primary
     role = database.Column(database.String(30), nullable=True)
 

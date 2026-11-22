@@ -223,17 +223,37 @@ def _party_allowed_companies(party_id: str, companies: list[tuple[str, str]]) ->
     return [(code, name) for code, name in companies if code in active_codes]
 
 
-def _party_suggested_emails(party_id: str, party: Party) -> list[str]:
-    """Load active contact emails and prioritize the party primary address."""
+def _party_linked_to_company(party_id: str, company: str) -> bool:
+    """Indica si el tercero tiene un vínculo activo con la compañía."""
+    return (
+        database.session.execute(
+            select(CompanyParty.id).where(
+                CompanyParty.party_id == party_id,
+                CompanyParty.company == company,
+                CompanyParty.is_active.is_(True),
+            )
+        ).first()
+        is not None
+    )
+
+
+def _party_suggested_emails(party_id: str, company: str) -> list[str]:
+    """Correos de contacto visibles para la compañía autorizada (#1777).
+
+    ``Contact`` sigue siendo global, pero solo se sugiere a través de un
+    ``PartyContact`` explícito de esa compañía. No se agrega automáticamente
+    ``Party.primary_email``.
+    """
     contact_stmt = (
         select(Contact)
         .join(PartyContact, PartyContact.contact_id == Contact.id)
-        .where(PartyContact.party_id == party_id, Contact.is_active.is_(True))
+        .where(
+            PartyContact.party_id == party_id,
+            PartyContact.company == company,
+            Contact.is_active.is_(True),
+        )
     )
-    suggested_emails = [contact.email for contact in database.session.execute(contact_stmt).scalars().all() if contact.email]
-    if party.primary_email and party.primary_email not in suggested_emails:
-        suggested_emails.insert(0, party.primary_email)
-    return suggested_emails
+    return [contact.email for contact in database.session.execute(contact_stmt).scalars().all() if contact.email]
 
 
 def _verified_snapshot_for_detail(confirmation: BalanceConfirmation) -> tuple[dict, bool]:
@@ -260,6 +280,8 @@ def _handle_confirmation_creation(party_id: str, party_type: str):
         flash(_("Debe seleccionar una compañía y fecha de corte."), "danger")
         return redirect(request.url)
     exige_acceso_compania("accounting", company_id, "crear")
+    if not _party_linked_to_company(party_id, company_id):
+        abort(403)
     try:
         cutoff_date = date.fromisoformat(cutoff_date_str)
     except ValueError:
@@ -303,12 +325,17 @@ def crear_confirmacion_form():
     """Formulario para solicitar una nueva confirmación de saldo."""
     party_id = request.args.get("party_id")
     party_type = request.args.get("party_type", "customer")  # customer | supplier
+    company_id = request.args.get("company_id") or request.form.get("company_id")
 
     action = "consultar" if request.method == "GET" else "crear"
     companies = _confirmation_companies(action)
     if party_id:
         companies = _party_allowed_companies(party_id, companies)
         if not companies:
+            abort(403)
+        if company_id and company_id not in {code for code, _ in companies}:
+            abort(403)
+        if company_id and not _party_linked_to_company(party_id, company_id):
             abort(403)
         party = database.session.get(Party, party_id)
     else:
@@ -319,7 +346,9 @@ def crear_confirmacion_form():
             return redirect(url_for("ventas.ventas_cliente_lista"))
         return redirect(url_for("compras.compras_proveedor_lista"))
 
-    suggested_emails = _party_suggested_emails(party_id, party)
+    # #1777: los correos solo se cargan después de autorizar compañía y
+    # tercero. Sin compañía seleccionada no se expone ningún destinatario.
+    suggested_emails = _party_suggested_emails(party_id, company_id) if company_id else []
 
     if request.method == "POST":
         return _handle_confirmation_creation(party_id, party_type)
@@ -330,6 +359,7 @@ def crear_confirmacion_form():
         party_type=party_type,
         companies=companies,
         suggested_emails=suggested_emails,
+        company_id=company_id,
         today=date.today().isoformat(),
     )
 

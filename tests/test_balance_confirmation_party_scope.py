@@ -125,9 +125,11 @@ def confirmation_party_scope_scenario():
         ).scalar_one()
         database.session.add_all(
             [
-                PartyContact(party_id=own_party_id, contact_id=own_contact.id, role="primary"),
-                PartyContact(party_id=foreign_party_id, contact_id=foreign_contact.id, role="primary"),
-                PartyContact(party_id=unassociated_party_id, contact_id=unassociated_contact.id, role="primary"),
+                PartyContact(party_id=own_party_id, contact_id=own_contact.id, company=alpha, role="primary"),
+                PartyContact(party_id=foreign_party_id, contact_id=foreign_contact.id, company=beta, role="primary"),
+                PartyContact(
+                    party_id=unassociated_party_id, contact_id=unassociated_contact.id, company=alpha, role="primary"
+                ),
                 CompanyParty(company=alpha, party_id=own_party_id, is_active=True),
                 CompanyParty(company=beta, party_id=foreign_party_id, is_active=True),
             ]
@@ -180,9 +182,10 @@ def _authenticated_client(application, user_id: str):
     return client
 
 
-def _form_url(party_id: str) -> str:
-    """Build the read-only form URL for a customer party."""
-    return f"/accounting/balance-confirmations/new?party_id={party_id}&party_type=customer"
+def _form_url(party_id: str, company: str | None = None) -> str:
+    """Build the form URL for a customer party and optional company."""
+    url = f"/accounting/balance-confirmations/new?party_id={party_id}&party_type=customer"
+    return f"{url}&company_id={company}" if company else url
 
 
 def test_confirmation_form_requires_rbac_before_party_lookup(confirmation_party_scope_scenario):
@@ -190,7 +193,7 @@ def test_confirmation_form_requires_rbac_before_party_lookup(confirmation_party_
     application, ids = confirmation_party_scope_scenario
     client = _authenticated_client(application, ids["denied"])
 
-    response = client.get(_form_url(ids["own_party"]))
+    response = client.get(_form_url(ids["own_party"], ids["company"]))
 
     assert response.status_code == 403
     assert ids["own_email"] not in response.get_data(as_text=True)
@@ -201,13 +204,13 @@ def test_confirmation_form_read_does_not_grant_creation_permission(confirmation_
     application, ids = confirmation_party_scope_scenario
     client = _authenticated_client(application, ids["read_requester"])
 
-    get_response = client.get(_form_url(ids["own_party"]))
+    get_response = client.get(_form_url(ids["own_party"], ids["company"]))
 
     assert get_response.status_code == 200
     assert ids["own_email"] in get_response.get_data(as_text=True)
 
     post_response = client.post(
-        _form_url(ids["own_party"]),
+        _form_url(ids["own_party"], ids["company"]),
         data={"company_id": ids["company"], "cutoff_date": date.today().isoformat(), "emails": ids["own_email"]},
     )
 
@@ -221,7 +224,7 @@ def test_confirmation_form_hides_foreign_or_unassociated_party_pii(confirmation_
     client = _authenticated_client(application, ids["requester"])
     private_email = ids["foreign_email"] if party_key == "foreign_party" else ids["unassociated_email"]
 
-    response = client.get(_form_url(ids[party_key]))
+    response = client.get(_form_url(ids[party_key], ids["company"]))
 
     assert response.status_code == 403
     body = response.get_data(as_text=True)
@@ -236,7 +239,7 @@ def test_confirmation_form_renders_contacts_for_active_authorized_party(confirma
     application, ids = confirmation_party_scope_scenario
     client = _authenticated_client(application, ids["requester"])
 
-    response = client.get(_form_url(ids["own_party"]))
+    response = client.get(_form_url(ids["own_party"], ids["company"]))
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)

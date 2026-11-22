@@ -391,8 +391,28 @@ def validated_party_tax_id(values: Mapping[str, str | None], *, exclude_party_id
     return tax_id
 
 
-def create_party_contact(party_id: str, values: Mapping[str, str | None]) -> Contact:
-    """Crea un contacto y lo vincula al tercero."""
+def _contact_company_for_party(party_id: str, company: str | None = None) -> str:
+    """Resuelve y valida la compañía explícita de un vínculo de contacto (#1777)."""
+    from cacao_accounting.company_context import get_active_company
+
+    target = (company or get_active_company() or "").strip()
+    if not target:
+        raise ValueError(_("La compañía del contacto es obligatoria."))
+    link = database.session.execute(
+        select(CompanyParty.id).where(
+            CompanyParty.party_id == party_id,
+            CompanyParty.company == target,
+            CompanyParty.is_active.is_(True),
+        )
+    ).first()
+    if link is None:
+        raise ValueError(_("El tercero no está habilitado para la compañía seleccionada."))
+    return target
+
+
+def create_party_contact(party_id: str, values: Mapping[str, str | None], company: str | None = None) -> Contact:
+    """Crea un contacto y lo vincula al tercero en una compañía explícita."""
+    target_company = _contact_company_for_party(party_id, company)
     contact = Contact(
         first_name=(values.get("first_name") or "").strip(),
         last_name=(values.get("last_name") or "").strip() or None,
@@ -405,13 +425,36 @@ def create_party_contact(party_id: str, values: Mapping[str, str | None]) -> Con
         raise ValueError(_("El nombre del contacto es obligatorio."))
     database.session.add(contact)
     database.session.flush()
-    database.session.add(PartyContact(party_id=party_id, contact_id=contact.id, role=(values.get("role") or "") or None))
+    database.session.add(
+        PartyContact(
+            party_id=party_id,
+            contact_id=contact.id,
+            company=target_company,
+            role=(values.get("role") or "") or None,
+        )
+    )
     return contact
 
 
-def update_party_contact(party_id: str, link_id: str, values: Mapping[str, str | None]) -> Contact:
-    """Actualiza un contacto vinculado al tercero."""
+def _assert_contact_not_shared(link: PartyContact) -> None:
+    """Impide editar un contacto compartido entre compañías (#1777)."""
+    other = database.session.execute(
+        select(PartyContact.id).where(
+            PartyContact.contact_id == link.contact_id,
+            PartyContact.id != link.id,
+        )
+    ).first()
+    if other is not None:
+        raise ValueError(_("El contacto está compartido con otra compañía; registre uno propio."))
+
+
+def update_party_contact(party_id: str, link_id: str, values: Mapping[str, str | None], company: str | None = None) -> Contact:
+    """Actualiza un contacto vinculado al tercero dentro de su compañía."""
     link = _party_contact_link(party_id, link_id)
+    target_company = _contact_company_for_party(party_id, company)
+    if link.company != target_company:
+        raise ValueError(_("El contacto no pertenece a la compañía seleccionada."))
+    _assert_contact_not_shared(link)
     contact = database.session.get(Contact, link.contact_id)
     if not contact:
         raise ValueError(_("Contacto no encontrado."))
