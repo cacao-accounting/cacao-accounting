@@ -53,7 +53,9 @@
               <th>{{ _('Compañía') }}</th>
               <th>{{ _('Activo') }}</th>
               <th>{% if party_role == "customer" %}{{ _('Cuenta por cobrar') }}{% else %}{{ _('Cuenta por pagar') }}{% endif %}</th>
+              {% if party_role == "customer" %}
               <th>{{ _('Lista de Precio') }}</th>
+              {% endif %}
               <th>{% if party_role == "supplier" %}{{ _('Retención al pagar') }}{% else %}{{ _('Regla Fiscal') }}{% endif %}</th>
               <th>{{ _('Plantilla de impuestos') }}</th>
               {% if party_role == "supplier" %}
@@ -168,6 +170,7 @@
                     </div>
                   </div>
                 </td>
+                {% if party_role == "customer" %}
                 <td style="min-width: 16rem;">
                   <div class="ca-smart-select" x-data='smartSelect({
                     doctype: "price_list",
@@ -177,7 +180,7 @@
                     initialLabel: row.default_price_list_label,
                     filters: {
                       company: function () { return row.company; },
-                      {% if party_role == "customer" %}is_selling: true,{% else %}is_buying: true,{% endif %}
+                      is_selling: true,
                       is_active: true
                     },
                     filterSources: ["#party-company-" + index],
@@ -215,6 +218,7 @@
                     </div>
                   </div>
                 </td>
+                {% endif %}
                 <td style="min-width: 16rem;">
                   <div class="ca-smart-select" x-data='smartSelect({
                     doctype: "tax_rule",

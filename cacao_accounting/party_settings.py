@@ -223,11 +223,14 @@ def build_party_company_settings(
     company_party = _party_company_record(party_id, company)
     resolved_role = _resolve_party_role(party_id, role)
     receivable_account, payable_account = _resolve_party_accounts(party_id, company, company_party, resolved_role)
-    default_price_list = _default_company_price_list(company, resolved_role)
-    configured_price_list = _configured_party_price_list(company, company_party)
-    return _build_settings(
-        company, company_party, receivable_account, payable_account, configured_price_list or default_price_list
-    )
+    # #1298: solo el rol cliente tiene consumidor de catálogo de precios.
+    if resolved_role == "customer":
+        default_price_list = _default_company_price_list(company, resolved_role)
+        configured_price_list = _configured_party_price_list(company, company_party)
+        price_list = configured_price_list or default_price_list
+    else:
+        price_list = None
+    return _build_settings(company, company_party, receivable_account, payable_account, price_list)
 
 
 def _resolve_party_role(party_id: str, role: str | None) -> str:
@@ -330,8 +333,8 @@ def draft_party_company_settings_rows(role: str, values: Mapping[str, Any]) -> l
                 "receivable_account_label": _row_value(fields["receivable_account_id"], index) if role == "customer" else "",
                 "payable_account_id": _row_value(fields["payable_account_id"], index) if role == "supplier" else "",
                 "payable_account_label": _row_value(fields["payable_account_id"], index) if role == "supplier" else "",
-                "default_price_list_id": _row_value(fields["default_price_list_id"], index),
-                "default_price_list_label": _row_value(fields["default_price_list_id"], index),
+                "default_price_list_id": _row_value(fields["default_price_list_id"], index) if role == "customer" else "",
+                "default_price_list_label": _row_value(fields["default_price_list_id"], index) if role == "customer" else "",
                 "default_tax_rule_id": _row_value(fields["default_tax_rule_id"], index),
                 "default_tax_rule_label": _row_value(fields["default_tax_rule_id"], index),
                 "tax_template_id": _row_value(fields["tax_template_id"], index),
@@ -544,7 +547,11 @@ def upsert_party_company_settings(
 
     _validate_tax_template(company, params.tax_template_id, role)
     _validate_tax_rule(company, params.default_tax_rule_id, role)
-    _validate_price_list(company, params.default_price_list_id, role)
+    # #1298: Compras no consume catálogo de precios por proveedor; la lista
+    # configurada solo tiene consumidor en el flujo de ventas (cliente).
+    default_price_list_id = params.default_price_list_id if role == "customer" else None
+    if default_price_list_id:
+        _validate_price_list(company, default_price_list_id, role)
 
     company_party = _party_company_record(party_id, company)
     if company_party is None:
@@ -557,7 +564,7 @@ def upsert_party_company_settings(
     company_party.is_active = params.is_active
     company_party.tax_template_id = params.tax_template_id
     company_party.default_tax_rule_id = params.default_tax_rule_id
-    company_party.default_price_list_id = params.default_price_list_id
+    company_party.default_price_list_id = default_price_list_id
     company_party.allow_purchase_invoice_without_order = params.allow_purchase_invoice_without_order
     company_party.allow_purchase_invoice_without_receipt = params.allow_purchase_invoice_without_receipt
     if is_new or update_extended:
