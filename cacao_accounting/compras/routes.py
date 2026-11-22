@@ -1203,6 +1203,17 @@ def _purchase_action_permissions() -> dict[str, bool]:
     }
 
 
+def _can_view_purchase_prices(company: str | None) -> bool:
+    """Return whether the current user may view purchase prices for a company."""
+    if not company:
+        return False
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("purchases"), usuario=current_user.id)
+    return bool(permissions.administrador or (permissions.consultar and permissions.tiene_acceso_compania(company)))
+
+
 def _render_request_comparison_view(request_comparison: PurchaseRequestComparison):
     """Render view for request comparison fallback."""
     exige_acceso_compania("purchases", request_comparison.company, "consultar")
@@ -2507,6 +2518,65 @@ def _receipt_available_source_types(is_return: bool) -> list[dict[str, str]]:
     return [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}]
 
 
+def _receipt_return_line_source(receipt: PurchaseReceipt, item: PurchaseReceiptItem) -> dict[str, str]:
+    """Rebuild the validated source-line metadata omitted from return relations."""
+    if not receipt.reversal_of:
+        return {}
+    source = database.session.get(PurchaseReceipt, receipt.reversal_of)
+    if not source or source.docstatus != 1 or source.is_return or source.company != receipt.company:
+        return {}
+    source_items = (
+        database.session.execute(
+            database.select(PurchaseReceiptItem).filter_by(
+                purchase_receipt_id=source.id,
+                item_code=item.item_code,
+                is_superseded=False,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    matching_items = [line for line in source_items if line.rate == item.rate]
+    source_item = (matching_items or source_items or [None])[0]
+    if source_item is None:
+        return {}
+    return {
+        "source_type": "purchase_receipt",
+        "source_id": source.id,
+        "source_item_id": source_item.id,
+    }
+
+
+def _receipt_edit_line_source(receipt: PurchaseReceipt, item: PurchaseReceiptItem) -> dict[str, str]:
+    """Return source metadata for an editable receipt line."""
+    if receipt.is_return:
+        return _receipt_return_line_source(receipt, item)
+    return get_target_line_source("purchase_receipt", item.id)
+
+
+def _receipt_edit_initial_line(
+    item: PurchaseReceiptItem,
+    source: dict[str, str],
+    hide_source_prices: bool,
+) -> dict[str, str]:
+    """Build an edit line while omitting confidential source amounts when needed."""
+    line = {
+        "receipt_item_id": item.id,
+        "item_code": item.item_code,
+        "item_name": item.item_name,
+        "qty": str(item.qty),
+        "uom": item.uom or "",
+        "warehouse": item.warehouse or "",
+        "batch_id": item.batch_id or "",
+        "serial_no": item.serial_no or "",
+        **source,
+    }
+    if not hide_source_prices:
+        line["rate"] = str(item.rate or 0)
+        line["amount"] = str(item.amount or 0)
+    return line
+
+
 def _receipt_catalogs(
     selected_company: str | None,
 ) -> tuple[list[dict[str, object]], list[dict[str, str]], list[dict[str, str]]]:
@@ -2554,6 +2624,8 @@ def _receipt_transaction_config(
     company_id: str | None,
     is_return: bool,
     from_order_id: str | None,
+    show_pricing: bool,
+    hide_pricing_for_source_types: list[str],
     items: list[dict[str, object]],
     uoms: list[dict[str, str]],
     bodegas: list[dict[str, str]],
@@ -2573,6 +2645,10 @@ def _receipt_transaction_config(
         "items": items,
         "uoms": uoms,
         "warehouses": bodegas,
+        "showPricing": show_pricing,
+        "showPricingForManual": True,
+        "hidePricingForSourceTypes": hide_pricing_for_source_types,
+        "sourcePricingFromApi": True,
         "initialSourceType": initial_source_type,
         "availableSourceTypes": _receipt_available_source_types(is_return),
         "initialHeader": initial_header,
@@ -2620,6 +2696,7 @@ def compras_recepcion_nuevo():
     selected_company = _resolve_receipt_selected_company(recepcion_origen, orden_origen, formulario)
     if selected_company:
         exige_acceso_compania("inventory", selected_company, "crear")
+    can_view_purchase_prices = _can_view_purchase_prices(selected_company)
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
     items_disponibles, uoms_disponibles, bodegas_disponibles = _receipt_catalogs(selected_company)
     is_return = bool(recepcion_origen) or request.args.get("is_return") in {"1", "true", "True"}
@@ -2634,6 +2711,8 @@ def compras_recepcion_nuevo():
         company_id=company_id,
         is_return=is_return,
         from_order_id=from_order_id,
+        show_pricing=(not from_order_id and not is_return) or can_view_purchase_prices,
+        hide_pricing_for_source_types=[] if can_view_purchase_prices else ["purchase_order", "purchase_receipt"],
         items=items_disponibles,
         uoms=uoms_disponibles,
         bodegas=bodegas_disponibles,
@@ -2741,9 +2820,18 @@ def compras_recepcion_editar(receipt_id: str):
         _require_requested_purchase_company_access(registro)
         return _handle_purchase_receipt_edit_post(registro)
 
-    lineas = database.session.execute(
-        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id, is_superseded=False)
-    ).scalars()
+    lineas = list(
+        database.session.execute(
+            database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id, is_superseded=False)
+        ).scalars()
+    )
+    can_view_purchase_prices = _can_view_purchase_prices(registro.company)
+    line_sources = {item.id: _receipt_edit_line_source(registro, item) for item in lineas}
+    has_purchase_order_source = bool(registro.purchase_order_id) or any(
+        source.get("source_type") == "purchase_order" for source in line_sources.values()
+    )
+    hide_source_prices = not can_view_purchase_prices and bool(registro.is_return or has_purchase_order_source)
+    is_return = bool(registro.is_return)
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_RECEIPT,
         "viewKey": "draft",
@@ -2751,7 +2839,12 @@ def compras_recepcion_editar(receipt_id: str):
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
+        "showPricing": not hide_source_prices,
+        "showPricingForManual": not hide_source_prices,
+        "hidePricingForSourceTypes": [] if can_view_purchase_prices else ["purchase_order", "purchase_receipt"],
+        "sourcePricingFromApi": True,
+        "initialSourceType": "purchase_receipt" if is_return else "purchase_order" if registro.purchase_order_id else "",
+        "availableSourceTypes": _receipt_available_source_types(is_return),
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -2759,21 +2852,7 @@ def compras_recepcion_editar(receipt_id: str):
             "party": registro.supplier_id or "",
             "party_label": registro.supplier_name or "",
         },
-        "initialLines": [
-            {
-                "item_code": item.item_code,
-                "item_name": item.item_name,
-                "qty": str(item.qty),
-                "uom": item.uom or "",
-                "rate": str(item.rate or 0),
-                "amount": str(item.amount or 0),
-                "warehouse": item.warehouse or "",
-                "batch_id": item.batch_id or "",
-                "serial_no": item.serial_no or "",
-                **get_target_line_source("purchase_receipt", item.id),
-            }
-            for item in lineas
-        ],
+        "initialLines": [_receipt_edit_initial_line(item, line_sources[item.id], hide_source_prices) for item in lineas],
     }
     return render_template(
         "compras/recepcion_nuevo.html",

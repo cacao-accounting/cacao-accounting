@@ -350,7 +350,11 @@ def test_pending_lines_accepts_alternative_read_module(document_flow_app, monkey
         f"?source_type={source_type}&target_type={target_type}&source_id=id-fuente&company=cacao"
     )
     assert response.status_code == 200
-    assert response.get_json()["items"] == [{"item_code": "ITEM-AUTORIZADO"}]
+    item = response.get_json()["items"][0]
+    assert item["item_code"] == "ITEM-AUTORIZADO"
+    if target_type == "purchase_receipt":
+        assert "rate" not in item
+        assert "amount" not in item
 
 
 def test_pending_lines_rejects_source_without_verifiable_company(document_flow_app, monkeypatch):

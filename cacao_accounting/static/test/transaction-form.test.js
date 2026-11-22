@@ -225,6 +225,38 @@ describe('transaction-form', function () {
     assert.strictEqual(component.visibleColumns.some((column) => column.field === 'amount'), false);
   });
 
+  it('hides pricing for restricted PO sourcing while keeping manual entry visible', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_receipt',
+      showPricing: true,
+      showPricingForManual: true,
+      hidePricingForSourceTypes: ['purchase_order', 'purchase_receipt'],
+      sourcePricingFromApi: true,
+      availableSourceTypes: [{ value: 'purchase_order', label: 'Orden de compra' }],
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    component.updateSourcePricingVisibility('purchase_order');
+    assert.strictEqual(component.showPricing, false);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'rate'), false);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'amount'), false);
+
+    component.updateSourcePricingVisibility('');
+    assert.strictEqual(component.showPricing, true);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'rate'), true);
+    assert.strictEqual(component.visibleColumns.some((column) => column.field === 'amount'), true);
+
+    component.updateSourcePricingVisibility('purchase_order', true);
+    assert.strictEqual(component.showPricing, false);
+    component.updateSourcePricingVisibility('purchase_order', false);
+    assert.strictEqual(component.showPricing, true);
+    component.updateSourcePricingVisibility('purchase_receipt');
+    assert.strictEqual(component.showPricing, false);
+  });
+
   it('adds the discount column when line discounts are enabled', function () {
     const create = loadTransactionForm();
     const component = create({

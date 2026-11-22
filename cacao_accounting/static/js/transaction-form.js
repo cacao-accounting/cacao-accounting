@@ -342,6 +342,10 @@
       return {
         formKey: config.formKey || '',
         showPricing: config.showPricing !== false,
+        showPricingForManual: config.showPricingForManual === true,
+        hidePricingForSourceTypes: Array.isArray(config.hidePricingForSourceTypes)
+          ? [...config.hidePricingForSourceTypes]
+          : [],
         canEditPrices: config.canEditPrices === true || !String(config.formKey || '').startsWith('sales.'),
         enableSalesPriceLookup: String(config.formKey || '').startsWith('sales.'),
         viewKey: config.viewKey || 'draft',
@@ -1143,6 +1147,9 @@
             if (!response.ok) throw new Error(response.statusText || 'source request failed');
             const data = await response.json();
             if (requestId !== sourceRequestSequence || contextSignature !== this.sourceLookupSignature()) return false;
+            if (config.sourcePricingFromApi === true && typeof data.pricing_redacted === 'boolean') {
+              this.updateSourcePricingVisibility(this.searchCriteria.source_type, data.pricing_redacted);
+            }
             this.sourceItems = this.mapSourceItems(data.items);
             return true;
           } catch (err) {
@@ -1202,7 +1209,24 @@
           this.autofillStep = 1;
         },
 
+        updateSourcePricingVisibility(sourceType = this.searchCriteria.source_type, pricingRedacted = null) {
+          const restrictedSource = this.hidePricingForSourceTypes.includes(sourceType || '');
+          let showPricing = restrictedSource
+            ? false
+            : (sourceType ? config.showPricing !== false : this.showPricingForManual || config.showPricing !== false);
+          if (config.sourcePricingFromApi === true && typeof pricingRedacted === 'boolean') {
+            showPricing = !pricingRedacted;
+          }
+          this.showPricing = showPricing;
+          for (const column of this.preferences.columns) {
+            if (column.field === 'rate' || column.field === 'amount') {
+              column.visible = this.showPricing;
+            }
+          }
+        },
+
         async fetchSourceDocuments() {
+          this.updateSourcePricingVisibility();
           const requestId = this.beginSourceRequest();
           const context = this.sourceLookupContext();
           const contextSignature = this.sourceLookupSignature();
@@ -1267,6 +1291,9 @@
               requestId !== sourceRequestSequence ||
               requestSignature !== this.sourceLookupSignature(this.selectedSourceIds())
             ) return;
+            if (config.sourcePricingFromApi === true && typeof data.pricing_redacted === 'boolean') {
+              this.updateSourcePricingVisibility(context.source_type, data.pricing_redacted);
+            }
             this.sourceItems = this.mapSourceItems(data.items);
           } catch (err) {
             if (
@@ -1293,6 +1320,7 @@
 
         applySource() {
           if (this.loadingSource || this.sourceHydrationPending || this.sourceLoadError) return;
+          this.updateSourcePricingVisibility();
           this.processSelectedSourceItems();
           this.cleanupEmptyLines();
           if (!this.lines.length) this.addRow();

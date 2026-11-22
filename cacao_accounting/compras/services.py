@@ -1119,6 +1119,34 @@ def _active_invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
     )
 
 
+def _purchase_receipt_source_rate(index: int, receipt: PurchaseReceipt | None, item_code: str) -> Decimal | None:
+    """Resolve a sourced receipt line's rate from its approved source document."""
+    source_type = request.form.get(f"source_type_{index}")
+    source_id = request.form.get(f"source_id_{index}")
+    source_item_id = request.form.get(f"source_item_id_{index}")
+    is_return = bool(receipt and receipt.is_return)
+    if is_return:
+        if source_type != "purchase_receipt" or source_id != receipt.reversal_of:
+            raise DocumentFlowError(_("La devolución debe usar la recepción original como origen."), 400)
+        source_spec = (PurchaseReceipt, PurchaseReceiptItem, "purchase_receipt_id")
+    elif source_type == "purchase_order":
+        source_spec = (PurchaseOrder, PurchaseOrderItem, "purchase_order_id")
+    else:
+        return None
+    source_model, source_item_model, source_parent_field = source_spec
+    source = database.session.get(source_model, source_id) if source_id else None
+    source_item = database.session.get(source_item_model, source_item_id) if source_item_id else None
+    if not source or not source_item or source.docstatus != 1 or getattr(source, "is_return", False):
+        raise DocumentFlowError(_("El documento origen y su línea deben existir y estar aprobados."), 400)
+    if getattr(source_item, source_parent_field) != source.id or getattr(source_item, "is_superseded", False):
+        raise DocumentFlowError(_("La línea origen no pertenece al documento indicado."), 400)
+    if source.company != (receipt.company if receipt else None):
+        raise DocumentFlowError(_("El documento origen debe pertenecer a la misma compañía."), 400)
+    if source_item.item_code != item_code:
+        raise DocumentFlowError(_("El artículo debe coincidir con la línea del documento origen."), 400)
+    return coerce_decimal(source_item.rate or 0, field_name=_("tarifa"), non_negative=True)
+
+
 def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una recepción de compra desde el formulario."""
     receipt = database.session.get(PurchaseReceipt, receipt_id)
@@ -1138,8 +1166,9 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
                 raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
-            rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
+            source_rate = _purchase_receipt_source_rate(i, receipt, item_code)
+            rate = source_rate if source_rate is not None else _form_decimal(f"rate_{i}", "0")
+            amount = qty * rate
             uom = request.form.get(f"uom_{i}") or None
             warehouse_code = (
                 request.form.get("to_warehouse") or request.form.get("warehouse") or request.form.get(f"warehouse_{i}") or None

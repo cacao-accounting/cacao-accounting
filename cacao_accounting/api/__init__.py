@@ -1502,17 +1502,9 @@ def api_document_flow_pending_lines():
             abort(403)
         if source_company != company:
             abort(409)
-        if _puede_leer_documento_compania(normalized_source_type, company):
-            continue
-        # #1332/#1515: Inventario puede cargar lineas para una entrega sin
-        # acceso de lectura a la orden de venta; recibe solo la proyeccion
-        # logistica, sin precios, importes ni datos comerciales.
-        if _allows_logistics_delivery_projection(normalized_source_type, normalized_target_type) and (
-            _puede_consultar_modulo_compania("inventory", company)
-        ):
-            logistics_projection = True
-            continue
-        abort(403)
+        logistics_projection = (
+            _pending_line_projection_required(normalized_source_type, normalized_target_type, company) or logistics_projection
+        )
     try:
         lines = get_pending_lines(
             source_document_type=source_type,
@@ -1524,7 +1516,7 @@ def api_document_flow_pending_lines():
         abort(exc.status_code)
     if logistics_projection:
         lines = [_logistics_line_projection(line) for line in lines]
-    return jsonify({"target_type": target_type, "items": lines})
+    return jsonify({"target_type": target_type, "items": lines, "pricing_redacted": logistics_projection})
 
 
 def _load_pending_line_source(document_type: str, document_id: str) -> Any:
@@ -1540,9 +1532,33 @@ def _load_pending_line_source(document_type: str, document_id: str) -> Any:
     return document
 
 
+def _pending_line_projection_required(source_type: str, target_type: str, company: str) -> bool:
+    """Authorize pending-line reads and report whether prices must be projected out."""
+    inventory_can_read = _puede_consultar_modulo_compania("inventory", company)
+    if (
+        _allows_logistics_receipt_projection(source_type, target_type)
+        and inventory_can_read
+        and not _puede_consultar_modulo_compania("purchases", company)
+    ):
+        return True
+    if _puede_leer_documento_compania(source_type, company):
+        return False
+    # #1332/#1515: Inventario puede cargar líneas para entregas y
+    # recepciones sin acceso de lectura al documento de compras/ventas;
+    # recibe solo la proyección logística, sin precios ni importes.
+    if _allows_logistics_delivery_projection(source_type, target_type) and inventory_can_read:
+        return True
+    abort(403)
+
+
 def _allows_logistics_delivery_projection(source_type: str, target_type: str) -> bool:
     """Identifica el flujo de despacho con proyeccion logistica controlada."""
     return source_type == "sales_order" and target_type == "delivery_note"
+
+
+def _allows_logistics_receipt_projection(source_type: str, target_type: str) -> bool:
+    """Identifica la recepción de compras que necesita solo datos logísticos."""
+    return target_type == "purchase_receipt" and source_type in {"purchase_order", "purchase_receipt"}
 
 
 @api.route("/api/document-flow/pending-deliveries")
