@@ -24241,3 +24241,16 @@ msgstr "Prepare delivery"
 #: cacao_accounting/inventario/templates/inventario/entregas_pendientes.html
 msgid "No hay entregas pendientes para la compañía seleccionada."
 msgstr "There are no pending deliveries for the selected company."
+
+#: cacao_accounting/printing/templates/admin/print_template_list.html
+msgid "Historial de versiones"
+msgstr "Version history"
+
+#: cacao_accounting/printing/templates/admin/print_template_list.html
+msgid "Versiones registradas del formato de impresión"
+msgstr "Registered print template versions"
+
+#: cacao_accounting/printing/templates/admin/print_template_list.html
+msgid "Nota del cambio"
+msgstr "Change note"
+

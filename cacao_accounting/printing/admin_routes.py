@@ -277,7 +277,13 @@ def template_versions(template_id: int):
         .scalars()
         .all()
     )
-    return render_template("admin/print_template_list.html", templates=[template], versions=versions)
+    return render_template(
+        "admin/print_template_list.html",
+        templates=[template],
+        versions=versions,
+        bank_labels={account["id"]: account["label"] for account in _bank_account_options()},
+        document_labels=dict(list_printable_documents()),
+    )
 
 
 def _update_template_from_form(template: PrintTemplate) -> None:
