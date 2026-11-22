@@ -87,6 +87,9 @@ describe('document-flow-tree', function () {
         true
       );
       assert.ok(html.includes(status.badge), `${status.label} should use ${status.badge}`);
+      if (status.badge === 'ca-flow-badge--partial') {
+        assert.ok(!html.includes('ca-flow-badge--approved'), `${status.label} must not look fully approved`);
+      }
     }
   });
 
