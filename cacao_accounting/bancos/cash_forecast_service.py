@@ -22,6 +22,7 @@ from cacao_accounting.database import (
 from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 from cacao_accounting.document_flow.payment import compute_outstanding_amount
 from cacao_accounting.ledger_queries import primary_ledger_id
+from cacao_accounting.numbers import coerce_decimal
 
 
 from cacao_accounting.i18n import _
@@ -355,11 +356,19 @@ def _compute_manual_projections(
     for entry in manual_entries:
         if not (start_date <= entry.estimated_date <= end_date):
             continue
+        try:
+            amount = coerce_decimal(entry.amount, "monto", positive=True)
+        except ValueError:
+            continue
         if zone == "Current" and entry.estimated_date <= today_date:
             continue
         try:
-            base_amt = get_base_amount(entry.amount, entry.currency, company_currency, entry.estimated_date)
-        except CashForecastConversionError:
+            base_amt = coerce_decimal(
+                get_base_amount(amount, entry.currency, company_currency, entry.estimated_date),
+                "monto convertido",
+                positive=True,
+            )
+        except (CashForecastConversionError, ValueError):
             # Skip only the incomplete manual projection; the rest of the
             # forecast remains usable.
             continue

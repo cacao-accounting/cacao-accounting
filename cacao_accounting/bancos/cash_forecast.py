@@ -4,7 +4,6 @@
 """Controlador de rutas para el Pronóstico de Flujo de Caja."""
 
 from datetime import date
-from decimal import Decimal
 from urllib.parse import unquote, urlsplit
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -30,6 +29,7 @@ from cacao_accounting.bancos.cash_forecast_service import (
     out_of_range_forecast_entries,
     validate_forecast_entry_date,
 )
+from cacao_accounting.numbers import coerce_decimal
 
 from cacao_accounting.i18n import _, _l
 
@@ -333,11 +333,11 @@ def cash_forecast_entry_add(forecast_id):
         type_ = _normalize_cash_forecast_entry_type(request.form.get("type"))
         concept = request.form.get("concept", "").strip()
         currency = request.form.get("currency")
-        amount = Decimal(request.form.get("amount", "0"))
+        amount = coerce_decimal(request.form.get("amount", "0"), "monto", positive=True)
         estimated_date = date.fromisoformat(request.form.get("estimated_date", ""))
         notes = request.form.get("notes", "").strip()
 
-        if not concept or not currency or amount <= 0 or not estimated_date:
+        if not concept or not currency or not estimated_date:
             flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
         else:
             validate_forecast_entry_date(forecast, estimated_date)
@@ -544,11 +544,11 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
         type_ = _normalize_cash_forecast_entry_type(request.form.get("type"))
         concept = request.form.get("concept", "").strip()
         currency = request.form.get("currency")
-        amount = Decimal(request.form.get("amount", "0"))
+        amount = coerce_decimal(request.form.get("amount", "0"), "monto", positive=True)
         estimated_date = date.fromisoformat(request.form.get("estimated_date", ""))
         notes = request.form.get("notes", "").strip()
 
-        if not concept or not currency or amount <= 0 or not estimated_date:
+        if not concept or not currency or not estimated_date:
             flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
         else:
             validate_forecast_entry_date(forecast, estimated_date)
