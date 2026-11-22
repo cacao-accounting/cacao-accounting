@@ -726,7 +726,7 @@ def _append_payment_reference_nodes(
 
     refs = _payment_entry_references(document_id)
     for ref in refs:
-        ref_type = normalize_doctype(ref.reference_type)
+        ref_type = normalize_doctype(ref.flow_source_type or ref.reference_type)
         _append_payment_reference_node(
             result,
             seen_pairs=seen_pairs,
