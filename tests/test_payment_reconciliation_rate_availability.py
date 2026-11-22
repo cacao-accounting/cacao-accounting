@@ -48,3 +48,9 @@ def test_tasa_ausente_bloquea_la_conciliacion(entorno_contable):
     """Sin tasa registrada para el par, la conciliación se bloquea."""
     with pytest.raises(DocumentFlowError, match="No existe una tasa registrada"):
         _require_available_reconciliation_rate("EUR", "NIO", Decimal("1"), FECHA)
+
+
+def test_tasa_divergente_usa_la_tasa_vigente(entorno_contable):
+    """Una tasa declarada distinta no prevalece: se aplica la resuelta."""
+    efectiva = _require_available_reconciliation_rate("USD", "NIO", Decimal("99"), FECHA)
+    assert efectiva == Decimal("36.5")

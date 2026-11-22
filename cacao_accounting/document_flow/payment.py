@@ -61,12 +61,14 @@ def _require_available_reconciliation_rate(
     declared_rate: Decimal,
     allocation_date: date,
 ) -> Decimal:
-    """Valida que exista una tasa registrada y devuelve la tasa efectiva.
+    """Resuelve la tasa vigente y bloquea la conciliación si no existe.
 
-    AGENTS.md exige bloquear la conciliación cuando falta la tasa requerida
-    para la fecha y el par de monedas. Se exige que haya una tasa registrada
-    (directa o inversa) en o antes de la fecha; la tasa declarada, si es
-    positiva, se conserva como efectiva.
+    AGENTS.md exige multimoneda real contra la moneda del libro y bloquear el
+    registro cuando falta la tasa. Por eso la tasa efectiva es la **resuelta**
+    para el par y la fecha (directa o inversa), no una tasa arbitraria
+    declarada por el cliente: una tasa declarada distinta no debe determinar el
+    importe AR/AP. Se exige una tasa declarada positiva para dejar explícita la
+    intención de conversión, pero el valor aplicado sale del catálogo histórico.
     """
     if not document_currency or not payment_currency or document_currency == payment_currency:
         return Decimal("1")
@@ -75,10 +77,12 @@ def _require_available_reconciliation_rate(
     from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 
     try:
-        _lookup_exchange_rate(document_currency, payment_currency, allocation_date)
+        resolved_rate = _lookup_exchange_rate(document_currency, payment_currency, allocation_date)
     except Exception as exc:
         raise _document_flow_error(_MSG_TASA_PAGO_NO_DISPONIBLE, 409) from exc
-    return declared_rate
+    if resolved_rate <= 0:
+        raise _document_flow_error(_MSG_TASA_PAGO_NO_DISPONIBLE, 409)
+    return resolved_rate
 
 
 _MSG_PAGO_EXCEDE_SALDO = _l("El monto aplicado excede el saldo disponible del pago.")
