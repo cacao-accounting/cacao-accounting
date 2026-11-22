@@ -151,3 +151,51 @@ def test_vale_sin_serie_usa_default(caja_series):
     with application.app_context():
         voucher = _crear(ids["fondo"])
         assert voucher.id is not None
+
+
+def test_gasto_rechaza_serie_ajena(caja_series):
+    """#1992: el gasto tampoco acepta una serie de otra compañía."""
+    from cacao_accounting.bancos.services import create_petty_cash_expense
+    from cacao_accounting.database import Accounts
+
+    application, ids = caja_series
+    with application.app_context():
+        gasto = Accounts(
+            code="5.01.01.001",
+            name="Gastos",
+            entity="cacao",
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="expense",
+        )
+        database.session.add(gasto)
+        database.session.flush()
+        with pytest.raises(ValueError, match="no pertenece a la compañía|debe ser para gastos"):
+            create_petty_cash_expense(
+                company="cacao",
+                petty_cash_id=ids["fondo"],
+                expense_account_code=gasto.code,
+                concept="Gasto",
+                amount=Decimal("10"),
+                cost_center_code="CC-1",
+                naming_series_id=ids["alpha"],
+            )
+        database.session.rollback()
+
+
+def test_reposicion_rechaza_serie_ajena(caja_series):
+    """#1992: la reposición tampoco acepta una serie de otra compañía."""
+    from cacao_accounting.bancos.services import create_petty_cash_replenishment
+
+    application, ids = caja_series
+    with application.app_context():
+        with pytest.raises(ValueError, match="no pertenece a la compañía|debe ser para reposiciones"):
+            create_petty_cash_replenishment(
+                company="cacao",
+                petty_cash_id=ids["fondo"],
+                expense_ids=[],
+                request_date=FECHA,
+                naming_series_id=ids["alpha"],
+            )
+        database.session.rollback()

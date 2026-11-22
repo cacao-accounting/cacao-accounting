@@ -971,6 +971,7 @@ def create_petty_cash_expense(
     voucher_id: str | None = None,
     remarks: str | None = None,
     actor_id: str | None = None,
+    naming_series_id: str | None = None,
 ) -> PettyCashExpense:
     """Crea y postea un gasto de caja chica (Dr Gasto / Cr Caja Chica)."""
     from cacao_accounting.approval_preflight import ensure_approval_flow_supported
@@ -991,6 +992,16 @@ def create_petty_cash_expense(
         project_code=project_code,
     )
     voucher = _lock_and_validate_petty_cash_voucher(voucher_id, company, petty_cash_id, amount)
+    # #1992: honrar la serie elegida en el formulario de gasto; rechazar una
+    # serie ajena o inactiva sin consumir el contador default.
+    if naming_series_id:
+        _validate_naming_series_default(
+            company=company,
+            naming_series_id=naming_series_id,
+            entity_type="petty_cash_expense",
+            error_prefix="La serie del gasto",
+            entity_type_error="La serie seleccionada debe ser para gastos de caja chica.",
+        )
 
     try:
         journal = post_petty_cash_expense_journal(
@@ -1022,6 +1033,7 @@ def create_petty_cash_expense(
             transaction_currency=fund.currency or _company_currency(company),
             journal_id=str(journal.id),
             docstatus=1,
+            naming_series_id=naming_series_id,
         )
         database.session.add(expense)
         database.session.flush()
@@ -1030,7 +1042,7 @@ def create_petty_cash_expense(
                 document=expense,
                 entity_type="petty_cash_expense",
                 posting_date_raw=posted_date,
-                naming_series_id=None,
+                naming_series_id=naming_series_id,
             )
         except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
             pass
@@ -1573,9 +1585,20 @@ def create_petty_cash_replenishment(
     request_date,
     notes: str | None = None,
     actor_id: str | None = None,
+    naming_series_id: str | None = None,
 ) -> PettyCashReplenishment:
     """Crea una solicitud y reserva sus gastos pendientes de reposicion."""
     _validate_petty_cash_fund(petty_cash_id, company)
+    # #1992: validar la serie elegida antes de otras comprobaciones, para
+    # rechazar una serie ajena/inactiva con su propio error.
+    if naming_series_id:
+        _validate_naming_series_default(
+            company=company,
+            naming_series_id=naming_series_id,
+            entity_type="petty_cash_replenishment",
+            error_prefix="La serie de la reposición",
+            entity_type_error="La serie seleccionada debe ser para reposiciones de caja chica.",
+        )
     ids = list(dict.fromkeys(str(item) for item in expense_ids if item))
     if not ids:
         raise ValueError(_("Seleccione al menos un gasto para reponer."))
@@ -1619,6 +1642,7 @@ def create_petty_cash_replenishment(
         status="borrador",
         docstatus=0,
         transaction_currency=fund.currency or _company_currency(company),
+        naming_series_id=naming_series_id,
     )
     try:
         database.session.add(replenishment)
@@ -1641,7 +1665,7 @@ def create_petty_cash_replenishment(
                 document=replenishment,
                 entity_type="petty_cash_replenishment",
                 posting_date_raw=request_date,
-                naming_series_id=None,
+                naming_series_id=naming_series_id,
             )
         except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
             pass

@@ -1483,6 +1483,7 @@ def _submit_petty_cash_expense_form(formulario, funds, title):
             voucher_id=request.form.get("voucher_id") or None,
             remarks=request.form.get("remarks") or None,
             actor_id=str(current_user.id),
+            naming_series_id=request.form.get("naming_series") or None,
         )
     except ValueError as exc:
         flash(_(str(exc)), "danger")
@@ -1704,6 +1705,7 @@ def caja_chica_reposicion_nueva():
                 request_date=date.fromisoformat(request.form.get("request_date") or date.today().isoformat()),
                 notes=request.form.get("notes") or None,
                 actor_id=str(current_user.id),
+                naming_series_id=request.form.get("naming_series") or None,
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
