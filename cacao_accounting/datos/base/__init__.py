@@ -101,7 +101,7 @@ def _consultar_version_database(uri: str) -> tuple[str, str]:
     match uri:
         case s if s.startswith("mysql+pymysql"):
             return "SELECT version();", "Running on MySQL."
-        case s if s.startswith("postgresql+pg8000") or s.startswith("postgresql+psycopg2"):
+        case s if s.startswith("postgresql+"):
             return "SELECT VERSION();", "Running on Postgresql."
         case _:
             return "select sqlite_version();", "Running on SQLITE."

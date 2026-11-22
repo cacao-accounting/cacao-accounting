@@ -190,7 +190,7 @@ Those are the commands required to setup a Cacao Accounting deploymen (chosee yo
 
     podman run --pod cacao-psql --rm --replace --init --name cacao-psql-app \
       -e CACAO_KEY=nsjksldknsdlkLKJ,dsljasfsadggfhh+++++++ASDhhf5325364dn \
-      -e CACAO_DB=postgresql+pg8000://cacaodb:cacaodb@localhost:5432/cacaodb \
+      -e CACAO_DB=postgresql+psycopg://cacaodb:cacaodb@localhost:5432/cacaodb \
       -e CACAO_USER=cacaouser \
       -e CACAO_PSWD=cacaopswd \
       -d quay.io/cacaoaccounting/cacaoaccounting:main

@@ -55,12 +55,19 @@ def test_dockerignore_no_copia_node_modules_local():
     assert "cacao_accounting/static/node_modules" in contenido
 
 
-def test_pg8000_pin_es_compatible_con_scramp():
-    """pg8000 1.31.5 usa `scramp.make_channel_binding`, eliminado en scramp 1.5.
+def test_driver_postgresql_es_psycopg_compilado():
+    """El driver PostgreSQL por defecto es psycopg 3 con extensión C.
 
-    El contenedor instala la última scramp (no fijada), por lo que hay que
-    fijar pg8000 a una versión que declare `scramp==1.5.0`.
+    Se compila en un paso explícito (requiere `pg_config` de `libpq-devel`) y
+    se verifica el backend `c`; la libpq queda disponible en runtime.
     """
     contenido = DOCKERFILE.read_text(encoding="utf-8")
-    assert "pg8000==1.31.5" not in contenido, "pg8000 1.31.5 rompe con scramp 1.5"
-    assert "pg8000==1.31.6" in contenido
+    for legacy in ("pg8000", "psycopg2"):
+        assert legacy not in contenido, f"{legacy} ya no es el driver soportado"
+    assert "libpq-devel" in contenido, "falta libpq-devel para compilar psycopg"
+    assert "--no-binary psycopg-c" in contenido, "falta forzar la compilación desde sdist"
+    assert "psycopg[c]==3.3.9" in contenido
+    assert "pq.__impl__ == 'c'" in contenido, "falta la verificación del backend C"
+    # libpq en runtime para la extensión compilada.
+    runtime = contenido.split("FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1782797275\n", 1)[-1]
+    assert "libpq" in runtime

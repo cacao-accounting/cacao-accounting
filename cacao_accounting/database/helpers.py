@@ -207,7 +207,7 @@ def db_version():  # pragma: no cover
             Q = database.session.execute(text("SELECT version();"))
             for i in Q:
                 db_version = str(i)
-        elif DABATASE_URI.startswith("postgresql+pg8000"):
+        elif DABATASE_URI.startswith("postgresql+"):
             Q = database.session.execute(text("SELECT VERSION();"))
             for i in Q:
                 db_version = str(i)

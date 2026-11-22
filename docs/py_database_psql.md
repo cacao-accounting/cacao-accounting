@@ -98,7 +98,7 @@ database you have created, also set a `SECRET_KEY` enviroment variable with lowe
 and numbers.
 
 ```sql
-sudo export CACAO_DB=postgresql+pg8000://cacaodbuser:cacaodbpwsd@localhost/cacaoaccountingdb
+sudo export CACAO_DB=postgresql+psycopg://cacaodbuser:cacaodbpwsd@localhost/cacaoaccountingdb
 sudo export CACAO_KEY=sñldkñsadfmnskpfmskn1235aaaaaaAAAAAAA
 ```
 

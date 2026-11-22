@@ -18,7 +18,7 @@
 | flask-sqlalchemy     |          BSD License          |                                                   Add SQLAlchemy support to your Flask application. |
 | flask-wtf            |          BSD License          |                             Form rendering, validation, and CSRF protection for Flask with WTForms. |
 | loguru               |          MIT License          |                                                               Python logging made (stupidly) simple |
-| pg8000               |          BSD License          |                                                                        PostgreSQL interface library |
+| psycopg              |          LGPL-3.0 License     |                                                                        PostgreSQL interface library |
 | pyjwt                |          MIT License          |                                                             JSON Web Token implementation in Python |
 | PyMySQL              |          MIT License          |                                                                            Pure Python MySQL Driver |
 | python-ulid          |          MIT License          |                                            Universally unique lexicographically sortable identifier |

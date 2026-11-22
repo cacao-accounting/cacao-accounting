@@ -47,18 +47,17 @@ CREATE USER cacaosystemuser WITH PASSWORD 'cacao123+';
 GRANT ALL PRIVILEGES ON DATABASE cacaoaccountingdatabase TO cacaosystemuser;
 ```
 
-You can use the PG800 (Pure Python Driver) and psycopg2 (Compiled Driver), those are the examples connection strings:
-
-PG8000:
-
-```
-postgresql+pg8000://user:password@host:port/dbname
-```
-
-PSYCOPG2:
+The supported PostgreSQL driver is psycopg 3 (compiled). A plain `postgresql://` URL is resolved to it
+automatically:
 
 ```
-postgresql+psycopg2://user:password@host:port/dbname
+postgresql://user:password@host:port/dbname
+```
+
+or explicitly:
+
+```
+postgresql+psycopg://user:password@host:port/dbname
 ```
 
 ### MySQL:

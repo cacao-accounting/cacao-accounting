@@ -38,11 +38,7 @@ def isolated_audit_app(tmp_path: Path, request):
         assert bootstrap_engine is not None
         with bootstrap_engine.begin() as connection:
             connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
-        connect_args = (
-            {"startup_params": {"search_path": schema_name}}
-            if "+pg8000" in uri
-            else {"options": f"-csearch_path={schema_name}"}
-        )
+        connect_args = {"options": f"-csearch_path={schema_name}"}
         database_uri = uri
         engine_options: Any = {"pool_size": 4, "max_overflow": 0, "connect_args": connect_args}
     else:

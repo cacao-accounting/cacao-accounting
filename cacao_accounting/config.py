@@ -8,7 +8,6 @@
 # --------------------------------------------------------------------------------------
 from os import environ, name
 from pathlib import Path
-import ssl
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # ---------------------------------------------------------------------------------------
@@ -78,22 +77,28 @@ else:
 SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or environ.get("SECRET_KEY")
 
 
-def normaliza_direccion_base_datos(uri: str) -> tuple[str, dict[str, dict[str, ssl.SSLContext]]]:
-    """Normaliza la URI de base de datos para compatibilidad entre proveedores."""
+def normaliza_direccion_base_datos(uri: str) -> tuple[str, dict[str, dict[str, str]]]:
+    """Normaliza la URI de base de datos para compatibilidad entre proveedores.
+
+    Las URL ``postgres://`` y ``postgresql://`` (sin driver explícito) se
+    resuelven al driver ``psycopg`` (psycopg 3), que es el único soportado.
+    """
     direccion = str(uri)
-    opciones_motor: dict[str, dict[str, ssl.SSLContext]] = {}
+    opciones_motor: dict[str, dict[str, str]] = {}
 
-    if direccion.startswith(POSTGRESQL_URI_PREFIX):
-        direccion = direccion.replace(POSTGRESQL_URI_PREFIX, "postgresql+pg8000://", 1)
+    if direccion.startswith("postgres://"):
+        direccion = direccion.replace("postgres://", "postgresql+psycopg://", 1)
+    elif direccion.startswith(POSTGRESQL_URI_PREFIX):
+        direccion = direccion.replace(POSTGRESQL_URI_PREFIX, "postgresql+psycopg://", 1)
 
-    if direccion.startswith("postgresql+pg8000://"):
+    if direccion.startswith("postgresql+psycopg://"):
         uri_parseada = urlsplit(direccion)
         query = dict(parse_qsl(uri_parseada.query, keep_blank_values=True))
         sslmode = query.pop("sslmode", "").lower()
         query.pop("channel_binding", None)
 
         if sslmode in {"require", "verify-ca", "verify-full"}:
-            opciones_motor["connect_args"] = {"ssl_context": ssl.create_default_context()}
+            opciones_motor["connect_args"] = {"sslmode": sslmode}
 
         direccion = urlunsplit(
             (uri_parseada.scheme, uri_parseada.netloc, uri_parseada.path, urlencode(query), uri_parseada.fragment)
@@ -113,7 +118,7 @@ def valida_direccion_base_datos(uri: str) -> bool:
             return True
         case _ if direccion.startswith(POSTGRESQL_URI_PREFIX):
             return True
-        case _ if direccion.startswith("postgresql+pg8000") or direccion.startswith("postgresql+psycopg2"):
+        case _ if direccion.startswith("postgresql+psycopg://"):
             return True
         case _ if direccion.startswith("sqlite"):
             return True
@@ -122,7 +127,7 @@ def valida_direccion_base_datos(uri: str) -> bool:
             return False
 
 
-configuracion: dict[str, bool | str | int | dict[str, dict[str, ssl.SSLContext]]] = {}
+configuracion: dict[str, bool | str | int | dict[str, dict[str, str]]] = {}
 
 DATABASE_URL_NORMALIZADA, DATABASE_ENGINE_OPTIONS = normaliza_direccion_base_datos(DATABASE_URL)
 

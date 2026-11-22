@@ -19,7 +19,7 @@ from cacao_accounting.logs import log
 
 def test_diagnostico_no_escribe_uri_ni_parametros_sensibles(app, monkeypatch):
     """Conserva la versión del motor sin emitir usuario, contraseña o token."""
-    uri = "postgresql+psycopg2://ci-user:ci-password@db.internal/cacao?sslpassword=ssl-secret&token=token-secret"
+    uri = "postgresql+psycopg://ci-user:ci-password@db.internal/cacao?sslpassword=ssl-secret&token=token-secret"
     salida = StringIO()
     sink_id = log.add(salida, format="{message}", level="INFO")
     try:
