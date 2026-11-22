@@ -46,6 +46,7 @@ CONFIG_FIELDS = {
 _DECIMAL_FIELDS = frozenset({"price_tolerance_value", "qty_tolerance_value"})
 _MATCHING_TYPES = frozenset({"2-way", "3-way"})
 _TOLERANCE_TYPES = frozenset({"percentage", "absolute"})
+_NUMERIC_TOLERANCE_FIELDS = ("price_tolerance_value", "qty_tolerance_value")
 _ENUM_FIELDS = {
     "matching_type": _MATCHING_TYPES,
     "price_tolerance_type": _TOLERANCE_TYPES,
@@ -75,6 +76,42 @@ def _validate_enum_values(model: str, values: dict[str, Any]) -> None:
             raise ValueError(_("El valor de configuración de matching no es válido."))
 
 
+def _validate_tolerance_values(model: str, values: dict[str, Any]) -> None:
+    """Reject negative, non-finite, or unrepresentable tolerance values."""
+    for field in _NUMERIC_TOLERANCE_FIELDS:
+        if field not in CONFIG_FIELDS[model]:
+            continue
+        number = coerce_decimal(values.get(field), field, non_negative=True, max_fractional_digits=4)
+        if number.adjusted() > 5:
+            raise ValueError(_("El campo %(field)s excede la precisión admitida.") % {"field": field})
+
+
+def _prepare_config_change(
+    model: str,
+    config: Any,
+    values: dict[str, Any],
+    expected_before: dict[str, Any] | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Normalize values, verify the review snapshot, and prepare its payload."""
+    fields = CONFIG_FIELDS[model]
+    _validate_enum_values(model, values)
+    _validate_tolerance_values(model, values)
+    typed_after = {field: _normalize(field, values.get(field)) for field in fields}
+    typed_before = {field: _normalize(field, getattr(config, field)) for field in fields}
+    if expected_before is not None and typed_before != {
+        field: _normalize(field, expected_before.get(field)) for field in fields
+    }:
+        raise ValueError(_("La operación cambió después de solicitar la revisión."))
+    changed_fields = [field for field in fields if typed_before[field] != typed_after[field]]
+    payload = {
+        "model": model,
+        "before": {field: _plain(value) for field, value in typed_before.items()},
+        "after": {field: _plain(value) for field, value in typed_after.items()},
+        "changed_fields": changed_fields,
+    }
+    return typed_after, payload
+
+
 def update_matching_config(
     model: str,
     company: str,
@@ -101,26 +138,11 @@ def update_matching_config(
     ).scalar_one_or_none()
     if config is None:
         raise ValueError(_("La configuración de matching no existe para la compañía solicitada."))
-    fields = CONFIG_FIELDS[model]
-    _validate_enum_values(model, values)
-    typed_after = {field: _normalize(field, values.get(field)) for field in fields}
-    if model == "sales" and typed_after.get("price_tolerance_value") is not None:
-        if typed_after["price_tolerance_value"] < 0:
-            raise ValueError(_("La tolerancia de precio no puede ser negativa."))
-    typed_before = {field: _normalize(field, getattr(config, field)) for field in fields}
-    if expected_before is not None and typed_before != {
-        field: _normalize(field, expected_before.get(field)) for field in fields
-    }:
-        raise ValueError(_("La operación cambió después de solicitar la revisión."))
-    changed_fields = [field for field in fields if typed_before[field] != typed_after[field]]
-    payload = {
-        "model": model,
-        "before": {field: _plain(value) for field, value in typed_before.items()},
-        "after": {field: _plain(value) for field, value in typed_after.items()},
-        "changed_fields": changed_fields,
-    }
+    typed_after, payload = _prepare_config_change(model, config, values, expected_before)
     identifier = f"{model}:{company}"
-    pending = require_review("config_change", identifier, company, actor_id, payload, review_required=bool(changed_fields))
+    pending = require_review(
+        "config_change", identifier, company, actor_id, payload, review_required=bool(payload["changed_fields"])
+    )
     if pending is None:
         for field, value in typed_after.items():
             setattr(config, field, value)

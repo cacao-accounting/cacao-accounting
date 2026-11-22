@@ -24320,3 +24320,7 @@ msgstr "The matching configuration value is invalid."
 msgid "El factor de conversión excede la precisión admitida por la base de datos."
 msgstr "The conversion factor exceeds the precision supported by the database."
 
+#: cacao_accounting/matching_config_service.py
+msgid "El campo %(field)s excede la precisión admitida."
+msgstr "The %(field)s field exceeds the supported precision."
+

@@ -98,7 +98,7 @@ def test_sales_matching_rejects_negative_price_tolerance_without_mutation(app, e
                 database.session.flush()
             original_tolerance = config.price_tolerance_value
 
-            with pytest.raises(ValueError, match="no puede ser negativa"):
+            with pytest.raises(ValueError, match="no puede ser negativo"):
                 update_matching_config(
                     "sales",
                     "cacao",
