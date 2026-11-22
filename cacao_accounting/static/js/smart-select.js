@@ -101,6 +101,7 @@
         lastFilterSignature: '',
         onSelect: config.onSelect || null,
         _positionHandler: null,
+        _filterSourceListeners: [],
         _defaultTimer: null,
         _closeSoonTimer: null,
         _requestId: 0,
@@ -127,6 +128,21 @@
           if (typeof this.$watch === 'function') {
             this.$watch('selectedValue', this.handleSelectedValueChange.bind(this));
           }
+        },
+
+        destroy() {
+          for (const registration of this._filterSourceListeners) {
+            registration.element.removeEventListener('change', registration.handler);
+            registration.element.removeEventListener('input', registration.handler);
+          }
+          this._filterSourceListeners = [];
+          this._invalidatePendingRequest();
+          if (this._defaultTimer !== null) {
+            clearTimeout(this._defaultTimer);
+            this._defaultTimer = null;
+          }
+          this._cancelCloseSoon();
+          this.closeMenu();
         },
 
         handleSelectedValueChange(value) {
@@ -157,6 +173,7 @@
             const handler = this.handleFilterChange.bind(this);
             element.addEventListener('change', handler);
             element.addEventListener('input', handler);
+            this._filterSourceListeners.push({ element, handler });
           }
         },
 

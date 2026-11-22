@@ -194,6 +194,93 @@ describe('smart-select', function () {
     assert.strictEqual(fetchCalls, 0);
   });
 
+  it('clears an import naming series when the record type changes', async function () {
+    const environment = createEnvironment();
+    const { window, document } = environment;
+    const recordType = document.createElement('select');
+    recordType.id = 'import-record-type';
+    for (const value of ['sales_invoice', 'purchase_order']) {
+      const option = document.createElement('option');
+      option.value = value;
+      recordType.appendChild(option);
+    }
+    recordType.value = 'sales_invoice';
+    document.body.appendChild(recordType);
+    const calls = [];
+    window.fetch = (url) => {
+      calls.push(url);
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) });
+    };
+    const component = environment.factory({
+      endpoint: '/api/search-select',
+      doctype: 'naming_series',
+      name: 'sequence_id',
+      filters: { entity_type: { selector: '#import-record-type' } },
+      filterSources: ['#import-record-type'],
+      requiredFilters: ['entity_type'],
+      loadOnFilterChange: true,
+      initialValue: 'SER-SALES',
+    });
+    component.init();
+    component.options = [{ value: 'SER-SALES' }];
+    recordType.value = 'purchase_order';
+    recordType.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await flushPromises();
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(component.options.length, 0);
+    assert.strictEqual(calls.length, 1);
+    assert.ok(calls[0].includes('entity_type=purchase_order'));
+    window.close();
+  });
+
+  it('removes external filter listeners when a component is destroyed', async function () {
+    const environment = createEnvironment();
+    const { window, document } = environment;
+    const company = document.createElement('select');
+    company.id = 'company';
+    for (const value of ['cacao', 'alpha']) {
+      const option = document.createElement('option');
+      option.value = value;
+      company.appendChild(option);
+    }
+    company.value = 'cacao';
+    document.body.appendChild(company);
+    let fetchCalls = 0;
+    window.fetch = () => {
+      fetchCalls += 1;
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [] }) });
+    };
+    for (let index = 0; index < 4; index += 1) {
+      const stale = environment.factory({
+        doctype: 'book',
+        name: 'book_id',
+        filters: { company: { selector: '#company' } },
+        filterSources: ['#company'],
+        requiredFilters: ['company'],
+        loadOnFilterChange: true,
+      });
+      stale.init();
+      stale.destroy();
+    }
+    const active = environment.factory({
+      doctype: 'book',
+      name: 'book_id',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      requiredFilters: ['company'],
+      loadOnFilterChange: true,
+    });
+    active.init();
+    company.value = 'alpha';
+    company.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await flushPromises();
+
+    assert.strictEqual(fetchCalls, 1);
+    active.destroy();
+    window.close();
+  });
+
   it('auto-selects default naming series when company changes and filter is present', async function () {
     let fetchCalls = 0;
     const companyElement = {

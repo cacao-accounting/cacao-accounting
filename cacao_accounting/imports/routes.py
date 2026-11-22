@@ -24,7 +24,7 @@ from flask import (
 from flask_login import login_required, current_user
 from flask_babel import get_locale
 from werkzeug.utils import secure_filename
-from cacao_accounting.database import Book, database
+from cacao_accounting.database import Book, NamingSeries, database
 from sqlalchemy import or_
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.imports.models import ImportBatch
@@ -95,6 +95,18 @@ def _resolve_company_book(company_id: str, book_value: str | None) -> Book | Non
     ).scalar_one_or_none()
 
 
+def _import_sequence_error(sequence_id: str | None, record_type: str | None, company_id: str | None) -> str | None:
+    """Return a validation message when a selected series does not match the batch."""
+    if not sequence_id:
+        return None
+    series = database.session.get(NamingSeries, sequence_id)
+    if not series or series.entity_type != record_type:
+        return _("La serie seleccionada no coincide con el tipo de documento.")
+    if series.company != company_id:
+        return _("La serie seleccionada no pertenece a la compañía indicada.")
+    return None
+
+
 @imports.before_request
 def before_request():
     """Ejecutar verificaciones previas a cada solicitud."""
@@ -126,9 +138,11 @@ def new():
         company_id = request.form.get("company_id")
         record_type = request.form.get("record_type")
         accounting_book_id = request.form.get("accounting_book_id") or None
+        sequence_id = request.form.get("sequence_id") or None
+        sequence_error = _import_sequence_error(sequence_id, record_type, company_id)
 
-        if not company_id or not record_type:
-            flash(_("Debe seleccionar compañía y tipo de registro."), "danger")
+        if not company_id or not record_type or sequence_error:
+            flash(sequence_error or _("Debe seleccionar compañía y tipo de registro."), "danger")
             return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
 
         exige_acceso_compania("imports", company_id, "crear")
@@ -147,7 +161,7 @@ def new():
         batch = ImportBatch(
             company_id=company_id,
             record_type=record_type,
-            sequence_id=request.form.get("sequence_id") or None,
+            sequence_id=sequence_id,
             accounting_book_id=accounting_book_id,
             import_status=0,
             created_by=current_user.id,

@@ -59,14 +59,13 @@
           </optgroup>
           {% endfor %}
         </select>
-        <input type="hidden" id="import-entity-type" :value="recordType" />
       </div>
 
       <div class="col-12">
         {{ smart_select_field("Serie / Secuencia", "sequence_id",
         "naming_series", "", "import-sequence", 1, {"company": {"selector":
-        "#import-company"}, "entity_type": {"selector": "#import-entity-type"}},
-        ["#import-company", "#import-entity-type"], ["company", "entity_type"])
+        "#import-company"}, "entity_type": {"selector": "#import-record-type"}},
+        ["#import-company", "#import-record-type"], ["company", "entity_type"])
         }}
       </div>
 

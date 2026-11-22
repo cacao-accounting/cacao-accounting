@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from cacao_accounting.database import Modules, database
+from cacao_accounting.database import Entity, Modules, NamingSeries, database
 from cacao_accounting.imports.models import ImportBatch
 
 
@@ -79,6 +79,102 @@ def test_new_import_form_rejects_missing_token_and_accepts_valid_token(import_cs
             database.session.execute(database.select(ImportBatch).filter_by(record_type="customer")).scalars().all()
         )
         assert len(created_batches) >= 5
+
+
+@pytest.mark.parametrize(
+    ("record_type", "series_type", "series_company", "expected_error"),
+    [
+        ("purchase_order", "sales_invoice", "cacao", "no coincide con el tipo"),
+        ("purchase_order", "purchase_order", "alpha", "no pertenece a la compañía"),
+    ],
+)
+def test_new_import_rejects_series_for_other_type_or_company(
+    import_csrf_pages, record_type, series_type, series_company, expected_error
+):
+    """Creation rejects a naming series whose type or company differs from the batch."""
+    app, client, _batches = import_csrf_pages
+    page = client.get("/imports/new")
+    token = _form_token(page.get_data(as_text=True))
+    with app.app_context():
+        if (
+            series_company == "alpha"
+            and not database.session.execute(database.select(Entity).filter_by(code="alpha")).scalar_one_or_none()
+        ):
+            database.session.add(
+                Entity(
+                    code="alpha",
+                    name="Alpha",
+                    company_name="Alpha SA",
+                    tax_id="J-ALPHA",
+                    currency="NIO",
+                    enabled=True,
+                    status="activo",
+                )
+            )
+            database.session.flush()
+        series = NamingSeries(
+            name=f"SER-{series_type}-{series_company}",
+            entity_type=series_type,
+            company=series_company,
+            prefix_template="TEST-",
+            is_active=True,
+            is_default=False,
+        )
+        database.session.add(series)
+        database.session.commit()
+        series_id = series.id
+        count_before = database.session.query(ImportBatch).count()
+
+    response = client.post(
+        "/imports/new",
+        data={
+            "company_id": "cacao",
+            "record_type": record_type,
+            "sequence_id": series_id,
+            "csrf_token": token,
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert expected_error in response.get_data(as_text=True)
+    with app.app_context():
+        assert database.session.query(ImportBatch).count() == count_before
+
+
+def test_new_import_persists_series_matching_type_and_company(import_csrf_pages):
+    """A valid company-specific series remains attached to the new batch."""
+    app, client, _batches = import_csrf_pages
+    page = client.get("/imports/new")
+    token = _form_token(page.get_data(as_text=True))
+    with app.app_context():
+        series = NamingSeries(
+            name="SER-PO-CACAO",
+            entity_type="purchase_order",
+            company="cacao",
+            prefix_template="PO-",
+            is_active=True,
+            is_default=False,
+        )
+        database.session.add(series)
+        database.session.commit()
+        series_id = series.id
+
+    response = client.post(
+        "/imports/new",
+        data={
+            "company_id": "cacao",
+            "record_type": "purchase_order",
+            "sequence_id": series_id,
+            "csrf_token": token,
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        batch = database.session.execute(database.select(ImportBatch).filter_by(sequence_id=series_id)).scalar_one()
+        assert batch.company_id == "cacao"
+        assert batch.record_type == "purchase_order"
 
 
 @pytest.mark.parametrize(
