@@ -414,6 +414,7 @@ def validate_lines() -> ResponseReturnValue:
     errors: list[dict[str, Any]] = []
     validated_rows: list[dict[str, Any]] = []
     reconciliation_remaining: dict[str, Decimal] = {}
+    document_remaining: dict[str, Decimal] = {}
     for row_index, row in enumerate(payload.rows):
         row_errors, validated_row = _validate_import_row(
             row=row,
@@ -424,6 +425,7 @@ def validate_lines() -> ResponseReturnValue:
             party_type=party_type,
             party_id=party_id,
             reconciliation_remaining=reconciliation_remaining,
+            document_remaining=document_remaining,
         )
         errors.extend(row_errors)
         validated_rows.append(validated_row)
@@ -539,6 +541,7 @@ def _validate_import_row(
     party_type: str = "",
     party_id: str = "",
     reconciliation_remaining: dict[str, Decimal] | None = None,
+    document_remaining: dict[str, Decimal] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Validate and enrich one imported line."""
     errors: list[dict[str, Any]] = []
@@ -556,6 +559,7 @@ def _validate_import_row(
             party_type=party_type,
             party_id=party_id,
             payment_remaining=reconciliation_remaining,
+            document_remaining=document_remaining,
         )
     return errors, validated_row
 
@@ -1150,6 +1154,7 @@ def _validate_payment_reconciliation_amounts(
     row_no: int,
     errors: list[dict[str, Any]],
     payment_remaining: dict[str, Decimal] | None = None,
+    document_remaining: dict[str, Decimal] | None = None,
 ) -> None:
     """Validate allocated amount against document and payment outstanding balances."""
     from cacao_accounting.document_flow.payment import compute_outstanding_amount, compute_payment_unallocated_amount
@@ -1168,10 +1173,21 @@ def _validate_payment_reconciliation_amounts(
             _("El descuento + diferencia de cambio no puede ser igual o mayor al monto aplicado."),
         )
         return
-    if allocated > compute_outstanding_amount(reference) + Decimal("0.01"):
+    # #1205: acumula lo asignado por filas previas al mismo documento del lote.
+    document_key = str(getattr(reference, "id", ""))
+    document_outstanding = compute_outstanding_amount(reference)
+    if document_remaining is None:
+        document_available = document_outstanding
+    else:
+        if document_key not in document_remaining:
+            document_remaining[document_key] = document_outstanding
+        document_available = document_remaining[document_key]
+    if allocated > document_available + Decimal("0.01"):
         _append_payment_reconciliation_error(
             errors, row_no, "allocated_amount", _("El monto aplicado excede el saldo pendiente del documento.")
         )
+    elif document_remaining is not None:
+        document_remaining[document_key] = document_available - allocated
     consumed = max(allocated - discount - gain_loss, Decimal("0")) * rate
     # #1205: acumula lo reservado por filas previas del mismo pago.
     payment_key = str(getattr(payment, "id", ""))
@@ -1199,6 +1215,7 @@ def _validate_payment_reconciliation_row(
     party_type: str = "",
     party_id: str = "",
     payment_remaining: dict[str, Decimal] | None = None,
+    document_remaining: dict[str, Decimal] | None = None,
 ) -> None:
     """Validate payment/document identity before reconciliation is applied."""
     payment = _get_payment_reconciliation_payment(row, company_id, row_no, errors)
@@ -1223,7 +1240,14 @@ def _validate_payment_reconciliation_row(
         _validate_payment_reconciliation_party(payment, reference, reference_type, row_no, errors)
         rate = _payment_reconciliation_rate(row, payment, reference, row_no, errors)
         _validate_payment_reconciliation_amounts(
-            row, payment, reference, rate, row_no, errors, payment_remaining=payment_remaining
+            row,
+            payment,
+            reference,
+            rate,
+            row_no,
+            errors,
+            payment_remaining=payment_remaining,
+            document_remaining=document_remaining,
         )
     allocated = row.get("allocated_amount")
     if _is_decimal(allocated) and Decimal(str(allocated)) <= 0:

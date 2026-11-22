@@ -140,3 +140,116 @@ def test_filas_dentro_del_saldo_disponible_se_aceptan(app, entorno_contable):
         )
 
     assert errors == []
+
+
+def _escenario_documental(app, *, document_total: str, payment_total: str) -> dict[str, str]:
+    """Crea una factura con saldo menor que el pago disponible."""
+    suffix = uuid4().hex[:8]
+    with app.app_context():
+        cliente = Party(code=f"DOC-{suffix}", name="Cliente doc", is_customer=True, is_active=True)
+        database.session.add(cliente)
+        database.session.flush()
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            document_no=f"DOC-{suffix}",
+            document_type="sales_invoice",
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            grand_total=Decimal(document_total),
+            outstanding_amount=Decimal(document_total),
+        )
+        pago = PaymentEntry(
+            company="cacao",
+            payment_type="receive",
+            posting_date=date(2026, 5, 15),
+            paid_amount=Decimal(payment_total),
+            received_amount=Decimal(payment_total),
+            currency="NIO",
+            party_type="customer",
+            party_id=cliente.id,
+            docstatus=1,
+            document_no=f"PAYDOC-{suffix}",
+        )
+        database.session.add_all([factura, pago])
+        database.session.commit()
+        return {"payment": pago.id, "reference": factura.id, "party": cliente.id}
+
+
+def test_saldo_del_documento_se_acumula_entre_lineas(app, entorno_contable):
+    """#1205: dos filas de 80 sobre una factura de 100 no pueden ser válidas ambas."""
+    ids = _escenario_documental(app, document_total="100", payment_total="160")
+    errors: list[dict] = []
+    payment_remaining: dict[str, Decimal] = {}
+    document_remaining: dict[str, Decimal] = {}
+    with app.app_context():
+        row = {
+            "payment_id": ids["payment"],
+            "reference_type": "sales_invoice",
+            "reference_id": ids["reference"],
+            "allocated_amount": "80",
+        }
+        _validate_payment_reconciliation_row(
+            dict(row),
+            1,
+            "cacao",
+            errors,
+            party_type="customer",
+            party_id=ids["party"],
+            payment_remaining=payment_remaining,
+            document_remaining=document_remaining,
+        )
+        _validate_payment_reconciliation_row(
+            dict(row),
+            2,
+            "cacao",
+            errors,
+            party_type="customer",
+            party_id=ids["party"],
+            payment_remaining=payment_remaining,
+            document_remaining=document_remaining,
+        )
+
+    assert any(error.get("row") == 2 and "saldo pendiente del documento" in error["message"] for error in errors)
+    assert all(error.get("row") != 1 for error in errors)
+
+
+def test_documento_con_saldo_suficiente_acepta_dos_filas(app, entorno_contable):
+    """Control positivo: con saldo documental de 200, dos filas de 80 caben."""
+    ids = _escenario_documental(app, document_total="200", payment_total="160")
+    errors: list[dict] = []
+    payment_remaining: dict[str, Decimal] = {}
+    document_remaining: dict[str, Decimal] = {}
+    with app.app_context():
+        row = {
+            "payment_id": ids["payment"],
+            "reference_type": "sales_invoice",
+            "reference_id": ids["reference"],
+            "allocated_amount": "80",
+        }
+        _validate_payment_reconciliation_row(
+            dict(row),
+            1,
+            "cacao",
+            errors,
+            party_type="customer",
+            party_id=ids["party"],
+            payment_remaining=payment_remaining,
+            document_remaining=document_remaining,
+        )
+        _validate_payment_reconciliation_row(
+            dict(row),
+            2,
+            "cacao",
+            errors,
+            party_type="customer",
+            party_id=ids["party"],
+            payment_remaining=payment_remaining,
+            document_remaining=document_remaining,
+        )
+
+    assert errors == []
