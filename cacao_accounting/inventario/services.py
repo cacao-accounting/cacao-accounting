@@ -53,8 +53,6 @@ from cacao_accounting.document_flow import (
 )
 
 
-from cacao_accounting.document_flow.context import company_currency  # noqa: F401  - legacy import retained for downstream
-
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 from cacao_accounting.decorators import exige_acceso_compania
