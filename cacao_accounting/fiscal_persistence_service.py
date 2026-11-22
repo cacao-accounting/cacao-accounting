@@ -426,9 +426,7 @@ def _canonical_tax_line_payload(
         )
 
     if tax_rule is not None:
-        base_amount = _canonical_tax_rule_base(
-            tax_rule, server_subtotal, concept_amounts, line_payload, category_subtotals
-        )
+        base_amount = _canonical_tax_rule_base(tax_rule, server_subtotal, concept_amounts, line_payload, category_subtotals)
         rate = _to_decimal(tax_rule.rate)
         amount = _canonical_tax_rule_amount(tax_rule, base_amount, rate)
         if not base_amount.is_finite() or not amount.is_finite():
