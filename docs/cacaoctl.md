@@ -57,6 +57,7 @@ cacaoctl db <subcomando> [opciones]
 | Subcomando  | Descripción                                          |
 |-------------|------------------------------------------------------|
 | `init`      | Crea una nueva base de datos.                        |
+| `migrate`   | Aplica migraciones pendientes de Alembic.            |
 | `reset`     | Recrea completamente la base de datos.               |
 | `clean`     | Elimina la base de datos (solo desarrollo).          |
 | `seed`      | Inserta datos de ejemplo en la base de datos.        |
@@ -83,6 +84,29 @@ Opciones:
 
 - `--force`: Elimina una base existente antes de crear la nueva.
 - `--seed`: Inserta datos de ejemplo después de crear la base.
+
+#### `db migrate`
+
+Aplica las migraciones pendientes de Alembic de forma idempotente. Si no hay
+migraciones por aplicar, informa y termina con éxito (código 0), por lo que es
+seguro ejecutarlo al inicio de un contenedor. Requiere una base inicializada;
+si la tabla `user` no existe, solicita ejecutar `cacaoctl db init` primero.
+
+```bash
+# Aplicar todas las migraciones pendientes
+cacaoctl db migrate
+
+# Aplicar hasta una revisión específica
+cacaoctl db migrate --revision 20261015_0001
+
+# Apuntar a una revisión distinta de head
+cacaoctl db migrate --head head
+```
+
+Opciones:
+
+- `--head`: Revisión destino (por defecto `head`).
+- `--revision`: Revisión específica a aplicar.
 
 #### `db reset`
 

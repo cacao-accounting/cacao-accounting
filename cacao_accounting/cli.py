@@ -147,6 +147,7 @@ def _entorno_actual() -> str:
             "  cacaoctl run\n"
             "  cacaoctl serve\n"
             "  cacaoctl db init\n"
+            "  cacaoctl db migrate\n"
             "  cacaoctl db reset\n"
             "  cacaoctl status\n"
             "  cacaoctl version\n"
@@ -247,6 +248,34 @@ def db_init(force: bool, seed: bool) -> None:
             _mensaje_exito(_("Base de datos creada."))
         else:
             _mensaje_error(_("No fue posible crear la base de datos."))
+            raise click.exceptions.Exit(1)
+
+
+@db.command(name="migrate", help=_("Aplica migraciones pendientes de Alembic (idempotente)."))
+@click.option("--head", default="head", help=_("Revisión destino (por defecto: head)."))
+@click.option("--revision", default=None, help=_("Revisión específica a aplicar."))
+def db_migrate(head: str, revision: str | None) -> None:
+    """Aplica migraciones pendientes de Alembic de forma idempotente.
+
+    Si no hay migraciones pendientes, imprime un mensaje informativo y
+    termina con éxito (código 0). Esto permite ejecutarlo de forma segura
+    en el inicio de un contenedor Docker.
+    """
+    from sqlalchemy import inspect
+
+    from cacao_accounting import alembic
+    from cacao_accounting.database import database
+
+    app = _obtener_aplicacion()
+    with app.app_context():
+        try:
+            if not inspect(database.engine).has_table("user"):
+                raise RuntimeError(_("La base de datos no está inicializada; ejecute primero 'cacaoctl db init'."))
+            target = revision or head
+            alembic.upgrade(target=target)
+            _mensaje_exito(_("Migraciones aplicadas correctamente."))
+        except Exception as exc:
+            _mensaje_error(_("No fue posible aplicar las migraciones: %(error)s") % {"error": exc})
             raise click.exceptions.Exit(1)
 
 

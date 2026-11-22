@@ -57,6 +57,9 @@ Aplicación contable web y de escritorio para PYMEs que centraliza tesorería, c
 # Crear la base de datos (idempotente)
 cacaoctl db init
 
+# Aplicar migraciones pendientes (idempotente)
+cacaoctl db migrate
+
 # Crear la base de datos con datos de ejemplo
 cacaoctl db init --seed
 
@@ -105,10 +108,12 @@ de pruebas, para que la inicialización sobreviva entre procesos.
 Configura `SECRET_KEY` con un valor estable para que los enlaces de
 recuperación de contraseña y los dispositivos reconocidos sigan validándose
 entre procesos y reinicios. Sin esa clave, la verificación por dispositivo y
-la recuperación de contraseña fallan de forma cerrada.
+la recuperación de contraseña fallan de forma cerrada. Configúrala también
+antes de ejecutar `cacaoctl db migrate` para transformar los secretos legados.
 
 Para un servidor WSGI usa `cacaoctl serve`. En Docker, el entrypoint ejecuta
-`cacaoctl db init` de forma idempotente antes de arrancar la aplicación.
+`cacaoctl db init` y `cacaoctl db migrate` de forma idempotente antes de
+arrancar la aplicación.
 
 ## Demo online
 
