@@ -59,7 +59,7 @@ COPY --from=python-builder /install/lib64/python3.12/site-packages /usr/lib64/py
 COPY --from=python-builder /install/bin /usr/local/bin
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 
-RUN useradd -r -s /bin/false appuser
+RUN useradd -r -s /bin/false -d /home/appuser -m appuser
 
 WORKDIR /app
 
@@ -78,6 +78,8 @@ USER appuser
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
+# Caddy (no root) escribe su configuración y certificados bajo $HOME.
+ENV HOME=/home/appuser
 ENV FLASK_APP="cacao_accounting"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

@@ -60,6 +60,8 @@ cacao_accounting/query_tools/tests
 cacao_accounting/static/test
 
 # Archivos estáticos y multimedia sin usar para optimizar el tamaño de la imagen OCI
+# node_modules se instala en la etapa `frontend`; no debe copiarse el local.
+cacao_accounting/static/node_modules
 cacao_accounting/static/media/Linux
 cacao_accounting/static/media/Windows
 cacao_accounting/static/media/Web
