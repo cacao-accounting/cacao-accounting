@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#1864: rechaza decimales inválidos en las líneas dinámicas de inventario."""
+"""#1419/#1864: rechaza decimales inválidos en líneas dinámicas de inventario."""
 
-from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -17,6 +16,7 @@ from cacao_accounting.document_identifiers import ensure_default_naming_series_f
     [
         ("material_receipt", "qty_0", "abc"),
         ("material_receipt", "rate_0", "NaN"),
+        ("material_receipt", "rate_0", "Infinity"),
         ("stock_reconciliation", "counted_qty_0", "Infinity"),
         ("stock_reconciliation", "target_valuation_rate_0", "NaN"),
         ("stock_reconciliation", "target_stock_value_0", "abc"),

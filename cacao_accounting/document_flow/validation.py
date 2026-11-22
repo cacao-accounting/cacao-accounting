@@ -15,6 +15,7 @@ from typing import Any, Iterable
 
 from cacao_accounting.database import DocumentRelation, database
 from cacao_accounting.document_flow import DocumentFlowError
+from cacao_accounting.numbers import coerce_decimal
 
 
 from cacao_accounting.i18n import _
@@ -160,7 +161,8 @@ def _validate_item_quantities(items):
 def _validate_item_rates(items):
     """Valida que todas las tarifas sean mayores a cero."""
     for item in items:
-        if getattr(item, "rate", 0) <= 0:
+        rate = coerce_decimal(getattr(item, "rate", 0), "tarifa")
+        if rate <= 0:
             raise ValueError(_("Todas las tarifas deben ser mayores a cero."))
 
 
