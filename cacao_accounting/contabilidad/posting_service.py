@@ -3089,6 +3089,13 @@ def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
     items = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars().all()
     if not items:
         raise PostingError(_("La entrada de stock no contiene lineas para contabilizar."))
+    if purpose == "stock_reconciliation":
+        from cacao_accounting.inventario.service import validate_stock_reconciliation_line_keys
+
+        validate_stock_reconciliation_line_keys(
+            document.company,
+            [(item.item_code, _reconciliation_warehouse(document, item)) for item in items],
+        )
 
     movements = _create_stock_movements_for_items(document, items, purpose)
 

@@ -60,6 +60,20 @@ class InventoryServiceError(ValueError):
     """Error controlado de servicios de inventario."""
 
 
+def validate_stock_reconciliation_line_keys(company: str | None, lines: Sequence[tuple[str | None, str | None]]) -> None:
+    """Rechaza saldos repetidos de artículo y bodega en un mismo conteo físico."""
+    seen: set[tuple[str, str, str]] = set()
+    for item_code, warehouse in lines:
+        normalized_item = str(item_code or "").strip()
+        normalized_warehouse = str(warehouse or "").strip()
+        if not normalized_item or not normalized_warehouse:
+            continue
+        key = (str(company or "").strip(), normalized_item, normalized_warehouse)
+        if key in seen:
+            raise InventoryServiceError(_("La conciliación no puede repetir el mismo artículo y bodega."))
+        seen.add(key)
+
+
 def validate_default_warehouse(warehouse_code: str | None, action: str = "crear") -> None:
     """Validate the default warehouse and the user's company access."""
     if not warehouse_code:

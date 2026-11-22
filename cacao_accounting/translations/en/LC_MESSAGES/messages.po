@@ -24332,3 +24332,7 @@ msgstr "The party group type must be customer or supplier."
 msgid "El tipo de documento de venta no es válido."
 msgstr "The sales document type is invalid."
 
+#: cacao_accounting/inventario/service.py
+msgid "La conciliación no puede repetir el mismo artículo y bodega."
+msgstr "A reconciliation cannot repeat the same item and warehouse."
+

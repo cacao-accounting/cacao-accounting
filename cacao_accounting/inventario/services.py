@@ -70,6 +70,7 @@ from cacao_accounting.inventario.service import (
     parse_item_account_rows,
     parse_item_uom_rows,
     update_item_with_uoms,
+    validate_stock_reconciliation_line_keys,
 )
 
 from cacao_accounting.i18n import _
@@ -759,17 +760,21 @@ def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: st
 
 def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de conciliacion con snapshot de cantidad y valuacion."""
-    i = 0
-    total_difference = Decimal("0")
-    line_count = 0
-    while request.form.get(f"item_code_{i}"):
-        item_code = request.form.get(f"item_code_{i}", "").strip()
-        warehouse = request.form.get(f"warehouse_{i}") or entry.to_warehouse or entry.from_warehouse
+    submitted_lines: list[tuple[int, str, str | None]] = []
+    index = 0
+    while request.form.get(f"item_code_{index}"):
+        item_code = str(request.form.get(f"item_code_{index}") or "").strip()
+        warehouse = request.form.get(f"warehouse_{index}") or entry.to_warehouse or entry.from_warehouse
         if item_code:
-            total_difference += _save_stock_reconciliation_item(entry, i, item_code, warehouse)
-            line_count += 1
-        i += 1
-    if line_count == 0:
+            submitted_lines.append((index, item_code, warehouse))
+        index += 1
+
+    validate_stock_reconciliation_line_keys(entry.company, [(item, warehouse) for _, item, warehouse in submitted_lines])
+
+    total_difference = Decimal("0")
+    for row_index, item_code, warehouse in submitted_lines:
+        total_difference += _save_stock_reconciliation_item(entry, row_index, item_code, warehouse)
+    if not submitted_lines:
         raise DocumentFlowError(_("El documento requiere al menos una línea."), 400)
     return total_difference
 
