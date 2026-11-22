@@ -9,10 +9,12 @@ regla al validar y al persistir.
 
 from __future__ import annotations
 
+import csv
 from datetime import date
 from uuid import uuid4
 
 import pytest
+from openpyxl import Workbook
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -24,7 +26,9 @@ from cacao_accounting.database import (
     FiscalYear,
     database,
 )
+from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.adapters.cash_forecast_entry import CashForecastEntryAdapter
+from cacao_accounting.imports.services.import_service import ImportService
 
 
 @pytest.fixture
@@ -96,6 +100,24 @@ def _row(forecast_id: str, amount: str) -> dict:
         "estimated_date": "2026-05-10",
         "notes": "",
     }
+
+
+def _write_forecast_rows(path, source_format: str, rows: list[list[object]]) -> None:
+    """Write forecast rows in the selected supported import format."""
+    headers = CashForecastEntryAdapter.columns
+    if source_format == "csv":
+        with path.open("w", encoding="utf-8", newline="") as source_file:
+            writer = csv.writer(source_file)
+            writer.writerow(headers)
+            writer.writerows(rows)
+        return
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(headers)
+    for row in rows:
+        sheet.append(row)
+    workbook.save(path)
 
 
 @pytest.mark.parametrize("amount", ["0", "-0.01", "-100"])
@@ -184,3 +206,48 @@ def test_persist_rechecks_positive_amount_before_inserting(forecast_amount_scena
 
     assert len(entries) == 1
     assert entries[0].amount == 50
+
+
+@pytest.mark.parametrize(
+    ("source_format", "entry_type", "invalid_amount"),
+    [
+        ("csv", "Income", "-100"),
+        ("csv", "Expense", "0"),
+        ("xlsx", "Income", -100),
+        ("xlsx", "Expense", 0),
+    ],
+)
+def test_invalid_amount_blocks_whole_forecast_import_batch(
+    forecast_amount_scenario, tmp_path, source_format, entry_type, invalid_amount
+):
+    """CSV and XLSX batches reject non-positive Income and Expense rows before persistence."""
+    app, ids = forecast_amount_scenario
+    path = tmp_path / f"forecast-entries.{source_format}"
+    rows = [
+        [ids["forecast"], entry_type, "Importe válido", "NIO", 25 if source_format == "xlsx" else "25", "2026-05-10", ""],
+        [ids["forecast"], entry_type, "Importe inválido", "NIO", invalid_amount, "2026-05-11", ""],
+    ]
+    _write_forecast_rows(path, source_format, rows)
+
+    with app.app_context():
+        batch = ImportBatch(
+            company_id="alpha",
+            record_type="cash_forecast_entry",
+            source_format=source_format,
+            source_filename=path.name,
+            source_path=str(path),
+            import_status=1,
+        )
+        database.session.add(batch)
+        database.session.commit()
+
+        assert ImportService().validate(batch.id)
+        database.session.refresh(batch)
+        errors = ImportBatchError.query.filter_by(batch_id=batch.id).all()
+        entries = (
+            database.session.execute(database.select(CashForecastEntry).filter_by(forecast_id=ids["forecast"])).scalars().all()
+        )
+
+        assert batch.import_status == 2
+        assert any(error.error_type == "ROW_VALIDATION" for error in errors)
+        assert entries == []
