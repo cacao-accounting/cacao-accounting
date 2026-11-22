@@ -8,6 +8,8 @@ from flask_login import current_user, login_required
 from cacao_accounting.i18n import _
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.database import (
+    CompanyParty,
+    Party,
     database,
     SalesInvoice,
     SalesOrder,
@@ -41,19 +43,47 @@ def _is_user_admin() -> bool:
 
 
 def check_portal_access(role_name: str) -> None:
-    """Verifica que el usuario tenga el rol del portal correspondiente o sea administrador."""
+    """Verifica que el usuario tenga el rol del portal correspondiente o sea administrador.
+
+    El acceso del tercero exige además que ``Party.is_active`` y su vínculo
+    ``CompanyParty.is_active`` para la compañía del usuario sigan vigentes. La
+    desactivación revoca nuevas consultas, incluso sobre documentos históricos,
+    sin modificar la evidencia almacenada (#1919).
+    """
     if is_desktop_mode():
         abort(403)
     if _is_user_admin():
         return
 
     if role_name == "customer" and current_user.is_portal_customer:
+        _require_active_party_link()
         return
 
     if role_name == "supplier" and current_user.is_portal_supplier:
+        _require_active_party_link()
         return
 
     abort(403)
+
+
+def _require_active_party_link() -> None:
+    """Rechaza el acceso del portal si el tercero o su vínculo están inactivos."""
+    party_id = current_user.party_id
+    company = current_user.company
+    if not party_id or not company:
+        abort(403)
+    party = database.session.get(Party, party_id)
+    if party is None or not party.is_active:
+        abort(403)
+    link = database.session.execute(
+        database.select(CompanyParty.id).where(
+            CompanyParty.company == company,
+            CompanyParty.party_id == party_id,
+            CompanyParty.is_active.is_(True),
+        )
+    ).scalar_one_or_none()
+    if link is None:
+        abort(403)
 
 
 # ─── PORTAL DE CLIENTES ───────────────────────────────────────────────────────
