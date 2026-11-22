@@ -31,7 +31,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.mysql import DATETIME as MySQLDateTime
-from sqlalchemy.orm import synonym, validates
+from sqlalchemy.orm import validates
 from ulid import ULID
 
 from cacao_accounting.email_identity import normalize_user_email
@@ -3666,11 +3666,6 @@ class ARAPLedgerEntry(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False, index=True)
     memo = database.Column(database.Text(), nullable=True)
-
-    # Names used by integrations and reports that predate the explicit schema.
-    amount = synonym("document_amount")
-    signed_amount = synonym("document_amount")
-    transaction_currency = synonym("currency")
 
     book_entries = database.relationship(
         "ARAPLedgerBookEntry",
