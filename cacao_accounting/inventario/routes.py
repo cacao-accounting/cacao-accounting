@@ -1069,6 +1069,14 @@ def inventario_entrada_duplicar(entry_id: str):
     exige_acceso_compania("inventory", origen.company, "crear")
     if origen.docstatus == 2:
         abort(400)
+    if origen.purpose in LEGACY_STOCK_ENTRY_PURPOSES:
+        # El propósito genérico histórico no tiene semántica canónica definida
+        # (#1891); duplicarlo crearía movimientos nuevos sin contrato.
+        flash(
+            _("El ajuste de inventario histórico no se puede duplicar. Cree un ajuste positivo o negativo."),
+            "danger",
+        )
+        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=origen.id))
 
     duplicado = StockEntry(
         purpose=origen.purpose,

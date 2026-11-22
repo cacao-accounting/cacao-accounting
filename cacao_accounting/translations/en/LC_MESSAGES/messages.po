@@ -24254,3 +24254,7 @@ msgstr "Registered print template versions"
 msgid "Nota del cambio"
 msgstr "Change note"
 
+#: cacao_accounting/inventario/routes.py
+msgid "El ajuste de inventario histórico no se puede duplicar. Cree un ajuste positivo o negativo."
+msgstr "The historical inventory adjustment cannot be duplicated. Create a positive or negative adjustment."
+
