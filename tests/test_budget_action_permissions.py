@@ -12,9 +12,11 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from flask import render_template
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -220,3 +222,54 @@ def test_aprobador_aprueba_el_presupuesto(escenario_presupuesto):
     assert response.status_code == 302
     with application.app_context():
         assert database.session.get(Budget, budget_id).status == "approved"
+
+
+def test_lista_presupuestos_pagina_y_busqueda(escenario_presupuesto):
+    """La segunda página renderiza enlaces válidos y conserva la búsqueda."""
+    application, ids = escenario_presupuesto
+    for _ in range(11):
+        _crear_presupuesto(application, ids)
+    client = _login(application, ids["lector"])
+
+    response = client.get(f"{PREFIJO}/list?page=2&search=Presupuesto+de+prueba")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'href="/accounting/presupuestos/list?page=1&amp;search=Presupuesto+de+prueba"' in body
+    assert 'href="/accounting/presupuestos/list?page=2&amp;search=Presupuesto+de+prueba"' in body
+
+
+def test_vistas_presupuesto_formatean_montos_con_filtro_registrado(escenario_presupuesto):
+    """Detalle y previsualización de importación renderizan importes monetarios."""
+    application, ids = escenario_presupuesto
+    budget_id, _ = _crear_presupuesto(application, ids)
+    client = _login(application, ids["lector"])
+
+    detail = client.get(f"{PREFIJO}/{budget_id}")
+
+    assert detail.status_code == 200
+    assert "100.00" in detail.get_data(as_text=True)
+
+    with application.app_context():
+        budget = database.session.get(Budget, budget_id)
+        assert budget is not None
+        row = SimpleNamespace(
+            row_index=1,
+            account_id=ids["cuenta"],
+            cost_center_id=ids["centro"],
+            period_id=ids["period"],
+            business_unit_id=None,
+            project_id=None,
+            amount=Decimal("1250.5"),
+        )
+        with application.test_request_context(f"{PREFIJO}/{budget_id}/import"):
+            preview = render_template(
+                "contabilidad/presupuestos/import.html",
+                budget=budget,
+                columns=[],
+                staged_lines=[row],
+                import_id="import-preview",
+                titulo="Importar",
+            )
+
+    assert "1,250.50" in preview
