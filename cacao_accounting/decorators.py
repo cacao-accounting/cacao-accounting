@@ -142,14 +142,12 @@ def exige_acceso_compania(
     permisos = Permisos(modulo=module_id, usuario=current_user.id)
     if permisos.administrador:
         return
-    permission_name = {
-        "autorizar": "autorizar",
-        "anular": "anular",
-        "crear": "crear",
-        "editar": "editar",
-        "consultar": "consultar",
-    }.get(accion, "consultar")
-    if getattr(permisos, permission_name, False) and permisos.tiene_acceso_compania(company):
+    # #1781: validar la acción contra el mapa canónico y leer el atributo
+    # homónimo de Permisos. Antes, cerrar/importar/eliminar degradaban a
+    # consultar y un lector podía ejecutar acciones restringidas.
+    if accion not in Permisos.PERMISSION_FIELDS:
+        abort(403)
+    if getattr(permisos, accion, False) and permisos.tiene_acceso_compania(company):
         return
     abort(403)
 
