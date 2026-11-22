@@ -31,15 +31,6 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
     get_unlinked_purchase_receipts_summary,
 )
 
-from cacao_accounting.compras.purchase_order_comparison_service import (
-    current_purchase_order_comparison_round,
-    open_purchase_order_comparison_round,
-    purchase_request_for_comparison,
-    purchase_order_comparison_rows,
-    purchase_orders_for_request,
-    purchase_order_comparison_round_orders,
-)
-
 from cacao_accounting.compras.purchase_request_comparison_service import (
     comparison_recommendations,
     create_purchase_orders_from_comparison,
@@ -73,10 +64,6 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseOrder,
-    PurchaseOrderComparison,
-    PurchaseOrderComparisonOrder,
-    PurchaseOrderComparisonRound,
-    PurchaseOrderComparisonRoundOrder,
     PurchaseOrderItem,
     PurchaseQuotation,
     PurchaseQuotationAward,
@@ -1204,37 +1191,6 @@ def compras_comparativo_colocar_ordenes_solicitud(comparison_id: str):
     return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison_id))
 
 
-@compras.route("/request-for-quotation/comparison/<comparison_id>/round", methods=["POST"])
-@modulo_activo("purchases")
-@login_required
-@verifica_permiso("purchases", "autorizar")
-def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
-    """Open an authorized immutable round with an explicit order snapshot."""
-    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
-    if not comparison:
-        abort(404)
-    exige_acceso_compania("purchases", comparison.company, "autorizar")
-    purchase_request = purchase_request_for_comparison(comparison)
-    if not purchase_request:
-        abort(404)
-    assert purchase_request is not None
-    candidate_orders = purchase_orders_for_request(purchase_request)
-    candidate_ids = {order.id for order in candidate_orders}
-    participant_ids = set(request.form.getlist("participant_ids"))
-    if not participant_ids.issubset(candidate_ids):
-        flash_error(_("Seleccione únicamente órdenes de compra de la misma Solicitud de Compra."))
-        return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
-    try:
-        round_record = open_purchase_order_comparison_round(comparison, purchase_request, participant_ids, current_user.id)
-        database.session.commit()
-        flash(_("Nueva ronda de negociación abierta."), "success")
-        return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id, round_id=round_record.id))
-    except (ValueError, SQLAlchemyError) as exc:
-        database.session.rollback()
-        flash_error(exc)
-        return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
-
-
 def _purchase_action_permissions() -> dict[str, bool]:
     """Devuelve las acciones de compras disponibles para el usuario actual."""
     from cacao_accounting.auth.permisos import Permisos
@@ -1292,105 +1248,15 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
     )
 
 
-def _current_round_participant_ids(comparison: PurchaseOrderComparison) -> set[str]:
-    """Devuelve los participantes de la ronda vigente para el formulario."""
-    current_round = current_purchase_order_comparison_round(comparison.id)
-    if current_round is not None:
-        return {row.purchase_order_id for row in purchase_order_comparison_round_orders(current_round.id)}
-    return {
-        row.purchase_order_id
-        for row in database.session.execute(
-            database.select(PurchaseOrderComparisonOrder).where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
-        ).scalars()
-    }
-
-
-def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested_round_id: str | None):
-    """Render view for persisted order comparison."""
-    exige_acceso_compania("purchases", comparison.company, "consultar")
-    purchase_request = purchase_request_for_comparison(comparison)
-    selected_round = None
-    if requested_round_id:
-        selected_round = database.session.get(PurchaseOrderComparisonRound, requested_round_id)
-        if not selected_round or selected_round.comparison_id != comparison.id:
-            abort(404)
-    else:
-        selected_round = current_purchase_order_comparison_round(comparison.id)
-    participant_rows: list[PurchaseOrderComparisonRoundOrder | PurchaseOrderComparisonOrder] = (
-        list(purchase_order_comparison_round_orders(selected_round.id)) if selected_round else []
-    )
-    if not participant_rows:
-        participant_rows = list(
-            database.session.execute(
-                database.select(PurchaseOrderComparisonOrder)
-                .where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
-                .order_by(PurchaseOrderComparisonOrder.is_base.desc(), PurchaseOrderComparisonOrder.created)
-            )
-            .scalars()
-            .all()
-        )
-    orders: list[PurchaseOrder] = []
-    for row in participant_rows:
-        order = database.session.get(PurchaseOrder, row.purchase_order_id)
-        if order is not None and order.docstatus == 1:
-            orders.append(order)
-    for order in orders:
-        _require_purchase_document_access(order)
-    base_order = database.session.get(PurchaseOrder, comparison.base_purchase_order_id)
-    if not base_order:
-        abort(404)
-    order_items = {
-        order.id: list(
-            database.session.execute(
-                database.select(PurchaseOrderItem)
-                .where(PurchaseOrderItem.purchase_order_id == order.id)
-                .order_by(PurchaseOrderItem.id)
-            )
-            .scalars()
-            .all()
-        )
-        for order in orders
-    }
-    comparison_rows = purchase_order_comparison_rows(orders, order_items)
-    rounds = list(
-        database.session.execute(
-            database.select(PurchaseOrderComparisonRound)
-            .where(PurchaseOrderComparisonRound.comparison_id == comparison.id)
-            .order_by(PurchaseOrderComparisonRound.round_number.desc())
-        )
-        .scalars()
-        .all()
-    )
-    # El formulario de una ronda nueva parte de la ronda vigente, no de la
-    # histórica que se está consultando (#2141).
-    participant_order_ids = _current_round_participant_ids(comparison)
-    return render_template(
-        "compras/comparativo_ordenes.html",
-        comparison=comparison,
-        purchase_request=purchase_request,
-        base_order=base_order,
-        orders=orders,
-        comparison_rows=comparison_rows,
-        candidate_orders=purchase_orders_for_request(purchase_request) if purchase_request else [],
-        participant_order_ids=participant_order_ids,
-        rounds=rounds,
-        selected_round=selected_round,
-        titulo=_titulo_comparativo() + " - " + (comparison.id or ""),
-    )
-
-
 @compras.route("/request-for-quotation/comparison/<comparison_id>")
 @modulo_activo("purchases")
 @login_required
 def compras_comparativo_ordenes(comparison_id: str):
-    """Display a persisted order comparison, with legacy offer fallback."""
-    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
+    """Display a persisted purchase-request comparison."""
+    comparison = database.session.get(PurchaseRequestComparison, comparison_id)
     if comparison is None:
-        request_comparison = database.session.get(PurchaseRequestComparison, comparison_id)
-        if request_comparison:
-            return _render_request_comparison_view(request_comparison)
         abort(404)
-    return _render_order_comparison_view(comparison, request.args.get("round_id"))
+    return _render_request_comparison_view(comparison)
 
 
 @compras.route("/request-for-quotation/<rfq_id>/offers")
