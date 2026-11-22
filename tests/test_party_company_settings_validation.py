@@ -212,7 +212,7 @@ def test_cliente_conserva_su_regla_venta():
 
 
 def test_conserva_los_campos_extendidos_al_guardar_el_formulario():
-    """#2130: el guardado básico no reinicia moneda, centro de costo ni banco."""
+    """#2130: el guardado básico no reinicia centro de costo, unidad ni bloqueo."""
     application, ids = _crear_app()
     try:
         with application.app_context():
