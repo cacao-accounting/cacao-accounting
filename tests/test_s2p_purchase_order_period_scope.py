@@ -10,13 +10,28 @@ silencio a la compañía del primer módulo.
 
 from __future__ import annotations
 
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
 
-from cacao_accounting import list_filters
+from cacao_accounting import create_app, list_filters
+from cacao_accounting.auth import proteger_passwd
+from cacao_accounting.auth.permisos import cargar_permisos_predeterminados
+from cacao_accounting.auth.roles import asigna_rol_a_usuario, crea_roles_predeterminados
 from cacao_accounting.compras import services
-from cacao_accounting.database import Modules, PurchaseOrder, User, database
+from cacao_accounting.config import configuracion
+from cacao_accounting.database import (
+    AccountingPeriod,
+    Currency,
+    Entity,
+    FiscalYear,
+    Modules,
+    PurchaseOrder,
+    User,
+    UserCompanyAccess,
+    database,
+)
 
 
 class _FakePermisos:
@@ -111,3 +126,183 @@ def test_consulta_se_limita_a_la_compania_autorizada_por_inventario(app, entorno
     params = " ".join(str(value) for value in compiled.params.values())
     assert "beta" in params
     assert "alpha" not in params
+
+
+PERIODO_MAYO = "PB-2026-05"
+PERIODO_ABRIL = "PB-2026-04"
+CONTRASENA = "periodo-2026"
+
+
+@pytest.fixture
+def listado_oc_periodo():
+    """App aislada con dos compañías y permisos reales por módulo."""
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    with application.app_context():
+        database.create_all()
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Modules(module="purchases", default=False, enabled=True),
+                Modules(module="inventory", default=False, enabled=True),
+                Entity(code="alfa", name="Alfa", company_name="Alfa SA", tax_id="J-A", currency="NIO", enabled=True),
+                Entity(code="beta", name="Beta", company_name="Beta SA", tax_id="J-B", currency="NIO", enabled=True),
+                User(
+                    id="solo_inventario",
+                    user="solo_inventario",
+                    name="Inventario Beta",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                ),
+                User(
+                    id="compras_ambas",
+                    user="compras_ambas",
+                    name="Compras Alfa y Beta",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                ),
+                UserCompanyAccess(user_id="solo_inventario", company_code="beta"),
+                UserCompanyAccess(user_id="compras_ambas", company_code="alfa"),
+                UserCompanyAccess(user_id="compras_ambas", company_code="beta"),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                FiscalYear(
+                    id="FY-BETA-2026",
+                    entity="beta",
+                    name="2026",
+                    year_start_date=date(2026, 1, 1),
+                    year_end_date=date(2026, 12, 31),
+                    is_closed=False,
+                ),
+                FiscalYear(
+                    id="FY-ALFA-2026",
+                    entity="alfa",
+                    name="2026",
+                    year_start_date=date(2026, 1, 1),
+                    year_end_date=date(2026, 12, 31),
+                    is_closed=False,
+                ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                AccountingPeriod(
+                    id=PERIODO_MAYO,
+                    entity="beta",
+                    fiscal_year_id="FY-BETA-2026",
+                    name="Mayo 2026",
+                    start=date(2026, 5, 1),
+                    end=date(2026, 5, 31),
+                    enabled=True,
+                    is_closed=False,
+                ),
+                AccountingPeriod(
+                    id=PERIODO_ABRIL,
+                    entity="beta",
+                    fiscal_year_id="FY-BETA-2026",
+                    name="Abril 2026",
+                    start=date(2026, 4, 1),
+                    end=date(2026, 4, 30),
+                    enabled=True,
+                    is_closed=False,
+                ),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                PurchaseOrder(
+                    company="beta",
+                    posting_date=date(2026, 5, 12),
+                    docstatus=1,
+                    document_no="PO-BETA-MAYO",
+                    supplier_name="Proveedor Beta Mayo",
+                    grand_total=150,
+                ),
+                PurchaseOrder(
+                    company="beta",
+                    posting_date=date(2026, 4, 10),
+                    docstatus=1,
+                    document_no="PO-BETA-ABRIL",
+                    supplier_name="Proveedor Beta Abril",
+                    grand_total=250,
+                ),
+                PurchaseOrder(
+                    company="alfa",
+                    posting_date=date(2026, 5, 20),
+                    docstatus=1,
+                    document_no="PO-ALFA-MAYO",
+                    supplier_name="Proveedor Alfa Mayo",
+                    grand_total=350,
+                ),
+            ]
+        )
+        database.session.commit()
+        crea_roles_predeterminados()
+        cargar_permisos_predeterminados()
+        asigna_rol_a_usuario("solo_inventario", "inventory_user")
+        asigna_rol_a_usuario("compras_ambas", "purchasing_user")
+    yield application
+    with application.app_context():
+        database.session.remove()
+        database.engine.dispose()
+
+
+def _login(client, usuario: str) -> None:
+    """Autentica al usuario del escenario mediante el login real."""
+    response = client.post(
+        "/login",
+        data={"usuario": usuario, "acceso": CONTRASENA},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+
+def test_listado_con_periodo_conserva_alcance_de_inventario(listado_oc_periodo):
+    """Un usuario con acceso solo de Inventario a Beta ve sus OC del período."""
+    client = listado_oc_periodo.test_client()
+    _login(client, "solo_inventario")
+
+    response = client.get(f"/buying/purchase-order/list?accounting_period_from={PERIODO_MAYO}")
+
+    assert response.status_code == 200, response.get_data(as_text=True)
+    body = response.get_data(as_text=True)
+    assert "PO-BETA-MAYO" in body
+    assert "PO-BETA-ABRIL" not in body
+    assert "PO-ALFA-MAYO" not in body
+
+
+def test_listado_rechaza_periodo_ambiguo_sin_compania(listado_oc_periodo):
+    """Dos compañías autorizadas exigen compañía explícita para el período."""
+    client = listado_oc_periodo.test_client()
+    _login(client, "compras_ambas")
+
+    response = client.get(f"/buying/purchase-order/list?accounting_period_from={PERIODO_MAYO}")
+
+    assert response.status_code == 400
+
+
+def test_listado_con_periodo_y_compania_explicita_acota_ordenes(listado_oc_periodo):
+    """Con compañía explícita solo aparecen las OC de Beta dentro del período."""
+    client = listado_oc_periodo.test_client()
+    _login(client, "compras_ambas")
+
+    response = client.get(f"/buying/purchase-order/list?company=beta&accounting_period_from={PERIODO_MAYO}")
+
+    assert response.status_code == 200, response.get_data(as_text=True)
+    body = response.get_data(as_text=True)
+    assert "PO-BETA-MAYO" in body
+    assert "PO-BETA-ABRIL" not in body
+    assert "PO-ALFA-MAYO" not in body
