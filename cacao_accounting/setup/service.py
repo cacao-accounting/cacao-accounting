@@ -125,7 +125,9 @@ def create_company(
             apply_catalog_default_mapping(entity.code, catalogo.file)
         except DefaultAccountError as exc:
             raise ValueError(str(exc)) from exc
-        create_default_petty_cash(entity.code)
+        # #1265: informar cuando no se pudo crear el fondo predeterminado por no
+        # haber una cuenta de caja chica utilizable.
+        entity._petty_cash_created = create_default_petty_cash(entity.code) is not None
 
     return entity
 
@@ -252,12 +254,17 @@ def finalize_setup(
     country: str,
     idioma: str,
     catalogo_archivo: str | None = None,
-) -> None:
-    """Completa el proceso de configuración inicial y crea la entidad por defecto."""
+) -> bool:
+    """Completa la configuración inicial y crea la entidad por defecto.
+
+    Devuelve ``False`` cuando no se creó el fondo de caja chica predeterminado
+    por falta de una cuenta utilizable, para que el asistente pueda informarlo
+    (#1265).
+    """
     claim_setup_completion()
     try:
         is_initial_entity = (database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0) == 0
-        create_company(
+        entity = create_company(
             company_data,
             catalogo_tipo=catalogo_tipo,
             country=country,
@@ -273,3 +280,4 @@ def finalize_setup(
     except Exception:
         database.session.rollback()
         raise
+    return bool(getattr(entity, "_petty_cash_created", True))

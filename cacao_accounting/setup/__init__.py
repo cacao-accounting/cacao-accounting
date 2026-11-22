@@ -155,8 +155,9 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
         flash(texts["catalog_required"], "danger")
         return None
 
+    petty_cash_ready = True
     try:
-        finalize_setup(
+        petty_cash_ready = finalize_setup(
             company_data,
             catalogo_tipo,
             setup_data.get("pais", "NI"),
@@ -178,6 +179,10 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
         return None
     session.pop("setup_step", None)
     flash(texts["setup_complete"], "success")
+    # #1265: informar cuando el fondo predeterminado no se pudo crear por falta
+    # de una cuenta de caja chica utilizable.
+    if not petty_cash_ready:
+        flash(texts["petty_cash_not_created"], "warning")
     return redirect(url_for("cacao_app.pagina_inicio"))
 
 
