@@ -127,6 +127,7 @@ class PurchasePendingRow:
     pending_qty: Decimal
     pending_amount: Decimal
     status: str
+    transaction_currency: str | None
 
 
 @dataclass
@@ -1794,6 +1795,7 @@ def get_purchase_reconciliation_pending(company: str, as_of_date: date | None = 
                 pending_qty=pending_qty,
                 pending_amount=pending_amount,
                 status="partial" if pending_qty < item_qty else "open",
+                transaction_currency=receipt.transaction_currency,
             )
         )
     return rows
@@ -1811,6 +1813,29 @@ def get_purchase_reconciliation_panel_groups(company: str) -> list[PurchaseRecon
         .scalars()
         .all()
     )
+    from cacao_accounting.database import PurchaseOrder
+
+    currencies_by_document: dict[str, str | None] = {}
+    for model, foreign_key in (
+        (PurchaseInvoice, "purchase_invoice_id"),
+        (PurchaseReceipt, "purchase_receipt_id"),
+        (PurchaseOrder, "purchase_order_id"),
+    ):
+        document_ids = {getattr(reconciliation, foreign_key) for reconciliation in reconciliations}
+        document_ids.discard(None)
+        if document_ids:
+            currencies_by_document.update(
+                dict(
+                    database.session.execute(
+                        select(model.id, model.transaction_currency).where(model.id.in_(document_ids))
+                    ).all()
+                )
+            )
+    for reconciliation in reconciliations:
+        document_id = (
+            reconciliation.purchase_invoice_id or reconciliation.purchase_receipt_id or reconciliation.purchase_order_id
+        )
+        reconciliation.display_currency = currencies_by_document.get(document_id)
     status_rank: dict[str, int] = {
         "disputed": 0,
         "partial": 1,
@@ -2053,6 +2078,7 @@ def get_purchase_order_status_report(company: str) -> list[dict[str, Any]]:
                 "supplier_id": order.supplier_id,
                 "supplier_name": order.supplier_name or "",
                 "grand_total": order.grand_total or Decimal("0"),
+                "transaction_currency": order.transaction_currency,
                 "ordered_qty": ordered_qty,
                 "received_qty": received_qty,
                 "billed_qty": billed_qty,
@@ -2111,6 +2137,7 @@ def get_unlinked_purchase_invoices(company: str) -> list[dict[str, Any]]:
                 "supplier_id": inv.supplier_id,
                 "supplier_name": _resolve_supplier_name(inv.supplier_id, inv.supplier_name),
                 "grand_total": inv.grand_total or Decimal("0"),
+                "transaction_currency": inv.transaction_currency,
                 "purchase_order_id": inv.purchase_order_id,
                 "purchase_order_no": _resolve_po_number(inv.purchase_order_id),
             }
@@ -2161,6 +2188,7 @@ def get_unlinked_purchase_receipts_summary(company: str) -> list[dict[str, Any]]
                 "purchase_order_no": _resolve_po_number(receipt.purchase_order_id),
                 "pending_qty": totals["pending_qty"],
                 "pending_amount": totals["pending_amount"],
+                "transaction_currency": receipt.transaction_currency,
             }
         )
 
