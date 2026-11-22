@@ -100,7 +100,7 @@ def test_concurrent_import_of_same_movement_is_rejected():
                 transaction = BankTransaction(
                     bank_account_id=account_id,
                     posting_date=posting_date,
-                    reference_number="",
+                    reference_number="CONC-2172",
                     description="Movimiento concurrente",
                     deposit=Decimal("10"),
                     withdrawal=None,
@@ -122,7 +122,7 @@ def test_concurrent_import_of_same_movement_is_rejected():
                             "bank_account_id": account_id,
                             "company_id": company_code,
                             "posting_date": posting_date,
-                            "reference_number": "",
+                            "reference_number": "CONC-2172",
                             "description": "Movimiento concurrente",
                             "deposit": Decimal("10"),
                             "withdrawal": None,

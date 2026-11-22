@@ -189,24 +189,22 @@ def test_unique_constraint_rejects_a_duplicate_identity_key(bank_identity_scenar
 def test_adapter_translates_a_real_unique_conflict(bank_identity_scenario):
     """El conflicto de la restricción se convierte en error de negocio controlado.
 
-    La fila existente guarda ``reference_number`` NULL y la importación envía la
-    cadena vacía. La comprobación previa no las iguala, así que el rechazo solo
-    puede provenir de la restricción única de la base.
+    Dos filas con la misma referencia en un mismo lote superan la comprobación
+    previa (que excluye las filas recién persistidas) y chocan con la
+    restricción única ``uq_bank_transaction_identity``; el adaptador traduce
+    ese ``IntegrityError`` a un ``ValueError`` de negocio dentro del savepoint.
+    Con referencia se conserva esta deduplicación (#1262); sin referencia la
+    identidad usa la procedencia.
     """
     app, company_code, account_id = bank_identity_scenario
 
     with app.app_context():
-        existing = BankTransaction(**_movement(account_id, reference=None))
-        database.session.add(existing)
-        database.session.commit()
+        movement = {
+            **_movement(account_id, reference="REF-CONFLICT"),
+            "company_id": company_code,
+        }
+        document = [dict(movement), dict(movement)]
 
-        document = [
-            {
-                **_movement(account_id, reference=""),
-                "company_id": company_code,
-                "description": "Misma identidad, otra descripción",
-            }
-        ]
         with pytest.raises(ValueError, match="ya existe") as error:
             BankStatementAdapter().persist_document(document)
 
@@ -406,14 +404,12 @@ def test_identity_conflict_detection_ignores_other_integrity_errors():
 def _legacy_bank_database(path, identities: tuple[str, ...]) -> None:
     """Crea una base previa al fix, sin restricción única en identity_key."""
     connection = sqlite3.connect(path)
-    connection.executescript(
-        """
+    connection.executescript("""
         CREATE TABLE bank_transaction (
             id VARCHAR(26) PRIMARY KEY,
             identity_key VARCHAR(64) NOT NULL
         );
-        """
-    )
+        """)
     connection.executemany(
         "INSERT INTO bank_transaction (id, identity_key) VALUES (?, ?)",
         [(f"LEGACY-{index}", identity) for index, identity in enumerate(identities, start=1)],
@@ -510,10 +506,11 @@ def test_identity_uniqueness_on_the_configured_engine():
     company_code, account_id = _seed_bank_scenario(app)
     try:
         with app.app_context():
-            database.session.add(BankTransaction(**_movement(account_id, reference=None)))
+            # Con referencia, la identidad económica es única en el motor real.
+            database.session.add(BankTransaction(**_movement(account_id, reference="REF-ENGINE")))
             database.session.commit()
 
-            database.session.add(BankTransaction(**_movement(account_id, reference=None)))
+            database.session.add(BankTransaction(**_movement(account_id, reference="REF-ENGINE")))
             with pytest.raises(IntegrityError) as error:
                 database.session.flush()
             # Cada motor nombra la restricción de forma distinta: SQLite y
@@ -521,8 +518,9 @@ def test_identity_uniqueness_on_the_configured_engine():
             assert _is_bank_identity_conflict(error.value)
             database.session.rollback()
 
+            movement = {**_movement(account_id, reference="REF-ENGINE-2"), "company_id": company_code}
             with pytest.raises(ValueError, match="ya existe"):
-                BankStatementAdapter().persist_document([{**_movement(account_id, reference=""), "company_id": company_code}])
+                BankStatementAdapter().persist_document([dict(movement), dict(movement)])
             database.session.rollback()
 
             assert (
