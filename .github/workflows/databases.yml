@@ -23,7 +23,8 @@ jobs:
           python -m pip install --only-binary=:all: -r /tmp/development-binary.txt
           python -m pip install --no-binary=:all: odfpy==1.4.1
           python -m pip install --only-binary=:all: -e .[cloud]
-          python -m pip install psycopg2-binary==2.9.12
+          sudo apt-get install -y --no-install-recommends libpq-dev build-essential
+          python -m pip install "psycopg[c]==3.3.9"
       - name: Test with SQLite
         env:
           CACAO_PRINT_DATABASE_URI: "True"
@@ -48,34 +49,14 @@ jobs:
           mysql --user=root --password=root < tests/setup_mysql.sql
           cacaoctl db reset --force
           SECRET_KEY=ASD123kljaAddS python -m pytest -m database --full --slow=True --tb=line --quiet
-      - name: Test with Postgresql + psycopg2
-        env:
-          CACAO_PRINT_DATABASE_URI: "True"
-          CACAO_TEST: "True"
-          CACAO_USER: "cacao2"
-          CACAO_PSWD: "cacao2"
-          CHECK_DATABASE: "true"
-          DATABASE_URL: "postgresql+psycopg2://cacao2:cacao2@localhost/cacao2"
-        run: |
-          sudo systemctl start postgresql.service
-          sudo -u postgres psql -c "CREATE USER cacao2 WITH PASSWORD 'cacao2';"
-          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON SCHEMA public TO cacao2;"
-          sudo -u postgres psql -c "CREATE DATABASE cacao2;"
-          sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cacao2 TO cacao2;"
-          sudo -u postgres psql -c "ALTER DATABASE cacao2 OWNER TO cacao2;"
-          sudo -u postgres psql -c "ALTER ROLE cacao2 CREATEDB;"
-          sudo -u postgres psql -c "GRANT USAGE ON SCHEMA public TO cacao2;"
-          sudo -u postgres psql -c "GRANT CREATE ON SCHEMA public TO cacao2;"
-          SECRET_KEY=ASD123klja+AddS cacaoctl db reset --force
-          SECRET_KEY=ASD123klja+AddS python -m pytest -m database --full --slow=True --tb=line --quiet
-      - name: Test with Postgresql + pg8000
+      - name: Test with Postgresql + psycopg
         env:
           CACAO_PRINT_DATABASE_URI: "True"
           CACAO_TEST: "True"
           CACAO_USER: "cacao"
           CACAO_PSWD: "cacao"
           CHECK_DATABASE: "true"
-          DATABASE_URL: "postgresql+pg8000://cacao:cacao@localhost/cacao"
+          DATABASE_URL: "postgresql+psycopg://cacao:cacao@localhost/cacao"
         run: |
           sudo -u postgres psql -c "CREATE USER cacao WITH PASSWORD 'cacao';"
           sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON SCHEMA public TO cacao;"
@@ -127,11 +108,12 @@ jobs:
           python -m pip install --only-binary=:all: -r /tmp/development-binary.txt
           python -m pip install --no-binary=:all: odfpy==1.4.1
           python -m pip install --only-binary=:all: -e .[cloud]
-          python -m pip install psycopg2-binary==2.9.12
+          sudo apt-get install -y --no-install-recommends libpq-dev build-essential
+          python -m pip install "psycopg[c]==3.3.9"
       - name: Test user scoped cache isolation
         env:
           CACAO_TEST: "True"
-          DATABASE_URL: postgresql+psycopg2://cacao:cacao@localhost:5432/cacao_cache_tests
+          DATABASE_URL: postgresql+psycopg://cacao:cacao@localhost:5432/cacao_cache_tests
           CACHE_REDIS_URL: redis://localhost:6379/2
           RATELIMIT_STORAGE_URI: redis://localhost:6379/0
           SECRET_KEY: cache-isolation-tests
