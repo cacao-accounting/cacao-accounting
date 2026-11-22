@@ -23,6 +23,8 @@ from cacao_accounting.database import (
     Currency,
     Entity,
     Modules,
+    SalesInvoice,
+    SalesQuotation,
     SalesRequest,
     User,
     UserCompanyAccess,
@@ -77,12 +79,51 @@ def solicitudes_por_compania():
             docstatus=0,
             customer_name="Cliente Confidencial Cafe",
         )
-        database.session.add_all([propia, ajena])
+        cotizacion_propia = SalesQuotation(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=0,
+            customer_name="Cliente Cacao",
+        )
+        cotizacion_ajena = SalesQuotation(
+            company="cafe",
+            posting_date=FECHA,
+            docstatus=0,
+            customer_name="Cliente Confidencial Cafe",
+        )
+        factura_propia = SalesInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="FAC-ORIGEN-CACAO",
+            customer_name="Cliente Cacao",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=1,
+        )
+        factura_ajena = SalesInvoice(
+            company="cafe",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="FAC-ORIGEN-CAFE",
+            customer_name="Cliente Confidencial Cafe",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=1,
+        )
+        database.session.add_all([propia, ajena, cotizacion_propia, cotizacion_ajena, factura_propia, factura_ajena])
         database.session.commit()
         crea_roles_predeterminados()
         cargar_permisos_predeterminados()
         asigna_rol_a_usuario("vendedor_cacao", "sales_auxiliar")
-        ids = {"propia": propia.id, "ajena": ajena.id}
+        ids = {
+            "propia": propia.id,
+            "ajena": ajena.id,
+            "cotizacion_propia": cotizacion_propia.id,
+            "cotizacion_ajena": cotizacion_ajena.id,
+            "factura_propia": factura_propia.id,
+            "factura_ajena": factura_ajena.id,
+        }
     yield application, ids
     with application.app_context():
         database.session.remove()
@@ -131,3 +172,39 @@ def test_cotizacion_requiere_login_para_el_origen(solicitudes_por_compania):
 
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
+
+
+@pytest.mark.parametrize(
+    ("origen", "parametro"),
+    [
+        ("propia", "from_request"),
+        ("cotizacion_propia", "from_quotation"),
+    ],
+)
+def test_orden_autoriza_sus_origenes(solicitudes_por_compania, origen, parametro):
+    """La orden de venta autoriza solicitud, cotización y factura de origen."""
+    application, ids = solicitudes_por_compania
+    client = application.test_client()
+    _login(client, "vendedor_cacao")
+
+    propio = client.get(f"/sales/sales-order/new?{parametro}={ids[origen]}")
+    assert propio.status_code == 200
+
+    ajeno = ids[origen.replace("propia", "ajena")]
+    ajeno_response = client.get(f"/sales/sales-order/new?{parametro}={ajeno}")
+    assert ajeno_response.status_code == 403
+    assert "Cliente Confidencial Cafe" not in ajeno_response.get_data(as_text=True)
+
+
+def test_factura_autoriza_la_factura_de_origen(solicitudes_por_compania):
+    """La nota de crédito desde factura autoriza la factura fuente."""
+    application, ids = solicitudes_por_compania
+    client = application.test_client()
+    _login(client, "vendedor_cacao")
+
+    propio = client.get(f"/sales/sales-invoice/new?from_invoice={ids['factura_propia']}")
+    assert propio.status_code == 200
+
+    ajeno = client.get(f"/sales/sales-invoice/new?from_invoice={ids['factura_ajena']}")
+    assert ajeno.status_code == 403
+    assert "Cliente Confidencial Cafe" not in ajeno.get_data(as_text=True)
