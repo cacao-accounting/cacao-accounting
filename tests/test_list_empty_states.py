@@ -28,6 +28,7 @@ LISTADOS = [
     ("/sales/sales-order/list", MENSAJE_DOCUMENTOS),
     ("/sales/sales-request/list", MENSAJE_DOCUMENTOS),
     ("/sales/delivery-note/list", MENSAJE_DOCUMENTOS),
+    ("/sales/sales-invoice/debit-note/list", MENSAJE_DOCUMENTOS),
     ("/sales/sales-invoice/return/list", MENSAJE_DOCUMENTOS),
 ]
 
@@ -46,3 +47,15 @@ def test_listado_vacio_muestra_estado_traducido_y_sin_paginacion_imposible(authe
     html = respuesta.get_data(as_text=True)
     assert mensaje in html, f"El listado {ruta} debe mostrar su estado vacío traducido."
     assert "Página 1 de 0" not in html, "No debe anunciarse una paginación sin resultados."
+
+
+def test_nota_debito_y_devolucion_conservan_su_tipo_documental(authenticated_client):
+    """Los dos callers del template compartido enlazan al tipo correcto (#2047)."""
+    client = authenticated_client()
+    busqueda = _busqueda_vacia()
+
+    debito = client.get(f"/sales/sales-invoice/debit-note/list?search={busqueda}").get_data(as_text=True)
+    devolucion = client.get(f"/sales/sales-invoice/return/list?search={busqueda}").get_data(as_text=True)
+
+    assert "document_type=sales_debit_note" in debito
+    assert "document_type=sales_return" in devolucion
