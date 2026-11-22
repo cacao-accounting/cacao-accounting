@@ -21,7 +21,6 @@ from sqlalchemy.exc import SQLAlchemyError
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask import Flask, session
-from flask_alembic import Alembic
 from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -72,7 +71,6 @@ from flask_babel import Babel
 
 from cacao_accounting.i18n import _, _get_locale, _get_timezone
 
-alembic = Alembic()
 babel = Babel()
 
 
@@ -94,7 +92,6 @@ def iniciar_extenciones(app: Flask | None = None) -> None:
 
     csrf = CSRFProtect()
     csrf.init_app(app)
-    alembic.init_app(app)
     database.init_app(app)
     from cacao_accounting.internal_control_service import register_internal_controls
 

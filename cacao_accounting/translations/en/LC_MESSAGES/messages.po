@@ -453,7 +453,6 @@ msgid ""
 "  cacaoctl run\n"
 "  cacaoctl serve\n"
 "  cacaoctl db init\n"
-"  cacaoctl db migrate\n"
 "  cacaoctl db reset\n"
 "  cacaoctl status\n"
 "  cacaoctl version\n"
@@ -463,7 +462,6 @@ msgstr ""
 "  cacaoctl run\n"
 "  cacaoctl serve\n"
 "  cacaoctl db init\n"
-"  cacaoctl db migrate\n"
 "  cacaoctl db reset\n"
 "  cacaoctl status\n"
 "  cacaoctl version\n"
@@ -529,31 +527,6 @@ msgstr "Database created."
 #: cacao_accounting/cli.py:250
 msgid "No fue posible crear la base de datos."
 msgstr "Unable to create the database."
-
-#: cacao_accounting/cli.py:254
-msgid "Aplica migraciones pendientes de Alembic (idempotente)."
-msgstr "Apply pending Alembic migrations (idempotent)."
-
-#: cacao_accounting/cli.py:255
-msgid "Revisión destino (por defecto: head)."
-msgstr "Target revision (default: head)."
-
-#: cacao_accounting/cli.py:256
-msgid "Revisión específica a aplicar."
-msgstr "Specific revision to apply."
-
-#: cacao_accounting/cli.py:273
-msgid "La base de datos no está inicializada; ejecute primero 'cacaoctl db init'."
-msgstr "The database is not initialized; run 'cacaoctl db init' first."
-
-#: cacao_accounting/cli.py:276
-msgid "Migraciones aplicadas correctamente."
-msgstr "Migrations applied successfully."
-
-#: cacao_accounting/cli.py:278
-#, python-format
-msgid "No fue posible aplicar las migraciones: %(error)s"
-msgstr "Could not apply migrations: %(error)s"
 
 #: cacao_accounting/cli.py:282
 msgid "Recrea completamente la base de datos."
