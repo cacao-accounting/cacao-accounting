@@ -60,11 +60,9 @@ from cacao_accounting.document_flow.repository import has_active_source_relation
 
 from cacao_accounting.decorators import (  # noqa: F401
     exige_acceso_compania,
-    exige_acceso_compania_cualquiera,
     modulo_activo,
     verifica_acceso as verifica_acceso,
     verifica_permiso,
-    verifica_permiso_cualquiera,
 )
 
 
@@ -220,9 +218,9 @@ def _load_delivery_note_sources(from_order_id: str | None, from_note_id: str | N
         source_company = getattr(source, "company", None)
         if not source_company:
             abort(404)
-        # #1332: el flujo de entrega lo puede iniciar Inventario; los datos
-        # comerciales del origen se omiten en el contexto para ese perfil.
-        exige_acceso_compania_cualquiera(("sales", "inventory"), str(source_company), "crear")
+        # #1332/#2052: la entrega la ejecuta Inventario; el origen solo exige
+        # el permiso de creación de Inventario sobre su compañía.
+        exige_acceso_compania("inventory", str(source_company), "crear")
     return order_source, delivery_source
 
 
@@ -402,9 +400,9 @@ def _handle_delivery_note_new_post() -> ResponseReturnValue:
         request.form.get("company") or None,
         request.form.get("currency") or request.form.get("transaction_currency") or None,
     )
-    # #1332: el alta de entrega la puede ejecutar Inventario; el backend
+    # #1332/#2052: el alta de entrega la ejecuta Inventario; el backend
     # resuelve cliente y precio desde el origen sin exigir permisos de Ventas.
-    exige_acceso_compania_cualquiera(("sales", "inventory"), company, "crear")
+    exige_acceso_compania("inventory", company, "crear")
     source_customer_id = getattr(source, "customer_id", None)
     if source_customer_id and customer_id and customer_id != source_customer_id:
         raise ValueError(_("El cliente debe coincidir con el documento origen."))
@@ -1913,7 +1911,7 @@ def ventas_orden_venta_close(order_id: str):
 @ventas.route("/delivery-note/new", methods=["GET", "POST"])
 @modulo_activo(("sales", "inventory"))
 @login_required
-@verifica_permiso_cualquiera(("sales", "inventory"), "crear")
+@verifica_permiso("inventory", "crear")
 def ventas_entrega_nuevo():
     """Formulario para crear una nota de entrega."""
     context = _build_delivery_note_new_context()

@@ -793,12 +793,15 @@ def _require_delivery_note_access(document: DeliveryNote, action: str = "consult
 
 
 def _can_manage_delivery_notes() -> bool:
-    """Return whether the user can create delivery notes in Sales and Inventory."""
+    """Return whether the user can create delivery notes.
+
+    #2052: la creación de remisiones es responsabilidad de Inventario. El
+    permiso ``inventory.crear`` es suficiente y no se exige ``sales.crear``;
+    Ventas conserva la orden y la información comercial.
+    """
     module_id = obtener_id_modulo_por_nombre("inventory")
     inventory = Permisos(modulo=module_id, usuario=current_user.id)
-    sales_module_id = obtener_id_modulo_por_nombre("sales")
-    sales = Permisos(modulo=sales_module_id, usuario=current_user.id)
-    return bool(sales.crear and inventory.crear)
+    return bool(inventory.crear)
 
 
 def _require_sales_document_access(document: Any, action: str = "consultar") -> None:
