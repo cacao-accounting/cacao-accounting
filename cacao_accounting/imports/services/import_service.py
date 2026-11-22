@@ -589,32 +589,55 @@ class ImportService:
             database.session.commit()
 
     def _finalize_execution(self, batch: Any, batch_id: str, success_count: int, error_count: int) -> None:
-        """Finaliza la ejecución actualizando estados y contadores."""
+        """Finaliza la ejecución actualizando estados y contadores.
+
+        La transición terminal se hace con un UPDATE condicional
+        ``WHERE import_status = 4`` para no sobrescribir un estado que recovery
+        (7) o una cancelación (8) hayan comprometido entre la lectura y la
+        escritura del worker (#1203).
+        """
         current_batch = database.session.get(ImportBatch, batch_id)
-        if current_batch:
-            # La cancelación solicitada durante la ejecución puede haberse
-            # comprometido desde otra sesión; releeer el estado para no
-            # sobrescribirlo con completado.
-            database.session.expire(current_batch)
-            current_batch = database.session.get(ImportBatch, batch_id)
-            if current_batch is None:
-                return
-            # Solo el worker que mantiene el lote en proceso (estado 4) puede
-            # finalizarlo. Si la recuperación ya lo marcó como fallido (7) o una
-            # cancelación lo dejó terminal (8), no se sobrescribe ese estado con
-            # un completado parcial/total (#1203).
-            if current_batch.import_status != 4:
-                database.session.commit()
-                return
-            current_batch.success_rows = success_count
-            current_batch.error_rows = error_count
-            current_batch.completed_at = _utc_now_naive()
-            if current_batch.cancel_requested:
-                current_batch.import_status = 8
-                database.session.commit()
-                return
-            current_batch.import_status = 5 if error_count == 0 else 6
-            database.session.commit()
+        if current_batch is None:
+            return
+        database.session.expire(current_batch)
+        current_batch = database.session.get(ImportBatch, batch_id)
+        if current_batch is None:
+            return
+        completed_at = _utc_now_naive()
+        if current_batch.cancel_requested:
+            cancel_result = database.session.execute(
+                update(ImportBatch)
+                .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+                .values(
+                    success_rows=success_count,
+                    error_rows=error_count,
+                    completed_at=completed_at,
+                    import_status=8,
+                )
+                .execution_options(synchronize_session=False)
+            )
+        else:
+            target_status = 5 if error_count == 0 else 6
+            cancel_result = database.session.execute(
+                update(ImportBatch)
+                .where(
+                    ImportBatch.id == batch_id,
+                    ImportBatch.import_status == 4,
+                    ImportBatch.cancel_requested.is_(False),
+                )
+                .values(
+                    success_rows=success_count,
+                    error_rows=error_count,
+                    completed_at=completed_at,
+                    import_status=target_status,
+                )
+                .execution_options(synchronize_session=False)
+            )
+        database.session.commit()
+        # rowcount == 0 significa que recovery o cancelación ganaron la carrera:
+        # el estado tomado por el ganador permanece intacto.
+        if (getattr(cancel_result, "rowcount", 0) or 0) == 0:
+            database.session.expire_all()
 
     def _handle_execution_error(self, batch_id: str, e: Exception) -> None:
         """Maneja errores fatales durante la ejecución."""

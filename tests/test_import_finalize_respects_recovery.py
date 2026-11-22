@@ -123,3 +123,46 @@ def test_finalize_marca_parcial_si_hay_errores(tmp_path):
         with app.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_finalize_conserva_estado_si_recovery_gana_entre_lectura_y_update(tmp_path, monkeypatch):
+    """#1203: la transición terminal es condicional a nivel SQL.
+
+    Se fuerza el interleaving: el worker lee el lote (estado 4), recovery toma
+    el lote y lo marca fallido (7), y luego el worker intenta finalizar. El
+    UPDATE condicional `WHERE import_status = 4` no debe sobrescribir el 7.
+    """
+    from cacao_accounting.imports.services import import_service as import_service_module
+
+    app = _app(tmp_path)
+    try:
+        batch_id = _batch(app)
+        with app.app_context():
+            batch = database.session.get(ImportBatch, batch_id)
+            service = ImportService()
+            original_execute = database.session.execute
+            notified: dict[str, bool] = {"done": False}
+
+            def racing_execute(statement, *args, **kwargs):
+                # Antes de que el worker ejecute su UPDATE, recovery reclama el
+                # lote en una sesión independiente y lo deja en 7.
+                if not notified["done"] and getattr(statement, "is_update", False):
+                    notified["done"] = True
+                    with app.app_context():
+                        recovery._claim_expired_batch(batch_id, datetime.now())
+                        database.session.commit()
+                        database.session.remove()
+                return original_execute(statement, *args, **kwargs)
+
+            monkeypatch.setattr(import_service_module.database.session, "execute", racing_execute)
+            service._finalize_execution(batch, batch_id, success_count=10, error_count=0)
+            monkeypatch.undo()
+
+            database.session.expire_all()
+            final = database.session.get(ImportBatch, batch_id)
+            assert notified["done"] is True
+            assert final.import_status == 7
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
