@@ -215,9 +215,9 @@ def resolve_item_price_record(
         .where((ItemPrice.valid_upto.is_(None)) | (ItemPrice.valid_upto >= posting_date))
         .where((ItemPrice.min_qty.is_(None)) | (ItemPrice.min_qty <= qty))
         .order_by(
+            case((ItemPrice.uom == uom, 0), else_=1),
             ItemPrice.min_qty.desc().nullslast(),
             ItemPrice.valid_from.desc().nullslast(),
-            case((ItemPrice.uom == uom, 0), else_=1),
         )
     )
     if uom:
