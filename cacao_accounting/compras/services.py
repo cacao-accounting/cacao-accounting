@@ -3405,6 +3405,89 @@ def _create_import_landed_cost_from_request():
     return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=registro.id))
 
 
+def _update_import_landed_cost_from_request(registro: ImportLandedCost):
+    """Actualiza un costo de importación en borrador desde el formulario.
+
+    Reemplaza líneas y cargos y recalcula totales, conservando identidad,
+    numeración y vínculo con la factura (#1752). Solo aplica a borradores.
+    """
+    from cacao_accounting.accounting_engine.landed_cost.engine import validate_allocation_method
+
+    if getattr(registro, "docstatus", 0) != 0:
+        flash(_("Solo se puede editar un costo de importación en borrador."), "danger")
+        return None
+    company = request.form.get("company", "").strip() or registro.company
+    if company != registro.company:
+        flash(_("La compañía de un costo de importación no puede cambiarse."), "danger")
+        return None
+    posting_date = _parse_date(request.form.get("posting_date")) or registro.posting_date
+    allocation_method = request.form.get("allocation_method", registro.allocation_method or "by_value")
+    try:
+        allocation_method = validate_allocation_method(allocation_method)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return None
+    exige_acceso_compania("purchases", company, "editar")
+
+    before_state = {
+        "posting_date": registro.posting_date,
+        "allocation_method": registro.allocation_method,
+        "remarks": registro.remarks,
+    }
+    registro.posting_date = posting_date
+    registro.document_date = posting_date
+    registro.allocation_method = allocation_method
+    registro.remarks = request.form.get("remarks", "").strip()
+
+    for item in database.session.execute(
+        database.select(ImportLandedCostItem).filter_by(import_landed_cost_id=registro.id)
+    ).scalars():
+        database.session.delete(item)
+    for charge in database.session.execute(
+        database.select(ImportLandedCostCharge).filter_by(import_landed_cost_id=registro.id)
+    ).scalars():
+        database.session.delete(charge)
+    database.session.flush()
+
+    total_item_amount = _save_import_landed_cost_items(registro)
+    total_item_base_amount = sum(
+        (
+            Decimal(str(item.base_amount or "0"))
+            for item in database.session.execute(
+                database.select(ImportLandedCostItem).filter_by(import_landed_cost_id=registro.id)
+            ).scalars()
+        ),
+        Decimal("0"),
+    )
+    total_charges = _save_import_landed_cost_charges(registro)
+    total_charge_base_amount = sum(
+        (
+            Decimal(str(charge.base_amount or "0"))
+            for charge in database.session.execute(
+                database.select(ImportLandedCostCharge).filter_by(import_landed_cost_id=registro.id)
+            ).scalars()
+        ),
+        Decimal("0"),
+    )
+    registro.total_base_amount = total_item_base_amount + total_charge_base_amount
+    registro.total_charges_amount = total_charges
+    registro.total_inventory_value = total_item_amount + total_charges
+    registro.grand_total = total_item_amount + total_charges
+
+    log_update(
+        registro,
+        before=before_state,
+        after={
+            "posting_date": registro.posting_date,
+            "allocation_method": registro.allocation_method,
+            "remarks": registro.remarks,
+        },
+    )
+    database.session.commit()
+    flash(_("Costo de importación actualizado correctamente."), "success")
+    return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=registro.id))
+
+
 def _get_import_landed_cost_items(landed_cost_id: str):
     """Devuelve las lineas de item de un costo de importacion."""
     return (

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+{% import "transaction_form_macros.html" as tf_macros with context %}
+
+<nav aria-label="{{ _('Ruta de navegación') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_import_landed_cost_lista') }}"
+        class="link-dark">{{ _('Costos de Importacion') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Editar Costo de Importación') }}</li>
+  </ol>
+</nav>
+
+<form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
+  {{ form.csrf_token }}
+  <input type="hidden" name="company" value="{{ registro.company }}">
+  <input type="hidden" name="document_type" value="import_landed_cost">
+  {{ tf_macros.transaction_form_header(
+      _('Costo de Importacion'),
+      cancel_url=url_for('compras.compras_import_landed_cost', landed_cost_id=registro.id)
+    ) }}
+  <div class="ca-card p-3 mb-3">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="allocation_method">{{ _('Método de Prorrateo') }}</label>
+        {{ form.allocation_method(class="form-select") }}
+      </div>
+      <div class="col-md-6">
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle me-1"></i>
+          {{ _('Documento:') }} {{ registro.document_no or registro.id }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ca-card p-3 mb-3">
+    <h6><i class="bi bi-box-seam me-1"></i> {{ _('Articulos') }}</h6>
+    {{ tf_macros.transaction_grid() }}
+  </div>
+
+  <div class="ca-card p-3 mb-3">
+    <h6><i class="bi bi-receipt me-1"></i> {{ _('Cargos a Prorratear') }}</h6>
+    <div class="table-responsive">
+      <table class="ca-table" id="charges-table">
+        <caption class="visually-hidden">{{ _('Cargos a prorratear') }}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ _("Concepto") }}</th>
+            <th scope="col">{{ _("Tipo") }}</th>
+            <th scope="col">{{ _("Monto") }}</th>
+            <th scope="col">{{ _("Cuenta") }}</th>
+            <th scope="col"></th>
+          </tr>
+        </thead>
+        <tbody id="charges-body">
+          {% for charge in charges %}
+          <tr>
+            <td><input type="text" class="form-control form-control-sm" name="charge_concept_{{ loop.index0 }}" value="{{ charge.concept }}"></td>
+            <td>
+              <select class="form-select form-select-sm" name="charge_type_{{ loop.index0 }}">
+                <option value="charge" {% if charge.charge_type != 'tax' %}selected{% endif %}>{{ _('Cargo') }}</option>
+                <option value="tax" {% if charge.charge_type == 'tax' %}selected{% endif %}>{{ _('Impuesto') }}</option>
+              </select>
+            </td>
+            <td><input type="number" class="form-control form-control-sm" name="charge_amount_{{ loop.index0 }}" step="0.0001" min="0" value="{{ charge.amount }}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="charge_account_id_{{ loop.index0 }}" value="{{ charge.account_id }}"></td>
+            <td><button type="button" class="btn btn-sm btn-outline-danger remove-charge-row"><i class="bi bi-trash"></i></button></td>
+          </tr>
+          {% else %}
+          <tr>
+            <td><input type="text" class="form-control form-control-sm" name="charge_concept_0" placeholder="{{ _('Flete, Seguro, Aduana...') }}"></td>
+            <td>
+              <select class="form-select form-select-sm" name="charge_type_0">
+                <option value="charge">{{ _('Cargo') }}</option>
+                <option value="tax">{{ _('Impuesto') }}</option>
+              </select>
+            </td>
+            <td><input type="number" class="form-control form-control-sm" name="charge_amount_0" step="0.0001" min="0"></td>
+            <td><input type="text" class="form-control form-control-sm" name="charge_account_id_0" placeholder="{{ _('Cuenta') }}"></td>
+            <td><button type="button" class="btn btn-sm btn-outline-danger remove-charge-row"><i class="bi bi-trash"></i></button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-primary" id="add-charge-row">
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Agregar Cargo') }}
+    </button>
+  </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  let chargeIdx = {{ charges|length if charges else 1 }};
+  document.getElementById('add-charge-row').addEventListener('click', function() {
+    const tbody = document.getElementById('charges-body');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" class="form-control form-control-sm" name="charge_concept_${chargeIdx}" placeholder="{{ _('Flete, Seguro, Aduana...') }}"></td>
+      <td>
+        <select class="form-select form-select-sm" name="charge_type_${chargeIdx}">
+          <option value="charge">{{ _('Cargo') }}</option>
+          <option value="tax">{{ _('Impuesto') }}</option>
+        </select>
+      </td>
+      <td><input type="number" class="form-control form-control-sm" name="charge_amount_${chargeIdx}" step="0.0001" min="0"></td>
+      <td><input type="text" class="form-control form-control-sm" name="charge_account_id_${chargeIdx}" placeholder="{{ _('Cuenta') }}"></td>
+      <td><button type="button" class="btn btn-sm btn-outline-danger remove-charge-row"><i class="bi bi-trash"></i></button></td>
+    `;
+    tbody.appendChild(tr);
+    chargeIdx++;
+  });
+  document.getElementById('charges-body').addEventListener('click', function(e) {
+    if (e.target.closest('.remove-charge-row')) {
+      e.target.closest('tr').remove();
+    }
+  });
+});
+</script>
+
+{% endblock %}

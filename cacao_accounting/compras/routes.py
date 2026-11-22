@@ -216,6 +216,7 @@ from cacao_accounting.compras.services import (
     _create_purchase_invoice_from_request,
     _handle_purchase_invoice_edit_post,
     _create_import_landed_cost_from_request,
+    _update_import_landed_cost_from_request,
     _get_import_landed_cost_items,
     _get_import_landed_cost_charges,
     check_budget_control,
@@ -3551,6 +3552,84 @@ def compras_import_landed_cost_nuevo():
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+    )
+
+
+@compras.route("/import-landed-cost/<landed_cost_id>/edit", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_import_landed_cost_editar(landed_cost_id: str):
+    """Edita un costo de importación en borrador (#1752)."""
+    from cacao_accounting.compras.forms import FormularioImportLandedCost
+
+    registro = database.session.get(ImportLandedCost, landed_cost_id)
+    if not registro:
+        abort(404)
+    _require_purchase_document_access(registro, "editar")
+    exige_acceso_compania("purchases", registro.company, "editar")
+    if registro.docstatus != 0:
+        flash(_("Solo se puede editar un costo de importación en borrador."), "danger")
+        return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
+
+    formulario = FormularioImportLandedCost(obj=registro)
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.naming_series.choices = _series_choices("import_landed_cost", registro.company)
+    titulo = _("Editar Costo de Importación") + " - " + APPNAME
+    items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
+
+    if request.method == "POST":
+        response = _update_import_landed_cost_from_request(registro)
+        if response is not None:
+            return response
+
+    items = _get_import_landed_cost_items(landed_cost_id)
+    cargos = _get_import_landed_cost_charges(landed_cost_id)
+    transaction_config = {
+        "initialHeader": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+        },
+        "initialLines": [
+            {
+                "item_code": item.item_code,
+                "item_name": item.item_name,
+                "qty": str(item.qty or ""),
+                "uom": item.uom or "",
+                "rate": str(item.rate or ""),
+                "amount": str(item.amount or ""),
+            }
+            for item in items
+        ],
+        "columns": [
+            {"key": "item_code", "label": "Articulo", "type": "select", "required": True},
+            {"key": "item_name", "label": "Nombre", "type": "text", "readonly": True},
+            {"key": "qty", "label": "Cantidad", "type": "number", "required": True},
+            {"key": "uom", "label": "UOM", "type": "select"},
+            {"key": "rate", "label": "Tasa", "type": "number"},
+            {"key": "amount", "label": "Monto", "type": "number"},
+        ],
+        "enableDimensions": True,
+    }
+    cargos_payload = [
+        {
+            "concept": charge.concept,
+            "amount": str(charge.amount or ""),
+            "charge_type": charge.charge_type or "",
+            "account_id": charge.account_id or "",
+        }
+        for charge in cargos
+    ]
+    return render_template(
+        "compras/import_landed_cost_editar.html",
+        form=formulario,
+        titulo=titulo,
+        registro=registro,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        transaction_config=transaction_config,
+        charges=cargos_payload,
     )
 
 

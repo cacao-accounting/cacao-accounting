@@ -23,7 +23,7 @@
 {% set buttons %}
 {% if registro.docstatus == 0 %}
 <a class="btn btn-sm btn-outline-secondary"
-  href="{{ url_for('compras.compras_import_landed_cost_nuevo', landed_cost_id=registro.id) }}">
+  href="{{ url_for('compras.compras_import_landed_cost_editar', landed_cost_id=registro.id) }}">
   <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
 </a>
 {% endif %}
