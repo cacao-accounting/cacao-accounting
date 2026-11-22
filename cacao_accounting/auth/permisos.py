@@ -230,9 +230,12 @@ class Permisos:
         from cacao_accounting.runtime_mode import is_desktop_mode
 
         if self.administrador and is_desktop_mode():
-            return list(
-                database.session.execute(select(Entity.code).where(Entity.enabled.is_(True)).order_by(Entity.code)).scalars()
-            )
+            # Desktop opera con una sola compañía por diseño: la asignada al
+            # usuario. Enumerar las entidades habilitadas hacía que
+            # `get_active_company()` eligiera la primera por orden alfabético,
+            # que puede ser otra compañía presente en la base.
+            company = str(getattr(self.usuario_model, "company", "") or "")
+            return [company] if company else []
         if not self.usuario:
             return []
         return list(

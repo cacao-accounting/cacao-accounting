@@ -13,6 +13,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import func, select
 
+from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 from cacao_accounting.database import (
     DeliveryNote,
     DeliveryNoteItem,
@@ -161,10 +162,11 @@ def _reparar_estado_compartido(entorno_contable) -> None:
     """Restaura el estado compartido del worker que otras pruebas pueden alterar.
 
     Bajo ``pytest -n auto`` la base SQLite en memoria se comparte dentro del
-    worker. Otras pruebas deshabilitan el módulo de ventas o retiran el acceso a
-    la compañía, lo que haría que el alta responda 403 antes de validar el
-    artículo y el caso perdería su propósito (#2124). Cada ejecución repara el
-    estado que necesita en lugar de depender del orden de ejecución.
+    worker. Otras pruebas deshabilitan el módulo de ventas, retiran el acceso a
+    la compañía o consumen la serie de numeración, lo que haría que el alta
+    falle antes de validar el artículo y el caso perdería su propósito (#2124).
+    Cada ejecución repara el estado que necesita en lugar de depender del orden
+    de ejecución.
     """
     app = entorno_contable.app
     with app.app_context():
@@ -182,6 +184,11 @@ def _reparar_estado_compartido(entorno_contable) -> None:
         if acceso is None:
             database.session.add(UserCompanyAccess(user_id=admin_id, company_code="cacao"))
 
+        database.session.commit()
+
+        # Las series de numeración son autocontenidas: se crean si faltan sin
+        # duplicar las existentes ni alterar las que otra prueba configuró.
+        ensure_default_naming_series_for_company("cacao", ["sales_invoice", "sales_order", "sales_quotation"])
         database.session.commit()
 
 

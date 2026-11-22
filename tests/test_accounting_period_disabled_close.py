@@ -133,6 +133,11 @@ def test_asistente_excluye_periodos_deshabilitados(app, authenticated_client, pe
     """La lista de períodos disponibles no ofrece un período deshabilitado."""
     from flask import template_rendered
 
+    from cacao_accounting.runtime_mode import is_desktop_mode
+
+    if is_desktop_mode():
+        pytest.skip("El escenario usa una compañía adicional y Desktop opera una sola compañía.")
+
     periodo = periodos_cierre
     capturado: dict[str, object] = {}
 

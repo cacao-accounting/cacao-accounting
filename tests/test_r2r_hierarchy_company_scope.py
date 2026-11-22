@@ -120,6 +120,10 @@ def test_parent_selector_ignores_exclusion_id_from_previous_company(
     authenticated_client, hierarchy_company_scenario, path, child_key, parent_key
 ):
     """Changing a leaf company still loads parent choices for the destination company."""
+    from cacao_accounting.runtime_mode import is_desktop_mode
+
+    if is_desktop_mode():
+        pytest.skip("El escenario consulta una compañía ajena; Desktop opera una sola compañía.")
     _app, _codes, ids = hierarchy_company_scenario
 
     response = authenticated_client().get(f"{path}?entity=alpha&action=editar&exclude_id={ids[child_key]}")

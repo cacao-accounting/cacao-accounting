@@ -47,7 +47,7 @@ def transferencia(app, entorno_contable):
         cuenta_origen.group = False
         cuenta_destino = Accounts(
             entity="cacao",
-            code=f"1103{sufijo[:2]}",
+            code=f"1103{sufijo}",
             name="Banco destino",
             classification="asset",
             account_type="bank",
