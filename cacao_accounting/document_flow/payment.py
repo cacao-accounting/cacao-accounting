@@ -47,8 +47,40 @@ from cacao_accounting.i18n import LazyText, _, _l
 if TYPE_CHECKING:
     from cacao_accounting.contabilidad.arap_allocation import AllocationLine
 
+
 _MSG_MONTO_MAYOR_CERO = _l("El monto aplicado debe ser mayor que cero.")
 _MSG_TASA_PAGO_POSITIVA = _l("Se requiere una tasa positiva entre la moneda del documento y la del pago.")
+_MSG_TASA_PAGO_NO_DISPONIBLE = _l(
+    "No existe una tasa registrada para la moneda del documento y la del pago en la fecha de conciliación."
+)
+
+
+def _require_available_reconciliation_rate(
+    document_currency: str,
+    payment_currency: str,
+    declared_rate: Decimal,
+    allocation_date: date,
+) -> Decimal:
+    """Valida que exista una tasa registrada y devuelve la tasa efectiva.
+
+    AGENTS.md exige bloquear la conciliación cuando falta la tasa requerida
+    para la fecha y el par de monedas. Se exige que haya una tasa registrada
+    (directa o inversa) en o antes de la fecha; la tasa declarada, si es
+    positiva, se conserva como efectiva.
+    """
+    if not document_currency or not payment_currency or document_currency == payment_currency:
+        return Decimal("1")
+    if declared_rate <= 0:
+        raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
+    from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
+
+    try:
+        _lookup_exchange_rate(document_currency, payment_currency, allocation_date)
+    except Exception as exc:
+        raise _document_flow_error(_MSG_TASA_PAGO_NO_DISPONIBLE, 409) from exc
+    return declared_rate
+
+
 _MSG_PAGO_EXCEDE_SALDO = _l("El monto aplicado excede el saldo disponible del pago.")
 
 MAX_RECONCILIATION_LINES = 100
@@ -988,6 +1020,7 @@ def _discount_allocation_line(
     document: Any,
     values: _ReconciliationLineValues,
     available: Decimal,
+    allocation_date: date,
 ) -> Any:
     """Build a payment allocation line for discounts or exchange differences."""
     from cacao_accounting.contabilidad.arap_allocation import AllocationLine
@@ -995,12 +1028,12 @@ def _discount_allocation_line(
     payment_currency = str(getattr(payment, "currency", None) or "")
     document_currency = _document_transaction_currency(document) or payment_currency
     requested_rate = raw_line.get("payment_exchange_rate") or raw_line.get("exchange_rate")
-    if payment_currency == document_currency:
+    if document_currency == payment_currency:
         effective_rate = Decimal("1")
     else:
-        effective_rate = decimal_or_zero(requested_rate)
-        if effective_rate <= 0:
-            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
+        effective_rate = _require_available_reconciliation_rate(
+            document_currency, payment_currency, decimal_or_zero(requested_rate), allocation_date
+        )
     consumed = _cash_consumed(values.allocated, values.discount, values.gain_loss) * effective_rate
     if consumed > available + Decimal("0.01"):
         raise _document_flow_error(_MSG_PAGO_EXCEDE_SALDO, 409)
@@ -1048,6 +1081,7 @@ def _apply_standard_reconciliation_allocation(
         outstanding=outstanding,
         allocated=values.allocated,
         available=available,
+        allocation_date=allocation_ctx.allocation_date,
     )
     resolver = OpenItemResolver(
         [
@@ -1123,7 +1157,9 @@ def _process_reconciliation_line(
         outstanding=outstanding,
     )
     if values.discount or values.gain_loss:
-        allocation_line = _discount_allocation_line(raw_line, payment, document, values, payment_remaining[values.payment_id])
+        allocation_line = _discount_allocation_line(
+            raw_line, payment, document, values, payment_remaining[values.payment_id], allocation_date
+        )
         _persist_reconciliation_allocation(
             raw_line=raw_line,
             payment=payment,
@@ -1162,6 +1198,7 @@ def _plan_reconciliation_allocation(
     outstanding: Decimal,
     allocated: Decimal,
     available: Decimal,
+    allocation_date: date,
 ) -> AllocationLine:
     """Valida una línea con el motor AR/AP y devuelve importes en ambas monedas."""
     from cacao_accounting.contabilidad.arap_allocation import (
@@ -1186,9 +1223,9 @@ def _plan_reconciliation_allocation(
     if document_currency == payment_currency:
         effective_rate = Decimal("1")
     else:
-        if requested_rate is None:
-            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
-        effective_rate = decimal_or_zero(requested_rate)
+        effective_rate = _require_available_reconciliation_rate(
+            document_currency, payment_currency, decimal_or_zero(requested_rate), allocation_date
+        )
     resolver = OpenItemResolver(
         [
             ARAPOpenItem(
@@ -2001,10 +2038,10 @@ def _payment_target_exchange_rate(payment: PaymentEntry, invoice: Any, selected:
     if allocated_currency == document_currency:
         return Decimal("1")
     requested_rate = selected.get("payment_exchange_rate") or selected.get("exchange_rate")
-    effective_rate = decimal_or_zero(requested_rate)
-    if effective_rate <= 0:
-        raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
-    return effective_rate
+    allocation_date = getattr(payment, "posting_date", None) or date.today()
+    return _require_available_reconciliation_rate(
+        document_currency, allocated_currency, decimal_or_zero(requested_rate), allocation_date
+    )
 
 
 def _apply_payment_target_line(

@@ -24336,3 +24336,7 @@ msgstr "The sales document type is invalid."
 msgid "La conciliación no puede repetir el mismo artículo y bodega."
 msgstr "A reconciliation cannot repeat the same item and warehouse."
 
+
+#: cacao_accounting/document_flow/payment.py
+msgid "No existe una tasa registrada para la moneda del documento y la del pago en la fecha de conciliación."
+msgstr "No registered exchange rate exists for the document and payment currencies on the reconciliation date."
