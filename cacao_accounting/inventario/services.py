@@ -1055,6 +1055,116 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
     registro.base_currency = base_currency_value
 
 
+def _normalized_line_number(value: Any) -> str:
+    """Normaliza un decimal de línea para comparar sin depender de la escala."""
+    return format(Decimal(str(value if value is not None else 0)).normalize(), "f")
+
+
+def _persisted_stock_entry_line_signatures(entry: StockEntry) -> list[tuple]:
+    """Firma de las líneas persistidas usada para detectar cambios reales."""
+    lines = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)).scalars().all()
+    if entry.purpose == "stock_reconciliation":
+        return sorted(
+            (
+                line.item_code,
+                line.uom or "",
+                line.source_warehouse or "",
+                _normalized_line_number(line.counted_qty),
+                _normalized_line_number(line.target_valuation_rate),
+            )
+            for line in lines
+        )
+    return sorted(
+        (
+            line.item_code,
+            _normalized_line_number(line.qty),
+            line.uom or "",
+            _normalized_line_number(line.basic_rate),
+            _normalized_line_number(line.amount),
+            line.batch_id or "",
+            line.serial_no or "",
+            line.source_warehouse or "",
+            line.target_warehouse or "",
+            _normalized_line_number(line.qty_in_base_uom if line.qty_in_base_uom is not None else line.qty),
+        )
+        for line in lines
+    )
+
+
+def _submitted_reconciliation_signatures(entry: StockEntry) -> list[tuple]:
+    """Firma de las líneas de conciliación enviadas por el formulario."""
+    signatures = []
+    for row in _submitted_stock_reconciliation_lines():
+        if not row["item_code"].strip():
+            continue
+        uom = row["uom"] or _item_default_uom(row["item_code"]) or ""
+        warehouse = row["warehouse"] or entry.to_warehouse or entry.from_warehouse or ""
+        signatures.append(
+            (
+                row["item_code"],
+                uom,
+                warehouse,
+                _normalized_line_number(row["counted_qty"] or 0),
+                _normalized_line_number(row["target_valuation_rate"] or 0),
+            )
+        )
+    return sorted(signatures)
+
+
+def _converted_line_base_qty(item_code: str, qty: Decimal, uom: str, default_uom: str | None) -> Decimal | None:
+    """Convierte la cantidad a la UOM base o devuelve ``None`` si no es comparable."""
+    if not uom or not default_uom or uom == default_uom:
+        return qty
+    from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
+
+    try:
+        return convert_item_qty(item_code, qty, uom, default_uom)
+    except InventoryServiceError:
+        return None
+
+
+def _submitted_material_line_signature(entry: StockEntry, index: int, row: dict[str, str]) -> tuple | None:
+    """Firma de una línea material enviada o ``None`` si no puede compararse."""
+    item_code = row["item_code"]
+    qty = coerce_decimal(row["qty"] or "1", f"qty_{index}")
+    rate = coerce_decimal(row["rate"] or "0", f"rate_{index}")
+    amount = qty * rate
+    if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"}:
+        amount = coerce_decimal(row["amount"] or "0", f"amount_{index}")
+    default_uom = _item_default_uom(item_code)
+    uom = row["uom"] or default_uom or ""
+    qty_in_base_uom = _converted_line_base_qty(item_code, qty, uom, default_uom)
+    if qty_in_base_uom is None:
+        return None
+    return (
+        item_code,
+        _normalized_line_number(qty),
+        uom,
+        _normalized_line_number(rate),
+        _normalized_line_number(amount),
+        row["batch_id"] or "",
+        row["serial_no"] or "",
+        entry.from_warehouse or "",
+        entry.to_warehouse or "",
+        _normalized_line_number(qty_in_base_uom),
+    )
+
+
+def _submitted_stock_entry_line_signatures(entry: StockEntry) -> list[tuple] | None:
+    """Firma de las líneas enviadas; ``None`` si no puede compararse con seguridad."""
+    if entry.purpose == "stock_reconciliation":
+        return _submitted_reconciliation_signatures(entry)
+    signatures = []
+    for index, row in enumerate(_submitted_stock_entry_lines()):
+        if not row["item_code"].strip():
+            continue
+        signature = _submitted_material_line_signature(entry, index, row)
+        if signature is None:
+            return None
+        signatures.append(signature)
+    return sorted(signatures)
+
+
 def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
     """Replace draft lines only when doing so cannot erase document-flow evidence."""
     relation_exists = database.session.execute(
@@ -1063,7 +1173,11 @@ def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
         .limit(1)
     ).first()
     if relation_exists:
-        raise ValueError(_("Los vínculos documentales son inmutables; registre una relación nueva."))
+        # #1865: una edición de solo cabecera es válida si conserva exactamente
+        # las líneas y cantidades vinculadas. Solo se rechaza un cambio real.
+        if _submitted_stock_entry_line_signatures(registro) != _persisted_stock_entry_line_signatures(registro):
+            raise ValueError(_("Los vínculos documentales son inmutables; registre una relación nueva."))
+        return
 
     for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars():
         database.session.delete(item)

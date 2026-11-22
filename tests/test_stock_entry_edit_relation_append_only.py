@@ -1,7 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""A linked stock entry cannot rewrite or remove its document-flow evidence."""
+"""#1865: editar la cabecera no puede borrar evidencia de un StockEntry vinculado.
+
+El guard rechazaba cualquier edición cuando existía una ``DocumentRelation``,
+incluidas las que solo cambian cabecera. La regresión exige que una edición de
+cabecera con líneas y cantidades idénticas se guarde, y que cualquier cambio de
+línea, cantidad o almacén se rechace sin mutar la evidencia.
+"""
 
 from datetime import date
 from decimal import Decimal
@@ -14,13 +20,9 @@ from cacao_accounting.database import DocumentRelation, StockEntry, StockEntryIt
 from cacao_accounting.inventario import services as inventory_services
 
 
-@pytest.mark.parametrize("relation_status", ["active", "closed"])
-@pytest.mark.parametrize("edit", ["change_quantity", "remove_line"])
-def test_linked_stock_entry_rejects_edit_without_mutating_evidence(app, entorno_contable, monkeypatch, relation_status, edit):
-    """Editing a linked movement rolls back instead of deleting relation history."""
+def _seed_linked_entry(app, relation_status: str = "active") -> dict[str, str]:
+    """Crea un movimiento con una línea y una relación documental activa."""
     suffix = uuid4().hex[:10]
-    item_code = "ART01"
-    uom = "UND"
     with app.app_context():
         entry = StockEntry(
             company="cacao",
@@ -34,11 +36,11 @@ def test_linked_stock_entry_rejects_edit_without_mutating_evidence(app, entorno_
         database.session.flush()
         line = StockEntryItem(
             stock_entry_id=entry.id,
-            item_code=item_code,
+            item_code="ART01",
             source_warehouse=None,
             target_warehouse=None,
             qty=Decimal("2"),
-            uom=uom,
+            uom="UND",
             qty_in_base_uom=Decimal("2"),
             basic_rate=Decimal("10"),
             amount=Decimal("20"),
@@ -55,7 +57,7 @@ def test_linked_stock_entry_rejects_edit_without_mutating_evidence(app, entorno_
             company="cacao",
             qty=Decimal("2"),
             qty_in_base_uom=Decimal("2"),
-            uom=uom,
+            uom="UND",
             rate=Decimal("10"),
             amount=Decimal("20"),
             relation_type="purchase_receipt_to_stock_entry",
@@ -63,51 +65,90 @@ def test_linked_stock_entry_rejects_edit_without_mutating_evidence(app, entorno_
         )
         database.session.add(relation)
         database.session.commit()
-        entry_id, line_id, relation_id = entry.id, line.id, relation.id
+        return {"entry": entry.id, "line": line.id, "relation": relation.id}
 
+
+def _post_edit(app, monkeypatch, entry_id: str, form_data: dict[str, str]):
+    """Ejecuta el handler de edición con las dependencias externas neutralizadas."""
     monkeypatch.setattr(inventory_services, "_validate_stock_entry_company", lambda _value, _action: "cacao")
     monkeypatch.setattr(inventory_services, "_validate_stock_entry_dimensions", lambda *_args: None)
-    line_fields = (
-        {
-            "item_code_0": item_code,
-            "qty_0": "3",
-            "uom_0": uom,
-            "rate_0": "10",
-            "amount_0": "30",
-        }
-        if edit == "change_quantity"
-        else {}
-    )
-    form_data = {
+    with app.test_request_context("/inventory/stock-entry/test/edit", method="POST", data=form_data):
+        response = inventory_services._handle_stock_entry_edit_post(database.session.get(StockEntry, entry_id))
+        return response, list(get_flashed_messages())
+
+
+def _header_form(**extra: str) -> dict[str, str]:
+    """Formulario con las líneas persistidas sin cambios."""
+    form = {
         "purpose": "material_receipt",
         "company": "cacao",
         "posting_date": "2026-05-16",
         "transaction_currency": "NIO",
         "remarks": "Edited header",
-        **line_fields,
+        "item_code_0": "ART01",
+        "qty_0": "2",
+        "uom_0": "UND",
+        "rate_0": "10",
+        "amount_0": "20",
     }
+    form.update(extra)
+    return form
 
-    with app.test_request_context("/inventory/stock-entry/test/edit", method="POST", data=form_data):
-        response = inventory_services._handle_stock_entry_edit_post(database.session.get(StockEntry, entry_id))
-        assert response is None
-        assert any("inmutables" in message for message in get_flashed_messages())
 
+@pytest.mark.parametrize("relation_status", ["active", "closed"])
+@pytest.mark.parametrize("edit", ["change_quantity", "remove_line", "change_warehouse"])
+def test_linked_stock_entry_rejects_line_edit_without_mutating_evidence(
+    app, entorno_contable, monkeypatch, relation_status, edit
+):
+    """Cambiar líneas, cantidades o almacenes revierte todo sin perder evidencia."""
+    ids = _seed_linked_entry(app, relation_status)
+    form_data = _header_form()
+    if edit == "change_quantity":
+        form_data.update({"qty_0": "3", "amount_0": "30"})
+    elif edit == "remove_line":
+        form_data.pop("item_code_0")
+    else:
+        form_data["from_warehouse"] = "BOD01"
+
+    response, messages = _post_edit(app, monkeypatch, ids["entry"], form_data)
+
+    assert response is None
+    assert any("inmutables" in message for message in messages)
     with app.app_context():
-        saved_entry = database.session.get(StockEntry, entry_id)
-        saved_line = database.session.get(StockEntryItem, line_id)
-        saved_relation = database.session.get(DocumentRelation, relation_id)
+        saved_entry = database.session.get(StockEntry, ids["entry"])
+        saved_line = database.session.get(StockEntryItem, ids["line"])
+        saved_relation = database.session.get(DocumentRelation, ids["relation"])
         assert saved_entry is not None and saved_entry.remarks == "Original header"
         assert saved_entry.posting_date == date(2026, 5, 15)
+        assert saved_entry.from_warehouse != "BOD01"
         assert saved_line is not None
         assert (saved_line.item_code, saved_line.qty, saved_line.uom, saved_line.amount) == (
-            item_code,
+            "ART01",
             Decimal("2.000000000"),
-            uom,
+            "UND",
             Decimal("20.0000"),
         )
         assert saved_relation is not None
         assert (saved_relation.status, saved_relation.qty, saved_relation.target_item_id) == (
             relation_status,
             Decimal("2.000000000"),
-            line_id,
+            ids["line"],
         )
+
+
+def test_linked_stock_entry_allows_header_only_edit(app, entorno_contable, monkeypatch):
+    """Cambiar solo campos de cabecera conserva la relación y no borra líneas."""
+    ids = _seed_linked_entry(app, "active")
+
+    response, messages = _post_edit(app, monkeypatch, ids["entry"], _header_form())
+
+    assert response is not None
+    assert not any("inmutables" in message for message in messages)
+    with app.app_context():
+        saved_entry = database.session.get(StockEntry, ids["entry"])
+        saved_line = database.session.get(StockEntryItem, ids["line"])
+        saved_relation = database.session.get(DocumentRelation, ids["relation"])
+        assert saved_entry is not None
+        assert (saved_entry.remarks, saved_entry.posting_date) == ("Edited header", date(2026, 5, 16))
+        assert saved_line is not None and saved_line.qty == Decimal("2.000000000")
+        assert saved_relation is not None and saved_relation.qty == Decimal("2.000000000")
