@@ -517,6 +517,12 @@ class ImportService:
                 adapter = self._get_adapter(batch.record_type)
                 table = reader.read(batch.source_path)
                 self._canonicalize_table_headers(table, adapter)
+                # El archivo puede cambiar entre la validación de `execute()` y
+                # esta segunda lectura del worker. Nunca se anuncia éxito para
+                # cero datos (#1200).
+                if not table.rows:
+                    self._handle_execution_error(batch_id, ValueError(_("El archivo no contiene filas de datos.")))
+                    return
                 structural_errors = self._collect_structural_errors(batch_id, table, adapter)
                 if structural_errors:
                     ImportBatchError.query.filter_by(batch_id=batch_id).delete()

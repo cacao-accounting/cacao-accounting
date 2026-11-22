@@ -118,3 +118,80 @@ def test_execution_defensively_rejects_an_empty_legacy_batch(empty_import_scenar
     errors = _errors(app, ids["execute"])
     assert len(errors) == 1
     assert "no contiene filas" in errors[0].message.lower()
+
+
+def test_worker_rejects_file_that_becomes_empty_after_execute(tmp_path):
+    """#1200: si el archivo queda vacío entre execute() y la lectura del worker.
+
+    `execute()` lee y valida; el worker vuelve a leer. Si en ese intervalo el
+    archivo pasa a tener solo encabezados, el worker no debe finalizar en
+    completado (estado 5) con cero datos.
+    """
+    app = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    suffix = uuid4().hex[:6]
+    source = tmp_path / "raced.csv"
+    rows = HEADERS + "IMP-1,2026-05-15,110101,100,0\nIMP-1,2026-05-15,410101,0,100\n"
+    source.write_text(rows, encoding="utf-8")
+
+    with app.app_context():
+        database.create_all()
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Entity(
+                    code="alpha",
+                    name="Alfa",
+                    company_name=f"Compañía Alfa {suffix}",
+                    tax_id=f"TAX-{suffix}",
+                    currency="NIO",
+                    enabled=True,
+                    status="default",
+                ),
+            ]
+        )
+        database.session.flush()
+        batch = ImportBatch(
+            company_id="alpha",
+            record_type="journal_entry",
+            source_format="csv",
+            source_filename="raced.csv",
+            source_path=str(source),
+            import_status=3,
+        )
+        database.session.add(batch)
+        database.session.commit()
+        batch_id = batch.id
+
+        service = ImportService()
+        original_read = service._get_reader("csv").read
+        calls = {"count": 0}
+
+        def racing_read(path):  # noqa: ANN001 - firma del lector
+            calls["count"] += 1
+            # Primera lectura (execute): archivo con filas. Segunda (worker):
+            # el archivo ya fue reemplazado por uno con solo encabezados.
+            if calls["count"] == 2:
+                source.write_text(HEADERS, encoding="utf-8")
+            return original_read(path)
+
+        service._get_reader = lambda _fmt: type("R", (), {"read": staticmethod(racing_read)})()  # type: ignore[assignment]
+        assert service.execute(batch_id) is True
+
+        database.session.expire_all()
+        final = database.session.get(ImportBatch, batch_id)
+        errors = list(database.session.execute(database.select(ImportBatchError).filter_by(batch_id=batch_id)).scalars().all())
+        database.session.remove()
+
+    assert calls["count"] >= 2
+    assert final.import_status == 7
+    assert final.success_rows == 0
+    assert any("no contiene filas" in error.message.lower() for error in errors)
