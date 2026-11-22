@@ -702,6 +702,10 @@
               onSelect: function(opt) {
                 header.external_counter_id = opt.value;
                 header.external_number = opt.next_suggested_formatted || "";
+              },
+              onClear: function() {
+                header.external_counter_id = "";
+                header.external_number = "";
               }
             })'>
             <input type="hidden" x-model="selectedValue">
@@ -757,7 +761,8 @@
                   requiredFilters: ["party_type"],
                   initialValue: "{{ initial_payment.party_id if initial_payment else "" }}",
                   preloadOnFocus: true,
-                  onSelect: function(opt) { header.party_id = opt.value; header.party_name = opt.display_name; }
+                  onSelect: function(opt) { header.party_id = opt.value; header.party_name = opt.display_name; },
+                  onClear: function() { header.party_id = ""; header.party_name = ""; }
                 })'>
                 <input type="hidden" x-model="selectedValue">
                 <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar tercero...') }}">

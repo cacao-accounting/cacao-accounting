@@ -651,6 +651,32 @@
           void this.refreshCatalogPrice(line);
         },
 
+        onItemClear(line) {
+          this._invalidateCatalogPriceRequest(line);
+          line.item_code = '';
+          line.item_name = '';
+          line.uom = '';
+          line.allowed_uoms = [];
+          line.uom_factors = {};
+          line.batch_id = '';
+          line.batch_no = '';
+          line.serial_no = '';
+          line.has_batch = false;
+          line.has_serial_no = false;
+          line.has_expiry_date = false;
+          line.weight = '';
+          line.weight_uom = '';
+          line.volume = '';
+          line.volume_uom = '';
+          line.source_type = '';
+          line.source_id = '';
+          line.source_document_no = '';
+          line.source_item_id = '';
+          line.price_list_name = '';
+          line.rate = 0;
+          line.amount = 0;
+        },
+
         onUomChange(line, uom) {
           const oldFactor = Number(line.uom_factors?.[line.uom]);
           const newFactor = Number(line.uom_factors?.[uom]);
