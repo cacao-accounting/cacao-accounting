@@ -135,27 +135,39 @@ def _sql_code(statement: str, dialect_name: str) -> str:
 
 
 def _sql_targets(code: str) -> list[str]:
-    """Return target table names covered by supported SQL write forms."""
+    """Return target table names covered by supported SQL write forms.
+
+    Las palabras DML deben ser instrucciones, no referencias cualificadas a
+    columnas llamadas ``update`` o ``delete`` (``roles_access.delete``): sin la
+    comprobación previa, un ``SELECT`` que proyecta esas columnas se leía como
+    un ``DELETE ... FROM roles_access`` y quedaba bloqueado.
+    """
     qualified_table = r'(?:["`]?\w+["`]?\.)?["`]?([\w]+)'
+    dml = r"(?<![\w.\"`])(?:%s)"
     patterns = (
-        r"\b(?:INSERT(?:(?:\s+OR\s+\w+)|(?:\s+(?:LOW_PRIORITY|DELAYED|HIGH_PRIORITY|IGNORE)))*"
-        r"\s+(?:INTO\s+)?|REPLACE(?:\s+(?:LOW_PRIORITY|DELAYED|HIGH_PRIORITY))*\s+(?:INTO\s+)?)" + qualified_table,
-        r"\bUPDATE(?:(?:\s+OR\s+\w+)|(?:\s+(?:LOW_PRIORITY|IGNORE)))*\s+(?:ONLY\s+)?" + qualified_table,
-        r"\bDELETE(?:\s+(?:LOW_PRIORITY|QUICK|IGNORE))*\s+FROM\s+(?:ONLY\s+)?" + qualified_table,
-        r"\bDELETE(?:\s+(?:LOW_PRIORITY|QUICK|IGNORE))*\s+[\w`\".*]+(?:\s*,\s*[\w`\".*]+)*"
+        dml
+        % (
+            r"INSERT(?:(?:\s+OR\s+\w+)|(?:\s+(?:LOW_PRIORITY|DELAYED|HIGH_PRIORITY|IGNORE)))*"
+            r"\s+(?:INTO\s+)?"
+            r"|REPLACE(?:\s+(?:LOW_PRIORITY|DELAYED|HIGH_PRIORITY))*\s+(?:INTO\s+)?"
+        )
+        + qualified_table,
+        dml % r"UPDATE(?:(?:\s+OR\s+\w+)|(?:\s+(?:LOW_PRIORITY|IGNORE)))*\s+(?:ONLY\s+)?" + qualified_table,
+        dml % r"DELETE(?:\s+(?:LOW_PRIORITY|QUICK|IGNORE))*\s+FROM\s+(?:ONLY\s+)?" + qualified_table,
+        dml % r"DELETE(?:\s+(?:LOW_PRIORITY|QUICK|IGNORE))*\s+[\w`\".*]+(?:\s*,\s*[\w`\".*]+)*"
         + r"\s+FROM\s+(?:ONLY\s+)?"
         + qualified_table,
-        r"\bTRUNCATE(?:\s+TABLE)?\s+(?:ONLY\s+)?" + qualified_table,
-        r"\bMERGE\s+INTO\s+(?:ONLY\s+)?" + qualified_table,
-        r"\bCOPY(?:\s+BINARY)?\s+" + qualified_table + r"\b[^;]*?\bFROM\b",
-        r"\bLOAD\s+(?:DATA|XML)\b[^;]*?\bINTO\s+TABLE\s+" + qualified_table,
+        dml % r"TRUNCATE(?:\s+TABLE)?\s+(?:ONLY\s+)?" + qualified_table,
+        dml % r"MERGE\s+INTO\s+(?:ONLY\s+)?" + qualified_table,
+        dml % r"COPY(?:\s+BINARY)?\s+" + qualified_table + r"\b[^;]*?\bFROM\b",
+        dml % r"LOAD\s+(?:DATA|XML)\b[^;]*?\bINTO\s+TABLE\s+" + qualified_table,
     )
     return [table for pattern in patterns for table in re.findall(pattern, code, flags=re.IGNORECASE)]
 
 
 def _mysql_multi_delete_references_protected_table(code: str, protected: set[str], dialect_name: str) -> bool:
     """Detect protected tables anywhere in a MySQL multi-table DELETE source."""
-    match = re.search(r"\bDELETE(?:\s+(?:LOW_PRIORITY|QUICK|IGNORE))*\s+(?!FROM\b)[\s\S]+?\s+FROM\s+", code, re.I)
+    match = re.search(r"(?<![\w.\"`])DELETE(?:\s+(?:LOW_PRIORITY|QUICK|IGNORE))*\s+(?!FROM\b)[\s\S]+?\s+FROM\s+", code, re.I)
     if match is None:
         return False
     sources = _text_before_top_level_clause(code, match.end(), r"WHERE|ORDER\s+BY|LIMIT", dialect_name)
