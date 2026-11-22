@@ -146,3 +146,20 @@ def test_candidate_resolution_rejects_invalid_explicit_tolerances(days_tolerance
     """Explicit service arguments cannot bypass the configured-rule validation."""
     with pytest.raises(BankReconciliationError, match="tolerancias inválidas"):
         _candidate_tolerances(SimpleNamespace(), "alpha", days_tolerance, amount_tolerance)
+
+
+@pytest.mark.parametrize(
+    ("days_tolerance", "amount_tolerance"),
+    [(20000, Decimal("0")), (7, Decimal("1e20")), (7, Decimal("99999999999999999"))],
+)
+def test_candidate_resolution_rejects_unrepresentable_tolerances(days_tolerance, amount_tolerance):
+    """#1688: valores fuera del rango de Integer/Numeric(20,4) se rechazan."""
+    with pytest.raises(BankReconciliationError, match="tolerancias inválidas"):
+        _candidate_tolerances(SimpleNamespace(), "alpha", days_tolerance, amount_tolerance)
+
+
+def test_candidate_resolution_accepts_representable_tolerances():
+    """Control positivo: valores dentro del rango son aceptados."""
+    days, amount = _candidate_tolerances(SimpleNamespace(), "alpha", 30, Decimal("10.5000"))
+    assert days == 30
+    assert amount == Decimal("10.5000")

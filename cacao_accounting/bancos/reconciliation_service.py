@@ -559,6 +559,11 @@ def _resolve_rule_tolerances(transaction: BankTransaction, company: str) -> tupl
     return days, amount_tolerance
 
 
+# Límites de representación (#1688), alineados con Integer y Numeric(20, 4).
+_MAX_DAYS_TOLERANCE = 3660
+_MAX_AMOUNT_TOLERANCE = Decimal("9999999999999999.9999")
+
+
 def _candidate_tolerances(
     transaction: BankTransaction, company: str, days_tolerance: int | None, amount_tolerance: Decimal | None
 ) -> tuple[int, Decimal]:
@@ -571,12 +576,18 @@ def _candidate_tolerances(
         days = int(days_tolerance)
         if days < 0:
             raise ValueError("negative days tolerance")
+        # #1688: acotar a rangos representables para no desbordar Integer ni
+        # `timedelta`/`date` al construir la ventana de candidatos.
+        if days > _MAX_DAYS_TOLERANCE:
+            raise ValueError("days tolerance out of range")
         amount = coerce_decimal(
             amount_tolerance,
             "tolerancia de monto",
             non_negative=True,
             max_fractional_digits=4,
         )
+        if amount > _MAX_AMOUNT_TOLERANCE:
+            raise ValueError("amount tolerance out of range")
     except (TypeError, ValueError) as exc:
         raise BankReconciliationError(_("La regla de matching contiene tolerancias inválidas.")) from exc
     return days, amount

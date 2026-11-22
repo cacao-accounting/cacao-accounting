@@ -721,17 +721,28 @@ def bancos_reglas_matching():
     )
 
 
+# Límites de representación (#1688): la columna de días es Integer y la
+# tolerancia de monto es Numeric(20, 4). Se acotan para que un valor aceptado
+# nunca desborde el almacenamiento ni `timedelta`/`date` al calcular la ventana.
+MAX_DAYS_TOLERANCE = 3660
+MAX_AMOUNT_TOLERANCE = Decimal("9999999999999999.9999")
+
+
 def _matching_tolerances_from_form(form) -> tuple[int, Decimal]:
-    """Parse finite, non-negative matching tolerances at the HTTP boundary."""
+    """Parse finite, non-negative, representable matching tolerances at the boundary."""
     days = int(form.get("days_tolerance") or 7)
     if days < 0:
         raise ValueError("negative days tolerance")
+    if days > MAX_DAYS_TOLERANCE:
+        raise ValueError("days tolerance out of range")
     amount = coerce_decimal(
         form.get("amount_tolerance") or "0",
         "tolerancia de monto",
         non_negative=True,
         max_fractional_digits=4,
     )
+    if amount > MAX_AMOUNT_TOLERANCE:
+        raise ValueError("amount tolerance out of range")
     return days, amount
 
 
