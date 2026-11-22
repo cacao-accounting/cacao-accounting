@@ -253,3 +253,105 @@ def test_documento_con_saldo_suficiente_acepta_dos_filas(app, entorno_contable):
         )
 
     assert errors == []
+
+
+def _escenario_dual(app, *, document_total: str, payment_small: str, payment_large: str) -> dict[str, str]:
+    """Factura con dos pagos: uno insuficiente y otro suficiente."""
+    suffix = uuid4().hex[:8]
+    with app.app_context():
+        cliente = Party(code=f"DUAL-{suffix}", name="Cliente dual", is_customer=True, is_active=True)
+        database.session.add(cliente)
+        database.session.flush()
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            document_no=f"DUAL-{suffix}",
+            document_type="sales_invoice",
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            grand_total=Decimal(document_total),
+            outstanding_amount=Decimal(document_total),
+        )
+        pago_chico = PaymentEntry(
+            company="cacao",
+            payment_type="receive",
+            posting_date=date(2026, 5, 15),
+            paid_amount=Decimal(payment_small),
+            received_amount=Decimal(payment_small),
+            currency="NIO",
+            party_type="customer",
+            party_id=cliente.id,
+            docstatus=1,
+            document_no=f"SMALL-{suffix}",
+        )
+        pago_grande = PaymentEntry(
+            company="cacao",
+            payment_type="receive",
+            posting_date=date(2026, 5, 15),
+            paid_amount=Decimal(payment_large),
+            received_amount=Decimal(payment_large),
+            currency="NIO",
+            party_type="customer",
+            party_id=cliente.id,
+            docstatus=1,
+            document_no=f"LARGE-{suffix}",
+        )
+        database.session.add_all([factura, pago_chico, pago_grande])
+        database.session.commit()
+        return {
+            "reference": factura.id,
+            "party": cliente.id,
+            "small": pago_chico.id,
+            "large": pago_grande.id,
+        }
+
+
+def test_fila_rechazada_no_consume_saldo_del_documento(app, entorno_contable):
+    """#1205: una fila rechazada por el pago no descuenta el saldo documental.
+
+    Factura 100; fila 1 asigna 80 con pago disponible 20 → falla por pago.
+    Fila 2 asigna 50 con otro pago suficiente → debe ser válida (la fila 1 no
+    se aplicó y no debe consumir 80 del documento).
+    """
+    ids = _escenario_dual(app, document_total="100", payment_small="20", payment_large="60")
+    errors: list[dict] = []
+    payment_remaining: dict[str, Decimal] = {}
+    document_remaining: dict[str, Decimal] = {}
+    with app.app_context():
+        _validate_payment_reconciliation_row(
+            {
+                "payment_id": ids["small"],
+                "reference_type": "sales_invoice",
+                "reference_id": ids["reference"],
+                "allocated_amount": "80",
+            },
+            1,
+            "cacao",
+            errors,
+            party_type="customer",
+            party_id=ids["party"],
+            payment_remaining=payment_remaining,
+            document_remaining=document_remaining,
+        )
+        _validate_payment_reconciliation_row(
+            {
+                "payment_id": ids["large"],
+                "reference_type": "sales_invoice",
+                "reference_id": ids["reference"],
+                "allocated_amount": "50",
+            },
+            2,
+            "cacao",
+            errors,
+            party_type="customer",
+            party_id=ids["party"],
+            payment_remaining=payment_remaining,
+            document_remaining=document_remaining,
+        )
+
+    assert any(error.get("row") == 1 and "saldo disponible del pago" in error["message"] for error in errors)
+    assert all(error.get("row") != 2 for error in errors)

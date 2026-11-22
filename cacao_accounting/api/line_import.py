@@ -1146,6 +1146,17 @@ def _payment_reconciliation_rate(
     return Decimal(str(raw_rate))
 
 
+def _reconciliation_available(
+    cache: dict[str, Decimal] | None, key: str, current: Decimal
+) -> tuple[Decimal, dict[str, Decimal] | None]:
+    """Devuelve el saldo disponible por clave, inicializando el acumulador."""
+    if cache is None:
+        return current, None
+    if key not in cache:
+        cache[key] = current
+    return cache[key], cache
+
+
 def _validate_payment_reconciliation_amounts(
     row: dict[str, Any],
     payment: Any,
@@ -1173,37 +1184,35 @@ def _validate_payment_reconciliation_amounts(
             _("El descuento + diferencia de cambio no puede ser igual o mayor al monto aplicado."),
         )
         return
-    # #1205: acumula lo asignado por filas previas al mismo documento del lote.
+
+    # #1205: acumula el saldo por documento y por pago a medida que avanzan las
+    # filas del lote; solo una fila aceptada consume.
     document_key = str(getattr(reference, "id", ""))
-    document_outstanding = compute_outstanding_amount(reference)
-    if document_remaining is None:
-        document_available = document_outstanding
-    else:
-        if document_key not in document_remaining:
-            document_remaining[document_key] = document_outstanding
-        document_available = document_remaining[document_key]
-    if allocated > document_available + Decimal("0.01"):
+    document_available, document_remaining = _reconciliation_available(
+        document_remaining, document_key, compute_outstanding_amount(reference)
+    )
+    document_ok = allocated <= document_available + Decimal("0.01")
+    if not document_ok:
         _append_payment_reconciliation_error(
             errors, row_no, "allocated_amount", _("El monto aplicado excede el saldo pendiente del documento.")
         )
-    elif document_remaining is not None:
-        document_remaining[document_key] = document_available - allocated
+
     consumed = max(allocated - discount - gain_loss, Decimal("0")) * rate
-    # #1205: acumula lo reservado por filas previas del mismo pago.
     payment_key = str(getattr(payment, "id", ""))
-    if payment_remaining is None:
-        available = compute_payment_unallocated_amount(payment)
-    else:
-        if payment_key not in payment_remaining:
-            payment_remaining[payment_key] = compute_payment_unallocated_amount(payment)
-        available = payment_remaining[payment_key]
-    if consumed > available + Decimal("0.01"):
+    payment_available, payment_remaining = _reconciliation_available(
+        payment_remaining, payment_key, compute_payment_unallocated_amount(payment)
+    )
+    payment_ok = consumed <= payment_available + Decimal("0.01")
+    if not payment_ok:
         _append_payment_reconciliation_error(
             errors, row_no, "allocated_amount", _("El monto aplicado excede el saldo disponible del pago.")
         )
-        return
-    if payment_remaining is not None:
-        payment_remaining[payment_key] = available - consumed
+
+    if document_ok and payment_ok:
+        if document_remaining is not None:
+            document_remaining[document_key] = document_available - allocated
+        if payment_remaining is not None:
+            payment_remaining[payment_key] = payment_available - consumed
 
 
 def _validate_payment_reconciliation_row(
