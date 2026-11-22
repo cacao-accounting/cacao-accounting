@@ -3,6 +3,8 @@
 
 """Módulo de Portal para Clientes y Proveedores (Cloud Mode únicamente)."""
 
+from typing import Any
+
 from flask import Blueprint, abort, render_template
 from flask_login import current_user, login_required
 from cacao_accounting.i18n import _
@@ -89,6 +91,18 @@ def _require_active_party_link() -> None:
 # ─── PORTAL DE CLIENTES ───────────────────────────────────────────────────────
 
 
+def _portal_page(query, ordering: Any) -> tuple[list[Any], int]:
+    """Devuelve la primera página del listado y el total de resultados (#1564).
+
+    El portal limita cada listado a ``PORTAL_PAGE_SIZE``; la plantilla debe
+    distinguir el total real de los registros mostrados para no presentar la
+    página como el conjunto completo.
+    """
+    total = database.session.execute(database.select(database.func.count()).select_from(query.subquery())).scalar_one()
+    rows = database.session.execute(query.order_by(ordering).limit(PORTAL_PAGE_SIZE)).scalars().all()
+    return list(rows), int(total)
+
+
 @portal.route("/customer")
 @login_required
 def customer_dashboard():
@@ -110,22 +124,10 @@ def customer_dashboard():
         q_quotations = q_quotations.filter_by(customer_id=pid)
         q_deliveries = q_deliveries.filter_by(customer_id=pid)
 
-    invoices = (
-        database.session.execute(q_invoices.order_by(SalesInvoice.posting_date.desc()).limit(PORTAL_PAGE_SIZE)).scalars().all()
-    )
-    orders = (
-        database.session.execute(q_orders.order_by(SalesOrder.posting_date.desc()).limit(PORTAL_PAGE_SIZE)).scalars().all()
-    )
-    quotations = (
-        database.session.execute(q_quotations.order_by(SalesQuotation.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
-        .scalars()
-        .all()
-    )
-    deliveries = (
-        database.session.execute(q_deliveries.order_by(DeliveryNote.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
-        .scalars()
-        .all()
-    )
+    invoices, total_invoices = _portal_page(q_invoices, SalesInvoice.posting_date.desc())
+    orders, total_orders = _portal_page(q_orders, SalesOrder.posting_date.desc())
+    quotations, total_quotations = _portal_page(q_quotations, SalesQuotation.posting_date.desc())
+    deliveries, total_deliveries = _portal_page(q_deliveries, DeliveryNote.posting_date.desc())
 
     return render_template(
         "portal/customer_dashboard.html",
@@ -133,6 +135,13 @@ def customer_dashboard():
         orders=orders,
         quotations=quotations,
         deliveries=deliveries,
+        totals={
+            "invoices": total_invoices,
+            "orders": total_orders,
+            "quotations": total_quotations,
+            "deliveries": total_deliveries,
+        },
+        page_size=PORTAL_PAGE_SIZE,
         titulo=_("Portal de Clientes"),
     )
 
@@ -243,27 +252,11 @@ def supplier_dashboard():
         q_quotations = q_quotations.filter_by(supplier_id=pid)
         q_receipts = q_receipts.filter_by(supplier_id=pid)
 
-    invoices = (
-        database.session.execute(q_invoices.order_by(PurchaseInvoice.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
-        .scalars()
-        .all()
-    )
-    notes = (
-        database.session.execute(q_notes.order_by(PurchaseInvoice.posting_date.desc()).limit(PORTAL_PAGE_SIZE)).scalars().all()
-    )
-    orders = (
-        database.session.execute(q_orders.order_by(PurchaseOrder.posting_date.desc()).limit(PORTAL_PAGE_SIZE)).scalars().all()
-    )
-    quotations = (
-        database.session.execute(q_quotations.order_by(PurchaseQuotation.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
-        .scalars()
-        .all()
-    )
-    receipts = (
-        database.session.execute(q_receipts.order_by(PurchaseReceipt.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
-        .scalars()
-        .all()
-    )
+    invoices, total_invoices = _portal_page(q_invoices, PurchaseInvoice.posting_date.desc())
+    notes, total_notes = _portal_page(q_notes, PurchaseInvoice.posting_date.desc())
+    orders, total_orders = _portal_page(q_orders, PurchaseOrder.posting_date.desc())
+    quotations, total_quotations = _portal_page(q_quotations, PurchaseQuotation.posting_date.desc())
+    receipts, total_receipts = _portal_page(q_receipts, PurchaseReceipt.posting_date.desc())
 
     return render_template(
         "portal/supplier_dashboard.html",
@@ -272,6 +265,14 @@ def supplier_dashboard():
         orders=orders,
         quotations=quotations,
         receipts=receipts,
+        totals={
+            "invoices": total_invoices,
+            "notes": total_notes,
+            "orders": total_orders,
+            "quotations": total_quotations,
+            "receipts": total_receipts,
+        },
+        page_size=PORTAL_PAGE_SIZE,
         titulo=_("Portal de Proveedores"),
     )
 

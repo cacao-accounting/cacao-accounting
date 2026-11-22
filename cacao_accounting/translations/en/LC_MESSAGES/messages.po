@@ -24344,3 +24344,7 @@ msgstr "No registered exchange rate exists for the document and payment currenci
 #: cacao_accounting/setup/catalogs.py
 msgid "No hay una cuenta de caja chica activa y habilitada; el fondo predeterminado no se creó. Configúrela y créelo manualmente."
 msgstr "No active and enabled petty cash account exists; the default fund was not created. Configure it and create the fund manually."
+
+#: cacao_accounting/portal/templates/portal/customer_dashboard.html
+msgid "Mostrando los primeros {shown} de {total} registros. Refine la consulta para ver el resto."
+msgstr "Showing the first {shown} of {total} records. Refine the query to see the rest."
