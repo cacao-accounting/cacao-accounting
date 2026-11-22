@@ -1390,9 +1390,17 @@ def cuentas_predeterminadas():
         if action == "delete":
             config = get_company_default_accounts(selected_company)
             if config:
-                database.session.delete(config)
-                database.session.commit()
-                flash(_("Configuración de cuentas predeterminadas eliminada correctamente."), "success")
+                # #2062: `CompanyDefaultAccount` es un modelo sensible y el
+                # guard ORM rechaza su borrado. La acción se presenta como
+                # error controlado en vez de terminar en HTTP 500.
+                try:
+                    database.session.delete(config)
+                    database.session.commit()
+                except ValueError as error:
+                    database.session.rollback()
+                    flash(_(str(error)), "danger")
+                else:
+                    flash(_("Configuración de cuentas predeterminadas eliminada correctamente."), "success")
             return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
 
         values = {field: request.form.get(field) or None for field in DEFAULT_ACCOUNT_FIELDS}
