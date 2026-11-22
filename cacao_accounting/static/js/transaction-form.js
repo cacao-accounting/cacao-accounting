@@ -1069,7 +1069,8 @@
 	        },
 
         calcTaxLine(line) {
-          line.base_amount = toNumber(line.base_amount || this.totalAmount);
+          const hasBase = line.base_amount !== null && line.base_amount !== undefined && line.base_amount !== '';
+          line.base_amount = toNumber(hasBase ? line.base_amount : this.totalAmount);
           line.rate = toNumber(line.rate);
           line.amount = this.calculateTaxAmount(line);
         },

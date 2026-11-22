@@ -1404,6 +1404,42 @@ describe('transaction-form', function () {
     assert.strictEqual(component.importModal.fileLoading, false);
   });
 
+  it("keeps a manual tax line base of zero instead of the subtotal", function () {
+    const create = loadTransactionForm();
+    const component = create({ items: [], uoms: [], defaultRows: 1 });
+    component.lines = [{ amount: 200 }];
+    const line = {
+      manual: true,
+      calculation_method: 'percentage',
+      base_amount: 0,
+      rate: 10,
+      amount: 0,
+    };
+
+    component.calcTaxLine(line);
+
+    assert.strictEqual(line.base_amount, 0);
+    assert.strictEqual(line.amount, 0);
+  });
+
+  it("falls back to the subtotal when a manual tax line has no base", function () {
+    const create = loadTransactionForm();
+    const component = create({ items: [], uoms: [], defaultRows: 1 });
+    component.lines = [{ amount: 200 }];
+    const line = {
+      manual: true,
+      calculation_method: 'percentage',
+      base_amount: '',
+      rate: 10,
+      amount: 0,
+    };
+
+    component.calcTaxLine(line);
+
+    assert.strictEqual(line.base_amount, 200);
+    assert.strictEqual(line.amount, 20);
+  });
+
   it("formats money with the configured currency precision", function () {
     globalThis.__CACAO_CURRENCY_DECIMALS__ = { TST4: 4, TST0: 0 };
     const create = loadTransactionForm();
