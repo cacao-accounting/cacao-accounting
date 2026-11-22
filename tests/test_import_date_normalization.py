@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#1055: fechas de Excel normalizadas antes de validar.
+"""#1055/#1529: fechas normalizadas y fechas inválidas rechazadas al validar.
 
 XLSX entrega `datetime` y XLS seriales numéricos; los adaptadores deben
 convertirlos a `date` sin rechazarlos ni dejarlos llegar a la ejecución.
@@ -28,8 +28,8 @@ from cacao_accounting.imports.utils.dates import parse_import_date
 EXCEL_SERIAL = 46152  # 2026-05-10 con el sistema de fechas de Excel
 
 
-@pytest.fixture
-def date_import_scenario():
+@pytest.fixture(name="date_import_scenario")
+def date_import_scenario_fixture():
     """Create a company for period and currency checks."""
     app = create_app(
         {
@@ -131,6 +131,21 @@ def test_journal_period_validation_accepts_an_excel_datetime(date_import_scenari
 
     assert errors
     assert not any("formato válido" in error for error in errors)
+
+
+def test_journal_validation_rejects_malformed_date_before_execution(date_import_scenario):
+    """A balanced journal with an invalid date is not reported as ready to import."""
+    app = date_import_scenario
+    adapter = JournalEntryAdapter()
+    document = [
+        {"document_ref": "JV-INVALID-DATE", "fecha": "not-a-date", "cuenta": "1101", "debito": "10", "credito": "0"},
+        {"document_ref": "JV-INVALID-DATE", "fecha": "not-a-date", "cuenta": "4101", "debito": "0", "credito": "10"},
+    ]
+
+    with app.app_context():
+        errors = adapter.validate_document(document, {"company_id": "alpha"})
+
+    assert any("fecha" in error.lower() and "válid" in error.lower() for error in errors)
 
 
 def test_bank_statement_build_accepts_datetime_and_serial():
