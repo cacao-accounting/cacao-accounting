@@ -19,6 +19,7 @@ from cacao_accounting.database import Currency, Entity, database
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.imports.utils import recovery
+from sqlalchemy import update
 
 
 def _app(tmp_path):
@@ -162,6 +163,53 @@ def test_finalize_conserva_estado_si_recovery_gana_entre_lectura_y_update(tmp_pa
             final = database.session.get(ImportBatch, batch_id)
             assert notified["done"] is True
             assert final.import_status == 7
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_finalize_resuelve_cancelacion_llegada_entre_lectura_y_update(tmp_path, monkeypatch):
+    """#1203: una cancelación que llega antes del UPDATE termina en estado 8.
+
+    El worker lee el lote con cancel_requested=False, luego `/cancel` marca
+    True y confirma; el UPDATE atómico del finalizador debe resolver a 8 (no
+    dejar el lote en 4).
+    """
+    from cacao_accounting.imports.services import import_service as import_service_module
+
+    app = _app(tmp_path)
+    try:
+        batch_id = _batch(app)
+        with app.app_context():
+            batch = database.session.get(ImportBatch, batch_id)
+            service = ImportService()
+            original_execute = database.session.execute
+            notified: dict[str, bool] = {"done": False}
+
+            def racing_execute(statement, *args, **kwargs):
+                if not notified["done"] and getattr(statement, "is_update", False):
+                    notified["done"] = True
+                    with app.app_context():
+                        database.session.execute(
+                            update(ImportBatch)
+                            .where(ImportBatch.id == batch_id)
+                            .values(cancel_requested=True)
+                            .execution_options(synchronize_session=False)
+                        )
+                        database.session.commit()
+                        database.session.remove()
+                return original_execute(statement, *args, **kwargs)
+
+            monkeypatch.setattr(import_service_module.database.session, "execute", racing_execute)
+            service._finalize_execution(batch, batch_id, success_count=5, error_count=0)
+            monkeypatch.undo()
+
+            database.session.expire_all()
+            final = database.session.get(ImportBatch, batch_id)
+            assert notified["done"] is True
+            assert final.cancel_requested is True
+            assert final.import_status == 8
     finally:
         with app.app_context():
             database.session.remove()

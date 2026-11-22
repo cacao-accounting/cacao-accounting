@@ -7,7 +7,7 @@ import threading
 from datetime import UTC, datetime
 from typing import Dict, Type, List, Any
 from flask import current_app
-from sqlalchemy import update
+from sqlalchemy import case, update
 from sqlalchemy.exc import SQLAlchemyError
 from cacao_accounting.database import database
 from cacao_accounting.imports.column_labels import canonical_columns
@@ -599,44 +599,32 @@ class ImportService:
         current_batch = database.session.get(ImportBatch, batch_id)
         if current_batch is None:
             return
-        database.session.expire(current_batch)
-        current_batch = database.session.get(ImportBatch, batch_id)
-        if current_batch is None:
-            return
         completed_at = _utc_now_naive()
-        if current_batch.cancel_requested:
-            cancel_result = database.session.execute(
-                update(ImportBatch)
-                .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
-                .values(
-                    success_rows=success_count,
-                    error_rows=error_count,
-                    completed_at=completed_at,
-                    import_status=8,
-                )
-                .execution_options(synchronize_session=False)
+        target_status = 5 if error_count == 0 else 6
+        # Una sola transición atómica: WHERE import_status = 4 protege contra
+        # recovery (7) y el CASE resuelve la cancelación contra el valor
+        # comprometido al momento del UPDATE, cerrando la carrera en que
+        # `/cancel` marca cancel_requested=True entre la lectura y la escritura
+        # del worker (#1203).
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+            .values(
+                success_rows=success_count,
+                error_rows=error_count,
+                completed_at=completed_at,
+                import_status=case(
+                    (ImportBatch.cancel_requested.is_(True), 8),
+                    else_=target_status,
+                ),
             )
-        else:
-            target_status = 5 if error_count == 0 else 6
-            cancel_result = database.session.execute(
-                update(ImportBatch)
-                .where(
-                    ImportBatch.id == batch_id,
-                    ImportBatch.import_status == 4,
-                    ImportBatch.cancel_requested.is_(False),
-                )
-                .values(
-                    success_rows=success_count,
-                    error_rows=error_count,
-                    completed_at=completed_at,
-                    import_status=target_status,
-                )
-                .execution_options(synchronize_session=False)
-            )
+            .execution_options(synchronize_session=False)
+        )
         database.session.commit()
-        # rowcount == 0 significa que recovery o cancelación ganaron la carrera:
-        # el estado tomado por el ganador permanece intacto.
-        if (getattr(cancel_result, "rowcount", 0) or 0) == 0:
+        # rowcount == 0 significa que recovery ganó la carrera: el estado 7
+        # permanece intacto. La cancelación no produce rowcount 0 porque la
+        # propia transición la resuelve a 8.
+        if (getattr(result, "rowcount", 0) or 0) == 0:
             database.session.expire_all()
 
     def _handle_execution_error(self, batch_id: str, e: Exception) -> None:
