@@ -2,28 +2,20 @@
 # Hook `post_compile` del buildpack *clásico* de Python de Heroku.
 #
 # El buildpack instala las dependencias de `requirements.txt`, pero no instala
-# el paquete en sí ni los assets del frontend. Aquí se completa el slug:
+# el paquete en sí, por lo que el comando `cacaoctl` que usa el Procfile no
+# existiría. Este hook completa el slug instalando el paquete y compilando los
+# catálogos de traducción.
 #
-#   1. `pip install .` instala Cacao Accounting y deja disponible el comando
-#      `cacaoctl` que usa el Procfile.
-#   2. `npm ci` instala bootstrap, bootstrap-icons, chart.js y exceljs en
-#      `cacao_accounting/static/node_modules`, que las plantillas sirven como
-#      estáticos. `node_modules` no se versiona, por eso se instala en el build.
-#   3. Se compilan los catálogos de traducción para no servir msgid en crudo.
+# Los assets del frontend se sirven por CDN en las plantillas de producción
+# (`macros.headertags`), por eso no se instala `node_modules`.
 #
 # Nota: el buildpack Cloud Native (`heroku/python` CNB) NO ejecuta este hook;
-# para ese caso las dependencias de Python van en `requirements.txt`.
+# para ese caso todo debe estar declarado en `requirements.txt`.
 
 set -euo pipefail
 
 echo "-----> Instalando Cacao Accounting"
 pip install --no-cache-dir --no-input .
-
-echo "-----> Instalando assets estáticos"
-(
-  cd cacao_accounting/static
-  npm ci --omit=dev --ignore-scripts --no-audit --no-fund
-)
 
 echo "-----> Compilando catálogos de traducción"
 python - <<'PY'

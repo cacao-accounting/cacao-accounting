@@ -5,9 +5,13 @@
 
 El buildpack de Python solo instala las dependencias de ``requirements.txt``.
 Por eso el despliegue necesita, además del Procfile, un hook ``post_compile``
-que instale el paquete (y el comando ``cacaoctl`` usado en el Procfile), los
-assets estáticos y los catálogos de traducción; y un ``Aptfile`` con las
-bibliotecas de sistema de WeasyPrint, libmagic y libpq.
+que instale el paquete (y el comando ``cacaoctl`` usado en el Procfile) y los
+catálogos de traducción; y un ``Aptfile`` con las bibliotecas de sistema de
+WeasyPrint, libmagic y libpq.
+
+``requirements.txt`` debe contener la base de escritorio más los extras de
+modo Cloud, porque el buildpack Cloud Native instala exactamente ese archivo
+y no ejecuta el hook.
 """
 
 from __future__ import annotations
@@ -71,11 +75,14 @@ def test_aptfile_incluye_las_bibliotecas_de_sistema():
         assert requerido in paquetes, f"falta {requerido} en Aptfile"
 
 
-def test_post_compile_instala_paquete_assets_y_traducciones():
-    """El hook completa el slug con lo que el buildpack de Python no instala."""
+def test_post_compile_instala_paquete_y_traducciones():
+    """El hook completa el slug con lo que el buildpack de Python no instala.
+
+    Los assets del frontend se sirven por CDN en producción, por eso el hook
+    no instala ``node_modules``.
+    """
     contenido = POST_COMPILE.read_text(encoding="utf-8")
     assert "pip install --no-cache-dir --no-input ." in contenido, "falta instalar el paquete"
-    assert "npm ci" in contenido, "faltan los assets estáticos"
     assert "write_mo" in contenido, "faltan los catálogos de traducción compilados"
     assert "set -euo pipefail" in contenido, "el hook debe abortar el build ante un error"
 
