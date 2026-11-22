@@ -102,6 +102,7 @@ disable = ["C0415", "C0103"]
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
+show_error_codes = true
 follow_imports = "silent"
 exclude = "(?x)(^build/|^dist/|^venv/|^\\.venv/)"
 disable_error_code = [
