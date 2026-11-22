@@ -40,8 +40,13 @@ else:
     TIEMPO_ESPERA = 20
 
 
-def verifica_coneccion_db(app):  # pragma: no cover
-    """Verifica si es posible conentarse a la base de datos."""
+def verifica_coneccion_db(app):
+    """Verifica si es posible conectarse a la base de datos.
+
+    Un ``SELECT`` vacío demuestra que la conexión funciona aunque no haya filas,
+    por eso se consulta con ``.first()`` y no se evalúa el objeto ``Result`` como
+    booleano (#2061).
+    """
     import time
 
     with app.app_context():
@@ -51,11 +56,10 @@ def verifica_coneccion_db(app):  # pragma: no cover
             try:
                 from cacao_accounting.database import User
 
-                QUERY = database.session.execute(database.select(User))
+                database.session.execute(database.select(User)).first()
 
-                if QUERY:
-                    DB_CONN = True
-                    log.info("Conexión a la base de datos exitosa.")
+                DB_CONN = True
+                log.info("Conexión a la base de datos exitosa.")
                 break
             except OperationalError:
                 DB_CONN = False

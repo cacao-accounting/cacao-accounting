@@ -28,6 +28,7 @@ def server() -> None:
     from cacao_accounting.database.helpers import (
         inicia_base_de_datos,
         resolver_credenciales_iniciales,
+        usuarios_creados,
         verifica_coneccion_db,
     )
 
@@ -52,6 +53,16 @@ def server() -> None:
         except OperationalError:
             log.error("No se pudo inicilizar la base de datos.")
             DATABASE = False
+
+    # Una base conectada pero sin administrador no debe arrancar Waitress con
+    # credenciales públicas: se aplica la misma validación que el flujo de
+    # inicialización antes de exponer el servicio (#2061).
+    if DATABASE and not usuarios_creados():
+        try:
+            resolver_credenciales_iniciales()
+        except ValueError as exc:
+            log.critical(str(exc))
+            raise SystemExit(1) from exc
 
     if DATABASE:
         try:
