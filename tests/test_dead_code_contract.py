@@ -18,6 +18,7 @@ from cacao_accounting.bancos import cash_forecast_service
 from cacao_accounting.admin import services as admin_services
 from cacao_accounting.api import dashboard as api_dashboard
 from cacao_accounting import tax_pricing_service
+from cacao_accounting.accounting_engine.orchestrator.event_orchestrator import BusinessEventOrchestrator
 from cacao_accounting.bancos import services as bancos_services
 from cacao_accounting.contabilidad import default_accounts, exchange_revaluation_service
 from cacao_accounting.document_flow import payment as document_flow_payment
@@ -71,3 +72,8 @@ def test_inventario_services_no_reexporta_company_currency():
     from cacao_accounting.inventario import services as inventario_services
 
     assert not hasattr(inventario_services, "company_currency")
+
+
+def test_orchestrator_no_reexpone_reversion_de_snapshot():
+    """#1352: la reversión real vive en posting_service, no en un helper sin caller."""
+    assert not hasattr(BusinessEventOrchestrator, "reverse_from_snapshot")
