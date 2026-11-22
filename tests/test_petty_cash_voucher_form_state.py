@@ -203,3 +203,21 @@ def test_post_valido_persiste_el_vale(caja_vale_estado):
         assert vale.company == "cacao"
         assert vale.petty_cash_id == ids["fondo"]
         assert vale.concept == "Compra de insumos de limpieza"
+
+
+def test_lista_de_vales_borrador_no_enlaza_edicion_inexistente(caja_vale_estado):
+    """La lista presenta acciones de estado disponibles para un borrador."""
+    application, ids = caja_vale_estado
+    client = application.test_client()
+    _iniciar(client)
+    _postear_vale(client, ids)
+
+    response = client.get("/cash_management/petty-cash-voucher/list")
+
+    assert response.status_code == 200
+    cuerpo = response.get_data(as_text=True)
+    assert "Compra de insumos de limpieza" in cuerpo
+    assert "Entregar" in cuerpo
+    assert "Cancelar" in cuerpo
+    assert "Editar" not in cuerpo
+    assert "caja_chica_vale_editar" not in cuerpo
