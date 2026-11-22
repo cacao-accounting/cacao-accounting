@@ -599,12 +599,18 @@ class ImportService:
             current_batch = database.session.get(ImportBatch, batch_id)
             if current_batch is None:
                 return
+            # Solo el worker que mantiene el lote en proceso (estado 4) puede
+            # finalizarlo. Si la recuperación ya lo marcó como fallido (7) o una
+            # cancelación lo dejó terminal (8), no se sobrescribe ese estado con
+            # un completado parcial/total (#1203).
+            if current_batch.import_status != 4:
+                database.session.commit()
+                return
             current_batch.success_rows = success_count
             current_batch.error_rows = error_count
             current_batch.completed_at = _utc_now_naive()
-            if current_batch.import_status == 8 or current_batch.cancel_requested:
-                # La cancelación (estado 8) es terminal: los contadores
-                # parciales quedan tal como la ejecución los dejó.
+            if current_batch.cancel_requested:
+                current_batch.import_status = 8
                 database.session.commit()
                 return
             current_batch.import_status = 5 if error_count == 0 else 6
