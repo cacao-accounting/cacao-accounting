@@ -2136,6 +2136,17 @@ def _create_purchase_receipt_from_form():
 
 
 def _handle_purchase_receipt_edit_post(registro):
+    """Edita una recepción y convierte los errores de validación en feedback."""
+    try:
+        return _apply_purchase_receipt_edit(registro)
+    except ValueError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=registro.id))
+
+
+def _apply_purchase_receipt_edit(registro):
+    """Aplica los cambios del formulario sobre una recepción en borrador."""
     before_state = _capture_purchase_state(registro)
     revert_relations_for_target("purchase_receipt", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("purchase_receipt", registro.id)
@@ -2150,7 +2161,7 @@ def _handle_purchase_receipt_edit_post(registro):
     if requested_currency and requested_currency != registro.transaction_currency:
         currency = database.session.execute(database.select(Currency).filter_by(code=requested_currency)).scalar_one_or_none()
         if currency is None or currency.active is False:
-            raise ValueError(_("La moneda seleccionada no está activa."))
+            raise ValueError(_("La moneda seleccionada no existe o no está activa."))
         registro.transaction_currency = requested_currency
 
     for item in _active_receipt_items(registro.id):

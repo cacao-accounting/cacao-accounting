@@ -3200,6 +3200,7 @@ def compras_factura_compra_editar(invoice_id: str):
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
+            "currency": registro.transaction_currency or "",
             "remarks": registro.remarks or "",
             "party": registro.supplier_id or "",
             "party_label": registro.supplier_name or "",
