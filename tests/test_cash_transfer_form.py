@@ -183,3 +183,54 @@ def test_referencia_externa_se_persiste_en_reference_no(app, transferencia, auth
         pago = database.session.execute(database.select(PaymentEntry).filter_by(reference_no=referencia)).scalar_one()
         assert pago.reference_no == referencia
         assert pago.paid_amount == Decimal("100.0000")
+
+
+def _nota_json(cuentas: dict, tipo: str, **referencia: str) -> dict[str, str]:
+    """Formulario de nota como lo envía nota_nueva.html (JSON payment_payload)."""
+    import json
+
+    payload = {
+        "payment_type": tipo,
+        "company": "cacao",
+        "bank_account_id": cuentas["origen"],
+        "posting_date": "2026-05-15",
+        "paid_amount": "100",
+        "currency": "NIO",
+        "base_currency": "NIO",
+        "exchange_rate": "1",
+        "mode_of_payment": "transfer",
+        **referencia,
+    }
+    return {"payment_payload": json.dumps(payload)}
+
+
+def test_nota_debito_persiste_external_number_legacy(app, transferencia, authenticated_client):
+    """#2039: el JSON de la nota con `external_number` llega a reference_no."""
+    referencia = f"ND-{uuid4().hex[:8]}"
+    client = authenticated_client("admin")
+
+    response = client.post(
+        "/cash_management/payment/debit-note/new",
+        data=_nota_json(transferencia, "debit_note", external_number=referencia),
+    )
+
+    assert response.status_code == 302, response.get_data(as_text=True)
+    with app.app_context():
+        pago = database.session.execute(database.select(PaymentEntry).filter_by(reference_no=referencia)).scalar_one()
+        assert pago.payment_type == "debit_note"
+
+
+def test_nota_credito_persiste_reference_no(app, transferencia, authenticated_client):
+    """#2039: la referencia de la nota de crédito se conserva al persistir."""
+    referencia = f"NC-{uuid4().hex[:8]}"
+    client = authenticated_client("admin")
+
+    response = client.post(
+        "/cash_management/payment/credit-note/new",
+        data=_nota_json(transferencia, "credit_note", reference_no=referencia),
+    )
+
+    assert response.status_code == 302, response.get_data(as_text=True)
+    with app.app_context():
+        pago = database.session.execute(database.select(PaymentEntry).filter_by(reference_no=referencia)).scalar_one()
+        assert pago.payment_type == "credit_note"
