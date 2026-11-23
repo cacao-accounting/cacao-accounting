@@ -24680,3 +24680,59 @@ msgstr "unlocked the login"
 #: cacao_accounting/__init__.py
 msgid "acción registrada"
 msgstr "recorded action"
+
+msgid "Impuestos"
+msgstr "Taxes"
+
+msgid "Pago relacionado"
+msgstr "Related payment"
+
+msgid "Importe bruto"
+msgstr "Gross amount"
+
+msgid "Total retenido"
+msgstr "Total withheld"
+
+msgid "Efectivo pagado"
+msgstr "Cash paid"
+
+msgid "Código QR de validación del documento"
+msgstr "Document validation QR code"
+
+msgid "Código QR de validación"
+msgstr "Validation QR code"
+
+msgid "Validar documento"
+msgstr "Validate document"
+
+msgid "Escanee este código QR para verificar el documento."
+msgstr "Scan this QR code to verify this document."
+
+msgid "Impreso por"
+msgstr "Printed by"
+
+msgid "el"
+msgstr "on"
+
+msgid "Cheque N.º"
+msgstr "Check No."
+
+msgid "Tasa anterior"
+msgstr "Old rate"
+
+msgid "Tasa nueva"
+msgstr "New rate"
+
+msgid "Estado desconocido"
+msgstr "Unknown status"
+
+msgid "Tipo documental desconocido"
+msgstr "Unknown document type"
+
+#: cacao_accounting/admin/routes.py
+msgid "Acceso"
+msgstr "Access"
+
+#: cacao_accounting/admin/routes.py
+msgid "Configurar"
+msgstr "Set up"

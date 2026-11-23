@@ -1770,21 +1770,21 @@ def editar_rol(role_id: str):
 
 
 _PERMISOS_ACCIONES = [
-    ("access", "Acceso"),
-    ("update", "Actualizar"),
-    ("set_null", "Anular"),
-    ("approve", "Autorizar"),
-    ("bi", "BI"),
-    ("close", "Cerrar"),
-    ("setup", "Configurar"),
-    ("view", "Consultar"),
-    ("create", "Crear"),
-    ("edit", "Editar"),
-    ("delete", "Eliminar"),
-    ("import_", "Importar"),
-    ("report", "Reportes"),
-    ("request", "Solicitar"),
-    ("validate", "Validar"),
+    ("access", _l("Acceso")),
+    ("update", _l("Actualizar")),
+    ("set_null", _l("Anular")),
+    ("approve", _l("Autorizar")),
+    ("bi", _l("BI")),
+    ("close", _l("Cerrar")),
+    ("setup", _l("Configurar")),
+    ("view", _l("Consultar")),
+    ("create", _l("Crear")),
+    ("edit", _l("Editar")),
+    ("delete", _l("Eliminar")),
+    ("import_", _l("Importar")),
+    ("report", _l("Reportes")),
+    ("request", _l("Solicitar")),
+    ("validate", _l("Validar")),
 ]
 
 
