@@ -960,6 +960,7 @@ def _msg_item_no_comprable(item_code: str) -> str:
     return _("El item %(item_code)s no está habilitado para compra.") % {"item_code": item_code}
 
 
+# complexipy: ignore - parser de formulario preexistente; excepción documentada (AGENTS: complejidad tolerada).
 def _save_purchase_order_items(order_id: str, award_source: Any = None) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una orden de compra desde el formulario."""
     order = database.session.get(PurchaseOrder, order_id)

@@ -758,6 +758,7 @@ def _claim_verification_attempt(invitation: BalanceConfirmationInvitation, token
     return claimed
 
 
+# complexipy: ignore - flujo público preexistente; excepción documentada (AGENTS: complejidad tolerada).
 @balance_confirmations_bp.route("/confirm-balance/<token>/verify", methods=["POST"])
 def public_confirm_balance_verify(token: str):
     """Procesa el formulario de verificación de identidad externa."""

@@ -247,6 +247,7 @@ def _audit_retry_success(item: Any) -> None:
         LOGGER.warning("No se pudo registrar auditoría en reintento: %s", audit_exc)
 
 
+# complexipy: ignore - entrega/reintento preexistente; excepción documentada (AGENTS: complejidad tolerada).
 def deliver_email_queue_item(queue_id: str, *, retry: bool) -> tuple[Any, bool]:
     """Serialize initial delivery and admin retries on the same queue row."""
     from datetime import datetime, timezone
