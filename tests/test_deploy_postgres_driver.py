@@ -19,6 +19,16 @@ def test_compose_declara_driver_psycopg_en_la_uri():
     assert any("postgresql+psycopg://" in linea for linea in lineas)
 
 
+def test_compose_requiere_password_y_alinea_healthcheck_con_postgres():
+    """La app no arranca con una contraseña DB vacía y el healthcheck respeta la configuración."""
+    compose = (RAIZ / "docker-compose.yml").read_text(encoding="utf-8")
+
+    assert "${DB_PASSWORD:?DB_PASSWORD must be set}" in compose
+    assert 'pg_isready -U \\"$${POSTGRES_USER}\\" -d \\"$${POSTGRES_DB}\\"' in compose
+    assert "POSTGRES_USER=${DB_USER:-cacao}" in compose
+    assert "POSTGRES_DB=${DB_NAME:-cacaodb}" in compose
+
+
 def test_la_dependencia_psycopg_declarada_es_la_del_driver():
     """El driver de la URI debe estar en requirements, no solo en la imagen."""
     requirements = (RAIZ / "requirements.txt").read_text(encoding="utf-8")

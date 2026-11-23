@@ -6,7 +6,7 @@ services:
     ports:
       - "80:80"
     environment:
-      - CACAO_DATABASE_URL=postgresql+psycopg://${DB_USER:-cacao}:${DB_PASSWORD:-}@db:5432/${DB_NAME:-cacaodb}
+      - CACAO_DATABASE_URL=postgresql+psycopg://${DB_USER:-cacao}:${DB_PASSWORD:?DB_PASSWORD must be set}@db:5432/${DB_NAME:-cacaodb}
       - CACHE_REDIS_URL=redis://cache:6379/2
       - RATELIMIT_STORAGE_URI=redis://cache:6379/0
       - CACAO_USER=${CACAO_USER:-cacao}
@@ -24,12 +24,12 @@ services:
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=${DB_USER:-cacao}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
       - POSTGRES_DB=${DB_NAME:-cacaodb}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cacao -d cacaodb"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 5

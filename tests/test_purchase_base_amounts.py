@@ -172,3 +172,52 @@ def test_factura_guarda_base_amount_y_base_rate(compras_usd):
         assert linea.amount == Decimal("100.0000")
         assert linea.base_amount == Decimal("3650.0000")
         assert linea.base_rate == Decimal("36.5000")
+
+
+def test_factura_guarda_lineas_despues_de_fila_vacia(compras_usd):  # pylint: disable=redefined-outer-name
+    """Una fila vacía no debe hacer que se pierdan líneas válidas posteriores."""
+    application = compras_usd
+    with application.app_context():
+        invoice = PurchaseInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            transaction_currency="USD",
+            docstatus=0,
+            document_type="purchase_invoice",
+        )
+        database.session.add(invoice)
+        database.session.commit()
+        invoice_id = invoice.id
+
+        form = {
+            "item_code_0": "",
+            "item_code_1": "ART-USD",
+            "item_code_01": "IGNORED-NONCANONICAL-ALIAS",
+            "item_name_1": "Artículo en dólares",
+            "qty_1": "2",
+            "rate_1": "100",
+            "uom_1": "UND",
+            "item_code_2": "ART-USD",
+            "item_name_2": "Artículo en dólares",
+            "qty_2": "1",
+            "rate_2": "50",
+            "uom_2": "UND",
+        }
+        with application.test_request_context("/", method="POST", data=form):
+            total_qty, total = _save_purchase_invoice_items(invoice_id)
+            database.session.commit()
+
+        lineas = (
+            database.session.execute(
+                database.select(PurchaseInvoiceItem)
+                .filter_by(purchase_invoice_id=invoice_id)
+                .order_by(PurchaseInvoiceItem.item_code)
+            )
+            .scalars()
+            .all()
+        )
+        assert total_qty == Decimal("3.0000")
+        assert total == Decimal("250.0000")
+        assert len(lineas) == 2
+        assert sum((linea.qty for linea in lineas), Decimal("0")) == total_qty
+        assert sum((linea.amount for linea in lineas), Decimal("0")) == total

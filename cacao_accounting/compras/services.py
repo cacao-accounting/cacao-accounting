@@ -1280,20 +1280,24 @@ def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | Non
 
 
 def form_line_indexes(prefix: str) -> list[int]:
-    """Índices de línea presentes en el formulario, sin truncar por huecos.
+    """Índices de línea presentes en el formulario, ordenados y sin huecos.
 
     Un formulario puede enviar ``item_code_0`` vacío y ``item_code_1`` con
-    datos; iterar mientras el campo exista descartaba las líneas posteriores
-    (#2214).
+    datos; iterar mientras el campo exista descartaba las líneas posteriores.
+    Se deduplican sufijos equivalentes como ``1`` y ``01`` (#2214).
     """
-    indexes: list[int] = []
+    indexes: set[int] = set()
     for key in request.form:
         if not key.startswith(f"{prefix}_"):
             continue
         suffix = key[len(prefix) + 1 :]
         if suffix.isdigit():
-            indexes.append(int(suffix))
-    return indexes
+            try:
+                indexes.add(int(suffix))
+            except ValueError:
+                # Python limita la conversión de sufijos decimales enormes.
+                continue
+    return sorted(indexes)
 
 
 def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
@@ -1306,12 +1310,10 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     )
     target_type = PURCHASE_INVOICE
     indexes = form_line_indexes("item_code")
-    i = 0
-    max_index = max(indexes, default=-1)
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
-    while i <= max_index:
+    for i in indexes:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
@@ -1344,7 +1346,6 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             total_qty += qty
             total += amount
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total

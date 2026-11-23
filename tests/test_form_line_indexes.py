@@ -23,7 +23,7 @@ def test_indices_con_hueco_intermedio():
     with app.test_request_context(
         "/",
         method="POST",
-        data={"item_code_0": "", "item_code_1": "A", "item_code_2": "B", "otro": "x"},
+        data={"item_code_0": "", "item_code_1": "A", "item_code_01": "alias", "item_code_2": "B", "otro": "x"},
     ):
         assert form_line_indexes("item_code") == [0, 1, 2]
 
