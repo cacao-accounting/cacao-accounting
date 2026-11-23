@@ -93,7 +93,6 @@ from cacao_accounting.inventario.services import (
     _render_stock_entry_edit_form,
     _render_stock_reconciliation_edit_form,
     STOCK_ENTRY_PURPOSES,
-    LEGACY_STOCK_ENTRY_PURPOSES,
 )
 
 from cacao_accounting.i18n import _
@@ -339,26 +338,6 @@ def inventario_material_transfer_lista():
         titulo=titulo,
         vista="inventario.inventario_material_transfer_lista",
         new_url=new_url,
-    )
-
-
-@inventario.route("/stock-entry/adjustment/list")
-@modulo_activo("inventory")
-@login_required
-def inventario_ajuste_lista():
-    """Listado de solo lectura para ajustes históricos (#1891)."""
-    consulta = _paginate_list(
-        StockEntry,
-        (StockEntry.document_no,),
-        _inventory_company_scoped_select(StockEntry).filter(StockEntry.purpose.in_(LEGACY_STOCK_ENTRY_PURPOSES)),
-    )
-    titulo = _("Listado de Ajustes de Inventario Históricos") + " - " + APPNAME
-    return render_template(
-        INVENTARIO_ENTRADA_LISTA_HTML,
-        consulta=consulta,
-        titulo=titulo,
-        vista="inventario.inventario_ajuste_lista",
-        new_url=None,
     )
 
 
@@ -1075,14 +1054,8 @@ def inventario_entrada_duplicar(entry_id: str):
     exige_acceso_compania("inventory", origen.company, "crear")
     if origen.docstatus == 2:
         abort(400)
-    if origen.purpose in LEGACY_STOCK_ENTRY_PURPOSES:
-        # El propósito genérico histórico no tiene semántica canónica definida
-        # (#1891); duplicarlo crearía movimientos nuevos sin contrato.
-        flash(
-            _("El ajuste de inventario histórico no se puede duplicar. Cree un ajuste positivo o negativo."),
-            "danger",
-        )
-        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=origen.id))
+    if origen.purpose not in STOCK_ENTRY_PURPOSES:
+        abort(404)
 
     duplicado = StockEntry(
         purpose=origen.purpose,
@@ -1165,10 +1138,10 @@ def inventario_entrada_submit(entry_id: str):
             require_party=False,
             require_warehouse=True,
             require_qty_positive=registro.purpose
-            not in {"stock_reconciliation", "adjustment_positive", "adjustment_negative", "stock_adjustment"},
-            require_rate_positive=registro.purpose not in {"adjustment_positive", "adjustment_negative", "stock_adjustment"},
+            not in {"stock_reconciliation", "adjustment_positive", "adjustment_negative"},
+            require_rate_positive=registro.purpose not in {"adjustment_positive", "adjustment_negative"},
         )
-        if registro.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"}:
+        if registro.purpose in {"adjustment_positive", "adjustment_negative"}:
             if any(Decimal(str(item.qty or 0)) == 0 and Decimal(str(item.amount or 0)) <= 0 for item in items):
                 raise ValueError(_("Un ajuste de solo valor requiere un monto mayor a cero."))
         from cacao_accounting.inventario.service import validate_batch_serial_draft

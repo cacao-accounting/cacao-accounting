@@ -98,10 +98,6 @@ STOCK_ENTRY_PURPOSES = frozenset(
     }
 )
 
-# Registros creados antes de #1891. Se conservan para lectura y para poder
-# contabilizar borradores históricos, pero no admiten nuevas creaciones.
-LEGACY_STOCK_ENTRY_PURPOSES = frozenset({"stock_adjustment"})
-
 
 def _is_duplicate_master_code_violation(error: IntegrityError, table_name: str) -> bool:
     """Identifica colisiones conocidas de código único en UOM y bodegas."""
@@ -622,7 +618,7 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
     qty = _form_decimal(f"qty_{index}", "1")
     rate = _form_decimal(f"rate_{index}", "0")
     amount = _line_amount(index)
-    if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"}:
+    if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative"}:
         amount = _form_decimal(f"amount_{index}", "0")
     default_uom = _item_default_uom(item_code)
     uom = request.form.get(f"uom_{index}") or default_uom
@@ -813,7 +809,6 @@ def _stock_entry_title(purpose: str | None) -> str:
         "material_receipt": "Nueva Recepción de Material",
         "material_issue": "Nueva Salida de Material",
         "material_transfer": "Nueva Transferencia de Material",
-        "stock_adjustment": "Ajuste de Inventario Histórico",
         "stock_reconciliation": "Nueva Conciliación de Inventario",
         "adjustment_positive": "Nuevo Ajuste Positivo de Inventario",
         "adjustment_negative": "Nuevo Ajuste Negativo de Inventario",
@@ -1188,7 +1183,7 @@ def _submitted_material_line_signature(entry: StockEntry, index: int, row: dict[
     qty = coerce_decimal(row["qty"] or "1", f"qty_{index}")
     rate = coerce_decimal(row["rate"] or "0", f"rate_{index}")
     amount = qty * rate
-    if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"}:
+    if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative"}:
         amount = coerce_decimal(row["amount"] or "0", f"amount_{index}")
     default_uom = _item_default_uom(item_code)
     uom = row["uom"] or default_uom or ""
@@ -1279,7 +1274,7 @@ def _render_stock_entry_edit_form(
         "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",
         "enableBatchSerial": True,
-        "allowManualAmount": registro.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"},
+        "allowManualAmount": registro.purpose in {"adjustment_positive", "adjustment_negative"},
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "availableSourceTypes": [

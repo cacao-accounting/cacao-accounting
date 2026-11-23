@@ -1172,6 +1172,22 @@ msgstr "Ledger lines are immutable; use an append-only reversal."
 msgid "La cancelación del ledger debe realizarse mediante el servicio auditado."
 msgstr "Ledger cancellation must be performed through the audited service."
 
+#: cacao_accounting/internal_control_service.py
+msgid "La transición de saldos de valoración requiere capas persistidas."
+msgstr "The valuation balance transition requires persisted layers."
+
+#: cacao_accounting/internal_control_service.py
+msgid "La evidencia histórica de la capa de valoración es inmutable; registre un movimiento compensatorio."
+msgstr "Historical valuation layer evidence is immutable; record a compensating movement."
+
+#: cacao_accounting/internal_control_service.py
+msgid "Los saldos derivados de la capa de valoración solo se actualizan mediante el servicio autorizado."
+msgstr "Valuation layer running balances can only be updated through the authorized service."
+
+#: cacao_accounting/internal_control_service.py
+msgid "Las capas de valoración no se eliminan; registre un movimiento compensatorio."
+msgstr "Valuation layers cannot be deleted; record a compensating movement."
+
 #: cacao_accounting/internal_control_service.py:1143
 msgid "Las transiciones de aprobación deben realizarse mediante el servicio autorizado."
 msgstr "Approval transitions must be performed through the authorized service."
@@ -24768,3 +24784,7 @@ msgstr "A template with that code already exists for the document type."
 #: cacao_accounting/document_flow/service.py
 msgid "Debe indicar el tipo de documento destino."
 msgstr "The target document type is required."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "La entrada de inventario requiere un valor funcional mayor que cero."
+msgstr "The inventory receipt requires a functional value greater than zero."

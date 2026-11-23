@@ -54,28 +54,7 @@ def test_las_rutas_de_creacion_generica_ya_no_existen(app, entorno_contable, aut
     client = authenticated_client()
     assert client.get("/inventory/stock-entry/adjustment/new").status_code == 404
     assert client.get("/inventory/stock-entry/adjustment/new-shortcut").status_code == 404
-
-
-def test_el_historial_generico_es_solo_lectura(app, entorno_contable, authenticated_client):
-    """Una fila histórica conserva consulta sin ofrecer creación."""
-    with app.app_context():
-        entry = StockEntry(
-            purpose="stock_adjustment",
-            company="cacao",
-            posting_date=date(2026, 5, 10),
-            document_no=f"HIST-{uuid4().hex[:8]}",
-            transaction_currency="NIO",
-            base_currency="NIO",
-            docstatus=0,
-        )
-        database.session.add(entry)
-        database.session.commit()
-
-    response = authenticated_client().get("/inventory/stock-entry/adjustment/list")
-    html = response.get_data(as_text=True)
-    assert response.status_code == 200
-    assert "Históricos" in html
-    assert "/inventory/stock-entry/adjustment/new" not in html
+    assert client.get("/inventory/stock-entry/adjustment/list").status_code == 404
 
 
 def test_ajuste_positivo_genera_stock_y_gl_balanceado(app, entorno_contable):

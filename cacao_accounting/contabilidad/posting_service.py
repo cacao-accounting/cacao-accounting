@@ -3196,15 +3196,19 @@ def _consume_outflow_stock_valuation(
 
 def _movement_inflow_receipt(document: StockEntry, line: Any, purpose: str, qty: Decimal) -> list[StockLedgerEntry]:
     amount = _decimal_value(line.amount)
-    if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount <= 0:
+    if purpose == "adjustment_positive" and qty == 0 and amount <= 0:
         raise PostingError(_("Un ajuste de solo valor requiere un monto mayor a cero."))
-    if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount > 0:
+    if purpose == "adjustment_positive" and qty == 0 and amount > 0:
         valuation_rate = _decimal_value(line.valuation_rate or line.basic_rate)
         value = amount
     else:
         valuation_rate = _line_rate(line)
         value = amount or (qty * valuation_rate)
     value = _inventory_value_in_functional_currency(document, value)
+    # Un aumento de existencias sin valor funcional deja stock y GL
+    # desalineados (#1873, #1891).
+    if qty > 0 and value <= 0:
+        raise PostingError(_("La entrada de inventario requiere un valor funcional mayor que cero."))
     valuation_rate = value / qty if qty else valuation_rate
     line._inventory_cost_amount = value
     return [
@@ -3291,7 +3295,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
     """Crea movimientos de inventario para una linea segun el proposito."""
     qty = _line_qty(line)
     match purpose:
-        case "material_receipt" | "adjustment_positive" | "stock_adjustment":
+        case "material_receipt" | "adjustment_positive":
             return _movement_inflow_receipt(document, line, purpose, qty)
         case "material_issue" | "adjustment_negative":
             return _movement_outflow_issue(document, line, qty)
@@ -4799,7 +4803,7 @@ def _add_stock_entry_line_gl_entries(
 
     if purpose == "stock_reconciliation":
         _add_reconciliation_entries(entries, context, inventory_account_id, offset_account_id, amount, line, dimension_kwargs)
-    elif purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
+    elif purpose in ("material_receipt", "adjustment_positive"):
         entries.extend(
             _normal_entries_for_amount(
                 context=context,
