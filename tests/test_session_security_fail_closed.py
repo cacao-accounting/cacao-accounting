@@ -88,6 +88,12 @@ def test_seguridad_persistida_bloquea_login_si_smtp_no_esta_configurado(monkeypa
     _quitar_smtp_ambiental(monkeypatch)
     application = _crear_app(security_enabled=True, smtp_configured=False)
     try:
+        with application.app_context():
+            admin = database.session.get(User, "admin")
+            assert admin is not None
+            admin.token = "token-previo"
+            database.session.commit()
+
         client = application.test_client()
         response = client.post(
             "/login",
@@ -104,7 +110,7 @@ def test_seguridad_persistida_bloquea_login_si_smtp_no_esta_configurado(monkeypa
         with application.app_context():
             assert database.session.execute(database.select(OtpVerification)).scalars().all() == []
             user = database.session.get(User, "admin")
-            assert user is not None and user.token is None
+            assert user is not None and user.token == "token-previo"
     finally:
         with application.app_context():
             database.session.remove()

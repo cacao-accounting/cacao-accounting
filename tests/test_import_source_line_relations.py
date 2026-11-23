@@ -382,7 +382,7 @@ def test_persisted_import_creates_relation_for_the_exact_source_line(entorno_con
     assert relation.qty_in_base_uom == Decimal("2")
 
 
-def test_purchase_order_import_preserves_request_line_origin(entorno_contable):
+def test_purchase_order_import_preserves_request_line_origin(entorno_contable_aislado):
     """Purchase orders can retain a request line without a source FK on the header."""
     request = PurchaseRequest(
         company="cacao",
@@ -437,7 +437,7 @@ def test_purchase_order_import_preserves_request_line_origin(entorno_contable):
     assert relation.qty_in_base_uom == Decimal("2")
 
 
-def test_purchase_order_without_source_keeps_relation_optional(entorno_contable):
+def test_purchase_order_without_source_keeps_relation_optional(entorno_contable_aislado):
     """Imports without an upstream document remain valid and create no relation."""
     supplier = database.session.execute(database.select(Party).filter_by(code="PRV001")).scalar_one()
     row = {

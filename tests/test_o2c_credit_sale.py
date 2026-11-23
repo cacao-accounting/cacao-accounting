@@ -31,9 +31,9 @@ from cacao_accounting.internal_control_service import audit_actor
 from cacao_accounting.ventas.services import _cancel_linked_delivery_note
 
 
-def test_venta_credito_abono_parcial_y_anulacion_conservan_evidencia(entorno_contable):
+def test_venta_credito_abono_parcial_y_anulacion_conservan_evidencia(entorno_contable_aislado):
     """Anular el abono restaura cartera sin borrar movimientos contables."""
-    with entorno_contable.app.app_context():
+    with entorno_contable_aislado.app.app_context():
         suffix = uuid4().hex[:10]
         company_code = "cacao"
         customer = database.session.execute(select(Party).where(Party.code == "CLI001")).scalar_one()

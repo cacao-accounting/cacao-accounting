@@ -131,7 +131,8 @@ def test_nota_debito_acepta_cuenta_gl_activa_hoja_como_borrador(entorno_contable
         assert borrador.company == "cacao"
         assert borrador.docstatus == 0
         gl_del_pago = database.session.query(GLEntry).filter_by(voucher_id=borrador.id, voucher_type="payment_entry")
-        assert gl_del_pago.count() == gl_antes
+        assert gl_del_pago.count() == 0
+        assert database.session.query(GLEntry).count() == gl_antes
 
 
 def test_submit_revalida_cuenta_gl_desactivada_tras_el_borrador(entorno_contable, authenticated_client):
