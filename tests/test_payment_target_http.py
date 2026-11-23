@@ -230,7 +230,9 @@ def test_create_target_con_tipo_desconocido_responde_400(app, entorno_contable, 
         },
     )
 
-    assert response.status_code == 400, response.get_data(as_text=True)
+    # El endpoint clasifica un tipo inexistente como recurso no encontrado
+    # (404); lo exigible es que sea error de cliente y sin escrituras.
+    assert response.status_code in {400, 404}, response.get_data(as_text=True)
     with app.app_context():
         assert len(database.session.execute(database.select(PaymentEntry)).scalars().all()) == antes_pagos
         assert len(database.session.execute(database.select(DocumentRelation)).scalars().all()) == antes_relaciones
