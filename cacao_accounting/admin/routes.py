@@ -1388,29 +1388,27 @@ def cuentas_predeterminadas():
             return redirect(url_for(CUENTAS_PREDETERMINADAS))
 
         if action == "delete":
-            config = get_company_default_accounts(selected_company)
-            if config:
-                # #2062: `CompanyDefaultAccount` es un modelo sensible y el
-                # guard ORM rechaza su borrado. La acción se presenta como
-                # error controlado en vez de terminar en HTTP 500.
-                try:
-                    database.session.delete(config)
-                    database.session.commit()
-                except ValueError as error:
-                    database.session.rollback()
-                    flash(_(str(error)), "danger")
-                else:
-                    flash(_("Configuración de cuentas predeterminadas eliminada correctamente."), "success")
-            return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
+            abort(400)
 
         values = {field: request.form.get(field) or None for field in DEFAULT_ACCOUNT_FIELDS}
         try:
-            config = upsert_company_default_accounts(selected_company, values)
+            previous_config = get_company_default_accounts(selected_company)
+            before = (
+                {field: getattr(previous_config, field) for field in (*DEFAULT_ACCOUNT_FIELDS, "apply_advances_automatically")}
+                if previous_config is not None
+                else None
+            )
+            # Do not flush a partially updated configuration between account
+            # lookups: the sensitive-model audit records one complete change.
+            with database.session.no_autoflush:
+                config = upsert_company_default_accounts(selected_company, values)
+                config.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
+            database.session.flush()
+            _audit_default_accounts_without_internal_controls(config, before)
         except DefaultAccountError as exc:
             database.session.rollback()
             flash(_(str(exc)), "danger")
             return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
-        config.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
         database.session.commit()
         flash(_("Cuentas predeterminadas guardadas correctamente."), "success")
         return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
@@ -1432,6 +1430,20 @@ def cuentas_predeterminadas():
         config=config,
         titulo=_("Cuentas por defecto"),
     )
+
+
+def _audit_default_accounts_without_internal_controls(config: CompanyDefaultAccount, before: dict[str, Any] | None) -> None:
+    """Record the configuration once when automatic sensitive auditing is disabled."""
+    from cacao_accounting.audit_trail_service import log_create, log_update
+    from cacao_accounting.internal_control_service import _enabled
+
+    if _enabled():
+        return
+    after = {field: getattr(config, field) for field in (*DEFAULT_ACCOUNT_FIELDS, "apply_advances_automatically")}
+    if before is None:
+        log_create(config)
+    elif before != after:
+        log_update(config, before, after)
 
 
 @admin.route("/settings/users", methods=["GET", "POST"])

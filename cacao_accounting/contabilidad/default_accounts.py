@@ -197,6 +197,8 @@ def validate_default_account_assignment(company: str, field: str, account_id: st
     account = _account_by_id(account_id)
     if not account or account.entity != company:
         raise DefaultAccountError(_("La cuenta seleccionada no existe para la compañía."))
+    if not account.active or not account.enabled or account.group:
+        raise DefaultAccountError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
     account_type = (account.account_type or "").strip()
     if account_type and account_type not in definition.allowed_account_types:
         allowed = ", ".join(definition.allowed_account_types)
