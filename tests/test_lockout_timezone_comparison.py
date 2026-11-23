@@ -26,3 +26,32 @@ def test_lockout_aware_pasado_desbloquea(app, monkeypatch):
     monkeypatch.setattr(account_throttling, "_desbloquear_cuenta", lambda u: None)
     with app.app_context():
         assert account_throttling.esta_bloqueada(usuario) is False
+
+
+def test_tiempo_restante_acepta_lockout_aware(app, monkeypatch):
+    """El tiempo restante calcula lockouts PostgreSQL aware en UTC."""
+    from cacao_accounting.auth import account_throttling
+
+    ahora = datetime(2026, 11, 23, 12, 0, tzinfo=timezone.utc)
+    usuario = SimpleNamespace(lockout_until=ahora + timedelta(minutes=5))
+    monkeypatch.setattr(account_throttling, "_now_utc", lambda: ahora.replace(tzinfo=None))
+
+    with app.app_context():
+        assert account_throttling.tiempo_restante_bloqueo(usuario) == 300
+
+
+def test_listar_cuentas_bloqueadas_acepta_lockout_aware(app, monkeypatch):
+    """El listado calcula el tiempo de filas aware sin comparar zonas mixtas."""
+    from cacao_accounting.auth import account_throttling
+
+    ahora = datetime(2026, 11, 23, 12, 0, tzinfo=timezone.utc)
+    usuario = SimpleNamespace(lockout_until=ahora + timedelta(minutes=5))
+    monkeypatch.setattr(account_throttling, "_now_utc", lambda: ahora.replace(tzinfo=None))
+    monkeypatch.setattr(
+        account_throttling.database.session,
+        "scalars",
+        lambda _query: SimpleNamespace(all=lambda: [usuario]),
+    )
+
+    with app.app_context():
+        assert account_throttling.listar_cuentas_bloqueadas() == [(usuario, 300)]

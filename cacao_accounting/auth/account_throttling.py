@@ -40,6 +40,13 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _as_utc_naive(value: datetime) -> datetime:
+    """Normaliza timestamps aware y naive al formato UTC naive del módulo."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _lockout_minutes(failed_count: int) -> int:
     """Retorna los minutos de bloqueo según el número de intentos fallidos."""
     for threshold, minutes in reversed(LOCKOUT_THRESHOLDS):
@@ -53,11 +60,9 @@ def esta_bloqueada(usuario: User) -> bool:
     if usuario.lockout_until is None:
         return False
     ahora = _now_utc()
-    bloqueo = usuario.lockout_until
-    if bloqueo.tzinfo is not None:
-        # PostgreSQL devuelve la columna con zona; se compara en UTC naive como
-        # el resto del módulo (#1738).
-        bloqueo = bloqueo.astimezone(timezone.utc).replace(tzinfo=None)
+    # PostgreSQL devuelve la columna con zona; se compara en UTC naive como
+    # el resto del módulo (#1738).
+    bloqueo = _as_utc_naive(usuario.lockout_until)
     if bloqueo > ahora:
         return True
     _desbloquear_cuenta(usuario)
@@ -128,7 +133,7 @@ def tiempo_restante_bloqueo(usuario: User) -> int | None:
     if usuario.lockout_until is None:
         return None
     ahora = _now_utc()
-    delta = usuario.lockout_until - ahora
+    delta = _as_utc_naive(usuario.lockout_until) - ahora
     if delta.total_seconds() <= 0:
         _desbloquear_cuenta(usuario)
         return None
@@ -141,8 +146,8 @@ def listar_cuentas_bloqueadas() -> list[tuple[User, int]]:
     usuarios = database.session.scalars(select(User).filter(User.lockout_until.isnot(None))).all()
     ahora = _now_utc()
     for u in usuarios:
-        if u.lockout_until and u.lockout_until > ahora:
-            segundos = int((u.lockout_until - ahora).total_seconds())
+        if u.lockout_until and _as_utc_naive(u.lockout_until) > ahora:
+            segundos = int((_as_utc_naive(u.lockout_until) - ahora).total_seconds())
             resultado.append((u, segundos))
     return resultado
 
