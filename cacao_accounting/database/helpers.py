@@ -654,7 +654,7 @@ def check_hierarchy_cycle(node_class, node_id, proposed_parent_id, *, entity: st
     _lock_hierarchy_companies(_hierarchy_company_codes(node_class, node_id, entity))
 
     if node_id:
-        for descendant_id in get_descendant_ids(node_class, node_id):
+        for descendant_id in get_descendant_ids(node_class, node_id, for_update=True):
             descendant = _fetch_hierarchy_node_locked(node_class, descendant_id)
             if descendant is not None and descendant.entity != entity:
                 raise ValueError(_("Los registros de una jerarquía deben pertenecer a la misma compañía."))
@@ -699,13 +699,22 @@ def update_hierarchy_attributes(node) -> None:
         update_hierarchy_attributes(child)
 
 
-def get_descendant_ids(node_class, node_id) -> list[str]:
-    """Devuelve todos los IDs descendientes de un nodo (excluyendo el nodo mismo)."""
+def get_descendant_ids(node_class, node_id, *, for_update: bool = False) -> list[str]:
+    """Devuelve todos los IDs descendientes de un nodo (excluyendo el nodo mismo).
+
+    Con ``for_update`` la enumeración usa una lectura bloqueante para no
+    reutilizar un snapshot previo al commit rival en motores con aislamiento
+    repetible (#2188). El orden por id mantiene determinista la adquisición
+    posterior de locks.
+    """
     descendants: list[str] = []
     pending = [node_id]
     while pending:
         current_id = pending.pop()
-        children = database.session.execute(database.select(node_class.id).filter_by(parent_id=current_id)).scalars()
+        query = database.select(node_class.id).filter_by(parent_id=current_id).order_by(node_class.id)
+        if for_update:
+            query = query.with_for_update()
+        children = database.session.execute(query).scalars()
         for child_id in children:
             if child_id not in descendants:
                 descendants.append(child_id)

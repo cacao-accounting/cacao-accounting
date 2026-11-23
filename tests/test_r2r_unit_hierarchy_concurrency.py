@@ -140,3 +140,45 @@ def test_concurrent_unit_moves_cannot_form_a_cycle():
             database.session.commit()
             database.session.remove()
             database.engine.dispose()
+
+
+def test_la_enumeracion_de_descendientes_usa_lectura_bloqueante(app, monkeypatch):
+    """La validación de ciclos enumera descendientes con FOR UPDATE (#2188)."""
+    sufijo = uuid4().hex[:6]
+    with app.app_context():
+        raiz = Unit(entity="cacao", code=f"RA{sufijo}", name="Raíz", enabled=True)
+        database.session.add(raiz)
+        database.session.flush()
+        hijo = Unit(entity="cacao", code=f"HI{sufijo}", name="Hijo", enabled=True, parent_id=raiz.id)
+        database.session.add(hijo)
+        database.session.flush()
+        nieto = Unit(entity="cacao", code=f"NI{sufijo}", name="Nieto", enabled=True, parent_id=hijo.id)
+        database.session.add(nieto)
+        database.session.commit()
+        raiz_id, hijo_id, nieto_id = raiz.id, hijo.id, nieto.id
+
+    capturados: list[object] = []
+    original = database.session.execute
+
+    def tracking(statement, *args, **kwargs):
+        capturados.append(statement)
+        return original(statement, *args, **kwargs)
+
+    monkeypatch.setattr(database.session, "execute", tracking)
+    try:
+        con_lock = get_descendant_ids(Unit, raiz_id, for_update=True)
+        assert capturados and all(getattr(stmt, "_for_update_arg", None) is not None for stmt in capturados)
+
+        capturados.clear()
+        sin_lock = get_descendant_ids(Unit, raiz_id)
+        assert capturados and all(getattr(stmt, "_for_update_arg", None) is None for stmt in capturados)
+
+        assert set(con_lock) == set(sin_lock) == {hijo_id, nieto_id}
+    finally:
+        with app.app_context():
+            database.session.rollback()
+            for unit_id in (nieto_id, hijo_id, raiz_id):
+                registro = database.session.get(Unit, unit_id)
+                if registro is not None:
+                    database.session.delete(registro)
+            database.session.commit()
