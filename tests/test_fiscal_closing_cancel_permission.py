@@ -7,9 +7,11 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from babel.support import Translations
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
@@ -166,3 +168,17 @@ def test_administrador_conserva_la_accion_de_anulacion(cierre_fiscal_escenario):
 
     assert response.status_code == 200
     assert "Anular comprobante" in response.get_data(as_text=True)
+
+
+def test_guard_de_anulacion_del_cierre_tiene_traduccion_inglesa():
+    """El mensaje del guard está en el catálogo compilado que usa el entorno inglés."""
+    catalogo = Translations.load(
+        str(Path(__file__).resolve().parents[1] / "cacao_accounting" / "translations"),
+        locales=["en"],
+        domain="messages",
+    )
+
+    assert (
+        catalogo.gettext("Solo el administrador del sistema puede anular un cierre fiscal.")
+        == "Only the system administrator can cancel a fiscal year close."
+    )

@@ -15244,6 +15244,10 @@ msgstr "New Fiscal Year Closing"
 msgid "Solo el administrador del sistema puede revertir el cierre de año fiscal."
 msgstr "Only the system administrator can reverse the fiscal year close."
 
+#: cacao_accounting/contabilidad/routes.py:3767
+msgid "Solo el administrador del sistema puede anular un cierre fiscal."
+msgstr "Only the system administrator can cancel a fiscal year close."
+
 #: cacao_accounting/contabilidad/routes.py:4537
 msgid "Cierre de año fiscal revertido correctamente."
 msgstr "Fiscal year close reversed successfully."
