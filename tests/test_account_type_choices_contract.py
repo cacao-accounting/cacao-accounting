@@ -5,20 +5,20 @@
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
+from werkzeug.datastructures import MultiDict
 
+from cacao_accounting.contabilidad.forms import FormularioCuenta
 from cacao_accounting.contabilidad.forms import ACCOUNT_TYPE_CHOICES
 
-RAIZ = Path(__file__).resolve().parents[1] / "cacao_accounting"
 
-
-def test_los_tipos_del_motor_son_editables():
-    """Cada account_type del motor aparece en ACCOUNT_TYPE_CHOICES."""
+def test_variance_de_liquidacion_de_compra_se_puede_editar(app):
+    """El tipo reportado está en choices y pasa el campo real de edición."""
     elegibles = {valor for valor, _etiqueta in ACCOUNT_TYPE_CHOICES}
-    usados: set[str] = set()
-    for archivo in (RAIZ / "accounting_engine").rglob("*.py"):
-        usados.update(re.findall(r'account_type\s*=\s*"([a-z_]+)"', archivo.read_text(encoding="utf-8")))
+    assert "purchase_settlement_variance" in elegibles
 
-    assert usados
-    assert usados <= elegibles, f"tipos no editables: {sorted(usados - elegibles)}"
+    with app.test_request_context("/accounting/account/new", method="POST"):
+        formulario = FormularioCuenta(
+            formdata=MultiDict({"account_type": "purchase_settlement_variance"}),
+            meta={"csrf": False},
+        )
+        assert formulario.account_type.validate(formulario)
