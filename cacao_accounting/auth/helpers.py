@@ -116,9 +116,10 @@ def redireccion_despues_de_login():
     from flask_login import current_user
 
     if current_user.is_authenticated:
-        if current_user.is_portal_customer:
-            return redirect("/portal/customer")
-        if current_user.is_portal_supplier:
-            return redirect("/portal/supplier")
+        from cacao_accounting.portal import portal_home_for_user
+
+        portal_home = portal_home_for_user()
+        if portal_home:
+            return redirect(portal_home)
 
     return redirect(url_for("cacao_app.pagina_inicio"))

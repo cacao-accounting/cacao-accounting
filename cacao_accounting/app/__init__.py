@@ -34,14 +34,14 @@ cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 def pagina_inicio():
     """Esta es la primer pagina mostrada al usuario luego de iniciar sesion."""
     from flask import redirect
-    from flask_login import current_user
 
     from cacao_accounting.company_context import authorized_company_codes, get_active_company
 
-    if current_user.is_portal_customer:
-        return redirect("/portal/customer")
-    if current_user.is_portal_supplier:
-        return redirect("/portal/supplier")
+    from cacao_accounting.portal import portal_home_for_user
+
+    portal_home = portal_home_for_user()
+    if portal_home:
+        return redirect(portal_home)
 
     authorized_codes = authorized_company_codes()
     entidades = (

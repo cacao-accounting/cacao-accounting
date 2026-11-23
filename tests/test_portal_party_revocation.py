@@ -207,3 +207,33 @@ def test_portal_conserva_la_evidencia_tras_la_revocacion(portal_revocable):
         assert factura is not None
         assert factura.docstatus == 1
         assert factura.document_no == "FAC-PORTAL-1919"
+
+
+def test_login_no_redirige_al_portal_con_vinculo_revocado(portal_revocable):
+    """#1920: sin vínculo vigente el login no redirige a un portal que dará 403."""
+    from flask_login import login_user
+
+    from cacao_accounting.portal import portal_home_for_user
+
+    application, ids = portal_revocable
+    _deactivate_link(application, ids["cliente"])
+
+    with application.app_context():
+        user = database.session.get(User, ids["cliente_user"])
+        with application.test_request_context("/"):
+            login_user(user)
+            assert portal_home_for_user() is None
+
+
+def test_login_redirige_al_portal_con_vinculo_vigente(portal_revocable):
+    """Control positivo: el cliente elegible conserva su portal."""
+    from flask_login import login_user
+
+    from cacao_accounting.portal import portal_home_for_user
+
+    application, ids = portal_revocable
+    with application.app_context():
+        user = database.session.get(User, ids["cliente_user"])
+        with application.test_request_context("/"):
+            login_user(user)
+            assert portal_home_for_user() == "/portal/customer"

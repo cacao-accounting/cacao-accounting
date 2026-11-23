@@ -68,15 +68,15 @@ def check_portal_access(role_name: str) -> None:
     abort(403)
 
 
-def _require_active_party_link() -> None:
-    """Rechaza el acceso del portal si el tercero o su vínculo están inactivos."""
+def active_party_link_exists() -> bool:
+    """Indica si el tercero del usuario y su vínculo con la compañía están vigentes."""
     party_id = current_user.party_id
     company = current_user.company
     if not party_id or not company:
-        abort(403)
+        return False
     party = database.session.get(Party, party_id)
     if party is None or not party.is_active:
-        abort(403)
+        return False
     link = database.session.execute(
         database.select(CompanyParty.id).where(
             CompanyParty.company == company,
@@ -84,7 +84,29 @@ def _require_active_party_link() -> None:
             CompanyParty.is_active.is_(True),
         )
     ).scalar_one_or_none()
-    if link is None:
+    return link is not None
+
+
+def portal_home_for_user() -> str | None:
+    """Devuelve la ruta del portal aplicable con el mismo criterio que el guard.
+
+    Evita redirigir al portal a un usuario cuya clasificación lo habilita pero
+    cuyo tercero o vínculo fue revocado, que terminaría en 403 (#1920).
+    """
+    if is_desktop_mode() or _is_user_admin():
+        return None
+    if not active_party_link_exists():
+        return None
+    if current_user.is_portal_customer:
+        return "/portal/customer"
+    if current_user.is_portal_supplier:
+        return "/portal/supplier"
+    return None
+
+
+def _require_active_party_link() -> None:
+    """Rechaza el acceso del portal si el tercero o su vínculo están inactivos."""
+    if not active_party_link_exists():
         abort(403)
 
 
