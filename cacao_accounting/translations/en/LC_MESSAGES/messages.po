@@ -24736,3 +24736,7 @@ msgstr "Access"
 #: cacao_accounting/admin/routes.py
 msgid "Configurar"
 msgstr "Set up"
+
+#: cacao_accounting/ventas/templates/ventas/orden_venta.html
+msgid "Anulada"
+msgstr "Cancelled"

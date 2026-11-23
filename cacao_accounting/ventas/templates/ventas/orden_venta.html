@@ -62,7 +62,7 @@
       (_('Fecha'), registro.posting_date),
       (_('Total'), format_money_with_currency(registro.grand_total, currency_code)),
       (_('Moneda'), currency_code),
-      (_('Estado de proceso'), registro.status),
+      (_('Estado de proceso'), _({'open': 'Abierta', 'partial': 'Parcial', 'closed': 'Cerrada', 'cancelled': 'Anulada', 'draft': 'Borrador', 'submitted': 'Enviada'}.get(registro.status, registro.status))),
       (_('Observaciones'), registro.remarks)
     ],
     'bi-cart4'
