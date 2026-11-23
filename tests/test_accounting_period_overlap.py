@@ -327,3 +327,26 @@ def test_mismo_rango_en_otra_compania_es_valido(app, authenticated_client, perio
     assert periodo is not None
     assert periodo.entity == gamma
     periodos_aislados["periods"].append(periodo.id)
+
+
+def test_nuevo_periodo_rechaza_rango_invertido(app, authenticated_client, periodos_aislados):
+    """#1941: inicio posterior al fin no se persiste."""
+    from cacao_accounting.database import AccountingPeriod, database
+
+    entidad = periodos_aislados["entities"][0]
+    datos = {
+        "entidad": entidad,
+        "fiscal_year": periodos_aislados["fiscal_years"][0],
+        "nombre": "PERIODO-INVERTIDO",
+        "inicio": "2026-12-31",
+        "fin": "2026-01-01",
+        "habilitado": "y",
+    }
+    response = authenticated_client("admin").post("/accounting/accounting_period/new", data=datos)
+
+    assert response.status_code == 200
+    with app.app_context():
+        creados = (
+            database.session.execute(database.select(AccountingPeriod).filter_by(name="PERIODO-INVERTIDO")).scalars().all()
+        )
+        assert creados == []
