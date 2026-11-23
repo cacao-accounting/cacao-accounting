@@ -24756,3 +24756,11 @@ msgstr "The tax calculation base is not valid."
 #: cacao_accounting/admin/routes.py
 msgid "El comportamiento del impuesto no es válido."
 msgstr "The tax behavior is not valid."
+
+#: cacao_accounting/api/line_import.py
+msgid "El identificador de compañía no es válido."
+msgstr "The company identifier is not valid."
+
+#: cacao_accounting/printing/admin_routes.py
+msgid "Ya existe una plantilla con ese código para el tipo documental."
+msgstr "A template with that code already exists for the document type."
