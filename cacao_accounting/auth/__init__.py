@@ -61,7 +61,7 @@ def cargar_sesion(identidad):  # pragma: no cover
 @administrador_sesion.unauthorized_handler
 def no_autorizado():  # pragma: no cover
     """Redirecciona al inicio de sesión usuarios no autorizados."""
-    flash(_("Favor iniciar sesión para acceder al sistema."))
+    flash(_("Favor iniciar sesión para acceder al sistema."), "warning")
     return INICIO_SESION
 
 
@@ -89,7 +89,7 @@ def _handle_session_security_login(identidad: User) -> ResponseReturnValue:
     from cacao_accounting.admin.session_security_service import smtp_is_configured, usuario_actual_ip
 
     if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
-        flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."))
+        flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."), "danger")
         return INICIO_SESION
 
     device_token = request.cookies.get("__Secure-device-id") or request.cookies.get("device-id")
@@ -103,12 +103,13 @@ def _handle_session_security_login(identidad: User) -> ResponseReturnValue:
     if not smtp_is_configured():
         current_app.logger.error("Session security is enabled but SMTP is not configured; OTP login denied")
         flash(
-            _("La verificación en dos pasos está activada, pero el correo no está disponible. " "Contacte al administrador.")
+            _("La verificación en dos pasos está activada, pero el correo no está disponible. Contacte al administrador."),
+            "danger",
         )
         return INICIO_SESION
 
     if not usuario_tiene_email(identidad):
-        flash(_("Su cuenta no tiene un correo electrónico configurado. Contacte al administrador."))
+        flash(_("Su cuenta no tiene un correo electrónico configurado. Contacte al administrador."), "danger")
         return INICIO_SESION
 
     from cacao_accounting.auth.device_verification import enviar_otp_por_email, generar_otp
@@ -124,11 +125,11 @@ def _handle_session_security_login(identidad: User) -> ResponseReturnValue:
         session.pop("otp_user_id", None)
         session.pop("otp_ip", None)
         session.pop("otp_user_agent", None)
-        flash(_("No se pudo enviar el código de verificación. Intente más tarde o contacte al administrador."))
+        flash(_("No se pudo enviar el código de verificación. Intente más tarde o contacte al administrador."), "danger")
         return INICIO_SESION
 
     database.session.commit()
-    flash(_("Se envió un código de verificación a su correo electrónico."))
+    flash(_("Se envió un código de verificación a su correo electrónico."), "info")
     return redirect(url_for("login.verify_otp"))
 
 
@@ -192,18 +193,18 @@ def verify_otp():  # pragma: no cover
     from cacao_accounting.auth.forms import OtpVerificationForm
 
     if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
-        flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."))
+        flash(_("La verificación requiere una SECRET_KEY estable configurada por el administrador."), "danger")
         return INICIO_SESION
 
     user_id = session.get("otp_user_id")
     if not user_id:
-        flash(_("Sesión no válida. Inicie sesión nuevamente."))
+        flash(_("Sesión no válida. Inicie sesión nuevamente."), "danger")
         return INICIO_SESION
 
     user = database.session.get(User, user_id)
     if user is None or not user.active:
         session.pop("otp_user_id", None)
-        flash(_("Sesión no válida. Inicie sesión nuevamente."))
+        flash(_("Sesión no válida. Inicie sesión nuevamente."), "danger")
         return INICIO_SESION
 
     form = OtpVerificationForm()
@@ -239,7 +240,7 @@ def verify_otp():  # pragma: no cover
             return response
 
         database.session.commit()
-        flash(_("Código de verificación incorrecto o expirado."))
+        flash(_("Código de verificación incorrecto o expirado."), "danger")
 
     return render_template(
         "verify_otp.html",
@@ -283,7 +284,7 @@ def forgot_password():  # pragma: no cover
                     # activo un token que la persona nunca recibió.
                     database.session.rollback()
 
-        flash(_("Si el correo electrónico está registrado, recibirá un enlace de recuperación."))
+        flash(_("Si el correo electrónico está registrado, recibirá un enlace de recuperación."), "info")
         return redirect(url_for("login.forgot_password"))
 
     return render_template(
@@ -303,12 +304,12 @@ def reset_password(token: str):  # pragma: no cover
 
     if not current_app.config.get("AUTH_TOKEN_KEY_STABLE", False):
         current_app.logger.error("Password reset validation requires a stable SECRET_KEY configuration")
-        flash(_("La recuperación requiere una SECRET_KEY estable configurada por el administrador."))
+        flash(_("La recuperación requiere una SECRET_KEY estable configurada por el administrador."), "danger")
         return redirect(url_for("login.forgot_password"))
 
     user = validar_token_recuperacion(token, consumir=False)
     if user is None:
-        flash(_("El enlace de recuperación no es válido o ha expirado."))
+        flash(_("El enlace de recuperación no es válido o ha expirado."), "danger")
         return redirect(url_for("login.forgot_password"))
 
     form = ResetPasswordForm()
@@ -326,14 +327,14 @@ def reset_password(token: str):  # pragma: no cover
 
         user = validar_token_recuperacion(token)
         if user is None:
-            flash(_("El enlace de recuperación no es válido o ha expirado."))
+            flash(_("El enlace de recuperación no es válido o ha expirado."), "danger")
             return redirect(url_for("login.forgot_password"))
 
         user.password = proteger_passwd(form.new_password.data)
         user.auth_version = User.auth_version + 1
         database.session.commit()
         user.token = None
-        flash(_("Contraseña actualizada correctamente. Puede iniciar sesión."))
+        flash(_("Contraseña actualizada correctamente. Puede iniciar sesión."), "success")
         return redirect(url_for("login.inicio_sesion"))
 
     return render_template(
@@ -430,7 +431,7 @@ def _handle_profile_update(profile_form: Any, password_form: Any) -> ResponseRet
     current_email = normalize_user_email(current_user.e_mail)
     email_changed = bool(email and email != current_email)
     if email_changed and _profile_email_exists_for_another_user(email):
-        flash(_("El correo electrónico ya está en uso por otro usuario."))
+        flash(_("El correo electrónico ya está en uso por otro usuario."), "danger")
         return _render_profile(profile_form, password_form)
 
     _apply_profile_form(profile_form, email)
@@ -440,9 +441,9 @@ def _handle_profile_update(profile_form: Any, password_form: Any) -> ResponseRet
         database.session.rollback()
         if not email_changed or not _profile_email_exists_for_another_user(email):
             raise
-        flash(_("El correo electrónico ya está en uso por otro usuario."))
+        flash(_("El correo electrónico ya está en uso por otro usuario."), "danger")
         return _render_profile(profile_form, password_form)
-    flash(_("Información de perfil actualizada correctamente."))
+    flash(_("Información de perfil actualizada correctamente."), "success")
     return redirect(url_for("login.profile"))
 
 
@@ -489,7 +490,7 @@ def _handle_password_change(profile_form: Any, password_form: Any) -> ResponseRe
 
     current_user.password = proteger_passwd(password_form.new_password.data)
     database.session.commit()
-    flash(_("Contraseña actualizada correctamente."))
+    flash(_("Contraseña actualizada correctamente."), "success")
     return redirect(url_for("login.profile"))
 
 

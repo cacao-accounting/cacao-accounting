@@ -96,6 +96,8 @@ def test_intentos_fallidos_se_persisten_entre_peticiones(otp_http_scenario):
         response = client.post("/auth/verify-otp", data={"code": _codigo_incorrecto(codigo)})
         assert response.status_code == 200
         assert _estado_otp(application, user_id).attempts == esperado
+        assert b"alert-danger" in response.data
+        assert "C\u00f3digo de verificaci\u00f3n incorrecto o expirado.".encode() in response.data
 
 
 def test_alcanzar_el_limite_consume_el_codigo(otp_http_scenario):

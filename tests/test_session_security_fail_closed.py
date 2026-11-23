@@ -105,7 +105,7 @@ def test_seguridad_persistida_bloquea_login_si_smtp_no_esta_configurado(monkeypa
         with client.session_transaction() as session:
             assert "_user_id" not in session
             assert "otp_user_id" not in session
-            assert any("el correo no está disponible" in message for _, message in session["_flashes"])
+            assert any(category == "danger" for category, _message in session["_flashes"])
 
         with application.app_context():
             assert database.session.execute(database.select(OtpVerification)).scalars().all() == []
@@ -174,7 +174,7 @@ def test_fallo_de_entrega_otp_revierte_codigo_nuevo_y_conserva_el_anterior(monke
         with client.session_transaction() as session:
             assert "_user_id" not in session
             assert "otp_user_id" not in session
-            assert any("No se pudo enviar" in message for _, message in session["_flashes"])
+            assert any(category == "danger" for category, _message in session["_flashes"])
         with application.app_context():
             records = database.session.execute(database.select(OtpVerification)).scalars().all()
             assert len(records) == 1

@@ -83,6 +83,21 @@ def test_fallo_de_correo_conserva_el_token_previo(escenario_reset, monkeypatch):
     assert tokens[0].consumed is False
 
 
+def test_falta_clave_estable_presenta_error_danger_en_recuperacion(escenario_reset):
+    """La pantalla de recuperación conserva y presenta la categoría de error."""
+    app, _user_id = escenario_reset
+    app.config["AUTH_TOKEN_KEY_STABLE"] = False
+    client = app.test_client()
+
+    response = client.get("/auth/reset-password/token-invalido")
+
+    assert response.status_code == 302
+    recovery_page = client.get(response.headers["Location"])
+    assert recovery_page.status_code == 200
+    assert b"alert-danger" in recovery_page.data
+    assert b"SECRET_KEY" in recovery_page.data
+
+
 def test_envio_exitoso_consume_el_previo_y_crea_uno_nuevo(escenario_reset, monkeypatch):
     """Control positivo: con entrega aceptada se renueva el token."""
     from cacao_accounting.auth import device_verification
