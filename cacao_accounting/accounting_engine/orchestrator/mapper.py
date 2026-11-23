@@ -421,6 +421,7 @@ class AccountingMapper:
         advance_account = context.references.custom_references.get("advance_account_id")
         open_payment_amount = Decimal(str(context.references.custom_references.get("open_payment_amount", "0")))
         if advance_account and open_payment_amount > 0 and diff != 0:
+            advance_rate = self._settlement_exchange_rate(context)
             lines.append(
                 self._build_line(
                     context,
@@ -428,12 +429,15 @@ class AccountingMapper:
                     abs(diff),
                     side="credit" if diff > 0 else "debit",
                     description=f"Open Payment Balance - {context.document_type}",
-                    exchange_rate=self._settlement_exchange_rate(context),
+                    exchange_rate=advance_rate,
+                    transaction_amount=self._company_to_transaction(abs(diff), advance_rate),
+                    amount_is_company_currency=True,
                 )
             )
             return JournalEntryProforma(lines=lines, memo=f"Pro-forma for {context.document_type}")
         rounding_account = context.references.get("default_rounding_account_id")
         if rounding_account:
+            rounding_rate = self._document_exchange_rate(context)
             lines.append(
                 self._build_line(
                     context,
@@ -441,11 +445,18 @@ class AccountingMapper:
                     abs(diff),
                     side="credit" if diff > 0 else "debit",
                     description=f"Rounding Difference - {context.document_type}",
-                    exchange_rate=self._document_exchange_rate(context),
+                    exchange_rate=rounding_rate,
+                    transaction_amount=self._company_to_transaction(abs(diff), rounding_rate),
+                    amount_is_company_currency=True,
                 )
             )
             return JournalEntryProforma(lines=lines, memo=f"Pro-forma for {context.document_type}")
         return JournalEntryProforma(lines=lines, memo=f"Pro-forma for {context.document_type}")
+
+    @staticmethod
+    def _company_to_transaction(amount: Decimal, exchange_rate: Decimal) -> Decimal:
+        """Convierte un importe de compañía a la moneda transaccional."""
+        return amount / exchange_rate if exchange_rate else amount
 
     def _map_explicit_account_lines(self, context: CalculationContext) -> list[JournalEntryLineProforma]:
         """Map pre-resolved account lines provided by the transactional builders."""
