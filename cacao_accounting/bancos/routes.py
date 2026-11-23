@@ -569,6 +569,7 @@ def bancos_conciliacion_bancaria_cuenta(bank_account_id: str):
         transactions=transactions,
         suggestions=suggestions,
         company=bank_account.company,
+        companies=_reconciliation_companies(),
         reconciliation_date=date.today().isoformat(),
     )
 
