@@ -5,6 +5,9 @@
 
 from __future__ import annotations
 
+from datetime import date
+from uuid import uuid4
+
 from cacao_accounting.database import FiscalYear, database
 
 
@@ -22,3 +25,37 @@ def test_anio_fiscal_invertido_no_se_persiste(app, authenticated_client, entorno
     with app.app_context():
         creados = database.session.execute(database.select(FiscalYear).filter_by(name="FY-INVERTIDO")).scalars().all()
         assert creados == []
+
+
+def test_editar_anio_fiscal_invertido_conserva_rango_original(app, authenticated_client, entorno_contable):
+    """La ruta de edición rechaza el rango invertido sin modificar el año existente."""
+    nombre = f"FY-EDITAR-{uuid4().hex[:10]}"
+    with app.app_context():
+        fiscal_year = FiscalYear(
+            entity="cacao",
+            name=nombre,
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+        )
+        database.session.add(fiscal_year)
+        database.session.commit()
+        fiscal_year_id = fiscal_year.id
+
+    respuesta = authenticated_client("admin").post(
+        f"/accounting/fiscal_year/{fiscal_year_id}/edit",
+        data={
+            "id": nombre,
+            "entidad": "cacao",
+            "inicio": "2026-12-31",
+            "fin": "2026-01-01",
+        },
+    )
+
+    assert respuesta.status_code == 200
+    with app.app_context():
+        guardado = database.session.get(FiscalYear, fiscal_year_id)
+        assert guardado is not None
+        assert guardado.year_start_date == date(2026, 1, 1)
+        assert guardado.year_end_date == date(2026, 12, 31)
+        database.session.delete(guardado)
+        database.session.commit()
