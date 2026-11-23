@@ -508,7 +508,7 @@ def _validate_company_context(context: dict[str, Any]) -> tuple[str | None, Resp
     company_id = context.get("company_id")
     if not company_id:
         return None, _invalid_payload_response("company_id", _("Compañía no especificada en el contexto."), 400)
-    if not isinstance(company_id, (str, int)):
+    if not isinstance(company_id, str):
         # Un valor no escalar llegaría al filtro SQL y provocaría un error de
         # programación en lugar de un 400 (#1966).
         return None, _invalid_payload_response("company_id", _("El identificador de compañía no es válido."), 400)
