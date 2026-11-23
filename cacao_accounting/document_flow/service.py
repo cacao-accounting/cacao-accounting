@@ -567,8 +567,9 @@ def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: 
     """
     if source_item is None:
         return decimal_or_zero(qty)
+    item_code = getattr(source_item, "item_code", None) or getattr(source_item, "code", None)
     return qty_in_base_uom(
-        getattr(source_item, "item_code", None),
+        item_code,
         qty,
         presentation_uom or getattr(source_item, "uom", None),
     )
