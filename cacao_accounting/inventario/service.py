@@ -113,6 +113,7 @@ class ItemAccountRow:
     income_account_id: str | None = None
     cogs_account_id: str | None = None
     stock_adjustment_account_id: str | None = None
+    stock_adjustment_provided: bool = True
 
 
 @dataclass(frozen=True)
@@ -927,7 +928,10 @@ def _actualiza_cuentas_persistidas(
             old_account.expense_account_id = target_row.expense_account_id
             old_account.income_account_id = target_row.income_account_id
             old_account.cogs_account_id = target_row.cogs_account_id
-            old_account.stock_adjustment_account_id = target_row.stock_adjustment_account_id
+            # Un formulario que no incluye la columna no debe borrar la cuenta
+            # de ajuste existente (#1825).
+            if target_row.stock_adjustment_provided:
+                old_account.stock_adjustment_account_id = target_row.stock_adjustment_account_id
             old_account.cost_center_code = target_row.cost_center_code
         else:
             database.session.delete(old_account)
@@ -1159,6 +1163,7 @@ def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
     income_accounts = _request_values(form, "income_account_id")
     cogs_accounts = _request_values(form, "cogs_account_id")
     stock_adjustment_accounts = _request_values(form, "stock_adjustment_account_id")
+    stock_adjustment_provided = "stock_adjustment_account_id" in form
     cost_centers = _request_values(form, "cost_center_code")
     rows: list[ItemAccountRow] = []
     for index, company in enumerate(companies):
@@ -1176,6 +1181,7 @@ def parse_item_account_rows(form: Mapping[str, Any]) -> list[ItemAccountRow]:
                 income_account_id=values[1],
                 cogs_account_id=values[2],
                 stock_adjustment_account_id=values[3],
+                stock_adjustment_provided=stock_adjustment_provided,
                 cost_center_code=values[4],
             )
         )

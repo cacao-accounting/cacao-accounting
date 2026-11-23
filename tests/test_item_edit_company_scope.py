@@ -261,6 +261,78 @@ def test_item_edit_form_does_not_render_foreign_company_rows(item_edit_scope_sce
     assert ids["secret_company"] not in body
 
 
+def _set_stock_adjustment_account(app, item_code: str, company: str, account_id: str | None) -> None:
+    """Assign the persisted stock adjustment account for one company row."""
+    with app.app_context():
+        row = database.session.execute(
+            database.select(ItemAccount).filter_by(item_code=item_code, company=company)
+        ).scalar_one()
+        row.stock_adjustment_account_id = account_id
+        database.session.commit()
+
+
+def test_item_edit_form_renders_stock_adjustment_account_selector(item_edit_scope_scenario):
+    """El formulario de edición debe enviar la cuenta de ajuste (#1825)."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+    _set_stock_adjustment_account(app, ids["item_code"], ids["local_company"], ids["local_alternate"])
+
+    response = client.get(f"/inventory/item/{ids['item_code']}/edit")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'name="stock_adjustment_account_id"' in body
+    assert ids["local_alternate"] in body
+
+
+def test_item_edit_without_stock_adjustment_field_preserves_existing_value(item_edit_scope_scenario):
+    """Un POST sin la columna no puede borrar la cuenta de ajuste configurada (#1825)."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+    _set_stock_adjustment_account(app, ids["item_code"], ids["local_company"], ids["local_alternate"])
+
+    response = client.post(
+        f"/inventory/item/{ids['item_code']}/edit",
+        data=_valid_item_form(
+            account_company=ids["local_company"],
+            expense_account_id=ids["local_account"],
+        ),
+    )
+
+    assert response.status_code == 302
+    rows = _persisted_rows(app, ids["item_code"])
+    assert rows[ids["local_company"]].stock_adjustment_account_id == ids["local_alternate"]
+
+
+def test_item_edit_updates_and_clears_stock_adjustment_account(item_edit_scope_scenario):
+    """La columna enviada se respeta: cambia la cuenta y un valor vacío la limpia."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+    _set_stock_adjustment_account(app, ids["item_code"], ids["local_company"], ids["local_account"])
+
+    updated = client.post(
+        f"/inventory/item/{ids['item_code']}/edit",
+        data=_valid_item_form(
+            account_company=ids["local_company"],
+            expense_account_id=ids["local_account"],
+            stock_adjustment_account_id=ids["local_alternate"],
+        ),
+    )
+    assert updated.status_code == 302
+    assert _persisted_rows(app, ids["item_code"])[ids["local_company"]].stock_adjustment_account_id == ids["local_alternate"]
+
+    cleared = client.post(
+        f"/inventory/item/{ids['item_code']}/edit",
+        data=_valid_item_form(
+            account_company=ids["local_company"],
+            expense_account_id=ids["local_account"],
+            stock_adjustment_account_id="",
+        ),
+    )
+    assert cleared.status_code == 302
+    assert _persisted_rows(app, ids["item_code"])[ids["local_company"]].stock_adjustment_account_id is None
+
+
 @pytest.mark.parametrize("factor", ["NaN", "Infinity", "0.0000000001"])
 def test_item_edit_renders_invalid_uom_factor_as_validation_error(item_edit_scope_scenario, factor):
     """A non-finite or unrepresentable UOM factor stays in handled validation."""

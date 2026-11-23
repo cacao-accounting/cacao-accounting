@@ -24740,3 +24740,11 @@ msgstr "Set up"
 #: cacao_accounting/ventas/templates/ventas/orden_venta.html
 msgid "Anulada"
 msgstr "Cancelled"
+
+#: cacao_accounting/inventario/templates/inventario/articulo_nuevo.html
+msgid "Cuenta de ajuste de inventario"
+msgstr "Inventory adjustment account"
+
+#: cacao_accounting/inventario/templates/inventario/articulo_nuevo.html
+msgid "Buscar cuenta de ajuste de inventario"
+msgstr "Search inventory adjustment account"
