@@ -1,20 +1,38 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#1813: la modalidad 3-way exige la nota de entrega."""
+"""#1813: la modalidad 3-way exige orden y nota de entrega."""
 
-import pytest
 from datetime import date
 
-from cacao_accounting.database import SalesInvoice, SalesMatchingConfig, SalesOrder, database
-from cacao_accounting.ventas.services import _validate_sales_order_requirement
+import pytest
 
+from cacao_accounting.database import (
+    DeliveryNote,
+    SalesInvoice,
+    SalesMatchingConfig,
+    SalesOrder,
+    database,
+)
+from cacao_accounting.ventas.services import _validate_sales_order_requirement
 
 FECHA = date(2026, 5, 15)
 
 
-def _crear_factura(order_id: str, document_no: str) -> SalesInvoice:
-    """Crea una factura de venta en borrador vinculada a la orden."""
+def _config(matching_type: str, require_sales_order: bool) -> SalesMatchingConfig:
+    """Crea o actualiza la configuración de matching de la compañía."""
+    config = database.session.execute(database.select(SalesMatchingConfig).filter_by(company="cacao")).scalar_one_or_none()
+    if config is None:
+        config = SalesMatchingConfig(company="cacao")
+        database.session.add(config)
+    config.matching_type = matching_type
+    config.require_sales_order = require_sales_order
+    database.session.flush()
+    return config
+
+
+def _crear_factura(order_id: str | None, document_no: str, delivery_id: str | None = None) -> SalesInvoice:
+    """Crea una factura de venta en borrador con los vínculos indicados."""
     invoice = SalesInvoice(
         company="cacao",
         posting_date=FECHA,
@@ -22,23 +40,58 @@ def _crear_factura(order_id: str, document_no: str) -> SalesInvoice:
         document_no=document_no,
         customer_name="Cliente 1813",
         sales_order_id=order_id,
+        delivery_note_id=delivery_id,
     )
     database.session.add(invoice)
     database.session.flush()
     return invoice
 
 
+def _orden(document_no: str) -> SalesOrder:
+    """Crea una orden de venta aprobada."""
+    orden = SalesOrder(
+        company="cacao",
+        posting_date=FECHA,
+        docstatus=1,
+        document_no=document_no,
+        customer_name="Cliente 1813",
+    )
+    database.session.add(orden)
+    database.session.flush()
+    return orden
+
+
+def _entrega(document_no: str, order_id: str | None) -> DeliveryNote:
+    """Crea una nota de entrega aprobada, opcionalmente ligada a una orden."""
+    entrega = DeliveryNote(
+        company="cacao",
+        posting_date=FECHA,
+        docstatus=1,
+        document_no=document_no,
+        customer_name="Cliente 1813",
+        sales_order_id=order_id,
+    )
+    database.session.add(entrega)
+    database.session.flush()
+    return entrega
+
+
 def test_2way_conserva_semantica_sin_delivery(app):
     """Modalidad 2-way sin Nota de Entrega no exige el vínculo (#1813)."""
     with app.app_context():
-        database.session.add(SalesMatchingConfig(company="cacao", matching_type="2-way", require_sales_order=True))
-        database.session.flush()
-        order = SalesOrder(
-            company="cacao", posting_date=FECHA, docstatus=1, document_no="SO-1813-2W", customer_name="Cliente 1813"
-        )
-        database.session.add(order)
-        database.session.flush()
+        _config("2-way", require_sales_order=True)
+        order = _orden("SO-1813-2W")
         invoice = _crear_factura(order.id, "SI-1813-2W")
+        database.session.commit()
+
+        _validate_sales_order_requirement(invoice)
+
+
+def test_2way_sin_flag_permite_factura_sin_vinculos(app):
+    """2-way con require_sales_order apagado no impone vínculos."""
+    with app.app_context():
+        _config("2-way", require_sales_order=False)
+        invoice = _crear_factura(None, "SI-1813-2W-OFF")
         database.session.commit()
 
         _validate_sales_order_requirement(invoice)
@@ -47,16 +100,45 @@ def test_2way_conserva_semantica_sin_delivery(app):
 def test_3way_exige_nota_de_entrega(app):
     """Modalidad 3-way exige la Nota de Entrega antes de aprobar (#1813)."""
     with app.app_context():
-        config = database.session.execute(database.select(SalesMatchingConfig).filter_by(company="cacao")).scalar_one()
-        config.matching_type = "3-way"
-        database.session.flush()
-        order = SalesOrder(
-            company="cacao", posting_date=FECHA, docstatus=1, document_no="SO-1813-3W", customer_name="Cliente 1813"
-        )
-        database.session.add(order)
-        database.session.flush()
+        _config("3-way", require_sales_order=True)
+        order = _orden("SO-1813-3W")
         invoice = _crear_factura(order.id, "SI-1813-3W")
         database.session.commit()
 
         with pytest.raises(ValueError, match="Nota de Entrega"):
             _validate_sales_order_requirement(invoice)
+
+
+def test_3way_exige_ambos_vinculos_con_flag_apagado(app):
+    """3-way no depende de require_sales_order: exige orden y entrega."""
+    with app.app_context():
+        _config("3-way", require_sales_order=False)
+        invoice = _crear_factura(None, "SI-1813-3W-OFF")
+        database.session.commit()
+
+        with pytest.raises(ValueError, match="Orden de Venta y una Nota de Entrega"):
+            _validate_sales_order_requirement(invoice)
+
+
+def test_3way_rechaza_entrega_sin_orden(app):
+    """Una Nota de Entrega sin Orden de Venta no satisface 3-way."""
+    with app.app_context():
+        _config("3-way", require_sales_order=False)
+        delivery = _entrega("DN-1813-SIN-OV", None)
+        invoice = _crear_factura(None, "SI-1813-DN-SIN-OV", delivery.id)
+        database.session.commit()
+
+        with pytest.raises(ValueError, match="Orden de Venta"):
+            _validate_sales_order_requirement(invoice)
+
+
+def test_3way_acepta_entrega_ligada_a_orden(app):
+    """La entrega que pertenece a la orden satisface ambos vínculos."""
+    with app.app_context():
+        _config("3-way", require_sales_order=False)
+        order = _orden("SO-1813-3W-OK")
+        delivery = _entrega("DN-1813-3W-OK", order.id)
+        invoice = _crear_factura(order.id, "SI-1813-3W-OK", delivery.id)
+        database.session.commit()
+
+        _validate_sales_order_requirement(invoice)

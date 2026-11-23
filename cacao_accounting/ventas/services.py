@@ -1887,16 +1887,25 @@ def _validate_3way_delivery_requirement(invoice: SalesInvoice, config: SalesMatc
 
 
 def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any] | None = None) -> None:
-    """Rechaza facturas sin orden de venta cuando la compañía lo exige."""
+    """Rechaza facturas sin orden de venta o nota de entrega según la modalidad."""
     if invoice.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or invoice.is_return:
         return
     config = database.session.execute(
         database.select(SalesMatchingConfig).filter_by(company=invoice.company)
     ).scalar_one_or_none()
+    if config and config.matching_type == "3-way":
+        if not invoice.sales_order_id and not invoice.delivery_note_id:
+            raise ValueError(_("La modalidad 3-way exige una Orden de Venta y una Nota de Entrega vinculadas a la factura."))
+        source = _validate_sales_invoice_source_links(invoice, items)
+        if not invoice.sales_order_id and not getattr(source, "sales_order_id", None):
+            raise ValueError(_("La factura debe estar vinculada a una Orden de Venta aprobada."))
+        if not invoice.delivery_note_id:
+            raise ValueError(_("La modalidad 3-way exige una Nota de Entrega vinculada a la factura."))
+        _validate_3way_delivery_requirement(invoice, config)
+        return
     if invoice.sales_order_id or invoice.delivery_note_id:
         source = _validate_sales_invoice_source_links(invoice, items)
         if invoice.sales_order_id or getattr(source, "sales_order_id", None):
-            _validate_3way_delivery_requirement(invoice, config)
             return
     if not config or not config.require_sales_order:
         return
@@ -1912,7 +1921,6 @@ def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any
         .limit(1)
     ).scalar_one_or_none()
     if linked_order:
-        _validate_3way_delivery_requirement(invoice, config)
         return
     raise ValueError(_("La factura debe estar vinculada a una Orden de Venta aprobada."))
 
