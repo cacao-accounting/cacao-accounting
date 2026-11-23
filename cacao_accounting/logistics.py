@@ -13,7 +13,6 @@ from cacao_accounting.database import Incoterm, database
 
 from cacao_accounting.i18n import _
 
-INCOTERM_CODES = ("EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF")
 LOGISTICS_FIELDS = ("incoterm_code", "incoterm_version", "delivery_date", "delivery_place")
 TERMS_FIELDS = frozenset(("purchase_terms", "sales_terms"))
 
@@ -55,10 +54,7 @@ def validate_incoterm(values: dict[str, Any], allowed_codes: Iterable[str] | Non
     version = values.get("incoterm_version") or "2020"
     if allowed_codes is None:
         rows = database.session.execute(database.select(Incoterm.code, Incoterm.is_active)).all()
-        if rows:
-            allowed = {code for code, active in rows if active}
-        else:
-            allowed = set(INCOTERM_CODES)
+        allowed = {code for code, active in rows if active}
     else:
         allowed = set(allowed_codes)
     if code not in allowed or version != "2020":
@@ -94,8 +90,6 @@ def ensure_compatible_logistics(documents: Iterable[Any], *, terms_field: str) -
 
 
 def incoterm_options() -> list[dict[str, str]]:
-    """Devuelve solo los Incoterms activos; el fallback aplica si no hay catálogo."""
+    """Devuelve solo los Incoterms activos del catálogo, sin fallback estático."""
     rows = database.session.execute(database.select(Incoterm).order_by(Incoterm.code)).scalars().all()
-    if rows:
-        return [{"code": row.code, "label": row.name, "version": row.version} for row in rows if row.is_active]
-    return [{"code": code, "label": code, "version": "2020"} for code in INCOTERM_CODES]
+    return [{"code": row.code, "label": row.name, "version": row.version} for row in rows if row.is_active]
