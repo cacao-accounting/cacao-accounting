@@ -27,10 +27,10 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.ledger_queries import primary_ledger_id
-from cacao_accounting.reportes.services import calculate_gross_margin_percentage, normalize_account_classification
+from cacao_accounting.reportes.services import normalize_account_classification
 from cacao_accounting.i18n import _
 
-ALLOWED_METRICS = frozenset({"sales", "purchases", "income", "expenses", "gross_margin", "gross_margin_percentage"})
+ALLOWED_METRICS = frozenset({"sales", "purchases", "income", "expenses", "gross_margin"})
 ALLOWED_DIMENSIONS = frozenset({"customer", "supplier", "item"})
 
 
@@ -159,8 +159,6 @@ def metric_value(company: str, metric: str, start: date, end: date) -> Decimal:
         return gl["income"]
     if metric == "expenses":
         return gl["expense"]
-    if metric == "gross_margin_percentage":
-        return calculate_gross_margin_percentage(gl["income"], gl["cost"])
     return gl["income"] - gl["cost"]
 
 
@@ -313,7 +311,6 @@ def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = 
             "cost": gl["cost"],
             "expenses": gl["expense"],
             "gross_margin": gl["income"] - gl["cost"],
-            "gross_margin_percentage": calculate_gross_margin_percentage(gl["income"], gl["cost"]),
             "net_income": gl["net_income"],
             "accounts_receivable": ar,
             "accounts_payable": ap,

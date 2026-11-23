@@ -30,7 +30,6 @@ from cacao_accounting.reportes.analytics import get_kpi_snapshot, metric_value
 from cacao_accounting.reportes.services import (
     FinancialReportFilters,
     OperationalReportFilters,
-    calculate_gross_margin_percentage,
     get_gross_margin,
     get_income_statement_report,
     normalize_account_classification,
@@ -277,20 +276,16 @@ def test_gross_margin_and_kpis_share_the_cost_classification(reference_cost_case
         income_metric = metric_value(COMPANY, "income", POSTING_DATE, POSTING_DATE)
         expenses_metric = metric_value(COMPANY, "expenses", POSTING_DATE, POSTING_DATE)
         gross_margin_metric = metric_value(COMPANY, "gross_margin", POSTING_DATE, POSTING_DATE)
-        gross_margin_percentage_metric = metric_value(COMPANY, "gross_margin_percentage", POSTING_DATE, POSTING_DATE)
 
     assert margin_report.totals["income"] == Decimal("1000")
     assert margin_report.totals["cogs"] == Decimal("400")
     assert margin_report.totals["gross_margin"] == Decimal("600")
-    assert margin_report.totals["gross_margin_percentage"] == Decimal("60.0")
     assert income_metric == Decimal("1000")
     assert expenses_metric == Decimal("100")
     assert gross_margin_metric == Decimal("600")
-    assert gross_margin_percentage_metric == Decimal("60.0")
     assert snapshot["metrics"]["cost"] == Decimal("400")
     assert snapshot["metrics"]["expenses"] == Decimal("100")
     assert snapshot["metrics"]["gross_margin"] == Decimal("600")
-    assert snapshot["metrics"]["gross_margin_percentage"] == Decimal("60.0")
     assert snapshot["metrics"]["net_income"] == Decimal("500")
 
     with app.app_context():
@@ -319,11 +314,6 @@ def test_dashboard_keeps_typed_cost_with_missing_or_unknown_classification(cost_
     assert balances == {"income": Decimal("100"), "expenses": Decimal("50")}
     assert monthly_result == [{"month": 5, "income": "100.0000", "expenses": "50.0000"}]
     assert income_statement.totals["cost"] == Decimal("50")
-
-
-def test_gross_margin_percentage_is_zero_when_income_is_zero():
-    """A zero income denominator yields a defined zero percentage."""
-    assert calculate_gross_margin_percentage(Decimal("0"), Decimal("10")) == Decimal("0")
 
 
 def test_budget_committed_amount_keeps_cost_accounts_debit_positive(reference_cost_case, app):

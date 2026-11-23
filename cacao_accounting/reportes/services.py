@@ -325,13 +325,6 @@ def account_classification_is_debit_positive(value: str | None) -> bool:
     return normalize_account_classification_value(value) in DEBIT_POSITIVE_CLASSIFICATIONS
 
 
-def calculate_gross_margin_percentage(income: Decimal, cost: Decimal) -> Decimal:
-    """Calcula el margen bruto porcentual; sin ingresos devuelve cero."""
-    if income == 0:
-        return Decimal("0")
-    return (income - cost) / income * Decimal("100")
-
-
 def _normalize_account_classification(account: Accounts | None) -> str:
     """Normaliza clasificación y tipo de cuenta para reportes financieros."""
     if account is None:
@@ -3826,7 +3819,6 @@ def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
         elif classification in {"ingreso", "income"}:
             income += _decimal_value(entry.credit) - _decimal_value(entry.debit)
     margin = income - cogs
-    margin_percentage = calculate_gross_margin_percentage(income, cogs)
     return PaginatedReport(
         rows=[
             ReportRow(
@@ -3834,7 +3826,6 @@ def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
                     "income": income,
                     "cogs": cogs,
                     "gross_margin": margin,
-                    "gross_margin_percentage": margin_percentage,
                 }
             )
         ],
@@ -3842,7 +3833,6 @@ def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
             "income": income,
             "cogs": cogs,
             "gross_margin": margin,
-            "gross_margin_percentage": margin_percentage,
         },
     )
 
