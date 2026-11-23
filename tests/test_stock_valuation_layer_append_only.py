@@ -439,6 +439,13 @@ def test_authorized_scope_allows_scoped_core_balance_update(desktop):
         assert layer.remaining_stock_value == Decimal("20")
 
 
+def test_balance_scope_requires_persisted_layers():
+    """An empty valuation scope cannot authorize any derived-balance update."""
+    with pytest.raises(ValueError, match="capas persistidas"):
+        with stock_valuation_balance_transition():
+            pass
+
+
 def test_authorized_scope_rejects_unrelated_layers():
     """A balance scope only covers the layers explicitly supplied to it."""
     app = _build_app(desktop=True)
