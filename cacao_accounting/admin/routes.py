@@ -94,8 +94,10 @@ from cacao_accounting.compras.purchase_sourcing_service import (
 from cacao_accounting.admin.navigation import CONFIGURATION_SECTIONS
 from cacao_accounting.admin.services import (
     LAST_ADMIN_REQUIRED_MESSAGE,
+    _acquire_last_admin_lock,
     _apply_user_edit,
     _can_create_user,
+    _commit_last_admin_transition,
     _crear_usuario_desde_form,
     _date_form,
     _decimal_form,
@@ -1466,6 +1468,30 @@ def _audit_default_accounts_without_internal_controls(config: CompanyDefaultAcco
         log_update(config, before, after)
 
 
+def _handle_user_toggle(user_id: str):
+    """Procesa el cambio de estado de un usuario preservando al último administrador."""
+    if not _acquire_last_admin_lock(user_id):
+        flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+    usuario = _obtener_usuario(user_id)
+    if usuario is None:
+        database.session.rollback()
+        flash(str(USUARIO_NO_ENCONTRADO), "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+    nuevo_estado = not bool(usuario.active)
+    if _would_leave_no_admin(usuario, active=nuevo_estado, classification=usuario.classification):
+        database.session.rollback()
+        flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+    _set_user_active(usuario, nuevo_estado)
+    if not _commit_last_admin_transition():
+        flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+    estado = _("habilitado") if usuario.active else _("deshabilitado")
+    flash(_("Usuario %(user)s %(status)s correctamente.") % {"user": usuario.user, "status": estado}, "success")
+    return redirect(url_for(LISTA_USUARIOS))
+
+
 @admin.route("/settings/users", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -1477,24 +1503,7 @@ def lista_usuarios():
         action = request.form.get("action")
 
         if action == "toggle" and user_id:
-            from cacao_accounting.admin.services import _lock_last_admin_users
-
-            _lock_last_admin_users(user_id)
-            usuario = _obtener_usuario(user_id)
-            if usuario is None:
-                database.session.rollback()
-                flash(str(USUARIO_NO_ENCONTRADO), "danger")
-                return redirect(url_for(LISTA_USUARIOS))
-            nuevo_estado = not bool(usuario.active)
-            if _would_leave_no_admin(usuario, active=nuevo_estado, classification=usuario.classification):
-                database.session.rollback()
-                flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
-                return redirect(url_for(LISTA_USUARIOS))
-            _set_user_active(usuario, nuevo_estado)
-            database.session.commit()
-            estado = _("habilitado") if usuario.active else _("deshabilitado")
-            flash(_("Usuario %(user)s %(status)s correctamente.") % {"user": usuario.user, "status": estado}, "success")
-            return redirect(url_for(LISTA_USUARIOS))
+            return _handle_user_toggle(user_id)
 
         usuario = _obtener_usuario(user_id) if user_id else None
         if usuario is None:
@@ -1565,20 +1574,23 @@ def editar_usuario(user_id: str):
     form = UserEditForm(obj=usuario)
     _populate_portal_choices(form)
     if form.validate_on_submit() and _validate_portal_fields(form):
-        from cacao_accounting.admin.services import _lock_last_admin_users
-
-        _lock_last_admin_users(user_id)
+        if not _acquire_last_admin_lock(user_id):
+            flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
         database.session.refresh(usuario)
         email_changed = normalize_user_email(form.e_mail.data) != normalize_user_email(usuario.e_mail)
         if _apply_user_edit(form, usuario):
             try:
-                database.session.commit()
+                committed = _commit_last_admin_transition()
             except IntegrityError:
                 database.session.rollback()
                 if not email_changed or not _user_email_is_taken(form.e_mail.data, exclude_user_id=usuario.id):
                     raise
                 form.e_mail.errors.append("El correo electrónico ya está en uso.")
             else:
+                if not committed:
+                    flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+                    return redirect(url_for(LISTA_USUARIOS))
                 flash(_("Usuario actualizado correctamente."), "success")
                 return redirect(url_for(LISTA_USUARIOS))
         database.session.rollback()
@@ -1616,10 +1628,10 @@ def usuario_roles(user_id: str):
         form.roles.data = [rol.id for rol in _obtener_roles_por_usuario(usuario.id)]
 
     if form.validate_on_submit():
-        from cacao_accounting.admin.services import _lock_last_admin_users
-
         seleccionado = {rol_id for rol_id in (form.roles.data or []) if rol_id}
-        _lock_last_admin_users(usuario.id)
+        if not _acquire_last_admin_lock(usuario.id):
+            flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
         database.session.refresh(usuario)
         if _would_leave_no_admin(
             usuario,
@@ -1638,7 +1650,9 @@ def usuario_roles(user_id: str):
             database.session.rollback()
             flash(str(exc), "danger")
             return redirect(url_for(LISTA_USUARIOS))
-        database.session.commit()
+        if not _commit_last_admin_transition():
+            flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
+            return redirect(url_for(LISTA_USUARIOS))
         flash(_("Roles actualizados correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))
 

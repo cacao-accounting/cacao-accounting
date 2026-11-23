@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from cacao_accounting import create_app
+from cacao_accounting.admin import services
 from cacao_accounting.admin.services import (
+    _acquire_last_admin_lock,
+    _commit_last_admin_transition,
     _lock_last_admin_users,
     _would_leave_no_admin,
 )
@@ -18,25 +23,52 @@ from cacao_accounting.database import Modules, Roles, RolesUser, User, database
 
 WORKERS = 2
 
+pytestmark = pytest.mark.database
 
-@pytest.fixture
-def last_admin_app(tmp_path):
-    suffix = uuid4().hex[:8]
-    app = create_app(
+LAST_ADMIN_MESSAGE = "El sistema debe conservar al menos un administrador activo."
+
+
+def _database_uri(tmp_path) -> str:
+    """Usa SQLite temporal o el motor externo dedicado de CI."""
+    uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if uri.startswith("sqlite"):
+        return f"sqlite:///{tmp_path / 'last-admin.sqlite'}"
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true y una base dedicada.")
+    return uri
+
+
+def _engine_options() -> dict[str, object]:
+    """Ajusta el pool para concurrencia real o el timeout de SQLite."""
+    if str(configuracion["SQLALCHEMY_DATABASE_URI"]).startswith("sqlite"):
+        return {"connect_args": {"timeout": 30}}
+    return {"pool_size": 4, "max_overflow": 0}
+
+
+def _crear_app(tmp_path):
+    return create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'last-admin.sqlite'}",
+            "SQLALCHEMY_DATABASE_URI": _database_uri(tmp_path),
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
             "MODO_ESCRITORIO": False,
-            "SQLALCHEMY_ENGINE_OPTIONS": {"connect_args": {"timeout": 30}},
+            "SQLALCHEMY_ENGINE_OPTIONS": _engine_options(),
         }
     )
+
+
+@pytest.fixture
+def last_admin_app(tmp_path):
+    """Dos administradores por clasificación en la base dedicada de la prueba."""
+    app = _crear_app(tmp_path)
+    suffix = uuid4().hex[:8]
     ids = {}
     with app.app_context():
         database.create_all()
-        database.session.add(Modules(module="admin", default=False, enabled=True))
+        if database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none() is None:
+            database.session.add(Modules(module="admin", default=False, enabled=True))
         admin_role = Roles(name=f"admin-{suffix}", note="admin")
         database.session.add(admin_role)
         database.session.flush()
@@ -60,8 +92,55 @@ def last_admin_app(tmp_path):
     yield app, ids
 
     with app.app_context():
+        database.session.execute(database.delete(RolesUser).where(RolesUser.user_id.in_([ids["a"], ids["b"]])))
+        database.session.execute(database.delete(User).where(User.id.in_([ids["a"], ids["b"]])))
+        database.session.execute(database.delete(Roles).where(Roles.id == ids["admin_role"]))
+        database.session.commit()
         database.session.remove()
         database.engine.dispose()
+
+
+def _single_admin_app(tmp_path, *, classification: str = "admin", with_role: bool = False):
+    """Escenario con un único administrador y sin otros privilegiados."""
+    app = _crear_app(tmp_path)
+    suffix = uuid4().hex[:8]
+    user_id = f"sole-{suffix}"
+    username = f"sole-{suffix}"
+    with app.app_context():
+        database.create_all()
+        if database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none() is None:
+            database.session.add(Modules(module="admin", default=False, enabled=True))
+        database.session.add(
+            User(
+                id=user_id,
+                user=username,
+                name="Administrador único",
+                password=b"unused",
+                active=True,
+                classification=classification,
+            )
+        )
+        if with_role:
+            admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
+            if admin_role is None:
+                admin_role = Roles(name="admin", note="admin")
+                database.session.add(admin_role)
+                database.session.flush()
+            database.session.add(RolesUser(user_id=user_id, role_id=admin_role.id, active=True))
+        database.session.commit()
+    return app, user_id, username
+
+
+def _authenticated(app, user_id: str):
+    """Cliente HTTP autenticado como el usuario indicado."""
+    with app.app_context():
+        auth_version = database.session.get(User, user_id).auth_version
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_auth_version"] = auth_version
+        session["_fresh"] = True
+    return client
 
 
 def _active_admin_total(app) -> int:
@@ -151,3 +230,80 @@ def test_concurrent_demotions_cannot_remove_all_admins(last_admin_app):
 
     assert sorted(results) == ["ok", "rejected"]
     assert _active_admin_total(app) == 1
+
+
+def test_toggle_http_rechaza_desactivar_al_ultimo_admin(tmp_path):
+    """POST real al listado: el último administrador no puede desactivarse."""
+    app, user_id, _ = _single_admin_app(tmp_path)
+    client = _authenticated(app, user_id)
+
+    response = client.post(
+        "/settings/users",
+        data={"user_id": user_id, "action": "toggle"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert LAST_ADMIN_MESSAGE in response.get_data(as_text=True)
+    with app.app_context():
+        assert database.session.get(User, user_id).active is True
+
+
+def test_edicion_http_rechaza_desclasificar_al_ultimo_admin(tmp_path):
+    """POST real a la edición: el último administrador conserva su clasificación."""
+    app, user_id, username = _single_admin_app(tmp_path)
+    client = _authenticated(app, user_id)
+
+    response = client.post(
+        f"/settings/users/{user_id}/edit",
+        data={"usuario": username, "classification": "system", "active": "y"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert LAST_ADMIN_MESSAGE in response.get_data(as_text=True)
+    with app.app_context():
+        assert database.session.get(User, user_id).classification == "admin"
+
+
+def test_roles_http_rechaza_retirar_el_rol_admin_al_ultimo_admin(tmp_path):
+    """POST real a roles: un administrador por rol no puede quedarse sin él."""
+    app, user_id, _ = _single_admin_app(tmp_path, classification="system", with_role=True)
+    client = _authenticated(app, user_id)
+
+    response = client.post(f"/settings/users/{user_id}/roles", data={}, follow_redirects=True)
+
+    assert response.status_code == 200
+    assert LAST_ADMIN_MESSAGE in response.get_data(as_text=True)
+    with app.app_context():
+        admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one()
+        assignment = database.session.execute(
+            database.select(RolesUser).filter_by(user_id=user_id, role_id=admin_role.id)
+        ).scalar_one()
+        assert assignment.active is True
+
+
+def test_lock_deadlock_se_trata_como_rechazo(last_admin_app, monkeypatch):
+    """Un deadlock al adquirir el bloqueo revierte y no responde 500."""
+    app, _ = last_admin_app
+
+    def deadlock(*_args, **_kwargs):
+        raise OperationalError("SELECT FOR UPDATE", {}, Exception("deadlock detected"))
+
+    monkeypatch.setattr(services, "_lock_last_admin_users", deadlock)
+
+    with app.app_context():
+        assert _acquire_last_admin_lock("cualquiera") is False
+
+
+def test_commit_deadlock_se_trata_como_rechazo(last_admin_app, monkeypatch):
+    """Un deadlock al confirmar revierte y no responde 500."""
+    app, _ = last_admin_app
+
+    def deadlock(*_args, **_kwargs):
+        raise OperationalError("COMMIT", {}, Exception("deadlock detected"))
+
+    monkeypatch.setattr(database.session, "commit", deadlock)
+
+    with app.app_context():
+        assert _commit_last_admin_transition() is False

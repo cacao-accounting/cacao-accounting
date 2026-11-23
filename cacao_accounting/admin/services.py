@@ -12,7 +12,7 @@ from flask import abort, flash, g, redirect, request, url_for
 from flask_login import current_user
 
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from cacao_accounting.auth import helpers, proteger_passwd
 
@@ -196,6 +196,26 @@ def _lock_last_admin_users(target_user_id: str | None = None) -> None:
             .with_for_update()
             .execution_options(populate_existing=True)
         ).scalar_one_or_none()
+
+
+def _acquire_last_admin_lock(target_user_id: str | None = None) -> bool:
+    """Adquiere el bloqueo de último administrador tratando un deadlock como rechazo."""
+    try:
+        _lock_last_admin_users(target_user_id)
+    except OperationalError:
+        database.session.rollback()
+        return False
+    return True
+
+
+def _commit_last_admin_transition() -> bool:
+    """Confirma la transición; un deadlock de PostgreSQL no debe responder 500."""
+    try:
+        database.session.commit()
+    except OperationalError:
+        database.session.rollback()
+        return False
+    return True
 
 
 def _active_admin_count(exclude_user_id: str | None = None) -> int:
