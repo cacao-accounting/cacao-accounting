@@ -484,14 +484,16 @@ def test_no_se_responde_un_borrador(confirmation_attempt_scenario):
         assert confirmation.status == "draft"
 
 
-def test_invitacion_cancelada_no_muta_al_verificar(confirmation_attempt_scenario):
-    """#1839: una invitación cancelada se rechaza sin cambiar su estado."""
+@pytest.mark.parametrize("status", ["cancelled", "responded", "expired"])
+def test_invitacion_terminal_no_muta_al_verificar(confirmation_attempt_scenario, status):
+    """#1839: una invitación terminal se rechaza sin cambiar su estado."""
     from cacao_accounting.database import BalanceConfirmationInvitation, database
 
     app, ids = confirmation_attempt_scenario
     with app.app_context():
         invitacion = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
-        invitacion.status = "cancelled"
+        invitacion.status = status
+        before = (invitacion.verified_at, invitacion.last_access_at, invitacion.failed_attempts)
         database.session.commit()
 
     respuesta = _post_verification(app, ids["token"], "123456")
@@ -499,4 +501,5 @@ def test_invitacion_cancelada_no_muta_al_verificar(confirmation_attempt_scenario
     assert respuesta.status_code in {302, 400, 404, 410}
     with app.app_context():
         invitacion = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
-        assert invitacion.status == "cancelled"
+        assert invitacion.status == status
+        assert (invitacion.verified_at, invitacion.last_access_at, invitacion.failed_attempts) == before

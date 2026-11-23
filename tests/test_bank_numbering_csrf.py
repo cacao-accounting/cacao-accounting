@@ -25,6 +25,8 @@ from cacao_accounting.database import (
     Currency,
     Entity,
     Modules,
+    ExternalCounter,
+    NamingSeries,
     Roles,
     RolesAccess,
     RolesUser,
@@ -156,6 +158,51 @@ def test_guardado_sin_csrf_es_rechazado(numeracion_csrf):
     )
 
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize("reference", ["series", "counter"])
+def test_configuracion_rechaza_referencia_inactiva_sin_guardado_parcial(numeracion_csrf, reference):
+    """La configuración no persiste ninguna entrada si una referencia está inactiva."""
+    application, account_id = numeracion_csrf
+    with application.app_context():
+        if reference == "series":
+            item = NamingSeries(
+                name="Serie inactiva",
+                entity_type="payment_entry",
+                company="cacao",
+                prefix_template="PAY-*YYYY*-",
+                is_active=False,
+            )
+        else:
+            item = ExternalCounter(
+                company="cacao",
+                name="Chequera inactiva",
+                counter_type="checkbook",
+                is_active=False,
+            )
+        database.session.add(item)
+        database.session.commit()
+        item_id = item.id
+
+    client = application.test_client()
+    _login(client)
+    detail = client.get(f"/cash_management/bank-account/{account_id}")
+    payload = {"payment_type": "pay", "use_external_counter": reference == "counter"}
+    payload["naming_series_id" if reference == "series" else "external_counter_id"] = item_id
+    response = client.post(
+        f"/cash_management/bank-account/{account_id}/numbering-config",
+        json={"configs": [payload, {"payment_type": "receive", "use_external_counter": False}]},
+        headers={"X-CSRFToken": _token(detail.get_data(as_text=True))},
+    )
+
+    assert response.status_code == 400
+    with application.app_context():
+        assert (
+            database.session.execute(database.select(BankAccountNumberingConfig).filter_by(bank_account_id=account_id))
+            .scalars()
+            .all()
+            == []
+        )
 
 
 def test_usuario_solo_consulta_no_ve_edicion_y_no_guarda(numeracion_csrf):
