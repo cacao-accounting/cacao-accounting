@@ -98,3 +98,17 @@ def test_plantilla_y_filas_traducen_tipo_base_y_comportamiento(app, authenticate
     assert f"{plantilla.name}</td><td>Compra</td>" in listado.get_data(as_text=True)
     assert items.status_code == 200
     assert "<td>Documento neto</td><td>Aditivo</td>" in items.get_data(as_text=True)
+
+
+def test_fila_con_impuesto_inactivo_muestra_su_nombre(app, authenticated_client, admin_modulo):
+    """Una fila histórica con impuesto desactivado no imprime el ULID técnico."""
+    impuesto, plantilla = _datos_fiscales(admin_modulo)
+    with database.session.begin():
+        database.session.get(Tax, impuesto.id).is_active = False
+
+    response = authenticated_client("admin").get(f"/settings/tax-templates/{plantilla.id}/items")
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert impuesto.name in body
+    assert impuesto.id not in body

@@ -587,12 +587,17 @@ def items_plantilla_impuesto(template_id: str):
         .all()
     )
     taxes = database.session.execute(database.select(Tax).filter_by(is_active=True).order_by(Tax.name)).scalars().all()
+    tax_labels = {tax.id: tax.name for tax in taxes}
+    referenced_tax_ids = {item.tax_id for item in items if item.tax_id}
+    if referenced_tax_ids:
+        referenced = database.session.execute(database.select(Tax).where(Tax.id.in_(referenced_tax_ids))).scalars().all()
+        tax_labels.update({tax.id: tax.name for tax in referenced if tax.id not in tax_labels})
     return render_template(
         "admin/tax_template_items.html",
         template=template,
         items=items,
         taxes=taxes,
-        tax_labels={tax.id: tax.name for tax in taxes},
+        tax_labels=tax_labels,
     )
 
 
