@@ -279,27 +279,45 @@ def test_vistas_presupuesto_formatean_montos_con_filtro_registrado(escenario_pre
 
 
 def test_cerrador_cierra_sin_permiso_crear(escenario_presupuesto):
-    """#1781: `cerrar` basta para la transición; no se exige `crear`."""
+    """#1781: `cerrar` basta para la transición y el presupuesto queda cerrado."""
     application, ids = escenario_presupuesto
     budget_id, _ = _crear_presupuesto(application, ids, estado="approved")
     client = _login(application, ids["cerrador"])
 
     response = client.post(f"{PREFIJO}/{budget_id}/close")
 
-    assert response.status_code != 403
     assert response.status_code == 302
+    with application.app_context():
+        assert database.session.get(Budget, budget_id).status == "closed"
 
 
 def test_importador_importa_sin_permiso_crear(escenario_presupuesto):
-    """#1781: `importar` basta para el POST de importación."""
+    """#1781: `importar` basta y la importación persiste la línea del lote."""
+    from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
+
     application, ids = escenario_presupuesto
     budget_id, _ = _crear_presupuesto(application, ids)
+    with application.app_context():
+        database.session.execute(database.delete(BudgetLine).where(BudgetLine.budget_id == budget_id))
+        database.session.commit()
+        cuenta = database.session.get(Accounts, ids["cuenta"])
+        centro = database.session.get(CostCenter, ids["centro"])
+        csv_content = ("Cuenta,Centro de Costo,Mayo,Total\n" f"{cuenta.code},{centro.code},250.00,250.00\n").encode("utf-8")
+        lote = BudgetImportService().validate_import(budget_id, "gastos.csv", csv_content, user_id=ids["importador"])
+        lote_id = lote.id
+        antes = database.session.execute(
+            database.select(database.func.count()).select_from(BudgetLine).where(BudgetLine.budget_id == budget_id)
+        ).scalar_one()
+
     client = _login(application, ids["importador"])
+    response = client.post(f"{PREFIJO}/{budget_id}/import", data={"import_id": lote_id})
 
-    response = client.post(f"{PREFIJO}/{budget_id}/import")
-
-    assert response.status_code != 403
-    assert response.status_code in (200, 302)
+    assert response.status_code == 302
+    with application.app_context():
+        despues = database.session.execute(
+            database.select(database.func.count()).select_from(BudgetLine).where(BudgetLine.budget_id == budget_id)
+        ).scalar_one()
+        assert despues == antes + 1
 
 
 def test_eliminador_borra_linea_sin_permiso_crear(escenario_presupuesto):
