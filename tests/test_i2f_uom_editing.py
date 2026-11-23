@@ -449,6 +449,36 @@ def test_stock_entry_update_preserves_uncontrolled_header_values(app, monkeypatc
     }
 
 
+def test_reconciliation_edit_preserves_remarks_when_form_omits_them(app, monkeypatch):
+    """#1834: el formulario de conciliación no envía remarks y la edición los conserva."""
+    with app.app_context():
+        entry = StockEntry(
+            company="cacao",
+            purpose="stock_reconciliation",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            remarks="Reconteo diciembre",
+        )
+        database.session.add(entry)
+        database.session.flush()
+        monkeypatch.setattr(inventory_services, "_validate_stock_entry_company", lambda _value, _action: "cacao")
+
+        with app.test_request_context(
+            "/stock-entry/test/edit",
+            method="POST",
+            data={
+                "purpose": "stock_reconciliation",
+                "company": "cacao",
+                "posting_date": "2026-11-14",
+                "currency": "NIO",
+            },
+        ):
+            _update_stock_entry_from_form(entry)
+
+        assert entry.remarks == "Reconteo diciembre"
+        database.session.rollback()
+
+
 def test_reconciliation_edit_accepts_only_company_owned_explicit_dimensions(app, monkeypatch):
     """Reconciliation header controls update dimensions after company validation."""
     suffix = uuid4().hex[:6].upper()
