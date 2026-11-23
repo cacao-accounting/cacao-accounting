@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -11,9 +12,11 @@ from typing import Any
 import pytest
 from argon2 import PasswordHasher
 from flask import Flask
-from sqlalchemy import select
+from sqlalchemy import inspect, select
+from sqlalchemy.dialects import sqlite as sqlite_dialect
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.schema import CreateIndex, CreateTable
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -41,6 +44,55 @@ from cacao_accounting.database import (
 )
 
 ph = PasswordHasher()
+
+_sqlite_schema_template: sqlite3.Connection | None = None
+_create_all_original = database.create_all
+
+
+def _sqlite_schema_ddl() -> str:
+    """Compila una sola vez el DDL completo del esquema para el motor SQLite."""
+    dialect = sqlite_dialect.dialect()
+    statements: list[str] = []
+    for table in database.metadata.tables.values():
+        statements.append(str(CreateTable(table).compile(dialect=dialect)))
+        statements.extend(str(CreateIndex(index).compile(dialect=dialect)) for index in table.indexes)
+    return ";\n".join(statements) + ";\n"
+
+
+def _schema_template_connection() -> sqlite3.Connection:
+    """Devuelve la base SQLite en memoria con el esquema, construida una sola vez."""
+    global _sqlite_schema_template
+    if _sqlite_schema_template is None:
+        connection = sqlite3.connect(":memory:")
+        connection.executescript(_sqlite_schema_ddl())
+        connection.commit()
+        _sqlite_schema_template = connection
+    return _sqlite_schema_template
+
+
+def _create_all_fast(*args: Any, **kwargs: Any) -> None:
+    """Crea el esquema SQLite copiando una plantilla, en lugar de emitir cada DDL.
+
+    ``metadata.create_all`` ejecuta más de mil sentencias DDL (tablas e índices)
+    por cada app de prueba, lo que domina el tiempo de la suite. Copiar el
+    esquema ya compilado con la API ``backup`` de SQLite conserva el mismo
+    resultado en una fracción del tiempo. Cualquier otro motor, o una base que
+    ya tenga esquema, delega en el comportamiento original (idempotente).
+    """
+    engine = database.engine
+    if engine.dialect.name != "sqlite" or inspect(engine).has_table("user"):
+        return _create_all_original(*args, **kwargs)
+
+    raw = engine.raw_connection()
+    try:
+        _schema_template_connection().backup(raw.driver_connection)
+    except sqlite3.Error:
+        raw.close()
+        return _create_all_original(*args, **kwargs)
+    raw.close()
+
+
+database.create_all = _create_all_fast
 
 
 def pytest_addoption(parser):
@@ -330,8 +382,9 @@ class EntornoContable:
     admin_user: Any
 
 
-@pytest.fixture
-def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
+def _sembrar_entorno(
+    app: Flask, request: pytest.FixtureRequest, *, restaurar_libro_secundario: bool = True
+) -> EntornoContable:
     """Semilla mínima para escenarios contables y operativos."""
     with app.app_context():
         company = database.session.execute(select(Entity).filter_by(code="cacao")).scalar_one()
@@ -516,7 +569,8 @@ def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
                     secondary_book.currency = "NIO"
                     database.session.commit()
 
-        request.addfinalizer(restore_secondary_book_currency)
+        if restaurar_libro_secundario:
+            request.addfinalizer(restore_secondary_book_currency)
 
         return EntornoContable(
             app=app,
@@ -544,3 +598,41 @@ def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
             warehouse=warehouse,
             admin_user=admin_user,
         )
+
+
+@pytest.fixture
+def entorno_contable(app, request: pytest.FixtureRequest) -> EntornoContable:
+    """Escenario contable sobre la app compartida del worker de pruebas."""
+    return _sembrar_entorno(app, request)
+
+
+@pytest.fixture
+def entorno_contable_aislado(request: pytest.FixtureRequest) -> EntornoContable:
+    """Escenario contable con app y base SQLite propias de la prueba.
+
+    Aísla el estado de estos escenarios del resto de la suite: permite
+    ejecutarlos en cualquier orden y en paralelo sin que pruebas previas
+    alteren cuentas, series o secuencias.
+    """
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "SQLALCHEMY_ENGINE_OPTIONS": {
+                "poolclass": StaticPool,
+                "connect_args": {"check_same_thread": False},
+            },
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "SECRET_KEY": "test-isolated-scenario-secret",
+        }
+    )
+    with application.app_context():
+        _seed_worker_base_data(application)
+        escenario = _sembrar_entorno(application, request, restaurar_libro_secundario=False)
+        try:
+            yield escenario
+        finally:
+            database.session.remove()
+            database.engine.dispose()
