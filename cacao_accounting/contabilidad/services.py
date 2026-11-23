@@ -173,13 +173,12 @@ def enforce_close_and_recurring_company_access():
     if request.path.startswith("/accounting/period-close/"):
         from cacao_accounting.database import PeriodCloseRun
 
-        _enforce_accounting_resource_access(
-            PeriodCloseRun, identifier, "autorizar" if request.method == "POST" else "consultar"
-        )
+        # El guard solo aísla la compañía del recurso; la acción concreta
+        # (autorizar, editar, crear, anular) la exige el decorador de cada ruta
+        # (#1797).
+        _enforce_accounting_resource_access(PeriodCloseRun, identifier, "consultar")
     elif request.path.startswith("/accounting/journal/recurring/"):
-        _enforce_accounting_resource_access(
-            RecurringJournalTemplate, identifier, "autorizar" if request.method == "POST" else "consultar"
-        )
+        _enforce_accounting_resource_access(RecurringJournalTemplate, identifier, "consultar")
     elif request.path.startswith("/accounting/exchange-revaluation/"):
         from cacao_accounting.database import ExchangeRevaluation
 

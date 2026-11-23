@@ -198,3 +198,75 @@ def test_revalorizacion_de_compania_autorizada_sigue_disponible(guard_contable):
     response = client.get(f"/accounting/exchange-revaluation/{identifier}")
 
     assert response.status_code == 200
+
+
+def test_post_de_ruta_con_accion_propia_no_exige_autorizar():
+    """#1797: el guard aísla la compañía y no impone ``autorizar`` a todo POST."""
+    from flask import request as flask_request
+    from flask_login import login_user
+
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    with application.app_context():
+        database.create_all()
+        database.session.add_all(
+            [
+                Modules(module="accounting", default=True, enabled=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Entity(
+                    code="alpha",
+                    name="Alpha",
+                    company_name="Alpha SA",
+                    tax_id="J0001",
+                    currency="NIO",
+                    enabled=True,
+                    status="default",
+                ),
+                User(
+                    id="auxiliar",
+                    user="auxiliar",
+                    name="Auxiliar Alpha",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                ),
+                UserCompanyAccess(user_id="auxiliar", company_code="alpha"),
+            ]
+        )
+        database.session.flush()
+        period = AccountingPeriod(
+            entity="alpha",
+            name="PERIODO-ALPHA-10",
+            start=date(2026, 10, 1),
+            end=FECHA,
+            enabled=True,
+            is_closed=False,
+        )
+        database.session.add(period)
+        database.session.flush()
+        run = PeriodCloseRun(company="alpha", period_id=period.id, run_status="open")
+        database.session.add(run)
+        database.session.commit()
+        crea_roles_predeterminados()
+        cargar_permisos_predeterminados()
+        asigna_rol_a_usuario("auxiliar", "accounting_auxiliar")
+        database.session.commit()
+        usuario = database.session.get(User, "auxiliar")
+
+        with application.test_request_context(
+            f"/accounting/period-close/monthly/{run.id}/project-capitalization", method="POST"
+        ):
+            flask_request.view_args = {"identifier": run.id}
+            login_user(usuario)
+            assert enforce_close_and_recurring_company_access() is None
+
+    with application.app_context():
+        database.session.remove()
+        database.engine.dispose()
