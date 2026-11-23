@@ -68,7 +68,10 @@ def server() -> None:
         try:
             log.info("Iniciando servidor WSGI en puerto {puerto}.", puerto=PORT)
             serve(app, port=int(PORT), threads=int(THREADS))
-        except OSError:
+        except OSError as exc:
+            # Un puerto ocupado no es un arranque exitoso: el servicio no debe
+            # reportar éxito con el servidor caído (#1905).
             log.error("Puerto {PORT} actualmente en uso.")
+            raise SystemExit(1) from exc
     else:
         log.error("No se logro establecer con la base de datos.")
