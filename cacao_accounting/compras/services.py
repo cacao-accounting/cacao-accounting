@@ -3597,6 +3597,13 @@ def _update_import_landed_cost_from_request(registro: ImportLandedCost):
         return None
     exige_acceso_compania("purchases", company, "editar")
 
+    from cacao_accounting.document_flow import refresh_source_caches_for_target, revert_relations_for_target
+
+    # #1752: las líneas se recrean, así que las relaciones activas de la
+    # factura fuente deben revertirse y regenerarse con las nuevas líneas.
+    revert_relations_for_target("import_landed_cost", registro.id, reason="draft_edited")
+    refresh_source_caches_for_target("import_landed_cost", registro.id)
+
     before_state = {
         "posting_date": registro.posting_date,
         "allocation_method": registro.allocation_method,
@@ -3628,6 +3635,8 @@ def _update_import_landed_cost_from_request(registro: ImportLandedCost):
         Decimal("0"),
     )
     total_charges = _save_import_landed_cost_charges(registro)
+    if registro.purchase_invoice_id:
+        _link_landed_cost_to_invoice(registro, registro.purchase_invoice_id, company)
     total_charge_base_amount = sum(
         (
             Decimal(str(charge.base_amount or "0"))

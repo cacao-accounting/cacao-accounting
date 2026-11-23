@@ -20,12 +20,14 @@ from cacao_accounting.compras import services as compras_services
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
+    DocumentRelation,
     Entity,
     ImportLandedCost,
     ImportLandedCostCharge,
     ImportLandedCostItem,
     Party,
     PurchaseInvoice,
+    PurchaseInvoiceItem,
     Item,
     Modules,
     UOM,
@@ -110,6 +112,19 @@ def landed_cost_edit_scenario():
         )
         database.session.add(factura)
         database.session.flush()
+        database.session.add(
+            PurchaseInvoiceItem(
+                purchase_invoice_id=factura.id,
+                item_code="ART01",
+                item_name="Articulo importado",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+            )
+        )
+        database.session.flush()
         registro = ImportLandedCost(
             company="cacao",
             posting_date=FECHA,
@@ -146,6 +161,8 @@ def landed_cost_edit_scenario():
                 charge_type="charge",
             )
         )
+        database.session.flush()
+        compras_services._link_landed_cost_to_invoice(registro, factura.id, "cacao")
         database.session.commit()
         landed_id = registro.id
     yield app, {"landed": landed_id}
@@ -216,3 +233,66 @@ def test_edicion_rechaza_documento_aprobado(landed_cost_edit_scenario, monkeypat
     assert response is None
     with application.app_context():
         assert database.session.get(ImportLandedCost, ids["landed"]).docstatus == 1
+
+
+def test_edicion_regenera_relaciones_con_las_lineas_nuevas(landed_cost_edit_scenario, monkeypatch):
+    """Las relaciones activas de la factura apuntan a las líneas recreadas."""
+    application, ids = landed_cost_edit_scenario
+    monkeypatch.setattr(compras_services, "exige_acceso_compania", lambda *_a, **_k: None)
+    with application.app_context():
+        anterior = database.session.execute(
+            database.select(ImportLandedCostItem).filter_by(import_landed_cost_id=ids["landed"])
+        ).scalar_one()
+        relaciones_antes = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(
+                    target_type="import_landed_cost", target_id=ids["landed"], status="active"
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert relaciones_antes
+        assert {rel.target_item_id for rel in relaciones_antes} == {anterior.id}
+        anterior_id = anterior.id
+
+    form = {
+        "company": "cacao",
+        "posting_date": FECHA.isoformat(),
+        "allocation_method": "by_quantity",
+        "remarks": "Líneas regeneradas",
+        "item_item_code_0": "ART01",
+        "item_item_name_0": "Articulo importado",
+        "item_qty_0": "2",
+        "item_uom_0": "UND",
+        "item_rate_0": "100",
+        "item_amount_0": "200",
+        "charge_concept_0": "Flete",
+        "charge_type_0": "charge",
+        "charge_amount_0": "20",
+    }
+    with application.test_request_context(f"/buying/import-landed-cost/{ids['landed']}/edit", method="POST", data=form):
+        registro = database.session.get(ImportLandedCost, ids["landed"])
+        response = compras_services._update_import_landed_cost_from_request(registro)
+
+    assert response is not None
+    with application.app_context():
+        nuevas = (
+            database.session.execute(database.select(ImportLandedCostItem).filter_by(import_landed_cost_id=ids["landed"]))
+            .scalars()
+            .all()
+        )
+        relaciones = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(
+                    target_type="import_landed_cost", target_id=ids["landed"], status="active"
+                )
+            )
+            .scalars()
+            .all()
+        )
+        nuevas_ids = {item.id for item in nuevas}
+        assert relaciones
+        assert {rel.target_item_id for rel in relaciones} <= nuevas_ids
+        assert all(rel.target_item_id != anterior_id for rel in relaciones)
+        assert sum(item.qty for item in nuevas) == Decimal("2")
