@@ -916,13 +916,7 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
     debit = _decimal(raw_line.get("debit"))
     credit = _decimal(raw_line.get("credit"))
     raw_order = raw_line.get("order")
-    try:
-        try:
-            order = int(raw_order) if raw_order not in (None, "") else fallback_order
-        except (TypeError, ValueError) as exc:
-            raise JournalValidationError(_("El orden de la línea debe ser un número entero.")) from exc
-    except (TypeError, ValueError) as exc:
-        raise JournalValidationError(_("El orden de la línea debe ser un número entero.")) from exc
+    order = _parse_line_order(raw_order, fallback_order)
     try:
         is_advance = coerce_boolean(raw_line.get("is_advance"), "is_advance")
     except ValueError as exc:
@@ -1552,3 +1546,20 @@ def _optional_bool(value: Any) -> bool:
         return False
     normalized = str(value).strip().lower()
     return normalized in ("true", "1", "yes", "on")
+
+
+def _parse_line_order(raw_order: Any, fallback_order: int) -> int:
+    """Valida que el orden de línea sea entero sin coerciones con pérdida."""
+    error_message = _("El orden de la línea debe ser un número entero.")
+    if raw_order is None or raw_order == "":
+        return fallback_order
+    if isinstance(raw_order, bool):
+        raise JournalValidationError(error_message)
+    if isinstance(raw_order, int):
+        return raw_order
+    if isinstance(raw_order, str):
+        try:
+            return int(raw_order)
+        except ValueError as exc:
+            raise JournalValidationError(error_message) from exc
+    raise JournalValidationError(error_message)
