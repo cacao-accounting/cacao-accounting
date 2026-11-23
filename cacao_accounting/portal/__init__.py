@@ -50,21 +50,20 @@ def check_portal_access(role_name: str) -> None:
     El acceso del tercero exige además que ``Party.is_active`` y su vínculo
     ``CompanyParty.is_active`` para la compañía del usuario sigan vigentes. La
     desactivación revoca nuevas consultas, incluso sobre documentos históricos,
-    sin modificar la evidencia almacenada (#1919).
+    sin modificar la evidencia almacenada (#1919). Un rol administrativo
+    adicional no exime al perfil de portal de esa revocación.
     """
     if is_desktop_mode():
         abort(403)
+    if current_user.is_portal_customer or current_user.is_portal_supplier:
+        _require_active_party_link()
+        if role_name == "customer" and current_user.is_portal_customer:
+            return
+        if role_name == "supplier" and current_user.is_portal_supplier:
+            return
+        abort(403)
     if _is_user_admin():
         return
-
-    if role_name == "customer" and current_user.is_portal_customer:
-        _require_active_party_link()
-        return
-
-    if role_name == "supplier" and current_user.is_portal_supplier:
-        _require_active_party_link()
-        return
-
     abort(403)
 
 
@@ -91,15 +90,17 @@ def portal_home_for_user() -> str | None:
     """Devuelve la ruta del portal aplicable con el mismo criterio que el guard.
 
     Evita redirigir al portal a un usuario cuya clasificación lo habilita pero
-    cuyo tercero o vínculo fue revocado, que terminaría en 403 (#1920).
+    cuyo tercero o vínculo fue revocado, que terminaría en 403 (#1920). Un rol
+    administrativo adicional no convierte al perfil de portal en administrador
+    para este flujo.
     """
-    if is_desktop_mode() or _is_user_admin():
+    if is_desktop_mode():
         return None
-    if not active_party_link_exists():
-        return None
-    if current_user.is_portal_customer:
-        return "/portal/customer"
-    if current_user.is_portal_supplier:
+    if current_user.is_portal_customer or current_user.is_portal_supplier:
+        if not active_party_link_exists():
+            return None
+        if current_user.is_portal_customer:
+            return "/portal/customer"
         return "/portal/supplier"
     return None
 
@@ -143,7 +144,6 @@ def customer_dashboard():
     """Dashboard principal del portal de clientes."""
     check_portal_access("customer")
     pid = current_user.party_id
-    is_admin = _is_user_admin()
 
     q_invoices = database.select(SalesInvoice).filter_by(
         document_type="sales_invoice", company=current_user.company, docstatus=1
@@ -152,11 +152,12 @@ def customer_dashboard():
     q_quotations = database.select(SalesQuotation).filter_by(company=current_user.company, docstatus=1)
     q_deliveries = database.select(DeliveryNote).filter_by(company=current_user.company, docstatus=1)
 
-    if not is_admin and pid:
-        q_invoices = q_invoices.filter_by(customer_id=pid)
-        q_orders = q_orders.filter_by(customer_id=pid)
-        q_quotations = q_quotations.filter_by(customer_id=pid)
-        q_deliveries = q_deliveries.filter_by(customer_id=pid)
+    portal_pid = pid if current_user.is_portal_customer or current_user.is_portal_supplier else None
+    if portal_pid:
+        q_invoices = q_invoices.filter_by(customer_id=portal_pid)
+        q_orders = q_orders.filter_by(customer_id=portal_pid)
+        q_quotations = q_quotations.filter_by(customer_id=portal_pid)
+        q_deliveries = q_deliveries.filter_by(customer_id=portal_pid)
 
     page = _portal_page_number()
     invoices, total_invoices = _portal_page(q_invoices, SalesInvoice.posting_date.desc(), page)
@@ -199,8 +200,7 @@ def customer_invoice(invoice_id):
     if not invoice:
         abort(404)
 
-    is_admin = _is_user_admin()
-    if not is_admin and invoice.customer_id != current_user.party_id:
+    if current_user.is_portal_customer and invoice.customer_id != current_user.party_id:
         abort(403)
 
     items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice_id)).all()
@@ -218,8 +218,7 @@ def customer_order(order_id):
     if not order:
         abort(404)
 
-    is_admin = _is_user_admin()
-    if not is_admin and order.customer_id != current_user.party_id:
+    if current_user.is_portal_customer and order.customer_id != current_user.party_id:
         abort(403)
 
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=order_id)).all()
@@ -237,8 +236,7 @@ def customer_quotation(quotation_id):
     if not quotation:
         abort(404)
 
-    is_admin = _is_user_admin()
-    if not is_admin and quotation.customer_id != current_user.party_id:
+    if current_user.is_portal_customer and quotation.customer_id != current_user.party_id:
         abort(403)
 
     items = database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=quotation_id)).all()
@@ -256,8 +254,7 @@ def customer_delivery(delivery_id):
     if not delivery:
         abort(404)
 
-    is_admin = _is_user_admin()
-    if not is_admin and delivery.customer_id != current_user.party_id:
+    if current_user.is_portal_customer and delivery.customer_id != current_user.party_id:
         abort(403)
 
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=delivery_id)).all()
@@ -273,7 +270,6 @@ def supplier_dashboard():
     """Dashboard principal del portal de proveedores."""
     check_portal_access("supplier")
     pid = current_user.party_id
-    is_admin = _is_user_admin()
 
     q_invoices = database.select(PurchaseInvoice).filter_by(
         document_type="purchase_invoice", company=current_user.company, docstatus=1
@@ -287,12 +283,13 @@ def supplier_dashboard():
     q_quotations = database.select(PurchaseQuotation).filter_by(company=current_user.company, docstatus=1)
     q_receipts = database.select(PurchaseReceipt).filter_by(company=current_user.company, docstatus=1)
 
-    if not is_admin and pid:
-        q_invoices = q_invoices.filter_by(supplier_id=pid)
-        q_notes = q_notes.filter_by(supplier_id=pid)
-        q_orders = q_orders.filter_by(supplier_id=pid)
-        q_quotations = q_quotations.filter_by(supplier_id=pid)
-        q_receipts = q_receipts.filter_by(supplier_id=pid)
+    portal_pid = pid if current_user.is_portal_customer or current_user.is_portal_supplier else None
+    if portal_pid:
+        q_invoices = q_invoices.filter_by(supplier_id=portal_pid)
+        q_notes = q_notes.filter_by(supplier_id=portal_pid)
+        q_orders = q_orders.filter_by(supplier_id=portal_pid)
+        q_quotations = q_quotations.filter_by(supplier_id=portal_pid)
+        q_receipts = q_receipts.filter_by(supplier_id=portal_pid)
 
     page = _portal_page_number()
     invoices, total_invoices = _portal_page(q_invoices, PurchaseInvoice.posting_date.desc(), page)
@@ -339,8 +336,7 @@ def supplier_invoice(invoice_id):
     if not invoice:
         abort(404)
 
-    is_admin = _is_user_admin()
-    if not is_admin and invoice.supplier_id != current_user.party_id:
+    if current_user.is_portal_supplier and invoice.supplier_id != current_user.party_id:
         abort(403)
 
     items = database.session.execute(
@@ -360,8 +356,7 @@ def supplier_order(order_id):
     if not order:
         abort(404)
 
-    is_admin = _is_user_admin()
-    if not is_admin and order.supplier_id != current_user.party_id:
+    if current_user.is_portal_supplier and order.supplier_id != current_user.party_id:
         abort(403)
 
     items = database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=order_id)).all()
@@ -379,8 +374,7 @@ def supplier_quotation(quotation_id):
     if not quotation:
         abort(404)
 
-    is_admin = _is_user_admin()
-    if not is_admin and quotation.supplier_id != current_user.party_id:
+    if current_user.is_portal_supplier and quotation.supplier_id != current_user.party_id:
         abort(403)
 
     items = database.session.execute(
@@ -400,8 +394,7 @@ def supplier_receipt(receipt_id):
     if not receipt:
         abort(404)
 
-    is_admin = _is_user_admin()
-    if not is_admin and receipt.supplier_id != current_user.party_id:
+    if current_user.is_portal_supplier and receipt.supplier_id != current_user.party_id:
         abort(403)
 
     items = database.session.execute(

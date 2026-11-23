@@ -25,6 +25,8 @@ from cacao_accounting.database import (
     Entity,
     Party,
     PurchaseInvoice,
+    Roles,
+    RolesUser,
     SalesInvoice,
     User,
     database,
@@ -58,12 +60,17 @@ def portal_revocable():
         database.session.flush()
         cliente = Party(code=f"CLI-{suffix}", name="Cliente Portal", is_customer=True, is_active=True)
         proveedor = Party(code=f"PRV-{suffix}", name="Proveedor Portal", is_supplier=True, is_active=True)
-        database.session.add_all([cliente, proveedor])
+        otro_cliente = Party(code=f"OTR-{suffix}", name="Otro Cliente", is_customer=True, is_active=True)
+        database.session.add_all([cliente, proveedor, otro_cliente])
+        database.session.flush()
+        rol_admin = Roles(name="admin", note="Administración")
+        database.session.add(rol_admin)
         database.session.flush()
         database.session.add_all(
             [
                 CompanyParty(company="cacao", party_id=cliente.id, is_active=True),
                 CompanyParty(company="cacao", party_id=proveedor.id, is_active=True),
+                CompanyParty(company="cacao", party_id=otro_cliente.id, is_active=True),
                 User(
                     id=f"portal-cliente-{suffix}",
                     user=f"portal_cliente_{suffix}",
@@ -84,8 +91,20 @@ def portal_revocable():
                     party_id=proveedor.id,
                     company="cacao",
                 ),
+                User(
+                    id=f"portal-mixto-{suffix}",
+                    user=f"portal_mixto_{suffix}",
+                    name="Cliente con rol admin",
+                    password=b"x",
+                    active=True,
+                    classification="customer",
+                    party_id=cliente.id,
+                    company="cacao",
+                ),
             ]
         )
+        database.session.flush()
+        database.session.add(RolesUser(user_id=f"portal-mixto-{suffix}", role_id=rol_admin.id, active=True))
         database.session.flush()
         factura_venta = SalesInvoice(
             company="cacao",
@@ -109,15 +128,31 @@ def portal_revocable():
             supplier_id=proveedor.id,
             supplier_name=proveedor.name,
         )
-        database.session.add_all([factura_venta, factura_compra])
+        factura_otro = SalesInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="FAC-PORTAL-OTRO",
+            customer_id=otro_cliente.id,
+            customer_name=otro_cliente.name,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            grand_total=Decimal("50"),
+            total=Decimal("50"),
+            outstanding_amount=Decimal("50"),
+        )
+        database.session.add_all([factura_venta, factura_compra, factura_otro])
         database.session.commit()
         ids = {
             "cliente": cliente.id,
             "proveedor": proveedor.id,
             "cliente_user": f"portal-cliente-{suffix}",
             "proveedor_user": f"portal-proveedor-{suffix}",
+            "mixto_user": f"portal-mixto-{suffix}",
             "factura_venta": factura_venta.id,
             "factura_compra": factura_compra.id,
+            "factura_otro": factura_otro.id,
         }
     yield application, ids
     with application.app_context():
@@ -237,3 +272,56 @@ def test_login_redirige_al_portal_con_vinculo_vigente(portal_revocable):
         with application.test_request_context("/"):
             login_user(user)
             assert portal_home_for_user() == "/portal/customer"
+
+
+def test_perfil_mixto_admin_solo_ve_sus_documentos(portal_revocable):
+    """Un cliente con rol admin conserva el filtro de su tercero."""
+    application, ids = portal_revocable
+    client = _client_for(application, ids["mixto_user"])
+
+    dashboard = client.get("/portal/customer")
+    propio = client.get(f"/portal/customer/invoice/{ids['factura_venta']}")
+    ajeno = client.get(f"/portal/customer/invoice/{ids['factura_otro']}")
+
+    assert dashboard.status_code == 200
+    cuerpo = dashboard.get_data(as_text=True)
+    assert "FAC-PORTAL-1919" in cuerpo
+    assert "FAC-PORTAL-OTRO" not in cuerpo
+    assert propio.status_code == 200
+    assert ajeno.status_code == 403
+
+
+def test_perfil_mixto_admin_revocado_por_tercero(portal_revocable):
+    """El rol admin no evita la revocación cuando el tercero se desactiva."""
+    application, ids = portal_revocable
+    client = _client_for(application, ids["mixto_user"])
+    _deactivate_party(application, ids["cliente"])
+
+    assert client.get("/portal/customer").status_code == 403
+    assert client.get(f"/portal/customer/invoice/{ids['factura_venta']}").status_code == 403
+
+
+def test_perfil_mixto_admin_revocado_por_vinculo(portal_revocable):
+    """El rol admin no evita la revocación cuando el vínculo se desactiva."""
+    application, ids = portal_revocable
+    client = _client_for(application, ids["mixto_user"])
+    _deactivate_link(application, ids["cliente"])
+
+    assert client.get("/portal/customer").status_code == 403
+    assert client.get(f"/portal/customer/invoice/{ids['factura_venta']}").status_code == 403
+
+
+def test_login_no_redirige_al_portal_mixto_revocado(portal_revocable):
+    """El perfil mixto revocado tampoco recibe redirección al portal."""
+    from flask_login import login_user
+
+    from cacao_accounting.portal import portal_home_for_user
+
+    application, ids = portal_revocable
+    _deactivate_link(application, ids["cliente"])
+
+    with application.app_context():
+        user = database.session.get(User, ids["mixto_user"])
+        with application.test_request_context("/"):
+            login_user(user)
+            assert portal_home_for_user() is None
