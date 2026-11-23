@@ -1254,11 +1254,13 @@ def libro(id_unidad):
     """Libro de Contabilidad."""
     from cacao_accounting.database import Book
 
-    REGISTRO = database.session.execute(database.select(Book).filter_by(code=id_unidad)).first()
+    REGISTRO = database.session.execute(database.select(Book).filter_by(code=id_unidad)).scalar_one_or_none()
+    if REGISTRO is None:
+        abort(404)
     return render_template(
         "contabilidad/book.html",
-        registro=REGISTRO[0],
-        titulo=_("Contabilidad | Libro") + f" {REGISTRO[0].code} - " + APPNAME,
+        registro=REGISTRO,
+        titulo=_("Contabilidad | Libro") + f" {REGISTRO.code} - " + APPNAME,
     )
 
 
