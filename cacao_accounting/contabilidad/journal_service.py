@@ -917,7 +917,10 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
     credit = _decimal(raw_line.get("credit"))
     raw_order = raw_line.get("order")
     try:
-        order = int(raw_order) if raw_order not in (None, "") else fallback_order
+        try:
+            order = int(raw_order) if raw_order not in (None, "") else fallback_order
+        except (TypeError, ValueError) as exc:
+            raise JournalValidationError(_("El orden de la línea debe ser un número entero.")) from exc
     except (TypeError, ValueError) as exc:
         raise JournalValidationError(_("El orden de la línea debe ser un número entero.")) from exc
     try:
