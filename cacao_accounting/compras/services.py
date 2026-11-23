@@ -1835,7 +1835,7 @@ def _create_purchase_order_from_request(form: dict):
                 "warning",
             )
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
-    except (IdentifierConfigurationError, DocumentFlowError) as exc:
+    except (IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
         return None

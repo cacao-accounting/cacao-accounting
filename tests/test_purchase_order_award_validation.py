@@ -421,6 +421,36 @@ def test_adjudicacion_rechaza_cantidades_repetidas_sobre_el_total(adjudicaciones
         assert valido is False
 
 
+def test_creacion_rechaza_tarifa_no_finita_sin_500(adjudicaciones, monkeypatch):
+    """#1544: una tarifa Infinity en el alta devuelve validación, no 500."""
+    application, ids = adjudicaciones
+    form = {
+        "company": ids["company"],
+        "supplier_id": ids["proveedor_a"],
+        "posting_date": FECHA.isoformat(),
+        "transaction_currency": "NIO",
+        "item_code_0": ids["item_code"],
+        "qty_0": "1",
+        "rate_0": "Infinity",
+        "uom_0": "BOX",
+    }
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    from flask_login import login_user
+
+    with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
+        login_user(database.session.get(User, ids["user"]))
+        resultado = _create_purchase_order_from_request(form)
+
+    assert resultado is None
+    with application.app_context():
+        ordenes = (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalars()
+            .all()
+        )
+        assert ordenes == []
+
+
 @pytest.mark.parametrize("qty", ["0", "-1", "Infinity", "NaN"])
 def test_adjudicacion_rechaza_cantidad_no_positiva_o_no_finita(adjudicaciones, qty):
     """Partial order quantities must be finite and positive."""
