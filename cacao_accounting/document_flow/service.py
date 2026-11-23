@@ -881,6 +881,19 @@ def _revert_relations_for_target(target_type: str, target_id: str, reason: str) 
     return len(relations) + len(downstream)
 
 
+def _known_target_key(target_type: str) -> str:
+    """Normaliza y valida el tipo documental destino del cierre.
+
+    Un tipo ausente es un error de cliente; uno desconocido propaga el
+    ``ValueError`` del registro para que la ruta lo traduzca a 400 (#1465).
+    """
+    target_key = normalize_doctype(str(target_type or ""))
+    if not target_key:
+        raise DocumentFlowError(_("Debe indicar el tipo de documento destino."), 400)
+    get_document_type(target_key)
+    return target_key
+
+
 def close_line_balance(
     *,
     source_type: str,
@@ -902,7 +915,7 @@ def close_line_balance(
     antes del ``jsonify`` para no publicar un cierre no persistido (#1466).
     """
     source_key = normalize_doctype(source_type)
-    target_key = normalize_doctype(target_type)
+    target_key = _known_target_key(target_type)
     if not reason.strip():
         raise DocumentFlowError(_("Debe indicar el motivo del cierre de saldo."), 409)
     source_item = get_document_item(source_key, source_item_id)
@@ -964,6 +977,7 @@ def close_document_balances(
     del commit para que la evidencia quede confirmada antes de responder.
     """
     closed: list[dict[str, Any]] = []
+    _known_target_key(target_type)
     for item in get_document_items(source_type, source_id):
         available = pending_qty(source_type, source_id, item.id, target_type, exclude_draft_targets=True)
         if available > 0:

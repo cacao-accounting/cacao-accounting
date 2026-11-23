@@ -24764,3 +24764,7 @@ msgstr "The company identifier is not valid."
 #: cacao_accounting/printing/admin_routes.py
 msgid "Ya existe una plantilla con ese código para el tipo documental."
 msgstr "A template with that code already exists for the document type."
+
+#: cacao_accounting/document_flow/service.py
+msgid "Debe indicar el tipo de documento destino."
+msgstr "The target document type is required."

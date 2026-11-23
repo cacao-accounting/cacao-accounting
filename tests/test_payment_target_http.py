@@ -212,17 +212,22 @@ def test_solo_ventas_no_crea_pagos(app, entorno_contable):
     assert response.status_code == 403, response.get_data(as_text=True)
 
 
-def test_create_target_con_tipo_desconocido_responde_400(app, entorno_contable, cajero):
-    """#1465: un target_document_type inválido es error de cliente, no 500."""
+def test_create_target_con_origen_valido_y_destino_desconocido(app, entorno_contable, authenticated_client):
+    """#1465: con una fuente real, un destino inválido es error de cliente."""
     from cacao_accounting.database import DocumentRelation, PaymentEntry
 
     with app.app_context():
+        invoice = _factura_cliente("cacao", f"FAC-1465-{uuid4().hex[:6]}")
+        invoice_id = invoice.id
+        database.session.commit()
         antes_pagos = len(database.session.execute(database.select(PaymentEntry)).scalars().all())
         antes_relaciones = len(database.session.execute(database.select(DocumentRelation)).scalars().all())
 
-    response = _cliente(app, cajero).post(
+    response = authenticated_client("admin").post(
         "/api/document-flow/create-target",
         json={
+            "source_document_type": "sales_invoice",
+            "source_document_id": invoice_id,
             "target_document_type": "tipo-inventado",
             "company": "cacao",
             "posting_date": "2026-05-15",
@@ -230,9 +235,60 @@ def test_create_target_con_tipo_desconocido_responde_400(app, entorno_contable, 
         },
     )
 
-    # El endpoint clasifica un tipo inexistente como recurso no encontrado
-    # (404); lo exigible es que sea error de cliente y sin escrituras.
     assert response.status_code in {400, 404}, response.get_data(as_text=True)
     with app.app_context():
         assert len(database.session.execute(database.select(PaymentEntry)).scalars().all()) == antes_pagos
         assert len(database.session.execute(database.select(DocumentRelation)).scalars().all()) == antes_relaciones
+
+
+def test_close_line_con_destino_desconocido_responde_400(app, entorno_contable, authenticated_client):
+    """#1465: un destino inexistente en close-line no escapa como 500."""
+    from cacao_accounting.database import SalesInvoiceItem
+
+    with app.app_context():
+        invoice = _factura_cliente("cacao", f"FAC-CLOSE-{uuid4().hex[:6]}")
+        item = SalesInvoiceItem(
+            sales_invoice_id=invoice.id,
+            item_code="ART01",
+            qty=Decimal("1"),
+            uom="UND",
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+        )
+        database.session.add(item)
+        database.session.commit()
+        invoice_id, item_id = invoice.id, item.id
+
+    response = authenticated_client("admin").post(
+        "/api/document-flow/close-line",
+        json={
+            "source_document_type": "sales_invoice",
+            "source_document_id": invoice_id,
+            "source_row_id": item_id,
+            "target_document_type": "tipo-inventado",
+            "qty": "1",
+            "reason": "Prueba QA3",
+        },
+    )
+
+    assert response.status_code == 400, response.get_data(as_text=True)
+
+
+def test_close_document_con_destino_desconocido_responde_400(app, entorno_contable, authenticated_client):
+    """#1465: un destino inexistente en close-document no escapa como 500."""
+    with app.app_context():
+        invoice = _factura_cliente("cacao", f"FAC-CLOSEDOC-{uuid4().hex[:6]}")
+        database.session.commit()
+        invoice_id = invoice.id
+
+    response = authenticated_client("admin").post(
+        "/api/document-flow/close-document",
+        json={
+            "source_document_type": "sales_invoice",
+            "source_document_id": invoice_id,
+            "target_document_type": "tipo-inventado",
+            "reason": "Prueba QA3",
+        },
+    )
+
+    assert response.status_code == 400, response.get_data(as_text=True)
