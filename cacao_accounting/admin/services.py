@@ -179,6 +179,16 @@ def _ensure_write_intent() -> None:
 def _lock_last_admin_users(target_user_id: str | None = None) -> None:
     """Serializa la transición que podría dejar el sistema sin administradores."""
     _ensure_write_intent()
+    # Orden determinista: primero todas las filas admin activas por id y luego
+    # la fila objetivo. Adquirir la objetivo primero permitía interbloqueos
+    # entre dos sesiones que cambian administradores distintos (#1767).
+    database.session.execute(
+        database.select(User.id)
+        .where(User.active.is_(True), _active_admin_filter())
+        .order_by(User.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalars().all()
     if target_user_id:
         database.session.execute(
             database.select(User.id)
@@ -186,12 +196,6 @@ def _lock_last_admin_users(target_user_id: str | None = None) -> None:
             .with_for_update()
             .execution_options(populate_existing=True)
         ).scalar_one_or_none()
-    database.session.execute(
-        database.select(User.id)
-        .where(User.active.is_(True), _active_admin_filter())
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    ).scalars().all()
 
 
 def _active_admin_count(exclude_user_id: str | None = None) -> int:
