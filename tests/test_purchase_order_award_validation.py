@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
 from threading import Barrier
+from uuid import uuid4
 
 import pytest
 
@@ -49,14 +50,23 @@ from cacao_accounting.database import (
 
 FECHA = date(2026, 10, 20)
 
+pytestmark = pytest.mark.database
+
 
 @pytest.fixture
 def adjudicaciones(tmp_path):
     """Adjudicación de Q1/proveedor A, con una fuente y proveedor alternos."""
+    import os
+
+    uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if uri.startswith("sqlite"):
+        uri = f"sqlite:///{tmp_path / 'purchase_awards.sqlite'}"
+    elif os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true y una base dedicada.")
     application = create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'purchase_awards.sqlite'}",
+            "SQLALCHEMY_DATABASE_URI": uri,
             "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 4, "max_overflow": 0},
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
@@ -66,22 +76,30 @@ def adjudicaciones(tmp_path):
     )
     with application.app_context():
         database.create_all()
+        sufijo = uuid4().hex[:6].upper()
+        company = f"CA-{sufijo}"
+        item_code = f"ART-1-{sufijo}"
+        item_code_2 = f"ART-2-{sufijo}"
+        user_id = f"admin-{sufijo}"
+        if database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none() is None:
+            database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+            database.session.flush()
+        if database.session.execute(database.select(Modules).filter_by(module="purchases")).scalar_one_or_none() is None:
+            database.session.add(Modules(module="purchases", default=False, enabled=True))
         database.session.add_all(
             [
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
+                    code=company,
+                    name=f"Cacao {sufijo}",
+                    company_name=f"Cacao SA {sufijo}",
+                    tax_id=f"J-{sufijo}",
                     currency="NIO",
                     enabled=True,
                     status="default",
                 ),
-                Modules(module="purchases", default=False, enabled=True),
                 User(
-                    id="admin",
-                    user="admin",
+                    id=user_id,
+                    user=user_id,
                     name="Administrador",
                     password=b"x",
                     active=True,
@@ -90,33 +108,35 @@ def adjudicaciones(tmp_path):
             ]
         )
         database.session.flush()
-        database.session.add_all([UOM(code="UND", name="Unidad"), UOM(code="BOX", name="Caja")])
+        for codigo, nombre in (("UND", "Unidad"), ("BOX", "Caja")):
+            if database.session.execute(database.select(UOM).filter_by(code=codigo)).scalar_one_or_none() is None:
+                database.session.add(UOM(code=codigo, name=nombre))
         database.session.flush()
-        proveedor_a = Party(code="PROV-A", name="Proveedor A", is_supplier=True)
-        proveedor_b = Party(code="PROV-B", name="Proveedor B", is_supplier=True)
-        item = Item(code="ART-1", name="Artículo", item_type="goods", is_stock_item=True, default_uom="UND")
+        proveedor_a = Party(code=f"PROV-A-{sufijo}", name="Proveedor A", is_supplier=True)
+        proveedor_b = Party(code=f"PROV-B-{sufijo}", name="Proveedor B", is_supplier=True)
+        item = Item(code=item_code, name="Artículo", item_type="goods", is_stock_item=True, default_uom="UND")
         database.session.add_all([proveedor_a, proveedor_b, item])
         database.session.flush()
         database.session.add(
-            ItemUOMConversion(item_code="ART-1", from_uom="BOX", to_uom="UND", conversion_factor=Decimal("2"))
+            ItemUOMConversion(item_code=item_code, from_uom="BOX", to_uom="UND", conversion_factor=Decimal("2"))
         )
         database.session.flush()
         database.session.add_all(
             [
-                CompanyParty(company="cacao", party_id=proveedor_a.id, is_active=True),
-                CompanyParty(company="cacao", party_id=proveedor_b.id, is_active=True),
+                CompanyParty(company=company, party_id=proveedor_a.id, is_active=True),
+                CompanyParty(company=company, party_id=proveedor_b.id, is_active=True),
             ]
         )
         database.session.flush()
         q1 = PurchaseQuotation(
-            company="cacao",
+            company=company,
             posting_date=FECHA,
             docstatus=1,
             document_no="RFQ-1",
             transaction_currency="NIO",
         )
         q2 = PurchaseQuotation(
-            company="cacao",
+            company=company,
             posting_date=FECHA,
             docstatus=1,
             document_no="RFQ-2",
@@ -125,7 +145,7 @@ def adjudicaciones(tmp_path):
         database.session.add_all([q1, q2])
         database.session.flush()
         sq_a = SupplierQuotation(
-            company="cacao",
+            company=company,
             posting_date=FECHA,
             docstatus=1,
             document_no="SQ-A",
@@ -134,7 +154,7 @@ def adjudicaciones(tmp_path):
             transaction_currency="NIO",
         )
         sq_b = SupplierQuotation(
-            company="cacao",
+            company=company,
             posting_date=FECHA,
             docstatus=1,
             document_no="SQ-B",
@@ -146,14 +166,14 @@ def adjudicaciones(tmp_path):
         database.session.flush()
         pq_item = PurchaseQuotationItem(
             purchase_quotation_id=q1.id,
-            item_code="ART-1",
+            item_code=item_code,
             qty=Decimal("50"),
             uom="UND",
             qty_in_base_uom=Decimal("50"),
         )
         sq_item = SupplierQuotationItem(
             supplier_quotation_id=sq_a.id,
-            item_code="ART-1",
+            item_code=item_code,
             qty=Decimal("5"),
             uom="BOX",
             qty_in_base_uom=Decimal("50"),
@@ -163,7 +183,7 @@ def adjudicaciones(tmp_path):
         database.session.flush()
         sq_b_item = SupplierQuotationItem(
             supplier_quotation_id=sq_b.id,
-            item_code="ART-1",
+            item_code=item_code,
             qty=Decimal("5"),
             uom="UND",
             qty_in_base_uom=Decimal("5"),
@@ -171,11 +191,11 @@ def adjudicaciones(tmp_path):
         )
         database.session.add(sq_b_item)
         database.session.flush()
-        item_2 = Item(code="ART-2", name="Artículo 2", item_type="goods", is_stock_item=True, default_uom="UND")
+        item_2 = Item(code=item_code_2, name="Artículo 2", item_type="goods", is_stock_item=True, default_uom="UND")
         database.session.add(item_2)
         database.session.flush()
         sq_b_q1 = SupplierQuotation(
-            company="cacao",
+            company=company,
             posting_date=FECHA,
             docstatus=1,
             document_no="SQ-B-Q1",
@@ -187,14 +207,14 @@ def adjudicaciones(tmp_path):
         database.session.flush()
         pq_item_2 = PurchaseQuotationItem(
             purchase_quotation_id=q1.id,
-            item_code="ART-2",
+            item_code=item_code_2,
             qty=Decimal("5"),
             uom="UND",
             qty_in_base_uom=Decimal("5"),
         )
         sq_b_q1_item = SupplierQuotationItem(
             supplier_quotation_id=sq_b_q1.id,
-            item_code="ART-2",
+            item_code=item_code_2,
             qty=Decimal("5"),
             uom="UND",
             qty_in_base_uom=Decimal("5"),
@@ -204,7 +224,7 @@ def adjudicaciones(tmp_path):
         database.session.flush()
         award = PurchaseQuotationAward(
             purchase_quotation_id=q1.id,
-            company="cacao",
+            company=company,
             status="finalized",
         )
         database.session.add(award)
@@ -216,7 +236,7 @@ def adjudicaciones(tmp_path):
                     purchase_quotation_item_id=pq_item.id,
                     supplier_quotation_id=sq_a.id,
                     supplier_quotation_item_id=sq_item.id,
-                    item_code="ART-1",
+                    item_code=item_code,
                     qty=Decimal("5"),
                     rate=Decimal("10"),
                     amount=Decimal("50"),
@@ -226,7 +246,7 @@ def adjudicaciones(tmp_path):
                     purchase_quotation_item_id=pq_item_2.id,
                     supplier_quotation_id=sq_b_q1.id,
                     supplier_quotation_item_id=sq_b_q1_item.id,
-                    item_code="ART-2",
+                    item_code=item_code_2,
                     qty=Decimal("5"),
                     rate=Decimal("12"),
                     amount=Decimal("60"),
@@ -242,6 +262,12 @@ def adjudicaciones(tmp_path):
             "proveedor_b": proveedor_b.id,
             "sq_item": sq_item.id,
             "sq_b_item": sq_b_item.id,
+            "company": company,
+            "item_code": item_code,
+            "item_code_2": item_code_2,
+            "user": user_id,
+            "uom_base": "UND",
+            "uom_box": "BOX",
         }
     yield application, ids
     with application.app_context():
@@ -252,7 +278,7 @@ def adjudicaciones(tmp_path):
 def _form(ids, **overrides):
     form = {
         "supplier_id": ids["proveedor_a"],
-        "item_code_0": "ART-1",
+        "item_code_0": ids["item_code"],
         "qty_0": "1",
         "source_item_id_0": ids["sq_item"],
         "uom_0": "BOX",
@@ -276,7 +302,7 @@ def test_adjudicacion_valida_corresponde_a_origen_proveedor_y_linea(adjudicacion
         resultado, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=source,
             supplier_id=ids["proveedor_a"],
             form=_form(ids),
@@ -293,7 +319,7 @@ def test_award_multisupplier_valida_orden_por_sus_lineas(adjudicaciones):
         resultado, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=ids["proveedor_a"],
             form=_form(ids),
@@ -309,7 +335,7 @@ def test_adjudicacion_rechaza_proveedor_ajeno(adjudicaciones):
         _, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=ids["proveedor_b"],
             form=_form(ids, supplier_id=ids["proveedor_b"]),
@@ -325,7 +351,7 @@ def test_adjudicacion_rechaza_origen_ajeno(adjudicaciones):
         _, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=source,
             supplier_id=ids["proveedor_a"],
             form=_form(ids),
@@ -340,7 +366,7 @@ def test_adjudicacion_rechaza_linea_no_adjudicada(adjudicaciones):
         _, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=ids["proveedor_a"],
             form=_form(ids, item_code_0="OTRO"),
@@ -355,7 +381,7 @@ def test_adjudicacion_rechaza_orden_sin_origen(adjudicaciones):
         _, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=None,
             supplier_id=ids["proveedor_a"],
             form=_form(ids),
@@ -370,7 +396,7 @@ def test_adjudicacion_rechaza_orden_sin_proveedor(adjudicaciones):
         _, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=None,
             form=_form(ids, supplier_id=None),
@@ -383,11 +409,11 @@ def test_adjudicacion_rechaza_cantidades_repetidas_sobre_el_total(adjudicaciones
     application, ids = adjudicaciones
     with application.app_context():
         form = _form(ids, qty_0="4")
-        form.update({"item_code_1": "ART-1", "qty_1": "4", "source_item_id_1": ids["sq_item"]})
+        form.update({"item_code_1": ids["item_code"], "qty_1": "4", "source_item_id_1": ids["sq_item"]})
         _, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=ids["proveedor_a"],
             form=form,
@@ -403,7 +429,7 @@ def test_adjudicacion_rechaza_cantidad_no_positiva_o_no_finita(adjudicaciones, q
         _, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=ids["proveedor_a"],
             form=_form(ids, qty_0=qty),
@@ -419,7 +445,7 @@ def test_adjudicacion_rechaza_cambiar_uom_o_precio(adjudicaciones, field, value)
         _, valido = _validar(
             application,
             ids["award"],
-            "cacao",
+            ids["company"],
             source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=ids["proveedor_a"],
             form=_form(ids, **{field: value}),
@@ -455,7 +481,7 @@ def test_creacion_manual_usa_conversion_base_persistida_en_la_oferta(adjudicacio
     monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
     with application.app_context():
         conversion = database.session.execute(
-            database.select(ItemUOMConversion).filter_by(item_code="ART-1", from_uom="BOX", to_uom="UND")
+            database.select(ItemUOMConversion).filter_by(item_code=ids["item_code"], from_uom="BOX", to_uom="UND")
         ).scalar_one()
         database.session.delete(conversion)
         database.session.flush()
@@ -464,10 +490,12 @@ def test_creacion_manual_usa_conversion_base_persistida_en_la_oferta(adjudicacio
         from flask_login import login_user
 
         with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
-            login_user(database.session.get(User, "admin"))
+            login_user(database.session.get(User, ids["user"]))
             compras_services._create_purchase_order_from_request(form)
 
-        line = database.session.execute(database.select(PurchaseOrderItem)).scalar_one()
+        line = database.session.execute(
+            database.select(PurchaseOrderItem).join(PurchaseOrder).where(PurchaseOrder.company == ids["company"])
+        ).scalar_one()
         relation = database.session.execute(
             database.select(DocumentRelation).filter_by(target_item_id=line.id, status="active")
         ).scalar_one()
@@ -482,7 +510,7 @@ def test_ordenes_parciales_no_superan_saldo_adjudicado(adjudicaciones, monkeypat
     application, ids = adjudicaciones
     with application.app_context():
         award_line = database.session.execute(
-            database.select(PurchaseQuotationAwardItem).filter_by(item_code="ART-1")
+            database.select(PurchaseQuotationAwardItem).filter_by(item_code=ids["item_code"])
         ).scalar_one()
         rfq_line = database.session.get(PurchaseQuotationItem, award_line.purchase_quotation_item_id)
         rfq_line.qty = Decimal("5")
@@ -495,7 +523,11 @@ def test_ordenes_parciales_no_superan_saldo_adjudicado(adjudicaciones, monkeypat
     _crear_orden(application, ids, monkeypatch, qty_0="0.3")
 
     with application.app_context():
-        orders = database.session.execute(database.select(PurchaseOrder)).scalars().all()
+        orders = (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalars()
+            .all()
+        )
         assert len(orders) == 1
         line = database.session.execute(
             database.select(PurchaseOrderItem).filter_by(purchase_order_id=orders[0].id)
@@ -509,7 +541,7 @@ def test_ordenes_concurrentes_no_superan_saldo_adjudicado(adjudicaciones, monkey
     monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
     with application.app_context():
         award_line = database.session.execute(
-            database.select(PurchaseQuotationAwardItem).filter_by(item_code="ART-1")
+            database.select(PurchaseQuotationAwardItem).filter_by(item_code=ids["item_code"])
         ).scalar_one()
         rfq_line = database.session.get(PurchaseQuotationItem, award_line.purchase_quotation_item_id)
         rfq_line.qty = Decimal("5")
@@ -527,7 +559,7 @@ def test_ordenes_concurrentes_no_superan_saldo_adjudicado(adjudicaciones, monkey
             with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
                 from flask_login import login_user
 
-                login_user(database.session.get(User, "admin"))
+                login_user(database.session.get(User, ids["user"]))
                 barrier.wait(timeout=10)
                 result = _create_purchase_order_from_request(form)
             database.session.remove()
@@ -538,19 +570,23 @@ def test_ordenes_concurrentes_no_superan_saldo_adjudicado(adjudicaciones, monkey
 
     assert sorted(outcomes) == [False, True]
     with application.app_context():
-        orders = database.session.execute(database.select(PurchaseOrder)).scalars().all()
+        orders = (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalars()
+            .all()
+        )
         assert len(orders) == 1
 
 
 def _form_orden(ids, **overrides):
     form = {
-        "company": "cacao",
+        "company": ids["company"],
         "supplier_id": ids["proveedor_a"],
         "posting_date": FECHA.isoformat(),
         "transaction_currency": "NIO",
         "purchase_award_id": ids["award"],
         "from_supplier_quotation": ids["sq_a"],
-        "item_code_0": "ART-1",
+        "item_code_0": ids["item_code"],
         "qty_0": "1",
         "rate_0": "10",
         "uom_0": "BOX",
@@ -568,7 +604,7 @@ def _crear_orden(application, ids, monkeypatch, **overrides):
     from flask_login import login_user
 
     with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
-        login_user(database.session.get(User, "admin"))
+        login_user(database.session.get(User, ids["user"]))
         return _create_purchase_order_from_request(form)
 
 
@@ -579,7 +615,11 @@ def test_creacion_guarda_orden_con_adjudicacion_valida(adjudicaciones, monkeypat
     _crear_orden(application, ids, monkeypatch)
 
     with application.app_context():
-        ordenes = database.session.execute(database.select(PurchaseOrder)).scalars().all()
+        ordenes = (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalars()
+            .all()
+        )
         assert len(ordenes) == 1
         assert ordenes[0].purchase_award_id == ids["award"]
         assert ordenes[0].supplier_id == ids["proveedor_a"]
@@ -592,7 +632,12 @@ def test_creacion_rechaza_cambios_de_uom_o_precio_adjudicados(adjudicaciones, mo
     _crear_orden(application, ids, monkeypatch, **{field: value})
 
     with application.app_context():
-        assert database.session.execute(database.select(PurchaseOrder)).scalars().all() == []
+        assert (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalars()
+            .all()
+            == []
+        )
 
 
 def test_creacion_rechaza_adjudicacion_sin_origen(adjudicaciones, monkeypatch):
@@ -606,11 +651,16 @@ def test_creacion_rechaza_adjudicacion_sin_origen(adjudicaciones, monkeypatch):
     from flask_login import login_user
 
     with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
-        login_user(database.session.get(User, "admin"))
+        login_user(database.session.get(User, ids["user"]))
         _create_purchase_order_from_request(form)
 
     with application.app_context():
-        assert database.session.execute(database.select(PurchaseOrder)).scalars().all() == []
+        assert (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalars()
+            .all()
+            == []
+        )
 
 
 def test_creacion_rechaza_adjudicacion_sin_proveedor(adjudicaciones, monkeypatch):
@@ -621,11 +671,16 @@ def test_creacion_rechaza_adjudicacion_sin_proveedor(adjudicaciones, monkeypatch
     from flask_login import login_user
 
     with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
-        login_user(database.session.get(User, "admin"))
+        login_user(database.session.get(User, ids["user"]))
         _create_purchase_order_from_request(form)
 
     with application.app_context():
-        assert database.session.execute(database.select(PurchaseOrder)).scalars().all() == []
+        assert (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalars()
+            .all()
+            == []
+        )
 
 
 def test_edicion_rechaza_cambio_de_proveedor_con_adjudicacion(adjudicaciones, monkeypatch):
@@ -633,13 +688,17 @@ def test_edicion_rechaza_cambio_de_proveedor_con_adjudicacion(adjudicaciones, mo
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
     with application.app_context():
-        orden_id = database.session.execute(database.select(PurchaseOrder)).scalar_one().id
+        orden_id = (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalar_one()
+            .id
+        )
 
     form = _form_orden(ids, supplier_id=ids["proveedor_b"])
     from flask_login import login_user
 
     with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
-        login_user(database.session.get(User, "admin"))
+        login_user(database.session.get(User, ids["user"]))
         orden = database.session.get(PurchaseOrder, orden_id)
         _update_purchase_order_from_request(orden)
 
@@ -656,13 +715,17 @@ def test_edicion_rechaza_quitar_proveedor_con_adjudicacion(adjudicaciones, monke
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
     with application.app_context():
-        orden_id = database.session.execute(database.select(PurchaseOrder)).scalar_one().id
+        orden_id = (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalar_one()
+            .id
+        )
 
     form = _form_orden(ids, supplier_id="")
     from flask_login import login_user
 
     with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
-        login_user(database.session.get(User, "admin"))
+        login_user(database.session.get(User, ids["user"]))
         orden = database.session.get(PurchaseOrder, orden_id)
         _update_purchase_order_from_request(orden)
 
@@ -676,13 +739,17 @@ def test_edicion_conserva_orden_con_linea_adjudicada(adjudicaciones, monkeypatch
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
     with application.app_context():
-        orden_id = database.session.execute(database.select(PurchaseOrder)).scalar_one().id
+        orden_id = (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalar_one()
+            .id
+        )
 
     form = _form_orden(ids, remarks="Actualizada")
     from flask_login import login_user
 
     with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
-        login_user(database.session.get(User, "admin"))
+        login_user(database.session.get(User, ids["user"]))
         orden = database.session.get(PurchaseOrder, orden_id)
         _update_purchase_order_from_request(orden)
 
@@ -692,10 +759,14 @@ def test_edicion_conserva_orden_con_linea_adjudicada(adjudicaciones, monkeypatch
         assert orden.remarks == "Actualizada"
 
 
-def _orden_creada(application) -> str:  # noqa: ANN001 - fixture helper
+def _orden_creada(application, ids) -> str:  # noqa: ANN001 - fixture helper
     """Devuelve el identificador de la única orden persistida."""
     with application.app_context():
-        return database.session.execute(database.select(PurchaseOrder)).scalar_one().id
+        return (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalar_one()
+            .id
+        )
 
 
 def _linea_orden(application, orden_id: str) -> PurchaseOrderItem:  # noqa: ANN001 - fixture helper
@@ -704,12 +775,12 @@ def _linea_orden(application, orden_id: str) -> PurchaseOrderItem:  # noqa: ANN0
         return database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=orden_id)).scalar_one()
 
 
-def _editar_orden(application, orden_id: str, form: dict) -> None:  # noqa: ANN001 - fixture helper
+def _editar_orden(application, ids, orden_id: str, form: dict) -> None:  # noqa: ANN001 - fixture helper
     """Ejecuta el POST de edición de la orden con el formulario indicado."""
     from flask_login import login_user
 
     with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
-        login_user(database.session.get(User, "admin"))
+        login_user(database.session.get(User, ids["user"]))
         orden = database.session.get(PurchaseOrder, orden_id)
         _update_purchase_order_from_request(orden)
 
@@ -718,16 +789,16 @@ def test_edicion_rechaza_exceder_cantidad_adjudicada(adjudicaciones, monkeypatch
     """La edición no puede pedir más cantidad de la adjudicada."""
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
-    orden_id = _orden_creada(application)
+    orden_id = _orden_creada(application, ids)
 
-    _editar_orden(application, orden_id, _form_orden(ids, qty_0="6"))
+    _editar_orden(application, ids, orden_id, _form_orden(ids, qty_0="6"))
 
     with application.app_context():
         orden = database.session.get(PurchaseOrder, orden_id)
         linea = _linea_orden(application, orden_id)
         assert orden.purchase_award_id == ids["award"]
         assert orden.supplier_id == ids["proveedor_a"]
-        assert linea.item_code == "ART-1"
+        assert linea.item_code == ids["item_code"]
         assert linea.qty == Decimal("1")
 
 
@@ -748,12 +819,13 @@ def test_edicion_rechaza_linea_de_fuente_no_adjudicada(adjudicaciones, monkeypat
     """Una edición con fuente coherente de otra cotización no rompe la adjudicación."""
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
-    orden_id = _orden_creada(application)
+    orden_id = _orden_creada(application, ids)
     linea_id = _linea_orden(application, orden_id).id
     relaciones = _relaciones_de_orden(application, orden_id)
 
     _editar_orden(
         application,
+        ids,
         orden_id,
         _form_orden(ids, source_id_0=ids["sq_b"], source_item_id_0=ids["sq_b_item"]),
     )
@@ -764,7 +836,7 @@ def test_edicion_rechaza_linea_de_fuente_no_adjudicada(adjudicaciones, monkeypat
         assert orden.purchase_award_id == ids["award"]
         assert orden.supplier_id == ids["proveedor_a"]
         assert linea.id == linea_id
-        assert linea.item_code == "ART-1"
+        assert linea.item_code == ids["item_code"]
         assert linea.qty == Decimal("1")
     assert _relaciones_de_orden(application, orden_id) == relaciones
 
@@ -773,9 +845,9 @@ def test_edicion_valida_conserva_articulo_fuente_y_cantidad(adjudicaciones, monk
     """Una edición dentro de lo adjudicado persiste artículo, fuente y cantidad."""
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
-    orden_id = _orden_creada(application)
+    orden_id = _orden_creada(application, ids)
 
-    _editar_orden(application, orden_id, _form_orden(ids, qty_0="3", remarks="Cantidad ajustada"))
+    _editar_orden(application, ids, orden_id, _form_orden(ids, qty_0="3", remarks="Cantidad ajustada"))
 
     with application.app_context():
         orden = database.session.get(PurchaseOrder, orden_id)
@@ -783,7 +855,7 @@ def test_edicion_valida_conserva_articulo_fuente_y_cantidad(adjudicaciones, monk
         assert orden.purchase_award_id == ids["award"]
         assert orden.supplier_id == ids["proveedor_a"]
         assert orden.remarks == "Cantidad ajustada"
-        assert linea.item_code == "ART-1"
+        assert linea.item_code == ids["item_code"]
         assert linea.qty == Decimal("3")
         assert linea.uom == "BOX"
 
@@ -796,13 +868,13 @@ def test_edicion_con_tarifa_no_finita_preserva_orden(adjudicaciones, monkeypatch
     """
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
-    orden_id = _orden_creada(application)
+    orden_id = _orden_creada(application, ids)
 
     form = _form_orden(ids, rate_0="Infinity")
     with application.test_request_context(f"/buying/purchase-order/{orden_id}/edit", method="POST", data=form):
         from flask_login import login_user
 
-        login_user(database.session.get(User, "admin"))
+        login_user(database.session.get(User, ids["user"]))
         orden = database.session.get(PurchaseOrder, orden_id)
         response = _update_purchase_order_from_request(orden)
 
@@ -824,13 +896,13 @@ def test_edicion_adjudicada_sin_relacion_conserva_lineas(adjudicaciones, monkeyp
     """An omitted line source cannot erase the award's documentary evidence."""
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
-    orden_id = _orden_creada(application)
+    orden_id = _orden_creada(application, ids)
     linea_id = _linea_orden(application, orden_id).id
     relaciones = _relaciones_de_orden(application, orden_id)
     form = _form_orden(ids, remarks="No debe guardarse")
     form.pop(missing)
 
-    _editar_orden(application, orden_id, form)
+    _editar_orden(application, ids, orden_id, form)
 
     with application.app_context():
         orden = database.session.get(PurchaseOrder, orden_id)
@@ -844,19 +916,19 @@ def test_edicion_no_duplica_cantidad_con_alias_de_linea(adjudicaciones, monkeypa
     """A quotation row and its RFQ row cannot consume the same award twice."""
     application, ids = adjudicaciones
     _crear_orden(application, ids, monkeypatch)
-    orden_id = _orden_creada(application)
+    orden_id = _orden_creada(application, ids)
     linea_id = _linea_orden(application, orden_id).id
     relaciones = _relaciones_de_orden(application, orden_id)
     with application.app_context():
         rfq_item = (
-            database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(item_code="ART-1"))
+            database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(item_code=ids["item_code"]))
             .scalar_one()
             .purchase_quotation_item_id
         )
     form = _form_orden(ids, qty_0="4")
-    form.update({"item_code_1": "ART-1", "qty_1": "4", "source_item_id_1": rfq_item})
+    form.update({"item_code_1": ids["item_code"], "qty_1": "4", "source_item_id_1": rfq_item})
 
-    _editar_orden(application, orden_id, form)
+    _editar_orden(application, ids, orden_id, form)
 
     assert _linea_orden(application, orden_id).id == linea_id
     assert _relaciones_de_orden(application, orden_id) == relaciones

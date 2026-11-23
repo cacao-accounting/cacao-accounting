@@ -1480,7 +1480,7 @@ def _validate_purchase_order_sourcing(
         if not direct_supplier_quotation and not (is_purchase_manager(current_user.id) and exception_reason):
             flash_error(
                 PurchaseSourcingError(
-                    "La Orden de Compra debe originarse en un comparativo o incluir una excepción autorizada."
+                    _("La Orden de Compra debe originarse en un comparativo o incluir una excepción autorizada.")
                 )
             )
             return False
@@ -1499,18 +1499,18 @@ def _validate_purchase_order_award(
     """Load a finalized award and verify company, source, supplier and lines."""
     award = database.session.get(PurchaseQuotationAward, award_id) if award_id else None
     if award_id and (not award or award.status != "finalized"):
-        flash_error(PurchaseSourcingError("La adjudicación seleccionada no es válida."))
+        flash_error(PurchaseSourcingError(_("La adjudicación seleccionada no es válida.")))
         return None, False
     if award and award.company != company:
-        flash_error(PurchaseSourcingError("La adjudicación no pertenece a la compañía seleccionada."))
+        flash_error(PurchaseSourcingError(_("La adjudicación no pertenece a la compañía seleccionada.")))
         return None, False
     if award is None:
         return None, True
     if not supplier_id:
-        flash_error(PurchaseSourcingError("La adjudicación requiere un proveedor seleccionado."))
+        flash_error(PurchaseSourcingError(_("La adjudicación requiere un proveedor seleccionado.")))
         return None, False
     if not _award_matches_source(award, source):
-        flash_error(PurchaseSourcingError("La adjudicación no corresponde al origen seleccionado."))
+        flash_error(PurchaseSourcingError(_("La adjudicación no corresponde al origen seleccionado.")))
         return None, False
     try:
         award_items = _award_items(award)
@@ -1521,7 +1521,7 @@ def _validate_purchase_order_award(
         flash_error(DocumentFlowError(_("Otra orden está usando esta adjudicación. Intente nuevamente."), 409))
         return None, False
     if award.status != "finalized":
-        flash_error(PurchaseSourcingError("La adjudicación seleccionada no es válida."))
+        flash_error(PurchaseSourcingError(_("La adjudicación seleccionada no es válida.")))
         return None, False
     try:
         matches_order = _award_matches_supplier_and_lines(award, supplier_id, form, source, current_order_id)
@@ -1531,7 +1531,7 @@ def _validate_purchase_order_award(
         return None, False
     if not matches_order:
         database.session.rollback()
-        flash_error(PurchaseSourcingError("La adjudicación no corresponde al proveedor o líneas de la orden."))
+        flash_error(PurchaseSourcingError(_("La adjudicación no corresponde al proveedor o líneas de la orden.")))
         return None, False
     return award, True
 

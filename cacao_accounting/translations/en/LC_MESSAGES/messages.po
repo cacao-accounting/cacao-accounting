@@ -24812,3 +24812,27 @@ msgstr "The company of an import landed cost cannot be changed."
 #: cacao_accounting/bancos/templates/bancos/transaccion_lista.html
 msgid "No hay transacciones bancarias para los filtros seleccionados."
 msgstr "There are no bank transactions for the selected filters."
+
+#: cacao_accounting/compras/services.py
+msgid "La Orden de Compra debe originarse en un comparativo o incluir una excepción autorizada."
+msgstr "Purchase orders must originate from a comparison or include an authorized exception."
+
+#: cacao_accounting/compras/services.py
+msgid "La adjudicación seleccionada no es válida."
+msgstr "The selected award is not valid."
+
+#: cacao_accounting/compras/services.py
+msgid "La adjudicación no pertenece a la compañía seleccionada."
+msgstr "The award does not belong to the selected company."
+
+#: cacao_accounting/compras/services.py
+msgid "La adjudicación requiere un proveedor seleccionado."
+msgstr "The award requires a selected supplier."
+
+#: cacao_accounting/compras/services.py
+msgid "La adjudicación no corresponde al origen seleccionado."
+msgstr "The award does not match the selected source."
+
+#: cacao_accounting/compras/services.py
+msgid "La adjudicación no corresponde al proveedor o líneas de la orden."
+msgstr "The award does not match the order's supplier or lines."
