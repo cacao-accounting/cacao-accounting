@@ -4625,6 +4625,12 @@ def cash_flow_config(company):
         if set(account_ids) != expected_ids:
             flash(_("La clasificación debe enviarse completa para evitar borrados accidentales."), "danger")
             return redirect(url_for("contabilidad.cash_flow_config", company=selected_company))
+        if any(request.form.get(f"section_{account_id}") is None for account_id in account_ids):
+            # Un formulario que enumera las cuentas pero omite su sección no es
+            # una edición explícita: tratarlo como borrado permitiría destruir
+            # el mapeo NIC-7 con un payload incompleto (#1789).
+            flash(_("Cada cuenta debe incluir su sección de flujo de efectivo."), "danger")
+            return redirect(url_for("contabilidad.cash_flow_config", company=selected_company))
         overrides = {account_id: request.form.get(f"section_{account_id}") for account_id in account_ids}
         try:
             save_cash_flow_mappings(selected_company, overrides)

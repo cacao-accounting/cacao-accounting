@@ -196,3 +196,19 @@ def test_post_vacio_conserva_mapeos_existentes(escenario_efe):
             database.select(CashFlowAccountMapping).filter_by(company="cacao", account_id=ids["account"])
         ).scalar_one()
         assert mapping.flow_section == "investing"
+
+
+def test_formulario_sin_seccion_no_borra_el_mapeo(escenario_efe):
+    """#1789: enumerar cuentas sin su sección no equivale a borrar el mapeo."""
+    application, ids = escenario_efe
+    client = _login(application, ids["editor"])
+    _post(client, ids["account"], "operating")
+
+    incompleto = client.post(RUTA.format("cacao"), data={"account_ids": [ids["account"]]})
+
+    assert incompleto.status_code == 302
+    with application.app_context():
+        mapping = database.session.execute(
+            database.select(CashFlowAccountMapping).filter_by(company="cacao", account_id=ids["account"])
+        ).scalar_one()
+        assert mapping.flow_section == "operating"
