@@ -265,3 +265,67 @@ def test_inventory_user_posts_delivery_resolving_source_values(inventory_deliver
         assert line.qty == Decimal("5.000000000")
         assert line.rate == Decimal("12.5000")
         assert line.amount == Decimal("62.5000")
+
+
+def test_inventory_user_posts_manual_delivery(inventory_delivery_scenario):
+    """#2052: el flujo manual también funciona con permisos solo de Inventario."""
+    app, ids = inventory_delivery_scenario
+    with app.app_context():
+        from cacao_accounting.database import ItemPrice, PriceList
+
+        lista = PriceList(name="Venta Alpha", currency="NIO", company="alpha", is_selling=True, is_default=True)
+        database.session.add(lista)
+        database.session.flush()
+        database.session.add(ItemPrice(item_code="DEL-ITEM", price_list_id=lista.id, uom="UND", price=Decimal("7")))
+        database.session.commit()
+    client = _authenticated_client(app)
+
+    response = client.post(
+        "/sales/delivery-note/new",
+        data={
+            "company": "alpha",
+            "posting_date": "2026-05-15",
+            "customer_id": ids["customer"],
+            "currency": "NIO",
+            "warehouse": "ALPHA-WH",
+            "item_code_0": "DEL-ITEM",
+            "item_name_0": "Artículo manual",
+            "qty_0": "2",
+            "uom_0": "UND",
+            "rate_0": "7",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code in {302, 303}, response.get_data(as_text=True)
+    with app.app_context():
+        delivery = database.session.execute(database.select(DeliveryNote)).scalars().one()
+        line = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=delivery.id)).scalar_one()
+        assert delivery.company == "alpha"
+        assert delivery.customer_id == ids["customer"]
+        assert delivery.sales_order_id is None
+        assert line.item_code == "DEL-ITEM"
+        assert line.qty == Decimal("2.000000000")
+
+
+def test_inventory_user_rechaza_otra_compania(inventory_delivery_scenario):
+    """#2052: la concesión de compañía acota el alta aunque inventario pueda crear."""
+    app, ids = inventory_delivery_scenario
+    client = _authenticated_client(app)
+
+    response = client.post(
+        "/sales/delivery-note/new",
+        data={
+            "company": "beta",
+            "posting_date": "2026-05-15",
+            "customer_id": ids["customer"],
+            "warehouse": "ALPHA-WH",
+            "item_code_0": "MAN-ITEM",
+            "qty_0": "1",
+            "uom_0": "UND",
+            "rate_0": "1",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403
