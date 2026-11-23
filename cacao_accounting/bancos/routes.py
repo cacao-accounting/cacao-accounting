@@ -834,7 +834,31 @@ def _transfer_draft_payload() -> dict[str, Any]:
         payload = dict(_payment_payload_from_request())
     except Exception:
         return {}
-    return {key: value for key, value in payload.items() if value not in (None, "")}
+    limpio = {key: value for key, value in payload.items() if value not in (None, "")}
+    _add_transfer_draft_labels(limpio)
+    return limpio
+
+
+def _add_transfer_draft_labels(payload: dict[str, Any]) -> None:
+    """Agrega los rótulos visibles para los smart-select del borrador."""
+    from cacao_accounting.database import BankAccount, Entity, NamingSeries
+
+    company = str(payload.get("company") or "")
+    if company:
+        entidad = database.session.get(Entity, company)
+        payload["company_label"] = str((entidad.name if entidad is not None else "") or company)
+    serie_id = str(payload.get("naming_series_id") or "")
+    if serie_id:
+        serie = database.session.get(NamingSeries, serie_id)
+        payload["naming_series_label"] = str((serie.name if serie is not None else "") or serie_id)
+    for clave, etiqueta in (
+        ("bank_account_id", "bank_account_label"),
+        ("target_bank_account_id", "target_bank_account_label"),
+    ):
+        cuenta_id = str(payload.get(clave) or "")
+        if cuenta_id:
+            cuenta = database.session.get(BankAccount, cuenta_id)
+            payload[etiqueta] = str((cuenta.account_name if cuenta is not None else "") or cuenta_id)
 
 
 @bancos.route("/payment/transfer/new", methods=["GET", "POST"])

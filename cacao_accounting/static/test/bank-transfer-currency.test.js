@@ -19,12 +19,12 @@ function loadFactory() {
   return globalThis.bankTransferForm;
 }
 
-function createForm() {
+function createForm(draft) {
   const target = new EventTarget();
   globalThis.document = target;
   globalThis.cacaoLocalIsoDate = () => '2026-05-15';
   const factory = loadFactory();
-  const form = factory({ paymentType: 'internal_transfer' });
+  const form = factory({ paymentType: 'internal_transfer', draft: draft || {} });
   const watchers = {};
   form.$watch = (field, callback) => {
     watchers[field] = callback;
@@ -67,5 +67,31 @@ describe('bank transfer currency', function () {
     assert.strictEqual(form.header.currency, '');
     assert.strictEqual(form.header.target_bank_account_id, '');
     assert.strictEqual(form.header.target_currency, '');
+  });
+
+  it('starts from the rejected draft and resubmits its reference', function () {
+    const draft = {
+      company: 'cacao',
+      bank_account_id: 'bank-1',
+      currency: 'USD',
+      target_bank_account_id: 'bank-2',
+      target_currency: 'NIO',
+      paid_amount: '125.50',
+      reference_no: 'REF-2044',
+    };
+    const { form } = createForm(draft);
+
+    assert.strictEqual(form.header.company, 'cacao');
+    assert.strictEqual(form.header.bank_account_id, 'bank-1');
+    assert.strictEqual(form.header.currency, 'USD');
+    assert.strictEqual(form.header.target_bank_account_id, 'bank-2');
+    assert.strictEqual(form.header.target_currency, 'NIO');
+    assert.strictEqual(form.header.reference_no, 'REF-2044');
+
+    form.prepareSubmit({ preventDefault: function () {} });
+    const payload = JSON.parse(form.payload);
+    assert.strictEqual(payload.reference_no, 'REF-2044');
+    assert.strictEqual(payload.bank_account_id, 'bank-1');
+    assert.strictEqual(payload.target_bank_account_id, 'bank-2');
   });
 });

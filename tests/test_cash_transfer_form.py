@@ -11,6 +11,7 @@ persistirse en `PaymentEntry.reference_no`.
 from __future__ import annotations
 
 from decimal import Decimal
+import re
 from uuid import uuid4
 
 import pytest
@@ -251,4 +252,7 @@ def test_rechazo_conserva_los_datos_del_formulario(app, transferencia, authentic
     assert "bankTransferForm" in html
     assert referencia in html
     assert "CUENTA-INEXISTENTE" in html
+    assert re.search(r'initialValue:\s*"' + re.escape(str(data["bank_account_id"])) + '"', html)
+    assert re.search(r'initialValue:\s*"CUENTA-INEXISTENTE"', html)
+    assert re.search(r'"reference_no":\s*"' + re.escape(referencia) + '"', html)
     assert _conteo_pagos(app) == antes
