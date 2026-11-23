@@ -13,6 +13,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
+from cacao_accounting.database_url import database_url_from_parts
 from cacao_accounting.logs import log
 from cacao_accounting.runtime_mode import detect_desktop_mode
 
@@ -63,8 +64,28 @@ def env_bool(name: str, default: bool = False) -> bool:
 # Force tests to run by default on an in-memory database, except those designed for a specific database.
 is_testing = env_bool("CACAO_TEST") or env_bool("CI") or (environ.get("PYTEST_VERSION") is not None)
 
+
+def _database_url_from_environment() -> str | None:
+    """Compone la URL desde CACAO_DB_* codificando la contraseña (#1851)."""
+    password = environ.get("CACAO_DB_PASSWORD")
+    if not password:
+        return None
+    return database_url_from_parts(
+        user=environ.get("CACAO_DB_USER", "cacao"),
+        password=password,
+        host=environ.get("CACAO_DB_HOST", "db"),
+        port=environ.get("CACAO_DB_PORT", "5432"),
+        name=environ.get("CACAO_DB_NAME", "cacaodb"),
+    )
+
+
 if is_testing:
-    env_db = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or environ.get("DATABASE_URL")
+    env_db = (
+        environ.get("CACAO_DATABASE_URL")
+        or environ.get("CACAO_DB")
+        or environ.get("DATABASE_URL")
+        or _database_url_from_environment()
+    )
     if env_db and (
         "mysql" in env_db or "postgresql" in env_db or "mariadb" in env_db or "mssql" in env_db or "sqlite:///" in env_db
     ):
@@ -72,7 +93,13 @@ if is_testing:
     else:
         DATABASE_URL = "sqlite:///:memory:"
 else:
-    DATABASE_URL = environ.get("CACAO_DATABASE_URL") or environ.get("CACAO_DB") or environ.get("DATABASE_URL") or SQLITE
+    DATABASE_URL = (
+        environ.get("CACAO_DATABASE_URL")
+        or environ.get("CACAO_DB")
+        or environ.get("DATABASE_URL")
+        or _database_url_from_environment()
+        or SQLITE
+    )
 
 SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or environ.get("SECRET_KEY")
 
