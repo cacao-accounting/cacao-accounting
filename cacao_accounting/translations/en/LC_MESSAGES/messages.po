@@ -24532,3 +24532,7 @@ msgstr "Printed by"
 #: cacao_accounting/printing/seed.py
 msgid "at"
 msgstr "at"
+
+#: cacao_accounting/admin/routes.py
+msgid "Actualizar rol"
+msgstr "Update role"

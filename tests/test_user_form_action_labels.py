@@ -92,3 +92,16 @@ def test_formulario_de_edicion_muestra_la_etiqueta_actualizar_usuario(app, authe
     html = respuesta.get_data(as_text=True)
     assert BOTON_ENVIO.format(texto="Actualizar Usuario") in html
     assert "Nuevo Usuario" not in html
+
+
+def test_alta_en_ingles_traduce_la_accion_del_boton(app, authenticated_client, modulo_admin_activo):
+    """#2022: con locale en el botón no queda en español."""
+    from flask_babel import force_locale
+
+    with force_locale("en"):
+        respuesta = authenticated_client().get("/settings/users/new")
+
+    assert respuesta.status_code == 200
+    html = respuesta.get_data(as_text=True)
+    assert BOTON_ENVIO.format(texto="New User") in html
+    assert BOTON_ENVIO.format(texto="Nuevo Usuario") not in html

@@ -1731,7 +1731,7 @@ def crear_rol():
         "admin/rol_form.html",
         form=form,
         titulo=_("Crear Rol"),
-        accion="Guardar rol",
+        accion=_("Guardar rol"),
     )
 
 
@@ -1764,7 +1764,7 @@ def editar_rol(role_id: str):
         "admin/rol_form.html",
         form=form,
         titulo=_("Editar Rol"),
-        accion="Actualizar rol",
+        accion=_("Actualizar rol"),
         rol=rol,
     )
 
