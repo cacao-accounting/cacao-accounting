@@ -75,9 +75,10 @@
       {% if document_type == 'purchase_credit_note' %}
       <div class="col-md-6">
         <label class="form-label" for="credit_note_type">{{ _('Tipo de nota de crédito') }}</label>
+        {% set tipo_credito_actual = registro.credit_note_type if edit and registro else 'commercial_adjustment' %}
         <select class="form-select" id="credit_note_type" name="credit_note_type">
-          <option value="commercial_adjustment">{{ _('Ajuste comercial') }}</option>
-          <option value="physical_return">{{ _('Devolución física') }}</option>
+          <option value="commercial_adjustment" {% if tipo_credito_actual != 'physical_return' %}selected{% endif %}>{{ _('Ajuste comercial') }}</option>
+          <option value="physical_return" {% if tipo_credito_actual == 'physical_return' %}selected{% endif %}>{{ _('Devolución física') }}</option>
         </select>
       </div>
       {% endif %}
