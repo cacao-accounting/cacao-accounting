@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
+"""#1974: el CRUD rechaza un año fiscal con rango invertido."""
+
+from __future__ import annotations
+
+from cacao_accounting.database import FiscalYear, database
+
+
+def test_anio_fiscal_invertido_no_se_persiste(app, authenticated_client, entorno_contable):
+    """El POST con fin anterior al inicio no crea el registro."""
+    datos = {
+        "id": "FY-INVERTIDO",
+        "entidad": "cacao",
+        "inicio": "2026-12-31",
+        "fin": "2026-01-01",
+    }
+    respuesta = authenticated_client("admin").post("/accounting/fiscal_year/new", data=datos)
+
+    assert respuesta.status_code == 200
+    with app.app_context():
+        creados = database.session.execute(database.select(FiscalYear).filter_by(name="FY-INVERTIDO")).scalars().all()
+        assert creados == []
