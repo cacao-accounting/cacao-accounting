@@ -297,7 +297,6 @@ def forgot_password():  # pragma: no cover
 @limiter.limit("5 per minute")
 def reset_password(token: str):  # pragma: no cover
     """Establecimiento de nueva contraseña con token de recuperación."""
-    from cacao_accounting.auth import proteger_passwd as _proteger_passwd
     from cacao_accounting.auth.device_verification import validar_token_recuperacion
     from cacao_accounting.auth.forms import ResetPasswordForm
     from cacao_accounting.auth.helpers import validar_clave_segura
@@ -330,7 +329,7 @@ def reset_password(token: str):  # pragma: no cover
             flash(_("El enlace de recuperación no es válido o ha expirado."))
             return redirect(url_for("login.forgot_password"))
 
-        user.password = _proteger_passwd(form.new_password.data)
+        user.password = proteger_passwd(form.new_password.data)
         user.auth_version = User.auth_version + 1
         database.session.commit()
         user.token = None
