@@ -622,7 +622,7 @@
                         name: "stock_adjustment_account_id",
                         minChars: 2,
                         initialValue: row.stock_adjustment_account_id,
-                        filters: { company: row.company, account_type: ["expense", "income"], is_active: true },
+                        filters: { company: row.company, account_type: ["expense", "income", "inventory_adjustment"], is_active: true },
                         requiredFilters: ["company"],
                         messages: {
                           placeholder: {{ _('Buscar cuenta de ajuste de inventario')|tojson }},

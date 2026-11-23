@@ -117,6 +117,13 @@ def item_edit_scope_scenario():
             classification="expense",
             account_type="expense",
         )
+        adjustment_account = Accounts(
+            entity=local_company,
+            code=f"ADJ-L-{suffix}",
+            name="Ajuste de inventario",
+            classification="expense",
+            account_type="inventory_adjustment",
+        )
         secret_account = Accounts(
             entity=secret_company,
             code=f"EXP-S-{suffix}",
@@ -129,6 +136,7 @@ def item_edit_scope_scenario():
                 UserCompanyAccess(user_id=editor_id, company_code=local_company),
                 local_account,
                 local_alternate,
+                adjustment_account,
                 secret_account,
                 Item(code=item_code, name="Artículo compartido", item_type="goods", is_stock_item=True, default_uom="EA"),
             ]
@@ -147,6 +155,7 @@ def item_edit_scope_scenario():
             "secret_company": secret_company,
             "local_account": local_account.id,
             "local_alternate": local_alternate.id,
+            "adjustment_account": adjustment_account.id,
             "secret_account": secret_account.id,
             "editor_id": editor_id,
         }
@@ -331,6 +340,29 @@ def test_item_edit_updates_and_clears_stock_adjustment_account(item_edit_scope_s
     )
     assert cleared.status_code == 302
     assert _persisted_rows(app, ids["item_code"])[ids["local_company"]].stock_adjustment_account_id is None
+
+
+def test_stock_adjustment_account_type_is_selectable_and_valid(item_edit_scope_scenario):
+    """El tipo inventory_adjustment aceptado por servicio aparece y se persiste."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+    response = client.get(f"/inventory/item/{ids['item_code']}/edit")
+    assert response.status_code == 200
+    assert 'account_type: ["expense", "income", "inventory_adjustment"]' in response.get_data(as_text=True)
+
+    saved = client.post(
+        f"/inventory/item/{ids['item_code']}/edit",
+        data=_valid_item_form(
+            account_company=ids["local_company"],
+            expense_account_id=ids["local_account"],
+            stock_adjustment_account_id=ids["adjustment_account"],
+        ),
+    )
+
+    assert saved.status_code == 302
+    assert (
+        _persisted_rows(app, ids["item_code"])[ids["local_company"]].stock_adjustment_account_id == ids["adjustment_account"]
+    )
 
 
 @pytest.mark.parametrize("factor", ["NaN", "Infinity", "0.0000000001"])
