@@ -9,13 +9,15 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
 from cacao_accounting.database import Accounts, Bank, BankAccount, PaymentEntry, database
 
+pytestmark = pytest.mark.usefixtures("entorno_contable")
 
-def test_montos_por_tipo_y_dos_monedas_de_transferencia(app, authenticated_client, entorno_contable):
-    """Las notas usan la dirección correcta y transferencias presentan ambas cuentas."""
-    suffix = uuid4().hex[:8]
-    prefix = f"QA1949-{suffix}"
+
+def _create_transfer_accounts(app, suffix: str) -> dict[str, str]:
+    """Create source and destination accounts, including a duplicate GL mapping."""
     with app.app_context():
         source_gl = Accounts(
             entity="cacao",
@@ -50,6 +52,15 @@ def test_montos_por_tipo_y_dos_monedas_de_transferencia(app, authenticated_clien
             gl_account_id=source_gl.id,
             is_active=True,
         )
+        decoy_target_account = BankAccount(
+            bank_id=target_bank.id,
+            company="cacao",
+            account_name="Cuenta alternativa QA",
+            account_no=f"ALT-{suffix}",
+            currency="NIO",
+            gl_account_id=target_gl.id,
+            is_active=True,
+        )
         target_account = BankAccount(
             bank_id=target_bank.id,
             company="cacao",
@@ -59,8 +70,22 @@ def test_montos_por_tipo_y_dos_monedas_de_transferencia(app, authenticated_clien
             gl_account_id=target_gl.id,
             is_active=True,
         )
-        database.session.add_all([source_account, target_account])
-        database.session.flush()
+        database.session.add_all([source_account, decoy_target_account, target_account])
+        database.session.commit()
+        return {
+            "source_account": source_account.id,
+            "decoy_target_account": decoy_target_account.id,
+            "target_account": target_account.id,
+            "source_bank": source_bank.id,
+            "target_bank": target_bank.id,
+            "source_gl": source_gl.id,
+            "target_gl": target_gl.id,
+        }
+
+
+def _create_payment_rows(app, prefix: str, accounts: dict[str, str]) -> list[str]:
+    """Persist representative receive/pay/note/transfer entries."""
+    with app.app_context():
         payments = [
             PaymentEntry(
                 company="cacao",
@@ -106,10 +131,10 @@ def test_montos_por_tipo_y_dos_monedas_de_transferencia(app, authenticated_clien
                 company="cacao",
                 payment_type="internal_transfer",
                 posting_date=date(2026, 5, 15),
-                bank_account_id=source_account.id,
-                target_bank_account_id=target_account.id,
-                paid_from_account_id=source_gl.id,
-                paid_to_account_id=target_gl.id,
+                bank_account_id=accounts["source_account"],
+                target_bank_account_id=accounts["target_account"],
+                paid_from_account_id=accounts["source_gl"],
+                paid_to_account_id=accounts["target_gl"],
                 currency="NIO",
                 transaction_currency="NIO",
                 paid_amount=Decimal("100.00"),
@@ -120,58 +145,71 @@ def test_montos_por_tipo_y_dos_monedas_de_transferencia(app, authenticated_clien
         ]
         database.session.add_all(payments)
         database.session.commit()
-        payment_ids = [payment.id for payment in payments]
-        source_account_id = source_account.id
-        target_account_id = target_account.id
-        source_bank_id = source_bank.id
-        target_bank_id = target_bank.id
-        source_gl_id = source_gl.id
-        target_gl_id = target_gl.id
+        return [payment.id for payment in payments]
 
+
+def _assert_payment_listings(client) -> None:
+    """Assert amount and label for each payment type's list route."""
+    expectations = {
+        "/cash_management/payment/list": ("321.00", "654.00", "NIO"),
+        "/cash_management/payment/credit-note/list": ("87.50", "Nota de crédito", "NIO"),
+        "/cash_management/payment/debit-note/list": ("98.75", "Nota de débito", "NIO"),
+        "/cash_management/transfer/list": ("100.0000 NIO → 110.0000 USD", "Transferencia interna"),
+    }
+    for path, expected_values in expectations.items():
+        response = client.get(path)
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        for expected_value in expected_values:
+            assert expected_value in html
+
+
+def _assert_payment_details(client, payment_ids: list[str]) -> None:
+    """Assert amount, currencies, and localized type in all payment details."""
+    expectations = (
+        (payment_ids[0], "Recibir", "NIO 321.00"),
+        (payment_ids[1], "Pagar", "NIO 654.00"),
+        (payment_ids[2], "Nota de crédito", "NIO 87.50"),
+        (payment_ids[3], "Nota de débito", "NIO 98.75"),
+        (payment_ids[4], "Transferencia interna", "100.00 NIO → 110.00 USD"),
+    )
+    for payment_id, label, amount in expectations:
+        response = client.get(f"/cash_management/payment/{payment_id}")
+        assert response.status_code == 200
+        html = response.get_data(as_text=True)
+        assert label in html
+        assert amount in html
+
+
+def _delete_payment_scenario(app, prefix: str, accounts: dict[str, str]) -> None:
+    """Remove only the payment and account records created by this test."""
+    with app.app_context():
+        payment_ids = database.select(PaymentEntry.id).where(PaymentEntry.document_no.like(f"{prefix}-%"))
+        database.session.execute(database.delete(PaymentEntry).where(PaymentEntry.id.in_(payment_ids)))
+        for key in ("source_account", "decoy_target_account", "target_account"):
+            bank_account = database.session.get(BankAccount, accounts[key])
+            if bank_account is not None:
+                database.session.delete(bank_account)
+        for key in ("source_bank", "target_bank"):
+            bank = database.session.get(Bank, accounts[key])
+            if bank is not None:
+                database.session.delete(bank)
+        for key in ("source_gl", "target_gl"):
+            account = database.session.get(Accounts, accounts[key])
+            if account is not None:
+                database.session.delete(account)
+        database.session.commit()
+
+
+def test_montos_por_tipo_y_dos_monedas_de_transferencia(app, authenticated_client):
+    """Las notas usan la dirección correcta y transferencias presentan ambas cuentas."""
+    suffix = uuid4().hex[:8]
+    prefix = f"QA1949-{suffix}"
+    accounts = _create_transfer_accounts(app, suffix)
+    payment_ids = _create_payment_rows(app, prefix, accounts)
     try:
         client = authenticated_client("admin")
-        listing_expectations = {
-            "/cash_management/payment/list": ("321.00", "654.00", "NIO"),
-            "/cash_management/payment/credit-note/list": ("87.50", "Nota de crédito", "NIO"),
-            "/cash_management/payment/debit-note/list": ("98.75", "Nota de débito", "NIO"),
-            "/cash_management/transfer/list": ("100.0000 NIO → 110.0000 USD", "Transferencia interna"),
-        }
-        for path, expected_values in listing_expectations.items():
-            response = client.get(path)
-            assert response.status_code == 200
-            html = response.get_data(as_text=True)
-            for expected_value in expected_values:
-                assert expected_value in html
-
-        for payment_id, expected_label, expected_amount in (
-            (payment_ids[0], "Recibir", "NIO 321.00"),
-            (payment_ids[1], "Pagar", "NIO 654.00"),
-            (payment_ids[2], "Nota de crédito", "NIO 87.50"),
-            (payment_ids[3], "Nota de débito", "NIO 98.75"),
-            (payment_ids[4], "Transferencia interna", "100.00 NIO → 110.00 USD"),
-        ):
-            response = client.get(f"/cash_management/payment/{payment_id}")
-            assert response.status_code == 200
-            html = response.get_data(as_text=True)
-            assert expected_label in html
-            assert expected_amount in html, [line.strip() for line in html.splitlines() if "fw-semibold" in line]
+        _assert_payment_listings(client)
+        _assert_payment_details(client, payment_ids)
     finally:
-        with app.app_context():
-            for payment_id in payment_ids:
-                payment = database.session.get(PaymentEntry, payment_id)
-                if payment is not None:
-                    database.session.delete(payment)
-            database.session.flush()
-            for bank_account_id in (source_account_id, target_account_id):
-                bank_account = database.session.get(BankAccount, bank_account_id)
-                if bank_account is not None:
-                    database.session.delete(bank_account)
-            for bank_id in (source_bank_id, target_bank_id):
-                bank = database.session.get(Bank, bank_id)
-                if bank is not None:
-                    database.session.delete(bank)
-            for account_id in (source_gl_id, target_gl_id):
-                account = database.session.get(Accounts, account_id)
-                if account is not None:
-                    database.session.delete(account)
-            database.session.commit()
+        _delete_payment_scenario(app, prefix, accounts)

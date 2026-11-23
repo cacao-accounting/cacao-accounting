@@ -1937,14 +1937,8 @@ def bancos_pago(payment_id):
     # Nombres para mostrar
     banco = database.session.get(BankAccount, registro.bank_account_id) if registro.bank_account_id else None
     banco_destino = None
-    if registro.payment_type == "internal_transfer" and registro.paid_to_account_id:
-        banco_destino = (
-            database.session.execute(
-                database.select(BankAccount).filter_by(company=registro.company, gl_account_id=registro.paid_to_account_id)
-            )
-            .scalars()
-            .first()
-        )
+    if registro.payment_type == "internal_transfer" and registro.target_bank_account_id:
+        banco_destino = database.session.get(BankAccount, registro.target_bank_account_id)
 
     creador = database.session.get(User, registro.created_by) if registro.created_by else None
     from cacao_accounting.database import WithholdingCertificate
