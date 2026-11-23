@@ -320,3 +320,35 @@ def test_administrador_cloud_se_limita_a_sus_concesiones(aprobaciones_cloud):
 def test_administrador_cloud_sin_concesiones_no_ve_solicitudes(aprobaciones_cloud):
     """#2059: la clasificación admin no concede compañías por sí sola en Cloud."""
     assert _contar(aprobaciones_cloud, "admin-sin") == 0
+
+
+def test_toggle_conserva_la_regla_y_cambia_su_estado(aprobaciones_cloud):
+    """#2002: alternar una regla inactiva no la borra y actualiza su estado."""
+    from decimal import Decimal as _Decimal
+
+    application = aprobaciones_cloud
+    with application.app_context():
+        regla = ApprovalMatrix(
+            company_id="alpha",
+            document_type="purchase_order",
+            user_id="aprobador",
+            min_amount=_Decimal("0"),
+            max_amount=_Decimal("100"),
+            approval_level=1,
+            enabled=False,
+        )
+        database.session.add(regla)
+        database.session.commit()
+        regla_id = regla.id
+
+    client = _authenticated_client(application, "admin")
+    respuesta = client.post(
+        "/settings/approval-matrix?company=alpha",
+        data={"action": "toggle_rule", "rule_id": regla_id},
+    )
+
+    assert respuesta.status_code in {200, 302}
+    with application.app_context():
+        persistida = database.session.get(ApprovalMatrix, regla_id)
+        assert persistida is not None
+        assert persistida.enabled is True
