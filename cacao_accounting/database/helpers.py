@@ -67,16 +67,9 @@ def verifica_coneccion_db(app):
                 DB_CONN = True
                 log.info("Conexión a la base de datos exitosa.")
                 break
-            except OperationalError:
+            except (OperationalError, InterfaceError, ProgrammingError):
                 DB_CONN = False
-                log.warning(DB_CONNECTION_FAILED)
-                log.info(DB_RETRYING_CONNECTION)
-            except InterfaceError:
-                DB_CONN = False
-                log.warning(DB_CONNECTION_FAILED)
-                log.info(DB_RETRYING_CONNECTION)
-            except ProgrammingError:
-                DB_CONN = False
+                database.session.rollback()
                 log.warning(DB_CONNECTION_FAILED)
                 log.info(DB_RETRYING_CONNECTION)
 

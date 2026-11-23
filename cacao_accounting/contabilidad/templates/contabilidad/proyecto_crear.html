@@ -84,10 +84,12 @@
             endpoint: {{ url_for("contabilidad.hierarchy_parent_options", node_type="project")|tojson }},
             action: {{ ("editar" if edit else "crear")|tojson }},
             excludeId: {{ (parent_exclude_id|default(""))|tojson }},
+            errorMessage: {{ _("No se pudieron cargar las opciones jerárquicas. Intente de nuevo.")|tojson }},
             placeholder: {{ _("— Ninguno —")|tojson }}
           })'
           @hierarchy-company-changed.window="refresh($event.detail.company)">
           {{ form.parent_id(class="form-select form-select-sm", id="parent_id", **{"x-ref": "parent"}) }}
+          <div class="form-text text-danger" role="alert" x-cloak x-show="error" x-text="error"></div>
         </div>
       </div>
       <div class="col-md-6">

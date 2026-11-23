@@ -4,11 +4,13 @@
 document.addEventListener('alpine:init', () => {
   Alpine.data('hierarchyParentSelect', (config) => ({
     requestId: 0,
+    error: '',
 
     async refresh(entity) {
       const select = this.$refs.parent;
       const currentValue = select.value;
       const requestId = ++this.requestId;
+      this.error = '';
 
       if (!entity) {
         this.replaceOptions(select, [], currentValue);
@@ -25,7 +27,10 @@ document.addEventListener('alpine:init', () => {
         if (requestId !== this.requestId) return;
         this.replaceOptions(select, options, currentValue);
       } catch (_error) {
-        if (requestId === this.requestId) this.replaceOptions(select, [], currentValue);
+        if (requestId === this.requestId) {
+          this.replaceOptions(select, [], currentValue);
+          this.error = config.errorMessage;
+        }
       }
     },
 

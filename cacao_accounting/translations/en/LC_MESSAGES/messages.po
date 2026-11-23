@@ -19046,6 +19046,9 @@ msgstr "The serial is not available for issue."
 msgid "El serial está siendo procesado por otra salida."
 msgstr "The serial is being processed by another issue."
 
+msgid "No se pudieron cargar las opciones jerárquicas. Intente de nuevo."
+msgstr "The hierarchy options could not be loaded. Please try again."
+
 #: cacao_accounting/inventario/service.py:362
 msgid "El serial no se encuentra en la bodega de salida."
 msgstr "The serial is not found in the issue warehouse."

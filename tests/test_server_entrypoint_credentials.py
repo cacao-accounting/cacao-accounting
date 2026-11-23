@@ -11,11 +11,15 @@ con una base conectada pero sin administrador y credenciales por defecto.
 
 from __future__ import annotations
 
+from unittest.mock import Mock
+
 import pytest
+from sqlalchemy.exc import InterfaceError, OperationalError, ProgrammingError
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import User, database
+from cacao_accounting.database import helpers as db_helpers
 from cacao_accounting.database.helpers import verifica_coneccion_db
 
 
@@ -55,6 +59,28 @@ def test_verifica_conexion_detecta_con_filas(empty_db_app, monkeypatch):
         database.session.add(User(user="probe", name="Probe", password=b"x", active=True))
         database.session.commit()
         assert verifica_coneccion_db(empty_db_app) is True
+
+
+def test_verifica_conexion_agota_reintentos_y_revierte_errores_sql(empty_db_app, monkeypatch):
+    """Los fallos de conexión se revierten y todos los reintentos terminan en False."""
+    import time
+
+    monkeypatch.setenv("CACAO_TEST", "True")
+    monkeypatch.setattr(db_helpers, "TIEMPO_ESPERA", 5)
+    monkeypatch.setattr(time, "time", Mock(side_effect=[0, 0, 1, 2, 3, 5]))
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    failures = [
+        error_type("SELECT user", {}, RuntimeError("connection unavailable"))
+        for error_type in (OperationalError, InterfaceError, ProgrammingError, OperationalError)
+    ]
+    execute = Mock(side_effect=failures)
+    rollback = Mock()
+    monkeypatch.setattr(database.session, "execute", execute)
+    monkeypatch.setattr(database.session, "rollback", rollback)
+
+    assert verifica_coneccion_db(empty_db_app) is False
+    assert execute.call_count == 4
+    assert rollback.call_count == 4
 
 
 def test_server_detiene_arranque_sin_admin_ni_credenciales(empty_db_app, monkeypatch):
