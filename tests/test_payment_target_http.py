@@ -235,7 +235,7 @@ def test_create_target_con_origen_valido_y_destino_desconocido(app, entorno_cont
         },
     )
 
-    assert response.status_code in {400, 404}, response.get_data(as_text=True)
+    assert response.status_code == 400, response.get_data(as_text=True)
     with app.app_context():
         assert len(database.session.execute(database.select(PaymentEntry)).scalars().all()) == antes_pagos
         assert len(database.session.execute(database.select(DocumentRelation)).scalars().all()) == antes_relaciones
@@ -272,6 +272,56 @@ def test_close_line_con_destino_desconocido_responde_400(app, entorno_contable, 
     )
 
     assert response.status_code == 400, response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "payload"),
+    [
+        (
+            "/api/document-flow/create-target",
+            {
+                "source_document_type": "tipo-inventado",
+                "source_document_id": "no-existe",
+                "target_document_type": "payment_entry",
+                "company": "cacao",
+                "posting_date": "2026-05-15",
+                "lines": [],
+            },
+        ),
+        (
+            "/api/document-flow/close-line",
+            {
+                "source_document_type": "tipo-inventado",
+                "source_document_id": "no-existe",
+                "source_row_id": "no-existe",
+                "target_document_type": "payment_entry",
+                "qty": "1",
+                "reason": "Prueba QA",
+            },
+        ),
+        (
+            "/api/document-flow/close-document",
+            {
+                "source_document_type": "tipo-inventado",
+                "source_document_id": "no-existe",
+                "target_document_type": "payment_entry",
+                "reason": "Prueba QA",
+            },
+        ),
+    ],
+)
+def test_tipo_fuente_desconocido_es_error_de_cliente(app, entorno_contable, authenticated_client, endpoint, payload):
+    """#1465: un tipo documental fuente inexistente no escapa como HTTP 500."""
+    with app.app_context():
+        antes_pagos = len(database.session.execute(database.select(PaymentEntry)).scalars().all())
+        antes_relaciones = len(database.session.execute(database.select(DocumentRelation)).scalars().all())
+
+    response = authenticated_client("admin").post(endpoint, json=payload)
+
+    assert response.status_code == 400, response.get_data(as_text=True)
+    with app.app_context():
+        assert len(database.session.execute(database.select(PaymentEntry)).scalars().all()) == antes_pagos
+        assert len(database.session.execute(database.select(DocumentRelation)).scalars().all()) == antes_relaciones
 
 
 def test_close_document_con_destino_desconocido_responde_400(app, entorno_contable, authenticated_client):
