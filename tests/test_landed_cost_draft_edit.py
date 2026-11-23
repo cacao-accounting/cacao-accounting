@@ -172,14 +172,11 @@ def landed_cost_edit_scenario():
 
 
 def _client(application):
-    from flask_login import login_user
-
+    """Cliente autenticado contra la app aislada del escenario."""
     client = application.test_client()
     with client.session_transaction() as session:
         session["_user_id"] = "admin"
         session["_fresh"] = True
-    with application.app_context():
-        login_user(database.session.get(User, "admin"))
     return client
 
 
@@ -296,3 +293,61 @@ def test_edicion_regenera_relaciones_con_las_lineas_nuevas(landed_cost_edit_scen
         assert {rel.target_item_id for rel in relaciones} <= nuevas_ids
         assert all(rel.target_item_id != anterior_id for rel in relaciones)
         assert sum(item.qty for item in nuevas) == Decimal("2")
+
+
+def test_edicion_http_actualiza_el_mismo_documento(landed_cost_edit_scenario):
+    """El POST por la ruta real actualiza el borrador sin duplicarlo."""
+    application, ids = landed_cost_edit_scenario
+    client = _client(application)
+    form = {
+        "company": "cacao",
+        "posting_date": FECHA.isoformat(),
+        "allocation_method": "by_quantity",
+        "remarks": "Editado por HTTP",
+        "item_item_code_0": "ART01",
+        "item_item_name_0": "Articulo importado",
+        "item_qty_0": "1",
+        "item_uom_0": "UND",
+        "item_rate_0": "100",
+        "item_amount_0": "100",
+        "charge_concept_0": "Flete",
+        "charge_type_0": "charge",
+        "charge_amount_0": "15",
+    }
+
+    response = client.post(f"/buying/import-landed-cost/{ids['landed']}/edit", data=form)
+
+    assert response.status_code == 302
+    with application.app_context():
+        documentos = database.session.execute(database.select(ImportLandedCost)).scalars().all()
+        assert len(documentos) == 1
+        actualizado = documentos[0]
+        assert actualizado.id == ids["landed"]
+        assert actualizado.allocation_method == "by_quantity"
+        assert actualizado.remarks == "Editado por HTTP"
+
+
+def test_edicion_http_rechaza_documento_aprobado(landed_cost_edit_scenario):
+    """La ruta real no muta un costo de importación aprobado."""
+    application, ids = landed_cost_edit_scenario
+    with application.app_context():
+        registro = database.session.get(ImportLandedCost, ids["landed"])
+        registro.docstatus = 1
+        registro.remarks = "Aprobado"
+        database.session.commit()
+
+    client = _client(application)
+    form = {
+        "company": "cacao",
+        "posting_date": FECHA.isoformat(),
+        "allocation_method": "by_quantity",
+        "remarks": "No debe aplicarse",
+    }
+    response = client.post(f"/buying/import-landed-cost/{ids['landed']}/edit", data=form)
+
+    assert response.status_code == 302
+    with application.app_context():
+        actual = database.session.get(ImportLandedCost, ids["landed"])
+        assert actual.docstatus == 1
+        assert actual.remarks == "Aprobado"
+        assert actual.allocation_method == "by_value"

@@ -24792,3 +24792,19 @@ msgstr "The target document type is required."
 #: cacao_accounting/contabilidad/posting_service.py
 msgid "La entrada de inventario requiere un valor funcional mayor que cero."
 msgstr "The inventory receipt requires a functional value greater than zero."
+
+#: cacao_accounting/compras/routes.py
+msgid "Editar Costo de Importación"
+msgstr "Edit Import Landed Cost"
+
+#: cacao_accounting/compras/routes.py
+msgid "Costo de importación actualizado correctamente."
+msgstr "Import landed cost updated successfully."
+
+#: cacao_accounting/compras/routes.py
+msgid "Solo se puede editar un costo de importación en borrador."
+msgstr "Only a draft import landed cost can be edited."
+
+#: cacao_accounting/compras/routes.py
+msgid "La compañía de un costo de importación no puede cambiarse."
+msgstr "The company of an import landed cost cannot be changed."
