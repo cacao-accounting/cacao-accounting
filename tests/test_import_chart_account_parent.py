@@ -253,3 +253,24 @@ def test_execution_persists_child_before_its_imported_parent(app, tmp_path):
             )
             database.session.delete(batch)
             database.session.commit()
+
+
+def test_import_rechecks_parent_after_preflight(app, chart_adapter):
+    """A parent demoted after preflight cannot acquire an imported child."""
+    suffix = uuid4().hex[:8]
+    parent_code, child_code = f"P{suffix}", f"C{suffix}"
+    with app.app_context():
+        parent = _account(code=parent_code, group=True)
+        database.session.add(parent)
+        database.session.commit()
+        row = _row(child_code, parent_code)
+        assert chart_adapter.validate_document([row], {"company_id": "cacao"}) == []
+        parent.group = False
+        database.session.commit()
+        child = chart_adapter.build_document([row], {"company_id": "cacao"})
+        with pytest.raises(ValueError, match="cuenta de grupo"):
+            chart_adapter.persist_document(child)
+        database.session.rollback()
+        assert Accounts.query.filter_by(entity="cacao", code=child_code).one_or_none() is None
+        database.session.delete(parent)
+        database.session.commit()

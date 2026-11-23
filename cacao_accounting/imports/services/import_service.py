@@ -553,6 +553,10 @@ class ImportService:
                     database.session.commit()
                     return
 
+                order_documents = getattr(adapter, "order_documents", None)
+                if callable(order_documents):
+                    docs = order_documents(docs)
+
                 context = {
                     "company_id": batch.company_id,
                     "sequence_id": batch.sequence_id,

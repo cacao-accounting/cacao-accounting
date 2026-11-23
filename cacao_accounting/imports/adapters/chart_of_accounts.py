@@ -3,9 +3,12 @@
 
 """Adaptador para importación de catálogo de cuentas."""
 
+from graphlib import TopologicalSorter
 from typing import List, Dict, Any
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import Accounts, database
+from cacao_accounting.default_scope import lock_default_scope
+from cacao_accounting.contabilidad.services import _validate_account_parent
 from cacao_accounting.i18n import _
 
 
@@ -117,8 +120,19 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
         return cuenta
 
     def persist_document(self, document: Any) -> None:
-        """Save the account to the database."""
+        """Serialize hierarchy writes and revalidate the parent at persistence time."""
+        lock_default_scope("account_hierarchy", document.entity)
+        document.parent = _validate_account_parent(document.entity, document.parent, current_code=document.code)
         database.session.add(document)
+
+    def order_documents(self, documents: Dict[str, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
+        """Persist imported parents first, even if the file lists children first."""
+        codes = {_normalized_parent(rows[0].get("codigo")): ref for ref, rows in documents.items()}
+        dependencies = {}
+        for ref, rows in documents.items():
+            parent_ref = codes.get(_normalized_parent(rows[0].get("padre")))
+            dependencies[ref] = (parent_ref,) if parent_ref is not None else ()
+        return {ref: documents[ref] for ref in TopologicalSorter(dependencies).static_order()}
 
 
 def _normalized_parent(value: Any) -> str | None:
