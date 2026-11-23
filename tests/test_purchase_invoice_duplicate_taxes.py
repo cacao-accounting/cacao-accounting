@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#2099: duplicar factura de compra recalcula el bruto con impuestos."""
+"""#2099: duplicar factura de compra recalcula el bruto con impuestos reales."""
 
 from __future__ import annotations
 
@@ -9,29 +9,103 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
-from cacao_accounting.compras import routes as compras_routes
-from cacao_accounting.database import Party, PurchaseInvoice, PurchaseInvoiceItem, database
+from cacao_accounting.database import (
+    CompanyParty,
+    Party,
+    PurchaseInvoice,
+    PurchaseInvoiceItem,
+    PurchaseMatchingConfig,
+    Tax,
+    TaxTemplate,
+    TaxTemplateItem,
+    database,
+)
 
 FECHA = date(2026, 5, 15)
 
 
-def test_duplicado_recalcula_el_total_fiscal(app, entorno_contable, authenticated_client, monkeypatch):
-    """El borrador duplicado no conserva el subtotal como grand_total."""
-    suffix = uuid4().hex[:8]
+def _plantilla_impuesto(sufijo: str) -> TaxTemplate:
+    """Crea un impuesto real de 15% y su plantilla de compra."""
+    impuesto = Tax(
+        id=f"TAX-DUP-{sufijo}",
+        name=f"IVA {sufijo}",
+        rate=15,
+        tax_type="percentage",
+        applies_to="purchase",
+        is_active=True,
+    )
+    plantilla = TaxTemplate(
+        name=f"Plantilla duplicado {sufijo}",
+        company="cacao",
+        template_type="buying",
+        currency="NIO",
+        is_active=True,
+    )
+    database.session.add_all([impuesto, plantilla])
+    database.session.flush()
+    database.session.add(
+        TaxTemplateItem(
+            tax_template_id=plantilla.id,
+            tax_id=impuesto.id,
+            sequence=10,
+            calculation_base="net_document",
+            behavior="additive",
+            is_inclusive=False,
+        )
+    )
+    database.session.flush()
+    return plantilla
+
+
+def test_duplicado_recalcula_el_total_fiscal(app, entorno_contable, authenticated_client):
+    """El borrador duplicado usa la plantilla real y conserva el total al enviarse."""
+    sufijo = uuid4().hex[:8]
     with app.app_context():
-        proveedor = database.session.execute(database.select(Party).filter_by(code="PRV001")).scalar_one()
+        matching = database.session.execute(
+            database.select(PurchaseMatchingConfig).filter_by(company="cacao")
+        ).scalar_one_or_none()
+        if matching is None:
+            matching = PurchaseMatchingConfig(
+                company="cacao",
+                matching_type="2-way",
+                require_purchase_order=False,
+                bridge_account_required=False,
+                auto_reconcile=False,
+            )
+            database.session.add(matching)
+        else:
+            matching.require_purchase_order = False
+        proveedor = Party(
+            code=f"PRV-DUP-{sufijo}",
+            name=f"Proveedor duplicado {sufijo}",
+            is_supplier=True,
+            is_active=True,
+        )
+        database.session.add(proveedor)
+        database.session.flush()
+        database.session.add(
+            CompanyParty(
+                company="cacao",
+                party_id=proveedor.id,
+                is_active=True,
+                allow_purchase_invoice_without_order=True,
+                allow_purchase_invoice_without_receipt=True,
+            )
+        )
+        plantilla = _plantilla_impuesto(sufijo)
         origen = PurchaseInvoice(
             company="cacao",
             posting_date=FECHA,
             docstatus=1,
-            document_no=f"PI-DUP-{suffix}",
+            document_no=f"PI-DUP-{sufijo}",
             document_type="purchase_invoice",
             supplier_id=proveedor.id,
             supplier_name=proveedor.name,
+            tax_template_id=plantilla.id,
             transaction_currency="NIO",
             base_currency="NIO",
             exchange_rate=Decimal("1"),
-            remarks=f"PI-DUP-{suffix}",
+            remarks=f"PI-DUP-{sufijo}",
             grand_total=Decimal("115"),
         )
         database.session.add(origen)
@@ -50,19 +124,27 @@ def test_duplicado_recalcula_el_total_fiscal(app, entorno_contable, authenticate
         )
         database.session.commit()
         origen_id = origen.id
+        plantilla_id = plantilla.id
 
-    monkeypatch.setattr(
-        compras_routes,
-        "calculate_document_total_with_taxes",
-        lambda _document, subtotal, _items: subtotal * Decimal("1.15"),
-    )
-    respuesta = authenticated_client().post(f"/buying/purchase-invoice/{origen_id}/duplicate")
+    client = authenticated_client()
+    respuesta = client.post(f"/buying/purchase-invoice/{origen_id}/duplicate")
 
     assert respuesta.status_code == 302
     with app.app_context():
         copia = database.session.execute(
-            database.select(PurchaseInvoice).filter_by(remarks=f"PI-DUP-{suffix}", docstatus=0)
+            database.select(PurchaseInvoice).filter_by(remarks=f"PI-DUP-{sufijo}", docstatus=0)
         ).scalar_one()
+        copia_id = copia.id
+        assert copia.tax_template_id == plantilla_id
         assert copia.total == Decimal("100")
         assert copia.grand_total == Decimal("115.00")
         assert copia.outstanding_amount == Decimal("115.00")
+        assert copia.base_grand_total == Decimal("115.00")
+
+    submit = client.post(f"/buying/purchase-invoice/{copia_id}/submit", follow_redirects=True)
+    assert submit.status_code in {302, 200}, submit.get_data(as_text=True)
+    with app.app_context():
+        enviada = database.session.get(PurchaseInvoice, copia_id)
+        assert enviada.docstatus == 1, "La copia no se contabilizó"
+        assert enviada.grand_total == Decimal("115.00")
+        assert enviada.outstanding_amount == Decimal("115.00")
