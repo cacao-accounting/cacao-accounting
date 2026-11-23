@@ -24808,3 +24808,7 @@ msgstr "Only a draft import landed cost can be edited."
 #: cacao_accounting/compras/routes.py
 msgid "La compañía de un costo de importación no puede cambiarse."
 msgstr "The company of an import landed cost cannot be changed."
+
+#: cacao_accounting/bancos/templates/bancos/transaccion_lista.html
+msgid "No hay transacciones bancarias para los filtros seleccionados."
+msgstr "There are no bank transactions for the selected filters."

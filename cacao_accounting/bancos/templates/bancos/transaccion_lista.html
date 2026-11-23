@@ -25,6 +25,7 @@
   </div>
   {{ macros.list_filters(show_status=False, placeholder=_("Buscar por descripcion o referencia..."), extra_params=consulta.period_extra_params) }}
   {{ macros.period_list_filters(consulta) }}
+  {% if consulta.items %}
   <table class="ca-table">
     <caption style="display: none;">{{ _('Listado de transacciones bancarias.') }}</caption>
     <thead>
@@ -46,6 +47,12 @@
       {%- endfor %}
     </tbody>
   </table>
+  {% else %}
+  <div class="p-4 text-center text-muted" role="status" aria-live="polite">
+    <i class="bi bi-info-circle fs-4 mb-2 d-block" aria-hidden="true"></i>
+    {{ _('No hay transacciones bancarias para los filtros seleccionados.') }}
+  </div>
+  {% endif %}
   <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="bancos.bancos_transaccion_lista", extra_params=consulta.period_extra_params) }}</div>
 </div>
 
