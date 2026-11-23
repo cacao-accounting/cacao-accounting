@@ -2363,6 +2363,18 @@ msgstr "You must select a company."
 msgid "Política de control presupuestario no válida."
 msgstr "Budget control policy invalid."
 
+#: cacao_accounting/admin/templates/admin/budget_control_config.html
+msgid "Notificar"
+msgstr "Notify"
+
+#: cacao_accounting/admin/templates/admin/budget_control_config.html
+msgid "Bloquear"
+msgstr "Block"
+
+#: cacao_accounting/admin/templates/admin/budget_control_config.html
+msgid "No hacer nada"
+msgstr "Do nothing"
+
 #: cacao_accounting/admin/routes.py:1323
 msgid "Configuración de control presupuestario guardada correctamente."
 msgstr "Budget control configuration saved successfully."

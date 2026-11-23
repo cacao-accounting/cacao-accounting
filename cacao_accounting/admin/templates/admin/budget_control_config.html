@@ -103,6 +103,11 @@
             </tr>
           </thead>
           <tbody>
+            {% set action_labels = {
+              "notify": _("Notificar"),
+              "block": _("Bloquear"),
+              "do_nothing": _("No hacer nada"),
+            } %}
             {% for cfg in configs %}
             <tr>
               <td><strong>{{ cfg.company }}</strong></td>
@@ -115,9 +120,9 @@
               </td>
               <td>
                 {% if cfg.enabled and cfg.action == "do_nothing" %}
-                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>{{ cfg.action }}</span>
+                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>{{ action_labels.get(cfg.action, cfg.action) }}</span>
                 {% else %}
-                <span class="text-monospace">{{ cfg.action }}</span>
+                <span class="text-monospace">{{ action_labels.get(cfg.action, cfg.action) }}</span>
                 {% endif %}
               </td>
             </tr>
