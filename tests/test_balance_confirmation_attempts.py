@@ -12,6 +12,7 @@ límite y decide el turno en una sola operación.
 from __future__ import annotations
 
 import hashlib
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
@@ -22,6 +23,8 @@ from sqlalchemy import func
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.balance_confirmation_bp import _claim_verification_attempt
+from cacao_accounting.contabilidad.balance_confirmation import compute_snapshot_hash
+from cacao_accounting.contabilidad import balance_confirmation_bp
 from cacao_accounting.database import (
     BalanceConfirmation,
     BalanceConfirmationInvitation,
@@ -117,6 +120,232 @@ def _post_verification(app, token: str, code: str, *, client=None, email: str = 
     )
 
 
+def test_expired_invitation_blocks_public_access_and_verification(confirmation_attempt_scenario):
+    """Una invitación vencida no expone formularios ni permite verificar credenciales."""
+    app, ids = confirmation_attempt_scenario
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        invitation.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        database.session.commit()
+
+    client = app.test_client()
+    page = client.get(f"/confirm-balance/{ids['token']}")
+    assert page.status_code == 200
+    assert b'name="code"' not in page.data
+    _post_verification(app, ids["token"], "123456", client=client)
+
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        assert invitation.status == "pending"
+        assert invitation.verified_at is None
+        assert invitation.failed_attempts == 0
+        assert not _claim_verification_attempt(invitation, invitation.token_hash)
+
+
+def test_unexpired_invitation_can_be_verified(confirmation_attempt_scenario):
+    """Una invitación con plazo propio futuro conserva el flujo de verificación."""
+    app, ids = confirmation_attempt_scenario
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        invitation.expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        database.session.commit()
+    _post_verification(app, ids["token"], "123456")
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        assert invitation.status == "viewed"
+        assert invitation.verified_at is not None
+
+
+def test_expired_invitation_cannot_submit_even_with_verified_session(confirmation_attempt_scenario):
+    """La sesión verificada no permite responder tras el vencimiento de la invitación."""
+    app, ids = confirmation_attempt_scenario
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+        snapshot = {"items": [], "totals": {}}
+        confirmation.snapshot_json = json.dumps(snapshot)
+        confirmation.snapshot_hash = compute_snapshot_hash(snapshot)
+        confirmation_id = confirmation.id
+        invitation.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        database.session.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[f"verified_confirmation_{confirmation_id}"] = ids["invitation"]
+    page = client.get(f"/confirm-balance/{ids['token']}")
+    response = client.post(f"/confirm-balance/{ids['token']}/respond", data={"response_type": "confirmed"})
+    assert b'name="response_type"' not in page.data
+    assert response.status_code == 302
+    with app.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation.status == "sent"
+        assert confirmation.responded_at is None
+
+
+def test_response_transition_rechecks_deadline_atomically(confirmation_attempt_scenario, monkeypatch):
+    """El UPDATE de respuesta rechaza una invitación que vence después de la lectura inicial."""
+    app, ids = confirmation_attempt_scenario
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+        snapshot = {"items": [], "totals": {}}
+        confirmation.snapshot_json = json.dumps(snapshot)
+        confirmation.snapshot_hash = compute_snapshot_hash(snapshot)
+        confirmation_id = confirmation.id
+        invitation.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        database.session.commit()
+
+    monkeypatch.setattr(balance_confirmation_bp, "_invitation_unexpired", lambda _invitation: True)
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[f"verified_confirmation_{confirmation_id}"] = ids["invitation"]
+    response = client.post(f"/confirm-balance/{ids['token']}/respond", data={"response_type": "confirmed"})
+    assert response.status_code == 302
+    with app.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        assert confirmation.status == "sent"
+        assert confirmation.responded_at is None
+
+
+@pytest.mark.parametrize("expire_before_transition", [False, True])
+def test_response_checks_confirmation_deadline_at_transition(
+    confirmation_attempt_scenario, monkeypatch, expire_before_transition
+):
+    """La respuesta no se registra si el plazo vence después de validar el formulario."""
+    app, ids = confirmation_attempt_scenario
+    start = datetime.now(timezone.utc)
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+        snapshot = {"items": [], "totals": {}}
+        confirmation.snapshot_json = json.dumps(snapshot)
+        confirmation.snapshot_hash = compute_snapshot_hash(snapshot)
+        confirmation.expires_at = start + timedelta(seconds=5)
+        invitation.expires_at = start + timedelta(minutes=5)
+        confirmation_id = confirmation.id
+        database.session.commit()
+
+    monkeypatch.setattr(balance_confirmation_bp, "_utcnow", lambda: start)
+    original_validate = balance_confirmation_bp._validated_public_response
+
+    def validate_then_advance_clock():
+        result = original_validate()
+        if expire_before_transition:
+            monkeypatch.setattr(balance_confirmation_bp, "_utcnow", lambda: start + timedelta(seconds=6))
+        return result
+
+    monkeypatch.setattr(balance_confirmation_bp, "_validated_public_response", validate_then_advance_clock)
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[f"verified_confirmation_{confirmation_id}"] = ids["invitation"]
+    user_agent = "Reviewer/" + "x" * 600
+    response = client.post(
+        f"/confirm-balance/{ids['token']}/respond",
+        data={"response_type": "confirmed"},
+        headers={"User-Agent": user_agent},
+    )
+    assert response.status_code == (302 if expire_before_transition else 200)
+    with app.app_context():
+        confirmation = database.session.get(BalanceConfirmation, confirmation_id)
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        database.session.refresh(confirmation)
+        assert confirmation.status == ("sent" if expire_before_transition else "confirmed")
+        assert (confirmation.responded_at is None) == expire_before_transition
+        assert invitation.status == ("pending" if expire_before_transition else "responded")
+        if not expire_before_transition:
+            assert confirmation.respondent_user_agent == user_agent[:512]
+
+
+def test_verification_transition_rechecks_deadline(confirmation_attempt_scenario, monkeypatch):
+    """Un vencimiento tras reclamar el intento impide crear una sesión verificada."""
+    app, ids = confirmation_attempt_scenario
+    original_claim = balance_confirmation_bp._claim_verification_attempt
+
+    def expire_after_claim(invitation, token_hash):
+        claimed = original_claim(invitation, token_hash)
+        invitation.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        database.session.commit()
+        return claimed
+
+    monkeypatch.setattr(balance_confirmation_bp, "_claim_verification_attempt", expire_after_claim)
+    client = app.test_client()
+    response = _post_verification(app, ids["token"], "123456", client=client)
+    assert response.status_code == 302
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        confirmation_id = invitation.balance_confirmation_id
+        assert invitation.status == "pending"
+        assert invitation.verified_at is None
+    with client.session_transaction() as session:
+        assert f"verified_confirmation_{confirmation_id}" not in session
+
+
+def test_rotated_token_cannot_consume_new_invitation_attempts(confirmation_attempt_scenario, monkeypatch):
+    """Un enlace antiguo no consume intentos del token emitido por un reenvío concurrente."""
+    app, ids = confirmation_attempt_scenario
+    original_claim = balance_confirmation_bp._claim_verification_attempt
+    new_token_hash = hashlib.sha256(b"rotated-token").hexdigest()
+
+    def rotate_before_claim(invitation, token_hash):
+        invitation.token_hash = new_token_hash
+        invitation.failed_attempts = 0
+        database.session.commit()
+        return original_claim(invitation, token_hash)
+
+    monkeypatch.setattr(balance_confirmation_bp, "_claim_verification_attempt", rotate_before_claim)
+    client = app.test_client()
+    response = _post_verification(app, ids["token"], "000000", client=client)
+    assert response.status_code == 302
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        assert invitation.token_hash == new_token_hash
+        assert invitation.failed_attempts == 0
+        assert invitation.verified_at is None
+
+
+@pytest.mark.parametrize("transition", ["cancelled", "expired", "confirmed"])
+def test_verification_cannot_reopen_confirmation_changed_after_attempt_claim(
+    confirmation_attempt_scenario, monkeypatch, transition
+):
+    """Una confirmación cerrada tras reclamar el intento no vuelve a viewed."""
+    app, ids = confirmation_attempt_scenario
+    original_claim = balance_confirmation_bp._claim_verification_attempt
+
+    def change_confirmation_after_claim(invitation, token_hash):
+        claimed = original_claim(invitation, token_hash)
+        confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+        if transition == "expired":
+            confirmation.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        elif transition == "confirmed":
+            from cacao_accounting.internal_control_service import balance_confirmation_response_transition
+
+            with balance_confirmation_response_transition(confirmation.id):
+                database.session.execute(
+                    database.update(BalanceConfirmation)
+                    .where(BalanceConfirmation.id == confirmation.id)
+                    .values(status="confirmed", response_type="confirmed", responded_at=datetime.now(timezone.utc))
+                )
+        else:
+            confirmation.status = "cancelled"
+        database.session.commit()
+        return claimed
+
+    monkeypatch.setattr(balance_confirmation_bp, "_claim_verification_attempt", change_confirmation_after_claim)
+    client = app.test_client()
+    response = _post_verification(app, ids["token"], "123456", client=client)
+    assert response.status_code == 302
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+        assert confirmation.status == ("sent" if transition == "expired" else transition)
+        assert confirmation.viewed_at is None
+        assert invitation.status == "pending"
+        assert invitation.verified_at is None
+        confirmation_id = confirmation.id
+    with client.session_transaction() as session:
+        assert f"verified_confirmation_{confirmation_id}" not in session
+
+
 def test_sixth_wrong_verification_is_rejected_after_five_attempts(confirmation_attempt_scenario):
     """El contador se detiene en cinco y el siguiente intento no compara el código."""
     app, ids = confirmation_attempt_scenario
@@ -140,7 +369,7 @@ def test_concurrent_attempts_claim_at_most_five_slots(confirmation_attempt_scena
         with app.app_context():
             try:
                 invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
-                return _claim_verification_attempt(invitation)
+                return _claim_verification_attempt(invitation, invitation.token_hash)
             finally:
                 database.session.remove()
 

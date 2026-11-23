@@ -11,7 +11,7 @@ from typing import cast
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for, session
 from flask_login import current_user, login_required
-from sqlalchemy import select, update
+from sqlalchemy import case, or_, select, update
 from sqlalchemy.engine import CursorResult
 
 from cacao_accounting.database import (
@@ -69,6 +69,17 @@ def _as_utc(value: datetime | None) -> datetime | None:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _invitation_unexpired(invitation: BalanceConfirmationInvitation) -> bool:
+    """Check the invitation deadline, allowing legacy invitations without one."""
+    expires_at = _as_utc(invitation.expires_at)
+    return expires_at is None or _utcnow() <= expires_at
+
+
+def _invitation_unexpired_sql(now: datetime):
+    """Build the deadline condition for an atomic invitation transition."""
+    return or_(BalanceConfirmationInvitation.expires_at.is_(None), BalanceConfirmationInvitation.expires_at >= now)
 
 
 def _mark_expired(confirmation: BalanceConfirmation) -> bool:
@@ -161,7 +172,7 @@ def _claim_confirmation_delivery(confirmation: BalanceConfirmation, allowed_stat
     return False
 
 
-def _active_invitation_exists(confirmation_id: str, invitation_id: str, token_hash: str):
+def _active_invitation_exists(confirmation_id: str, invitation_id: str, token_hash: str, now: datetime):
     """Return a SQL predicate for the currently active invitation credential."""
     return (
         select(BalanceConfirmationInvitation.id)
@@ -170,6 +181,7 @@ def _active_invitation_exists(confirmation_id: str, invitation_id: str, token_ha
             BalanceConfirmationInvitation.balance_confirmation_id == confirmation_id,
             BalanceConfirmationInvitation.token_hash == token_hash,
             BalanceConfirmationInvitation.status.in_(("pending", "viewed")),
+            _invitation_unexpired_sql(now),
         )
         .exists()
     )
@@ -680,6 +692,13 @@ def public_confirm_balance(token: str):
             message=msg,
         )
 
+    if invitation.status not in ("pending", "viewed") or not _invitation_unexpired(invitation):
+        return render_template(
+            TEMPLATE_CONFIRM_BALANCE_STATUS,
+            title=_("No disponible"),
+            message=_("La invitación no se encuentra disponible."),
+        )
+
     # Verificar si el usuario actual en sesión ya superó el paso de verificación
     session_key = f"verified_confirmation_{confirmation.id}"
     if session.get(session_key) != invitation.id:
@@ -710,7 +729,7 @@ def public_confirm_balance(token: str):
     )
 
 
-def _claim_verification_attempt(invitation: BalanceConfirmationInvitation) -> bool:
+def _claim_verification_attempt(invitation: BalanceConfirmationInvitation, token_hash: str) -> bool:
     """Claim one verification attempt with an atomic, bounded increment (#2186).
 
     La lectura y el incremento en memoria permitían que solicitudes paralelas
@@ -724,7 +743,10 @@ def _claim_verification_attempt(invitation: BalanceConfirmationInvitation) -> bo
             update(BalanceConfirmationInvitation)
             .where(
                 BalanceConfirmationInvitation.id == invitation.id,
+                BalanceConfirmationInvitation.token_hash == token_hash,
                 BalanceConfirmationInvitation.failed_attempts < 5,
+                BalanceConfirmationInvitation.status.in_(("pending", "viewed")),
+                _invitation_unexpired_sql(_utcnow()),
             )
             .values(failed_attempts=BalanceConfirmationInvitation.failed_attempts + 1)
             .execution_options(synchronize_session=False)
@@ -759,7 +781,11 @@ def public_confirm_balance_verify(token: str):
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     database.session.refresh(invitation)
-    if invitation.token_hash != token_hash or invitation.status not in ("pending", "viewed"):
+    if (
+        invitation.token_hash != token_hash
+        or invitation.status not in ("pending", "viewed")
+        or not _invitation_unexpired(invitation)
+    ):
         flash(_("La invitación no se encuentra disponible."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
@@ -783,9 +809,17 @@ def public_confirm_balance_verify(token: str):
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Rate limiting / failed attempts check
-    if invitation.failed_attempts >= 5 or not _claim_verification_attempt(invitation):
+    if invitation.failed_attempts >= 5 or not _claim_verification_attempt(invitation, token_hash):
+        database.session.refresh(invitation)
         database.session.commit()
-        msg = _("Se ha excedido el número de intentos permitidos para este enlace. Por favor contacte al administrador.")
+        if (
+            invitation.token_hash != token_hash
+            or invitation.status not in ("pending", "viewed")
+            or not _invitation_unexpired(invitation)
+        ):
+            msg = _("La invitación no se encuentra disponible.")
+        else:
+            msg = _("Se ha excedido el número de intentos permitidos para este enlace. Por favor contacte al administrador.")
         flash(msg, "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
@@ -802,15 +836,56 @@ def public_confirm_balance_verify(token: str):
         flash(_("La dirección de correo electrónico o el código ingresado son incorrectos."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
-    # Verificación exitosa
-    invitation.verified_at = _utcnow()
-    invitation.last_access_at = _utcnow()
-    invitation.failed_attempts = 0
-    invitation.status = "viewed"
+    # El reclamo del intento confirmó su propia transacción. La confirmación
+    # pudo cambiar durante ese intervalo, por lo que se reclama de nuevo antes
+    # de conceder acceso y se conserva el lock hasta confirmar la verificación.
+    verified_at = _utcnow()
+    confirmation_result = database.session.execute(
+        update(BalanceConfirmation)
+        .where(
+            BalanceConfirmation.id == confirmation.id,
+            BalanceConfirmation.status.in_(("sent", "viewed")),
+            BalanceConfirmation.response_type.is_(None),
+            BalanceConfirmation.responded_at.is_(None),
+            or_(BalanceConfirmation.expires_at.is_(None), BalanceConfirmation.expires_at >= verified_at),
+        )
+        .values(
+            status="viewed",
+            viewed_at=case((BalanceConfirmation.status == "sent", verified_at), else_=BalanceConfirmation.viewed_at),
+        )
+        .execution_options(synchronize_session="fetch")
+    )
+    if getattr(confirmation_result, "rowcount", 0) != 1:
+        database.session.rollback()
+        flash(_("La confirmación no se encuentra disponible."), "danger")
+        return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
-    if confirmation.status == "sent":
-        confirmation.status = "viewed"
-        confirmation.viewed_at = _utcnow()
+    # Verificación exitosa: el plazo de invitación también se comprueba en SQL.
+    transition_at = _utcnow()
+    result = database.session.execute(
+        update(BalanceConfirmationInvitation)
+        .where(
+            BalanceConfirmationInvitation.id == invitation.id,
+            BalanceConfirmationInvitation.token_hash == token_hash,
+            BalanceConfirmationInvitation.status.in_(("pending", "viewed")),
+            _invitation_unexpired_sql(transition_at),
+            select(BalanceConfirmation.id)
+            .where(
+                BalanceConfirmation.id == invitation.balance_confirmation_id,
+                BalanceConfirmation.status == "viewed",
+                BalanceConfirmation.response_type.is_(None),
+                BalanceConfirmation.responded_at.is_(None),
+                or_(BalanceConfirmation.expires_at.is_(None), BalanceConfirmation.expires_at >= transition_at),
+            )
+            .exists(),
+        )
+        .values(verified_at=verified_at, last_access_at=verified_at, failed_attempts=0, status="viewed")
+        .execution_options(synchronize_session="fetch")
+    )
+    if getattr(result, "rowcount", 0) != 1:
+        database.session.rollback()
+        flash(_("La invitación no se encuentra disponible."), "danger")
+        return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Log audit event
     log_balance_confirmation_event(
@@ -868,7 +943,11 @@ def public_confirm_balance_respond(token: str):
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     database.session.refresh(invitation)
-    if invitation.token_hash != token_hash or invitation.status not in ("pending", "viewed"):
+    if (
+        invitation.token_hash != token_hash
+        or invitation.status not in ("pending", "viewed")
+        or not _invitation_unexpired(invitation)
+    ):
         flash(_("La invitación no se encuentra disponible."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
@@ -899,20 +978,22 @@ def public_confirm_balance_respond(token: str):
     # El WHERE por estado evita que dos invitaciones concurrentes queden
     # registradas como "primera respuesta válida".
     response_status = "confirmed" if response_type == "confirmed" else "disputed"
-    user_agent = request.user_agent.string if request.user_agent else None
+    user_agent = request.headers.get("User-Agent")
     with balance_confirmation_response_transition(str(confirmation.id)):
+        response_at = _utcnow()
         result = database.session.execute(
             update(BalanceConfirmation)
             .where(
                 BalanceConfirmation.id == confirmation.id,
-                BalanceConfirmation.status.in_(("draft", "sent", "viewed")),
+                BalanceConfirmation.status.in_(("sent", "viewed")),
                 BalanceConfirmation.response_type.is_(None),
                 BalanceConfirmation.responded_at.is_(None),
-                _active_invitation_exists(confirmation.id, invitation.id, token_hash),
+                or_(BalanceConfirmation.expires_at.is_(None), BalanceConfirmation.expires_at >= response_at),
+                _active_invitation_exists(confirmation.id, invitation.id, token_hash, response_at),
             )
             .values(
                 status=response_status,
-                responded_at=_utcnow(),
+                responded_at=response_at,
                 response_type=response_type,
                 response_comment=response_comment,
                 respondent_first_name=first_name,

@@ -11,13 +11,16 @@ autoriza compañía y tercero antes de cargar destinatarios, y no expone
 
 from __future__ import annotations
 
+from datetime import date
 from uuid import uuid4
 
 import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
+from cacao_accounting.contabilidad import balance_confirmation_bp
 from cacao_accounting.database import (
+    BalanceConfirmation,
     CompanyParty,
     Contact,
     Currency,
@@ -166,6 +169,40 @@ def test_compania_no_autorizada_o_ajena_responde_403(escenario_contactos):
         data={"company_id": "beta", "cutoff_date": "2026-05-15", "emails": ids["alpha_email"]},
     )
     assert response.status_code == 403
+
+
+def test_fallo_interno_de_creacion_revierte_y_no_expone_detalle(escenario_contactos, monkeypatch):
+    """Un error interno se registra sin revelar su detalle ni conservar escritura parcial."""
+    application, ids = escenario_contactos
+    private_detail = "PRIVATE-SQL-SMTP-DETAIL-2128"
+
+    def fail_after_writing(**kwargs):
+        database.session.add(
+            BalanceConfirmation(
+                company=kwargs["company_id"],
+                party_type=kwargs["party_type"],
+                party_id=kwargs["party_id"],
+                cutoff_date=kwargs["cutoff_date"],
+                status="draft",
+            )
+        )
+        database.session.flush()
+        raise ValueError(private_detail)
+
+    monkeypatch.setattr(balance_confirmation_bp, "create_balance_confirmation", fail_after_writing)
+    with application.app_context():
+        count_before = database.session.query(BalanceConfirmation).count()
+    client = _login(application, ids["user"])
+    response = client.post(
+        _url(ids, "alpha"),
+        data={"company_id": "alpha", "cutoff_date": date.today().isoformat(), "emails": ids["alpha_email"]},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert private_detail not in response.get_data(as_text=True)
+    assert "No fue posible crear la confirmación de saldo." in response.get_data(as_text=True)
+    with application.app_context():
+        assert database.session.query(BalanceConfirmation).count() == count_before
 
 
 def test_contacto_compartido_entre_companias_no_se_edita(escenario_contactos):
