@@ -17,14 +17,25 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AccountingPeriod,
     Accounts,
+    Bank,
+    BankAccount,
+    Book,
+    CompanyDefaultAccount,
     Currency,
     Entity,
+    FiscalYear,
+    GLEntry,
+    PaymentEntry,
     PettyCashAccount,
     PettyCashExpense,
+    PettyCashReplenishment,
     PettyCashReplenishmentExpense,
+    User,
     database,
 )
+from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 
 pytestmark = pytest.mark.database
 
@@ -48,7 +59,7 @@ def caja_chica_app(tmp_path):
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
-            "MODO_ESCRITORIO": False,
+            "MODO_ESCRITORIO": True,
         }
     )
     empresa = f"L{uuid4().hex[:8]}"
@@ -101,8 +112,110 @@ def caja_chica_app(tmp_path):
             docstatus=1,
         )
         database.session.add(gasto)
+        database.session.flush()
+        anio = FiscalYear(
+            entity=empresa,
+            name="2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+        )
+        database.session.add(anio)
+        database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                entity=empresa,
+                fiscal_year_id=anio.id,
+                name="Octubre 2026",
+                start=date(2026, 10, 1),
+                end=date(2026, 10, 31),
+                enabled=True,
+                is_closed=False,
+            )
+        )
+        database.session.add(
+            Book(
+                entity=empresa,
+                code=f"B{empresa[1:]}",
+                name="Libro caja chica",
+                status="activo",
+                is_primary=True,
+                currency="NIO",
+            )
+        )
+        cuenta_banco = Accounts(
+            entity=empresa,
+            code=f"BK-{empresa}",
+            name="Banco caja chica",
+            classification="asset",
+            account_type="bank",
+            active=True,
+            enabled=True,
+            group=False,
+        )
+        cuenta_gasto = Accounts(
+            entity=empresa,
+            code=f"GX-{empresa}",
+            name="Gasto caja chica",
+            classification="expense",
+            account_type="expense",
+            active=True,
+            enabled=True,
+            group=False,
+        )
+        database.session.add_all([cuenta_banco, cuenta_gasto])
+        database.session.flush()
+        database.session.add(
+            CompanyDefaultAccount(
+                company=empresa,
+                default_cash=cuenta.id,
+                default_bank=cuenta_banco.id,
+                default_expense=cuenta_gasto.id,
+            )
+        )
+        banco = Bank(name=f"Banco {empresa}")
+        database.session.add(banco)
+        database.session.flush()
+        cuenta_bancaria = BankAccount(
+            company=empresa,
+            bank_id=banco.id,
+            account_name=f"Cuenta {empresa}",
+            account_no=f"AC-{empresa}",
+            currency="NIO",
+            is_active=True,
+            gl_account_id=cuenta_banco.id,
+        )
+        database.session.add(cuenta_bancaria)
+        database.session.flush()
+        solicitud = PettyCashReplenishment(
+            company=empresa,
+            petty_cash_id=fondo.id,
+            request_date=date(2026, 10, 19),
+            amount=Decimal("85.00"),
+            status="aprobado",
+            docstatus=1,
+        )
+        database.session.add(solicitud)
+        usuario = User(
+            id=f"admin-{empresa}",
+            user=f"admin_{empresa}",
+            name="Admin caja chica",
+            password=b"unused",
+            active=True,
+            classification="admin",
+        )
+        database.session.add(usuario)
+        database.session.flush()
+        ensure_default_naming_series_for_company(empresa)
         database.session.commit()
-        ids = {"company": empresa, "fund_id": fondo.id, "expense_id": gasto.id}
+        ids = {
+            "company": empresa,
+            "fund_id": fondo.id,
+            "expense_id": gasto.id,
+            "bank_id": cuenta_bancaria.id,
+            "replenishment_id": solicitud.id,
+            "user_id": usuario.id,
+        }
     yield app, ids
     with app.app_context():
         database.session.remove()
@@ -145,3 +258,53 @@ def test_dos_solicitudes_concurrentes_reservan_una_vez(caja_chica_app):
             .all()
         )
         assert len(vinculos) == 1
+
+
+def _reembolsar(app, ids, barrera: Barrier) -> str:
+    from flask_login import login_user
+
+    from cacao_accounting.bancos.services import replenish_petty_cash
+
+    with app.test_request_context("/"):
+        login_user(database.session.get(User, ids["user_id"]))
+        try:
+            barrera.wait(timeout=10)
+            solicitud = database.session.get(PettyCashReplenishment, ids["replenishment_id"])
+            replenish_petty_cash(solicitud, bank_account_id=ids["bank_id"])
+            return "reembolsada"
+        except ValueError:
+            database.session.rollback()
+            return "rechazada"
+        finally:
+            database.session.remove()
+
+
+def test_dos_reembolsos_concurrentes_crean_una_sola_nota(caja_chica_app):
+    """Dos pagos simultáneos de la misma solicitud dejan una sola nota y un GL."""
+    app, ids = caja_chica_app
+    barrera = Barrier(2)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        resultados = list(pool.map(lambda _: _reembolsar(app, ids, barrera), range(2)))
+
+    assert resultados.count("reembolsada") == 1, resultados
+    with app.app_context():
+        solicitud = database.session.get(PettyCashReplenishment, ids["replenishment_id"])
+        assert solicitud.status == "reembolsado"
+        assert solicitud.bank_debit_note_id
+        pagos = (
+            database.session.execute(
+                database.select(PaymentEntry).filter_by(
+                    company=ids["company"], payment_type="debit_note", posting_date=date(2026, 10, 19)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(pagos) == 1
+        gl = (
+            database.session.execute(database.select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=pagos[0].id))
+            .scalars()
+            .all()
+        )
+        assert gl
+        assert sum(fila.debit for fila in gl) == sum(fila.credit for fila in gl)
