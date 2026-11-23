@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import re
 import sqlite3
 import ssl
 import smtplib
@@ -33,6 +34,9 @@ class EmailError(Exception):
 
 LOGGER = logging.getLogger(__name__)
 SMTP_PASSWORD_SALT_KEY = "smtp_password_salt"
+# Los identificadores de la cola son ULID; cualquier otro valor no puede llegar a
+# una consulta ni a una línea de registro (Sonar S5145).
+_QUEUE_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 def _get_encryption_key(salt: bytes) -> bytes:
@@ -246,6 +250,9 @@ def _audit_retry_success(item: Any) -> None:
 def deliver_email_queue_item(queue_id: str, *, retry: bool) -> tuple[Any, bool]:
     """Serialize initial delivery and admin retries on the same queue row."""
     from datetime import datetime, timezone
+
+    if not _QUEUE_ID_PATTERN.fullmatch(queue_id or ""):
+        raise EmailError(_("El identificador del registro de correo no es válido."))
 
     if retry and is_desktop_mode():
         raise EmailError(_("El reintento de envío de correos no está disponible en modo DESKTOP."))

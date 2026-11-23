@@ -24473,3 +24473,7 @@ msgstr "The quantity in base UOM must be greater than zero."
 #: cacao_accounting/cli.py
 msgid "La base de datos ya contiene la entidad demo sin la señal de semilla completa; use una base de datos nueva."
 msgstr "The database already contains the demo entity without the complete seed marker; use a new database."
+
+#: cacao_accounting/messaging/email.py
+msgid "El identificador del registro de correo no es válido."
+msgstr "The email queue record identifier is not valid."
