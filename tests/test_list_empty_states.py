@@ -67,34 +67,93 @@ def test_paginacion_de_notas_conserva_su_endpoint(app, entorno_contable, authent
 
     from cacao_accounting.database import PaymentEntry, database
 
+    ids: list[str] = []
     with app.app_context():
         for index in range(11):
-            database.session.add(
-                PaymentEntry(
-                    company="cacao",
-                    payment_type="debit_note",
-                    document_no=f"ND-PAG-{index}",
-                    party_name="Cliente",
-                    posting_date=date(2026, 5, 15),
-                    paid_amount=1,
-                )
+            debito = PaymentEntry(
+                company="cacao",
+                payment_type="debit_note",
+                document_no=f"ND-PAG-{uuid4().hex[:8]}-{index}",
+                party_name="Cliente",
+                posting_date=date(2026, 5, 15),
+                paid_amount=1,
             )
-            database.session.add(
-                PaymentEntry(
-                    company="cacao",
-                    payment_type="credit_note",
-                    document_no=f"NC-PAG-{index}",
-                    party_name="Cliente",
-                    posting_date=date(2026, 5, 15),
-                    paid_amount=1,
-                )
+            credito = PaymentEntry(
+                company="cacao",
+                payment_type="credit_note",
+                document_no=f"NC-PAG-{uuid4().hex[:8]}-{index}",
+                party_name="Cliente",
+                posting_date=date(2026, 5, 15),
+                paid_amount=1,
             )
+            database.session.add_all([debito, credito])
+            database.session.flush()
+            ids.extend([debito.id, credito.id])
         database.session.commit()
 
-    client = authenticated_client("admin")
-    debito = client.get("/cash_management/payment/debit-note/list").get_data(as_text=True).replace("&amp;", "&")
-    credito = client.get("/cash_management/payment/credit-note/list").get_data(as_text=True).replace("&amp;", "&")
+    try:
+        client = authenticated_client("admin")
+        debito = client.get("/cash_management/payment/debit-note/list").get_data(as_text=True).replace("&amp;", "&")
+        credito = client.get("/cash_management/payment/credit-note/list").get_data(as_text=True).replace("&amp;", "&")
 
-    assert "/cash_management/payment/debit-note/list?page=2" in debito
-    assert "/cash_management/payment/credit-note/list?page=2" in credito
-    assert "/cash_management/payment/credit-note/list" not in debito
+        assert "/cash_management/payment/debit-note/list?page=2" in debito
+        assert "/cash_management/payment/credit-note/list?page=2" in credito
+        assert "/cash_management/payment/credit-note/list" not in debito
+    finally:
+        with app.app_context():
+            database.session.execute(database.delete(PaymentEntry).where(PaymentEntry.id.in_(ids)))
+            database.session.commit()
+
+
+def test_paginacion_de_devoluciones_de_venta_conserva_su_endpoint(app, entorno_contable, authenticated_client):
+    """#2047: la segunda página de devoluciones O2C usa su propio listado."""
+    from datetime import date
+    from decimal import Decimal
+
+    from cacao_accounting.database import SalesInvoice, database
+
+    sufijo = uuid4().hex[:8]
+    ids: list[str] = []
+    with app.app_context():
+        for indice in range(11):
+            factura = SalesInvoice(
+                company="cacao",
+                posting_date=date(2026, 5, 15),
+                docstatus=1,
+                document_type="sales_return",
+                document_no=f"DEV-PAG-{sufijo}-{indice:02d}",
+                customer_name="Cliente devolución",
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+                grand_total=Decimal("1"),
+                total=Decimal("1"),
+                outstanding_amount=Decimal("0"),
+            )
+            database.session.add(factura)
+            database.session.flush()
+            ids.append(factura.id)
+        database.session.commit()
+
+    try:
+        client = authenticated_client("admin")
+        primera = client.get(f"/sales/sales-invoice/return/list?search=DEV-PAG-{sufijo}")
+        segunda = client.get(f"/sales/sales-invoice/return/list?search=DEV-PAG-{sufijo}&page=2")
+
+        assert primera.status_code == 200
+        assert segunda.status_code == 200
+        cuerpo_primera = primera.get_data(as_text=True).replace("&amp;", "&")
+        cuerpo_segunda = segunda.get_data(as_text=True)
+        assert "page=2" in cuerpo_primera
+        assert "/sales/sales-invoice/debit-note/list" not in cuerpo_primera
+        paginas = [
+            {indice for indice in range(11) if f"DEV-PAG-{sufijo}-{indice:02d}" in cuerpo}
+            for cuerpo in (cuerpo_primera, cuerpo_segunda)
+        ]
+        assert len(paginas[0]) == 10
+        assert len(paginas[1]) == 1
+        assert paginas[0].isdisjoint(paginas[1])
+    finally:
+        with app.app_context():
+            database.session.execute(database.delete(SalesInvoice).where(SalesInvoice.id.in_(ids)))
+            database.session.commit()
