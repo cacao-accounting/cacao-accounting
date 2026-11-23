@@ -186,8 +186,60 @@ def test_post_rechazado_conserva_datos_ingresados(app, entorno_contable, authent
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
+    assert "Ya existe una conciliación para esa caja y fecha." in body
     assert 'value="cacao"' in body
     assert f'<option value="{fund_id}" selected' in body
     assert 'value="2026-05-16"' in body
     assert 'value="42.75"' in body
     assert "Confirmación POS 98765" in body
+
+
+def test_conflicto_de_unicidad_se_traduce_y_libera_la_sesion(app, entorno_contable, monkeypatch):
+    """La defensa de unicidad convierte IntegrityError en ValueError y revierte."""
+    del entorno_contable
+    suffix = uuid4().hex[:8]
+    with app.app_context():
+        cuenta = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1101")).scalar_one()
+        fondo = PettyCashAccount(
+            company="cacao",
+            account_id=cuenta.id,
+            name=f"Caja {suffix}",
+            currency="NIO",
+            float_amount=Decimal("100"),
+            is_default=False,
+            is_active=True,
+        )
+        database.session.add(fondo)
+        database.session.commit()
+        fondo_id = fondo.id
+        bank_services.create_petty_cash_reconciliation(
+            company="cacao",
+            petty_cash_id=fondo_id,
+            reconciliation_date=date(2026, 5, 20),
+            counted_cash=Decimal("100"),
+        )
+        # Fuerza la colisión de unicidad: el prechequeo no ve la fila existente.
+        monkeypatch.setattr(bank_services, "_existing_petty_cash_reconciliation", lambda *args, **kwargs: None)
+
+        with pytest.raises(ValueError, match="Ya existe una conciliación"):
+            bank_services.create_petty_cash_reconciliation(
+                company="cacao",
+                petty_cash_id=fondo_id,
+                reconciliation_date=date(2026, 5, 20),
+                counted_cash=Decimal("100"),
+            )
+
+        bank_services.create_petty_cash_reconciliation(
+            company="cacao",
+            petty_cash_id=fondo_id,
+            reconciliation_date=date(2026, 5, 21),
+            counted_cash=Decimal("100"),
+        )
+        filas = (
+            database.session.execute(database.select(PettyCashReconciliation).filter_by(petty_cash_id=fondo_id))
+            .scalars()
+            .all()
+        )
+
+    assert len(filas) == 2
+    assert len([fila for fila in filas if fila.reconciliation_date == date(2026, 5, 20)]) == 1

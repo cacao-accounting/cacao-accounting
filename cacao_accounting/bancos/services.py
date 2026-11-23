@@ -1274,6 +1274,17 @@ def petty_cash_ledger_balance_in_fund_currency(petty_cash: PettyCashAccount, as_
         return None
 
 
+def _existing_petty_cash_reconciliation(
+    company: str, petty_cash_id: str, reconciliation_date
+) -> PettyCashReconciliation | None:
+    """Devuelve la conciliación existente para caja y fecha, si la hay."""
+    return database.session.execute(
+        database.select(PettyCashReconciliation).filter_by(
+            company=company, petty_cash_id=petty_cash_id, reconciliation_date=reconciliation_date
+        )
+    ).scalar_one_or_none()
+
+
 def create_petty_cash_reconciliation(
     *,
     company: str,
@@ -1287,11 +1298,7 @@ def create_petty_cash_reconciliation(
     if counted_cash is None or counted_cash < 0:
         raise ValueError(_("El efectivo contado debe ser un importe no negativo."))
     lock_default_scope("petty_cash_reconciliation", company, petty_cash_id, str(reconciliation_date))
-    duplicate = database.session.execute(
-        database.select(PettyCashReconciliation).filter_by(
-            company=company, petty_cash_id=petty_cash_id, reconciliation_date=reconciliation_date
-        )
-    ).scalar_one_or_none()
+    duplicate = _existing_petty_cash_reconciliation(company, petty_cash_id, reconciliation_date)
     if duplicate:
         raise ValueError(_("Ya existe una conciliación para esa caja y fecha."))
     derived = _petty_cash_reconciliation_derived_values(fund, reconciliation_date)
