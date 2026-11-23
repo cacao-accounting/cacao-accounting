@@ -37,6 +37,7 @@ from cacao_accounting.database import (
     Bank,
     BankAccountNumberingConfig,
     BankTransaction,
+    Book,
     ComprobanteContable,
     CostCenter,
     Currency,
@@ -1222,8 +1223,13 @@ def _petty_cash_reconciliation_derived_values(fund, as_of_date) -> dict[str, Dec
     los gastos poster ya salieron por el GL. Volver a sumar
     ``pending_expenses`` duplicaría la descarga del gasto y fabricaría un
     faltante fantasma en cajas físicamente cuadradas.
+
+    El GL vive en la moneda del libro primario y los vales en la moneda del
+    fondo; el saldo contable se convierte a la moneda del fondo antes de
+    restarlo (#1886).
     """
     ledger_balance = petty_cash_ledger_balance(fund, as_of_date=as_of_date)
+    ledger_balance = _petty_cash_ledger_balance_in_fund_currency(fund, ledger_balance, as_of_date)
     open_vouchers = petty_cash_open_vouchers_total(fund, as_of_date)
     pending_expenses = petty_cash_pending_replenishment_total(fund, as_of_date)
     expected_cash = ledger_balance - open_vouchers
@@ -1233,6 +1239,26 @@ def _petty_cash_reconciliation_derived_values(fund, as_of_date) -> dict[str, Dec
         "pending_expenses": pending_expenses,
         "expected_cash": expected_cash,
     }
+
+
+def _petty_cash_ledger_balance_in_fund_currency(
+    fund: PettyCashAccount,
+    ledger_balance: Decimal,
+    as_of_date: date | None,
+) -> Decimal:
+    """Convierte el saldo del libro primario a la moneda del fondo.
+
+    Sin tasa disponible se bloquea la conciliación en lugar de restar
+    importes de monedas distintas.
+    """
+    fund_currency = str(fund.currency or _company_currency(str(fund.company)))
+    ledger_id = primary_ledger_id(str(fund.company))
+    ledger = database.session.get(Book, ledger_id) if ledger_id else None
+    ledger_currency = str(ledger.currency or "") if ledger is not None else ""
+    if not ledger_currency or not fund_currency or ledger_currency == fund_currency:
+        return ledger_balance
+    rate = _lookup_exchange_rate(ledger_currency, fund_currency, as_of_date or date.today())
+    return (ledger_balance * rate).quantize(Decimal("0.0001"))
 
 
 def create_petty_cash_reconciliation(
