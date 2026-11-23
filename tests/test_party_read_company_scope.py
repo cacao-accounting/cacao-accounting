@@ -19,7 +19,7 @@ from cacao_accounting.database import CompanyParty, Currency, Entity, Modules, P
 PASSWORD = "party-read-scope-password"
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def party_read_scope_app():
     """Create parties spanning authorized and private companies for both modules."""
     app = create_app(
