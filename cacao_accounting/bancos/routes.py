@@ -1571,6 +1571,7 @@ def caja_chica_conciliacion_nueva():
         "bancos/caja_chica_conciliacion_nueva.html",
         fondos=fondos,
         today=date.today().isoformat(),
+        submitted_data=request.form if request.method == "POST" else {},
         titulo=_("Nueva Conciliación de Caja Chica") + " - " + APPNAME,
     )
 
@@ -1605,6 +1606,7 @@ def caja_chica_conciliacion_editar(r_id):
         fondos=[],
         registro=conciliacion,
         edit=True,
+        submitted_data=request.form if request.method == "POST" else {},
         today=conciliacion.reconciliation_date.isoformat() if conciliacion.reconciliation_date else date.today().isoformat(),
         titulo=_("Editar Conciliación de Caja Chica") + " - " + APPNAME,
     )
