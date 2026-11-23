@@ -25,6 +25,19 @@ class PaginatedResult:
     total_items: int
     items: list[Any] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        """Valida las invariantes de paginación al construir el resultado.
+
+        ``total_pages`` divide por ``page_size``; un tamaño cero o negativo
+        produciría una división inválida o metadatos imposibles (#1904).
+        """
+        if not isinstance(self.page, int) or self.page < 1:
+            raise ValueError("page debe ser un entero mayor o igual a 1")
+        if not isinstance(self.page_size, int) or self.page_size < 1:
+            raise ValueError("page_size debe ser un entero mayor o igual a 1")
+        if not isinstance(self.total_items, int) or self.total_items < 0:
+            raise ValueError("total_items debe ser un entero no negativo")
+
     @property
     def total_pages(self) -> int:
         """Calcula el número total de páginas redondeando hacia arriba."""
