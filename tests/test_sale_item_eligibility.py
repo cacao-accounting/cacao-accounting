@@ -11,7 +11,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 from cacao_accounting.database import (
@@ -194,18 +194,32 @@ def _reparar_estado_compartido(entorno_contable) -> None:
         entity_types = ["sales_invoice", "sales_order", "sales_quotation", "sales_request", "delivery_note"]
         ensure_default_naming_series_for_company("cacao", entity_types)
         for entity_type in entity_types:
-            series = database.session.execute(
-                select(NamingSeries).filter_by(
-                    entity_type=entity_type,
-                    company="cacao",
-                    is_active=True,
-                    is_default=True,
+            series_rows = (
+                database.session.execute(
+                    select(NamingSeries)
+                    .where(
+                        NamingSeries.entity_type == entity_type,
+                        NamingSeries.is_active.is_(True),
+                        or_(NamingSeries.company == "cacao", NamingSeries.company.is_(None)),
+                    )
+                    .order_by(NamingSeries.company.is_(None), NamingSeries.name)
                 )
-            ).scalar_one()
-            mapping = database.session.execute(
-                select(SeriesSequenceMap.id).filter_by(naming_series_id=series.id).limit(1)
-            ).scalar_one_or_none()
-            if mapping is None:
+                .scalars()
+                .all()
+            )
+            for series in series_rows:
+                fallback_mapping = database.session.execute(
+                    select(SeriesSequenceMap.id)
+                    .filter_by(naming_series_id=series.id)
+                    .where(SeriesSequenceMap.condition.is_(None))
+                    .limit(1)
+                ).scalar_one_or_none()
+                if fallback_mapping is not None:
+                    continue
+
+                last_priority = database.session.execute(
+                    select(func.max(SeriesSequenceMap.priority)).filter_by(naming_series_id=series.id)
+                ).scalar_one()
                 sequence = Sequence(
                     name=f"test {entity_type} {uuid4().hex}",
                     current_value=0,
@@ -219,7 +233,7 @@ def _reparar_estado_compartido(entorno_contable) -> None:
                     SeriesSequenceMap(
                         naming_series_id=series.id,
                         sequence_id=sequence.id,
-                        priority=0,
+                        priority=int(last_priority or -1) + 1,
                     )
                 )
         database.session.commit()
