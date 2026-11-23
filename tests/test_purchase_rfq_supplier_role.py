@@ -128,3 +128,32 @@ def test_la_edicion_no_muta_la_cabecera_con_un_cliente(app, entorno_contable):
         registro = database.session.execute(database.select(PurchaseQuotation).filter_by(id=cotizacion_id)).scalar_one()
         assert registro.supplier_id == proveedor_id
         assert registro.supplier_name == "Proveedor original"
+
+
+def test_edicion_con_cantidad_invalida_no_escapa_como_error(app, entorno_contable):
+    """#1947: una línea inválida se traduce en respuesta controlada y sin mutación."""
+    proveedor_id = _tercero(app, is_supplier=True)
+    with app.app_context():
+        cotizacion = PurchaseQuotation(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=0,
+            supplier_id=proveedor_id,
+            supplier_name="Proveedor",
+            transaction_currency="NIO",
+        )
+        database.session.add(cotizacion)
+        database.session.commit()
+        cotizacion_id = cotizacion.id
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        datos = _formulario(proveedor_id)
+        datos.update({"item_code_0": "ITEM-X", "qty_0": "abc", "rate_0": "1"})
+        with app.test_request_context("/", method="POST", data=datos):
+            login_user(admin)
+            respuesta = _handle_purchase_quotation_edit_post(cotizacion)
+
+    assert respuesta is not None
+    with app.app_context():
+        persistida = database.session.get(PurchaseQuotation, cotizacion_id)
+        assert persistida is not None
+        assert persistida.docstatus == 0
