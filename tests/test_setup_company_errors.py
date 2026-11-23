@@ -105,6 +105,28 @@ def test_codigo_duplicado_no_produce_500():
             database.engine.dispose()
 
 
+def test_rango_fiscal_invertido_no_crea_compania():
+    """Un inicio posterior al fin se rechaza en el formulario, sin 500."""
+    application = _crear_app()
+    try:
+        client = _cliente(application)
+        datos = _formulario("INVERTIDO")
+        datos["inicio_anio_fiscal"] = "2026-12-31"
+        datos["fin_anio_fiscal"] = "2026-01-01"
+
+        respuesta = client.post("/setup/", data=datos)
+
+        assert respuesta.status_code == 200
+        assert "anterior a la fecha de inicio" in respuesta.get_data(as_text=True)
+        with application.app_context():
+            creada = database.session.execute(database.select(Entity).filter_by(code="INVERTIDO")).scalar_one_or_none()
+            assert creada is None
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
 def test_alta_valida_completa_el_asistente():
     """El control positivo crea la compañía y redirige a la aplicación."""
     application = _crear_app()

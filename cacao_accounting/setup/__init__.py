@@ -145,7 +145,8 @@ def _handle_setup_company_step(setup_data: dict[str, str]) -> object | None:
     texts = setup_texts(setup_data.get("idioma"))
     form = SetupCompanyForm(language=setup_data.get("idioma"))
     if not form.validate_on_submit():
-        flash(texts["invalid_company"], "danger")
+        first_error = next((error for field in form for error in field.errors), None)
+        flash(first_error or texts["invalid_company"], "danger")
         return None
 
     company_data = _build_company_data(form, setup_data)
