@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: 2025 - 2026 William Jose MORENO Reyes
 
 const assert = require('assert');
+const { execFileSync } = require('child_process');
+const path = require('path');
 
 const nativeSetTimeout = globalThis.setTimeout;
 const nativeClearTimeout = globalThis.clearTimeout;
@@ -1488,6 +1490,22 @@ describe('transaction-form', function () {
     assert.match(precise.formatMoney(1.004), /^1[.,]0040$/);
     assert.match(integer.formatMoney(1.6), /^2$/);
     assert.match(fallback.formatMoney(1.004), /^1[.,]00$/);
+  });
+
+  it("builds the accounting date in the local timezone, not in UTC", function () {
+    const script = [
+      "globalThis.window = { crypto: { randomUUID: () => 'uuid-test' } };",
+      'globalThis.document = { addEventListener() {}, querySelector() { return null; }, getElementById() { return null; } };',
+      'globalThis.Alpine = { data() {} };',
+      `require(${JSON.stringify(path.join(__dirname, '..', 'js', 'transaction-form.js'))});`,
+      'process.stdout.write(globalThis.cacaoLocalIsoDate(new Date("2026-11-01T00:30:00Z")));',
+    ].join('\n');
+    const localDate = execFileSync(process.execPath, ['-e', script], {
+      encoding: 'utf8',
+      env: { ...process.env, TZ: 'America/Managua' },
+    });
+
+    assert.strictEqual(localDate, '2026-10-31');
   });
 
 });

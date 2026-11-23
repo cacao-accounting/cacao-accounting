@@ -56,7 +56,7 @@
         naming_series_id: (config.initialJournal && config.initialJournal.naming_series_id) || '',
         naming_series_label: (config.initialJournal && config.initialJournal.naming_series_label) || '',
         ledger_id: (config.initialJournal && config.initialJournal.ledger_id) || '',
-        start_date: (config.initialJournal && config.initialJournal.start_date) || new Date().toISOString().slice(0, 10),
+        start_date: (config.initialJournal && config.initialJournal.start_date) || globalThis.cacaoLocalIsoDate(new Date()),
         end_date: (config.initialJournal && config.initialJournal.end_date) || '',
         frequency: (config.initialJournal && config.initialJournal.frequency) || 'monthly',
         currency: (config.initialJournal && config.initialJournal.currency) || '',

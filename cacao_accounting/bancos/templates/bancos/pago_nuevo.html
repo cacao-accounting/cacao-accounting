@@ -137,7 +137,7 @@
     return {
       header: {
         payment_type: config.initial.payment_type || 'receive',
-        posting_date: config.initial.posting_date || new Date().toISOString().slice(0, 10),
+        posting_date: config.initial.posting_date || globalThis.cacaoLocalIsoDate(new Date()),
         mode_of_payment: config.initial.mode_of_payment || 'transfer',
         company: config.initial.company || '',
         company_locked: Boolean(config.initial.flow_locked),

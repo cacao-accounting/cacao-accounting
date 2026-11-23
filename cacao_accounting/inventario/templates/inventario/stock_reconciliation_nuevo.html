@@ -196,7 +196,7 @@ function stockReconciliationForm(config = {}) {
   return {
     header: {
       company: '',
-      posting_date: new Date().toISOString().slice(0, 10),
+      posting_date: globalThis.cacaoLocalIsoDate(new Date()),
       adjustment_account_id: '',
       cost_center_code: '',
       unit_code: '',

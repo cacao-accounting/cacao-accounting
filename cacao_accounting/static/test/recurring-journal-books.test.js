@@ -22,6 +22,7 @@ function loadFactory() {
   const script = scripts.find((block) => block.includes('recurringJournalForm'));
   assert.ok(script, 'No se encontró el script de recurringJournalForm');
   const executable = script.replace(/<script>|<\/script>/g, '').replace(/\{\{[\s\S]*?\}\}/g, '');
+  globalThis.cacaoLocalIsoDate = () => '2026-01-01';
   // eslint-disable-next-line no-eval
   (0, eval)(executable);
   return globalThis.recurringJournalForm;
@@ -38,6 +39,7 @@ function deferred() {
 describe('recurring journal books', function () {
   afterEach(function () {
     delete globalThis.recurringJournalForm;
+    delete globalThis.cacaoLocalIsoDate;
     delete globalThis.fetch;
   });
 

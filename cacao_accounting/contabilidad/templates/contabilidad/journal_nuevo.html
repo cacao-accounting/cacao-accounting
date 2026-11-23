@@ -175,7 +175,7 @@
 
   function normalizeJournalWorksheetValue(value) {
     if (value === null || value === undefined) return '';
-    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    if (value instanceof Date) return globalThis.cacaoLocalIsoDate(value);
     if (typeof value === 'object') {
       if (Array.isArray(value.richText)) {
         return value.richText.map(function (part) { return part.text || ''; }).join('');
@@ -226,7 +226,7 @@
         company_label: (config.initialJournal && config.initialJournal.company_label) || '',
         naming_series_id: (config.initialJournal && config.initialJournal.naming_series_id) || '',
         naming_series_label: (config.initialJournal && config.initialJournal.naming_series_label) || '',
-        posting_date: (config.initialJournal && config.initialJournal.posting_date) || new Date().toISOString().slice(0, 10),
+        posting_date: (config.initialJournal && config.initialJournal.posting_date) || globalThis.cacaoLocalIsoDate(new Date()),
         reference: (config.initialJournal && config.initialJournal.reference) || '',
         memo: (config.initialJournal && config.initialJournal.memo) || '',
         transaction_currency: (config.initialJournal && config.initialJournal.transaction_currency) || '',

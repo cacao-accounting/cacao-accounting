@@ -10,6 +10,21 @@
     return `transaction-line-${Date.now()}-${uidCounter}`;
   }
 
+  /** Devuelve la fecha calendario local en formato ISO (YYYY-MM-DD).
+   *
+   * ``toISOString()`` convierte el instante a UTC; en husos al oeste de UTC
+   * eso adelanta el día durante la noche. Los formularios contables deben
+   * prellenar el día local del usuario (#1390, #1514).
+   */
+  function localIsoDate(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  }
+
+  globalThis.cacaoLocalIsoDate = localIsoDate;
+
   function toNumber(value) {
     const parsed = Number.parseFloat(value || 0);
     if (Number.isNaN(parsed)) return 0;
@@ -190,7 +205,7 @@
 
   function normalizeWorksheetValue(value) {
     if (value === null || value === undefined) return '';
-    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    if (value instanceof Date) return localIsoDate(value);
     if (typeof value === 'object') {
       if (Array.isArray(value.richText)) {
         return value.richText.map((part) => part.text || '').join('');
@@ -361,7 +376,7 @@
           company: '',
           naming_series: '',
           currency: '',
-          posting_date: new Date().toISOString().slice(0, 10),
+          posting_date: localIsoDate(new Date()),
           party_type: '',
           party: '',
           party_label: '',

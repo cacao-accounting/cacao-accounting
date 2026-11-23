@@ -22,7 +22,7 @@
         payment_type: config.paymentType,
         company: '',
         naming_series_id: '',
-        posting_date: new Date().toISOString().slice(0, 10),
+        posting_date: globalThis.cacaoLocalIsoDate(new Date()),
         bank_account_id: '',
         currency: '',
         paid_amount: 0,
