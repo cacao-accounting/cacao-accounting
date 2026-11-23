@@ -8,7 +8,9 @@ from __future__ import annotations
 from datetime import date
 from uuid import uuid4
 
-from cacao_accounting.database import StockEntry, database
+import pytest
+
+from cacao_accounting.database import DeliveryNote, PurchaseReceipt, StockEntry, database
 
 URL = "/inventory/stock-entry/new"
 
@@ -55,3 +57,56 @@ def test_origen_inexistente_deja_los_campos_editables(app, authenticated_client)
     body = response.get_data(as_text=True)
     assert '"initialSourceType": ""' in body
     assert '"initialHeader"' not in body
+
+
+def test_origen_sin_moneda_deja_los_campos_editables(app, authenticated_client):
+    """Un origen heredado sin moneda transaccional no bloquea la cabecera vacía."""
+    with app.app_context():
+        origen = StockEntry(
+            company="cacao",
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 15),
+            transaction_currency=None,
+            base_currency="NIO",
+            document_no=f"SE-{uuid4().hex[:8]}",
+        )
+        database.session.add(origen)
+        database.session.commit()
+        origen_id = origen.id
+
+    response = authenticated_client("admin").get(f"{URL}?source_type=stock_entry&source_id={origen_id}")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert '"initialSourceType": ""' in body
+    assert '"initialHeader"' not in body
+
+
+@pytest.mark.parametrize(
+    ("modelo", "source_type", "prefijo"),
+    [
+        (PurchaseReceipt, "purchase_receipt", "PR"),
+        (DeliveryNote, "delivery_note", "DN"),
+    ],
+)
+def test_origenes_de_compra_y_venta_hidratan_cabecera(app, authenticated_client, modelo, source_type, prefijo):
+    """Recepción de compra y nota de entrega aportan compañía y moneda del origen."""
+    with app.app_context():
+        origen = modelo(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            transaction_currency="NIO",
+            base_currency="NIO",
+            document_no=f"{prefijo}-{uuid4().hex[:8]}",
+        )
+        database.session.add(origen)
+        database.session.commit()
+        origen_id = origen.id
+
+    response = authenticated_client("admin").get(f"{URL}?source_type={source_type}&source_id={origen_id}")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert f'"initialSourceType": "{source_type}"' in body
+    assert '"company": "cacao"' in body
+    assert '"currency": "NIO"' in body

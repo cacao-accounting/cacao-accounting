@@ -977,8 +977,11 @@ _SOURCE_MODELS: dict[str, Any] = {
 def stock_entry_source_header(source_type: str | None, source_id: str | None) -> dict[str, str] | None:
     """Devuelve la compañía y moneda del origen para hidratar la cabecera bloqueada.
 
-    Solo hidrata cuando el documento existe y la compañía es consultable por el
-    usuario; de lo contrario la cabecera queda editable (#1874).
+    Solo hidrata cuando el documento existe, declara compañía y moneda
+    transaccional, y la compañía es consultable por el usuario. Sin moneda
+    (datos legacy o importados) la cabecera queda editable para no bloquear
+    un formulario imposible (#1874). Un origen de otra compañía falla cerrado
+    con 403 mediante ``exige_acceso_compania``.
     """
     model = _SOURCE_MODELS.get(source_type or "")
     if model is None or not source_id:
@@ -987,8 +990,11 @@ def stock_entry_source_header(source_type: str | None, source_id: str | None) ->
     company = getattr(source, "company", None)
     if source is None or not company:
         return None
+    currency = str(getattr(source, "transaction_currency", "") or "").strip()
+    if not currency:
+        return None
     exige_acceso_compania("inventory", str(company), "crear")
-    return {"company": str(company), "currency": str(getattr(source, "transaction_currency", "") or "")}
+    return {"company": str(company), "currency": currency}
 
 
 def _handle_stock_entry_edit_post(registro: StockEntry):
