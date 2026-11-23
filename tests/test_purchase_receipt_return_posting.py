@@ -18,6 +18,7 @@ from cacao_accounting.approval_engine import approved_execution
 from cacao_accounting.contabilidad.posting_service import post_purchase_receipt
 from cacao_accounting.database import (
     Accounts,
+    Book,
     CompanyDefaultAccount,
     GLEntry,
     Item,
@@ -157,6 +158,15 @@ def test_posted_purchase_return_preserves_layer_and_reconciles_ledgers(entorno_c
         original_movement = database.session.execute(
             database.select(StockLedgerEntry).filter_by(voucher_type="purchase_receipt", voucher_id=original.id)
         ).scalar_one()
+        original_movement_values = {
+            "qty_change": original_movement.qty_change,
+            "qty_after_transaction": original_movement.qty_after_transaction,
+            "valuation_rate": original_movement.valuation_rate,
+            "stock_value_difference": original_movement.stock_value_difference,
+            "stock_value": original_movement.stock_value,
+            "is_cancelled": original_movement.is_cancelled,
+            "voucher_id": original_movement.voucher_id,
+        }
         original_book_values = (
             database.session.execute(
                 database.select(StockLedgerBookEntry).filter_by(stock_ledger_entry_id=original_movement.id)
@@ -175,6 +185,15 @@ def test_posted_purchase_return_preserves_layer_and_reconciles_ledgers(entorno_c
         original_gl = database.session.execute(database.select(GLEntry).filter_by(voucher_id=original.id)).scalars().all()
         assert original_gl
         assert sum(entry.debit for entry in original_gl) == sum(entry.credit for entry in original_gl)
+        original_gl_snapshots = {
+            entry.id: {
+                "account_id": entry.account_id,
+                "ledger_id": entry.ledger_id,
+                "debit": entry.debit,
+                "credit": entry.credit,
+            }
+            for entry in original_gl
+        }
 
         returned = _receipt(
             is_return=True,
@@ -211,8 +230,15 @@ def test_posted_purchase_return_preserves_layer_and_reconciles_ledgers(entorno_c
 
         original_movement_after = database.session.get(StockLedgerEntry, original_movement.id)
         assert original_movement_after is not None
-        assert original_movement_after.qty_change == Decimal("10")
-        assert original_movement_after.stock_value_difference == Decimal("100")
+        assert {
+            "qty_change": original_movement_after.qty_change,
+            "qty_after_transaction": original_movement_after.qty_after_transaction,
+            "valuation_rate": original_movement_after.valuation_rate,
+            "stock_value_difference": original_movement_after.stock_value_difference,
+            "stock_value": original_movement_after.stock_value,
+            "is_cancelled": original_movement_after.is_cancelled,
+            "voucher_id": original_movement_after.voucher_id,
+        } == original_movement_values
 
         for row_id, snapshot in original_book_snapshots.items():
             row = database.session.get(StockLedgerBookEntry, row_id)
@@ -221,23 +247,37 @@ def test_posted_purchase_return_preserves_layer_and_reconciles_ledgers(entorno_c
             assert row.exchange_rate == snapshot["exchange_rate"]
             assert row.ledger_id == snapshot["ledger_id"]
 
+        for entry_id, snapshot in original_gl_snapshots.items():
+            entry = database.session.get(GLEntry, entry_id)
+            assert entry is not None
+            assert entry.account_id == snapshot["account_id"]
+            assert entry.ledger_id == snapshot["ledger_id"]
+            assert entry.debit == snapshot["debit"]
+            assert entry.credit == snapshot["credit"]
+
+        active_books = (
+            database.session.execute(database.select(Book).filter_by(entity="cacao", status="activo")).scalars().all()
+        )
+        assert len(active_books) >= 2
+        active_ledger_ids = {book.id for book in active_books}
+
         return_book_entries = (
             database.session.execute(database.select(StockLedgerBookEntry).filter_by(stock_ledger_entry_id=return_movement.id))
             .scalars()
             .all()
         )
-        assert return_book_entries
+        assert len(return_book_entries) == len(active_books)
+        assert {row.ledger_id for row in return_book_entries} == active_ledger_ids
         assert {row.book_amount for row in return_book_entries} == {Decimal("-40")}
 
         return_gl = database.session.execute(database.select(GLEntry).filter_by(voucher_id=returned.id)).scalars().all()
         assert return_gl
-        return_debit = sum(entry.debit for entry in return_gl)
-        return_credit = sum(entry.credit for entry in return_gl)
-        assert return_debit == return_credit
-        by_book: dict[str, Decimal] = {}
+        by_book: dict[str, tuple[Decimal, Decimal]] = {}
         for entry in return_gl:
-            by_book[entry.ledger_id] = by_book.get(entry.ledger_id, Decimal("0")) + Decimal(entry.debit)
-        assert set(by_book.values()) == {Decimal("40")}
+            debit, credit = by_book.get(entry.ledger_id, (Decimal("0"), Decimal("0")))
+            by_book[entry.ledger_id] = (debit + Decimal(entry.debit), credit + Decimal(entry.credit))
+        assert set(by_book) == active_ledger_ids
+        assert all(debit == credit == Decimal("40") for debit, credit in by_book.values())
 
         assert sum(layer.qty for layer in (preserved_layer, return_layer)) == Decimal("6")
         assert sum(layer.stock_value_difference for layer in (preserved_layer, return_layer)) == Decimal("60")
