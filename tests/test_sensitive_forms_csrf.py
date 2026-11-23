@@ -171,3 +171,86 @@ def test_toggle_de_contador_externo_renderiza_y_exige_csrf(escenario_csrf):
     assert PATRON_TOKEN.search(formulario) is not None
 
     assert client.post(ruta).status_code == 400
+
+
+def _token(cliente, ruta_get: str, aguja: str) -> str:
+    """Extrae el token del formulario que contiene la aguja."""
+    html = cliente.get(ruta_get).get_data(as_text=True)
+    return PATRON_TOKEN.search(_formulario_con(html, aguja)).group(1)
+
+
+def test_toggle_de_contador_con_token_cambia_el_estado(escenario_csrf):
+    """Con el token del formulario el toggle ejecuta la transición."""
+    application, user_id, ids = escenario_csrf
+    client = _cliente(application, user_id)
+    ruta = f"/accounting/external-counter/{ids['counter']}/toggle-active"
+    token = _token(client, "/accounting/external-counter/list", ruta)
+
+    response = client.post(ruta, data={"csrf_token": token})
+
+    assert response.status_code == 302
+    with application.app_context():
+        assert database.session.get(ExternalCounter, ids["counter"]).is_active is False
+
+
+def test_plantilla_de_impresion_con_token_se_crea_y_edita(escenario_csrf):
+    """El alta y la edición de plantilla persisten con un token válido."""
+    from cacao_accounting.printing.models import PrintTemplate
+
+    application, user_id, _ = escenario_csrf
+    client = _cliente(application, user_id)
+    codigo = f"CSRF-{uuid4().hex[:6]}"
+    token = _token(client, "/admin/print-templates/new", 'name="template_body"')
+
+    creada = client.post(
+        "/admin/print-templates/new",
+        data={
+            "csrf_token": token,
+            "document_type": "sales_invoice",
+            "code": codigo,
+            "name": "Plantilla CSRF",
+            "template_body": "<p>Documento</p>",
+        },
+    )
+    assert creada.status_code == 302
+
+    with application.app_context():
+        plantilla = database.session.execute(database.select(PrintTemplate).filter_by(code=codigo)).scalar_one()
+        template_id = plantilla.id
+
+    edicion = f"/admin/print-templates/{template_id}/edit"
+    token_edicion = _token(client, edicion, 'name="template_body"')
+    actualizada = client.post(
+        edicion,
+        data={
+            "csrf_token": token_edicion,
+            "document_type": "sales_invoice",
+            "code": codigo,
+            "name": "Plantilla CSRF editada",
+            "template_body": "<p>Documento editado</p>",
+        },
+    )
+    assert actualizada.status_code in (200, 302)
+    with application.app_context():
+        assert database.session.get(PrintTemplate, template_id).name == "Plantilla CSRF editada"
+
+
+@pytest.mark.parametrize(
+    ("ruta", "datos"),
+    [
+        ("/accounting/fiscal_year_closing/new", {"company": "cacao", "fiscal_year_id": "FY"}),
+        ("/accounting/presupuestos/report/real-vs-budget", {"company": "cacao", "granularity": "month"}),
+    ],
+)
+def test_cierre_y_reporte_aceptan_el_token_del_formulario(escenario_csrf, ruta, datos):
+    """El token del propio formulario supera CSRF y llega a la vista."""
+    application, user_id, ids = escenario_csrf
+    client = _cliente(application, user_id)
+    aguja = 'name="fiscal_year_id"' if "fiscal" in ruta else 'name="granularity"'
+    datos = {**datos, "csrf_token": _token(client, ruta, aguja)}
+    if "fiscal" in ruta:
+        datos["fiscal_year_id"] = ids["fiscal_year"]
+
+    respuesta = client.post(ruta, data=datos)
+    assert respuesta.status_code != 400
+    assert "CSRF" not in respuesta.get_data(as_text=True)
