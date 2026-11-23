@@ -607,7 +607,7 @@ def _handle_supplier_create(
             name=validated_party_name(form),
             comercial_name=form.get("comercial_name"),
             tax_id=validated_party_tax_id(form),
-            is_active=form.get("is_active", "on") is not None,
+            is_active=form.get("is_active") is not None,
         )
         database.session.add(proveedor)
         apply_party_group(proveedor, form.get("party_group_id") or None, role="supplier")
