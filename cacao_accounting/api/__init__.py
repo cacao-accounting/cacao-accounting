@@ -808,7 +808,12 @@ _SEARCH_SELECT_MODULE: dict[str, Any] = {
     "account_code": "accounting",
     "book": "accounting",
     "accounting_period": "accounting",
-    "accounting_period_id": "accounting",
+    # El selector de período de los listados operativos (#2142) consume este
+    # doctype vía /api/search-select: lo conceden la contabilidad y los módulos
+    # cuyos listados muestran el picker (ventas, compras, inventario y caja),
+    # siempre con la compañía dentro del alcance del usuario. El resto de
+    # catálogos contables conserva a la contabilidad como dueño exclusivo.
+    "accounting_period_id": ("accounting", "sales", "purchases", "inventory", "cash"),
     "fiscal_year_id": "accounting",
     "budget": "accounting",
     "tax_template": "accounting",

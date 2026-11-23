@@ -169,9 +169,25 @@ def listado_oc_periodo():
                     password=proteger_passwd(CONTRASENA),
                     active=True,
                 ),
+                User(
+                    id="admin_beta",
+                    user="admin_beta",
+                    name="Administrador con Beta",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                    classification="admin",
+                ),
+                User(
+                    id="sin_modulos",
+                    user="sin_modulos",
+                    name="Sin módulos ni compañías",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                ),
                 UserCompanyAccess(user_id="solo_inventario", company_code="beta"),
                 UserCompanyAccess(user_id="compras_ambas", company_code="alfa"),
                 UserCompanyAccess(user_id="compras_ambas", company_code="beta"),
+                UserCompanyAccess(user_id="admin_beta", company_code="beta"),
             ]
         )
         database.session.flush()
@@ -306,3 +322,35 @@ def test_listado_con_periodo_y_compania_explicita_acota_ordenes(listado_oc_perio
     assert "PO-BETA-MAYO" in body
     assert "PO-BETA-ABRIL" not in body
     assert "PO-ALFA-MAYO" not in body
+
+
+def test_selector_de_periodo_consulta_para_solo_inventario(listado_oc_periodo):
+    """#2142: el catálogo de períodos es consultable sin permiso de Contabilidad."""
+    client = listado_oc_periodo.test_client()
+    _login(client, "solo_inventario")
+
+    response = client.get("/api/search-select?doctype=accounting_period_id&company=beta&q=Mayo")
+
+    assert response.status_code == 200, response.get_data(as_text=True)
+    assert "Mayo 2026" in response.get_data(as_text=True)
+
+
+def test_selector_de_periodo_rechaza_usuario_sin_alcance(listado_oc_periodo):
+    """Un usuario sin módulos dueños del catálogo recibe 403, no el listado."""
+    client = listado_oc_periodo.test_client()
+    _login(client, "sin_modulos")
+
+    response = client.get("/api/search-select?doctype=accounting_period_id&q=Mayo")
+
+    assert response.status_code == 403, response.get_data(as_text=True)
+
+
+def test_opciones_de_compania_del_administrador_cloud_usa_concesiones(listado_oc_periodo):
+    """#2142: el administrador Cloud solo ve las compañías con concesión explícita."""
+    from cacao_accounting.database import User as UserModel
+
+    with listado_oc_periodo.app_context():
+        admin = database.session.execute(database.select(UserModel).filter_by(user="admin_beta")).scalar_one()
+        choices = list_filters.company_choices_for_module("purchases", current_user=admin)
+
+    assert [code for code, _nombre in choices] == ["", "beta"]

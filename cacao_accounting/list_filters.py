@@ -182,11 +182,17 @@ def company_choices_for_module(module: str, *, current_user: Any) -> list[tuple[
     from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.database import Entity, database
     from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+    from cacao_accounting.runtime_mode import is_desktop_mode
 
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre(module), usuario=current_user.id)
-    if permissions.administrador:
+    if permissions.administrador and is_desktop_mode():
+        # Desktop opera con una sola compañía: el administrador conserva el
+        # bypass de alcance y ve las entidades habilitadas de la base.
         codes = [row[0] for row in database.session.execute(database.select(Entity.code)).all()]
     elif permissions.consultar:
+        # Cloud —incluido el administrador— y usuarios comunes: solo las
+        # compañías con concesión explícita, alineado con el alcance de la
+        # consulta (#1828, #2142).
         codes = list(permissions.obtener_companias_autorizadas())
     else:
         codes = []
