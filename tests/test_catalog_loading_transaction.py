@@ -8,10 +8,14 @@ from __future__ import annotations
 from datetime import date
 from types import SimpleNamespace
 
+import pytest
+
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.ctas import cargar_catalogos
-from cacao_accounting.database import Accounts, Currency, Entity, database
+from cacao_accounting.contabilidad.default_accounts import DefaultAccountError
+from cacao_accounting.database import Accounts, Book, Currency, Entity, database
+from cacao_accounting.setup import service
 from cacao_accounting.setup.service import finalize_setup
 
 
@@ -102,5 +106,50 @@ def test_alta_compania_carga_catalogo_csv_seleccionado():
         assert entity.country == "NI"
         assert len(accounts) > 0
         assert any(account.code == "11.01.001.001" for account in accounts)
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_finalizacion_revierte_compania_si_falla_mapping(monkeypatch):
+    """Una falla después de cargar el catálogo revierte toda la creación."""
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": True,
+        }
+    )
+    with application.app_context():
+        database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.commit()
+
+        def fail_mapping(_company, _catalog):
+            assert database.session.execute(database.select(Accounts).filter_by(entity="CSVFAIL")).first()
+            raise DefaultAccountError("mapping invalidado durante la carga")
+
+        monkeypatch.setattr(service, "apply_catalog_default_mapping", fail_mapping)
+        with pytest.raises(ValueError, match="mapping invalidado"):
+            finalize_setup(
+                {
+                    "id": "CSVFAIL",
+                    "razon_social": "CSV Company SA",
+                    "id_fiscal": "J-FAIL",
+                    "moneda": "NIO",
+                    "pais": "NI",
+                    "inicio_anio_fiscal": date(2026, 1, 1),
+                    "fin_anio_fiscal": date(2026, 12, 31),
+                },
+                "preexistente",
+                "NI",
+                "es",
+                "base_es.csv",
+            )
+        assert database.session.execute(database.select(Entity).filter_by(code="CSVFAIL")).first() is None
+        assert database.session.execute(database.select(Book).filter_by(entity="CSVFAIL")).first() is None
+        assert database.session.execute(database.select(Accounts).filter_by(entity="CSVFAIL")).first() is None
         database.session.remove()
         database.engine.dispose()

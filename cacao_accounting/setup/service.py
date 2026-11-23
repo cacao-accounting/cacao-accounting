@@ -5,21 +5,24 @@
 
 from __future__ import annotations
 
+from csv import DictReader, Error as CSVError
 from os import listdir
 from os.path import isfile, join
 from typing import Any
 
 from cacao_accounting.contabilidad.default_accounts import (
+    DEFAULT_ACCOUNT_DEFINITION_BY_FIELD,
     DefaultAccountError,
     apply_catalog_default_mapping,
     catalog_has_default_mapping,
+    load_catalog_default_mapping,
 )
 from cacao_accounting.bancos.services import create_default_petty_cash
 from cacao_accounting.contabilidad.ctas import (
     CatalogoCtas,
     DIRECTORIO_CTAS,
-    base_en,
-    base_es,
+    HEADER_ALIASES,
+    _is_group,
     cargar_catalogos,
 )
 from cacao_accounting.database import CacaoConfig, Entity, database
@@ -72,18 +75,53 @@ def available_catalog_files() -> list[tuple[str, str]]:
 
 
 def choose_catalog_file(country: str, idioma: str, catalog_name: str | None = None) -> Any | None:
-    """Selecciona el catálogo contable adecuado según país, idioma y nombre de archivo."""
+    """Resuelve el catálogo seleccionado explícitamente, sin fallback regional."""
     idioma_normalizado = normalize_language(idioma).upper()
-    if catalog_name:
-        catalog_file = join(DIRECTORIO_CTAS, catalog_name)
-        if isfile(catalog_file) and catalog_has_default_mapping(catalog_file):
-            return CatalogoCtas(file=catalog_file, pais=country, idioma=idioma_normalizado)
+    if not catalog_name or catalog_name not in {name for name, _ in available_catalog_files()}:
         return None
+    catalog_file = join(DIRECTORIO_CTAS, catalog_name)
+    if not _valid_catalog_file(catalog_file):
+        return None
+    return CatalogoCtas(file=catalog_file, pais=country, idioma=idioma_normalizado)
 
-    candidato = base_en if idioma_normalizado == "EN" else base_es
-    if not isfile(candidato.file) or not catalog_has_default_mapping(candidato.file):
-        return None
-    return CatalogoCtas(file=candidato.file, pais=country, idioma=idioma_normalizado)
+
+def _valid_catalog_file(catalog_file: str) -> bool:
+    """Verifica formato y referencias del mapping antes de crear la compañía."""
+    try:
+        mapping = load_catalog_default_mapping(catalog_file)
+        with open(catalog_file, encoding="utf-8", newline="") as catalog:
+            reader = DictReader(catalog)
+            headers = set(reader.fieldnames or ())
+            if any(not headers.intersection(HEADER_ALIASES[field]) for field in ("code", "name", "classification")):
+                return False
+            fields = {
+                field: next(header for header in HEADER_ALIASES[field] if header in headers)
+                for field in ("code", "name", "classification")
+            }
+            account_types: dict[str, str] = {}
+            group_codes: set[str] = set()
+            type_field = next((header for header in HEADER_ALIASES["account_type"] if header in headers), None)
+            group_field = next((header for header in HEADER_ALIASES["group"] if header in headers), None)
+            for row in reader:
+                if None in row or any(not str(row.get(column) or "").strip() for column in fields.values()):
+                    return False
+                code = str(row[fields["code"]]).strip()
+                if code in account_types:
+                    return False
+                account_types[code] = str(row.get(type_field) or "").strip() if type_field else ""
+                if group_field and _is_group(str(row.get(group_field) or "")):
+                    group_codes.add(code)
+        return bool(account_types) and all(
+            code in account_types
+            and code not in group_codes
+            and (
+                not account_types[code]
+                or account_types[code] in DEFAULT_ACCOUNT_DEFINITION_BY_FIELD[field].allowed_account_types
+            )
+            for field, code in mapping.items()
+        )
+    except (OSError, UnicodeError, CSVError, ValueError, TypeError, AttributeError):
+        return False
 
 
 def create_company(
@@ -100,6 +138,14 @@ def create_company(
     if force_single_entity() and company_count >= 1:
         raise ValueError(_("Esta instalación solo permite una compañía."))
 
+    catalogo = None
+    if catalogo_tipo == "preexistente":
+        if country is None or idioma is None:
+            raise ValueError(_("No se puede cargar el catálogo sin país e idioma."))
+        catalogo = choose_catalog_file(country, idioma, catalogo_archivo)
+        if catalogo is None:
+            raise ValueError(_("El catálogo seleccionado no está disponible o no tiene mapping JSON de cuentas por defecto."))
+
     entity = create_default_entity(company_data, status=status, default=default)
     create_default_book(entity)
     create_default_cost_center(entity)
@@ -115,11 +161,6 @@ def create_company(
     ensure_global_naming_series()
 
     if catalogo_tipo == "preexistente":
-        if country is None or idioma is None:
-            raise ValueError(_("No se puede cargar el catálogo sin país e idioma."))
-        catalogo = choose_catalog_file(country, idioma, catalogo_archivo)
-        if catalogo is None:
-            raise ValueError(_("El catálogo seleccionado no está disponible o no tiene mapping JSON de cuentas por defecto."))
         cargar_catalogos(catalogo, entity)
         try:
             apply_catalog_default_mapping(entity.code, catalogo.file)
