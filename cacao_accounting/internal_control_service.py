@@ -1480,18 +1480,22 @@ def _guard_stock_valuation_statement(clause: Any, multiparams: Any, params: Any)
 
 
 def _stock_valuation_statement_targets_authorized_layer(clause: Any, multiparams: Any, params: Any) -> bool:
-    """Require a bulk UPDATE to filter on IDs authorized by the valuation scope."""
+    """Require every bulk UPDATE parameter set to target an authorized layer."""
     authorized = _STOCK_VALUATION_BALANCE_TRANSITION.get()
     if not authorized:
         return False
     parameter_sets = _parameter_sets(multiparams, params)
-    targets = _equality_target_values(clause, "id", parameter_sets)
-    return bool(targets) and targets.issubset(authorized)
+    if not parameter_sets:
+        return False
+    for parameter_set in parameter_sets:
+        targets = _equality_target_values(clause, "id", parameter_set)
+        if not targets or not targets.issubset(authorized):
+            return False
+    return True
 
 
-def _equality_target_values(clause: Any, key: str, parameter_sets: list[dict[str, Any]]) -> set[str]:
-    """Resolve the values compared with equality against ``key`` in the statement WHERE."""
-    parameters = {name: value for group in parameter_sets for name, value in group.items()}
+def _equality_target_values(clause: Any, key: str, parameters: dict[str, Any]) -> set[str]:
+    """Resolve the values compared with equality against ``key`` in one execution."""
     values: set[str] = set()
     for criterion in getattr(clause, "_where_criteria", ()):
         if (

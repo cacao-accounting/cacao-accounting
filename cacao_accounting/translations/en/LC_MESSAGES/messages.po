@@ -1188,6 +1188,10 @@ msgstr "Valuation layer running balances can only be updated through the authori
 msgid "Las capas de valoración no se eliminan; registre un movimiento compensatorio."
 msgstr "Valuation layers cannot be deleted; record a compensating movement."
 
+#: cacao_accounting/inventario/service.py
+msgid "La reconstrucción física de capas de valoración no está disponible; registre movimientos compensatorios."
+msgstr "Physical reconstruction of valuation layers is not available; record compensating movements."
+
 #: cacao_accounting/internal_control_service.py:1143
 msgid "Las transiciones de aprobación deben realizarse mediante el servicio autorizado."
 msgstr "Approval transitions must be performed through the authorized service."

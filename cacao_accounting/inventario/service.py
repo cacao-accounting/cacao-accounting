@@ -709,7 +709,15 @@ def rebuild_stock_valuation_layers(
     ajuste de valor publicadas por conciliaciones y costos capitalizables para
     que la cola FIFO reconstruida valore las salidas igual que antes del
     rebuild.
+
+    La reconstruccion fisica no esta disponible bajo la politica append-only:
+    reemplazar capas equivale a reescribir evidencia historica y su rediseno
+    corresponde a #651. ``dry_run=True`` sigue disponible para previsualizar.
     """
+    if not dry_run:
+        raise InventoryServiceError(
+            _("La reconstrucción física de capas de valoración no está disponible; registre movimientos compensatorios.")
+        )
     query = select(StockValuationLayer).filter_by(company=company)
     if item_code:
         query = query.filter_by(item_code=item_code)
@@ -746,11 +754,6 @@ def rebuild_stock_valuation_layers(
             )
         )
     final_layers = _merge_rebuilt_layers(new_layers, list(existing))
-    if not dry_run:
-        for layer in existing:
-            database.session.delete(layer)
-        database.session.flush()
-        database.session.add_all(final_layers)
     return StockRebuildResult(rebuilt_bins=0, rebuilt_layers=len(final_layers))
 
 

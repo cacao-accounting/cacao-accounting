@@ -18,7 +18,7 @@ from uuid import uuid4
 
 import pytest
 from flask_login import login_user
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -49,7 +49,11 @@ from cacao_accounting.internal_control_service import (
     STOCK_VALUATION_BALANCE_FIELDS,
     stock_valuation_balance_transition,
 )
-from cacao_accounting.inventario.service import update_stock_valuation_layer_balances
+from cacao_accounting.inventario.service import (
+    InventoryServiceError,
+    rebuild_stock_valuation_layers,
+    update_stock_valuation_layer_balances,
+)
 
 IMMUTABLE_FIELDS = (
     "qty",
@@ -437,6 +441,46 @@ def test_authorized_scope_allows_scoped_core_balance_update(desktop):
         assert layer is not None
         assert layer.remaining_qty == Decimal("2")
         assert layer.remaining_stock_value == Decimal("20")
+
+
+@pytest.mark.parametrize("desktop", [True, False])
+def test_authorized_core_update_rejects_mixed_parameter_sets(desktop):
+    """An executemany cannot use one authorized ID to update another layer."""
+    app = _build_app(desktop)
+    seed = _seed_layer(app)
+    other_seed = _seed_layer(app)
+
+    with app.app_context():
+        layer = database.session.get(StockValuationLayer, seed["id"])
+        assert layer is not None
+        statement = (
+            database.update(StockValuationLayer)
+            .where(StockValuationLayer.id == bindparam("row_id"))
+            .values(remaining_qty=Decimal("0"), remaining_stock_value=Decimal("0"))
+        )
+        with pytest.raises(ValueError):
+            with stock_valuation_balance_transition(layer):
+                database.session.connection().execute(
+                    statement,
+                    [{"row_id": seed["id"]}, {"row_id": other_seed["id"]}],
+                )
+                database.session.commit()
+        database.session.rollback()
+
+    _assert_persisted_snapshot(app, seed)
+    _assert_persisted_snapshot(app, other_seed)
+
+
+def test_physical_rebuild_is_rejected_without_deleting_layers():
+    """The destructive rebuild no longer exposes a partial-delete path."""
+    app = _build_app(desktop=True)
+    seed = _seed_layer(app)
+
+    with app.app_context():
+        with pytest.raises(InventoryServiceError):
+            rebuild_stock_valuation_layers(seed["company"])
+
+    _assert_persisted_snapshot(app, seed)
 
 
 def test_balance_scope_requires_persisted_layers():
