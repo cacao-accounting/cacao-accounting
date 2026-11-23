@@ -754,6 +754,28 @@ def rebuild_stock_valuation_layers(
     return StockRebuildResult(rebuilt_bins=0, rebuilt_layers=len(final_layers))
 
 
+def update_stock_valuation_layer_balances(
+    layer: StockValuationLayer,
+    *,
+    remaining_qty: Decimal,
+    remaining_stock_value: Decimal,
+) -> StockValuationLayer:
+    """Actualiza los saldos derivados de una capa dentro del servicio autorizado.
+
+    La evidencia histórica de la capa (cantidad, tasa, costo y trazabilidad
+    documental) no se modifica. Solo cambian los saldos corrientes, bajo el
+    alcance explícito que distingue una actualización legítima de valoración de
+    una reescritura directa del ORM.
+    """
+    from cacao_accounting.internal_control_service import stock_valuation_balance_transition
+
+    with stock_valuation_balance_transition(layer):
+        layer.remaining_qty = remaining_qty
+        layer.remaining_stock_value = remaining_stock_value
+        database.session.flush()
+    return layer
+
+
 def _inventory_editable_companies() -> set[str] | None:
     """Compañías cuyas filas contables de item puede editar el usuario.
 

@@ -1844,6 +1844,24 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     consumed_layers = database.Column(database.Text, nullable=True)
 
 
+@event.listens_for(StockValuationLayer, "before_update")
+def _guard_stock_valuation_layer_update(mapper, connection, target) -> None:
+    """Protege la evidencia histórica y acota los saldos derivados (#759)."""
+    del mapper, connection
+    from cacao_accounting.internal_control_service import guard_stock_valuation_layer_update
+
+    guard_stock_valuation_layer_update(target)
+
+
+@event.listens_for(StockValuationLayer, "before_delete")
+def _reject_stock_valuation_layer_delete(mapper, connection, target) -> None:
+    """Impide la eliminación física de capas de valoración (#759)."""
+    del mapper, connection
+    from cacao_accounting.internal_control_service import guard_stock_valuation_layer_delete
+
+    guard_stock_valuation_layer_delete(target)
+
+
 class StockLedgerBookEntry(database.Model):  # type: ignore[name-defined]
     """Snapshot append-only del valor de cada movimiento en cada libro activo."""
 

@@ -46,6 +46,9 @@ _BALANCE_CONFIRMATION_RESPONSE_TRANSITION: ContextVar[frozenset[str]] = ContextV
     "icfr_balance_confirmation_response_transition", default=frozenset()
 )
 _POSTING_AUTHORIZATION: ContextVar[bool] = ContextVar("icfr_posting_authorization", default=False)
+_STOCK_VALUATION_BALANCE_TRANSITION: ContextVar[frozenset[str]] = ContextVar(
+    "icfr_stock_valuation_balance_transition", default=frozenset()
+)
 _POSTED_DOCUMENTS_IN_TRANSACTION = "icfr_posted_documents"
 BALANCE_CONFIRMATION_SNAPSHOT_FIELDS = frozenset(
     {
@@ -86,6 +89,12 @@ LEDGER_TABLES = frozenset(
         "exchange_revaluation_item",
     }
 )
+# Stock valuation layers combine immutable historical evidence (quantity, rate,
+# cost, document and source-layer traceability) with derived running balances.
+# The historical columns never change; only the running balances may be
+# refreshed, and only inside an authorized valuation service scope.
+STOCK_VALUATION_TABLES = frozenset({"stock_valuation_layer"})
+STOCK_VALUATION_BALANCE_FIELDS = frozenset({"remaining_qty", "remaining_stock_value"})
 # Inter-voucher flow evidence: the link, consumed quantities and matching
 # results that downstream reports reconcile against the financial ledger.
 FLOW_EVIDENCE_TABLES = frozenset(
@@ -277,6 +286,20 @@ def bank_reconciliation_transition(*rows: Any) -> Iterator[None]:
         yield
     finally:
         _BANK_RECONCILIATION_TRANSITION.reset(token)
+
+
+@contextmanager
+def stock_valuation_balance_transition(*layers: Any) -> Iterator[None]:
+    """Authorize derived-balance updates for the supplied valuation layers only."""
+    layer_ids = {str(getattr(layer, "id", "") or "") for layer in layers}
+    layer_ids.discard("")
+    if not layer_ids:
+        raise ValueError(_("La transición de saldos de valoración requiere capas persistidas."))
+    token = _STOCK_VALUATION_BALANCE_TRANSITION.set(_STOCK_VALUATION_BALANCE_TRANSITION.get().union(layer_ids))
+    try:
+        yield
+    finally:
+        _STOCK_VALUATION_BALANCE_TRANSITION.reset(token)
 
 
 @contextmanager
@@ -859,7 +882,13 @@ POLYMORPHIC_EVIDENCE_TABLES = frozenset({"document_tax_summary", "document_tax_l
 # are independent of the Cloud INTERNAL_CONTROLS process-wide workflow
 # controls, which additionally demand audited service scopes).
 STRUCTURAL_EVIDENCE_TABLES = frozenset(
-    EVIDENCE_TABLES.union(LEDGER_TABLES, FLOW_EVIDENCE_TABLES, POLYMORPHIC_EVIDENCE_TABLES, {"balance_confirmation"})
+    EVIDENCE_TABLES.union(
+        LEDGER_TABLES,
+        FLOW_EVIDENCE_TABLES,
+        POLYMORPHIC_EVIDENCE_TABLES,
+        STOCK_VALUATION_TABLES,
+        {"balance_confirmation"},
+    )
 )
 
 
@@ -958,6 +987,7 @@ def _raw_sql_protected_tables() -> set[str]:
         LEDGER_TABLES,
         FLOW_EVIDENCE_TABLES,
         POLYMORPHIC_EVIDENCE_TABLES,
+        STOCK_VALUATION_TABLES,
         _financial_child_tables(),
         {"approval_request", "cacao_config"},
     )
@@ -1016,6 +1046,9 @@ def _guard_bulk_update_statement(connection: Any, clause: Any, multiparams: Any,
     """Protect evidence writes and posted documents for bulk update/delete."""
     if table_name == "balance_confirmation":
         _guard_balance_confirmation_statement(connection, clause, multiparams, params)
+        return
+    if table_name in STOCK_VALUATION_TABLES:
+        _guard_stock_valuation_statement(clause, multiparams, params)
         return
     if table_name in POLYMORPHIC_EVIDENCE_TABLES:
         raise ValueError(_("Los cambios sensibles deben realizarse mediante el servicio auditado."))
@@ -1405,6 +1438,71 @@ def _guard_core_insert_row(connection: Any, table: Any, row: dict[str, Any], par
         if not _parent_is_posted(connection, parent_table, parent_id):
             continue
         raise ValueError(_("Los datos financieros posteados son inmutables; use una reversión o ajuste."))
+
+
+def stock_valuation_layer_balance_is_authorized(layer: Any) -> bool:
+    """Return whether the active valuation scope authorizes this layer's balance."""
+    return str(getattr(layer, "id", "") or "") in _STOCK_VALUATION_BALANCE_TRANSITION.get()
+
+
+def guard_stock_valuation_layer_update(target: Any) -> None:
+    """Protect historical valuation evidence and scope derived balances."""
+    changed = {attribute.key for attribute in inspect(target).attrs if attribute.history.has_changes()}
+    if changed - STOCK_VALUATION_BALANCE_FIELDS:
+        raise ValueError(
+            _("La evidencia histórica de la capa de valoración es inmutable; registre un movimiento compensatorio.")
+        )
+    if changed and not stock_valuation_layer_balance_is_authorized(target):
+        raise ValueError(
+            _("Los saldos derivados de la capa de valoración solo se actualizan mediante el servicio autorizado.")
+        )
+
+
+def guard_stock_valuation_layer_delete(target: Any) -> None:
+    """Reject physical deletion of valuation evidence in both runtime modes."""
+    del target
+    raise ValueError(_("Las capas de valoración no se eliminan; registre un movimiento compensatorio."))
+
+
+def _guard_stock_valuation_statement(clause: Any, multiparams: Any, params: Any) -> None:
+    """Reject bulk rewrites and deletes that bypass the valuation service scope."""
+    if isinstance(clause, Delete):
+        raise ValueError(_("Las capas de valoración no se eliminan; registre un movimiento compensatorio."))
+    changed = _statement_changed_values(clause, multiparams, params, clause.table)
+    if not changed or changed.keys() - STOCK_VALUATION_BALANCE_FIELDS:
+        raise ValueError(
+            _("La evidencia histórica de la capa de valoración es inmutable; registre un movimiento compensatorio.")
+        )
+    if not _stock_valuation_statement_targets_authorized_layer(clause, multiparams, params):
+        raise ValueError(
+            _("Los saldos derivados de la capa de valoración solo se actualizan mediante el servicio autorizado.")
+        )
+
+
+def _stock_valuation_statement_targets_authorized_layer(clause: Any, multiparams: Any, params: Any) -> bool:
+    """Require a bulk UPDATE to filter on IDs authorized by the valuation scope."""
+    authorized = _STOCK_VALUATION_BALANCE_TRANSITION.get()
+    if not authorized:
+        return False
+    parameter_sets = _parameter_sets(multiparams, params)
+    targets = _equality_target_values(clause, "id", parameter_sets)
+    return bool(targets) and targets.issubset(authorized)
+
+
+def _equality_target_values(clause: Any, key: str, parameter_sets: list[dict[str, Any]]) -> set[str]:
+    """Resolve the values compared with equality against ``key`` in the statement WHERE."""
+    parameters = {name: value for group in parameter_sets for name, value in group.items()}
+    values: set[str] = set()
+    for criterion in getattr(clause, "_where_criteria", ()):
+        if (
+            isinstance(criterion, BinaryExpression)
+            and getattr(criterion.left, "key", None) == key
+            and criterion.operator is operators.eq
+        ):
+            resolved = _bound_value(criterion.right, parameters)
+            if resolved is not None:
+                values.add(str(resolved))
+    return values
 
 
 def _guard_ledger_statement(clause: Any, multiparams: Any, params: Any) -> None:
