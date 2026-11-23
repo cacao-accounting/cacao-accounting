@@ -85,3 +85,11 @@ def test_modelos_workflow_sin_consumidor_no_reaparecen():
 
     for symbol in ("WorkflowActionLog", "WorkflowInstance", "WorkflowState", "WorkflowTransition"):
         assert not hasattr(cacao_database, symbol), f"#1916: {symbol} reapareció"
+
+
+def test_excepciones_sin_consumidores_no_reaparecen():
+    """#1841: DataError, OperationalError y AccessDenied no tienen consumidores."""
+    from cacao_accounting import exceptions as cacao_exceptions
+
+    for simbolo in ("DataError", "OperationalError", "AccessDenied"):
+        assert not hasattr(cacao_exceptions, simbolo), f"{simbolo} reapareció sin consumidores"

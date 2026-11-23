@@ -10,20 +10,8 @@ class CacaoAccountingException(Exception):
     _safe_for_display = True
 
 
-class DataError(CacaoAccountingException):
-    """Clase para generar errores de datos."""
-
-
 class IntegrityError(CacaoAccountingException):
     """Clase para generar errores de Integridad."""
-
-
-class OperationalError(CacaoAccountingException):
-    """Clase para generar errores operativos."""
-
-
-class AccessDenied(CacaoAccountingException):
-    """Clase para generar errores de acceso."""
 
 
 def flash_error(exc, category="danger"):
