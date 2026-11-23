@@ -452,6 +452,10 @@ def configuracion_valuacion_inventario():
     _require_system_admin()
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     selected_company = request.form.get("company") or request.args.get("company") or (companies[0].code if companies else "")
+    company_codes = {str(company.code) for company in companies}
+    if selected_company and selected_company not in company_codes:
+        flash(_("La compañía seleccionada no existe."), "danger")
+        return redirect(url_for(LISTA_VALUACION_INVENTARIO))
 
     if request.method == "POST":
         if not selected_company:
