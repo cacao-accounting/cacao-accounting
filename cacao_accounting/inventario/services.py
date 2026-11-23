@@ -24,11 +24,13 @@ from flask_login import current_user
 from cacao_accounting.database import (
     Accounts,
     CostCenter,
+    DeliveryNote,
     DocumentRelation,
     Entity,
     Item,
     ItemCategory,
     Project,
+    PurchaseReceipt,
     StockBin,
     StockEntry,
     StockEntryItem,
@@ -968,6 +970,30 @@ def _source_context(source_type: str | None, source_id: str | None) -> tuple[str
     if source_type == "stock_entry":
         return f"/api/inventory/stock-entry/{source_id}/items", "movimiento de inventario"
     return None, _LABEL_DOCUMENTO_ORIGEN
+
+
+_SOURCE_MODELS: dict[str, Any] = {
+    "purchase_receipt": PurchaseReceipt,
+    "delivery_note": DeliveryNote,
+    "stock_entry": StockEntry,
+}
+
+
+def stock_entry_source_header(source_type: str | None, source_id: str | None) -> dict[str, str] | None:
+    """Devuelve la compañía y moneda del origen para hidratar la cabecera bloqueada.
+
+    Solo hidrata cuando el documento existe y la compañía es consultable por el
+    usuario; de lo contrario la cabecera queda editable (#1874).
+    """
+    model = _SOURCE_MODELS.get(source_type or "")
+    if model is None or not source_id:
+        return None
+    source = database.session.get(model, source_id)
+    company = getattr(source, "company", None)
+    if source is None or not company:
+        return None
+    exige_acceso_compania("inventory", str(company), "crear")
+    return {"company": str(company), "currency": str(getattr(source, "transaction_currency", "") or "")}
 
 
 def _handle_stock_entry_edit_post(registro: StockEntry):

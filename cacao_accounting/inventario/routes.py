@@ -88,6 +88,7 @@ from cacao_accounting.inventario.services import (
     _stock_entry_title,
     _handle_stock_entry_new_post,
     _source_context,
+    stock_entry_source_header,
     _handle_stock_entry_edit_post,
     _render_stock_entry_edit_form,
     _render_stock_reconciliation_edit_form,
@@ -900,8 +901,11 @@ def inventario_entrada_nuevo():
 
     formulario = FormularioEntradaAlmacen()
     formulario.company.choices = _inventory_company_choices()
-    selected_company = request.values.get("company") or (
-        formulario.company.choices[0][0] if formulario.company.choices else None
+    source_header = stock_entry_source_header(request.args.get("source_type"), request.args.get("source_id"))
+    selected_company = (
+        (source_header or {}).get("company")
+        or request.values.get("company")
+        or (formulario.company.choices[0][0] if formulario.company.choices else None)
     )
     # #1173: el GET consulta y renderiza bodegas antes del POST; una
     # compañía pedida explícitamente exige permiso de consulta en
@@ -930,13 +934,15 @@ def inventario_entrada_nuevo():
         "enableBatchSerial": True,
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "initialSourceType": request.args.get("source_type") or "",
+        "initialSourceType": request.args.get("source_type") if source_header else "",
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Remisión de Mercadería Vendida")},
         ],
         "allowManualAmount": purpose in {"adjustment_positive", "adjustment_negative"},
     }
+    if source_header is not None:
+        transaction_config["initialHeader"] = source_header
     if request.method == "POST":
         if formulario.validate():
             response = _handle_stock_entry_new_post(request.form)
