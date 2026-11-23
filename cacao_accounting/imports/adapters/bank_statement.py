@@ -6,15 +6,18 @@
 from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 
+from sqlalchemy.exc import IntegrityError
+
 from cacao_accounting.database import BankAccount, BankTransaction, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.imports.readers.base import NumericCellValue
 from cacao_accounting.imports.utils.dates import parse_import_date
-from cacao_accounting.numbers import coerce_decimal
-from sqlalchemy.exc import IntegrityError
-
-
 from cacao_accounting.i18n import _
+from cacao_accounting.numbers import coerce_decimal
+
+# SQLite stores NUMERIC values through IEEE-754 floats; cap at 15 significant
+# digits so four decimal places survive identically on both Tier 1 databases.
+MAX_BANK_AMOUNT = Decimal("99999999999.9999")
 
 
 def _text(value: Any, default: str = "") -> str:
@@ -71,10 +74,17 @@ class BankStatementAdapter(BaseImportAdapter):
         )
 
     @staticmethod
+    def _normalize_amount(amount: Decimal) -> Decimal | None:
+        """Valida el rango de Numeric(20, 4) y normaliza su escala."""
+        if abs(amount) > MAX_BANK_AMOUNT:
+            raise InvalidOperation(_("El monto bancario excede la precisión exacta de 11 dígitos enteros."))
+        return amount.quantize(Decimal("0.0001")) if amount != 0 else None
+
+    @staticmethod
     def _numeric_cell_amount(value: NumericCellValue) -> Decimal | None:
         """Convierte una celda numérica sin interpretar separadores de texto."""
         amount = coerce_decimal(str(value), "monto", max_fractional_digits=4)
-        return amount if amount != 0 else None
+        return BankStatementAdapter._normalize_amount(amount)
 
     @staticmethod
     def _optional_amount(value: Any) -> Decimal | None:
@@ -112,7 +122,7 @@ class BankStatementAdapter(BaseImportAdapter):
             if len(decimal_part) == 3:
                 raise InvalidOperation(_("Separador de miles ambiguo"))
         amount = coerce_decimal(normalized, "monto", max_fractional_digits=4)
-        return amount if amount != 0 else None
+        return BankStatementAdapter._normalize_amount(amount)
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
         """Validate a single bank statement row."""
@@ -239,7 +249,7 @@ class BankStatementAdapter(BaseImportAdapter):
         company_id = tx_data.get("company_id")
         if company_id and bank_account.company != company_id:
             raise ValueError(
-                _("La cuenta bancaria %(bank_account_id)s pertenece a la compañía %(bank_company)s, " "no a %(company_id)s.")
+                _("La cuenta bancaria %(bank_account_id)s pertenece a la compañía %(bank_company)s, no a %(company_id)s.")
                 % {
                     "bank_account_id": bank_account.id,
                     "bank_company": bank_account.company,
