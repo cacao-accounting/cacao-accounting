@@ -5,13 +5,18 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from threading import Event, Lock
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
+
+# Pytest injects the fixture with this name in each consuming test.
+# pylint: disable=redefined-outer-name
 
 from cacao_accounting import create_app
 from cacao_accounting.compras.purchase_reconciliation_service import (
@@ -64,11 +69,14 @@ def allocation_scenario(tmp_path: Path):
         database.create_all()
         if database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none() is None:
             database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        if database.session.execute(database.select(Modules).filter_by(module="purchases")).scalar_one_or_none() is None:
+            database.session.add(Modules(module="purchases", default=False, enabled=True))
+        if database.session.execute(database.select(UOM).filter_by(code="EA")).scalar_one_or_none() is None:
+            database.session.add(UOM(code="EA", name="Each", is_active=True))
         database.session.add_all(
             [
-                Modules(module="purchases", default=True, enabled=True),
                 Entity(
-                    code="alpha",
+                    code=f"AL-{suffix}",
                     name="Alfa",
                     company_name=f"Compañía Alfa {suffix}",
                     tax_id=f"TAX-{suffix}",
@@ -76,7 +84,6 @@ def allocation_scenario(tmp_path: Path):
                     enabled=True,
                     status="default",
                 ),
-                UOM(code="EA", name="Each", is_active=True),
             ]
         )
         database.session.flush()
@@ -86,7 +93,7 @@ def allocation_scenario(tmp_path: Path):
         database.session.add(supplier)
         database.session.flush()
         order = PurchaseOrder(
-            company="alpha",
+            company=f"AL-{suffix}",
             document_no=f"PO-{suffix}",
             supplier_id=supplier.id,
             supplier_name=supplier.name,
@@ -111,7 +118,7 @@ def allocation_scenario(tmp_path: Path):
         receipt_ids: list[str] = []
         for index, qty in enumerate((Decimal("6"), Decimal("6"), Decimal("6")), start=1):
             receipt = PurchaseReceipt(
-                company="alpha",
+                company=f"AL-{suffix}",
                 document_no=f"PR-{suffix}-{index}",
                 supplier_id=supplier.id,
                 supplier_name=supplier.name,
@@ -138,7 +145,7 @@ def allocation_scenario(tmp_path: Path):
             )
             receipt_ids.append(str(receipt.id))
         invoice = PurchaseInvoice(
-            company="alpha",
+            company=f"AL-{suffix}",
             document_type="purchase_invoice",
             document_no=f"PI-{suffix}",
             supplier_id=supplier.id,
@@ -202,6 +209,52 @@ def _allocated_invoice_qty(invoice_item_id: str) -> Decimal:
     return Decimal(str(value or 0))
 
 
+class _PauseFirstCapacityRead:
+    """Pause the first capacity read to expose an allocation interleaving."""
+
+    def __init__(self, original):
+        self.original = original
+        self.started = Event()
+        self.release = Event()
+        self._first_call = True
+        self._lock = Lock()
+
+    def __call__(self, invoice_item_id: str) -> Decimal:
+        """Return the allocated quantity after pausing one caller once."""
+        value = self.original(invoice_item_id)
+        with self._lock:
+            should_pause = self._first_call
+            self._first_call = False
+        if should_pause:
+            self.started.set()
+            assert self.release.wait(timeout=30)
+        return value
+
+    def wait_until_paused(self, timeout: float) -> bool:
+        """Report whether the capacity read reached its pause point."""
+        return self.started.wait(timeout=timeout)
+
+    def unblock(self) -> None:
+        """Release the paused capacity read."""
+        self.release.set()
+
+
+def _allocate_in_test_app(scenario, receipt_id: str, started: Event | None = None) -> list[Decimal]:
+    """Run and commit one allocation in its own Flask and SQLAlchemy context."""
+    with scenario["app"].app_context():
+        if started is not None:
+            started.set()
+        try:
+            allocations = allocate_purchase_invoice_receipt_lines(receipt_id, scenario["invoice_id"])
+            database.session.commit()
+            return [row.qty_in_base_uom for row in allocations]
+        except Exception:
+            database.session.rollback()
+            raise
+        finally:
+            database.session.remove()
+
+
 def test_invoice_receipt_allocation_respects_invoice_qty(allocation_scenario):
     """Dos recepciones de 6 no pueden sobreasignar una factura de 10 unidades."""
     scenario = allocation_scenario
@@ -235,8 +288,6 @@ def test_invoice_receipt_allocation_skips_exhausted_invoice_line(allocation_scen
 
 def test_concurrent_receipts_do_not_overallocate_invoice(allocation_scenario):
     """Dos recepciones concurrentes no superan la cantidad de la línea de factura."""
-    from concurrent.futures import ThreadPoolExecutor
-
     scenario = allocation_scenario
 
     def run(receipt_id: str) -> list[Decimal]:
@@ -258,49 +309,32 @@ def test_concurrent_receipts_do_not_overallocate_invoice(allocation_scenario):
 
 
 def test_pausa_antes_del_insert_serializa_capacidad(allocation_scenario, monkeypatch):
-    """#1689: si la primera transacción se pausa antes del insert, la segunda espera."""
-    from concurrent.futures import ThreadPoolExecutor
-    from threading import Event
-
+    """#1689: una segunda sesión espera y asigna solo la capacidad restante."""
     from cacao_accounting.compras import purchase_reconciliation_service as servicio
 
     scenario = allocation_scenario
-    original = servicio._allocated_invoice_qty
-    pausado = Event()
-    liberar = Event()
-    llamadas = {"n": 0}
-
-    def con_pausa(invoice_item_id):
-        valor = original(invoice_item_id)
-        llamadas["n"] += 1
-        if llamadas["n"] == 1:
-            pausado.set()
-            assert liberar.wait(timeout=30)
-        return valor
-
-    monkeypatch.setattr(servicio, "_allocated_invoice_qty", con_pausa)
-
-    def correr(receipt_id: str) -> str:
-        with scenario["app"].app_context():
-            try:
-                allocate_purchase_invoice_receipt_lines(receipt_id, scenario["invoice_id"])
-                database.session.commit()
-                return "asignada"
-            except Exception:
-                database.session.rollback()
-                return "rechazada"
+    segunda_iniciada = Event()
+    pause = _PauseFirstCapacityRead(servicio._allocated_invoice_qty)  # pylint: disable=protected-access
+    monkeypatch.setattr(servicio, "_allocated_invoice_qty", pause)
 
     with ThreadPoolExecutor(max_workers=2) as workers:
-        primera = workers.submit(correr, scenario["receipt_ids"][0])
-        assert pausado.wait(timeout=60)
-        segunda = workers.submit(correr, scenario["receipt_ids"][1])
-        with pytest.raises(TimeoutError):
-            segunda.result(timeout=2)
-        liberar.set()
-        primera.result(timeout=60)
-        segunda.result(timeout=60)
+        primera = workers.submit(_allocate_in_test_app, scenario, scenario["receipt_ids"][0])
+        assert pause.wait_until_paused(timeout=60)
+        segunda = workers.submit(_allocate_in_test_app, scenario, scenario["receipt_ids"][1], segunda_iniciada)
+        try:
+            assert segunda_iniciada.wait(timeout=10)
+            with pytest.raises(TimeoutError):
+                segunda.result(timeout=2)
+        finally:
+            pause.unblock()
+        primera_qty = primera.result(timeout=60)
+        segunda_qty = segunda.result(timeout=60)
 
     with scenario["app"].app_context():
         total = _allocated_invoice_qty(scenario["invoice_item_id"])
 
-    assert total <= Decimal("10")
+    assert sorted((sum(primera_qty, Decimal("0")), sum(segunda_qty, Decimal("0")))) == [
+        Decimal("4"),
+        Decimal("6"),
+    ]
+    assert total == Decimal("10")
