@@ -7,6 +7,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
 
 
 def test_lockout_aware_futuro_bloquea(app):
@@ -55,3 +58,37 @@ def test_listar_cuentas_bloqueadas_acepta_lockout_aware(app, monkeypatch):
 
     with app.app_context():
         assert account_throttling.listar_cuentas_bloqueadas() == [(usuario, 300)]
+
+
+@pytest.mark.database
+def test_lockout_persistido_en_postgresql():
+    """Un lockout real con zona se lee por las tres rutas de throttling."""
+    from cacao_accounting import create_app
+    from cacao_accounting.auth import account_throttling
+    from cacao_accounting.config import configuracion
+    from cacao_accounting.database import User, database
+
+    application = create_app({**configuracion, "TESTING": True, "WTF_CSRF_ENABLED": False})
+    with application.app_context():
+        if database.engine.dialect.name != "postgresql":
+            pytest.skip("La persistencia de lockout con zona requiere PostgreSQL.")
+        user_id = f"lockout-{uuid4().hex[:8]}"
+        database.session.add(
+            User(
+                id=user_id,
+                user=user_id,
+                name="Lockout",
+                password=b"x",
+                active=True,
+                lockout_until=datetime.now(timezone.utc) + timedelta(minutes=5),
+            )
+        )
+        database.session.commit()
+        database.session.expire_all()
+        usuario = database.session.get(User, user_id)
+
+        assert account_throttling.esta_bloqueada(usuario) is True
+        restante = account_throttling.tiempo_restante_bloqueo(usuario)
+        assert restante is not None and 0 < restante <= 300
+        bloqueadas = account_throttling.listar_cuentas_bloqueadas()
+        assert any(str(bloqueado.id) == user_id for bloqueado, _ in bloqueadas)
