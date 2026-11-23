@@ -142,4 +142,12 @@
   </form>
 </div>
 
+<script>
+  document.addEventListener('company-selected', function () {
+    var currency = document.getElementById('pc_currency');
+    if (currency) {
+      currency.value = '';
+    }
+  });
+</script>
 {% endblock %}

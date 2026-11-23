@@ -221,3 +221,17 @@ def test_lista_de_vales_borrador_no_enlaza_edicion_inexistente(caja_vale_estado)
     assert "Cancelar" in cuerpo
     assert "Editar" not in cuerpo
     assert "caja_chica_vale_editar" not in cuerpo
+
+
+def test_formulario_limpia_la_moneda_al_cambiar_compania(caja_vale_estado):
+    """El formulario conecta company-selected con la limpieza de la moneda del fondo."""
+    application, _ids = caja_vale_estado
+    client = application.test_client()
+    _iniciar(client)
+
+    response = client.get("/cash_management/petty-cash-voucher/new")
+
+    assert response.status_code == 200
+    cuerpo = response.get_data(as_text=True)
+    assert "company-selected" in cuerpo
+    assert "getElementById('pc_currency')" in cuerpo
