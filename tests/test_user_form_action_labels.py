@@ -17,7 +17,7 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import Modules, User, database
+from cacao_accounting.database import Modules, Roles, User, database
 
 BOTON_ENVIO = '<button type="submit" class="btn btn-primary">{texto}</button>'
 
@@ -105,3 +105,38 @@ def test_alta_en_ingles_traduce_la_accion_del_boton(app, authenticated_client, m
     html = respuesta.get_data(as_text=True)
     assert BOTON_ENVIO.format(texto="New User") in html
     assert BOTON_ENVIO.format(texto="Nuevo Usuario") not in html
+
+
+def test_edicion_en_ingles_traduce_la_accion_del_boton(app, authenticated_client, modulo_admin_activo):
+    """#2022: la edición de usuario también sigue el locale inglés."""
+    from flask_babel import force_locale
+
+    usuario_id = _crear_usuario_interno(app)
+    with force_locale("en"):
+        respuesta = authenticated_client().get(f"/settings/users/{usuario_id}/edit")
+
+    assert respuesta.status_code == 200
+    html = respuesta.get_data(as_text=True)
+    assert BOTON_ENVIO.format(texto="Update User") in html
+    assert BOTON_ENVIO.format(texto="Actualizar Usuario") not in html
+
+
+def test_acciones_de_roles_tambien_se_traducen_al_ingles(app, authenticated_client, modulo_admin_activo):
+    """Las etiquetas adicionales de crear y editar rol mantienen el idioma activo."""
+    from flask_babel import force_locale
+
+    client = authenticated_client()
+    with app.app_context():
+        role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one()
+        role_id = role.id
+
+    with force_locale("en"):
+        create_response = client.get("/settings/roles/new")
+        edit_response = client.get(f"/settings/roles/{role_id}/edit")
+
+    assert create_response.status_code == 200
+    assert edit_response.status_code == 200
+    assert "Save role" in create_response.get_data(as_text=True)
+    assert "Update role" in edit_response.get_data(as_text=True)
+    assert "Guardar rol" not in create_response.get_data(as_text=True)
+    assert "Actualizar rol" not in edit_response.get_data(as_text=True)
