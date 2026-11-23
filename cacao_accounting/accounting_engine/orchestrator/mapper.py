@@ -29,12 +29,40 @@ class AccountingMapper:
         settlement: Optional[SettlementResult] = None,
     ) -> JournalEntryProforma:
         """Create a pro-forma journal entry from engine results."""
-        del landed
-        if settlement and context.event_type in {"payment_confirmed", "collection_confirmed", "refund_confirmed"}:
+        if landed and context.document_type == "import_landed_cost":
+            lines = self._map_landed_cost_lines(context, landed, fiscal)
+        elif settlement and context.event_type in {"payment_confirmed", "collection_confirmed", "refund_confirmed"}:
             lines = self._map_settlement_event(context, settlement)
         else:
             lines = self._map_document_event(context, fiscal, settlement)
         return self._finalize_proforma(context, lines)
+
+    def _map_landed_cost_lines(
+        self,
+        context: CalculationContext,
+        landed: LandedCostResult,
+        fiscal: Optional[FiscalResult],
+    ) -> list[JournalEntryLineProforma]:
+        """Map the landed-cost proration to inventory debits against the bridge."""
+        lines = self._map_explicit_account_lines(context)
+        inventory_accounts = context.references.get("landed_inventory_accounts", {}) or {}
+        for allocation in landed.allocations:
+            account_id = inventory_accounts.get(str(allocation.item_line_id))
+            amount = allocation.allocated_total
+            if not account_id or amount <= 0:
+                continue
+            lines.append(
+                self._build_line(
+                    context,
+                    str(account_id),
+                    amount,
+                    side="debit",
+                    description=f"{allocation.item_line_id} - Costo Importacion",
+                    exchange_rate=self._document_exchange_rate(context),
+                )
+            )
+        lines.extend(self._map_fiscal_lines(context, fiscal, skip_capitalizable=True))
+        return lines
 
     def _map_document_event(
         self,
@@ -209,6 +237,8 @@ class AccountingMapper:
         self,
         context: CalculationContext,
         fiscal: Optional[FiscalResult],
+        *,
+        skip_capitalizable: bool = False,
     ) -> list[JournalEntryLineProforma]:
         """Map fiscal lines for invoice-like events."""
         if not fiscal:
@@ -216,6 +246,8 @@ class AccountingMapper:
         lines: list[JournalEntryLineProforma] = []
         for fiscal_line in fiscal.tax_lines:
             if not fiscal_line.affects_document_total:
+                continue
+            if skip_capitalizable and fiscal_line.accounting_treatment == "capitalizable_inventory_cost":
                 continue
             account_id = self._resolve_tax_account(context, fiscal_line.account_id, concept=fiscal_line.concept)
             if not account_id:
