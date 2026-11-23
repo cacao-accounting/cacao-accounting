@@ -13,7 +13,7 @@ SECCIONES = RAIZ / "templates" / "party_detail_sections.html"
 
 
 def test_secciones_declaran_los_ids_que_ventas_enlaza():
-    """#party-contacts y #party-addresses existen y se enlazan desde ventas."""
+    """Los anclajes existen; ventas no ofrece un enlace a una sección sin destino."""
     secciones = SECCIONES.read_text(encoding="utf-8")
     ids = set(re.findall(r'id="([^"]+)"', secciones))
 
@@ -25,3 +25,4 @@ def test_secciones_declaran_los_ids_que_ventas_enlaza():
     assert {"party-contacts", "party-addresses"} <= ids
     assert enlaces <= ids, f"anclas sin destino: {sorted(enlaces - ids)}"
     assert "contactos-direcciones" not in texto_ventas
+    assert "Contactos y Direcciones de Clientes" not in texto_ventas
