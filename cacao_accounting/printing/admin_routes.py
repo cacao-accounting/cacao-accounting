@@ -114,6 +114,12 @@ def create_template():
             database.session.rollback()
             flash(_("Error al crear plantilla: %(error)s") % {"error": exc}, "danger")
             return _render_form(None)
+        except IntegrityError:
+            # Un código repetido en la misma compañía y tipo documental es un
+            # conflicto de dominio, no un 500 (#1929).
+            database.session.rollback()
+            flash(_("Ya existe una plantilla con ese código para el tipo documental."), "danger")
+            return _render_form(None)
         flash(_("Plantilla creada exitosamente."), "success")
         return redirect(url_for("printing_admin.edit_template", template_id=template.id))
     return _render_form(None)
