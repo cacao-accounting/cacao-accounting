@@ -113,3 +113,20 @@ def test_alcanzar_el_limite_consume_el_codigo(otp_http_scenario):
     response = client.post("/auth/verify-otp", data={"code": _codigo_incorrecto(codigo)})
     assert response.status_code == 200
     assert _estado_otp(application, user_id).attempts == OTP_MAX_ATTEMPTS
+
+
+def test_post_exitoso_conserva_destino_y_cookie(otp_http_scenario):
+    """#1917: el POST exitoso responde con un Location válido, cookie y sesión."""
+    application, user_id, codigo = otp_http_scenario
+    client = _cliente_con_otp(application, user_id)
+
+    response = client.post("/auth/verify-otp", data={"code": codigo})
+
+    assert response.status_code in {301, 302, 303}
+    location = response.headers.get("Location", "")
+    assert location.startswith("/")
+    assert "Response" not in location
+    assert "device-id" in response.headers.get("Set-Cookie", "")
+    with client.session_transaction() as session:
+        assert session.get("_user_id") == user_id
+        assert "otp_user_id" not in session
