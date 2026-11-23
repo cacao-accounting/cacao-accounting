@@ -633,6 +633,7 @@ def create_document_relation(
     target_item_id: str | None,
     qty: Any,
     uom: str | None = None,
+    qty_in_base_uom: Any | None = None,
     rate: Any = None,
     amount: Any = None,
 ) -> DocumentRelation:
@@ -660,7 +661,13 @@ def create_document_relation(
         raise DocumentFlowError(_("La cantidad relacionada debe ser mayor que cero."), 409)
 
     presentation_uom = uom or getattr(target_item, "uom", None) or getattr(source_item, "uom", None)
-    base_qty = _relation_qty_in_base_uom(source_item, qty_decimal, presentation_uom)
+    base_qty = (
+        decimal_or_zero(qty_in_base_uom)
+        if qty_in_base_uom is not None
+        else _relation_qty_in_base_uom(source_item, qty_decimal, presentation_uom)
+    )
+    if base_qty <= 0:
+        raise DocumentFlowError(_("La cantidad en UOM base debe ser mayor que cero."), 409)
 
     if source_item_id:
         _lock_document_flow_source(source_key, source_id, source_item_id, target_key)

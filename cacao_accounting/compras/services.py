@@ -13,7 +13,8 @@ from logging import getLogger
 
 from typing import Any, Sequence, cast
 
-from sqlalchemy import update
+from sqlalchemy import and_, func, or_, update
+from sqlalchemy.exc import DBAPIError
 
 from cacao_accounting.exceptions import flash_error
 from cacao_accounting.numbers import coerce_decimal
@@ -100,7 +101,11 @@ from cacao_accounting.document_flow.context import company_currency, effective_c
 
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, next_relation_revision
 
-from cacao_accounting.document_flow.service import _relation_qty_in_base_uom, source_qty_in_base_uom
+from cacao_accounting.document_flow.service import (
+    _lock_document_flow_source,
+    _relation_qty_in_base_uom,
+    source_qty_in_base_uom,
+)
 
 
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
@@ -695,20 +700,36 @@ def _award_lines_by_supplier(award_id: str) -> dict[str, list[PurchaseQuotationA
 
 def _add_award_order_lines(order: PurchaseOrder, lines: list[PurchaseQuotationAwardItem]) -> tuple[Decimal, Decimal]:
     """Create order lines and source relations for one supplier quotation."""
+    award = database.session.get(PurchaseQuotationAward, order.purchase_award_id)
+    if award is None:
+        raise PurchaseSourcingError(_("La adjudicación de la orden ya no está disponible."))
     total_qty = Decimal("0")
     total = Decimal("0")
     for award_line in lines:
-        source = database.session.get(PurchaseQuotationItem, award_line.purchase_quotation_item_id)
+        source = database.session.get(SupplierQuotationItem, award_line.supplier_quotation_item_id)
+        quotation = database.session.get(SupplierQuotation, award_line.supplier_quotation_id)
+        rfq_line = database.session.get(PurchaseQuotationItem, award_line.purchase_quotation_item_id)
+        if (
+            source is None
+            or quotation is None
+            or rfq_line is None
+            or quotation.purchase_quotation_id != award.purchase_quotation_id
+            or source.supplier_quotation_id != quotation.id
+            or source.item_code != award_line.item_code
+            or rfq_line.item_code != award_line.item_code
+            or not source.uom
+        ):
+            raise PurchaseSourcingError(_("La línea de oferta adjudicada ya no está disponible."))
         line = PurchaseOrderItem(
             purchase_order_id=order.id,
             item_code=award_line.item_code,
-            item_name=source.item_name if source else award_line.item_code,
+            item_name=source.item_name or award_line.item_code,
             qty=award_line.qty,
             uom=source.uom if source else None,
             rate=award_line.rate,
             amount=award_line.amount,
         )
-        line.qty_in_base_uom = _relation_qty_in_base_uom(line, award_line.qty, line.uom)
+        line.qty_in_base_uom = _award_line_base_quantity(award_line, source, _award_decimal(award_line.qty))
         database.session.add(line)
         database.session.flush()
         create_document_relation(
@@ -720,6 +741,7 @@ def _add_award_order_lines(order: PurchaseOrder, lines: list[PurchaseQuotationAw
             target_item_id=line.id,
             qty=award_line.qty,
             uom=line.uom,
+            qty_in_base_uom=line.qty_in_base_uom,
             rate=award_line.rate,
             amount=award_line.amount,
         )
@@ -730,6 +752,10 @@ def _add_award_order_lines(order: PurchaseOrder, lines: list[PurchaseQuotationAw
 
 def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[PurchaseOrder]:
     """Create one draft purchase order per supplier from an award."""
+    award_items = _award_items(award)
+    _lock_award_consumption(award, award_items)
+    if _award_has_active_manual_orders(award.id):
+        raise PurchaseSourcingError(_("La adjudicación ya tiene órdenes registradas."))
     claimed = database.session.execute(
         update(PurchaseQuotationAward)
         .where(PurchaseQuotationAward.id == award.id, PurchaseQuotationAward.status == "finalized")
@@ -797,6 +823,7 @@ def _create_line_relation(
     uom: str | None,
     rate: Decimal,
     amount: Decimal,
+    qty_in_base_uom: Decimal | None = None,
 ) -> None:
     """Crea relacion documental para una linea importada desde un origen."""
     source_type = request.form.get(f"source_type_{index}")
@@ -852,6 +879,7 @@ def _create_line_relation(
         target_item_id=target_item_id,
         qty=qty,
         uom=uom,
+        qty_in_base_uom=qty_in_base_uom,
         rate=rate,
         amount=amount,
     )
@@ -931,7 +959,7 @@ def _msg_item_no_comprable(item_code: str) -> str:
     return _("El item %(item_code)s no está habilitado para compra.") % {"item_code": item_code}
 
 
-def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
+def _save_purchase_order_items(order_id: str, award_source: Any = None) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una orden de compra desde el formulario."""
     order = database.session.get(PurchaseOrder, order_id)
     exchange_rate = _purchase_exchange_rate(
@@ -943,6 +971,11 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
+    award_items = (
+        _award_items(database.session.get(PurchaseQuotationAward, order.purchase_award_id))
+        if order and order.purchase_award_id
+        else []
+    )
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -955,8 +988,20 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             if not item_obj.is_active or not item_obj.is_purchase_item:
                 raise DocumentFlowError(_msg_item_no_comprable(item_code), 400)
             rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
+            qty_in_base_uom: Decimal
+            if award_items:
+                source_item_id = request.form.get(f"source_item_id_{i}") or ""
+                award_line = _award_line_for_request(item_code, source_item_id, award_items, award_source)
+                if award_line is None or not _award_conditions_match(award_line, uom or "", rate):
+                    raise DocumentFlowError(_("La línea debe conservar la UOM y el precio adjudicados."), 400)
+                quotation_line = database.session.get(SupplierQuotationItem, award_line.supplier_quotation_item_id)
+                qty_in_base_uom = _award_line_base_quantity(award_line, quotation_line, qty)
+                rate = _award_decimal(award_line.rate)
+                uom = quotation_line.uom
+            else:
+                qty_in_base_uom = _relation_qty_in_base_uom(item_obj, qty, uom)
+            amount = (qty * rate).quantize(Decimal("0.0001")) if award_items else _line_amount(i)
             linea = PurchaseOrderItem(
                 purchase_order_id=order_id,
                 item_code=item_code,
@@ -966,11 +1011,21 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 rate=rate,
                 amount=amount,
             )
-            linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
+            linea.qty_in_base_uom = qty_in_base_uom
             linea.base_amount, linea.base_rate = _compute_base_amounts(amount, exchange_rate)
             database.session.add(linea)
             database.session.flush()
-            _create_line_relation(i, "purchase_order", order_id, linea.id, qty, uom, rate, amount)
+            _create_line_relation(
+                i,
+                "purchase_order",
+                order_id,
+                linea.id,
+                qty,
+                uom,
+                rate,
+                amount,
+                qty_in_base_uom if award_items else None,
+            )
             _create_purchase_request_relation_from_supplier_quotation(
                 request.form.get(f"source_id_{i}"),
                 request.form.get(f"source_item_id_{i}"),
@@ -1452,6 +1507,7 @@ def _validate_purchase_order_award(
     source: Any = None,
     supplier_id: str | None = None,
     form: Any = None,
+    current_order_id: str | None = None,
 ) -> Any:
     """Load a finalized award and verify company, source, supplier and lines."""
     award = database.session.get(PurchaseQuotationAward, award_id) if award_id else None
@@ -1469,7 +1525,25 @@ def _validate_purchase_order_award(
     if not _award_matches_source(award, source):
         flash_error(PurchaseSourcingError("La adjudicación no corresponde al origen seleccionado."))
         return None, False
-    if not _award_matches_supplier_and_lines(award, supplier_id, form):
+    try:
+        award_items = _award_items(award)
+        _lock_award_consumption(award, award_items)
+        database.session.refresh(award)
+    except DBAPIError:
+        database.session.rollback()
+        flash_error(DocumentFlowError(_("Otra orden está usando esta adjudicación. Intente nuevamente."), 409))
+        return None, False
+    if award.status != "finalized":
+        flash_error(PurchaseSourcingError("La adjudicación seleccionada no es válida."))
+        return None, False
+    try:
+        matches_order = _award_matches_supplier_and_lines(award, supplier_id, form, source, current_order_id)
+    except DocumentFlowError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return None, False
+    if not matches_order:
+        database.session.rollback()
         flash_error(PurchaseSourcingError("La adjudicación no corresponde al proveedor o líneas de la orden."))
         return None, False
     return award, True
@@ -1487,25 +1561,55 @@ def _award_matches_source(award: PurchaseQuotationAward, source: Any) -> bool:
 def _award_decimal(value: Any) -> Decimal:
     """Convierte un valor de formulario o modelo a Decimal seguro."""
     try:
-        return Decimal(str(value or "0"))
+        result = Decimal(str(value or "0"))
+        return result if result.is_finite() else Decimal("0")
     except (ArithmeticError, ValueError):
         return Decimal("0")
 
 
-def _award_matches_supplier_and_lines(award: PurchaseQuotationAward, supplier_id: str | None, form: Any) -> bool:
+def _award_matches_supplier_and_lines(
+    award: PurchaseQuotationAward,
+    supplier_id: str | None,
+    form: Any,
+    source: Any,
+    current_order_id: str | None = None,
+) -> bool:
     """Return whether award items cover the selected supplier and submitted lines."""
     award_items = _award_items(award)
-    if not award_items or not _award_matches_supplier(award_items, supplier_id):
+    if not award_items:
         return False
     if form is None:
-        return True
-    requested = _order_requested_quantities(form)
+        return False
+    requested = _order_form_lines(form)
     if not requested:
         return False
-    return all(
-        _award_covers_request(item_code, source_item_id, qty, award_items)
-        for (item_code, source_item_id), qty in requested.items()
-    )
+    accumulated: dict[str, Decimal] = {}
+    for item_code, qty, source_item_id, uom, rate in requested:
+        if not qty.is_finite() or qty <= 0:
+            return False
+        candidate = _award_line_for_request(item_code, source_item_id, award_items, source)
+        if (
+            candidate is None
+            or not _award_line_matches_supplier(candidate, supplier_id)
+            or not _award_conditions_match(candidate, uom, rate)
+        ):
+            return False
+        accumulated[candidate.id] = accumulated.get(candidate.id, Decimal("0")) + qty
+    awarded_by_id = {line.id: _award_decimal(line.qty) for line in award_items}
+    award_lines_by_id = {line.id: line for line in award_items}
+    for line_id, requested_qty in accumulated.items():
+        award_line = award_lines_by_id.get(line_id)
+        quotation_line = (
+            database.session.get(SupplierQuotationItem, award_line.supplier_quotation_item_id) if award_line else None
+        )
+        if award_line is None or requested_qty > awarded_by_id[line_id]:
+            return False
+        requested_base = _award_line_base_quantity(award_line, quotation_line, requested_qty)
+        award_base = _award_line_base_quantity(award_line, quotation_line, awarded_by_id[line_id])
+        consumed_base = _award_consumed_base_quantity(award, award_line, current_order_id)
+        if consumed_base + requested_base > award_base:
+            return False
+    return True
 
 
 def _award_items(award: PurchaseQuotationAward) -> list[PurchaseQuotationAwardItem]:
@@ -1513,18 +1617,71 @@ def _award_items(award: PurchaseQuotationAward) -> list[PurchaseQuotationAwardIt
     return list(database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalars())
 
 
-def _award_matches_supplier(award_items: list[PurchaseQuotationAwardItem], supplier_id: str | None) -> bool:
-    """Return whether every awarded line belongs to the selected supplier."""
-    for supplier_quotation_id in {item.supplier_quotation_id for item in award_items}:
-        quotation = database.session.get(SupplierQuotation, supplier_quotation_id)
-        if quotation is None or (supplier_id and quotation.supplier_id != supplier_id):
-            return False
-    return True
+def _lock_award_consumption(award: PurchaseQuotationAward, award_items: list[PurchaseQuotationAwardItem]) -> None:
+    """Serialize availability checks and order creation for each awarded line."""
+    for award_line in sorted(award_items, key=lambda line: line.id):
+        _lock_document_flow_source("purchase_award", award.id, award_line.id, "purchase_order")
 
 
-def _order_form_lines(form: Any) -> list[tuple[str, Decimal, str]]:
-    """Return the item, quantity and optional source row submitted for an order."""
-    lines: list[tuple[str, Decimal, str]] = []
+def _award_has_active_manual_orders(award_id: str) -> bool:
+    """Return whether active purchase-order relations already use the award."""
+    return (
+        database.session.execute(
+            database.select(DocumentRelation.id)
+            .join(PurchaseOrder, PurchaseOrder.id == DocumentRelation.target_id)
+            .where(
+                PurchaseOrder.purchase_award_id == award_id,
+                DocumentRelation.target_type == "purchase_order",
+                DocumentRelation.status == "active",
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def _award_consumed_base_quantity(
+    award: PurchaseQuotationAward,
+    award_line: PurchaseQuotationAwardItem,
+    current_order_id: str | None,
+) -> Decimal:
+    """Sum active base quantities previously ordered from one canonical award line."""
+    source_match = or_(
+        and_(
+            DocumentRelation.source_type == "supplier_quotation",
+            DocumentRelation.source_id == award_line.supplier_quotation_id,
+            DocumentRelation.source_item_id == award_line.supplier_quotation_item_id,
+        ),
+        and_(
+            DocumentRelation.source_type == "purchase_quotation",
+            DocumentRelation.source_id == award.purchase_quotation_id,
+            DocumentRelation.source_item_id == award_line.purchase_quotation_item_id,
+        ),
+    )
+    query = (
+        database.select(func.coalesce(func.sum(DocumentRelation.qty_in_base_uom), 0))
+        .join(PurchaseOrder, PurchaseOrder.id == DocumentRelation.target_id)
+        .where(
+            PurchaseOrder.purchase_award_id == award.id,
+            DocumentRelation.target_type == "purchase_order",
+            DocumentRelation.status == "active",
+            source_match,
+        )
+    )
+    if current_order_id:
+        query = query.where(PurchaseOrder.id != current_order_id)
+    return _award_decimal(database.session.execute(query).scalar_one())
+
+
+def _award_line_matches_supplier(award_line: PurchaseQuotationAwardItem, supplier_id: str | None) -> bool:
+    """Return whether one awarded line belongs to the selected supplier."""
+    quotation = database.session.get(SupplierQuotation, award_line.supplier_quotation_id)
+    return bool(quotation and supplier_id and quotation.supplier_id == supplier_id)
+
+
+def _order_form_lines(form: Any) -> list[tuple[str, Decimal, str, str, Decimal]]:
+    """Return the item, quantity, source row, unit and price submitted for an order."""
+    lines: list[tuple[str, Decimal, str, str, Decimal]] = []
     index = 0
     while form.get(f"item_code_{index}"):
         item_code = str(form.get(f"item_code_{index}") or "").strip()
@@ -1534,37 +1691,52 @@ def _order_form_lines(form: Any) -> list[tuple[str, Decimal, str]]:
                     item_code,
                     _award_decimal(form.get(f"qty_{index}")),
                     str(form.get(f"source_item_id_{index}") or ""),
+                    str(form.get(f"uom_{index}") or ""),
+                    _award_decimal(form.get(f"rate_{index}")) if form.get(f"rate_{index}") not in (None, "") else None,
                 )
             )
         index += 1
     return lines
 
 
-def _order_requested_quantities(form: Any) -> dict[tuple[str, str], Decimal]:
-    """Accumulate requested quantities per item and source row."""
-    requested: dict[tuple[str, str], Decimal] = {}
-    for item_code, qty, source_item_id in _order_form_lines(form):
-        key = (item_code, source_item_id)
-        requested[key] = requested.get(key, Decimal("0")) + qty
-    return requested
-
-
-def _award_covers_request(
+def _award_line_for_request(
     item_code: str,
     source_item_id: str,
-    qty: Decimal,
     award_items: list[PurchaseQuotationAwardItem],
-) -> bool:
-    """Return whether the awarded lines cover the accumulated requested quantity."""
-    candidates = [item for item in award_items if item.item_code == item_code]
-    if source_item_id:
-        candidates = [
-            item for item in candidates if source_item_id in {item.supplier_quotation_item_id, item.purchase_quotation_item_id}
-        ]
-    if not candidates:
-        return False
-    awarded = sum((_award_decimal(item.qty) for item in candidates), Decimal("0"))
-    return qty <= awarded
+    source: Any,
+) -> PurchaseQuotationAwardItem | None:
+    """Resolve one submitted source row to its canonical awarded line."""
+    if not source_item_id:
+        return None
+    source_field = "supplier_quotation_item_id" if isinstance(source, SupplierQuotation) else "purchase_quotation_item_id"
+    candidates = [
+        item for item in award_items if item.item_code == item_code and getattr(item, source_field) == source_item_id
+    ]
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _award_conditions_match(award_line: PurchaseQuotationAwardItem, uom: str, rate: Decimal | None) -> bool:
+    """Require the submitted order line to retain awarded unit and price."""
+    quotation_line = database.session.get(SupplierQuotationItem, award_line.supplier_quotation_item_id)
+    return bool(
+        quotation_line and uom and quotation_line.uom == uom and rate is not None and rate == _award_decimal(award_line.rate)
+    )
+
+
+def _award_line_base_quantity(
+    award_line: PurchaseQuotationAwardItem,
+    quotation_line: SupplierQuotationItem | None,
+    qty: Decimal,
+) -> Decimal:
+    """Scale the supplier line's persisted base quantity for a partial award use."""
+    if quotation_line is None:
+        raise DocumentFlowError(_("La línea de oferta adjudicada ya no está disponible."), 400)
+    source_qty = _award_decimal(quotation_line.qty)
+    source_base_qty = _award_decimal(quotation_line.qty_in_base_uom)
+    awarded_qty = _award_decimal(award_line.qty)
+    if source_qty <= 0 or source_base_qty <= 0 or qty <= 0 or qty > awarded_qty:
+        raise DocumentFlowError(_("La línea de oferta adjudicada no conserva una cantidad base válida."), 400)
+    return (qty * source_base_qty / source_qty).quantize(Decimal("0.000000001"))
 
 
 def _purchase_order_comparison_open(source: Any) -> bool:
@@ -1650,7 +1822,7 @@ def _create_purchase_order_from_request(form: dict):
             posting_date_raw=posting_date,
             naming_series_id=form.get("naming_series") or None,
         )
-        total_qty, total = _save_purchase_order_items(orden.id)
+        total_qty, total = _save_purchase_order_items(orden.id, award_source=source)
         if source:
             source_type = {
                 PurchaseRequest: "purchase_request",
@@ -1699,6 +1871,7 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
         ).scalar_one_or_none()
     )
     before_state = _capture_purchase_state(registro)
+    source = None
     if registro.purchase_award_id:
         source = _purchase_order_edit_source(registro)
         award, valid_award = _validate_purchase_order_award(
@@ -1707,6 +1880,7 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
             source=source,
             supplier_id=request.form.get("supplier_id") or None,
             form=request.form,
+            current_order_id=registro.id,
         )
         if not valid_award:
             return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
@@ -1740,7 +1914,15 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     ).scalars():
         database.session.delete(item)
     try:
-        total_qty, total = _save_purchase_order_items(registro.id)
+        total_qty, total = _save_purchase_order_items(registro.id, award_source=source)
+        if registro.purchase_award_id:
+            source_type = "supplier_quotation" if isinstance(source, SupplierQuotation) else "purchase_quotation"
+            items = (
+                database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id))
+                .scalars()
+                .all()
+            )
+            _validate_purchase_source_link(registro, source_type, source.id, items)
     except ValueError as error:
         # #1544: una tarifa/cantidad no finita o inválida se presenta como
         # validación; el rollback restaura relaciones y líneas ya marcadas y

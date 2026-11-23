@@ -10,8 +10,10 @@ servidor debe rechazar la relación en creación y edición.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
+from threading import Barrier
 
 import pytest
 
@@ -29,6 +31,7 @@ from cacao_accounting.database import (
     Currency,
     Entity,
     Item,
+    ItemUOMConversion,
     Modules,
     Party,
     PurchaseOrder,
@@ -48,12 +51,13 @@ FECHA = date(2026, 10, 20)
 
 
 @pytest.fixture
-def adjudicaciones():
+def adjudicaciones(tmp_path):
     """Adjudicación de Q1/proveedor A, con una fuente y proveedor alternos."""
     application = create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'purchase_awards.sqlite'}",
+            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 4, "max_overflow": 0},
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
@@ -86,12 +90,16 @@ def adjudicaciones():
             ]
         )
         database.session.flush()
-        database.session.add(UOM(code="UND", name="Unidad"))
+        database.session.add_all([UOM(code="UND", name="Unidad"), UOM(code="BOX", name="Caja")])
         database.session.flush()
         proveedor_a = Party(code="PROV-A", name="Proveedor A", is_supplier=True)
         proveedor_b = Party(code="PROV-B", name="Proveedor B", is_supplier=True)
         item = Item(code="ART-1", name="Artículo", item_type="goods", is_stock_item=True, default_uom="UND")
         database.session.add_all([proveedor_a, proveedor_b, item])
+        database.session.flush()
+        database.session.add(
+            ItemUOMConversion(item_code="ART-1", from_uom="BOX", to_uom="UND", conversion_factor=Decimal("2"))
+        )
         database.session.flush()
         database.session.add_all(
             [
@@ -139,16 +147,16 @@ def adjudicaciones():
         pq_item = PurchaseQuotationItem(
             purchase_quotation_id=q1.id,
             item_code="ART-1",
-            qty=Decimal("5"),
+            qty=Decimal("50"),
             uom="UND",
-            qty_in_base_uom=Decimal("5"),
+            qty_in_base_uom=Decimal("50"),
         )
         sq_item = SupplierQuotationItem(
             supplier_quotation_id=sq_a.id,
             item_code="ART-1",
             qty=Decimal("5"),
-            uom="UND",
-            qty_in_base_uom=Decimal("5"),
+            uom="BOX",
+            qty_in_base_uom=Decimal("50"),
             rate=Decimal("10"),
         )
         database.session.add_all([pq_item, sq_item])
@@ -163,6 +171,37 @@ def adjudicaciones():
         )
         database.session.add(sq_b_item)
         database.session.flush()
+        item_2 = Item(code="ART-2", name="Artículo 2", item_type="goods", is_stock_item=True, default_uom="UND")
+        database.session.add(item_2)
+        database.session.flush()
+        sq_b_q1 = SupplierQuotation(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="SQ-B-Q1",
+            supplier_id=proveedor_b.id,
+            purchase_quotation_id=q1.id,
+            transaction_currency="NIO",
+        )
+        database.session.add(sq_b_q1)
+        database.session.flush()
+        pq_item_2 = PurchaseQuotationItem(
+            purchase_quotation_id=q1.id,
+            item_code="ART-2",
+            qty=Decimal("5"),
+            uom="UND",
+            qty_in_base_uom=Decimal("5"),
+        )
+        sq_b_q1_item = SupplierQuotationItem(
+            supplier_quotation_id=sq_b_q1.id,
+            item_code="ART-2",
+            qty=Decimal("5"),
+            uom="UND",
+            qty_in_base_uom=Decimal("5"),
+            rate=Decimal("12"),
+        )
+        database.session.add_all([pq_item_2, sq_b_q1_item])
+        database.session.flush()
         award = PurchaseQuotationAward(
             purchase_quotation_id=q1.id,
             company="cacao",
@@ -170,17 +209,29 @@ def adjudicaciones():
         )
         database.session.add(award)
         database.session.flush()
-        database.session.add(
-            PurchaseQuotationAwardItem(
-                award_id=award.id,
-                purchase_quotation_item_id=pq_item.id,
-                supplier_quotation_id=sq_a.id,
-                supplier_quotation_item_id=sq_item.id,
-                item_code="ART-1",
-                qty=Decimal("5"),
-                rate=Decimal("10"),
-                amount=Decimal("50"),
-            )
+        database.session.add_all(
+            [
+                PurchaseQuotationAwardItem(
+                    award_id=award.id,
+                    purchase_quotation_item_id=pq_item.id,
+                    supplier_quotation_id=sq_a.id,
+                    supplier_quotation_item_id=sq_item.id,
+                    item_code="ART-1",
+                    qty=Decimal("5"),
+                    rate=Decimal("10"),
+                    amount=Decimal("50"),
+                ),
+                PurchaseQuotationAwardItem(
+                    award_id=award.id,
+                    purchase_quotation_item_id=pq_item_2.id,
+                    supplier_quotation_id=sq_b_q1.id,
+                    supplier_quotation_item_id=sq_b_q1_item.id,
+                    item_code="ART-2",
+                    qty=Decimal("5"),
+                    rate=Decimal("12"),
+                    amount=Decimal("60"),
+                ),
+            ]
         )
         database.session.commit()
         ids = {
@@ -204,6 +255,8 @@ def _form(ids, **overrides):
         "item_code_0": "ART-1",
         "qty_0": "1",
         "source_item_id_0": ids["sq_item"],
+        "uom_0": "BOX",
+        "rate_0": "10",
     }
     form.update(overrides)
     return form
@@ -225,6 +278,23 @@ def test_adjudicacion_valida_corresponde_a_origen_proveedor_y_linea(adjudicacion
             ids["award"],
             "cacao",
             source=source,
+            supplier_id=ids["proveedor_a"],
+            form=_form(ids),
+        )
+        assert valido is True
+        assert resultado is award
+
+
+def test_award_multisupplier_valida_orden_por_sus_lineas(adjudicaciones):
+    """An order for one awarded supplier remains valid in a multi-supplier award."""
+    application, ids = adjudicaciones
+    with application.app_context():
+        award = database.session.get(PurchaseQuotationAward, ids["award"])
+        resultado, valido = _validar(
+            application,
+            ids["award"],
+            "cacao",
+            source=database.session.get(SupplierQuotation, ids["sq_a"]),
             supplier_id=ids["proveedor_a"],
             form=_form(ids),
         )
@@ -325,6 +395,153 @@ def test_adjudicacion_rechaza_cantidades_repetidas_sobre_el_total(adjudicaciones
         assert valido is False
 
 
+@pytest.mark.parametrize("qty", ["0", "-1", "Infinity", "NaN"])
+def test_adjudicacion_rechaza_cantidad_no_positiva_o_no_finita(adjudicaciones, qty):
+    """Partial order quantities must be finite and positive."""
+    application, ids = adjudicaciones
+    with application.app_context():
+        _, valido = _validar(
+            application,
+            ids["award"],
+            "cacao",
+            source=database.session.get(SupplierQuotation, ids["sq_a"]),
+            supplier_id=ids["proveedor_a"],
+            form=_form(ids, qty_0=qty),
+        )
+        assert valido is False
+
+
+@pytest.mark.parametrize("field,value", [("uom_0", "UND"), ("rate_0", "11")])
+def test_adjudicacion_rechaza_cambiar_uom_o_precio(adjudicaciones, field, value):
+    """A manual order cannot override terms authorized by the award."""
+    application, ids = adjudicaciones
+    with application.app_context():
+        _, valido = _validar(
+            application,
+            ids["award"],
+            "cacao",
+            source=database.session.get(SupplierQuotation, ids["sq_a"]),
+            supplier_id=ids["proveedor_a"],
+            form=_form(ids, **{field: value}),
+        )
+        assert valido is False
+
+
+def test_orden_generada_conserva_uom_y_conversion_de_la_oferta(adjudicaciones, monkeypatch):
+    """Award conversion uses the awarded supplier line, not the RFQ unit."""
+    application, ids = adjudicaciones
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    monkeypatch.setattr(compras_services, "log_create", lambda *args, **kwargs: None)
+    with application.app_context():
+        award = database.session.get(PurchaseQuotationAward, ids["award"])
+        orders = compras_services._create_purchase_orders_from_award(award)
+        database.session.flush()
+
+        line = database.session.execute(
+            database.select(PurchaseOrderItem).filter_by(purchase_order_id=orders[0].id)
+        ).scalar_one()
+        relation = database.session.execute(
+            database.select(DocumentRelation).filter_by(target_item_id=line.id, status="active")
+        ).scalar_one()
+        assert line.uom == "BOX"
+        assert line.qty_in_base_uom == Decimal("50.000000000")
+        assert relation.uom == "BOX"
+        assert relation.qty_in_base_uom == Decimal("50.000000000")
+
+
+def test_creacion_manual_usa_conversion_base_persistida_en_la_oferta(adjudicaciones, monkeypatch):
+    """An award-linked manual order keeps the supplier quote's base quantity snapshot."""
+    application, ids = adjudicaciones
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    with application.app_context():
+        conversion = database.session.execute(
+            database.select(ItemUOMConversion).filter_by(item_code="ART-1", from_uom="BOX", to_uom="UND")
+        ).scalar_one()
+        database.session.delete(conversion)
+        database.session.flush()
+        form = _form_orden(ids, uom_0="BOX")
+        monkeypatch.setattr(compras_services, "log_create", lambda *args, **kwargs: None)
+        from flask_login import login_user
+
+        with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
+            login_user(database.session.get(User, "admin"))
+            compras_services._create_purchase_order_from_request(form)
+
+        line = database.session.execute(database.select(PurchaseOrderItem)).scalar_one()
+        relation = database.session.execute(
+            database.select(DocumentRelation).filter_by(target_item_id=line.id, status="active")
+        ).scalar_one()
+        assert line.uom == "BOX"
+        assert line.qty_in_base_uom == Decimal("10.000000000")
+        assert relation.uom == "BOX"
+        assert relation.qty_in_base_uom == Decimal("10.000000000")
+
+
+def test_ordenes_parciales_no_superan_saldo_adjudicado(adjudicaciones, monkeypatch):
+    """Separate manual orders cannot consume more than one award line permits."""
+    application, ids = adjudicaciones
+    with application.app_context():
+        award_line = database.session.execute(
+            database.select(PurchaseQuotationAwardItem).filter_by(item_code="ART-1")
+        ).scalar_one()
+        rfq_line = database.session.get(PurchaseQuotationItem, award_line.purchase_quotation_item_id)
+        rfq_line.qty = Decimal("5")
+        rfq_line.qty_in_base_uom = Decimal("5")
+        award_line.qty = Decimal("0.5")
+        award_line.amount = Decimal("5")
+        database.session.commit()
+
+    _crear_orden(application, ids, monkeypatch, qty_0="0.3")
+    _crear_orden(application, ids, monkeypatch, qty_0="0.3")
+
+    with application.app_context():
+        orders = database.session.execute(database.select(PurchaseOrder)).scalars().all()
+        assert len(orders) == 1
+        line = database.session.execute(
+            database.select(PurchaseOrderItem).filter_by(purchase_order_id=orders[0].id)
+        ).scalar_one()
+        assert line.qty == Decimal("0.3")
+
+
+def test_ordenes_concurrentes_no_superan_saldo_adjudicado(adjudicaciones, monkeypatch):
+    """Concurrent partial orders serialize on the canonical awarded line."""
+    application, ids = adjudicaciones
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    with application.app_context():
+        award_line = database.session.execute(
+            database.select(PurchaseQuotationAwardItem).filter_by(item_code="ART-1")
+        ).scalar_one()
+        rfq_line = database.session.get(PurchaseQuotationItem, award_line.purchase_quotation_item_id)
+        rfq_line.qty = Decimal("5")
+        rfq_line.qty_in_base_uom = Decimal("5")
+        award_line.qty = Decimal("0.5")
+        award_line.amount = Decimal("5")
+        database.session.commit()
+        database.session.remove()
+
+    barrier = Barrier(2)
+
+    def create_partial_order() -> bool:
+        form = _form_orden(ids, qty_0="0.3")
+        with application.app_context():
+            with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
+                from flask_login import login_user
+
+                login_user(database.session.get(User, "admin"))
+                barrier.wait(timeout=10)
+                result = _create_purchase_order_from_request(form)
+            database.session.remove()
+            return result is not None
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        outcomes = list(workers.map(lambda _index: create_partial_order(), range(2)))
+
+    assert sorted(outcomes) == [False, True]
+    with application.app_context():
+        orders = database.session.execute(database.select(PurchaseOrder)).scalars().all()
+        assert len(orders) == 1
+
+
 def _form_orden(ids, **overrides):
     form = {
         "company": "cacao",
@@ -336,7 +553,7 @@ def _form_orden(ids, **overrides):
         "item_code_0": "ART-1",
         "qty_0": "1",
         "rate_0": "10",
-        "uom_0": "UND",
+        "uom_0": "BOX",
         "source_type_0": "supplier_quotation",
         "source_id_0": ids["sq_a"],
         "source_item_id_0": ids["sq_item"],
@@ -366,6 +583,16 @@ def test_creacion_guarda_orden_con_adjudicacion_valida(adjudicaciones, monkeypat
         assert len(ordenes) == 1
         assert ordenes[0].purchase_award_id == ids["award"]
         assert ordenes[0].supplier_id == ids["proveedor_a"]
+
+
+@pytest.mark.parametrize("field,value", [("uom_0", "UND"), ("rate_0", "11")])
+def test_creacion_rechaza_cambios_de_uom_o_precio_adjudicados(adjudicaciones, monkeypatch, field, value):
+    """The purchase-order endpoint rejects commercial terms outside the award."""
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch, **{field: value})
+
+    with application.app_context():
+        assert database.session.execute(database.select(PurchaseOrder)).scalars().all() == []
 
 
 def test_creacion_rechaza_adjudicacion_sin_origen(adjudicaciones, monkeypatch):
@@ -558,7 +785,7 @@ def test_edicion_valida_conserva_articulo_fuente_y_cantidad(adjudicaciones, monk
         assert orden.remarks == "Cantidad ajustada"
         assert linea.item_code == "ART-1"
         assert linea.qty == Decimal("3")
-        assert linea.uom == "UND"
+        assert linea.uom == "BOX"
 
 
 def test_edicion_con_tarifa_no_finita_preserva_orden(adjudicaciones, monkeypatch):
@@ -579,8 +806,8 @@ def test_edicion_con_tarifa_no_finita_preserva_orden(adjudicaciones, monkeypatch
         orden = database.session.get(PurchaseOrder, orden_id)
         response = _update_purchase_order_from_request(orden)
 
-    # Sin 500: la ruta re-renderiza (retorno None) y conserva la orden.
-    assert response is None
+    # Invalid commercial terms are rejected before mutating the order.
+    assert response.status_code == 302
     with application.app_context():
         orden = database.session.get(PurchaseOrder, orden_id)
         assert orden.docstatus == 0
@@ -590,3 +817,46 @@ def test_edicion_con_tarifa_no_finita_preserva_orden(adjudicaciones, monkeypatch
         assert len(lineas) == 1
         assert Decimal(str(lineas[0].rate)) == Decimal("10")
         assert orden.purchase_award_id == ids["award"]
+
+
+@pytest.mark.parametrize("missing", ["source_item_id_0", "source_type_0", "source_id_0"])
+def test_edicion_adjudicada_sin_relacion_conserva_lineas(adjudicaciones, monkeypatch, missing):
+    """An omitted line source cannot erase the award's documentary evidence."""
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch)
+    orden_id = _orden_creada(application)
+    linea_id = _linea_orden(application, orden_id).id
+    relaciones = _relaciones_de_orden(application, orden_id)
+    form = _form_orden(ids, remarks="No debe guardarse")
+    form.pop(missing)
+
+    _editar_orden(application, orden_id, form)
+
+    with application.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        assert orden.purchase_award_id == ids["award"]
+        assert orden.remarks != "No debe guardarse"
+        assert _linea_orden(application, orden_id).id == linea_id
+    assert _relaciones_de_orden(application, orden_id) == relaciones
+
+
+def test_edicion_no_duplica_cantidad_con_alias_de_linea(adjudicaciones, monkeypatch):
+    """A quotation row and its RFQ row cannot consume the same award twice."""
+    application, ids = adjudicaciones
+    _crear_orden(application, ids, monkeypatch)
+    orden_id = _orden_creada(application)
+    linea_id = _linea_orden(application, orden_id).id
+    relaciones = _relaciones_de_orden(application, orden_id)
+    with application.app_context():
+        rfq_item = (
+            database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(item_code="ART-1"))
+            .scalar_one()
+            .purchase_quotation_item_id
+        )
+    form = _form_orden(ids, qty_0="4")
+    form.update({"item_code_1": "ART-1", "qty_1": "4", "source_item_id_1": rfq_item})
+
+    _editar_orden(application, orden_id, form)
+
+    assert _linea_orden(application, orden_id).id == linea_id
+    assert _relaciones_de_orden(application, orden_id) == relaciones
