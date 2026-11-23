@@ -130,3 +130,89 @@ def test_bloquea_la_conciliacion_si_falta_la_tasa(app, entorno_contable):
 
         with pytest.raises(ValueError, match="tipo de cambio"):
             _petty_cash_reconciliation_derived_values(fondo, FECHA)
+
+
+def _voucher_entregado(fondo: PettyCashAccount, amount: Decimal) -> None:
+    """Registra un vale entregado pendiente de liquidación."""
+    database.session.add(
+        PettyCashVoucher(
+            petty_cash_id=fondo.id,
+            concept="Vale entregado",
+            amount=amount,
+            voucher_status="entregado",
+            posting_date=FECHA,
+        )
+    )
+
+
+def test_lista_y_detalle_muestran_el_saldo_en_moneda_del_fondo(app, entorno_contable, authenticated_client):
+    """La lista y el detalle convierten 365 NIO a 10 USD y esperan 0."""
+    del entorno_contable
+    with app.app_context():
+        fondo = _fondo_usd()
+        _asiento_en_libro(fondo, Decimal("365"))
+        _voucher_entregado(fondo, Decimal("10"))
+        database.session.commit()
+        fondo_id, fondo_nombre = fondo.id, fondo.name
+
+    client = authenticated_client("admin")
+    lista = client.get("/cash_management/petty-cash/list")
+    detalle = client.get(f"/cash_management/petty-cash/{fondo_id}")
+
+    assert lista.status_code == 200
+    cuerpo_lista = lista.get_data(as_text=True)
+    fila = cuerpo_lista.split(fondo_nombre, 1)[1].split("</tr>", 1)[0]
+    assert "10.0000" in fila
+    assert "0.0000" in fila
+    assert "365" not in fila
+
+    assert detalle.status_code == 200
+    cuerpo_detalle = detalle.get_data(as_text=True)
+    assert "10.0000" in cuerpo_detalle
+    assert "0.0000" in cuerpo_detalle
+
+
+def test_lista_muestra_guion_si_falta_la_tasa(app, entorno_contable, authenticated_client):
+    """Sin tasa, la lista no mezcla monedas ni responde 500."""
+    del entorno_contable
+    with app.app_context():
+        fondo = _fondo_usd(currency="EUR")
+        _asiento_en_libro(fondo, Decimal("365"))
+        database.session.commit()
+        fondo_nombre = fondo.name
+
+    lista = authenticated_client("admin").get("/cash_management/petty-cash/list")
+
+    assert lista.status_code == 200
+    fila = lista.get_data(as_text=True).split(fondo_nombre, 1)[1].split("</tr>", 1)[0]
+    assert "365" not in fila
+    assert fila.count(">-<") >= 2
+
+
+def test_post_de_conciliacion_sin_tasa_avisa_y_no_persiste(app, entorno_contable, authenticated_client):
+    """La ruta HTTP bloquea la conciliación sin tasa y no crea filas."""
+    from cacao_accounting.database import PettyCashReconciliation
+
+    del entorno_contable
+    with app.app_context():
+        fondo = _fondo_usd(currency="EUR")
+        _asiento_en_libro(fondo, Decimal("365"))
+        database.session.commit()
+        fondo_id = fondo.id
+        antes = len(database.session.execute(select(PettyCashReconciliation)).scalars().all())
+
+    response = authenticated_client("admin").post(
+        "/cash_management/petty-cash-reconciliation/new",
+        data={
+            "company": "cacao",
+            "petty_cash_id": fondo_id,
+            "reconciliation_date": FECHA.isoformat(),
+            "counted_cash": "10",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "tipo de cambio" in response.get_data(as_text=True).lower()
+    with app.app_context():
+        despues = len(database.session.execute(select(PettyCashReconciliation)).scalars().all())
+        assert despues == antes

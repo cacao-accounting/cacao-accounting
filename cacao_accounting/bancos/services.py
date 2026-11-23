@@ -74,7 +74,7 @@ from cacao_accounting.database.helpers import get_active_naming_series
 
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
-from cacao_accounting.contabilidad.posting_service import _lookup_exchange_rate
+from cacao_accounting.contabilidad.posting_service import PostingError, _lookup_exchange_rate
 
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
 
@@ -1259,6 +1259,19 @@ def _petty_cash_ledger_balance_in_fund_currency(
         return ledger_balance
     rate = _lookup_exchange_rate(ledger_currency, fund_currency, as_of_date or date.today())
     return (ledger_balance * rate).quantize(Decimal("0.0001"))
+
+
+def petty_cash_ledger_balance_in_fund_currency(petty_cash: PettyCashAccount, as_of_date: date | None = None) -> Decimal | None:
+    """Devuelve el saldo GL expresado en la moneda del fondo.
+
+    Sin tasa disponible devuelve ``None`` para que la presentación muestre el
+    faltante en lugar de restar importes de monedas distintas (#1886).
+    """
+    ledger_balance = petty_cash_ledger_balance(petty_cash, as_of_date)
+    try:
+        return _petty_cash_ledger_balance_in_fund_currency(petty_cash, ledger_balance, as_of_date)
+    except PostingError:
+        return None
 
 
 def create_petty_cash_reconciliation(

@@ -124,7 +124,7 @@ from cacao_accounting.bancos.services import (
     create_petty_cash_voucher,
     petty_cash_accounts,
     petty_cash_expenses,
-    petty_cash_ledger_balance,
+    petty_cash_ledger_balance_in_fund_currency,
     petty_cash_vouchers,
     reconcile_petty_cash,
     replenish_petty_cash,
@@ -1128,8 +1128,9 @@ def caja_chica_lista():
     registros: list[PettyCashAccount] = []
     for company in companies:
         registros.extend(petty_cash_accounts(company))
-    saldos = {pc.id: petty_cash_ledger_balance(pc) for pc in registros}
+    saldos = {pc.id: petty_cash_ledger_balance_in_fund_currency(pc) for pc in registros}
     vales_abiertos = {pc.id: petty_cash_open_vouchers_total(pc) for pc in registros}
+    esperados = {pc.id: (saldos[pc.id] - vales_abiertos[pc.id] if saldos[pc.id] is not None else None) for pc in registros}
     pendientes = {pc.id: petty_cash_pending_replenishment_total(pc) for pc in registros}
     responsables = {
         pc.custodian_id: (database.session.get(User, pc.custodian_id).name if pc.custodian_id else None) for pc in registros
@@ -1140,6 +1141,7 @@ def caja_chica_lista():
         registros=registros,
         saldos=saldos,
         vales_abiertos=vales_abiertos,
+        esperados=esperados,
         pendientes=pendientes,
         responsables=responsables,
         titulo=titulo,
@@ -1201,8 +1203,9 @@ def caja_chica(pc_id):
     titulo = registro.name + " - " + APPNAME
     cuenta = database.session.get(Accounts, registro.account_id) if registro.account_id else None
     responsable = database.session.get(User, registro.custodian_id) if registro.custodian_id else None
-    saldo = petty_cash_ledger_balance(registro)
+    saldo = petty_cash_ledger_balance_in_fund_currency(registro)
     vales_abiertos = petty_cash_open_vouchers_total(registro)
+    esperado = saldo - vales_abiertos if saldo is not None else None
     pendiente_reposicion = petty_cash_pending_replenishment_total(registro)
     return render_template(
         "bancos/caja_chica.html",
@@ -1211,6 +1214,7 @@ def caja_chica(pc_id):
         responsable=responsable,
         saldo=saldo,
         vales_abiertos=vales_abiertos,
+        esperado=esperado,
         pendiente_reposicion=pendiente_reposicion,
         can_edit_cash=_cash_can_edit(registro.company),
         titulo=titulo,

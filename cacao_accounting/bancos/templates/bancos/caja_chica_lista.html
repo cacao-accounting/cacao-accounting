@@ -46,8 +46,8 @@
         <td>{{ responsables.get(item.custodian_id) or item.custodian_id or '-' }}</td>
         <td>{{ item.float_amount }}</td>
         <td>{{ item.currency or '-' }}</td>
-        <td>{{ saldos.get(item.id, 0) }}</td>
-        <td>{{ saldos.get(item.id, 0) - vales_abiertos.get(item.id, 0) }}</td>
+        <td>{{ saldos.get(item.id) if saldos.get(item.id) is not none else '-' }}</td>
+        <td>{{ esperados.get(item.id) if esperados.get(item.id) is not none else '-' }}</td>
         <td>{{ vales_abiertos.get(item.id, 0) }}</td>
         <td>{{ pendientes.get(item.id, 0) }}</td>
         <td>
