@@ -106,7 +106,7 @@ JOURNAL_TEMPLATE = (
   <thead>
     <tr>
       <th>Account</th>
-      <th>Description</th>
+      <th>{{ _("Description") }}</th>
       <th class="text-right">Debit</th>
       <th class="text-right">Credit</th>
     </tr>
@@ -138,7 +138,7 @@ JOURNAL_TEMPLATE = (
 </div>
 {% endif %}
 <div class="print-footer">
-  Printed by {{ audit.printed_by }} at {{ audit.printed_at }}<br>
+  {{ _("Printed by") }} {{ audit.printed_by }} {{ _("at") }} {{ audit.printed_at }}<br>
   Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
   Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
 </div>
@@ -169,8 +169,8 @@ LINES_TEMPLATE = """
   <thead>
     <tr>
       <th>Code</th>
-      <th>Description</th>
-      <th class="text-right">Qty</th>
+      <th>{{ _("Description") }}</th>
+      <th class="text-right">{{ _("Qty") }}</th>
       <th class="text-right">Unit Price</th>
       <th class="text-right">Total</th>
     </tr>
@@ -203,7 +203,7 @@ LINES_TEMPLATE = """
 </div>
 {% endif %}
 <div class="print-footer">
-  Printed by {{ audit.printed_by }} at {{ audit.printed_at }}<br>
+  {{ _("Printed by") }} {{ audit.printed_by }} {{ _("at") }} {{ audit.printed_at }}<br>
   Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
   Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
 </div>
@@ -294,7 +294,7 @@ ROOT_TEMPLATE_MAP = {
 </div>
 {% endif %}
 <div class="print-footer">
-  Printed by {{ audit.printed_by }} at {{ audit.printed_at }}<br>
+  {{ _("Printed by") }} {{ audit.printed_by }} {{ _("at") }} {{ audit.printed_at }}<br>
   Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
   Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
 </div>
@@ -368,7 +368,7 @@ ROOT_TEMPLATE_MAP = {
 </div>
 {% endif %}
 <div class="print-footer">
-  Printed by {{ audit.printed_by }} at {{ audit.printed_at }}<br>
+  {{ _("Printed by") }} {{ audit.printed_by }} {{ _("at") }} {{ audit.printed_at }}<br>
   Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
   Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
 </div>

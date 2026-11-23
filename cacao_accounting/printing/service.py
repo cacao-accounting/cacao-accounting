@@ -724,17 +724,17 @@ class PrintService:
 
         def status_label(value: Any) -> str:
             labels = {
-                "draft": "BORRADOR",
-                "borrador": "BORRADOR",
-                "posted": "CONTABILIZADO",
-                "submitted": "APROBADO",
-                "approved": "APROBADO",
-                "void": "ANULADO",
-                "cancelled": "ANULADO",
-                "anulado": "ANULADO",
-                "reverted": "REVERTIDO",
-                "rejected": "RECHAZADO",
-                "closed": "CERRADO",
+                "draft": _("BORRADOR"),
+                "borrador": _("BORRADOR"),
+                "posted": _("CONTABILIZADO"),
+                "submitted": _("APROBADO"),
+                "approved": _("APROBADO"),
+                "void": _("ANULADO"),
+                "cancelled": _("ANULADO"),
+                "anulado": _("ANULADO"),
+                "reverted": _("REVERTIDO"),
+                "rejected": _("RECHAZADO"),
+                "closed": _("CERRADO"),
             }
             return labels.get(str(value).lower(), str(value).upper())
 

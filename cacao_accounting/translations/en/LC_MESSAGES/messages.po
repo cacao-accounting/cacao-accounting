@@ -24488,3 +24488,47 @@ msgstr "The email queue record identifier is not valid."
 #: cacao_accounting/contabilidad/routes.py
 msgid "Cada cuenta debe incluir su sección de flujo de efectivo."
 msgstr "Each account must include its cash flow section."
+
+#: cacao_accounting/printing/service.py
+msgid "BORRADOR"
+msgstr "DRAFT"
+
+#: cacao_accounting/printing/service.py
+msgid "CONTABILIZADO"
+msgstr "POSTED"
+
+#: cacao_accounting/printing/service.py
+msgid "APROBADO"
+msgstr "APPROVED"
+
+#: cacao_accounting/printing/service.py
+msgid "ANULADO"
+msgstr "VOID"
+
+#: cacao_accounting/printing/service.py
+msgid "REVERTIDO"
+msgstr "REVERTED"
+
+#: cacao_accounting/printing/service.py
+msgid "RECHAZADO"
+msgstr "REJECTED"
+
+#: cacao_accounting/printing/service.py
+msgid "CERRADO"
+msgstr "CLOSED"
+
+#: cacao_accounting/printing/seed.py
+msgid "Description"
+msgstr "Description"
+
+#: cacao_accounting/printing/seed.py
+msgid "Qty"
+msgstr "Qty"
+
+#: cacao_accounting/printing/seed.py
+msgid "Printed by"
+msgstr "Printed by"
+
+#: cacao_accounting/printing/seed.py
+msgid "at"
+msgstr "at"
