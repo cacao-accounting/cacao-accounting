@@ -444,11 +444,17 @@ def test_authorized_scope_allows_scoped_core_balance_update(desktop):
 
 
 @pytest.mark.parametrize("desktop", [True, False])
-def test_authorized_core_update_rejects_mixed_parameter_sets(desktop):
+@pytest.mark.parametrize("authorized_first", [True, False])
+def test_authorized_core_update_rejects_mixed_parameter_sets(desktop, authorized_first):
     """An executemany cannot use one authorized ID to update another layer."""
     app = _build_app(desktop)
     seed = _seed_layer(app)
     other_seed = _seed_layer(app)
+    parameters = (
+        [{"row_id": seed["id"]}, {"row_id": other_seed["id"]}]
+        if authorized_first
+        else [{"row_id": other_seed["id"]}, {"row_id": seed["id"]}]
+    )
 
     with app.app_context():
         layer = database.session.get(StockValuationLayer, seed["id"])
@@ -460,15 +466,44 @@ def test_authorized_core_update_rejects_mixed_parameter_sets(desktop):
         )
         with pytest.raises(ValueError):
             with stock_valuation_balance_transition(layer):
-                database.session.connection().execute(
-                    statement,
-                    [{"row_id": seed["id"]}, {"row_id": other_seed["id"]}],
-                )
+                database.session.connection().execute(statement, parameters)
                 database.session.commit()
         database.session.rollback()
 
     _assert_persisted_snapshot(app, seed)
     _assert_persisted_snapshot(app, other_seed)
+
+
+@pytest.mark.parametrize("desktop", [True, False])
+def test_authorized_core_update_allows_all_authorized_parameter_sets(desktop):
+    """A multi-row update remains usable when every layer is authorized."""
+    app = _build_app(desktop)
+    first = _seed_layer(app)
+    second = _seed_layer(app)
+
+    with app.app_context():
+        first_layer = database.session.get(StockValuationLayer, first["id"])
+        second_layer = database.session.get(StockValuationLayer, second["id"])
+        assert first_layer is not None
+        assert second_layer is not None
+        statement = (
+            database.update(StockValuationLayer)
+            .where(StockValuationLayer.id == bindparam("row_id"))
+            .values(remaining_qty=Decimal("2"), remaining_stock_value=Decimal("20"))
+        )
+        with stock_valuation_balance_transition(first_layer, second_layer):
+            database.session.connection().execute(
+                statement,
+                [{"row_id": first["id"]}, {"row_id": second["id"]}],
+            )
+            database.session.commit()
+
+    for layer_id in (first["id"], second["id"]):
+        with app.app_context():
+            layer = database.session.get(StockValuationLayer, layer_id)
+            assert layer is not None
+            assert layer.remaining_qty == Decimal("2")
+            assert layer.remaining_stock_value == Decimal("20")
 
 
 def test_physical_rebuild_is_rejected_without_deleting_layers():
