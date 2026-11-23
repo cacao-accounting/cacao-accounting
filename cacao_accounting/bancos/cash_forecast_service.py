@@ -88,7 +88,13 @@ def _fiscal_year_range(forecast: CashForecast) -> tuple[date, date]:
 
 
 def validate_forecast_entry_date(forecast: CashForecast, estimated_date: date) -> None:
-    """Exige que una proyección manual caiga dentro de su año fiscal."""
+    """Exige que una proyección manual caiga dentro de su año fiscal.
+
+    Regla aprobada (#2185): el pronóstico rechaza fechas fuera del rango de
+    su año fiscal en alta, edición e importación; las proyecciones históricas
+    externas se reportan con ``out_of_range_forecast_entries`` sin
+    modificarlas, en cumplimiento del principio append-only.
+    """
     start, end = _fiscal_year_range(forecast)
     if not start <= estimated_date <= end:
         raise ValueError(
