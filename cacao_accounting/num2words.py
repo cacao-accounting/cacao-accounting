@@ -56,7 +56,7 @@ class _LanguageSpec:
 
 UNIDADES_ES = (
     "",
-    "UN",
+    "UNO",
     "DOS",
     "TRES",
     "CUATRO",
@@ -129,17 +129,26 @@ EN_TENS = ("", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EI
 
 
 def _es_two_digits(spec: _LanguageSpec, num: int, apocope: bool = False) -> str:
-    """Convierte 0-99 a letras en español; ``apocope`` aplica la forma corta (veintiún)."""
+    """Convierte 0-99 a letras en español aplicando la apócope por unidad.
+
+    La forma corta (``UN``/``VEINTIÚN``) solo corresponde cuando la cifra
+    precede a una escala (mil, millón); aislada se usa la forma plena
+    (``UNO``/``VEINTIUNO``).
+    """
     if num == 0:
         return ""
     if num < 30:
-        if num == 21 and apocope:
+        if apocope and num == 1:
+            return "UN"
+        if apocope and num == 21:
             return "VEINTIÚN"
         return spec.units[num]
 
     decenas, unidades = divmod(num, 10)
     if unidades == 0:
         return spec.tens[decenas]
+    if apocope and unidades == 1:
+        return f"{spec.tens[decenas]} Y UN"
     return f"{spec.tens[decenas]} Y {spec.units[unidades]}"
 
 
