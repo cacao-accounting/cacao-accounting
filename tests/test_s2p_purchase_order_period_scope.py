@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     FiscalYear,
     Modules,
     PurchaseOrder,
+    PurchaseReceipt,
     User,
     UserCompanyAccess,
     database,
@@ -263,6 +264,30 @@ def listado_oc_periodo():
                     supplier_name="Proveedor Alfa Mayo",
                     grand_total=350,
                 ),
+                PurchaseReceipt(
+                    company="beta",
+                    posting_date=date(2026, 5, 12),
+                    docstatus=1,
+                    document_no="PR-BETA-MAYO",
+                    supplier_name="Proveedor Beta Mayo",
+                    grand_total=150,
+                ),
+                PurchaseReceipt(
+                    company="beta",
+                    posting_date=date(2026, 4, 10),
+                    docstatus=1,
+                    document_no="PR-BETA-ABRIL",
+                    supplier_name="Proveedor Beta Abril",
+                    grand_total=250,
+                ),
+                PurchaseReceipt(
+                    company="alfa",
+                    posting_date=date(2026, 5, 20),
+                    docstatus=1,
+                    document_no="PR-ALFA-MAYO",
+                    supplier_name="Proveedor Alfa Mayo",
+                    grand_total=350,
+                ),
             ]
         )
         database.session.commit()
@@ -298,6 +323,20 @@ def test_listado_con_periodo_conserva_alcance_de_inventario(listado_oc_periodo):
     assert "PO-BETA-MAYO" in body
     assert "PO-BETA-ABRIL" not in body
     assert "PO-ALFA-MAYO" not in body
+
+
+def test_listado_de_recepciones_conserva_alcance_de_inventario(listado_oc_periodo):
+    """El filtro de período de recepciones usa el alcance de Inventario."""
+    client = listado_oc_periodo.test_client()
+    _login(client, "solo_inventario")
+
+    response = client.get(f"/buying/purchase-receipt/list?accounting_period_from={PERIODO_MAYO}")
+
+    assert response.status_code == 200, response.get_data(as_text=True)
+    body = response.get_data(as_text=True)
+    assert "PR-BETA-MAYO" in body
+    assert "PR-BETA-ABRIL" not in body
+    assert "PR-ALFA-MAYO" not in body
 
 
 def test_listado_rechaza_periodo_ambiguo_sin_compania(listado_oc_periodo):
