@@ -70,16 +70,16 @@
 >
   <input type="hidden" id="{{ name }}" name="{{ name }}" x-model="selectedValue">
   <div class="ca-smart-select-input-wrap">
-    <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+    <input class="form-control ca-smart-select-input" type="text" x-model="search" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="name + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null" @input="onInput"
       @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar') }} {{ label }}" {% if required %}required{% endif %} :readonly="locked">
     <button class="ca-smart-select-clear" type="button" x-show="selectedValue && !locked" @click="clearSelection"
       title="{{ _('Limpiar') }}">×</button>
   </div>
-  <div class="ca-smart-select-menu" x-show="open" x-cloak>
+  <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-    <template x-for="option in options" :key="option.value">
-      <button class="ca-smart-select-option" type="button"
-        @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+    <template x-for="(option, index) in options" :key="option.value">
+      <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
+        @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
         <span x-text="option.display_name"></span>
       </button>
     </template>
@@ -330,16 +330,16 @@
                     })'>
                     <input type="hidden" :name="'item_code_' + index" x-model="selectedValue">
                     <div class="ca-smart-select-input-wrap">
-                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput"
+                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="name + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null" @input="onInput"
                         @focus="onFocus" @blur="closeSoon" :placeholder="column.label">
                       <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
                         title="{{ _('Limpiar') }}">×</button>
                     </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
                       <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-                      <template x-for="option in options" :key="option.value">
-                        <button class="ca-smart-select-option" type="button"
-                          @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+                      <template x-for="(option, index) in options" :key="option.value">
+                        <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
+                          @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
                           <span x-text="option.display_name"></span>
                         </button>
                       </template>
@@ -383,13 +383,13 @@
                     <div x-effect="if (line.uom && selectedValue !== line.uom) { selectedValue = line.uom; selectedLabel = line.uom; search = line.uom; options = []; }"></div>
                     <input type="hidden" :name="'uom_' + index" x-model="selectedValue">
                     <div class="ca-smart-select-input-wrap">
-                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput"
+                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="name + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null" @input="onInput"
                         @focus="onFocus" @blur="closeSoon" :placeholder="column.label">
                     </div>
-                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
-                      <template x-for="option in options" :key="option.value">
-                        <button class="ca-smart-select-option" type="button"
-                          @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
+                      <template x-for="(option, index) in options" :key="option.value">
+                        <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
+                          @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
                           <span x-text="option.display_name"></span>
                         </button>
                       </template>
@@ -785,16 +785,16 @@
                   })'>
                   <input type="hidden" name="modal_batch_id" x-model="selectedValue" x-effect="modalLine.batch_id = selectedValue" :required="modalLine.has_batch">
                   <div class="ca-smart-select-input-wrap">
-                    <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
+                    <input class="form-control ca-smart-select-input" type="text" x-model="search" role="combobox" aria-autocomplete="list" :aria-expanded="open" :aria-controls="name + '-listbox'" :aria-activedescendant="open && highlightedIndex >= 0 ? name + '-option-' + highlightedIndex : null" @input="onInput"
                       @focus="onFocus" @blur="closeSoon" :placeholder="'{{ _('Buscar lote') }}'" :required="modalLine.has_batch">
                     <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
                       title="{{ _('Limpiar') }}">×</button>
                   </div>
-                  <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                  <div class="ca-smart-select-menu" x-show="open" x-cloak :id="name + '-listbox'" role="listbox">
                     <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
-                    <template x-for="option in options" :key="option.value">
-                      <button class="ca-smart-select-option" type="button"
-                        @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+                    <template x-for="(option, index) in options" :key="option.value">
+                      <button class="ca-smart-select-option" type="button" role="option" :id="name + '-option-' + index" :aria-selected="index === highlightedIndex" :class="{ 'is-highlighted': index === highlightedIndex }" @mousemove="highlightedIndex = index"
+                        @click="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
                         <span x-text="option.display_name"></span>
                       </button>
                     </template>

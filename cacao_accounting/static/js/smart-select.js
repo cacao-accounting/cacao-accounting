@@ -499,10 +499,25 @@
         bindKeyboardNavigation() {
           const root = this.$el || (typeof document !== 'undefined' ? document : null);
           if (!root || typeof root.querySelector !== 'function') return;
+          const handleKeydown = (event) => {
+            const target = event.target;
+            const isInput = target && target.classList && target.classList.contains('ca-smart-select-input');
+            const isOption = target && target.classList && target.classList.contains('ca-smart-select-option');
+            if (isInput || (isOption && (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Escape'))) {
+              this.onKeydown(event);
+            }
+          };
+          if (root.dataset && typeof root.addEventListener === 'function') {
+            if (root.dataset.smartSelectKeyboard === 'on') return;
+            root.dataset.smartSelectKeyboard = 'on';
+            root.addEventListener('keydown', handleKeydown);
+            return;
+          }
           const input = root.querySelector('.ca-smart-select-input');
-          if (!input || input.dataset.smartSelectKeyboard === 'on') return;
-          input.dataset.smartSelectKeyboard = 'on';
-          input.addEventListener('keydown', (event) => this.onKeydown(event));
+          if (input && input.dataset && input.addEventListener && input.dataset.smartSelectKeyboard !== 'on') {
+            input.dataset.smartSelectKeyboard = 'on';
+            input.addEventListener('keydown', handleKeydown);
+          }
         },
 
         _visibleOptionCount() {
@@ -517,7 +532,7 @@
 
         highlightPrevious() {
           const total = this._visibleOptionCount();
-          this.highlightedIndex = total ? (this.highlightedIndex - 1 + total) % total : -1;
+          this.highlightedIndex = total ? (this.highlightedIndex <= 0 ? total - 1 : this.highlightedIndex - 1) : -1;
           return this.highlightedIndex;
         },
 
