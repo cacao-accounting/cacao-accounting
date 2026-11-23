@@ -68,7 +68,7 @@
           filter_sources=["#company"],
           required_filters=["company"],
           required=True,
-          on_select="function(opt){ var el = document.getElementById('pc_currency'); if (el) el.value = opt.currency || ''; }"
+          on_select="function(opt){ var el = document.getElementById('pc_currency'); if (el) el.value = opt.currency || ''; document.dispatchEvent(new CustomEvent('fund-selected', {detail: opt})); }"
       ) }}
     </div>
     <div class="col-md-4">
@@ -101,7 +101,7 @@
     </div>
     <div class="col-md-4">
       <label class="form-label" for="amount">{{ _('Importe') }} <span class="text-danger">*</span></label>
-      <input class="form-control form-control-sm" type="number" step="any" min="0" name="amount" id="amount" value="{{ form.amount.data or '' }}" required>
+      <input class="form-control form-control-sm" type="number" step="{{ amount_step }}" min="0" name="amount" id="amount" value="{{ form.amount.data or '' }}" required>
     </div>
     <div class="col-md-4">
       <label class="form-label" for="cost_center_code">{{ _('Centro de costo') }} <span class="text-danger">*</span></label>
@@ -144,4 +144,14 @@
   </form>
 </div>
 
+<script>
+  globalThis.pettyCashFundSteps = {{ fund_amount_steps|tojson }};
+  document.addEventListener('fund-selected', function (event) {
+    var amount = document.getElementById('amount');
+    var step = globalThis.pettyCashFundSteps[event.detail.value];
+    if (amount && step) {
+      amount.step = step;
+    }
+  });
+</script>
 {% endblock %}

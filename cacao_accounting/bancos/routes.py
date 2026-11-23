@@ -1475,6 +1475,34 @@ def caja_chica_gasto_lista():
     return render_template("bancos/caja_chica_gasto_lista.html", registros=registros, titulo=titulo)
 
 
+def _currency_input_step(currency_code: str | None) -> str:
+    """Devuelve el paso HTML del importe según los decimales de la moneda."""
+    from cacao_accounting.database import Currency
+
+    codigo = str(currency_code or "")
+    currency = (
+        database.session.execute(database.select(Currency).filter_by(code=codigo)).scalar_one_or_none() if codigo else None
+    )
+    decimals = int(currency.decimals) if currency is not None and currency.decimals is not None else 2
+    if decimals <= 0:
+        return "1"
+    return "0." + ("0" * (decimals - 1)) + "1"
+
+
+def _render_petty_cash_expense_form(formulario, funds, title, selected_fund_id: str | None = None):
+    """Renderiza el formulario con el paso de importe de cada fondo."""
+    fund_amount_steps = {f.id: _currency_input_step(f.currency) for f in funds}
+    amount_step = fund_amount_steps.get(selected_fund_id or "", "0.01")
+    return render_template(
+        BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML,
+        form=formulario,
+        fondos=funds,
+        fund_amount_steps=fund_amount_steps,
+        amount_step=amount_step,
+        titulo=title,
+    )
+
+
 @bancos.route("/petty-cash-expense/new", methods=["GET", "POST"])
 @modulo_activo("cash")
 @login_required
@@ -1497,7 +1525,13 @@ def caja_chica_gasto_nuevo():
     if formulario.validate_on_submit() or request.method == "POST":
         return _submit_petty_cash_expense_form(formulario, fondos, titulo)
 
-    return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
+    selected_fund = next((f for f in fondos if f.id == formulario.petty_cash_id.data), None)
+    return _render_petty_cash_expense_form(
+        formulario,
+        fondos,
+        titulo,
+        selected_fund.id if selected_fund else None,
+    )
 
 
 def _voucher_for_expense_form(voucher_id, funds):
@@ -1528,7 +1562,7 @@ def _submit_petty_cash_expense_form(formulario, funds, title):
     petty_cash_id = request.form.get("petty_cash_id")
     if not company or not petty_cash_id:
         flash(_("Seleccione la compañía y la caja chica."), "danger")
-        return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=funds, titulo=title)
+        return _render_petty_cash_expense_form(formulario, funds, title, petty_cash_id)
     exige_acceso_compania("cash", company, "crear")
     try:
         create_petty_cash_expense(
@@ -1549,7 +1583,7 @@ def _submit_petty_cash_expense_form(formulario, funds, title):
         )
     except ValueError as exc:
         flash(_(str(exc)), "danger")
-        return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=funds, titulo=title)
+        return _render_petty_cash_expense_form(formulario, funds, title, petty_cash_id)
     flash(_("Gasto de caja chica registrado y contabilizado."), "success")
     return redirect(url_for("bancos.caja_chica_gasto_lista"))
 

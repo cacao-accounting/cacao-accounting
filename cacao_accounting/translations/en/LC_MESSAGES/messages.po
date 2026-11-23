@@ -7750,6 +7750,10 @@ msgstr "The expense concept is required."
 msgid "El importe del gasto debe ser mayor a cero."
 msgstr "The expense amount must be greater than zero."
 
+#: cacao_accounting/bancos/services.py
+msgid "El importe no puede tener más de %(decimals)s decimales para la moneda %(currency)s."
+msgstr "The amount cannot have more than %(decimals)s decimals for currency %(currency)s."
+
 #: cacao_accounting/bancos/services.py:1032
 msgid "El gasto de caja chica requiere un centro de costo."
 msgstr "The petty cash expense requires a cost center."

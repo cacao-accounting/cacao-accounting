@@ -957,6 +957,24 @@ def post_petty_cash_expense_journal(
     return journal
 
 
+def _validate_petty_cash_expense_precision(amount: Decimal, fund: PettyCashAccount) -> None:
+    """Rechaza importes con más decimales que los configurados para la moneda (#2090)."""
+    currency_code = fund.currency or _company_currency(str(fund.company))
+    currency = (
+        database.session.execute(database.select(Currency).filter_by(code=currency_code)).scalar_one_or_none()
+        if currency_code
+        else None
+    )
+    decimals = int(currency.decimals) if currency is not None and currency.decimals is not None else 2
+    exponent = amount.normalize().as_tuple().exponent
+    scale = abs(exponent) if isinstance(exponent, int) and exponent < 0 else 0
+    if scale > decimals:
+        raise ValueError(
+            _("El importe no puede tener más de %(decimals)s decimales para la moneda %(currency)s.")
+            % {"decimals": decimals, "currency": currency_code}
+        )
+
+
 def create_petty_cash_expense(
     *,
     company: str,
@@ -983,6 +1001,7 @@ def create_petty_cash_expense(
 
         posted_date = _date.today()
     fund = _validate_petty_cash_fund(petty_cash_id, company)
+    _validate_petty_cash_expense_precision(amount, fund)
     _validate_petty_cash_expense_request(
         company=company,
         expense_account_code=expense_account_code,
