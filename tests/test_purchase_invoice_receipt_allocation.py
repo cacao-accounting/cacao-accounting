@@ -39,10 +39,17 @@ from cacao_accounting.database import (
 @pytest.fixture
 def allocation_scenario(tmp_path: Path):
     """Factura de compra de 10 unidades con tres recepciones candidatas de 6."""
+    import os
+
+    uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if uri.startswith("sqlite"):
+        uri = f"sqlite:///{tmp_path / 'allocation-invoice.sqlite'}"
+    elif os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true y una base dedicada.")
     app = create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'allocation-invoice.sqlite'}",
+            "SQLALCHEMY_DATABASE_URI": uri,
             "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 4, "max_overflow": 0},
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
@@ -55,9 +62,10 @@ def allocation_scenario(tmp_path: Path):
 
     with app.app_context():
         database.create_all()
+        if database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none() is None:
+            database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
         database.session.add_all(
             [
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Modules(module="purchases", default=True, enabled=True),
                 Entity(
                     code="alpha",
@@ -247,3 +255,52 @@ def test_concurrent_receipts_do_not_overallocate_invoice(allocation_scenario):
         allocated_total = _allocated_invoice_qty(scenario["invoice_item_id"])
 
     assert allocated_total <= Decimal("10")
+
+
+def test_pausa_antes_del_insert_serializa_capacidad(allocation_scenario, monkeypatch):
+    """#1689: si la primera transacción se pausa antes del insert, la segunda espera."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from cacao_accounting.compras import purchase_reconciliation_service as servicio
+
+    scenario = allocation_scenario
+    original = servicio._allocated_invoice_qty
+    pausado = Event()
+    liberar = Event()
+    llamadas = {"n": 0}
+
+    def con_pausa(invoice_item_id):
+        valor = original(invoice_item_id)
+        llamadas["n"] += 1
+        if llamadas["n"] == 1:
+            pausado.set()
+            assert liberar.wait(timeout=30)
+        return valor
+
+    monkeypatch.setattr(servicio, "_allocated_invoice_qty", con_pausa)
+
+    def correr(receipt_id: str) -> str:
+        with scenario["app"].app_context():
+            try:
+                allocate_purchase_invoice_receipt_lines(receipt_id, scenario["invoice_id"])
+                database.session.commit()
+                return "asignada"
+            except Exception:
+                database.session.rollback()
+                return "rechazada"
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        primera = workers.submit(correr, scenario["receipt_ids"][0])
+        assert pausado.wait(timeout=60)
+        segunda = workers.submit(correr, scenario["receipt_ids"][1])
+        with pytest.raises(TimeoutError):
+            segunda.result(timeout=2)
+        liberar.set()
+        primera.result(timeout=60)
+        segunda.result(timeout=60)
+
+    with scenario["app"].app_context():
+        total = _allocated_invoice_qty(scenario["invoice_item_id"])
+
+    assert total <= Decimal("10")
