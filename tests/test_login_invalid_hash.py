@@ -55,3 +55,25 @@ def test_login_con_hash_invalido_conserva_la_fila_de_usuario(app, client):
         registro = database.session.execute(database.select(User).filter_by(user=usuario)).scalar_one()
         assert registro.password == b"bad"
         assert registro.active is True
+
+
+def test_login_con_hash_corrupto_con_encabezado_argon2_no_rompe(app, client):
+    """#1965: un cuerpo ilegible tras el encabezado Argon2 tampoco genera 500."""
+    sufijo = uuid4().hex[:6]
+    usuario = f"hash-corrupto-{sufijo}"
+    with app.app_context():
+        database.session.add(
+            User(
+                user=usuario,
+                name="Hash corrupto",
+                password=b"$argon2id$v=19$m=65536,t=3,p=4$c2FsdA$no-es-un-hash",
+                active=True,
+            )
+        )
+        database.session.commit()
+
+    response = client.post("/login", data={"usuario": usuario, "acceso": "Intento-2026!"})
+
+    assert response.status_code != 500
+    with client.session_transaction() as session:
+        assert "_user_id" not in session

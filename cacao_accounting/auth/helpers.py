@@ -7,7 +7,7 @@ import re
 from typing import Optional
 
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from flask import current_app, redirect, session, url_for
 from jwt import encode
 from jwt.exceptions import PyJWTError
@@ -39,6 +39,11 @@ def autenticar_usuario(usuario: str, clave: str) -> Optional[User]:
         log.warning("Hash de contraseña inválido para el usuario {}", registro.id)
         return None
     except VerifyMismatchError:
+        return None
+    except VerificationError:
+        # Un hash con encabezado Argon2 reconocible pero cuerpo ilegible no es
+        # una credencial válida: se trata como intento fallido, sin 500 (#1965).
+        log.warning("Hash de contraseña ilegible para el usuario {}", registro.id)
         return None
 
 
