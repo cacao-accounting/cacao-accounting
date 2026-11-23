@@ -39,16 +39,16 @@
       <div class="col-md-6">
         <label for="fiscal_year_id" class="form-label fw-bold">{{ _("Año Fiscal") }}</label>
         <select name="fiscal_year_id" id="fiscal_year_id" class="form-select" required>
-          <option value="" disabled selected>{{ _("Seleccione Año Fiscal") }}</option>
+          <option value="" disabled {{ 'selected' if not submitted or not submitted.get('fiscal_year_id') }}>{{ _("Seleccione Año Fiscal") }}</option>
           {% for fy in fiscal_years %}
-          <option value="{{ fy.id }}">{{ fy.name }} ({{ fy.year_start_date.strftime('%d/%m/%Y') }} - {{ fy.year_end_date.strftime('%d/%m/%Y') }})</option>
+          <option value="{{ fy.id }}" {{ 'selected' if submitted and submitted.get('fiscal_year_id') == fy.id }}>{{ fy.name }} ({{ fy.year_start_date.strftime('%d/%m/%Y') }} - {{ fy.year_end_date.strftime('%d/%m/%Y') }})</option>
           {% endfor %}
         </select>
       </div>
 
       <div class="col-md-6">
         <label for="version" class="form-label fw-bold">{{ _("Versión / Identificador") }}</label>
-        <input type="text" name="version" id="version" class="form-control" placeholder="{{ _('Ej: Q3-2026, Escenario Optimista, v1') }}" required>
+        <input type="text" name="version" id="version" class="form-control" value="{{ (submitted or {}).get('version', '') }}" placeholder="{{ _('Ej: Q3-2026, Escenario Optimista, v1') }}" required>
         <div class="form-text">{{ _("Nombre único para identificar esta versión del pronóstico de caja.") }}</div>
       </div>
 
@@ -63,7 +63,7 @@
 
       <div class="col-12">
         <label for="description" class="form-label fw-bold">{{ _("Descripción") }}</label>
-        <textarea name="description" id="description" class="form-control" rows="3" placeholder="{{ _('Añada notas sobre el escenario, suposiciones, objetivos...') }}"></textarea>
+        <textarea name="description" id="description" class="form-control" rows="3" placeholder="{{ _('Añada notas sobre el escenario, suposiciones, objetivos...') }}">{{ (submitted or {}).get('description', '') }}</textarea>
       </div>
 
       <div class="col-12 mt-4 d-flex justify-content-end gap-2">

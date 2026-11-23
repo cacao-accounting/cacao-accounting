@@ -130,6 +130,7 @@ def cash_forecast_new():
         companies=companies,
         selected_company=company,
         fiscal_years=fiscal_years,
+        submitted=request.form if request.method == "POST" else None,
         titulo=_("Nuevo Pronóstico de Flujo de Caja"),
     )
 
