@@ -352,3 +352,85 @@ def test_toggle_conserva_la_regla_y_cambia_su_estado(aprobaciones_cloud):
         persistida = database.session.get(ApprovalMatrix, regla_id)
         assert persistida is not None
         assert persistida.enabled is True
+
+
+def _pending_request_for(application, company: str) -> tuple[str, int]:
+    """Devuelve la solicitud pendiente de la compañía y su conteo de acciones."""
+    from cacao_accounting.database import ApprovalAction, ApprovalRequest, database
+
+    with application.app_context():
+        solicitud = (
+            database.session.execute(database.select(ApprovalRequest).filter_by(company_id=company, status="Pending Approval"))
+            .scalars()
+            .first()
+        )
+        assert solicitud is not None
+        acciones = len(
+            database.session.execute(database.select(ApprovalAction).filter_by(approval_request_id=solicitud.id))
+            .scalars()
+            .all()
+        )
+        return solicitud.id, acciones
+
+
+def _request_status(application, request_id: str) -> str:
+    from cacao_accounting.database import ApprovalRequest, database
+
+    with application.app_context():
+        return str(database.session.get(ApprovalRequest, request_id).status)
+
+
+def test_admin_cloud_sin_concesion_no_puede_aprobar_por_post(aprobaciones_cloud):
+    """#2059: ocultar la fila no basta; el POST directo a Beta debe rechazarse."""
+    application = aprobaciones_cloud
+    request_id, acciones_antes = _pending_request_for(application, "beta")
+    client = _authenticated_client(application, "admin-sin")
+
+    response = client.post(
+        "/me/pending-approvals",
+        data={"request_id": request_id, "action": "approve", "comments": "Intento directo"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "no cumple los permisos" in response.get_data(as_text=True)
+    assert _request_status(application, request_id) == "Pending Approval"
+    with application.app_context():
+        from cacao_accounting.database import ApprovalAction, database
+
+        acciones = (
+            database.session.execute(database.select(ApprovalAction).filter_by(approval_request_id=request_id)).scalars().all()
+        )
+        assert len(acciones) == acciones_antes
+
+
+def test_admin_cloud_pierde_el_post_al_revocar_su_concesion(aprobaciones_cloud):
+    """#2059: revocar la compañía impide aprobar aunque el usuario siga siendo admin."""
+    from cacao_accounting.database import UserCompanyAccess, database
+
+    application = aprobaciones_cloud
+    request_id, acciones_antes = _pending_request_for(application, "alpha")
+    with application.app_context():
+        acceso = database.session.execute(
+            database.select(UserCompanyAccess).filter_by(user_id="admin", company_code="alpha")
+        ).scalar_one()
+        database.session.delete(acceso)
+        database.session.commit()
+
+    client = _authenticated_client(application, "admin")
+    response = client.post(
+        "/me/pending-approvals",
+        data={"request_id": request_id, "action": "reject", "comments": "Intento revocado"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "no cumple los permisos" in response.get_data(as_text=True)
+    assert _request_status(application, request_id) == "Pending Approval"
+    with application.app_context():
+        from cacao_accounting.database import ApprovalAction, database
+
+        acciones = (
+            database.session.execute(database.select(ApprovalAction).filter_by(approval_request_id=request_id)).scalars().all()
+        )
+        assert len(acciones) == acciones_antes
