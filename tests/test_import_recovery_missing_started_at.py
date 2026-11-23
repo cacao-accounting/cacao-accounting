@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from cacao_accounting.database import Currency, Entity, database
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
+from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.imports.utils.recovery import recover_crashed_batches
 
 
@@ -52,3 +53,39 @@ def test_lote_en_proceso_sin_marca_se_recupera(app):
         errores = database.session.execute(database.select(ImportBatchError).filter_by(batch_id=lote_id)).scalars().all()
         assert len(errores) == 1
         assert errores[0].error_type == "SYSTEM_TIMEOUT"
+
+
+def test_worker_no_persiste_documento_si_recovery_ya_gano(app, entorno_contable):
+    """Un lote recuperado no puede crear documentos financieros tardíos."""
+    with app.app_context():
+        lote = ImportBatch(
+            company_id="cacao",
+            record_type="journal_entry",
+            source_format="csv",
+            source_filename="lote.csv",
+            import_status=7,
+            started_at=None,
+        )
+        database.session.add(lote)
+        database.session.commit()
+        lote_id = lote.id
+        persistencias = []
+
+        class Adapter:
+            """Registra si el worker intentó persistir después de perder el lote."""
+
+            @staticmethod
+            def build_document(rows, context):
+                return {}
+
+            @staticmethod
+            def persist_document(document):
+                persistencias.append(document)
+
+        resultado = ImportService()._process_document(Adapter(), "doc-1", [{}], {}, lote, lote_id)
+
+        assert resultado is None
+        assert persistencias == []
+        assert lote.import_status == 7
+        errores = database.session.execute(database.select(ImportBatchError).filter_by(batch_id=lote_id)).scalars().all()
+        assert errores == []

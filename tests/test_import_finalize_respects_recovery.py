@@ -386,7 +386,7 @@ def test_cancel_despues_de_un_documento_conserva_contadores_parciales(tmp_path):
             database.engine.dispose()
 
 
-def test_worker_se_detiene_cuando_recovery_reclama_entre_documentos(tmp_path):
+def test_worker_se_detiene_cuando_recovery_reclama_entre_documentos(tmp_path, monkeypatch):
     """#1203: si recovery reclama el lote entre documentos, el siguiente no se crea."""
     app = _app(tmp_path)
     try:
@@ -395,6 +395,23 @@ def test_worker_se_detiene_cuando_recovery_reclama_entre_documentos(tmp_path):
             batch = database.session.get(ImportBatch, batch_id)
             service = ImportService()
             processed: list[str] = []
+            original_update_progress = service._update_batch_progress
+            recovery_triggered = False
+
+            def update_progress_then_recover(batch_record, current_id, success_count, error_count):
+                nonlocal recovery_triggered
+                original_update_progress(batch_record, current_id, success_count, error_count)
+                if recovery_triggered or len(processed) != 1:
+                    return
+                recovery_triggered = True
+                stale_at = datetime.now() - timedelta(hours=5)
+                database.session.execute(update(ImportBatch).where(ImportBatch.id == batch_id).values(started_at=stale_at))
+                database.session.commit()
+                cutoff = datetime.now() - timedelta(hours=4)
+                assert recovery._claim_expired_batch(batch_id, cutoff) is True
+                database.session.commit()
+
+            monkeypatch.setattr(service, "_update_batch_progress", update_progress_then_recover)
 
             class _Adapter:
                 def build_document(self, rows, context):
@@ -402,16 +419,13 @@ def test_worker_se_detiene_cuando_recovery_reclama_entre_documentos(tmp_path):
 
                 def persist_document(self, document):
                     processed.append("doc")
-                    # Tras el primer documento, recovery reclama el lote vencido.
-                    if len(processed) == 1:
-                        assert recovery._claim_expired_batch(batch_id, datetime.now()) is True
-                        database.session.commit()
 
             docs = {"doc_1": [{"row": 1}], "doc_2": [{"row": 2}]}
             success, error = service._process_all_documents(batch, batch_id, _Adapter(), docs, {"company_id": "alpha"})
 
             assert processed == ["doc"]
             assert success == 1
+            assert recovery_triggered is True
             database.session.expire_all()
             assert database.session.get(ImportBatch, batch_id).import_status == 7
     finally:

@@ -8,8 +8,9 @@ import threading
 from datetime import UTC, datetime
 from typing import Dict, Type, List, Any
 from flask import current_app
-from sqlalchemy import case, update
+from sqlalchemy import case, event, update
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 from cacao_accounting.database import database
 from cacao_accounting.imports.column_labels import canonical_columns
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
@@ -71,6 +72,26 @@ STRUCTURAL_ERROR_TYPES = {
     "MISSING_HEADER",
     "EXTRA_CELLS",
 }
+_IMPORT_BATCH_SESSION_KEY = "import_batch_worker_id"
+
+
+class ImportBatchOwnershipLost(RuntimeError):
+    """Raised when recovery or cancellation has taken ownership from a worker."""
+
+
+@event.listens_for(Session, "before_commit")
+def _renew_import_batch_lease(session: Session) -> None:
+    """Renew and fence an import worker before every internal service commit."""
+    batch_id = session.info.get(_IMPORT_BATCH_SESSION_KEY)
+    if not batch_id:
+        return
+    result = session.connection().execute(
+        update(ImportBatch)
+        .where(ImportBatch.id == batch_id, ImportBatch.import_status == 4)
+        .values(started_at=_utc_now_naive())
+    )
+    if (getattr(result, "rowcount", 0) or 0) != 1:
+        raise ImportBatchOwnershipLost(f"Import batch {batch_id} is no longer owned by this worker.")
 
 
 class _IndexedImportRow(dict[str, Any]):
@@ -475,16 +496,49 @@ class ImportService:
         context: dict,
         batch: Any,
         batch_id: str,
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int] | None:
         """Procesa un documento individual dentro de la importación."""
-        doc_obj = adapter.build_document(rows, context)
-        self._validate_document_period(doc_obj, batch)
-        adapter.persist_document(doc_obj)
-        database.session.commit()
-        # Los adaptadores de terceros crean Party/CompanyParty: el selector de
-        # datos maestros debe dejar de servir la lista anterior (#1900).
-        invalidate_cache("smart-select-master-data")
-        return len(rows), 0
+        session = database.session()
+        previous_batch_id = session.info.get(_IMPORT_BATCH_SESSION_KEY)
+        session.info[_IMPORT_BATCH_SESSION_KEY] = batch_id
+        try:
+            if not self._renew_batch_claim(batch_id):
+                database.session.rollback()
+                self._check_batch_cancellation(batch, batch_id)
+                return None
+
+            doc_obj = adapter.build_document(rows, context)
+            self._validate_document_period(doc_obj, batch)
+            adapter.persist_document(doc_obj)
+            database.session.commit()
+            # Los adaptadores de terceros crean Party/CompanyParty: el selector de
+            # datos maestros debe dejar de servir la lista anterior (#1900).
+            invalidate_cache("smart-select-master-data")
+            return len(rows), 0
+        finally:
+            if previous_batch_id is None:
+                session.info.pop(_IMPORT_BATCH_SESSION_KEY, None)
+            else:
+                session.info[_IMPORT_BATCH_SESSION_KEY] = previous_batch_id
+
+    @staticmethod
+    def _renew_batch_claim(batch_id: str) -> bool:
+        """Renueva la marca del worker dentro de la transaccion del documento.
+
+        El UPDATE condicional adquiere el lock de la fila hasta confirmar el
+        documento y evita que recovery clasifique como vencido un worker activo.
+        """
+        result = database.session.execute(
+            update(ImportBatch)
+            .where(
+                ImportBatch.id == batch_id,
+                ImportBatch.import_status == 4,
+                ImportBatch.cancel_requested.is_(False),
+            )
+            .values(started_at=_utc_now_naive())
+            .execution_options(synchronize_session=False)
+        )
+        return (getattr(result, "rowcount", 0) or 0) == 1
 
     def _validate_document_period(self, doc_obj: Any, batch: Any) -> None:
         """Valida que el periodo contable esté abierto para el documento."""
@@ -588,7 +642,10 @@ class ImportService:
                 return success_count, error_count
 
             try:
-                s, e = self._process_document(adapter, ref, rows, context, batch, batch_id)
+                result = self._process_document(adapter, ref, rows, context, batch, batch_id)
+                if result is None:
+                    return success_count, error_count
+                s, e = result
                 success_count += s
                 error_count += e
             except (ArithmeticError, ValueError, SQLAlchemyError) as exc:
