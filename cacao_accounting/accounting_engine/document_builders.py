@@ -1111,14 +1111,22 @@ def _tax_rules_from_template(
         items_by_tax.setdefault(str(template_item.tax_id), []).append(template_item)
     used_by_tax: dict[str, int] = {}
     rules: list[TaxRuleContext] = []
+    # El motor acumula por concepto, no por ``running_total``. Para que una
+    # fila ``previous_total`` conserve la base de la plantilla heredada hay
+    # que declarar qué impuestos previos participan y con qué signo.
+    prior_concepts: dict[str, int] = {}
     for index, tax_line in enumerate(tax_result.lines, start=1):
         tax_key = str(tax_line.tax_id)
         candidates = items_by_tax.get(tax_key, [])
         offset = used_by_tax.get(tax_key, 0)
         matched_item = candidates[offset] if offset < len(candidates) else None
         used_by_tax[tax_key] = offset + 1
-        if rule := _tax_rule_from_template_line(tax_line, matched_item, index, event_type):
-            rules.append(rule)
+        rule = _tax_rule_from_template_line(tax_line, matched_item, index, event_type, prior_concepts)
+        if rule is None:
+            continue
+        rules.append(rule)
+        if not rule.included_in_price:
+            prior_concepts[rule.concept] = -1 if rule.tax_type == "withholding" else 1
     return rules
 
 
@@ -1127,6 +1135,7 @@ def _tax_rule_from_template_line(
     template_item: TaxTemplateItem | None,
     order: int,
     event_type: str,
+    prior_concepts: dict[str, int] | None = None,
 ) -> TaxRuleContext | None:
     """Convert one legacy tax line into a tax rule context."""
     tax = database.session.get(Tax, tax_line.tax_id)
@@ -1134,6 +1143,7 @@ def _tax_rule_from_template_line(
         return None
     calculation_method = _template_tax_calculation_method(tax)
     base_mode = _template_tax_base_mode(template_item)
+    include_concepts, exclude_concepts = _template_tax_dependencies(base_mode, prior_concepts or {})
     return TaxRuleContext(
         rule_id=str(tax_line.tax_id),
         name=tax_line.name,
@@ -1143,7 +1153,9 @@ def _tax_rule_from_template_line(
         rate=_decimal_value(tax.rate),
         amount=tax_line.amount if calculation_method == "fixed" else Decimal("0"),
         base_mode=base_mode,
-        include_concepts=_template_tax_include_concepts(base_mode),
+        include_concepts=include_concepts,
+        exclude_concepts=exclude_concepts,
+        participates_in_next_base=not tax_line.is_inclusive,
         order=order,
         accounting_treatment=_template_tax_accounting_treatment(tax_line),
         recognition_event=event_type,
@@ -1183,13 +1195,19 @@ def _template_tax_base_mode(template_item: TaxTemplateItem | None) -> str:
             return "goods"
 
 
-def _template_tax_include_concepts(base_mode: str) -> list[str]:
-    """Resolve dependent concepts for accumulated legacy taxes."""
-    match base_mode:
-        case "accumulated":
-            return ["goods"]
-        case _:
-            return []
+def _template_tax_dependencies(base_mode: str, prior_concepts: dict[str, int]) -> tuple[list[str], list[str]]:
+    """Resolve the accumulated and deducted concepts of a legacy previous-total tax.
+
+    La plantilla heredada actualiza su ``running_total`` con cada impuesto no
+    incluido: los aditivos suman y las retenciones restan. El motor fiscal
+    reproduce ese total declarando los conceptos previos como incluidos o
+    excluidos de la base acumulada.
+    """
+    if base_mode != "accumulated":
+        return [], []
+    include_concepts = ["goods"] + [concept for concept, sign in prior_concepts.items() if sign > 0]
+    exclude_concepts = [concept for concept, sign in prior_concepts.items() if sign < 0]
+    return include_concepts, exclude_concepts
 
 
 def _template_tax_calculation_method(tax: Tax) -> str:
