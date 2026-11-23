@@ -919,12 +919,18 @@ class ApprovalEngine:
         company_id = (
             getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
         )
+        doctype = cls._resolve_doctype(document)
+        # La orden pudo perder proveedor, actividad o membresía mientras
+        # esperaba aprobación (#1823), incluso en un flujo sin aprobadores.
+        if company_id and doctype == "purchase_order":
+            from cacao_accounting.compras.services import _validated_purchase_supplier
+
+            _validated_purchase_supplier(getattr(document, "supplier_id", None), company_id)
         if not company_id or is_desktop_mode():
             return True
         if not cls.is_enabled(company_id) and cls._pending_request(document) is None:
             return True
 
-        doctype = cls._resolve_doctype(document)
         amount = cls.get_document_amount(document)
 
         req = cls._pending_request(document, lock=True)
@@ -949,13 +955,6 @@ class ApprovalEngine:
 
         if not cls.can_approve(document, user):
             raise ValueError(_("El usuario no cumple los permisos, límites o independencia requeridos para aprobar."))
-
-        # La orden pudo perder proveedor, actividad o membresía mientras
-        # esperaba aprobación (#1823).
-        if doctype == "purchase_order":
-            from cacao_accounting.compras.services import _validated_purchase_supplier
-
-            _validated_purchase_supplier(getattr(document, "supplier_id", None), company_id)
 
         cls._assert_approval_snapshot(req, document)
 

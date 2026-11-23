@@ -19,8 +19,8 @@ def test_lote_en_proceso_sin_marca_se_recupera(app):
     with app.app_context():
         if database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none() is None:
             database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
-        database.session.add_all(
-            [
+        if database.session.execute(database.select(Entity).filter_by(code="alpha")).scalar_one_or_none() is None:
+            database.session.add(
                 Entity(
                     code="alpha",
                     name="Alfa",
@@ -28,9 +28,8 @@ def test_lote_en_proceso_sin_marca_se_recupera(app):
                     tax_id=f"TAX-{sufijo}",
                     currency="NIO",
                     enabled=True,
-                ),
-            ]
-        )
+                )
+            )
         database.session.flush()
         lote = ImportBatch(
             company_id="alpha",
