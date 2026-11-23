@@ -725,12 +725,15 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     journal.reference = data.reference
     journal.memo = data.memo
     journal.naming_series_id = data.naming_series_id
-    currency_changed = journal.transaction_currency != data.transaction_currency
+    exchange_rate_basis_changed = (
+        journal.transaction_currency != data.transaction_currency or journal.base_currency != data.base_currency
+    )
     journal.transaction_currency = data.transaction_currency
     journal.base_currency = data.base_currency
-    # El formulario de edición no envía la tasa de cabecera: si la moneda no
-    # cambió se conserva la del borrador en lugar de vaciarla (#1818).
-    if data.exchange_rate is not None or currency_changed:
+    # El formulario puede enviar la tasa anterior junto al nuevo par de monedas.
+    if exchange_rate_basis_changed:
+        journal.exchange_rate = None
+    elif data.exchange_rate is not None:
         journal.exchange_rate = data.exchange_rate
     journal.is_closing = data.is_closing
     journal.is_fiscal_year_closing = data.is_fiscal_year_closing
