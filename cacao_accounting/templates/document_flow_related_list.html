@@ -64,7 +64,8 @@
         </td>
         {% endif %}
         {% if spec.total_field %}
-        <td>{{ getattr(doc, spec.total_field, '') or '' }}</td>
+        {% set total_value = getattr(doc, spec.total_field, none) %}
+        <td>{{ total_value if total_value is not none else '' }}</td>
         {% endif %}
         <td>
           {% if spec.detail_endpoint %}
