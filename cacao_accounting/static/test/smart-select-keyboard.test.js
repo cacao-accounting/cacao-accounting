@@ -112,4 +112,27 @@ describe('#1976 smart select con teclado', () => {
     expect(inputEvents).to.equal(1);
     expect(changeEvents).to.equal(1);
   });
+
+  it('highlightPrevious desde -1 lleva a la última opción', () => {
+    const { componente } = cargarComponente();
+    componente.open = true;
+    componente.options = [{ value: 'a' }, { value: 'b' }];
+
+    expect(componente.highlightPrevious()).to.equal(1);
+    expect(componente.highlightPrevious()).to.equal(0);
+  });
+
+  it('delega al componente el keydown emitido en una opción', () => {
+    const { componente, window } = cargarComponente();
+    componente.open = true;
+    componente.options = [{ value: 'a' }, { value: 'b' }];
+    const menu = window.document.querySelector('.ca-smart-select-menu');
+    const opcion = window.document.createElement('button');
+    opcion.className = 'ca-smart-select-option';
+    menu.appendChild(opcion);
+
+    opcion.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+
+    expect(componente.highlightedIndex).to.equal(0);
+  });
 });
