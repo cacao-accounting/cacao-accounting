@@ -32,6 +32,7 @@ from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
 from cacao_accounting.query_tools.handlers.documents import (
     get_document_details_handler,
     get_document_flow,
+    get_document_lines_handler,
     get_document_status_handler,
 )
 from cacao_accounting.query_tools.handlers.operational import search_document_relations
@@ -172,6 +173,41 @@ def test_document_tools_require_the_owning_module(document_acl_scenario):
                 context=context, company_id="alpha", document_type="purchase_invoice", document_id=ids["purchase"]
             )
         )
+
+
+def test_document_lines_require_the_owning_module(document_acl_scenario):
+    """El ámbito documents no sustituye el permiso del módulo para get_lines."""
+    app, ids = document_acl_scenario
+    context = _context({"documents.reports.read"})
+
+    with app.app_context():
+        _denied(
+            lambda: get_document_lines_handler.handler(
+                context=context, company_id="alpha", document_type="sales_invoice", document_id=ids["sale"]
+            )
+        )
+
+
+def test_sales_scope_reads_lines_and_status(document_acl_scenario):
+    """Las tres herramientas responden con el módulo dueño autorizado."""
+    app, ids = document_acl_scenario
+    context = _context({"documents.reports.read", "receivables.reports.read"})
+
+    with app.app_context():
+        lineas = get_document_lines_handler.handler(
+            context=context, company_id="alpha", document_type="sales_invoice", document_id=ids["sale"]
+        )
+        estado = get_document_status_handler.handler(
+            context=context, company_id="alpha", document_type="sales_invoice", document_id=ids["sale"]
+        )
+        detalle = get_document_details_handler.handler(
+            context=context, company_id="alpha", document_type="sales_invoice", document_id=ids["sale"]
+        )
+
+        assert lineas["found"] is True
+        assert lineas["items"] == []
+        assert estado["found"] is True
+        assert detalle["found"] is True
 
 
 def test_sales_scope_reads_sales_but_not_purchase(document_acl_scenario):
