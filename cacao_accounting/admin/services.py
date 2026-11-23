@@ -689,8 +689,12 @@ def _pending_approval_info(req, get_model_class, approval_engine, user_model, do
 def _pending_approval_company_codes() -> list[str]:
     """Return the active tenant companies the current user can potentially review."""
     from cacao_accounting.approval_policy import is_admin
+    from cacao_accounting.runtime_mode import is_desktop_mode
 
-    if is_admin(current_user):
+    # Desktop opera con una sola compañía y el administrador conserva el
+    # bypass. En Cloud la clasificación admin no concede compañías por sí sola:
+    # la insignia y la bandeja se limitan a UserCompanyAccess (#2059, #1828).
+    if is_admin(current_user) and is_desktop_mode():
         return list(database.session.execute(database.select(Entity.code).where(Entity.enabled.is_(True))).scalars().all())
     return list(
         database.session.execute(

@@ -110,6 +110,15 @@ def aprobaciones_cloud():
                 ),
                 UserCompanyAccess(user_id="aprobador", company_code="alpha"),
                 UserCompanyAccess(user_id="sales-only", company_code="beta"),
+                UserCompanyAccess(user_id="admin", company_code="alpha"),
+                User(
+                    id="admin-sin",
+                    user="admin-sin",
+                    name="Administrador sin compañías",
+                    password=proteger_passwd(CONTRASENA),
+                    active=True,
+                    classification="admin",
+                ),
             ]
         )
         database.session.flush()
@@ -298,6 +307,16 @@ def test_sales_only_reviewer_keeps_other_module_company_scope(aprobaciones_cloud
     assert _contar(aprobaciones_cloud, "sales-only") == 1
 
 
-def test_administrador_global_conserva_el_total(aprobaciones_cloud):
-    """Control positivo: el administrador ve todas las revisiones habilitadas."""
-    assert _contar(aprobaciones_cloud, "admin") == 5
+def test_administrador_cloud_se_limita_a_sus_concesiones(aprobaciones_cloud):
+    """#2059: en Cloud el administrador solo ve las compañías concedidas."""
+    # Alpha tiene cuatro solicitudes; beta queda fuera pese a la clasificación admin.
+    assert _contar(aprobaciones_cloud, "admin") == 4
+    client = _authenticated_client(aprobaciones_cloud, "admin")
+    body = client.get("/me/pending-approvals").get_data(as_text=True)
+    assert "INV-ALPHA-VISIBLE" in body
+    assert "INV-BETA" not in body
+
+
+def test_administrador_cloud_sin_concesiones_no_ve_solicitudes(aprobaciones_cloud):
+    """#2059: la clasificación admin no concede compañías por sí sola en Cloud."""
+    assert _contar(aprobaciones_cloud, "admin-sin") == 0
