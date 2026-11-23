@@ -124,6 +124,9 @@ def escenario_presupuesto():
             "lector": crear_usuario("lector", access=True, view=True),
             "creador": crear_usuario("creador", access=True, view=True, create=True),
             "aprobador": crear_usuario("aprobador", access=True, view=True, approve=True),
+            "cerrador": crear_usuario("cerrador", access=True, view=True, close=True),
+            "importador": crear_usuario("importador", access=True, view=True, import_=True),
+            "eliminador": crear_usuario("eliminador", access=True, view=True, delete=True),
             "book": book.id,
             "fiscal": fiscal.id,
             "period": period.id,
@@ -273,3 +276,41 @@ def test_vistas_presupuesto_formatean_montos_con_filtro_registrado(escenario_pre
             )
 
     assert "1,250.50" in preview
+
+
+def test_cerrador_cierra_sin_permiso_crear(escenario_presupuesto):
+    """#1781: `cerrar` basta para la transición; no se exige `crear`."""
+    application, ids = escenario_presupuesto
+    budget_id, _ = _crear_presupuesto(application, ids, estado="approved")
+    client = _login(application, ids["cerrador"])
+
+    response = client.post(f"{PREFIJO}/{budget_id}/close")
+
+    assert response.status_code != 403
+    assert response.status_code == 302
+
+
+def test_importador_importa_sin_permiso_crear(escenario_presupuesto):
+    """#1781: `importar` basta para el POST de importación."""
+    application, ids = escenario_presupuesto
+    budget_id, _ = _crear_presupuesto(application, ids)
+    client = _login(application, ids["importador"])
+
+    response = client.post(f"{PREFIJO}/{budget_id}/import")
+
+    assert response.status_code != 403
+    assert response.status_code in (200, 302)
+
+
+def test_eliminador_borra_linea_sin_permiso_crear(escenario_presupuesto):
+    """#1781: `eliminar` basta para borrar una línea del presupuesto."""
+    application, ids = escenario_presupuesto
+    _, line_id = _crear_presupuesto(application, ids)
+    client = _login(application, ids["eliminador"])
+
+    response = client.post(f"{PREFIJO}/line/{line_id}/delete")
+
+    assert response.status_code != 403
+    assert response.status_code == 302
+    with application.app_context():
+        assert database.session.get(BudgetLine, line_id) is None
