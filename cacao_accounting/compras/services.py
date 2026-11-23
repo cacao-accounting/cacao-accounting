@@ -1244,7 +1244,9 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
 
 def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | None = None, company: str | None = None) -> None:
     """Valida la bodega indicada en una recepción."""
-    item = database.session.get(Item, item_code) if item_code else None
+    item = (
+        database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none() if item_code else None
+    )
     if not warehouse_code and item is not None and item.is_stock_item:
         raise DocumentFlowError(
             _("El item de inventario '%(item_code)s' requiere una bodega.") % {"item_code": item_code}, 400
@@ -3214,6 +3216,9 @@ def _handle_purchase_invoice_edit_post(registro):
         refresh_source_caches_for_target(target_type, registro.id)
         registro.supplier_id = request.form.get("supplier_id") or None
         registro.company = request.form.get("company") or None
+        # La moneda base es la funcional de la compañía; al cambiar de compañía
+        # o con un snapshot obsoleto debe refrescarse antes de recalcular (#1822).
+        registro.base_currency = company_currency(registro.company) or registro.base_currency
         if registro.document_type == PURCHASE_CREDIT_NOTE:
             credit_note_type = request.form.get("credit_note_type") or registro.credit_note_type or "commercial_adjustment"
             if credit_note_type not in {"commercial_adjustment", "physical_return"}:
