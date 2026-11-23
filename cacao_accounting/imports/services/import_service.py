@@ -38,6 +38,7 @@ from cacao_accounting.imports.adapters.transaction_documents import (
     SupplierQuotationAdapter,
 )
 from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.cache import invalidate_cache
 from cacao_accounting.i18n import _
 
 
@@ -480,6 +481,9 @@ class ImportService:
         self._validate_document_period(doc_obj, batch)
         adapter.persist_document(doc_obj)
         database.session.commit()
+        # Los adaptadores de terceros crean Party/CompanyParty: el selector de
+        # datos maestros debe dejar de servir la lista anterior (#1900).
+        invalidate_cache("smart-select-master-data")
         return len(rows), 0
 
     def _validate_document_period(self, doc_obj: Any, batch: Any) -> None:
