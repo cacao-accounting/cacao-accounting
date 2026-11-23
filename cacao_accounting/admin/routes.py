@@ -569,6 +569,12 @@ def items_plantilla_impuesto(template_id: str):
             behavior=request.form.get("behavior") or "additive",
             is_inclusive=bool(request.form.get("is_inclusive")),
         )
+        if item.calculation_base not in {"net_document", "previous_total"}:
+            flash(_("La base de cálculo del impuesto no es válida."), "danger")
+            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+        if item.behavior not in {"additive", "deductive"}:
+            flash(_("El comportamiento del impuesto no es válido."), "danger")
+            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
         database.session.add(item)
         database.session.commit()
         flash(_("Linea de impuesto agregada correctamente."), "success")

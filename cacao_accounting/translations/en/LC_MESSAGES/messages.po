@@ -24748,3 +24748,11 @@ msgstr "Inventory adjustment account"
 #: cacao_accounting/inventario/templates/inventario/articulo_nuevo.html
 msgid "Buscar cuenta de ajuste de inventario"
 msgstr "Search inventory adjustment account"
+
+#: cacao_accounting/admin/routes.py
+msgid "La base de cálculo del impuesto no es válida."
+msgstr "The tax calculation base is not valid."
+
+#: cacao_accounting/admin/routes.py
+msgid "El comportamiento del impuesto no es válido."
+msgstr "The tax behavior is not valid."
