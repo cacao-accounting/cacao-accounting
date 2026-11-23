@@ -654,21 +654,30 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
     return amount
 
 
+def _submitted_item_code_indexes() -> list[int]:
+    """Devuelve los índices únicos de artículo enviados, ordenados numéricamente."""
+    indexes: set[int] = set()
+    for key in request.form:
+        if not key.startswith("item_code_"):
+            continue
+        suffix = key.rsplit("_", 1)[1]
+        if suffix.isdigit():
+            try:
+                indexes.add(int(suffix))
+            except ValueError:
+                continue
+    return sorted(indexes)
+
+
 def _save_stock_entry_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de un movimiento de inventario."""
-    i = 0
-    indexes = [
-        int(key.rsplit("_", 1)[1]) for key in request.form if key.startswith("item_code_") and key.rsplit("_", 1)[1].isdigit()
-    ]
-    max_index = max(indexes, default=-1)
     total = Decimal("0")
     line_count = 0
-    while i <= max_index:
+    for i in _submitted_item_code_indexes():
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             total += _save_stock_entry_item(entry, i, item_code)
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(_("El documento requiere al menos una línea."), 400)
     return total
@@ -763,13 +772,11 @@ def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: st
 def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de conciliacion con snapshot de cantidad y valuacion."""
     submitted_lines: list[tuple[int, str, str | None]] = []
-    index = 0
-    while request.form.get(f"item_code_{index}"):
+    for index in _submitted_item_code_indexes():
         item_code = str(request.form.get(f"item_code_{index}") or "").strip()
         warehouse = request.form.get(f"warehouse_{index}") or entry.to_warehouse or entry.from_warehouse
         if item_code:
             submitted_lines.append((index, item_code, warehouse))
-        index += 1
 
     validate_stock_reconciliation_line_keys(entry.company, [(item, warehouse) for _, item, warehouse in submitted_lines])
 
@@ -982,9 +989,7 @@ def _handle_stock_entry_edit_post(registro: StockEntry):
 
 def _submitted_stock_entry_lines() -> list[dict[str, str]]:
     """Return posted line values so a rejected edit can be corrected in place."""
-    indexes = {
-        int(key.rsplit("_", 1)[1]) for key in request.form if key.startswith("item_code_") and key.rsplit("_", 1)[1].isdigit()
-    }
+    indexes = _submitted_item_code_indexes()
     fields = (
         ("item_code", "item_code"),
         ("item_name", "item_name"),
@@ -1003,14 +1008,12 @@ def _submitted_stock_entry_lines() -> list[dict[str, str]]:
         ("project", "project"),
         ("remarks", "remarks"),
     )
-    return [{name: request.form.get(f"{field}_{index}", "") for name, field in fields} for index in sorted(indexes)]
+    return [{name: request.form.get(f"{field}_{index}", "") for name, field in fields} for index in indexes]
 
 
 def _submitted_stock_reconciliation_lines() -> list[dict[str, str]]:
     """Return posted reconciliation values after an edit validation failure."""
-    indexes = {
-        int(key.rsplit("_", 1)[1]) for key in request.form if key.startswith("item_code_") and key.rsplit("_", 1)[1].isdigit()
-    }
+    indexes = _submitted_item_code_indexes()
     fields = (
         "item_code",
         "uom",
@@ -1022,7 +1025,7 @@ def _submitted_stock_reconciliation_lines() -> list[dict[str, str]]:
         "current_stock_value",
         "target_stock_value",
     )
-    return [{field: request.form.get(f"{field}_{index}", "") for field in fields} for index in sorted(indexes)]
+    return [{field: request.form.get(f"{field}_{index}", "") for field in fields} for index in indexes]
 
 
 def _capture_stock_entry_state(registro: StockEntry) -> dict:
