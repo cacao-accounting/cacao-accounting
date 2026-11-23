@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from cacao_accounting.reportes.helpers import _format_cell, _group_rows_by_field
+from cacao_accounting.reportes.helpers import _format_cell, _group_paginated_rows, _group_rows_by_field
 
 
 def _interleaved_rows():
@@ -87,3 +87,21 @@ def test_conserva_el_orden_de_primera_aparicion_y_de_filas(app):
 
     assert [title.rsplit(": ", 1)[-1] for title in titles] == ["Sur", "Norte"]
     assert accounts == ["1", "3", "2"]
+
+
+def test_subtotal_paginas_usa_cifras_reales_con_columnas_ocultas(app):
+    """La última página muestra el subtotal íntegro aunque se oculte débito."""
+    source = [
+        {
+            "account_code": "1101",
+            "__group_position": 2,
+            "__group_count": 2,
+            "__group_debit": Decimal("2.0098"),
+            "__group_credit": Decimal("0"),
+        }
+    ]
+    with app.app_context():
+        rows = _group_paginated_rows([{"account_code": "1101"}], source, "account_code", "NIO")
+        expected = _format_cell("debit", Decimal("2.0098"), "NIO")
+    assert rows[0]["__group_title"].endswith("(Continuación)")
+    assert rows[-1]["debit"] == expected

@@ -23,9 +23,11 @@ from cacao_accounting.database import (
     Currency,
     Entity,
     GLEntry,
+    Party,
     database,
 )
 from cacao_accounting.reportes.routes import account_movement
+from cacao_accounting.reportes.helpers import _group_paginated_rows
 from cacao_accounting.reportes.services import FinancialReportFilters, get_account_movement_detail
 
 FECHA = date(2026, 5, 15)
@@ -114,8 +116,65 @@ def test_export_all_devuelve_todas_las_filas(app, entorno_contable):
 
         assert paginated.total_rows >= 102
         assert len(paginated.rows) == 100
+        assert "__party_group_label" not in paginated.columns
         assert len(full.rows) == full.total_rows
         assert len(full.rows) >= 102
+
+
+def test_agrupacion_por_tercero_conserva_identidades_distintas(app, entorno_contable):
+    """Parties sharing a display name remain separate accounting groups."""
+    _scenario(app)
+    with app.app_context():
+        ledger = database.session.execute(database.select(Book).filter_by(entity=COMPANIA)).scalars().first()
+        account = database.session.execute(database.select(Accounts).filter_by(entity=COMPANIA, code="1101")).scalar_one()
+        parties = [Party(code=f"DUP-{index}", name="Mismo tercero", is_customer=True) for index in range(2)]
+        database.session.add_all(parties)
+        database.session.flush()
+        for index, party in enumerate(parties):
+            voucher = ComprobanteContable(
+                entity=COMPANIA,
+                date=FECHA,
+                document_no=f"PARTY-{index}-{uuid4().hex[:6]}",
+                status="submitted",
+            )
+            database.session.add(voucher)
+            database.session.flush()
+            database.session.add(
+                GLEntry(
+                    company=COMPANIA,
+                    ledger_id=ledger.id,
+                    account_id=account.id,
+                    account_code=account.code,
+                    voucher_type="journal_entry",
+                    voucher_id=voucher.id,
+                    posting_date=FECHA,
+                    debit=Decimal("1"),
+                    credit=Decimal("0"),
+                    party_type="customer",
+                    party_id=party.id,
+                    is_cancelled=False,
+                )
+            )
+        database.session.commit()
+
+        report = get_account_movement_detail(
+            FinancialReportFilters(company=COMPANIA, page=1, page_size=500),
+            group_by="party_id",
+        )
+        duplicate_name_rows = [row.values for row in report.rows if row.values["party_id"] == "Mismo tercero"]
+
+        assert len(duplicate_name_rows) == 2
+        assert "__party_group_label" not in report.columns
+        assert [row["__group_count"] for row in duplicate_name_rows] == [1, 1]
+        grouped = _group_paginated_rows(
+            [{key: value for key, value in row.items() if not key.startswith("__")} for row in duplicate_name_rows],
+            duplicate_name_rows,
+            "party_id",
+            "NIO",
+        )
+        titles = [row["__group_title"] for row in grouped if row.get("__row_type") == "group"]
+        assert "DUP-0" in titles[0] and "DUP-1" in titles[1]
+        assert titles[0] != titles[1]
 
 
 def test_ruta_account_movement_usa_export_all_para_pdf():

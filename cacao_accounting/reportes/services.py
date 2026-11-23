@@ -2615,7 +2615,8 @@ def _apply_period_filter(query: Any, period_ids: list[str] | None, period_start:
     return query
 
 
-def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
+def _gl_sort_order(sort_by: str, sort_dir: str) -> tuple[Any, Any]:
+    """Construye un orden determinista compartido por consulta y ventanas."""
     sort_columns = {
         "posting_date": GLEntry.posting_date,
         "document_no": GLEntry.document_no,
@@ -2626,7 +2627,11 @@ def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
     }
     column = sort_columns.get(sort_by, GLEntry.posting_date)
     direction = column.desc() if sort_dir.lower() == "desc" else column.asc()
-    return query.order_by(direction, GLEntry.id.asc())
+    return direction, GLEntry.id.asc()
+
+
+def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
+    return query.order_by(*_gl_sort_order(sort_by, sort_dir))
 
 
 def _movement_voucher_status(entry: GLEntry) -> str:
@@ -2726,6 +2731,7 @@ def _movement_detail_row_values(
         "project": entry.project_code,
         "party_type": entry.party_type,
         "party_id": party.name or party.code if party else entry.party_id,
+        "__party_group_label": f"{party.name} ({party.code})" if party else entry.party_id,
         "line_comment": entry.remarks,
         "created_by": entry.created_by,
         "created_at": entry.created,
@@ -2799,7 +2805,89 @@ def _movement_detail_query(
     return _sorted_gl_query(query, filters.sort_by, filters.sort_dir)
 
 
-def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedReport:
+def _movement_group_expression(group_by: str) -> Any | None:
+    """Resuelve únicamente dimensiones del detalle disponibles en el selector."""
+    expressions = {
+        "account_code": func.coalesce(func.nullif(GLEntry.account_code, ""), Accounts.code, ""),
+        "unit_code": GLEntry.unit_code,
+        "project_code": GLEntry.project_code,
+        "voucher_type": GLEntry.voucher_type,
+        "document_no": func.coalesce(func.nullif(GLEntry.document_no, ""), GLEntry.voucher_id),
+        "cost_center": GLEntry.cost_center_code,
+        "party_id": GLEntry.party_id,
+        "posting_date": GLEntry.posting_date,
+        "accounting_period": AccountingPeriod.name,
+    }
+    expression = expressions.get(group_by)
+    if expression is not None and group_by != "posting_date":
+        return func.coalesce(func.nullif(expression, ""), "")
+    return expression
+
+
+def _grouped_movement_query(query: Any, filters: FinancialReportFilters, group_expression: Any) -> Any:
+    """Calcula orden, saldos y subtotales en SQL sin materializar el mayor."""
+    order = _gl_sort_order(filters.sort_by, filters.sort_dir)
+    account = func.coalesce(func.nullif(GLEntry.account_code, ""), Accounts.code, "")
+    indexed = (
+        query.order_by(None)
+        .with_only_columns(
+            GLEntry.id.label("entry_id"),
+            group_expression.label("group_value"),
+            GLEntry.debit.label("debit"),
+            GLEntry.credit.label("credit"),
+            func.row_number().over(order_by=order).label("original_position"),
+            func.sum(GLEntry.debit - GLEntry.credit).over(partition_by=account, order_by=order).label("running_balance"),
+            maintain_column_froms=True,
+        )
+        .subquery()
+    )
+    group = indexed.c.group_value
+    return select(
+        indexed,
+        func.min(indexed.c.original_position).over(partition_by=group).label("group_first"),
+        func.row_number().over(partition_by=group, order_by=indexed.c.original_position).label("group_position"),
+        func.count().over(partition_by=group).label("group_count"),
+        func.sum(indexed.c.debit).over(partition_by=group).label("group_debit"),
+        func.sum(indexed.c.credit).over(partition_by=group).label("group_credit"),
+    ).subquery()
+
+
+def _collect_grouped_movement_rows(query: Any, grouped: Any, filters: FinancialReportFilters, ledger: Book) -> list[ReportRow]:
+    """Recupera solo la página solicitada y sus metadatos de grupo."""
+    page = max(filters.page, 1)
+    size = max(filters.page_size, 1)
+    page_query = (
+        query.order_by(None)
+        .join(grouped, grouped.c.entry_id == GLEntry.id)
+        .add_columns(
+            grouped.c.group_position,
+            grouped.c.group_count,
+            grouped.c.group_debit,
+            grouped.c.group_credit,
+            grouped.c.running_balance,
+        )
+        .order_by(grouped.c.group_first, grouped.c.original_position)
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    rows: list[ReportRow] = []
+    for entry, account, period, party, position, count, debit, credit, running_balance in database.session.execute(page_query):
+        values = _movement_detail_row_values(
+            entry,
+            account,
+            period,
+            party,
+            ledger,
+            _decimal_value(running_balance),
+            filters.include_running_balance,
+            filters.include_cancellations or filters.status == "cancelled",
+        )
+        values.update(__group_position=position, __group_count=count, __group_debit=debit, __group_credit=credit)
+        rows.append(ReportRow(values=values))
+    return rows
+
+
+def get_account_movement_detail(filters: FinancialReportFilters, *, group_by: str | None = None) -> PaginatedReport:
     """Detalle de movimiento contable (diario + mayor) desde GL."""
     period_start, period_end, _ = _report_period_bounds(filters)
     period_ids = _report_period_ids(filters)
@@ -2813,6 +2901,21 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
     total_rows = database.session.execute(count_query).scalar_one()
     page = max(filters.page, 1)
     page_size = max(filters.page_size, 1)
+    group_expression = _movement_group_expression(group_by or "")
+    if group_expression is not None and not filters.export_all:
+        grouped = _grouped_movement_query(query, filters, group_expression)
+        rows = _collect_grouped_movement_rows(query, grouped, filters, selected_ledger)
+        total_debit = sum((_decimal_value(row.values["debit"]) for row in rows), Decimal("0"))
+        total_credit = sum((_decimal_value(row.values["credit"]) for row in rows), Decimal("0"))
+        return PaginatedReport(
+            rows=rows,
+            totals={"debit": total_debit, "credit": total_credit, "difference": total_debit - total_credit},
+            columns=[key for key in rows[0].values if not key.startswith("__")] if rows else [],
+            total_rows=total_rows,
+            page=page,
+            page_size=page_size,
+            ledger_currency=selected_ledger.currency,
+        )
     row_offset = (page - 1) * page_size
     display_from_index = 0
     if not filters.export_all:
@@ -2828,7 +2931,7 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
     )
     rows, total_debit, total_credit = _collect_movement_detail_rows(entries, selected_ledger, filters, display_from_index)
 
-    columns = list(rows[0].values.keys()) if rows else []
+    columns = [key for key in rows[0].values if not key.startswith("__")] if rows else []
     return PaginatedReport(
         rows=rows,
         totals={"debit": total_debit, "credit": total_credit, "difference": total_debit - total_credit},
@@ -2997,6 +3100,8 @@ def _grouped_account_gl_query(
     account_code = func.coalesce(GLEntry.account_code, Accounts.code, "")
     movement_condition = _grouped_movement_condition(period_start, period_end, period_ids)
     opening_condition = _grouped_opening_condition(period_start, period_ids)
+    if not filters.include_closing:
+        movement_condition = and_(movement_condition, GLEntry.is_fiscal_year_closing.is_(False))
     opening_value = case((opening_condition, GLEntry.debit - GLEntry.credit), else_=0)
     movement_debit = case((movement_condition, GLEntry.debit), else_=0)
     movement_credit = case((movement_condition, GLEntry.credit), else_=0)
@@ -3014,7 +3119,10 @@ def _grouped_account_gl_query(
         func.min(case((movement_condition, GLEntry.posting_date), else_=None)).label("first_movement"),
         func.max(case((movement_condition, GLEntry.posting_date), else_=None)).label("last_movement"),
     ).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-    query = _apply_gl_filters(query, filters, None, None, None).where(GLEntry.ledger_id == ledger_id)
+    # El filtro controla los cierres del movimiento, no su efecto histórico en
+    # el saldo inicial del siguiente período.
+    query_filters = replace(filters, include_closing=True)
+    query = _apply_gl_filters(query, query_filters, None, None, None).where(GLEntry.ledger_id == ledger_id)
     query = query.group_by(account_code, Accounts.name, Accounts.account_type, Accounts.classification, Accounts.currency)
     return query.having(
         or_(

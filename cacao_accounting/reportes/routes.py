@@ -38,6 +38,7 @@ from cacao_accounting.reportes.services import (
     get_balance_sheet_report,
     get_gross_margin,
     get_income_statement_report,
+    _movement_group_expression,
     get_inventory_existence,
     get_inventory_valuation,
     get_monthly_withholding_report,
@@ -77,6 +78,7 @@ from cacao_accounting.reportes.helpers import (
     _operational_filters,
     _render_operational_report,
     _operational_context_summary,
+    _preferred_group_by_from_view,
 )
 
 from cacao_accounting.i18n import _
@@ -253,7 +255,14 @@ def account_summary():
 def account_movement():
     """Report account movement detail."""
     filters, selected_view, saved_views = _resolve_view_context("account-movement", _financial_filters())
-    report = get_account_movement_detail(filters) if _should_run_financial_report() else _empty_financial_report()
+    group_by = request.args.get("group_by") or _preferred_group_by_from_view("account-movement", selected_view)
+    if group_by and _movement_group_expression(group_by) is None:
+        abort(400, description=_("La dimensión de agrupación solicitada no está disponible."))
+    report = (
+        get_account_movement_detail(filters, group_by=group_by)
+        if _should_run_financial_report()
+        else _empty_financial_report()
+    )
     if request.args.get("export") in {"csv", "xlsx", "pdf"}:
         export_report = get_account_movement_detail(cast(FinancialReportFilters, replace(filters, export_all=True, page=1)))
         return _render_financial_report(

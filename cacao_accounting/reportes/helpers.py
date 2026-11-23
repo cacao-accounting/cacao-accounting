@@ -28,6 +28,7 @@ from cacao_accounting.reportes.services import (
     FinancialReportFilters,
     OperationalReportFilters,
     PaginatedReport,
+    _movement_group_expression,
 )
 from cacao_accounting.version import APPNAME
 
@@ -1352,9 +1353,43 @@ def _apply_grouping(
     saved_view: str,
 ) -> list[dict[str, object]]:
     group_by = request.args.get("group_by") or _preferred_group_by_from_view(report_code, saved_view)
+    if report_code == "account-movement" and source_rows and "__group_position" in source_rows[0]:
+        return _group_paginated_rows(display_rows, source_rows, group_by, report.ledger_currency)
     if not (report_code == "account-movement" and group_by and group_by in (report.columns or [])):
         return display_rows
     return _group_rows_by_field(display_rows, source_rows, group_by, report.ledger_currency)
+
+
+def _group_paginated_rows(
+    display_rows: list[dict[str, object]], source_rows: list[dict[str, object]], group_by: str, ledger_currency: str | None
+) -> list[dict[str, object]]:
+    """Presenta continuación y subtotal completo sin materializar otras páginas."""
+    grouped: list[dict[str, object]] = []
+    column = {"unit_code": "unit", "project_code": "project"}.get(group_by, group_by)
+    group_index = -1
+    for index, (display, source) in enumerate(zip(display_rows, source_rows)):
+        position = int(_to_decimal_or_zero(source.get("__group_position")))
+        count = int(_to_decimal_or_zero(source.get("__group_count")))
+        if index == 0 or position == 1:
+            group_index += 1
+            raw_value = source.get("__party_group_label") if group_by == "party_id" else source.get(column)
+            group_value = _format_cell(column, raw_value, ledger_currency)
+            title = f"{_(group_by.replace('_', ' ').title())}: {group_value}"
+            if position > 1:
+                title = f"{title} ({_('Continuación')})"
+            grouped.append({"__row_type": "group", "__group_title": title})
+        row = dict(display)
+        row["__tree_group"] = group_index
+        grouped.append(row)
+        if position == count:
+            grouped.append(
+                _build_group_subtotal_row(
+                    _to_decimal_or_zero(source.get("__group_debit")),
+                    _to_decimal_or_zero(source.get("__group_credit")),
+                    ledger_currency,
+                )
+            )
+    return grouped
 
 
 def _group_rows_by_field(
@@ -1442,6 +1477,19 @@ def _render_financial_report(
     row_metadata = _build_row_metadata(source_rows, report_filters)
     display_rows = _build_display_rows(source_rows, row_metadata, display_columns, report.ledger_currency)
     grouped_rows = _apply_grouping(display_rows, source_rows, report, report_code, saved_view)
+    group_page = bool(
+        report_code == "account-movement"
+        and report.total_rows
+        and group_by
+        and _movement_group_expression(group_by) is not None
+    )
+    total_pages = max((report.total_rows + report.page_size - 1) // report.page_size, 1) if group_page else 1
+    page_links: dict[str, str] = {}
+    if group_page:
+        for name, number in (("previous", report.page - 1), ("next", report.page + 1)):
+            query = request.args.to_dict(flat=False)
+            query["page"] = [str(number)]
+            page_links[name] = f"{request.path}?{urlencode(query, doseq=True)}"
     display_totals = {key: _format_cell(key, value, report.ledger_currency) for key, value in report.totals.items()}
     unclassified_count = _unclassified_accounts_count(report.totals)
     period_picker = _period_picker_payload(
@@ -1469,6 +1517,9 @@ def _render_financial_report(
         total_rows=report.total_rows,
         page=report.page,
         page_size=report.page_size,
+        total_pages=total_pages,
+        group_page=group_page,
+        page_links=page_links,
         ledger_currency=report.ledger_currency,
         context_summary=_build_context_summary(report, report_filters),
         report_filters=report_filters,

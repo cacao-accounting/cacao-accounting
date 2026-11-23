@@ -117,6 +117,9 @@
               <option value="accounting_period" {% if group_by == 'accounting_period' %}selected{% endif %}>{{ _("Periodo") }}</option>
             </select>
           </label>
+          {% if report_code == 'account-movement' %}
+          <small class="text-muted">{{ _("El saldo acumulado, la autoría y los metadatos siguen visibles, pero no están disponibles para agrupación temporalmente.") }}</small>
+          {% endif %}
         </div>
         <div class="d-flex flex-wrap gap-2 mt-2">
           <button class="btn btn-primary" type="submit">{{ _("Aplicar filtros") }}</button>
@@ -224,6 +227,13 @@
         </tbody>
       </table>
     </div>
+    {% if group_page and total_pages > 1 %}
+    <nav class="d-flex justify-content-between align-items-center p-2" aria-label="{{ _('Página') }}">
+      {% if page > 1 %}<a href="{{ page_links.previous }}">{{ _('Anterior') }}</a>{% else %}<span></span>{% endif %}
+      <span>{{ _('Página') }} {{ page }} / {{ total_pages }}</span>
+      {% if page < total_pages %}<a href="{{ page_links.next }}">{{ _('Siguiente') }}</a>{% else %}<span></span>{% endif %}
+    </nav>
+    {% endif %}
     <div class="ca-report-totals-sticky">
       {% for key, value in totals.items() %}
       <div class="ca-total-item">
