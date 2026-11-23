@@ -210,3 +210,27 @@ def test_solo_ventas_no_crea_pagos(app, entorno_contable):
     response = _cliente(app, user_id).post("/api/document-flow/create-target", json=_payload(invoice_id, customer_id))
 
     assert response.status_code == 403, response.get_data(as_text=True)
+
+
+def test_create_target_con_tipo_desconocido_responde_400(app, entorno_contable, cajero):
+    """#1465: un target_document_type inválido es error de cliente, no 500."""
+    from cacao_accounting.database import DocumentRelation, PaymentEntry
+
+    with app.app_context():
+        antes_pagos = len(database.session.execute(database.select(PaymentEntry)).scalars().all())
+        antes_relaciones = len(database.session.execute(database.select(DocumentRelation)).scalars().all())
+
+    response = _cliente(app, cajero).post(
+        "/api/document-flow/create-target",
+        json={
+            "target_document_type": "tipo-inventado",
+            "company": "cacao",
+            "posting_date": "2026-05-15",
+            "lines": [],
+        },
+    )
+
+    assert response.status_code == 400, response.get_data(as_text=True)
+    with app.app_context():
+        assert len(database.session.execute(database.select(PaymentEntry)).scalars().all()) == antes_pagos
+        assert len(database.session.execute(database.select(DocumentRelation)).scalars().all()) == antes_relaciones

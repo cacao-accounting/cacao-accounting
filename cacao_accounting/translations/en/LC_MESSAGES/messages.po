@@ -19042,6 +19042,10 @@ msgstr "The batch does not have enough balance in the issue warehouse."
 msgid "El serial no esta disponible para salida."
 msgstr "The serial is not available for issue."
 
+#: cacao_accounting/inventario/service.py
+msgid "El serial está siendo procesado por otra salida."
+msgstr "The serial is being processed by another issue."
+
 #: cacao_accounting/inventario/service.py:362
 msgid "El serial no se encuentra en la bodega de salida."
 msgstr "The serial is not found in the issue warehouse."

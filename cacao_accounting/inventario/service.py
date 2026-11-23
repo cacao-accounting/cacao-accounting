@@ -12,8 +12,8 @@ from datetime import date
 from typing import Any, Mapping, Sequence
 
 from flask_login import current_user
-from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from cacao_accounting.database import (
     Accounts,
@@ -416,6 +416,38 @@ def _validate_incoming_serial(serial, allow_transfer: bool, allow_return: bool) 
         raise InventoryServiceError(_("El serial ya existe y solo puede cambiar de bodega mediante una transferencia."))
 
 
+def _claim_outgoing_serial(serial_no: str, item_code: str, warehouse: str | None) -> None:
+    """Reserva el serial disponible dentro de la transacción de salida.
+
+    La actualización condicional serializa la validación también en SQLite,
+    donde ``SELECT FOR UPDATE`` no bloquea filas. El estado temporal solo vive
+    dentro de la transacción; el posting lo reemplaza por ``delivered`` o hace
+    rollback si falla.
+    """
+    query = update(SerialNumber).where(
+        SerialNumber.serial_no == serial_no,
+        SerialNumber.item_code == item_code,
+        SerialNumber.serial_status == "available",
+    )
+    if warehouse:
+        query = query.where(SerialNumber.warehouse == warehouse)
+    try:
+        result = database.session.execute(query.values(serial_status="posting").execution_options(synchronize_session="fetch"))
+    except OperationalError as exc:
+        if database.session.get_bind().dialect.name == "sqlite" and "locked" in str(exc).lower():
+            raise InventoryServiceError(_("El serial está siendo procesado por otra salida.")) from exc
+        raise
+    if result.rowcount == 1:
+        return
+
+    serial = database.session.execute(
+        select(SerialNumber).where(SerialNumber.serial_no == serial_no).execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+    if serial is not None and serial.item_code != item_code:
+        raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
+    _validate_outgoing_serial(serial, warehouse)
+
+
 def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False, allow_return=False):
     """Valida identificador, cantidad y transición permitida de un serial."""
     serial_no = getattr(line, "serial_no", None)
@@ -427,19 +459,13 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False,
     quantity = _decimal_value(raw_quantity) if raw_quantity is not None else Decimal("1")
     if quantity != Decimal("1"):
         raise InventoryServiceError(_("Cada linea de un item serializado debe mover exactamente una unidad."))
-    serial_query = select(SerialNumber).filter_by(serial_no=serial_no)
     if outgoing:
-        # La transición del serial se serializa con el posteo: dos salidas
-        # concurrentes del mismo serial no pueden validar ambas como disponible
-        # antes de que una confirme (#1306).
-        serial_query = serial_query.with_for_update()
-    serial = database.session.execute(serial_query).scalar_one_or_none()
+        _claim_outgoing_serial(serial_no, item.code, warehouse)
+        return
+    serial = database.session.execute(select(SerialNumber).filter_by(serial_no=serial_no)).scalar_one_or_none()
     if serial is not None and serial.item_code != item.code:
         raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
-    if outgoing:
-        _validate_outgoing_serial(serial, warehouse)
-    else:
-        _validate_incoming_serial(serial, allow_transfer, allow_return)
+    _validate_incoming_serial(serial, allow_transfer, allow_return)
 
 
 def validate_batch_serial(
