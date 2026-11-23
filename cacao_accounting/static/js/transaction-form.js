@@ -940,8 +940,7 @@
               const detail = Array.isArray(data?.errors) && data.errors.length
                 ? data.errors.join(' ')
                 : (data?.message || i18n.errorTaxPreview || 'No se pudo calcular.');
-              this.taxCharges.error = detail;
-              this.taxCharges.loading = false;
+              this._handleTaxPreviewFailure(detail);
               return;
             }
             this.applyTaxPreviewData(data);
@@ -962,7 +961,16 @@
 
         handleTaxPreviewError(err) {
           console.warn('transactionForm tax preview failed', err);
-          this.taxCharges.error = i18n.errorTaxPreview || 'No se pudo calcular.';
+          this._handleTaxPreviewFailure(i18n.errorTaxPreview || 'No se pudo calcular.');
+        },
+
+        _handleTaxPreviewFailure(message) {
+          this.taxCharges.error = message;
+          this.taxCharges.profile = null;
+          this.taxCharges.lines = (this.taxCharges.lines || []).filter((line) => line.manual);
+          this.taxCharges.activeIndex = null;
+          this.taxCharges.modalLine = null;
+          this.recalculateTaxSummary();
           this.taxCharges.loading = false;
         },
 
@@ -980,8 +988,7 @@
         applyTaxPreviewData(data) {
           const errors = Array.isArray(data.errors) ? data.errors.filter(Boolean) : [];
           if (errors.length) {
-            this.taxCharges.error = errors.join(' ');
-            this.taxCharges.loading = false;
+            this._handleTaxPreviewFailure(errors.join(' '));
             return;
           }
           this.taxCharges.error = '';

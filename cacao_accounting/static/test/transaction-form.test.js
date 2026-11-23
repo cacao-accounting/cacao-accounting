@@ -636,6 +636,41 @@ describe('transaction-form', function () {
     assert.strictEqual(warnings.length, 1);
   });
 
+  it('drops stale calculated tax lines after a failed preview and preserves manual lines', async function () {
+    const create = loadTransactionForm();
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 422,
+      json: () => Promise.resolve({ errors: ['Circular dependency detected in tax rules.'] }),
+    });
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'cacao', currency: 'NIO' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Caja', qty: 1, rate: 100 }],
+    });
+
+    component.init();
+    component.taxCharges.profile = { name: 'Previous profile' };
+    component.taxCharges.summary = { subtotal: '100', document_tax_total: '15', grand_total: '115' };
+    component.taxCharges.lines = [
+      { concept: 'Old computed tax', amount: 15, manual: false },
+      { concept: 'Manual freight', amount: 3, manual: true, type: 'charge' },
+    ];
+
+    await component.fetchTaxPreview();
+
+    assert.strictEqual(component.taxCharges.error, 'Circular dependency detected in tax rules.');
+    assert.strictEqual(component.taxCharges.profile, null);
+    assert.deepStrictEqual(component.taxCharges.lines.map((line) => line.concept), ['Manual freight']);
+    assert.strictEqual(component.taxCharges.summary.document_tax_total, '3');
+    assert.strictEqual(component.taxCharges.summary.grand_total, '103');
+    assert.strictEqual(component.taxCharges.loading, false);
+    assert.deepStrictEqual(component.mapTaxLinesToPayload().map((line) => line.concept), ['Manual freight']);
+  });
+
   it('adds manual tax or charge lines and updates fiscal totals', function () {
     const create = loadTransactionForm();
     const component = create({
