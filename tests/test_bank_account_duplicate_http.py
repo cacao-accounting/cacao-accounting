@@ -5,26 +5,24 @@
 
 from __future__ import annotations
 
+import re
 from uuid import uuid4
 
 import pytest
-
 from cacao_accounting.database import (
-    Accounts,
     Bank,
     BankAccount,
     Currency,
     Entity,
     Modules,
-    User,
-    UserCompanyAccess,
     database,
 )
 
 
-@pytest.fixture
-def cuenta_bancaria(app):
+@pytest.fixture(name="cuenta_bancaria")
+def crear_cuenta_bancaria(app, request):
     """Banco y cuenta GL de la compañía cacao para el alta por ruta."""
+    request.getfixturevalue("entorno_contable")
     sufijo = uuid4().hex[:5]
     with app.app_context():
         if database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none() is None:
@@ -45,63 +43,48 @@ def cuenta_bancaria(app):
             )
         database.session.flush()
         banco = Bank(name=f"Banco {sufijo}", is_active=True)
-        cuenta_gl = Accounts(
-            entity="cacao",
-            code=f"11{sufijo}",
-            name="Banco GL",
-            classification="asset",
-            account_type="bank",
-            active=True,
-            enabled=True,
-            group=False,
-        )
-        database.session.add_all([banco, cuenta_gl])
+        database.session.add(banco)
         database.session.commit()
-        yield {
+        datos = {
             "bank_id": banco.id,
             "company": "cacao",
-            "gl_account_id": cuenta_gl.id,
             "account_name": "Cuenta QA",
             "account_no": f"ACC-{sufijo}",
             "currency": "NIO",
         }
-
-
-def _cliente(app):
-    from cacao_accounting.auth import proteger_passwd
-
-    sufijo = uuid4().hex[:5]
-    with app.app_context():
-        user_id = f"bancos-{sufijo}"
-        database.session.add(
-            User(
-                id=user_id,
-                user=user_id,
-                name="Bancos",
-                password=proteger_passwd("Clave-2026!"),
-                active=True,
-                classification="admin",
-            )
-        )
-        database.session.add(UserCompanyAccess(user_id=user_id, company_code="cacao"))
+        yield datos
+        cuenta = database.session.execute(
+            database.select(BankAccount).filter_by(company=datos["company"], account_no=datos["account_no"])
+        ).scalar_one_or_none()
+        if cuenta is not None:
+            database.session.delete(cuenta)
+        database.session.flush()
+        database.session.delete(banco)
         database.session.commit()
-    client = app.test_client()
-    with client.session_transaction() as session:
-        session["_user_id"] = user_id
-        session["_fresh"] = True
-    return client
 
 
-def test_cuenta_duplicada_no_produce_500(app, cuenta_bancaria):
+def test_cuenta_duplicada_no_produce_500(app, authenticated_client, cuenta_bancaria):
     """La segunda alta con el mismo número devuelve error controlado."""
-    client = _cliente(app)
+    client = authenticated_client("admin")
+    formulario = client.get("/cash_management/bank-account/new")
+    csrf_token = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', formulario.get_data(as_text=True))
+    assert csrf_token is not None
+    datos = {**cuenta_bancaria, "csrf_token": csrf_token.group(1)}
 
-    primera = client.post("/cash_management/bank-account/new", data=cuenta_bancaria)
-    segunda = client.post("/cash_management/bank-account/new", data=cuenta_bancaria)
+    primera = client.post("/cash_management/bank-account/new", data=datos)
+    segunda = client.post("/cash_management/bank-account/new", data=datos)
 
-    assert primera.status_code == 302
+    assert primera.status_code == 302, primera.get_data(as_text=True)
     assert segunda.status_code == 200
     assert "Ya existe una cuenta bancaria" in segunda.get_data(as_text=True)
     with app.app_context():
-        cuentas = database.session.execute(database.select(BankAccount)).scalars().all()
+        cuentas = (
+            database.session.execute(
+                database.select(BankAccount).filter_by(
+                    company=cuenta_bancaria["company"], account_no=cuenta_bancaria["account_no"]
+                )
+            )
+            .scalars()
+            .all()
+        )
         assert len(cuentas) == 1
