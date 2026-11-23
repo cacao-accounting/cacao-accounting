@@ -82,6 +82,7 @@ LEDGER_TABLES = frozenset(
     {
         "gl_entry",
         "stock_ledger_entry",
+        "stock_ledger_book_entry",
         "ar_ap_ledger_entry",
         "ar_ap_ledger_book_entry",
         "purchase_economic_event",
