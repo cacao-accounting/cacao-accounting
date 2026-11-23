@@ -482,3 +482,21 @@ def test_no_se_responde_un_borrador(confirmation_attempt_scenario):
     with app.app_context():
         confirmation = database.session.execute(database.select(BalanceConfirmation)).scalar_one()
         assert confirmation.status == "draft"
+
+
+def test_invitacion_cancelada_no_muta_al_verificar(confirmation_attempt_scenario):
+    """#1839: una invitación cancelada se rechaza sin cambiar su estado."""
+    from cacao_accounting.database import BalanceConfirmationInvitation, database
+
+    app, ids = confirmation_attempt_scenario
+    with app.app_context():
+        invitacion = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        invitacion.status = "cancelled"
+        database.session.commit()
+
+    respuesta = _post_verification(app, ids["token"], "123456")
+
+    assert respuesta.status_code in {302, 400, 404, 410}
+    with app.app_context():
+        invitacion = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        assert invitacion.status == "cancelled"
