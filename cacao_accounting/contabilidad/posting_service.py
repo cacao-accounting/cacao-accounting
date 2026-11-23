@@ -3226,6 +3226,9 @@ def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> li
             raise PostingError(_("Un ajuste de solo valor requiere un monto mayor a cero."))
         value = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
         fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
+        # El GL consume el costo funcional ya convertido, no el importe
+        # transaccional de la línea (#1879).
+        line._inventory_cost_amount = value
         return [
             _create_stock_movement(
                 document=document,
