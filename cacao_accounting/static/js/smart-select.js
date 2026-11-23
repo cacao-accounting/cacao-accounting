@@ -106,8 +106,10 @@
         _defaultTimer: null,
         _closeSoonTimer: null,
         _requestId: 0,
+        highlightedIndex: -1,
 
         init() {
+          this.bindKeyboardNavigation();
           this.lastFilterSignature = this.filterSignature();
           this.bindFilterSources();
           this.invalid = false;
@@ -494,6 +496,65 @@
           this.invalid = Boolean(this.search.trim() && !this.selectedValue && !restoredInitialLabel);
         },
 
+        bindKeyboardNavigation() {
+          const root = this.$el || (typeof document !== 'undefined' ? document : null);
+          if (!root || typeof root.querySelector !== 'function') return;
+          const input = root.querySelector('.ca-smart-select-input');
+          if (!input || input.dataset.smartSelectKeyboard === 'on') return;
+          input.dataset.smartSelectKeyboard = 'on';
+          input.addEventListener('keydown', (event) => this.onKeydown(event));
+        },
+
+        _visibleOptionCount() {
+          return Array.isArray(this.options) ? this.options.length : 0;
+        },
+
+        highlightNext() {
+          const total = this._visibleOptionCount();
+          this.highlightedIndex = total ? (this.highlightedIndex + 1) % total : -1;
+          return this.highlightedIndex;
+        },
+
+        highlightPrevious() {
+          const total = this._visibleOptionCount();
+          this.highlightedIndex = total ? (this.highlightedIndex - 1 + total) % total : -1;
+          return this.highlightedIndex;
+        },
+
+        highlightedOption() {
+          const total = this._visibleOptionCount();
+          if (this.highlightedIndex < 0 || this.highlightedIndex >= total) return null;
+          return this.options[this.highlightedIndex];
+        },
+
+        onKeydown(event) {
+          const key = event && event.key;
+          if (key === 'ArrowDown') {
+            if (event.preventDefault) event.preventDefault();
+            if (!this.open) this.openMenu();
+            this.highlightNext();
+            return;
+          }
+          if (key === 'ArrowUp') {
+            if (event.preventDefault) event.preventDefault();
+            if (!this.open) this.openMenu();
+            this.highlightPrevious();
+            return;
+          }
+          if (key === 'Enter' && this.open) {
+            const option = this.highlightedOption();
+            if (option) {
+              if (event.preventDefault) event.preventDefault();
+              this.selectOption(option);
+            }
+            return;
+          }
+          if (key === 'Escape') {
+            if (event.preventDefault) event.preventDefault();
+            this.closeMenu();
+          }
+        },
+
         openMenu() {
           this.open = true;
           this.bindMenuPositionListeners();
@@ -502,6 +563,7 @@
 
         closeMenu() {
           this._cancelCloseSoon();
+          this.highlightedIndex = -1;
           this.open = false;
           this.unbindMenuPositionListeners();
           this.clearMenuPosition();
