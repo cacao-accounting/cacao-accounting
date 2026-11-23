@@ -5,13 +5,15 @@
 
 from __future__ import annotations
 
+import json
+import re
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 
 from cacao_accounting.contabilidad.journal_service import create_journal_draft, update_journal_draft
-from cacao_accounting.database import Accounts, Book, Entity, User, UserCompanyAccess, database
+from cacao_accounting.database import Accounts, Book, ComprobanteContable, Entity, User, UserCompanyAccess, database
 
 
 def _payload(**overrides: object) -> dict[str, object]:
@@ -79,15 +81,24 @@ def test_cambiar_de_moneda_con_tasa_enviada_no_conserva_la_tasa_anterior(app, en
         assert actualizado.exchange_rate is None
 
 
-def test_cambiar_compania_con_otro_base_no_conserva_la_tasa_anterior(app, entorno_contable, reference_users):
+def test_cambiar_compania_con_otro_base_no_conserva_la_tasa_anterior(entorno_contable_aislado):
     """Cambiar de compañía cambia la base monetaria y descarta la tasa anterior."""
-    del reference_users
-    del entorno_contable
+    app = entorno_contable_aislado.app
+    actor_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
     with app.app_context():
-        actor_id = _actor_id()
         suffix = uuid4().hex[:6]
-        company = database.session.execute(database.select(Entity).filter_by(code="alpha")).scalar_one()
-        company.currency = "USD"
+        database.session.add(
+            Entity(
+                code="alpha",
+                name="Alpha",
+                company_name="Alpha Company",
+                tax_id="J0002",
+                currency="USD",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
         database.session.add(
             Book(
                 entity="alpha",
@@ -98,11 +109,7 @@ def test_cambiar_compania_con_otro_base_no_conserva_la_tasa_anterior(app, entorn
                 currency="USD",
             )
         )
-        access = database.session.execute(
-            database.select(UserCompanyAccess).filter_by(user_id=actor_id, company_code="alpha")
-        ).scalar_one_or_none()
-        if access is None:
-            database.session.add(UserCompanyAccess(user_id=actor_id, company_code="alpha"))
+        database.session.add(UserCompanyAccess(user_id=actor_id, company_code="alpha"))
         debit_code = f"D{suffix}"
         credit_code = f"C{suffix}"
         database.session.add_all(
@@ -130,3 +137,34 @@ def test_cambiar_compania_con_otro_base_no_conserva_la_tasa_anterior(app, entorn
         assert actualizado.base_currency == "USD"
         assert actualizado.transaction_currency == "USD"
         assert actualizado.exchange_rate is None
+
+
+def test_edicion_http_sin_tasa_conserva_tasa_y_base(entorno_contable_aislado):
+    """El POST real al formulario conserva la tasa y la moneda base del borrador."""
+    app = entorno_contable_aislado.app
+    actor_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
+    with app.app_context():
+        journal = create_journal_draft(_payload(), user_id=actor_id, assign_identifier=False)
+        identifier = journal.id
+
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = actor_id
+        session["_fresh"] = True
+
+    edit_payload = _payload()
+    edit_payload.pop("base_currency")
+    edit_payload.pop("exchange_rate")
+    response = client.post(f"/accounting/journal/edit/{identifier}", data={"journal_payload": json.dumps(edit_payload)})
+
+    assert response.status_code == 302
+    with app.app_context():
+        persisted = database.session.get(ComprobanteContable, identifier)
+        assert persisted.base_currency == "NIO"
+        assert persisted.exchange_rate == Decimal("36.5")
+
+    page = client.get(f"/accounting/journal/edit/{identifier}")
+
+    assert page.status_code == 200
+    tasas = re.findall(r'"exchange_rate":\s*"([0-9.]+)"', page.get_data(as_text=True))
+    assert tasas and Decimal(tasas[0]) == Decimal("36.5")
