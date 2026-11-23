@@ -35,6 +35,7 @@ from cacao_accounting.compras.purchase_sourcing_service import (
 
 from cacao_accounting.database import (
     CompanyParty,
+    Currency,
     DocumentRelation,
     ImportLandedCost,
     ImportLandedCostCharge,
@@ -2145,6 +2146,12 @@ def _handle_purchase_receipt_edit_post(registro):
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
+    requested_currency = (request.form.get("transaction_currency") or request.form.get("currency") or "").strip()
+    if requested_currency and requested_currency != registro.transaction_currency:
+        currency = database.session.execute(database.select(Currency).filter_by(code=requested_currency)).scalar_one_or_none()
+        if currency is None or currency.active is False:
+            raise ValueError(_("La moneda seleccionada no está activa."))
+        registro.transaction_currency = requested_currency
 
     for item in _active_receipt_items(registro.id):
         item.is_superseded = True
