@@ -32,11 +32,11 @@
       {{ form.csrf_token }}
       <div class="col-12 col-md-6">
         <label class="form-label" for="origin">{{ _('Moneda Origen') }} <span class="text-danger">*</span></label>
-        <input class="form-control form-control-sm" id="origin" name="origin" list="monedas" required autocomplete="off">
+        <input class="form-control form-control-sm" id="origin" name="origin" list="monedas" value="{{ request.form.get('origin', '') }}" required autocomplete="off">
       </div>
       <div class="col-12 col-md-6">
         <label class="form-label" for="destination">{{ _('Moneda Destino') }} <span class="text-danger">*</span></label>
-        <input class="form-control form-control-sm" id="destination" name="destination" list="monedas" required autocomplete="off">
+        <input class="form-control form-control-sm" id="destination" name="destination" list="monedas" value="{{ request.form.get('destination', '') }}" required autocomplete="off">
       </div>
       <div class="col-12 col-md-6">
         <label class="form-label" for="rate">{{ _('Tasa de Cambio') }} <span class="text-danger">*</span></label>

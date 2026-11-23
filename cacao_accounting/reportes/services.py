@@ -2568,20 +2568,20 @@ def _apply_party_filters(query: Any, filters: FinancialReportFilters) -> Any:
 
 
 def _apply_cancellation_scope(query: Any, filters: FinancialReportFilters) -> Any:
-    from cacao_accounting.cancellation_scope import ordinary_gl_scope
+    from cacao_accounting.cancellation_scope import effective_gl_scope
 
     if filters.include_cancellations or filters.status == "cancelled":
         return query
-    return query.where(*ordinary_gl_scope())
+    return query.where(*effective_gl_scope())
 
 
 def _apply_status_filter(query: Any, filters: FinancialReportFilters) -> Any:
-    from cacao_accounting.cancellation_scope import cancelled_originals_scope, ordinary_gl_scope
+    from cacao_accounting.cancellation_scope import cancelled_originals_scope, effective_gl_scope
 
     if filters.status == "cancelled":
         query = query.where(*cancelled_originals_scope())
     elif filters.status in {"submitted", "posted"}:
-        query = query.where(*ordinary_gl_scope())
+        query = query.where(*effective_gl_scope())
     return query
 
 

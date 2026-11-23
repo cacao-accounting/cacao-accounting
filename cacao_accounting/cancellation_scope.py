@@ -25,3 +25,27 @@ def cancelled_originals_scope() -> tuple[Any]:
     from cacao_accounting.database import GLEntry
 
     return (GLEntry.is_cancelled.is_(True),)
+
+
+def effective_gl_scope() -> tuple[Any, ...]:
+    """Restricciones GL para reportes: originales vivos y reversiones vigentes.
+
+    Excluye originales anulados y conserva las contrapartidas activas cuya
+    línea origen pertenece a **otro** período: son el efecto efectivo de una
+    reversión interperíodo (#1970). Las contrapartidas del mismo período se
+    anulan con su original y quedan fuera.
+    """
+    from sqlalchemy import exists, or_
+    from sqlalchemy.orm import aliased
+
+    from cacao_accounting.database import GLEntry
+
+    origen = aliased(GLEntry)
+    mismo_periodo = exists().where(
+        origen.id == GLEntry.reversal_of,
+        origen.accounting_period_id == GLEntry.accounting_period_id,
+    )
+    return (
+        GLEntry.is_cancelled.is_(False),
+        or_(GLEntry.is_reversal.is_(False), ~mismo_periodo),
+    )
