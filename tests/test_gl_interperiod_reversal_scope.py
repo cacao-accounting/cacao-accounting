@@ -9,7 +9,12 @@ from datetime import date
 from decimal import Decimal
 
 from cacao_accounting.cancellation_scope import effective_gl_scope, ordinary_gl_scope
-from cacao_accounting.database import AccountingPeriod, Book, GLEntry, database
+from cacao_accounting.database import AccountingPeriod, Accounts, Book, GLEntry, database
+from cacao_accounting.reportes.services import (
+    FinancialReportFilters,
+    get_account_movement_detail,
+    get_income_statement_report,
+)
 
 
 def _periodo(period_id: str, start: date, end: date) -> AccountingPeriod:
@@ -77,3 +82,94 @@ def test_incluye_reversion_interperiodo_y_excluye_la_del_mismo_periodo(app, ento
         # interperíodo: queda fijado como regresión del defecto.
         anteriores = set(database.session.execute(database.select(GLEntry.id).where(*ordinary_gl_scope())).scalars().all())
         assert contra_nov.id not in anteriores
+
+
+def test_reporte_gl_incluye_reversion_interperiodo_en_su_periodo(entorno_contable_aislado):
+    """El detalle GL y el estado de resultados reflejan la reversa en junio."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        database.session.add(_periodo("P2026-06", date(2026, 6, 1), date(2026, 6, 30)))
+        cuenta = Accounts(
+            entity="cacao",
+            code="5299",
+            name="Gasto de revaluación",
+            classification="expense",
+            account_type="expense",
+            active=True,
+            enabled=True,
+            group=False,
+        )
+        database.session.add(cuenta)
+        database.session.flush()
+        libro = _libro()
+
+        def entrada(fecha: date, periodo: str, *, debito="0", credito="0", **extra) -> GLEntry:
+            datos = {
+                "company": "cacao",
+                "account_code": cuenta.code,
+                "account_id": cuenta.id,
+                "ledger_id": libro,
+                "posting_date": fecha,
+                "accounting_period_id": periodo,
+                "debit": Decimal(debito),
+                "credit": Decimal(credito),
+                "voucher_type": "exchange_revaluation",
+                "voucher_id": f"REV-{periodo}-{fecha.day}",
+                "is_cancelled": False,
+                "is_reversal": False,
+            }
+            datos.update(extra)
+            return GLEntry(**datos)
+
+        vivo_mayo = entrada(date(2026, 5, 20), "P2026-05", debito="5")
+        original_mayo = entrada(date(2026, 5, 10), "P2026-05", debito="10", is_cancelled=True)
+        database.session.add_all([vivo_mayo, original_mayo])
+        database.session.flush()
+        reversa_junio = entrada(date(2026, 6, 1), "P2026-06", credito="10", is_reversal=True, reversal_of=original_mayo.id)
+        original_mismo = entrada(date(2026, 5, 12), "P2026-05", debito="7", is_cancelled=True)
+        database.session.add_all([reversa_junio, original_mismo])
+        database.session.flush()
+        contra_mismo = entrada(date(2026, 5, 12), "P2026-05", credito="7", is_reversal=True, reversal_of=original_mismo.id)
+        database.session.add(contra_mismo)
+        database.session.commit()
+
+        mayo = get_account_movement_detail(
+            FinancialReportFilters(
+                company="cacao",
+                ledger="DEFAULT_BOOK",
+                accounting_period="P2026-05",
+                account_code="5299",
+                page_size=100,
+                export_all=True,
+            )
+        )
+        junio = get_account_movement_detail(
+            FinancialReportFilters(
+                company="cacao",
+                ledger="DEFAULT_BOOK",
+                accounting_period="P2026-06",
+                account_code="5299",
+                page_size=100,
+                export_all=True,
+            )
+        )
+        estado_junio = get_income_statement_report(
+            FinancialReportFilters(
+                company="cacao",
+                ledger="DEFAULT_BOOK",
+                accounting_period="P2026-06",
+                page_size=100,
+                export_all=True,
+            )
+        )
+
+        debito_mayo = sum((row.values.get("debit", Decimal("0")) for row in mayo.rows), Decimal("0"))
+        credito_mayo = sum((row.values.get("credit", Decimal("0")) for row in mayo.rows), Decimal("0"))
+        assert debito_mayo == Decimal("5")
+        assert credito_mayo == Decimal("0")
+
+        debito_junio = sum((row.values.get("debit", Decimal("0")) for row in junio.rows), Decimal("0"))
+        credito_junio = sum((row.values.get("credit", Decimal("0")) for row in junio.rows), Decimal("0"))
+        assert debito_junio == Decimal("0")
+        assert credito_junio == Decimal("10")
+        assert estado_junio.totals["expense"] == Decimal("-10")
