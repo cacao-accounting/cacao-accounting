@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.compras.purchase_sourcing_service import (
     PurchaseSourcingError,
+    _award_qty_in_supplier_uom,
     close_purchase_quotation_comparison,
     _validate_award_authorization,
     create_purchase_quotation_award,
@@ -281,6 +282,35 @@ def test_adjudicacion_descarta_justificacion_vacia_sin_excepcion(sourcing_award)
         award = create_purchase_quotation_award(rfq, {ids["rfq_item"]: ids["SQ-CHEAP"]}, "admin", "   ")
         assert award.authorization_reason is None
         assert award.authorized_by is None
+
+
+def test_adjudicacion_limita_cantidad_base_y_conserva_uom_de_oferta(sourcing_award):
+    """The award quantity is capped in base UOM then stored in the supplier UOM."""
+    application, ids = sourcing_award
+    with application.app_context():
+        database.session.add(UOM(code="BOX", name="Caja"))
+        database.session.flush()
+        rfq_item = database.session.get(PurchaseQuotationItem, ids["rfq_item"])
+        quote_line = database.session.execute(
+            database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=ids["SQ-CHEAP"])
+        ).scalar_one()
+        quote_line.uom = "BOX"
+        quote_line.qty_in_base_uom = Decimal("50")
+
+        award = create_purchase_quotation_award(
+            database.session.get(PurchaseQuotation, ids["rfq"]),
+            {ids["rfq_item"]: ids["SQ-CHEAP"]},
+            "admin",
+        )
+        database.session.flush()
+
+        award_item = database.session.execute(
+            database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)
+        ).scalar_one()
+        assert _award_qty_in_supplier_uom(rfq_item, quote_line) == Decimal("0.500000000")
+        assert award_item.qty == Decimal("0.500000000")
+        assert award_item.rate == Decimal("10")
+        assert award_item.amount == Decimal("5.0000")
 
 
 def _close_rfq_manually(application, ids) -> None:

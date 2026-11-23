@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from collections.abc import Sequence
 from logging import getLogger
 from typing import cast
@@ -336,7 +336,7 @@ def create_purchase_quotation_award(
             raise PurchaseSourcingError(
                 _("La oferta seleccionada no cubre el artículo %(item_code)s.") % {"item_code": item.item_code}
             )
-        qty = min(Decimal(str(item.qty)), Decimal(str(offer_line.qty)))
+        qty = _award_qty_in_supplier_uom(item, offer_line)
         database.session.add(
             PurchaseQuotationAwardItem(
                 award_id=award.id,
@@ -354,6 +354,28 @@ def create_purchase_quotation_award(
     if negotiation_round:
         negotiation_round.status = "closed"
     return award
+
+
+def _award_qty_in_supplier_uom(rfq_item: PurchaseQuotationItem, offer_line: SupplierQuotationItem) -> Decimal:
+    """Cap the award to requested base quantity and express it in offer UOM."""
+    requested_base_qty = _positive_base_quantity(rfq_item)
+    offered_qty = Decimal(str(offer_line.qty or 0))
+    offered_base_qty = _positive_base_quantity(offer_line)
+    if not offered_qty.is_finite() or offered_qty <= 0:
+        raise PurchaseSourcingError(_("La oferta seleccionada no tiene cantidad válida."))
+    awarded_base_qty = min(requested_base_qty, offered_base_qty)
+    awarded_qty = (awarded_base_qty * offered_qty / offered_base_qty).quantize(Decimal("0.000000001"), rounding=ROUND_DOWN)
+    if awarded_qty <= 0:
+        raise PurchaseSourcingError(_("La oferta seleccionada no permite una cantidad adjudicable."))
+    return awarded_qty
+
+
+def _positive_base_quantity(line: PurchaseQuotationItem | SupplierQuotationItem) -> Decimal:
+    """Require the base quantity snapshot saved with the submitted line."""
+    base_qty = Decimal(str(line.qty_in_base_uom or 0))
+    if not base_qty.is_finite() or base_qty <= 0:
+        raise PurchaseSourcingError(_("La línea de oferta adjudicada no conserva una cantidad base válida."))
+    return base_qty
 
 
 def close_purchase_quotation_comparison(
