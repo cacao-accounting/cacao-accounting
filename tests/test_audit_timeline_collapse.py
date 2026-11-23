@@ -84,3 +84,58 @@ def test_la_etiqueta_resultante_sigue_el_estado_del_panel(app):
 
     assert 'aria-expanded="false"' in html
     assert html.count('data-bs-toggle="collapse"') == len(pares)
+
+
+def test_timeline_traduce_todas_las_acciones_en_ambos_idiomas(app):
+    """Las 39 acciones de ALLOWED_ACTIONS tienen etiqueta real en es y en."""
+    from flask_babel import force_locale
+
+    from cacao_accounting import audit_action_label
+    from cacao_accounting.audit_trail_service import ALLOWED_ACTIONS
+    from cacao_accounting.i18n import _
+
+    macro_mensajes = {
+        "created": "creó este documento",
+        "updated": "editó este documento",
+        "submitted": "contabilizó este documento",
+        "approved": "aprobó este documento",
+        "cancelled": "anuló este documento",
+        "rejected": "rechazó este documento",
+        "reversed": "revirtió este documento",
+        "reversal_draft_created": "creó un borrador de reversión",
+        "commented": "agregó un comentario",
+    }
+    filas = [
+        SimpleNamespace(
+            event=SimpleNamespace(
+                document_id="DOC-I18N",
+                actor_name="Ana",
+                action=accion,
+                timestamp="2026-05-10 10:00",
+                comment=None,
+            ),
+            changes=[],
+        )
+        for accion in sorted(ALLOWED_ACTIONS)
+    ]
+    plantilla = "{% import 'macros.html' as m %}{{ m.audit_timeline(timeline, page_size=100) }}"
+
+    with app.test_request_context("/"):
+        with force_locale("es"):
+            html_es = render_template_string(plantilla, timeline=filas)
+            etiquetas_es = {accion: audit_action_label(accion) for accion in ALLOWED_ACTIONS}
+            macro_es = {accion: _(texto) for accion, texto in macro_mensajes.items()}
+        with force_locale("en"):
+            html_en = render_template_string(plantilla, timeline=filas)
+            etiquetas_en = {accion: audit_action_label(accion) for accion in ALLOWED_ACTIONS}
+            macro_en = {accion: _(texto) for accion, texto in macro_mensajes.items()}
+
+    for accion in ALLOWED_ACTIONS:
+        if accion in macro_mensajes:
+            assert macro_es[accion] in html_es, accion
+            assert macro_en[accion] in html_en, accion
+            continue
+        assert etiquetas_es[accion] != "acción registrada", accion
+        assert etiquetas_en[accion] != "action recorded", accion
+        assert etiquetas_es[accion] in html_es, accion
+        assert etiquetas_en[accion] in html_en, accion
