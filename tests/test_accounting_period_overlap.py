@@ -350,3 +350,39 @@ def test_nuevo_periodo_rechaza_rango_invertido(app, authenticated_client, period
             database.session.execute(database.select(AccountingPeriod).filter_by(name="PERIODO-INVERTIDO")).scalars().all()
         )
         assert creados == []
+
+
+def test_editar_periodo_rechaza_rango_invertido_y_conserva_fechas(app, authenticated_client, periodos_aislados):
+    """La edición inválida conserva las fechas ya registradas (#1941)."""
+    from cacao_accounting.database import AccountingPeriod, database
+
+    entidad = periodos_aislados["entities"][0]
+    fiscal_year = periodos_aislados["fiscal_years"][0]
+    nombre = "PERIODO-EDITAR-INVERTIDO"
+    period_id = _crear_periodo(
+        app,
+        periodos_aislados,
+        entity=entidad,
+        fiscal_year=fiscal_year,
+        nombre=nombre,
+        start=date(2026, 1, 1),
+        end=date(2026, 12, 31),
+    )
+    response = authenticated_client("admin").post(
+        f"/accounting/accounting_period/{period_id}/edit",
+        data={
+            "entidad": entidad,
+            "fiscal_year": fiscal_year,
+            "nombre": nombre,
+            "inicio": "2026-12-31",
+            "fin": "2026-01-01",
+            "habilitado": "y",
+        },
+    )
+
+    assert response.status_code == 200
+    with app.app_context():
+        periodo = database.session.get(AccountingPeriod, period_id)
+        assert periodo is not None
+        assert periodo.start == date(2026, 1, 1)
+        assert periodo.end == date(2026, 12, 31)
