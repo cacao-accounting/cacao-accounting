@@ -53,7 +53,12 @@ def esta_bloqueada(usuario: User) -> bool:
     if usuario.lockout_until is None:
         return False
     ahora = _now_utc()
-    if usuario.lockout_until > ahora:
+    bloqueo = usuario.lockout_until
+    if bloqueo.tzinfo is not None:
+        # PostgreSQL devuelve la columna con zona; se compara en UTC naive como
+        # el resto del módulo (#1738).
+        bloqueo = bloqueo.astimezone(timezone.utc).replace(tzinfo=None)
+    if bloqueo > ahora:
         return True
     _desbloquear_cuenta(usuario)
     return False
