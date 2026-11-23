@@ -119,3 +119,22 @@ def _crear_borrador_con_cliente(entorno_contable, cliente_id: str, marcador: str
         database.session.add(linea)
         database.session.commit()
         return pedido.id, linea.id
+
+
+def test_edicion_con_tercero_proveedor_rechazada_y_conserva_cliente(entorno_contable, authenticated_client):
+    """#2056: editar no permite sustituir el cliente por un proveedor."""
+    cliente_id = _id_cliente_principal(entorno_contable)
+    proveedor_id = _crear_proveedor_solo(entorno_contable)
+    marcador = f"EDIT-{uuid4().hex[:6]}"
+    pedido_id, _linea = _crear_borrador_con_cliente(entorno_contable, cliente_id, marcador)
+
+    respuesta = authenticated_client("admin").post(
+        f"/sales/sales-request/{pedido_id}/edit",
+        data=_datos_formulario(proveedor_id, marcador),
+    )
+
+    assert respuesta.status_code != 500
+    with entorno_contable.app.app_context():
+        pedido = database.session.get(SalesRequest, pedido_id)
+        assert pedido is not None
+        assert pedido.customer_id == cliente_id
