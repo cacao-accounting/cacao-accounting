@@ -56,6 +56,7 @@ def verifica_coneccion_db(app):
 
     with app.app_context():
         __inicio = time.time()
+        DB_CONN = False
         while (time.time() - __inicio) < TIEMPO_ESPERA or intentos_restantes:
             log.info("Verificando conexión a la base de datos.")
             try:
@@ -84,12 +85,9 @@ def verifica_coneccion_db(app):
             elif intentos_restantes:
                 intentos_restantes = 0
 
-        try:
-            if not DB_CONN:
-                log.warning("No fue imposible establecer una conexión con la base de datos.")
-            return DB_CONN
-        except UnboundLocalError:
-            return False
+        if not DB_CONN:
+            log.warning("No fue imposible establecer una conexión con la base de datos.")
+        return DB_CONN
 
 
 def entidades_creadas():

@@ -187,9 +187,8 @@ def _bank_reconciliation_date(company: str) -> date:
     raw = (request.form.get("reconciliation_date") or request.args.get("reconciliation_date") or "").strip()
     try:
         reconciliation_date = date.fromisoformat(raw) if raw else date.today()
-    except ValueError as exc:
+    except ValueError:
         abort(400, description=_("La fecha de conciliación no es una fecha válida (ISO 8601)."))
-        raise ValueError from exc
 
     period = database.session.execute(
         database.select(AccountingPeriod).where(

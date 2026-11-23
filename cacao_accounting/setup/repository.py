@@ -346,7 +346,7 @@ def create_default_accounting_period(entity: Entity, fiscal_year: "FiscalYear") 
         return existing_period
 
     period_ranges = _generate_fiscal_period_ranges(fiscal_year.year_start_date, fiscal_year.year_end_date)
-    for index, (start, end) in enumerate(period_ranges, start=1):
+    for start, end in period_ranges:
         period_name = f"{start:%Y-%m}"
         period = AccountingPeriod(
             entity=entity.code,

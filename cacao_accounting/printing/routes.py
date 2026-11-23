@@ -70,7 +70,6 @@ def preview_document(document_type: str, document_id: str) -> str:
             company,
         )
         abort(404)
-        raise RuntimeError(_("Flask abort returned unexpectedly"))
 
 
 @printing_public.route("/print/<document_type>/<document_id>/pdf")

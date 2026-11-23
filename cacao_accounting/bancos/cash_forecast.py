@@ -84,7 +84,7 @@ def cash_forecast_list():
     company = request.args.get("company")
     companies = obtener_lista_entidades_por_id_razonsocial()
     if company in (None, "") and companies:
-        for code, name in companies:
+        for code, _name in companies:
             if code:
                 company = code
                 break
@@ -112,7 +112,7 @@ def cash_forecast_new():
     companies = obtener_lista_entidades_por_id_razonsocial()
     company = request.args.get("company") or request.form.get("company")
     if company in (None, "") and companies:
-        for code, name in companies:
+        for code, _name in companies:
             if code:
                 company = code
                 break
@@ -479,7 +479,7 @@ def cash_forecast_manual_entries():
     company = request.args.get("company")
     companies = obtener_lista_entidades_por_id_razonsocial()
     if company in (None, "") and companies:
-        for code, name in companies:
+        for code, _name in companies:
             if code:
                 company = code
                 break
