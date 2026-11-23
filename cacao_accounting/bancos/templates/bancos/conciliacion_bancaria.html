@@ -51,7 +51,7 @@
       </thead>
       <tbody>
         {% for transaction in transactions %}
-        {% set amount = transaction.deposit if transaction.deposit is not none else transaction.withdrawal %}
+        {% set amount = transaction.deposit if transaction.deposit is not none and transaction.deposit > 0 else transaction.withdrawal %}
         <tr>
           <td>{{ transaction.posting_date }}</td>
           <td>{{ transaction.reference_number or "" }}</td>

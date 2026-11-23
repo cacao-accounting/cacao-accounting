@@ -18,6 +18,7 @@ from cacao_accounting.bancos.reconciliation_service import (
     BankCandidate,
     BankReconciliationMatch,
     BankReconciliationRequest,
+    _bank_amount,
     find_bank_reconciliation_candidates,
     reconcile_bank_items,
 )
@@ -167,7 +168,7 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
         )
 
     candidate = max(seen_candidates.values(), key=lambda candidate: candidate.score)
-    transaction_amount = Decimal(str(transaction.deposit if transaction.deposit is not None else transaction.withdrawal))
+    transaction_amount = _bank_amount(transaction)
     allocated = min(transaction_amount, candidate.amount)
     reconciliation = reconcile_bank_items(
         BankReconciliationRequest(
