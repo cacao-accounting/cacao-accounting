@@ -837,7 +837,7 @@ _SEARCH_SELECT_MODULE: dict[str, Any] = {
     "budget": "accounting",
     "tax_template": "accounting",
     "tax_rule": "accounting",
-    "naming_series": "accounting",
+    "naming_series": ("accounting", "inventory"),
     "voucher_type": "accounting",
     "document_no": "accounting",
     "external_counter": "accounting",
@@ -856,7 +856,7 @@ _SEARCH_SELECT_MODULE: dict[str, Any] = {
     "supplier": "purchases",
     # Catálogos compartidos de terceros/precios: cualquiera de los módulos
     # comerciales que los usan concede la consulta.
-    "party": ("sales", "purchases"),
+    "party": ("sales", "purchases", "inventory"),
     "party_group": ("sales", "purchases"),
     "customer_group": ("sales", "purchases"),
     "supplier_group": ("sales", "purchases"),
