@@ -110,6 +110,36 @@ def test_alta_solicitud_rechaza_decimal_invalido(
         )
 
 
+def test_alta_solicitud_con_hueco_guarda_linea_posterior(app, authenticated_client):
+    """Una fila inicial vacía no hace que la solicitud se persista sin su artículo."""
+    marker = f"GAP-PR-{uuid4().hex[:8]}"
+    form = {
+        "company": "cacao",
+        "transaction_currency": "NIO",
+        "posting_date": "2026-05-15",
+        "remarks": marker,
+        "item_code_0": "",
+        "item_code_1": "ART01",
+        "item_name_1": "Articulo Comercial",
+        "qty_1": "2",
+        "uom_1": "UND",
+    }
+
+    response = authenticated_client().post("/buying/purchase-request/new", data=form)
+
+    assert response.status_code == 302
+    with app.app_context():
+        request_record = database.session.execute(database.select(PurchaseRequest).filter_by(remarks=marker)).scalar_one()
+        items = (
+            database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=request_record.id))
+            .scalars()
+            .all()
+        )
+        assert len(items) == 1
+        assert items[0].item_code == "ART01"
+        assert items[0].qty == Decimal("2.0000")
+
+
 @pytest.mark.parametrize(("campo", "valor", "mensaje"), DECIMALES_INVALIDOS)
 def test_alta_cotizacion_rechaza_decimal_invalido(
     app, entorno_contable, authenticated_client, monkeypatch, campo, valor, mensaje

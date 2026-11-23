@@ -19,6 +19,7 @@ from sqlalchemy.exc import DBAPIError
 from cacao_accounting.exceptions import flash_error
 from cacao_accounting.numbers import coerce_decimal
 from cacao_accounting.cache import invalidate_cache
+from cacao_accounting.form_lines import form_line_items
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
@@ -967,7 +968,6 @@ def _save_purchase_order_items(order_id: str, award_source: Any = None) -> tuple
         order.posting_date if order else None,
         order.transaction_currency if order else None,
     )
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
@@ -976,8 +976,7 @@ def _save_purchase_order_items(order_id: str, award_source: Any = None) -> tuple
         if order and order.purchase_award_id
         else []
     )
-    while request.form.get(f"item_code_{i}"):
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
@@ -1039,7 +1038,6 @@ def _save_purchase_order_items(order_id: str, award_source: Any = None) -> tuple
             total_qty += qty
             total += amount
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
@@ -1047,12 +1045,10 @@ def _save_purchase_order_items(order_id: str, award_source: Any = None) -> tuple
 
 def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una solicitud de cotización de compra desde el formulario."""
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
-    while request.form.get(f"item_code_{i}"):
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
@@ -1073,7 +1069,6 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
             _create_line_relation(i, "purchase_quotation", quotation_id, linea.id, qty, uom, Decimal("0"), Decimal("0"))
             total_qty += qty
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
@@ -1081,12 +1076,10 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
 
 def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una solicitud de compra desde el formulario."""
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
-    while request.form.get(f"item_code_{i}"):
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
@@ -1104,7 +1097,6 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             database.session.add(linea)
             total_qty += qty
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
@@ -1112,12 +1104,10 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
 
 def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una cotización de proveedor desde el formulario."""
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
-    while request.form.get(f"item_code_{i}"):
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
@@ -1146,7 +1136,6 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
             total_qty += qty
             total += amount
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
@@ -1211,12 +1200,10 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
         receipt.posting_date if receipt else None,
         receipt.transaction_currency if receipt else None,
     )
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
-    while request.form.get(f"item_code_{i}"):
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
@@ -1250,7 +1237,6 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             total_qty += qty
             total += amount
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
@@ -1279,27 +1265,6 @@ def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | Non
         )
 
 
-def form_line_indexes(prefix: str) -> list[int]:
-    """Índices de línea presentes en el formulario, ordenados y sin huecos.
-
-    Un formulario puede enviar ``item_code_0`` vacío y ``item_code_1`` con
-    datos; iterar mientras el campo exista descartaba las líneas posteriores.
-    Se deduplican sufijos equivalentes como ``1`` y ``01`` (#2214).
-    """
-    indexes: set[int] = set()
-    for key in request.form:
-        if not key.startswith(f"{prefix}_"):
-            continue
-        suffix = key[len(prefix) + 1 :]
-        if suffix.isdigit():
-            try:
-                indexes.add(int(suffix))
-            except ValueError:
-                # Python limita la conversión de sufijos decimales enormes.
-                continue
-    return sorted(indexes)
-
-
 def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una factura de compra desde el formulario."""
     invoice = database.session.get(PurchaseInvoice, invoice_id)
@@ -1309,12 +1274,10 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
         invoice.transaction_currency if invoice else None,
     )
     target_type = PURCHASE_INVOICE
-    indexes = form_line_indexes("item_code")
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
-    for i in indexes:
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
@@ -1702,9 +1665,8 @@ def _award_line_matches_supplier(award_line: PurchaseQuotationAwardItem, supplie
 def _order_form_lines(form: Any) -> list[tuple[str, Decimal, str, str, Decimal]]:
     """Return the item, quantity, source row, unit and price submitted for an order."""
     lines: list[tuple[str, Decimal, str, str, Decimal]] = []
-    index = 0
-    while form.get(f"item_code_{index}"):
-        item_code = str(form.get(f"item_code_{index}") or "").strip()
+    for index, raw_item_code in form_line_items(form, "item_code"):
+        item_code = raw_item_code.strip()
         if item_code:
             lines.append(
                 (
@@ -1715,7 +1677,6 @@ def _order_form_lines(form: Any) -> list[tuple[str, Decimal, str, str, Decimal]]
                     _award_decimal(form.get(f"rate_{index}")) if form.get(f"rate_{index}") not in (None, "") else None,
                 )
             )
-        index += 1
     return lines
 
 

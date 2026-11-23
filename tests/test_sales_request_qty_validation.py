@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import func, select
 
 import cacao_accounting
-from cacao_accounting.database import Party, SalesRequest, SalesRequestItem, database
+from cacao_accounting.database import Item, Party, SalesRequest, SalesRequestItem, database
 
 FECHA = date(2026, 5, 15)
 MENSAJE_CANTIDAD = "debe ser mayor a cero"
@@ -90,6 +90,50 @@ def test_pedido_con_cantidad_positiva_se_persiste(entorno_contable, authenticate
         assert linea is not None
         assert linea.item_code == "ART01"
         assert Decimal(str(linea.qty)) == Decimal("1")
+
+
+def test_alta_pedido_guarda_lineas_despues_de_hueco(app, entorno_contable, authenticated_client):
+    """El POST persiste todas las líneas aunque falte un índice intermedio."""
+    marker = f"GAP-SR-{uuid4().hex[:10]}"
+    item_code = f"ART-GAP-{uuid4().hex[:6]}"
+    with app.app_context():
+        database.session.add(
+            Item(
+                code=item_code,
+                name="Artículo de regresión",
+                item_type="goods",
+                is_stock_item=True,
+                is_sale_item=True,
+                default_uom="UND",
+            )
+        )
+        database.session.commit()
+
+    form = _datos_formulario(entorno_contable, "1", marker)
+    form.update(
+        {
+            "item_code_2": item_code,
+            "item_name_2": "Artículo de regresión",
+            "qty_2": "2",
+            "rate_2": "10",
+            "uom_2": "UND",
+        }
+    )
+
+    response = authenticated_client().post(RUTA_NUEVO_PEDIDO, data=form)
+
+    assert response.status_code == 302
+    with app.app_context():
+        request_record = database.session.execute(select(SalesRequest).filter_by(remarks=marker)).scalar_one()
+        items = (
+            database.session.execute(
+                select(SalesRequestItem).filter_by(sales_request_id=request_record.id).order_by(SalesRequestItem.item_code)
+            )
+            .scalars()
+            .all()
+        )
+        assert [item.item_code for item in items] == sorted(["ART01", item_code])
+        assert sum((item.qty for item in items), Decimal("0")) == Decimal("3.0000")
 
 
 def test_plantilla_del_formulario_exige_cantidad_minima_positiva():

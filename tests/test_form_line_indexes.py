@@ -5,8 +5,10 @@
 
 from __future__ import annotations
 
+from flask import request
+
 from cacao_accounting import create_app
-from cacao_accounting.compras.services import form_line_indexes
+from cacao_accounting.form_lines import form_line_indexes, form_line_items
 from cacao_accounting.config import configuracion
 
 
@@ -25,7 +27,7 @@ def test_indices_con_hueco_intermedio():
         method="POST",
         data={"item_code_0": "", "item_code_1": "A", "item_code_01": "alias", "item_code_2": "B", "otro": "x"},
     ):
-        assert form_line_indexes("item_code") == [0, 1, 2]
+        assert form_line_indexes(request.form, "item_code") == [0, 1, 2]
 
 
 def test_sin_lineas_devuelve_lista_vacia():
@@ -39,4 +41,11 @@ def test_sin_lineas_devuelve_lista_vacia():
         }
     )
     with app.test_request_context("/", method="POST", data={"otro": "x"}):
-        assert form_line_indexes("item_code") == []
+        assert form_line_indexes(request.form, "item_code") == []
+
+
+def test_indices_pueden_leerse_de_un_formulario_explicito():
+    """Los validadores que reciben un form pueden usar la misma enumeración robusta."""
+    form = {"item_code_0": "A", "item_code_2": "B", "item_code_02": "alias"}
+    assert form_line_indexes(form, "item_code") == [0, 2]
+    assert form_line_items(form, "item_code") == [(0, "A"), (2, "B")]

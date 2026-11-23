@@ -90,11 +90,12 @@ def compras_usd():
 
 def _formulario() -> dict[str, str]:
     return {
-        "item_code_0": "ART-USD",
-        "item_name_0": "Artículo en dólares",
-        "qty_0": "1",
-        "rate_0": "100",
-        "uom_0": "UND",
+        "item_code_0": "",
+        "item_code_1": "ART-USD",
+        "item_name_1": "Artículo en dólares",
+        "qty_1": "1",
+        "rate_1": "100",
+        "uom_1": "UND",
     }
 
 

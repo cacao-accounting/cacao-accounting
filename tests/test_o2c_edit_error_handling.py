@@ -3,6 +3,8 @@
 
 """Regresión #2126: edición O2C sin líneas responde controlado y conserva las líneas."""
 
+# pylint: disable=duplicate-code
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,6 +17,7 @@ import pytest
 from cacao_accounting.database import (
     DeliveryNote,
     DeliveryNoteItem,
+    Item,
     Party,
     SalesOrder,
     SalesOrderItem,
@@ -200,3 +203,68 @@ def test_edicion_con_error_de_totales_responde_controlado_y_conserva_lineas(
         linea = database.session.get(especificacion.lineas, linea_id)
         assert linea is not None
         assert linea.item_code == "ART01"
+
+
+def test_edicion_orden_venta_persiste_linea_despues_de_hueco(entorno_contable, authenticated_client):
+    """Una edición destructiva de SalesOrder no descarta la fila tras un índice ausente."""
+    app = entorno_contable.app
+    marker = f"EDIT-GAP-{uuid4().hex[:10]}"
+    specification = EspecificacionEdicion(
+        documento="orden de venta",
+        modelo=SalesOrder,
+        lineas=SalesOrderItem,
+        clave_foranea="sales_order_id",
+        ruta_edicion="/sales/sales-order/{id}/edit",
+        con_bodega=True,
+    )
+    order_id, _old_line_id = _crear_borrador_con_linea(entorno_contable, specification, marker)
+    item_code = f"ART-GAP-{uuid4().hex[:6]}"
+    with app.app_context():
+        customer_id = database.session.execute(database.select(Party.id).filter_by(code="CLI001")).scalar_one()
+        database.session.add(
+            Item(
+                code=item_code,
+                name="Artículo de regresión",
+                item_type="goods",
+                is_stock_item=True,
+                is_sale_item=True,
+                default_uom="UND",
+            )
+        )
+        database.session.commit()
+
+    response = authenticated_client().post(
+        f"/sales/sales-order/{order_id}/edit",
+        data={
+            "company": "cacao",
+            "currency": "NIO",
+            "posting_date": FECHA.isoformat(),
+            "customer_id": customer_id,
+            "remarks": marker,
+            "item_code_0": "ART01",
+            "item_name_0": "Articulo Comercial",
+            "qty_0": "2",
+            "rate_0": "10",
+            "uom_0": "UND",
+            "warehouse_0": "BOD01",
+            "item_code_2": item_code,
+            "item_name_2": "Artículo de regresión",
+            "qty_2": "3",
+            "rate_2": "5",
+            "uom_2": "UND",
+            "warehouse_2": "BOD01",
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        order = database.session.execute(database.select(SalesOrder).filter_by(remarks=marker)).scalar_one()
+        items = (
+            database.session.execute(
+                database.select(SalesOrderItem).filter_by(sales_order_id=order.id).order_by(SalesOrderItem.item_code)
+            )
+            .scalars()
+            .all()
+        )
+        assert [line.item_code for line in items] == sorted(["ART01", item_code])
+        assert sum((line.qty for line in items), Decimal("0")) == Decimal("5.0000")

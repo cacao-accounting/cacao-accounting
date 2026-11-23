@@ -127,23 +127,7 @@ from cacao_accounting.logistics import copy_logistics, logistics_values
 from cacao_accounting.i18n import LazyText, _, _l
 
 from cacao_accounting.numbers import coerce_decimal
-
-
-def _max_line_index(prefix: str) -> int:
-    """Mayor índice de línea enviado, sin truncar por filas vacías (#1039).
-
-    Iterar mientras el campo exista descartaba las líneas posteriores a un
-    hueco; la grilla puede enviar ``item_code_0`` vacío y ``item_code_1`` con
-    datos.
-    """
-    indices: list[int] = []
-    for key in request.form:
-        if not key.startswith(f"{prefix}_"):
-            continue
-        sufijo = key[len(prefix) + 1 :]
-        if sufijo.isdigit():
-            indices.append(int(sufijo))
-    return max(indices, default=-1)
+from cacao_accounting.form_lines import form_line_items
 
 
 def _raise_posting_error(message: str) -> NoReturn:
@@ -1156,14 +1140,11 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     order = database.session.get(SalesOrder, order_id)
     if order is None:
         raise ValueError(_("La orden de venta no existe."))
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    max_index = _max_line_index("item_code")
-    while i <= max_index:
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             if item_code in seen_item_codes:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
@@ -1202,7 +1183,6 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             total_qty += qty
             total += amount
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
@@ -1213,14 +1193,11 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
     sales_request = database.session.get(SalesRequest, request_id)
     if sales_request is None:
         raise ValueError(_("El pedido de venta no existe."))
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    max_index = _max_line_index("item_code")
-    while i <= max_index:
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             if item_code in seen_item_codes:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
@@ -1250,7 +1227,6 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             total_qty += qty
             total += amount
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
@@ -1261,14 +1237,11 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
     quotation = database.session.get(SalesQuotation, quotation_id)
     if quotation is None:
         raise ValueError(_("La cotización de venta no existe."))
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    max_index = _max_line_index("item_code")
-    while i <= max_index:
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             if item_code in seen_item_codes:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
@@ -1298,7 +1271,6 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
             total_qty += qty
             total += amount
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
@@ -1309,14 +1281,11 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
     delivery_note = database.session.get(DeliveryNote, note_id)
     if delivery_note is None:
         raise ValueError(_("La nota de entrega no existe."))
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    max_index = _max_line_index("item_code")
-    while i <= max_index:
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             if item_code in seen_item_codes:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
@@ -1359,7 +1328,6 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
             total_qty += qty
             total += amount
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
@@ -1370,14 +1338,11 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     invoice = database.session.get(SalesInvoice, invoice_id)
     if invoice is None:
         raise ValueError(_("La factura de venta no existe."))
-    i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    max_index = _max_line_index("item_code")
-    while i <= max_index:
-        item_code = request.form.get(f"item_code_{i}", "")
+    for i, item_code in form_line_items(request.form, "item_code"):
         if item_code.strip():
             if item_code in seen_item_codes:
                 raise DocumentFlowError(_msg_item_repetido(item_code), 400)
@@ -1417,7 +1382,6 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             total_qty += qty
             total += amount
             line_count += 1
-        i += 1
     if line_count == 0:
         raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
