@@ -428,14 +428,49 @@ def pending_approval_count() -> int:
 
 
 def audit_action_label(action: str) -> str:
-    """Return display text for audit actions not covered by older template maps."""
+    """Return localized display text for every allowed audit action (#1968)."""
     labels = {
+        "created": _("creó el documento"),
+        "updated": _("actualizó el documento"),
+        "submitted": _("envió el documento"),
+        "approved": _("aprobó el documento"),
+        "cancelled": _("anuló el documento"),
+        "rejected": _("rechazó el documento"),
+        "reversed": _("revirtió el documento"),
+        "reversal_draft_created": _("creó el borrador de reversión"),
+        "imported": _("importó registros"),
+        "reconciled": _("concilió"),
+        "partially_reconciled": _("concilió parcialmente"),
+        "closed": _("cerró"),
+        "reopened": _("reabrió"),
+        "commented": _("comentó"),
+        "uploaded": _("adjuntó un archivo"),
+        "downloaded": _("descargó un archivo"),
+        "deleted": _("eliminó"),
+        "download_attempted": _("intentó descargar"),
+        "delete_attempted": _("intentó eliminar"),
+        "update_attempted": _("intentó actualizar"),
+        "cleanup_failed": _("falló la limpieza"),
         "task_created": _("asignó una tarea"),
         "task_status_changed": _("cambió el estado de una tarea"),
         "task_completed": _("completó una tarea"),
         "task_cancelled": _("canceló una tarea"),
+        "approval_requested": _("solicitó aprobación"),
+        "cancellation_requested": _("solicitó anulación"),
+        "balance_confirmation_created": _("creó una confirmación de saldos"),
+        "balance_confirmation_sent": _("envió una confirmación de saldos"),
+        "balance_confirmation_resent": _("reenvió una confirmación de saldos"),
+        "balance_confirmation_viewed": _("consultó una confirmación de saldos"),
+        "balance_confirmation_verified": _("verificó una confirmación de saldos"),
+        "balance_confirmation_confirmed": _("confirmó saldos"),
+        "balance_confirmation_disputed": _("disputó saldos"),
+        "balance_confirmation_cancelled": _("anuló una confirmación de saldos"),
+        "balance_confirmation_expired": _("confirmación de saldos expirada"),
+        "email_sent": _("envió un correo"),
+        "login_failed": _("intento de acceso fallido"),
+        "login_unlocked": _("desbloqueó el acceso"),
     }
-    return labels.get(action, action)
+    return labels.get(action, _("acción registrada"))
 
 
 def _transaction_form_i18n_labels() -> dict[str, str]:

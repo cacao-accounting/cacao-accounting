@@ -24536,3 +24536,147 @@ msgstr "at"
 #: cacao_accounting/admin/routes.py
 msgid "Actualizar rol"
 msgstr "Update role"
+
+#: cacao_accounting/__init__.py
+msgid "creó el documento"
+msgstr "created the document"
+
+#: cacao_accounting/__init__.py
+msgid "actualizó el documento"
+msgstr "updated the document"
+
+#: cacao_accounting/__init__.py
+msgid "envió el documento"
+msgstr "submitted the document"
+
+#: cacao_accounting/__init__.py
+msgid "aprobó el documento"
+msgstr "approved the document"
+
+#: cacao_accounting/__init__.py
+msgid "anuló el documento"
+msgstr "cancelled the document"
+
+#: cacao_accounting/__init__.py
+msgid "rechazó el documento"
+msgstr "rejected the document"
+
+#: cacao_accounting/__init__.py
+msgid "revirtió el documento"
+msgstr "reversed the document"
+
+#: cacao_accounting/__init__.py
+msgid "creó el borrador de reversión"
+msgstr "created the reversal draft"
+
+#: cacao_accounting/__init__.py
+msgid "importó registros"
+msgstr "imported records"
+
+#: cacao_accounting/__init__.py
+msgid "concilió"
+msgstr "reconciled"
+
+#: cacao_accounting/__init__.py
+msgid "concilió parcialmente"
+msgstr "partially reconciled"
+
+#: cacao_accounting/__init__.py
+msgid "cerró"
+msgstr "closed"
+
+#: cacao_accounting/__init__.py
+msgid "reabrió"
+msgstr "reopened"
+
+#: cacao_accounting/__init__.py
+msgid "comentó"
+msgstr "commented"
+
+#: cacao_accounting/__init__.py
+msgid "adjuntó un archivo"
+msgstr "uploaded a file"
+
+#: cacao_accounting/__init__.py
+msgid "descargó un archivo"
+msgstr "downloaded a file"
+
+#: cacao_accounting/__init__.py
+msgid "eliminó"
+msgstr "deleted"
+
+#: cacao_accounting/__init__.py
+msgid "intentó descargar"
+msgstr "attempted to download"
+
+#: cacao_accounting/__init__.py
+msgid "intentó eliminar"
+msgstr "attempted to delete"
+
+#: cacao_accounting/__init__.py
+msgid "intentó actualizar"
+msgstr "attempted to update"
+
+#: cacao_accounting/__init__.py
+msgid "falló la limpieza"
+msgstr "cleanup failed"
+
+#: cacao_accounting/__init__.py
+msgid "solicitó aprobación"
+msgstr "requested approval"
+
+#: cacao_accounting/__init__.py
+msgid "solicitó anulación"
+msgstr "requested cancellation"
+
+#: cacao_accounting/__init__.py
+msgid "creó una confirmación de saldos"
+msgstr "created a balance confirmation"
+
+#: cacao_accounting/__init__.py
+msgid "envió una confirmación de saldos"
+msgstr "sent a balance confirmation"
+
+#: cacao_accounting/__init__.py
+msgid "reenvió una confirmación de saldos"
+msgstr "resent a balance confirmation"
+
+#: cacao_accounting/__init__.py
+msgid "consultó una confirmación de saldos"
+msgstr "viewed a balance confirmation"
+
+#: cacao_accounting/__init__.py
+msgid "verificó una confirmación de saldos"
+msgstr "verified a balance confirmation"
+
+#: cacao_accounting/__init__.py
+msgid "confirmó saldos"
+msgstr "confirmed balances"
+
+#: cacao_accounting/__init__.py
+msgid "disputó saldos"
+msgstr "disputed balances"
+
+#: cacao_accounting/__init__.py
+msgid "anuló una confirmación de saldos"
+msgstr "cancelled a balance confirmation"
+
+#: cacao_accounting/__init__.py
+msgid "confirmación de saldos expirada"
+msgstr "balance confirmation expired"
+
+#: cacao_accounting/__init__.py
+msgid "envió un correo"
+msgstr "sent an email"
+
+#: cacao_accounting/__init__.py
+msgid "intento de acceso fallido"
+msgstr "failed login attempt"
+
+#: cacao_accounting/__init__.py
+msgid "desbloqueó el acceso"
+msgstr "unlocked the login"
+
+#: cacao_accounting/__init__.py
+msgid "acción registrada"
+msgstr "recorded action"
