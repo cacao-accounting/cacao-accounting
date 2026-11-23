@@ -107,7 +107,7 @@
             </button>
             {% endif %}
             {% endif %}
-            {% if registro.status == "submitted" %}
+            {% if registro.status == "submitted" and (not registro.is_fiscal_year_closing or current_user.classification == "admin") %}
             <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}"
                 onsubmit="var r=prompt('{{ _('Indique el motivo de la anulación:') }}'); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -163,7 +163,7 @@
                 </button>
                 {% endif %}
                 {% endif %}
-                {% if registro.status == "submitted" %}
+                {% if registro.status == "submitted" and (not registro.is_fiscal_year_closing or current_user.classification == "admin") %}
                 <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}"
                     onsubmit="var r=prompt('{{ _('Indique el motivo de la anulación:') }}'); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

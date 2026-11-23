@@ -3761,6 +3761,8 @@ def anular_comprobante(identifier: str):
     if not journal:
         abort(404)
     exige_acceso_compania("accounting", journal.entity, "anular")
+    if journal.is_fiscal_year_closing and current_user.classification != "admin":
+        abort(403, description=_("Solo el administrador del sistema puede anular un cierre fiscal."))
     reason = (request.form.get("reason") or "").strip()
     if not reason:
         flash(_("Debe indicar el motivo de la anulación."), "danger")
