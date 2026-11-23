@@ -96,3 +96,12 @@ def validate_css_safety(stylesheet_body: Optional[str]) -> None:
     # Basic check for expression() or other dynamic CSS
     if "expression(" in stylesheet_body.lower():
         raise TemplateValidationError(_("Dynamic CSS expressions are not allowed."))
+
+    # #1930: el tamaño y la orientación de página pertenecen a la configuración
+    # de impresión. Una regla @page con `size` (incluido `!important`) podría
+    # imponerse a la selección del usuario, así que se rechaza explícitamente.
+    for bloque in re.finditer(r"@page[^{]*\{([^}]*)\}", stylesheet_body, re.IGNORECASE | re.DOTALL):
+        if re.search(r"(?:^|[;\s])size\s*:", bloque.group(1), re.IGNORECASE):
+            raise TemplateValidationError(
+                _("El CSS de la plantilla no puede definir el tamaño de página; use la configuración de impresión.")
+            )

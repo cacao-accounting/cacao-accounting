@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -19,22 +20,38 @@ def _template(paper_size: str = "letter", orientation: str = "portrait") -> Simp
     """Construye una plantilla mínima para el servicio de impresión."""
     return SimpleNamespace(
         template_body="<p>Documento</p>",
-        stylesheet_body="@page { size: letter portrait; margin: 15mm; }",
+        stylesheet_body="@page { margin: 15mm; }",
         paper_size=paper_size,
         orientation=orientation,
     )
 
 
-def test_la_regla_configurada_gana_al_css_de_la_plantilla():
-    """La regla inyectada se emite después del CSS persistido."""
+@pytest.mark.parametrize(
+    "stylesheet",
+    [
+        "@page { size: letter portrait; margin: 15mm; }",
+        "@page { size: A4 landscape !important; }",
+        "@page :first { size: A4 landscape; }",
+    ],
+)
+def test_css_de_plantilla_no_puede_definir_el_tamano_de_pagina(stylesheet):
+    """El CSS persistido no puede imponerse a la página configurada (#1930)."""
+    with pytest.raises(TemplateValidationError, match="tamaño de página"):
+        PrintService().build_print_html("<p>Documento</p>", stylesheet, paper_size="a4", orientation="landscape")
+
+
+def test_margenes_del_css_no_alteran_la_pagina_configurada():
+    """Un @page sin `size` conserva márgenes y la configuración se aplica después."""
     html = PrintService().build_print_html(
         "<p>Documento</p>",
-        "@page { size: letter portrait; margin: 15mm; }",
+        "@page { margin: 15mm; }",
         paper_size="a4",
         orientation="landscape",
     )
 
-    assert html.index("size: letter portrait") < html.index("size: A4 landscape")
+    assert "margin: 15mm" in html
+    assert "size: A4 landscape" in html
+    assert html.rindex("size: A4 landscape") > html.index("margin: 15mm")
 
 
 def test_valores_predeterminados_son_letter_portrait():
@@ -137,3 +154,37 @@ def test_preview_usa_la_configuracion_de_la_plantilla(monkeypatch):
     )
 
     assert "size: letter landscape" in html
+
+
+def _pdf_disponible() -> bool:
+    """Indica si WeasyPrint puede generar PDFs en este entorno."""
+    try:
+        from weasyprint import HTML
+
+        HTML(string="<p>prueba</p>").write_pdf()
+    except Exception:
+        return False
+    return True
+
+
+@pytest.mark.skipif(not _pdf_disponible(), reason="WeasyPrint sin librerías nativas; CI Linux cubre el PDF")
+@pytest.mark.parametrize(
+    ("paper_size", "orientation", "ancho", "alto"),
+    [("letter", "portrait", 612, 792), ("a4", "landscape", 842, 595)],
+)
+def test_pdf_real_usa_las_dimensiones_configuradas(paper_size, orientation, ancho, alto):
+    """El PDF generado expone el MediaBox del tamaño y orientación elegidos."""
+    service = PrintService()
+    html = service.build_print_html(
+        "<p>Documento</p>",
+        "@page { margin: 15mm; }",
+        paper_size=paper_size,
+        orientation=orientation,
+    )
+
+    pdf = service._render_pdf_document(html)
+
+    caja = re.search(rb"/MediaBox\s*\[\s*0\s+0\s+([0-9.]+)\s+([0-9.]+)\s*\]", pdf)
+    assert caja is not None, "El PDF no expone MediaBox"
+    assert int(float(caja.group(1))) == ancho
+    assert int(float(caja.group(2))) == alto

@@ -20299,6 +20299,10 @@ msgstr "Executable URL schemes are not allowed."
 msgid "El CSS no puede cerrar el elemento <style>."
 msgstr "CSS cannot close the <style> element."
 
+#: cacao_accounting/printing/validators.py
+msgid "El CSS de la plantilla no puede definir el tamaño de página; use la configuración de impresión."
+msgstr "Template CSS cannot set the page size; use the print settings."
+
 #: cacao_accounting/printing/validators.py:79
 msgid "Dynamic CSS expressions are not allowed."
 msgstr "Dynamic CSS expressions are not allowed."
