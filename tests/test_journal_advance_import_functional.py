@@ -10,6 +10,8 @@ desconocido debe rechazarse antes de persistir.
 
 from __future__ import annotations
 
+import csv
+from io import StringIO
 from uuid import uuid4
 
 import pytest
@@ -30,6 +32,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
+from cacao_accounting.imports.services.import_service import ImportService
 
 
 @pytest.fixture
@@ -163,5 +166,54 @@ def test_importacion_rechaza_booleano_desconocido(journal_import_scenario):
         document = adapter.build_document(_rows("quizá"), context)
         with pytest.raises(JournalValidationError, match="booleano válido"):
             adapter.persist_document(document)
+        database.session.rollback()
+        assert database.session.execute(database.select(ComprobanteContableDetalle)).scalars().all() == []
+
+
+def _csv_rows(advance: str) -> tuple[list[dict[str, str]], list[str]]:
+    """Devuelve filas y encabezados leídos por el lector CSV real."""
+    contenido = (
+        "document_ref,fecha,cuenta,debito,credito,is_advance\n"
+        f"IMP-CSV,2026-05-15,110101,100,0,{advance}\n"
+        f"IMP-CSV,2026-05-15,410101,0,100,{advance}\n"
+    )
+    lector = csv.DictReader(StringIO(contenido))
+    filas = list(lector)
+    encabezados = list(lector.fieldnames or [])
+    return filas, encabezados
+
+
+@pytest.mark.parametrize(("advance", "esperado"), [("false", False), ("true", True)])
+def test_csv_real_valida_encabezado_y_conserva_is_advance(journal_import_scenario, advance: str, esperado: bool) -> None:
+    """El lector CSV acepta la columna y el valor llega al detalle persistido."""
+    app = journal_import_scenario
+    with app.app_context():
+        filas, encabezados = _csv_rows(advance)
+        adapter = JournalEntryAdapter()
+        errores = ImportService()._collect_header_errors("batch-csv", encabezados, adapter)
+        assert errores == []
+
+        contexto = {"company_id": "cacao", "accounting_book_id": "DEFAULT_BOOK", "created_by": "admin"}
+        documento = adapter.build_document(filas, contexto)
+        adapter.persist_document(documento)
+        detalles = database.session.execute(database.select(ComprobanteContableDetalle)).scalars().all()
+        assert len(detalles) == 2
+        assert all(detalle.is_advance is esperado for detalle in detalles)
+
+
+def test_csv_real_rechaza_booleano_desconocido(journal_import_scenario) -> None:
+    """Un valor no booleano atraviesa el encabezado y falla al persistir."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError
+
+    app = journal_import_scenario
+    with app.app_context():
+        filas, encabezados = _csv_rows("quizá")
+        adapter = JournalEntryAdapter()
+        assert ImportService()._collect_header_errors("batch-csv", encabezados, adapter) == []
+
+        contexto = {"company_id": "cacao", "accounting_book_id": "DEFAULT_BOOK", "created_by": "admin"}
+        documento = adapter.build_document(filas, contexto)
+        with pytest.raises(JournalValidationError, match="booleano válido"):
+            adapter.persist_document(documento)
         database.session.rollback()
         assert database.session.execute(database.select(ComprobanteContableDetalle)).scalars().all() == []

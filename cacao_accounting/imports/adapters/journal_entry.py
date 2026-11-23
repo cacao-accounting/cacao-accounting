@@ -40,6 +40,7 @@ class JournalEntryAdapter(BaseImportAdapter):
         "debito",
         "credito",
         "referencia",
+        "is_advance",
     ]
     required_columns = ["document_ref", "fecha", "cuenta", "debito", "credito"]
     column_aliases = {
