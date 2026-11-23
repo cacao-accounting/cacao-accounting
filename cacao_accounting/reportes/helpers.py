@@ -427,16 +427,22 @@ def _handle_saved_view_action(report_code: str, filters: FinancialReportFilters)
         SavedReportViewError,
         get_saved_view,
         restore_filters,
+        view_display,
     )
 
     view_key = (request.args.get("saved_view") or "default").strip() or "default"
     g.saved_report_view = None
+    g.view_show_users = False
+    g.view_advanced = False
     if view_key == "default":
         return filters, "default"
     user_id = getattr(current_user, "id", None)
     try:
         view = get_saved_view(view_key, report_code, filters.company, user_id)
         g.saved_report_view = view
+        display = view_display(view)
+        g.view_show_users = bool(display.get("show_users"))
+        g.view_advanced = bool(display.get("advanced"))
         return restore_filters(filters, view), str(view.id)
     except SavedReportViewError as exc:
         abort(404, description=str(exc))
@@ -1263,6 +1269,11 @@ def _export_financial_report(report, report_code: str, title: str, report_filter
     return None
 
 
+def _show_users_enabled() -> bool:
+    """Indica si la vista aplicada o la URL piden columnas de autoría."""
+    return _bool_arg("show_users") or bool(getattr(g, "view_show_users", False))
+
+
 def _compute_display_columns(report, report_code: str, saved_view: str) -> list[str]:
     selected_columns = request.args.getlist("visible_columns")
     if not selected_columns:
@@ -1272,7 +1283,7 @@ def _compute_display_columns(report, report_code: str, saved_view: str) -> list[
         columns = [column for column in columns if column in selected_columns]
     if report_code == "trial-balance":
         columns = [column for column in columns if column != "level"]
-    required_authors = {"created_by", "created_at", "approved_by", "approved_at"} if _bool_arg("show_users") else set()
+    required_authors = {"created_by", "created_at", "approved_by", "approved_at"} if _show_users_enabled() else set()
     display_columns = [
         column
         for column in columns
@@ -1462,7 +1473,7 @@ def _render_financial_report(
 ):
     from cacao_accounting.document_authorship import report_authorship
 
-    report = report_authorship(report, report_filters.company, _bool_arg("show_users"))
+    report = report_authorship(report, report_filters.company, _show_users_enabled())
     export_response = _export_financial_report(report, report_code, report_title, report_filters)
     if export_response is not None:
         return export_response
@@ -1573,7 +1584,7 @@ def _render_operational_framework(
 ):
     from cacao_accounting.document_authorship import report_authorship
 
-    report = report_authorship(report, str(filter_state.get("company") or ""), _bool_arg("show_users"))
+    report = report_authorship(report, str(filter_state.get("company") or ""), _show_users_enabled())
     export_response = _export_operational_report(report, report_code, report_title, filter_state)
     if export_response is not None:
         return export_response

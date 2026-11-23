@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 {% from "smart_select_field.html" import smart_select_field %}
 {% from "reportes/report_macros.html" import period_range_field %}
+{% set view_show_users = g.get('view_show_users') if g else false %}
+{% set view_advanced = g.get('view_advanced') if g else false %}
+{% set show_users_active = request.args.get('show_users') in ('1', 'true', 'yes', 'on') or view_show_users %}
+{% set advanced_active = request.args.get('advanced') == '1' or view_advanced %}
 {% block contenido %}
 <nav aria-label="{{ _('Ruta de navegación') }}">
   <ol class="breadcrumb lh-sm">
@@ -49,7 +53,7 @@
       </div>
       <form method="get" class="d-grid gap-2" id="financial-filter-form">
         <input type="hidden" name="apply_filters" value="1">
-        <input type="hidden" id="financial-advanced-state" name="advanced" value="{{ '1' if request.args.get('advanced') == '1' else '0' }}">
+        <input type="hidden" id="financial-advanced-state" name="advanced" value="{{ '1' if advanced_active else '0' }}">
                 <div class="d-flex flex-wrap gap-2 mb-2">
           <button class="btn btn-primary" type="submit">{{ _("Aplicar filtros") }}</button>
           <a class="btn btn-outline-secondary" href="{{ request.path }}">{{ _("Limpiar filtros") }}</a>
@@ -72,7 +76,7 @@
         </label>
         {% if is_cloud_mode() and report_code == 'account-movement' %}
         <label class="form-check">
-          <input class="form-check-input" type="checkbox" name="show_users" value="1" {% if request.args.get('show_users') in ('1', 'true', 'yes', 'on') %}checked{% endif %}>
+          <input class="form-check-input" type="checkbox" name="show_users" value="1" {% if show_users_active %}checked{% endif %}>
           <span class="form-check-label">{{ _('Mostrar usuarios') }}</span>
         </label>
         {% endif %}
@@ -81,12 +85,12 @@
           type="button"
           id="financial-advanced-toggle"
           aria-controls="financial-advanced-filters"
-          aria-expanded="{{ 'true' if request.args.get('advanced') == '1' else 'false' }}"
+          aria-expanded="{{ 'true' if advanced_active else 'false' }}"
         >
-          <span data-advanced-label="show" {% if request.args.get('advanced') == '1' %}hidden{% endif %}>{{ _("Mostrar filtros avanzados") }}</span>
-          <span data-advanced-label="hide" {% if request.args.get('advanced') != '1' %}hidden{% endif %}>{{ _("Ocultar filtros avanzados") }}</span>
+          <span data-advanced-label="show" {% if advanced_active %}hidden{% endif %}>{{ _("Mostrar filtros avanzados") }}</span>
+          <span data-advanced-label="hide" {% if not advanced_active %}hidden{% endif %}>{{ _("Ocultar filtros avanzados") }}</span>
         </button>
-        <div class="ca-report-advanced-filters d-grid gap-2{% if request.args.get('advanced') != '1' %} is-hidden{% endif %}" id="financial-advanced-filters">
+        <div class="ca-report-advanced-filters d-grid gap-2{% if not advanced_active %} is-hidden{% endif %}" id="financial-advanced-filters">
           <label class="form-label mb-0 w-100">
             {{ _("Comprobante") }}
             <input class="form-control" type="text" name="voucher_number" id="report-voucher-number"

@@ -194,3 +194,32 @@ def test_guarda_aplica_y_elimina_por_http(app, entorno_contable, authenticated_c
     assert eliminada.status_code == 302
     with app.app_context():
         assert database.session.get(SavedReportView, view.id) is None
+
+
+def test_vista_restaura_usuarios_y_filtros_avanzados(app, entorno_contable, authenticated_client):
+    """Aplicar una vista restaura autoría y panel avanzado sin query params."""
+    client = authenticated_client()
+    with app.app_context():
+        view = create_saved_view(
+            "account-movement",
+            "cacao",
+            _admin_id(),
+            f"Indicadores {uuid4().hex[:6]}",
+            _filters(),
+            {"show_users": True, "advanced": True},
+        )
+        view_id = view.id
+
+    original = app.jinja_env.globals.get("is_cloud_mode")
+    app.jinja_env.globals["is_cloud_mode"] = lambda: True
+    try:
+        response = client.get(f"/reports/account-movement?company=cacao&apply_filters=1&saved_view={view_id}")
+    finally:
+        app.jinja_env.globals["is_cloud_mode"] = original
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'name="advanced" value="1"' in html
+    assert 'name="show_users" value="1" checked' in html
+    assert 'id="financial-advanced-filters"' in html
+    assert 'is-hidden" id="financial-advanced-filters"' not in html
