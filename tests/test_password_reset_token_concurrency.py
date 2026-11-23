@@ -70,7 +70,7 @@ def test_emisiones_concurrentes_conservan_un_solo_token(tmp_path, monkeypatch):
 
 
 @pytest.mark.database
-def test_emisiones_concurrentes_en_postgresql_conservan_un_solo_token():
+def test_emisiones_concurrentes_en_postgresql_conservan_un_solo_token(monkeypatch):
     """La serialización se valida con conexiones concurrentes al motor Tier 1."""
     app = create_app({**configuracion, "TESTING": True, "WTF_CSRF_ENABLED": False})
     with app.app_context():
@@ -80,6 +80,16 @@ def test_emisiones_concurrentes_en_postgresql_conservan_un_solo_token():
         database.session.add(User(id=user_id, user=user_id, name="Usuario", password=b"x", active=True))
         database.session.commit()
 
+    locks: list[str] = []
+    lock_rendezvous = Barrier(2)
+    original_lock = device_verification._lock_secret_issuance
+
+    def tracking_lock(target_user_id: str) -> None:
+        locks.append(target_user_id)
+        lock_rendezvous.wait(timeout=10)
+        original_lock(target_user_id)
+
+    monkeypatch.setattr(device_verification, "_lock_secret_issuance", tracking_lock)
     barrier = Barrier(2)
 
     def issue_token(_):
@@ -99,3 +109,5 @@ def test_emisiones_concurrentes_en_postgresql_conservan_un_solo_token():
         active = database.session.scalars(database.select(PasswordResetToken).filter_by(user_id=user_id, consumed=False)).all()
         assert len(active) == 1
         assert sum(validar_token_recuperacion(token) is not None for token in tokens) == 1
+
+    assert locks.count(user_id) == 2
