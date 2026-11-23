@@ -158,7 +158,7 @@ def inicio_sesion():  # pragma: no cover
     if usuario_previo is not None and esta_bloqueada(usuario_previo):
         segundos = tiempo_restante_bloqueo(usuario_previo)
         minutos = (segundos or 0) // 60 + 1
-        flash(_("Cuenta bloqueada temporalmente. Intente de nuevo en {} minuto(s).").format(minutos))
+        flash(_("Cuenta bloqueada temporalmente. Intente de nuevo en {} minuto(s).").format(minutos), "danger")
         return INICIO_SESION
 
     identidad = helpers.autenticar_usuario(form.usuario.data, form.acceso.data)
@@ -167,14 +167,14 @@ def inicio_sesion():  # pragma: no cover
             registrar_intento_fallido(usuario_previo)
             notificar_intento_fallido(usuario_previo)
             database.session.commit()
-        flash(_("Inicio de Sesion Incorrecto."))
+        flash(_("Inicio de Sesion Incorrecto."), "danger")
         return INICIO_SESION
 
     registrar_intento_exitoso(identidad)
     database.session.commit()
 
     if not helpers.puede_iniciar_en_escritorio(identidad):
-        flash(_("Solo un usuario administrador puede iniciar sesion."))
+        flash(_("Solo un usuario administrador puede iniciar sesion."), "danger")
         return INICIO_SESION
 
     if _session_security_is_enabled():
