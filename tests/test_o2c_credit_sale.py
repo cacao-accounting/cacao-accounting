@@ -40,7 +40,9 @@ def test_venta_credito_abono_parcial_y_anulacion_conservan_evidencia(entorno_con
         actor = database.session.execute(select(User).where(User.user == "admin")).scalar_one()
         item = database.session.execute(select(Item).where(Item.code == "ART01")).scalar_one()
         uom = database.session.execute(select(UOM).where(UOM.code == "UND")).scalar_one()
-        income_account = database.session.execute(select(Accounts).where(Accounts.code == "4101")).scalar_one()
+        income_account = database.session.execute(
+            select(Accounts).where(Accounts.entity == company_code, Accounts.code == "4101")
+        ).scalar_one()
         invoice = SalesInvoice(
             company=company_code,
             posting_date=date(2026, 5, 15),
@@ -334,7 +336,9 @@ def test_reembolso_de_nota_credito_anulado_restaura_saldo_abierto(entorno_contab
         actor = database.session.execute(select(User).where(User.user == "admin")).scalar_one()
         item = database.session.execute(select(Item).where(Item.code == "ART01")).scalar_one()
         uom = database.session.execute(select(UOM).where(UOM.code == "UND")).scalar_one()
-        income_account = database.session.execute(select(Accounts).where(Accounts.code == "4101")).scalar_one()
+        income_account = database.session.execute(
+            select(Accounts).where(Accounts.entity == "cacao", Accounts.code == "4101")
+        ).scalar_one()
         credit_note = SalesInvoice(
             company="cacao",
             posting_date=date(2026, 5, 15),

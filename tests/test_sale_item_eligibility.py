@@ -19,7 +19,10 @@ from cacao_accounting.database import (
     DeliveryNoteItem,
     Item,
     Modules,
+    NamingSeries,
     Party,
+    Sequence,
+    SeriesSequenceMap,
     SalesInvoice,
     SalesInvoiceItem,
     SalesOrder,
@@ -188,7 +191,37 @@ def _reparar_estado_compartido(entorno_contable) -> None:
 
         # Las series de numeración son autocontenidas: se crean si faltan sin
         # duplicar las existentes ni alterar las que otra prueba configuró.
-        ensure_default_naming_series_for_company("cacao", ["sales_invoice", "sales_order", "sales_quotation"])
+        entity_types = ["sales_invoice", "sales_order", "sales_quotation", "sales_request", "delivery_note"]
+        ensure_default_naming_series_for_company("cacao", entity_types)
+        for entity_type in entity_types:
+            series = database.session.execute(
+                select(NamingSeries).filter_by(
+                    entity_type=entity_type,
+                    company="cacao",
+                    is_active=True,
+                    is_default=True,
+                )
+            ).scalar_one()
+            mapping = database.session.execute(
+                select(SeriesSequenceMap.id).filter_by(naming_series_id=series.id).limit(1)
+            ).scalar_one_or_none()
+            if mapping is None:
+                sequence = Sequence(
+                    name=f"test {entity_type} {uuid4().hex}",
+                    current_value=0,
+                    increment=1,
+                    padding=5,
+                    reset_policy="monthly",
+                )
+                database.session.add(sequence)
+                database.session.flush()
+                database.session.add(
+                    SeriesSequenceMap(
+                        naming_series_id=series.id,
+                        sequence_id=sequence.id,
+                        priority=0,
+                    )
+                )
         database.session.commit()
 
 
@@ -229,9 +262,11 @@ def test_alta_manual_rechaza_articulo_no_vendible(entorno_contable, authenticate
 @pytest.mark.parametrize("especificacion", ESPECIFICACIONES)
 def test_alta_manual_acepta_articulo_vendible_y_activo(entorno_contable, authenticated_client, especificacion):
     """Control positivo: un artículo vendible y activo permite crear el documento (#2124)."""
+    _reparar_estado_compartido(entorno_contable)
     app = entorno_contable.app
+    codigo_item = _crear_item_no_vendible(entorno_contable, activo=True, vendible=True)
     marcador = f"ALTA-ACEPTADA-{uuid4().hex[:10]}"
-    formulario = _datos_formulario(entorno_contable, especificacion, "ART01", marcador)
+    formulario = _datos_formulario(entorno_contable, especificacion, codigo_item, marcador)
 
     respuesta = authenticated_client().post(especificacion.ruta, data=formulario)
 
@@ -245,7 +280,7 @@ def test_alta_manual_acepta_articulo_vendible_y_activo(entorno_contable, authent
             select(especificacion.lineas).where(getattr(especificacion.lineas, especificacion.clave_foranea) == documento.id)
         ).scalar_one()
         assert linea is not None
-        assert linea.item_code == "ART01"
+        assert linea.item_code == codigo_item
         assert Decimal(str(linea.qty)) == Decimal("1")
 
 
@@ -352,6 +387,7 @@ def test_aprobacion_rechaza_articulo_deshabilitado_despues(
     entorno_contable, authenticated_client, especificacion, vendible, activo
 ):
     """Un borrador no se aprueba si el artículo dejó de ser vendible tras crearlo (#2124)."""
+    _reparar_estado_compartido(entorno_contable)
     app = entorno_contable.app
     documento_id, linea_id, codigo_item = _crear_borrador_con_item_vendible(entorno_contable, especificacion)
     with app.app_context():

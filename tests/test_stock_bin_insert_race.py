@@ -69,7 +69,7 @@ def test_post_stock_entry_rechaza_bodega_ajena_al_company(app, entorno_contable)
                 Entity(
                     code=otra_compania,
                     name="Cafe",
-                    company_name="Cafe SA",
+                    company_name=f"Cafe {sufijo} SA",
                     tax_id=f"J-{sufijo}",
                     currency="NIO",
                     enabled=True,
