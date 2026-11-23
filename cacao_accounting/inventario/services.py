@@ -657,9 +657,13 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
 def _save_stock_entry_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de un movimiento de inventario."""
     i = 0
+    indexes = [
+        int(key.rsplit("_", 1)[1]) for key in request.form if key.startswith("item_code_") and key.rsplit("_", 1)[1].isdigit()
+    ]
+    max_index = max(indexes, default=-1)
     total = Decimal("0")
     line_count = 0
-    while request.form.get(f"item_code_{i}"):
+    while i <= max_index:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             total += _save_stock_entry_item(entry, i, item_code)
