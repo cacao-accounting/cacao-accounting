@@ -974,7 +974,12 @@ def lista_precios():
             )
             for item in database.session.execute(
                 database.select(Item).where(
-                    Item.is_active.is_(True), Item.is_sale_item.is_(True), Item.standard_rate.is_not(None)
+                    Item.is_active.is_(True),
+                    Item.is_sale_item.is_(True),
+                    Item.standard_rate.is_not(None),
+                    # Una tarifa legacy negativa no puede convertirse en precio
+                    # utilizable de la lista (#1741).
+                    Item.standard_rate >= 0,
                 )
             ).scalars():
                 database.session.add(

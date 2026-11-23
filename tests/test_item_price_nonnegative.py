@@ -75,3 +75,32 @@ def test_existing_negative_price_is_not_returned_for_use(app, entorno_contable):
         database.session.delete(item_price)
         database.session.delete(database.session.get(PriceList, price_list_id))
         database.session.commit()
+
+
+def test_lista_de_precios_omite_tarifas_legacy_negativas(app, authenticated_client, entorno_contable):
+    """#1741: crear una lista no genera precios desde tarifas negativas heredadas."""
+    from cacao_accounting.database import Item, ItemPrice, database
+
+    with app.app_context():
+        item = Item(
+            code="NEG-1741",
+            name="Negativo",
+            item_type="service",
+            is_stock_item=False,
+            is_sale_item=True,
+            is_purchase_item=False,
+            default_uom="UND",
+            standard_rate=Decimal("-5"),
+        )
+        database.session.add(item)
+        database.session.commit()
+
+    respuesta = authenticated_client("admin").post(
+        "/settings/price-lists",
+        data={"name": "Lista 1741", "company": "cacao", "currency": "NIO", "is_selling": "y"},
+    )
+
+    assert respuesta.status_code in {200, 302}
+    with app.app_context():
+        precios = database.session.execute(database.select(ItemPrice).filter_by(item_code="NEG-1741")).scalars().all()
+        assert precios == []
