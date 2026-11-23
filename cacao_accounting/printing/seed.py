@@ -11,7 +11,7 @@ from cacao_accounting.printing.models import PrintTemplate
 from cacao_accounting.i18n import LazyText
 from cacao_accounting.printing.registry import PRINTABLE_DOCUMENTS, init_printing_registry
 
-SEED_TEMPLATE_VERSION = 2
+SEED_TEMPLATE_VERSION = 3
 
 BASE_CSS = """
 @page { margin: 15mm; }
@@ -84,9 +84,9 @@ JOURNAL_TEMPLATE = (
     """
 {% set current_status = journal_entry.status | default_text('') | lower %}
 {% if current_status in ['draft', 'borrador'] %}
-<div class="watermark watermark-draft">BORRADOR</div>
+<div class="watermark watermark-draft">{{ _("BORRADOR") }}</div>
 {% elif current_status in ['cancelled', 'anulado', 'void', 'rejected'] %}
-<div class="watermark watermark-cancelled">ANULADO</div>
+<div class="watermark watermark-cancelled">{{ _("ANULADO") }}</div>
 {% endif %}
 <div class="print-header">
   <div class="company-info">
@@ -95,7 +95,7 @@ JOURNAL_TEMPLATE = (
     <div>{{ company.address }}</div>
   </div>
   <div class="document-info">
-    <h2>Comprobante contable</h2>
+    <h2>{{ _("Comprobante contable") }}</h2>
     <div>{{ journal_entry.number }}</div>
     <div>{{ journal_entry.date }}</div>
     <div class="status-badge status-{{ current_status }}">{{ journal_entry.status | status_label }}</div>
@@ -105,10 +105,10 @@ JOURNAL_TEMPLATE = (
 <table class="items-table">
   <thead>
     <tr>
-      <th>Account</th>
-      <th>{{ _("Description") }}</th>
-      <th class="text-right">Debit</th>
-      <th class="text-right">Credit</th>
+      <th>{{ _("Cuenta") }}</th>
+      <th>{{ _("Descripción") }}</th>
+      <th class="text-right">{{ _("Debe") }}</th>
+      <th class="text-right">{{ _("Haber") }}</th>
     </tr>
   </thead>
   <tbody>
@@ -123,7 +123,7 @@ JOURNAL_TEMPLATE = (
   </tbody>
   <tfoot>
     <tr>
-      <th colspan="2">Total</th>
+      <th colspan="2">{{ _("Total") }}</th>
       <th class="text-right">{{ journal_entry.total_debit | money(journal_entry.currency) }}</th>
       <th class="text-right">{{ journal_entry.total_credit | money(journal_entry.currency) }}</th>
     </tr>
@@ -133,14 +133,17 @@ JOURNAL_TEMPLATE = (
     + """
 {% if validation is defined and validation and validation.enabled and validation.qr_data_uri %}
 <div class="validation-block">
-  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="Document validation QR">
-  <div class="validation-text"><strong>Validate document</strong><br>Scan this QR code to verify this document.</div>
+  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="{{ _('Código QR de validación del documento') }}">
+  <div class="validation-text">
+    <strong>{{ _("Validar documento") }}</strong><br>
+    {{ _("Escanee este código QR para verificar el documento.") }}
+  </div>
 </div>
 {% endif %}
 <div class="print-footer">
-  {{ _("Printed by") }} {{ audit.printed_by }} {{ _("at") }} {{ audit.printed_at }}<br>
-  Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
-  Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
+  {{ _("Impreso por") }} {{ audit.printed_by }} {{ _("el") }} {{ audit.printed_at }}<br>
+  {{ _("Creado por") }} {{ audit.created_by | default_text('-') }} {{ _("el") }} {{ audit.created_at | default_text('-') }}<br>
+  {{ _("Aprobado por") }} {{ audit.approved_by | default_text('-') }} {{ _("el") }} {{ audit.approved_at | default_text('-') }}
 </div>
 """
 )
@@ -148,9 +151,9 @@ JOURNAL_TEMPLATE = (
 LINES_TEMPLATE = """
 {% set current_status = doc.status | default_text('') | lower %}
 {% if current_status in ['draft', 'borrador'] %}
-<div class="watermark watermark-draft">BORRADOR</div>
+<div class="watermark watermark-draft">{{ _("BORRADOR") }}</div>
 {% elif current_status in ['cancelled', 'anulado', 'void', 'rejected'] %}
-<div class="watermark watermark-cancelled">ANULADO</div>
+<div class="watermark watermark-cancelled">{{ _("ANULADO") }}</div>
 {% endif %}
 <div class="print-header">
   <div class="company-info">
@@ -168,11 +171,11 @@ LINES_TEMPLATE = """
 <table class="items-table">
   <thead>
     <tr>
-      <th>Code</th>
-      <th>{{ _("Description") }}</th>
-      <th class="text-right">{{ _("Qty") }}</th>
-      <th class="text-right">Unit Price</th>
-      <th class="text-right">Total</th>
+      <th>{{ _("Código") }}</th>
+      <th>{{ _("Descripción") }}</th>
+      <th class="text-right">{{ _("Cantidad") }}</th>
+      <th class="text-right">{{ _("Precio unitario") }}</th>
+      <th class="text-right">{{ _("Total") }}</th>
     </tr>
   </thead>
   <tbody>
@@ -189,45 +192,50 @@ LINES_TEMPLATE = """
 </table>
 <table class="totals">
   {% set doc_curr = doc.get('currency', company.default_currency) %}
-  <tr><td>Subtotal</td><td class="text-right">{{ (doc.get('subtotal', 0)) | money(doc_curr) }}</td></tr>
-  <tr><td>Taxes</td><td class="text-right">{{ (doc.get('taxes', 0)) | money(doc_curr) }}</td></tr>
+  <tr><td>{{ _("Subtotal") }}</td><td class="text-right">{{ (doc.get('subtotal', 0)) | money(doc_curr) }}</td></tr>
+  <tr><td>{{ _("Impuestos") }}</td><td class="text-right">{{ (doc.get('taxes', 0)) | money(doc_curr) }}</td></tr>
   <tr>
-    <td><strong>Grand total</strong></td>
+    <td><strong>{{ _("Total general") }}</strong></td>
     <td class="text-right"><strong>{{ (doc.get('grand_total', 0)) | money(doc_curr) }}</strong></td>
   </tr>
 </table>
 {% if validation is defined and validation and validation.enabled and validation.qr_data_uri %}
 <div class="validation-block">
-  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="Document validation QR">
-  <div class="validation-text"><strong>Validate document</strong><br>Scan this QR code to verify this document.</div>
+  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="{{ _('Código QR de validación del documento') }}">
+  <div class="validation-text">
+    <strong>{{ _("Validar documento") }}</strong><br>
+    {{ _("Escanee este código QR para verificar el documento.") }}
+  </div>
 </div>
 {% endif %}
 <div class="print-footer">
-  {{ _("Printed by") }} {{ audit.printed_by }} {{ _("at") }} {{ audit.printed_at }}<br>
-  Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
-  Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
+  {{ _("Impreso por") }} {{ audit.printed_by }} {{ _("el") }} {{ audit.printed_at }}<br>
+  {{ _("Creado por") }} {{ audit.created_by | default_text('-') }} {{ _("el") }} {{ audit.created_at | default_text('-') }}<br>
+  {{ _("Aprobado por") }} {{ audit.approved_by | default_text('-') }} {{ _("el") }} {{ audit.approved_at | default_text('-') }}
 </div>
 """
 
 ROOT_TEMPLATE_MAP = {
     "withholding_certificate": """
 {% set current_status = withholding_certificate.status | default_text('') | lower %}
-{% if current_status in ['cancelled', 'anulado', 'void'] %}<div class="watermark watermark-cancelled">ANULADO</div>{% endif %}
+{% if current_status in ['cancelled', 'anulado', 'void'] %}
+<div class="watermark watermark-cancelled">{{ _("ANULADO") }}</div>
+{% endif %}
 <div class="print-header">
   <div class="company-info"><h1>{{ company.name }}</h1><div>{{ company.tax_id }}</div></div>
   <div class="document-info">
-    <h2>Certificado de retención</h2>
+    <h2>{{ _("Certificado de retención") }}</h2>
     <div>{{ withholding_certificate.number }}</div>
     <div>{{ withholding_certificate.date }}</div>
     <div class="status-badge status-{{ current_status }}">{{ withholding_certificate.status | status_label }}</div>
   </div>
 </div>
-<p>Proveedor: {{ withholding_certificate.supplier_name }}</p>
-<p>Pago relacionado: {{ withholding_certificate.payment_number }}</p>
+<p>{{ _("Proveedor") }}: {{ withholding_certificate.supplier_name }}</p>
+<p>{{ _("Pago relacionado") }}: {{ withholding_certificate.payment_number }}</p>
 <table class="items-table">
   <thead><tr>
-    <th>Concepto</th><th class="text-right">Base</th>
-    <th class="text-right">Tasa</th><th class="text-right">Retención</th>
+    <th>{{ _("Concepto") }}</th><th class="text-right">{{ _("Base") }}</th>
+    <th class="text-right">{{ _("Tasa") }}</th><th class="text-right">{{ _("Retención") }}</th>
   </tr></thead>
   <tbody>{% for line in withholding_certificate.lines %}
     <tr>
@@ -239,72 +247,75 @@ ROOT_TEMPLATE_MAP = {
   {% endfor %}</tbody>
 </table>
 <table class="totals">
-  <tr><td>Importe bruto</td><td class="text-right">
+  <tr><td>{{ _("Importe bruto") }}</td><td class="text-right">
     {{ withholding_certificate.gross_amount | money(withholding_certificate.currency) }}</td></tr>
-  <tr><td>Total retenido</td><td class="text-right">
+  <tr><td>{{ _("Total retenido") }}</td><td class="text-right">
     {{ withholding_certificate.withheld_amount | money(withholding_certificate.currency) }}</td></tr>
-  <tr><td>Efectivo pagado</td><td class="text-right">
+  <tr><td>{{ _("Efectivo pagado") }}</td><td class="text-right">
     {{ withholding_certificate.cash_amount | money(withholding_certificate.currency) }}</td></tr>
 </table>
 {% if validation is defined and validation and validation.enabled and validation.qr_data_uri %}
 <div class="validation-block">
-  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="QR de validación">
-  <div class="validation-text"><strong>Validar certificado</strong><br>
-    Escanee este código QR para verificar su autenticidad.
+  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="{{ _('Código QR de validación') }}">
+  <div class="validation-text"><strong>{{ _("Validar certificado") }}</strong><br>
+    {{ _("Escanee este código QR para verificar su autenticidad.") }}
   </div>
 </div>
 {% endif %}
-<div class="print-footer">Impreso por {{ audit.printed_by }} el {{ audit.printed_at }}</div>
+<div class="print-footer">{{ _("Impreso por") }} {{ audit.printed_by }} {{ _("el") }} {{ audit.printed_at }}</div>
 """,
-    "invoice": "{% set doc = invoice %}{% set title = 'Factura' %}" + LINES_TEMPLATE,
-    "purchase_order": "{% set doc = purchase_order %}{% set title = 'Orden de compra' %}" + LINES_TEMPLATE,
-    "sales_order": "{% set doc = sales_order %}{% set title = 'Orden de venta' %}" + LINES_TEMPLATE,
-    "sales_request": "{% set doc = sales_request %}{% set title = 'Solicitud de venta' %}" + LINES_TEMPLATE,
-    "purchase_request": "{% set doc = purchase_request %}{% set title = 'Solicitud de compra' %}" + LINES_TEMPLATE,
-    "supplier_quotation": "{% set doc = supplier_quotation %}{% set title = 'Cotizacion de proveedor' %}" + LINES_TEMPLATE,
-    "request_for_quotation": "{% set doc = request_for_quotation %}{% set title = 'Solicitud de cotizacion' %}"
+    "invoice": '{% set doc = invoice %}{% set title = _("Factura") %}' + LINES_TEMPLATE,
+    "purchase_order": '{% set doc = purchase_order %}{% set title = _("Orden de compra") %}' + LINES_TEMPLATE,
+    "sales_order": '{% set doc = sales_order %}{% set title = _("Orden de venta") %}' + LINES_TEMPLATE,
+    "sales_request": '{% set doc = sales_request %}{% set title = _("Solicitud de venta") %}' + LINES_TEMPLATE,
+    "purchase_request": '{% set doc = purchase_request %}{% set title = _("Solicitud de compra") %}' + LINES_TEMPLATE,
+    "supplier_quotation": '{% set doc = supplier_quotation %}{% set title = _("Cotización de proveedor") %}' + LINES_TEMPLATE,
+    "request_for_quotation": '{% set doc = request_for_quotation %}{% set title = _("Solicitud de cotización") %}'
     + LINES_TEMPLATE,
-    "purchase_receipt": "{% set doc = purchase_receipt %}{% set title = 'Recepcion de compra' %}" + LINES_TEMPLATE,
-    "landed_cost": "{% set doc = landed_cost %}{% set title = 'Gasto de importacion' %}" + LINES_TEMPLATE,
-    "receipt": "{% set doc = receipt %}{% set title = 'Nota de entrega' %}" + LINES_TEMPLATE,
-    "adjustment": "{% set doc = adjustment %}{% set title = 'Movimiento de inventario' %}" + LINES_TEMPLATE,
-    "quote": "{% set doc = quote %}{% set title = 'Cotizacion' %}" + LINES_TEMPLATE,
+    "purchase_receipt": '{% set doc = purchase_receipt %}{% set title = _("Recepción de compra") %}' + LINES_TEMPLATE,
+    "landed_cost": '{% set doc = landed_cost %}{% set title = _("Gasto de importación") %}' + LINES_TEMPLATE,
+    "receipt": '{% set doc = receipt %}{% set title = _("Nota de entrega") %}' + LINES_TEMPLATE,
+    "adjustment": '{% set doc = adjustment %}{% set title = _("Movimiento de inventario") %}' + LINES_TEMPLATE,
+    "quote": '{% set doc = quote %}{% set title = _("Cotización") %}' + LINES_TEMPLATE,
     "payment": """
 {% set current_status = payment.status | default_text('') | lower %}
 {% if current_status in ['draft', 'borrador'] %}
-<div class="watermark watermark-draft">BORRADOR</div>
+<div class="watermark watermark-draft">{{ _("BORRADOR") }}</div>
 {% elif current_status in ['cancelled', 'anulado', 'void', 'rejected'] %}
-<div class="watermark watermark-cancelled">ANULADO</div>
+<div class="watermark watermark-cancelled">{{ _("ANULADO") }}</div>
 {% endif %}
 <div class="print-header">
   <div class="company-info"><h1>{{ company.name }}</h1><div>{{ company.tax_id }}</div></div>
   <div class="document-info">
-    <h2>Comprobante de pago</h2>
+    <h2>{{ _("Comprobante de pago") }}</h2>
     <div>{{ payment.number }}</div>
     <div>{{ payment.date }}</div>
     <div class="status-badge status-{{ current_status }}">{{ payment.status | status_label }}</div>
   </div>
 </div>
-<p>Party: {{ payment.party_name }}</p>
-<p>Total: {{ payment.paid_amount | money(payment.currency) }}</p>
+<p>{{ _("Beneficiario") }}: {{ payment.party_name }}</p>
+<p>{{ _("Total") }}: {{ payment.paid_amount | money(payment.currency) }}</p>
 {% if validation is defined and validation and validation.enabled and validation.qr_data_uri %}
 <div class="validation-block">
-  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="Document validation QR">
-  <div class="validation-text"><strong>Validate document</strong><br>Scan this QR code to verify this document.</div>
+  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="{{ _('Código QR de validación del documento') }}">
+  <div class="validation-text">
+    <strong>{{ _("Validar documento") }}</strong><br>
+    {{ _("Escanee este código QR para verificar el documento.") }}
+  </div>
 </div>
 {% endif %}
 <div class="print-footer">
-  {{ _("Printed by") }} {{ audit.printed_by }} {{ _("at") }} {{ audit.printed_at }}<br>
-  Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
-  Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
+  {{ _("Impreso por") }} {{ audit.printed_by }} {{ _("el") }} {{ audit.printed_at }}<br>
+  {{ _("Creado por") }} {{ audit.created_by | default_text('-') }} {{ _("el") }} {{ audit.created_at | default_text('-') }}<br>
+  {{ _("Aprobado por") }} {{ audit.approved_by | default_text('-') }} {{ _("el") }} {{ audit.approved_at | default_text('-') }}
 </div>
 """,
     "check": """
 {% set current_status = check.status | default_text('') | lower %}
 {% if current_status in ['draft', 'borrador'] %}
-<div class="watermark watermark-draft">BORRADOR</div>
+<div class="watermark watermark-draft">{{ _("BORRADOR") }}</div>
 {% elif current_status in ['cancelled', 'anulado', 'void', 'rejected'] %}
-<div class="watermark watermark-cancelled">ANULADO</div>
+<div class="watermark watermark-cancelled">{{ _("ANULADO") }}</div>
 {% endif %}
 
 <div class="check-sheet" style="position: relative; width: 200mm; height: 85mm; font-family: monospace; font-size: 13px;">
@@ -321,21 +332,21 @@ ROOT_TEMPLATE_MAP = {
     {{ company.address | default_text('Managua') }}, {{ check.day }} de {{ check.month_name }} de {{ check.year }}
   </div>
   <div class="check-field check-memo" style="position: absolute; top: 64mm; left: 25mm; font-size: 11px;">
-    Cheque No. {{ check.number }} - {{ check.memo | default_text('') }}
+    {{ _("Cheque N.º") }} {{ check.number }} - {{ check.memo | default_text('') }}
   </div>
 </div>
 """,
     "revaluation": """
 {% set current_status = revaluation.status | default_text('') | lower %}
 {% if current_status in ['draft', 'borrador'] %}
-<div class="watermark watermark-draft">BORRADOR</div>
+<div class="watermark watermark-draft">{{ _("BORRADOR") }}</div>
 {% elif current_status in ['cancelled', 'anulado', 'void', 'rejected'] %}
-<div class="watermark watermark-cancelled">ANULADO</div>
+<div class="watermark watermark-cancelled">{{ _("ANULADO") }}</div>
 {% endif %}
 <div class="print-header">
   <div class="company-info"><h1>{{ company.name }}</h1><div>{{ company.tax_id }}</div></div>
   <div class="document-info">
-    <h2>Comprobante de revaluacion</h2>
+    <h2>{{ _("Comprobante de revaluación") }}</h2>
     <div>{{ revaluation.number }}</div>
     <div>{{ revaluation.date }}</div>
     <div class="status-badge status-{{ current_status }}">{{ revaluation.status | status_label }}</div>
@@ -344,10 +355,10 @@ ROOT_TEMPLATE_MAP = {
 <table class="items-table">
   <thead>
     <tr>
-      <th>Reference</th>
-      <th class="text-right">Old rate</th>
-      <th class="text-right">New rate</th>
-      <th class="text-right">Difference</th>
+      <th>{{ _("Referencia") }}</th>
+      <th class="text-right">{{ _("Tasa anterior") }}</th>
+      <th class="text-right">{{ _("Tasa nueva") }}</th>
+      <th class="text-right">{{ _("Diferencia") }}</th>
     </tr>
   </thead>
   <tbody>
@@ -363,14 +374,17 @@ ROOT_TEMPLATE_MAP = {
 </table>
 {% if validation is defined and validation and validation.enabled and validation.qr_data_uri %}
 <div class="validation-block">
-  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="Document validation QR">
-  <div class="validation-text"><strong>Validate document</strong><br>Scan this QR code to verify this document.</div>
+  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="{{ _('Código QR de validación del documento') }}">
+  <div class="validation-text">
+    <strong>{{ _("Validar documento") }}</strong><br>
+    {{ _("Escanee este código QR para verificar el documento.") }}
+  </div>
 </div>
 {% endif %}
 <div class="print-footer">
-  {{ _("Printed by") }} {{ audit.printed_by }} {{ _("at") }} {{ audit.printed_at }}<br>
-  Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
-  Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
+  {{ _("Impreso por") }} {{ audit.printed_by }} {{ _("el") }} {{ audit.printed_at }}<br>
+  {{ _("Creado por") }} {{ audit.created_by | default_text('-') }} {{ _("el") }} {{ audit.created_at | default_text('-') }}<br>
+  {{ _("Aprobado por") }} {{ audit.approved_by | default_text('-') }} {{ _("el") }} {{ audit.approved_at | default_text('-') }}
 </div>
 """,
 }

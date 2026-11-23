@@ -109,6 +109,7 @@ class PrintService:
             autoescape=True,
             undefined=StrictUndefined,
         )
+        self.env.globals["_"] = _
         self._setup_filters()
 
     def render_preview_html(
@@ -736,7 +737,7 @@ class PrintService:
                 "rejected": _("RECHAZADO"),
                 "closed": _("CERRADO"),
             }
-            return labels.get(str(value).lower(), str(value).upper())
+            return labels.get(str(value).lower(), _("Estado desconocido"))
 
         self.env.filters.update(
             {
