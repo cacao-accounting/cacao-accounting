@@ -21283,6 +21283,16 @@ msgstr "Report pagination"
 msgid "Página"
 msgstr "Page"
 
+#: cacao_accounting/portal/templates/portal/customer_dashboard.html
+#: cacao_accounting/portal/templates/portal/supplier_dashboard.html
+msgid "Paginación del portal"
+msgstr "Portal pagination"
+
+#: cacao_accounting/portal/templates/portal/customer_dashboard.html
+#: cacao_accounting/portal/templates/portal/supplier_dashboard.html
+msgid "Página %(page)s de %(pages)s"
+msgstr "Page %(page)s of %(pages)s"
+
 #: cacao_accounting/reportes/templates/reportes/operational_report.html:126
 msgid "registros"
 msgstr "records"

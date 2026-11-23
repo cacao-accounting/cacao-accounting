@@ -15,9 +15,6 @@
   <h4><span class="bi bi-file-earmark-text text-secondary me-2" aria-hidden="true"></span>{{ _('Cotizaciones de Venta') }}</h4>
   <span class="badge bg-secondary">{{ totals.quotations if totals is defined else quotations|length }}</span>
 </div>
-{% if totals is defined and totals.quotations > page_size %}
-<div class="alert alert-warning py-2 mb-3" role="alert">{{ _('Mostrando los primeros {shown} de {total} registros. Refine la consulta para ver el resto.').format(shown=page_size, total=totals.quotations) }}</div>
-{% endif %}
 <div class="table-responsive bg-white border rounded shadow-sm mb-4">
   <table class="table table-hover align-middle mb-0">
     <caption class="visually-hidden">{{ _('Cotizaciones de Venta') }}</caption>
@@ -57,9 +54,6 @@
   <h4><span class="bi bi-cart-fill text-success me-2" aria-hidden="true"></span>{{ _('Órdenes de Venta') }}</h4>
   <span class="badge bg-secondary">{{ totals.orders if totals is defined else orders|length }}</span>
 </div>
-{% if totals is defined and totals.orders > page_size %}
-<div class="alert alert-warning py-2 mb-3" role="alert">{{ _('Mostrando los primeros {shown} de {total} registros. Refine la consulta para ver el resto.').format(shown=page_size, total=totals.orders) }}</div>
-{% endif %}
 <div class="table-responsive bg-white border rounded shadow-sm mb-4">
   <table class="table table-hover align-middle mb-0">
     <caption class="visually-hidden">{{ _('Órdenes de Venta') }}</caption>
@@ -99,9 +93,6 @@
   <h4><span class="bi bi-truck text-warning me-2" aria-hidden="true"></span>{{ _('Notas de Entrega / Remisiones') }}</h4>
   <span class="badge bg-secondary">{{ totals.deliveries if totals is defined else deliveries|length }}</span>
 </div>
-{% if totals is defined and totals.deliveries > page_size %}
-<div class="alert alert-warning py-2 mb-3" role="alert">{{ _('Mostrando los primeros {shown} de {total} registros. Refine la consulta para ver el resto.').format(shown=page_size, total=totals.deliveries) }}</div>
-{% endif %}
 <div class="table-responsive bg-white border rounded shadow-sm mb-4">
   <table class="table table-hover align-middle mb-0">
     <caption class="visually-hidden">{{ _('Notas de Entrega / Remisiones') }}</caption>
@@ -141,9 +132,6 @@
   <h4><span class="bi bi-receipt text-danger me-2" aria-hidden="true"></span>{{ _('Facturas de Venta') }}</h4>
   <span class="badge bg-secondary">{{ totals.invoices if totals is defined else invoices|length }}</span>
 </div>
-{% if totals is defined and totals.invoices > page_size %}
-<div class="alert alert-warning py-2 mb-3" role="alert">{{ _('Mostrando los primeros {shown} de {total} registros. Refine la consulta para ver el resto.').format(shown=page_size, total=totals.invoices) }}</div>
-{% endif %}
 <div class="table-responsive bg-white border rounded shadow-sm mb-4">
   <table class="table table-hover align-middle mb-0">
     <caption class="visually-hidden">{{ _('Facturas de Venta') }}</caption>
@@ -177,4 +165,17 @@
     </tbody>
   </table>
 </div>
+{% if page > 1 or has_next %}
+<nav class="d-flex justify-content-between align-items-center mb-4" aria-label="{{ _('Paginación del portal') }}">
+  {% if page > 1 %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('portal.customer_dashboard', page=page - 1) }}">{{ _('Anterior') }}</a>
+  {% else %}
+  <span></span>
+  {% endif %}
+  <span class="text-muted">{{ page_label }}</span>
+  {% if has_next %}
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('portal.customer_dashboard', page=page + 1) }}">{{ _('Siguiente') }}</a>
+  {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

@@ -103,13 +103,30 @@ def _client_for(application, user_id: str):
     return client
 
 
-def test_dashboard_muestra_el_total_real_y_avisa_del_truncamiento(portal_truncado):
-    """El badge usa 101 (no 100) y aparece el aviso de truncamiento."""
+def test_dashboard_muestra_el_total_real_y_navega_al_resto(portal_truncado):
+    """El badge usa 101 y la página 1 ofrece navegación a la página 2."""
     application, ids = portal_truncado
     response = _client_for(application, ids["user"]).get("/portal/customer")
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert ">101<" in body
-    assert "101" in body and "100" in body
-    assert "Mostrando los primeros" in body
+    assert "page=2" in body
+    assert "Siguiente" in body
+    assert "Mostrando los primeros" not in body
+
+
+def test_pagina_dos_expone_los_documentos_posteriores(portal_truncado):
+    """La segunda página muestra la factura 101 que la página 1 ocultaba."""
+    application, ids = portal_truncado
+    client = _client_for(application, ids["user"])
+
+    primera = client.get("/portal/customer")
+    segunda = client.get("/portal/customer?page=2")
+
+    assert primera.status_code == 200
+    assert segunda.status_code == 200
+    assert primera.get_data(as_text=True).count("/portal/customer/invoice/") == 100
+    cuerpo_segunda = segunda.get_data(as_text=True)
+    assert cuerpo_segunda.count("/portal/customer/invoice/") == 1
+    assert "Página 2 de 2" in cuerpo_segunda

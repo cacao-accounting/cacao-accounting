@@ -5,7 +5,7 @@
 
 from typing import Any
 
-from flask import Blueprint, abort, render_template
+from flask import Blueprint, abort, render_template, request
 from flask_login import current_user, login_required
 from cacao_accounting.i18n import _
 from cacao_accounting.runtime_mode import is_desktop_mode
@@ -113,16 +113,28 @@ def _require_active_party_link() -> None:
 # ─── PORTAL DE CLIENTES ───────────────────────────────────────────────────────
 
 
-def _portal_page(query, ordering: Any) -> tuple[list[Any], int]:
-    """Devuelve la primera página del listado y el total de resultados (#1564).
+def _portal_page(query, ordering: Any, page: int = 1) -> tuple[list[Any], int]:
+    """Devuelve la página solicitada y el total real de resultados (#1564).
 
-    El portal limita cada listado a ``PORTAL_PAGE_SIZE``; la plantilla debe
-    distinguir el total real de los registros mostrados para no presentar la
-    página como el conjunto completo.
+    El portal pagina cada listado en bloques de ``PORTAL_PAGE_SIZE``; el total
+    se calcula sobre la consulta completa para que la plantilla pueda mostrar
+    el conjunto real y la navegación entre páginas.
     """
     total = database.session.execute(database.select(database.func.count()).select_from(query.subquery())).scalar_one()
-    rows = database.session.execute(query.order_by(ordering).limit(PORTAL_PAGE_SIZE)).scalars().all()
+    offset = (page - 1) * PORTAL_PAGE_SIZE
+    rows = database.session.execute(query.order_by(ordering).offset(offset).limit(PORTAL_PAGE_SIZE)).scalars().all()
     return list(rows), int(total)
+
+
+def _portal_page_number() -> int:
+    """Página solicitada por la consulta, acotada a valores positivos."""
+    return max(1, request.args.get("page", 1, type=int) or 1)
+
+
+def _portal_page_count(totals: dict[str, int]) -> int:
+    """Cantidad de páginas necesarias para el listado más extenso."""
+    mayor = max(totals.values(), default=0)
+    return max(1, (mayor + PORTAL_PAGE_SIZE - 1) // PORTAL_PAGE_SIZE)
 
 
 @portal.route("/customer")
@@ -146,10 +158,19 @@ def customer_dashboard():
         q_quotations = q_quotations.filter_by(customer_id=pid)
         q_deliveries = q_deliveries.filter_by(customer_id=pid)
 
-    invoices, total_invoices = _portal_page(q_invoices, SalesInvoice.posting_date.desc())
-    orders, total_orders = _portal_page(q_orders, SalesOrder.posting_date.desc())
-    quotations, total_quotations = _portal_page(q_quotations, SalesQuotation.posting_date.desc())
-    deliveries, total_deliveries = _portal_page(q_deliveries, DeliveryNote.posting_date.desc())
+    page = _portal_page_number()
+    invoices, total_invoices = _portal_page(q_invoices, SalesInvoice.posting_date.desc(), page)
+    orders, total_orders = _portal_page(q_orders, SalesOrder.posting_date.desc(), page)
+    quotations, total_quotations = _portal_page(q_quotations, SalesQuotation.posting_date.desc(), page)
+    deliveries, total_deliveries = _portal_page(q_deliveries, DeliveryNote.posting_date.desc(), page)
+    totals = {
+        "invoices": total_invoices,
+        "orders": total_orders,
+        "quotations": total_quotations,
+        "deliveries": total_deliveries,
+    }
+    page_count = _portal_page_count(totals)
+    page_label = _("Página %(page)s de %(pages)s") % {"page": page, "pages": page_count}
 
     return render_template(
         "portal/customer_dashboard.html",
@@ -157,13 +178,12 @@ def customer_dashboard():
         orders=orders,
         quotations=quotations,
         deliveries=deliveries,
-        totals={
-            "invoices": total_invoices,
-            "orders": total_orders,
-            "quotations": total_quotations,
-            "deliveries": total_deliveries,
-        },
+        totals=totals,
         page_size=PORTAL_PAGE_SIZE,
+        page=page,
+        page_count=page_count,
+        page_label=page_label,
+        has_next=page < page_count,
         titulo=_("Portal de Clientes"),
     )
 
@@ -274,11 +294,21 @@ def supplier_dashboard():
         q_quotations = q_quotations.filter_by(supplier_id=pid)
         q_receipts = q_receipts.filter_by(supplier_id=pid)
 
-    invoices, total_invoices = _portal_page(q_invoices, PurchaseInvoice.posting_date.desc())
-    notes, total_notes = _portal_page(q_notes, PurchaseInvoice.posting_date.desc())
-    orders, total_orders = _portal_page(q_orders, PurchaseOrder.posting_date.desc())
-    quotations, total_quotations = _portal_page(q_quotations, PurchaseQuotation.posting_date.desc())
-    receipts, total_receipts = _portal_page(q_receipts, PurchaseReceipt.posting_date.desc())
+    page = _portal_page_number()
+    invoices, total_invoices = _portal_page(q_invoices, PurchaseInvoice.posting_date.desc(), page)
+    notes, total_notes = _portal_page(q_notes, PurchaseInvoice.posting_date.desc(), page)
+    orders, total_orders = _portal_page(q_orders, PurchaseOrder.posting_date.desc(), page)
+    quotations, total_quotations = _portal_page(q_quotations, PurchaseQuotation.posting_date.desc(), page)
+    receipts, total_receipts = _portal_page(q_receipts, PurchaseReceipt.posting_date.desc(), page)
+    totals = {
+        "invoices": total_invoices,
+        "notes": total_notes,
+        "orders": total_orders,
+        "quotations": total_quotations,
+        "receipts": total_receipts,
+    }
+    page_count = _portal_page_count(totals)
+    page_label = _("Página %(page)s de %(pages)s") % {"page": page, "pages": page_count}
 
     return render_template(
         "portal/supplier_dashboard.html",
@@ -287,14 +317,12 @@ def supplier_dashboard():
         orders=orders,
         quotations=quotations,
         receipts=receipts,
-        totals={
-            "invoices": total_invoices,
-            "notes": total_notes,
-            "orders": total_orders,
-            "quotations": total_quotations,
-            "receipts": total_receipts,
-        },
+        totals=totals,
         page_size=PORTAL_PAGE_SIZE,
+        page=page,
+        page_count=page_count,
+        page_label=page_label,
+        has_next=page < page_count,
         titulo=_("Portal de Proveedores"),
     )
 
