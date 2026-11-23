@@ -7,7 +7,8 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
-from cacao_accounting.database import ItemPrice, Modules, PriceList, database
+from cacao_accounting.database import Item, ItemPrice, Modules, PriceList, database
+from cacao_accounting.setup.repository import create_default_price_lists
 from cacao_accounting.tax_pricing_service import resolve_item_price_record
 
 
@@ -104,3 +105,26 @@ def test_lista_de_precios_omite_tarifas_legacy_negativas(app, authenticated_clie
     with app.app_context():
         precios = database.session.execute(database.select(ItemPrice).filter_by(item_code="NEG-1741")).scalars().all()
         assert precios == []
+
+
+def test_seed_omite_tarifa_estandar_legacy_negativa(app, entorno_contable):
+    """El seed no debe regenerar precios de venta negativos desde artículos legacy."""
+    with app.app_context():
+        item = Item(
+            code="SEED-NEG-1741",
+            name="Negativo heredado",
+            item_type="service",
+            is_stock_item=False,
+            is_sale_item=True,
+            is_purchase_item=False,
+            default_uom="UND",
+            standard_rate=Decimal("-5"),
+        )
+        database.session.add(item)
+        database.session.flush()
+
+        create_default_price_lists("cacao", "NIO")
+
+        prices = database.session.execute(database.select(ItemPrice).filter_by(item_code="SEED-NEG-1741")).scalars().all()
+        assert prices == []
+        database.session.rollback()

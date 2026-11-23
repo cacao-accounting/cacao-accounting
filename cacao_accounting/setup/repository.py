@@ -188,7 +188,12 @@ def create_default_price_lists(company: str, currency: str | None, language: str
     ).scalars()
     items = (
         database.session.execute(
-            database.select(Item).where(Item.is_active.is_(True), Item.is_sale_item.is_(True), Item.standard_rate.is_not(None))
+            database.select(Item).where(
+                Item.is_active.is_(True),
+                Item.is_sale_item.is_(True),
+                Item.standard_rate.is_not(None),
+                Item.standard_rate >= 0,
+            )
         )
         .scalars()
         .all()

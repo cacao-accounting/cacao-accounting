@@ -12,6 +12,7 @@ rol correcto.
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from uuid import uuid4
 
 from flask_login import login_user
@@ -20,7 +21,7 @@ from cacao_accounting.compras.services import (
     _create_purchase_quotation_from_request,
     _handle_purchase_quotation_edit_post,
 )
-from cacao_accounting.database import Party, PurchaseQuotation, User, database
+from cacao_accounting.database import Party, PurchaseQuotation, PurchaseQuotationItem, User, database
 
 FECHA = date(2026, 5, 15)
 
@@ -141,10 +142,25 @@ def test_edicion_con_cantidad_invalida_no_escapa_como_error(app, entorno_contabl
             supplier_id=proveedor_id,
             supplier_name="Proveedor",
             transaction_currency="NIO",
+            total=Decimal("20"),
+            grand_total=Decimal("20"),
         )
         database.session.add(cotizacion)
         database.session.commit()
+        linea_original = PurchaseQuotationItem(
+            purchase_quotation_id=cotizacion.id,
+            item_code="ART01",
+            item_name="Artículo original",
+            qty=Decimal("2"),
+            qty_in_base_uom=Decimal("2"),
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("20"),
+        )
+        database.session.add(linea_original)
+        database.session.commit()
         cotizacion_id = cotizacion.id
+        linea_id = linea_original.id
         admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
         datos = _formulario(proveedor_id)
         datos.update({"item_code_0": "ITEM-X", "qty_0": "abc", "rate_0": "1"})
@@ -157,3 +173,9 @@ def test_edicion_con_cantidad_invalida_no_escapa_como_error(app, entorno_contabl
         persistida = database.session.get(PurchaseQuotation, cotizacion_id)
         assert persistida is not None
         assert persistida.docstatus == 0
+        assert persistida.total == Decimal("20.0000")
+        linea_persistida = database.session.get(PurchaseQuotationItem, linea_id)
+        assert linea_persistida is not None
+        assert linea_persistida.item_code == "ART01"
+        assert linea_persistida.qty == Decimal("2.000000000")
+        assert linea_persistida.amount == Decimal("20.0000")
