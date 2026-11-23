@@ -15,7 +15,7 @@
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.database import (
@@ -480,8 +480,36 @@ def _cargar_documentos_demo():
     database.session.commit()
 
 
+DEMO_SEED_KEY = "DEMO_SEED_COMPLETE"
+
+
+def marcar_seed_demo_completo() -> None:
+    """Persistir la señal de seed demo completo (#2168).
+
+    La señal solo se escribe cuando ``dev_data`` termina sin errores; una
+    carga parcial no la produce, de modo que el reintento no declare éxito
+    sobre datos incompletos.
+    """
+    from cacao_accounting.database import CacaoConfig
+
+    registro = database.session.execute(database.select(CacaoConfig).filter_by(key=DEMO_SEED_KEY)).scalar_one_or_none()
+    if registro is None:
+        database.session.add(CacaoConfig(key=DEMO_SEED_KEY, value=datetime.now(timezone.utc).isoformat()))
+    else:
+        registro.value = datetime.now(timezone.utc).isoformat()
+    database.session.commit()
+
+
+def seed_demo_completo() -> bool:
+    """Indica si la señal de seed demo completo está persistida (#2168)."""
+    from cacao_accounting.database import CacaoConfig
+
+    return database.session.execute(database.select(CacaoConfig.id).filter_by(key=DEMO_SEED_KEY)).first() is not None
+
+
 def dev_data():
     """Carga datos de desarrollo a la base de datos."""
     log.trace("Iniciando carga de datos de prueba.")
     master_data()
     transacciones()
+    marcar_seed_demo_completo()

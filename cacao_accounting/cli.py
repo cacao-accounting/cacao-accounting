@@ -351,7 +351,14 @@ def db_clean(force: bool) -> None:
 
 
 def _demo_seed_presente() -> bool:
-    """Indica si la entidad demo principal ya está persistida."""
+    """Indica si los datos demo ya están aplicados por completo (#2168)."""
+    from cacao_accounting.datos.dev import seed_demo_completo
+
+    return seed_demo_completo()
+
+
+def _entidad_demo_existente() -> bool:
+    """Indica si la entidad demo existe sin señal de seed completo."""
     from cacao_accounting.database import Entity, database
 
     return database.session.execute(database.select(Entity.id).filter_by(code="CACAO")).first() is not None
@@ -373,6 +380,15 @@ def db_seed(force: bool) -> None:
         if _demo_seed_presente():
             _mensaje_advertencia(_("Los datos de ejemplo ya están aplicados; no se realizaron cambios."))
             return
+        if _entidad_demo_existente():
+            # Estado ambiguo: seed parcial interrumpido o entidad CACAO previa
+            # sin datos demo. Reanudar duplicaría etapas ya aplicadas (#2168).
+            mensaje = _(
+                "La base de datos ya contiene la entidad demo sin la señal de"
+                " semilla completa; use una base de datos nueva."
+            )
+            _mensaje_error(mensaje)
+            raise click.exceptions.Exit(1)
         try:
             dev_data()
             _mensaje_exito(_("Datos de ejemplo insertados."))

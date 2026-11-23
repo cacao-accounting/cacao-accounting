@@ -24421,3 +24421,7 @@ msgstr "The unit of measure is inactive."
 #: cacao_accounting/imports/services/import_service.py
 msgid "No se pudo leer el archivo de importación."
 msgstr "The import file could not be read."
+
+#: cacao_accounting/cli.py
+msgid "La base de datos ya contiene la entidad demo sin la señal de semilla completa; use una base de datos nueva."
+msgstr "The database already contains the demo entity without the complete seed marker; use a new database."
