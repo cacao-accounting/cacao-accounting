@@ -45,8 +45,24 @@ def _has_executable_url(value: str | None) -> bool:
     return compact_value.startswith(("javascript:", "vbscript:"))
 
 
+def _rendered_probe(template_body: str) -> str:
+    """Renderiza la plantilla en sandbox para validar la salida, no solo el fuente.
+
+    El escape de Jinja (``<scr{{ '' }}ipt>``) evita que el parser vea un
+    ``<script>`` en el texto, pero produce uno al renderizar. La sonda usa un
+    entorno sandbox y, si la plantilla no puede renderizarse con el contexto
+    vacío, devuelve el fuente para conservar el comportamiento previo (#2131).
+    """
+    from jinja2.sandbox import SandboxedEnvironment
+
+    try:
+        return SandboxedEnvironment(autoescape=False).from_string(template_body).render()
+    except Exception:
+        return ""
+
+
 def validate_template_security(template_body: str) -> None:
-    """Valida que la plantilla no contenga elementos prohibidos."""
+    """Valida que la plantilla no contenga elementos prohibidos en su salida."""
     if re.search(r"<!\s*\[\s*cdata\s*\[", template_body, re.IGNORECASE):
         raise TemplateValidationError(_("Las secciones CDATA no están permitidas en plantillas HTML."))
     ambiguous_comment_endings = r"<!--(?:.*?)--!>|<!-->|<!--->"
@@ -55,6 +71,9 @@ def validate_template_security(template_body: str) -> None:
 
     parser = _PrintTemplateSecurityParser()
     parser.feed(template_body)
+    rendered = _rendered_probe(template_body)
+    if rendered != template_body:
+        parser.feed(rendered)
     if parser.violation is None:
         return
 
