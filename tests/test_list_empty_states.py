@@ -59,3 +59,42 @@ def test_nota_debito_y_devolucion_conservan_su_tipo_documental(authenticated_cli
 
     assert "document_type=sales_debit_note" in debito
     assert "document_type=sales_return" in devolucion
+
+
+def test_paginacion_de_notas_conserva_su_endpoint(app, entorno_contable, authenticated_client):
+    """#2047: la página siguiente de notas no apunta al listado de devoluciones."""
+    from datetime import date
+
+    from cacao_accounting.database import PaymentEntry, database
+
+    with app.app_context():
+        for index in range(11):
+            database.session.add(
+                PaymentEntry(
+                    company="cacao",
+                    payment_type="debit_note",
+                    document_no=f"ND-PAG-{index}",
+                    party_name="Cliente",
+                    posting_date=date(2026, 5, 15),
+                    paid_amount=1,
+                )
+            )
+            database.session.add(
+                PaymentEntry(
+                    company="cacao",
+                    payment_type="credit_note",
+                    document_no=f"NC-PAG-{index}",
+                    party_name="Cliente",
+                    posting_date=date(2026, 5, 15),
+                    paid_amount=1,
+                )
+            )
+        database.session.commit()
+
+    client = authenticated_client("admin")
+    debito = client.get("/cash_management/payment/debit-note/list").get_data(as_text=True).replace("&amp;", "&")
+    credito = client.get("/cash_management/payment/credit-note/list").get_data(as_text=True).replace("&amp;", "&")
+
+    assert "/cash_management/payment/debit-note/list?page=2" in debito
+    assert "/cash_management/payment/credit-note/list?page=2" in credito
+    assert "/cash_management/payment/credit-note/list" not in debito
