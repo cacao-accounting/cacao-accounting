@@ -133,7 +133,11 @@
         </div>
         <div class="ca-kv-item">
           <label>{{ _('Monto') }}</label>
+          {% if registro.payment_type == 'internal_transfer' %}
+          <p class="fw-semibold">{{ "{:,.2f}".format(registro.paid_amount or 0) }} {{ banco.currency if banco else (registro.transaction_currency or registro.currency or '') }} → {{ "{:,.2f}".format(registro.received_amount or 0) }} {{ banco_destino.currency if banco_destino else '' }}</p>
+          {% else %}
           <p class="fw-semibold">{{ registro.transaction_currency or registro.currency or '' }} {{ "{:,.2f}".format(payment_amount or 0) }}</p>
+          {% endif %}
         </div>
         <div class="ca-kv-item">
           <label>{{ _('Tipo de cambio') }}</label>

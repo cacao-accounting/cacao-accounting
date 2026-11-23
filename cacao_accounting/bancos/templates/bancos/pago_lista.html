@@ -47,8 +47,12 @@
         <td>{{ {'pay': _('Pagar'), 'receive': _('Recibir'), 'credit_note': _('Nota de crédito'), 'debit_note': _('Nota de débito'), 'internal_transfer': _('Transferencia interna')}.get(item.payment_type, item.payment_type) }}</td>
         <td>{{ macros.document_status_for("payment_entry", item) }}</td>
         <td>{{ item.party_name or "" }}</td>
+        {% if item.payment_type == 'internal_transfer' %}
+        <td>{{ item.paid_amount or "" }} {{ item.transaction_currency or item.currency or "" }} → {{ item.received_amount or "" }} {{ target_currencies.get(item.target_bank_account_id, "") }}</td>
+        {% else %}
         {% set monto = item.received_amount if item.payment_type in ['receive', 'credit_note'] else item.paid_amount %}
-        <td>{{ monto or "" }}{% if monto and item.transaction_currency %} {{ item.transaction_currency }}{% endif %}</td>
+        <td>{{ monto or "" }}{% if monto and (item.transaction_currency or item.currency) %} {{ item.transaction_currency or item.currency }}{% endif %}</td>
+        {% endif %}
       </tr>
       {% else %}
       <tr>

@@ -345,12 +345,23 @@ def bancos_transferencia_lista():
         (PaymentEntry.document_no, PaymentEntry.party_name, PaymentEntry.reference_no, PaymentEntry.remarks),
         database.select(PaymentEntry).filter_by(payment_type="internal_transfer"),
     )
+    target_bank_ids = {item.target_bank_account_id for item in consulta.items if item.target_bank_account_id}
+    target_currencies = (
+        dict(
+            database.session.execute(
+                database.select(BankAccount.id, BankAccount.currency).where(BankAccount.id.in_(target_bank_ids))
+            ).all()
+        )
+        if target_bank_ids
+        else {}
+    )
     titulo = _("Listado de Transferencias Internas") + " - " + APPNAME
     return render_template(
         BANCOS_PAGO_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
         is_transfer_list=True,
+        target_currencies=target_currencies,
         list_endpoint="bancos.bancos_transferencia_lista",
     )
 
