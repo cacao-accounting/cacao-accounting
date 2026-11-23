@@ -55,8 +55,8 @@
       <div class="col-md-6">
         <label for="periodicity" class="form-label fw-bold">{{ _("Periodicidad") }}</label>
         <select name="periodicity" id="periodicity" class="form-select" required>
-          <option value="weekly">{{ _("Semanal") }}</option>
-          <option value="monthly" selected>{{ _("Mensual") }}</option>
+          <option value="weekly" {{ 'selected' if submitted and submitted.get('periodicity') == 'weekly' }}>{{ _("Semanal") }}</option>
+          <option value="monthly" {{ 'selected' if not submitted or not submitted.get('periodicity') or submitted.get('periodicity') == 'monthly' }}>{{ _("Mensual") }}</option>
         </select>
         <div class="form-text">{{ _("Define la división temporal de las proyecciones (semanal o mensual).") }}</div>
       </div>
