@@ -215,9 +215,9 @@ def _required_base_qty(line: Any) -> Decimal:
 
 
 def _line_amount(line: Any) -> Decimal:
-    amount = _decimal_value(getattr(line, "amount", None))
-    if amount:
-        return amount
+    raw_amount = getattr(line, "amount", None)
+    if raw_amount is not None:
+        return _decimal_value(raw_amount)
     return _line_qty(line) * _decimal_value(getattr(line, "rate", None) or getattr(line, "valuation_rate", None))
 
 
