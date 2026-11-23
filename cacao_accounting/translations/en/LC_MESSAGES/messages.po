@@ -24422,6 +24422,54 @@ msgstr "The unit of measure is inactive."
 msgid "No se pudo leer el archivo de importación."
 msgstr "The import file could not be read."
 
+#: cacao_accounting/reportes/helpers.py
+msgid "Continuación"
+msgstr "Continued"
+
+#: cacao_accounting/reportes/templates/reportes/financial_report.html
+msgid "El saldo acumulado, la autoría y los metadatos siguen visibles, pero no están disponibles para agrupación temporalmente."
+msgstr "Running balance, authorship, and metadata remain visible, but cannot be used for grouping temporarily."
+
+#: cacao_accounting/reportes/routes.py
+msgid "La dimensión de agrupación solicitada no está disponible."
+msgstr "The requested grouping dimension is unavailable."
+
+#: cacao_accounting/compras/services.py
+msgid "La adjudicación de la orden ya no está disponible."
+msgstr "The order award is no longer available."
+
+#: cacao_accounting/compras/services.py
+msgid "La línea de oferta adjudicada ya no está disponible."
+msgstr "The awarded quotation line is no longer available."
+
+#: cacao_accounting/compras/services.py
+msgid "La línea de oferta adjudicada no conserva una cantidad base válida."
+msgstr "The awarded quotation line does not retain a valid base quantity."
+
+#: cacao_accounting/compras/services.py
+msgid "La línea debe conservar la UOM y el precio adjudicados."
+msgstr "The line must retain the awarded UOM and price."
+
+#: cacao_accounting/compras/purchase_sourcing_service.py
+msgid "La oferta seleccionada no tiene cantidad válida."
+msgstr "The selected quotation does not have a valid quantity."
+
+#: cacao_accounting/compras/purchase_sourcing_service.py
+msgid "La oferta seleccionada no permite una cantidad adjudicable."
+msgstr "The selected quotation does not allow an awardable quantity."
+
+#: cacao_accounting/compras/services.py
+msgid "La adjudicación ya tiene órdenes registradas."
+msgstr "The award already has purchase orders recorded."
+
+#: cacao_accounting/compras/services.py
+msgid "Otra orden está usando esta adjudicación. Intente nuevamente."
+msgstr "Another order is using this award. Please try again."
+
+#: cacao_accounting/document_flow/service.py
+msgid "La cantidad en UOM base debe ser mayor que cero."
+msgstr "The quantity in base UOM must be greater than zero."
+
 #: cacao_accounting/cli.py
 msgid "La base de datos ya contiene la entidad demo sin la señal de semilla completa; use una base de datos nueva."
 msgstr "The database already contains the demo entity without the complete seed marker; use a new database."
