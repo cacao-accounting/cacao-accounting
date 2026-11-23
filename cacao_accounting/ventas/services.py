@@ -129,6 +129,23 @@ from cacao_accounting.i18n import LazyText, _, _l
 from cacao_accounting.numbers import coerce_decimal
 
 
+def _max_line_index(prefix: str) -> int:
+    """Mayor índice de línea enviado, sin truncar por filas vacías (#1039).
+
+    Iterar mientras el campo exista descartaba las líneas posteriores a un
+    hueco; la grilla puede enviar ``item_code_0`` vacío y ``item_code_1`` con
+    datos.
+    """
+    indices: list[int] = []
+    for key in request.form:
+        if not key.startswith(f"{prefix}_"):
+            continue
+        sufijo = key[len(prefix) + 1 :]
+        if sufijo.isdigit():
+            indices.append(int(sufijo))
+    return max(indices, default=-1)
+
+
 def _raise_posting_error(message: str) -> NoReturn:
     """Raise the posting error while keeping the dynamic import type-safe."""
     error_type = cast(type[PostingError], PostingError)
@@ -1144,7 +1161,8 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    while request.form.get(f"item_code_{i}"):
+    max_index = _max_line_index("item_code")
+    while i <= max_index:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
@@ -1200,7 +1218,8 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    while request.form.get(f"item_code_{i}"):
+    max_index = _max_line_index("item_code")
+    while i <= max_index:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
@@ -1247,7 +1266,8 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    while request.form.get(f"item_code_{i}"):
+    max_index = _max_line_index("item_code")
+    while i <= max_index:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
@@ -1294,7 +1314,8 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    while request.form.get(f"item_code_{i}"):
+    max_index = _max_line_index("item_code")
+    while i <= max_index:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
@@ -1354,7 +1375,8 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     total = Decimal("0")
     line_count = 0
     seen_item_codes: set[str] = set()
-    while request.form.get(f"item_code_{i}"):
+    max_index = _max_line_index("item_code")
+    while i <= max_index:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
