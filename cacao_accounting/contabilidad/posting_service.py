@@ -2600,6 +2600,9 @@ def _persist_single_allocation(
     allocated_amount = _decimal_value(getattr(allocation, "allocated_total", None))
     if allocated_amount == 0:
         return
+    # La valuación de inventario vive en moneda funcional; la allocation del
+    # motor está en moneda transaccional (#1793).
+    functional_amount = _inventory_value_in_functional_currency(document, allocated_amount)
     item = items_by_line_id.get(str(allocation.item_line_id))
     if item is None:
         raise PostingError(_("El prorrateo de costo capitalizable no coincide con una linea de factura."))
@@ -2611,7 +2614,7 @@ def _persist_single_allocation(
         document=document,
         item=item,
         warehouse=warehouse,
-        allocated_amount=allocated_amount,
+        allocated_amount=functional_amount,
         create_valuation_adjustment=create_valuation_adjustment,
     )
     _persist_landed_cost_allocation_record(
