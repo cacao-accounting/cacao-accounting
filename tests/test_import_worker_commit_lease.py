@@ -10,6 +10,8 @@ from threading import Event, Thread
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Currency, Entity, database
@@ -19,13 +21,22 @@ from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.imports.utils import recovery
 from cacao_accounting.imports.utils.recovery import _expired_batch_ids
 
+pytestmark = pytest.mark.database
+
 
 def _file_app(path):
-    """Create an isolated SQLite database for the independent-session race."""
+    """Create the isolated database used by the independent-session race."""
+    import os
+
+    uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if uri.startswith("sqlite"):
+        uri = f"sqlite:///{path}"
+    elif os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true y una base dedicada.")
     application = create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{path}",
+            "SQLALCHEMY_DATABASE_URI": uri,
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
@@ -89,22 +100,24 @@ def test_recovery_en_sesion_separada_espera_commit_del_documento(tmp_path, monke
     result: dict[str, object] = {}
 
     with application.app_context():
-        database.session.add_all(
-            [
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Entity(
-                    code="lease",
-                    name="Lease",
-                    company_name="Lease SA",
-                    tax_id="LEASE-1",
-                    currency="NIO",
-                    enabled=True,
-                ),
-            ]
+        sufijo = uuid4().hex[:6].upper()
+        company = f"LE-{sufijo}"
+        if database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none() is None:
+            database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+            database.session.flush()
+        database.session.add(
+            Entity(
+                code=company,
+                name=f"Lease {sufijo}",
+                company_name=f"Lease SA {sufijo}",
+                tax_id=f"LEASE-{sufijo}",
+                currency="NIO",
+                enabled=True,
+            )
         )
         database.session.flush()
         batch = ImportBatch(
-            company_id="lease",
+            company_id=company,
             record_type="journal_entry",
             source_format="csv",
             source_filename="lease.csv",
