@@ -234,3 +234,21 @@ def test_nota_credito_persiste_reference_no(app, transferencia, authenticated_cl
     with app.app_context():
         pago = database.session.execute(database.select(PaymentEntry).filter_by(reference_no=referencia)).scalar_one()
         assert pago.payment_type == "credit_note"
+
+
+def test_rechazo_conserva_los_datos_del_formulario(app, transferencia, authenticated_client):
+    """#2044: un rechazo devuelve el formulario con los datos enviados."""
+    referencia = f"REF-{uuid4().hex[:8]}"
+    antes = _conteo_pagos(app)
+    client = authenticated_client("admin")
+    data = _payload(transferencia, referencia)
+    data["target_bank_account_id"] = "CUENTA-INEXISTENTE"
+
+    response = client.post(RUTA, data=data)
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "bankTransferForm" in html
+    assert referencia in html
+    assert "CUENTA-INEXISTENTE" in html
+    assert _conteo_pagos(app) == antes

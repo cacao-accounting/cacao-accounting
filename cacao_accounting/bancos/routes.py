@@ -815,6 +815,17 @@ def bancos_nota_credito_nueva():
     )
 
 
+def _transfer_draft_payload() -> dict[str, Any]:
+    """Devuelve el payload enviado para repoblar el formulario tras un rechazo."""
+    from cacao_accounting.bancos.services import _payment_payload_from_request
+
+    try:
+        payload = dict(_payment_payload_from_request())
+    except Exception:
+        return {}
+    return {key: value for key, value in payload.items() if value not in (None, "")}
+
+
 @bancos.route("/payment/transfer/new", methods=["GET", "POST"])
 @modulo_activo("cash")
 @login_required
@@ -831,6 +842,7 @@ def bancos_transferencia_nueva():
             titulo=_("Nueva Transferencia Bancaria") + " - " + APPNAME,
             payment_type="internal_transfer",
             companies=obtener_lista_entidades_por_id_razonsocial(),
+            draft_payload=_transfer_draft_payload(),
         )
 
     return render_template(

@@ -18,7 +18,7 @@
 <script>
   globalThis.bankTransferForm = function (config) {
     return {
-      header: {
+      header: Object.assign({
         payment_type: config.paymentType,
         company: '',
         naming_series_id: '',
@@ -31,7 +31,7 @@
         exchange_rate: 1,
         remarks: '',
         external_number: '',
-      },
+      }, config.draft || {}),
       payload: '',
 
       init: function () {
@@ -81,7 +81,7 @@
   };
 </script>
 
-<form method="post" x-data='bankTransferForm({ paymentType: "{{ payment_type }}" })' @submit="prepareSubmit">
+<form method="post" x-data='bankTransferForm({ paymentType: "{{ payment_type }}", draft: {{ (draft_payload or {})|tojson }} })' @submit="prepareSubmit">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="payment_payload" :value="payload">
 
