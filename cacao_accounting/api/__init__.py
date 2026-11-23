@@ -261,6 +261,10 @@ def _require_flow_source_lines_access(payload: dict[str, Any], action: str = "cr
     la pertenencia a compañía del documento padre real de la línea física.
     """
     target_type = normalize_doctype(str(payload.get("target_document_type") or payload.get("target_type") or ""))
+    # En un pago destino, Caja y Bancos es el módulo responsable: basta con que
+    # el documento fuente pertenezca a una compañía concedida. La proyección
+    # operativa no concede acceso a la factura completa (#1405).
+    source_action: str | None = None if target_type == "payment_entry" else action
     lines = payload.get("lines") or []
     if not isinstance(lines, list) or any(not isinstance(selected, dict) for selected in lines):
         abort(400)
@@ -269,16 +273,27 @@ def _require_flow_source_lines_access(payload: dict[str, Any], action: str = "cr
         item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
         document_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
         if not item_id:
-            _require_payment_reference_access(target_type, source_type, document_id, action)
+            _require_payment_reference_access(target_type, source_type, document_id, source_action)
             continue
-        _require_source_item_access(source_type, item_id, document_id, action)
+        _require_source_item_access(source_type, item_id, document_id, source_action)
+
+
+def _require_source_company(company: str) -> None:
+    """Exige una compañía concedida sin evaluar permisos del módulo comercial."""
+    from cacao_accounting.company_context import explicit_company_grants
+    from cacao_accounting.runtime_mode import is_desktop_mode
+
+    if is_desktop_mode():
+        return
+    if str(company) not in explicit_company_grants():
+        abort(403)
 
 
 def _require_payment_reference_access(
     target_type: str,
     source_type: str,
     document_id: str,
-    action: str,
+    action: str | None,
 ) -> None:
     """Autoriza una línea de pago que referencia una factura completa."""
     if target_type != "payment_entry":
@@ -292,7 +307,9 @@ def _require_payment_reference_access(
     if not company:
         abort(404)
     module = _module_for_document_type(source_type)
-    if module:
+    if action is None:
+        _require_source_company(company)
+    elif module:
         exige_acceso_compania(module, company, action)
 
 
@@ -300,7 +317,7 @@ def _require_source_item_access(
     source_type: str,
     item_id: str,
     document_id: str,
-    action: str,
+    action: str | None,
 ) -> None:
     """Autoriza una línea que referencia un ítem de documento concreto."""
     if not source_type:
@@ -316,7 +333,9 @@ def _require_source_item_access(
     if not company:
         abort(404)
     module = _module_for_document_type(source_type)
-    if module:
+    if action is None:
+        _require_source_company(company)
+    elif module:
         exige_acceso_compania(module, company, action)
 
 

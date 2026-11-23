@@ -77,7 +77,7 @@ def cajero(app, entorno_contable):
         database.session.add(UserCompanyAccess(user_id=user_id, company_code="cacao"))
         database.session.commit()
         asigna_rol_a_usuario(f"cajero_{suffix}", "auxiliar_of_treasury")
-        asigna_rol_a_usuario(f"cajero_{suffix}", "sales_auxiliar")
+        # #1405: Tesorería no necesita permisos de Ventas para aplicar pagos.
     return user_id
 
 
@@ -179,3 +179,34 @@ def test_create_target_rechaza_factura_fuente_de_otra_compania(app, entorno_cont
     with app.app_context():
         pagos_despues = database.session.execute(database.select(PaymentEntry.id)).scalars().all()
         assert pagos_despues == pagos_antes
+
+
+def test_solo_ventas_no_crea_pagos(app, entorno_contable):
+    """#1405: sin `cash.crear` no se crea un pago aunque haya permisos de ventas."""
+    suffix = uuid4().hex[:6]
+    user_id = f"vendedor-{suffix}"
+    with app.app_context():
+        crea_roles_predeterminados()
+        cargar_permisos_predeterminados()
+        database.session.add(
+            User(
+                id=user_id,
+                user=f"vendedor_{suffix}",
+                name="Vendedor",
+                password=b"unused",
+                classification="user",
+                active=True,
+                company="cacao",
+            )
+        )
+        database.session.flush()
+        database.session.add(UserCompanyAccess(user_id=user_id, company_code="cacao"))
+        database.session.commit()
+        asigna_rol_a_usuario(f"vendedor_{suffix}", "sales_auxiliar")
+        invoice = _factura_cliente("cacao", f"FAC-VENTAS-{suffix}")
+        invoice_id, customer_id = invoice.id, invoice.customer_id
+        database.session.commit()
+
+    response = _cliente(app, user_id).post("/api/document-flow/create-target", json=_payload(invoice_id, customer_id))
+
+    assert response.status_code == 403, response.get_data(as_text=True)
