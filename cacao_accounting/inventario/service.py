@@ -407,6 +407,8 @@ def _validate_incoming_serial(serial, allow_transfer: bool, allow_return: bool) 
     """Valida que un serial existente solo reingrese o se transfiera por la vía permitida."""
     if not serial:
         return
+    if serial.serial_status == "cancelled":
+        return
     if allow_return:
         if serial.serial_status != "delivered":
             raise InventoryServiceError(_("Solo se puede reingresar un serial entregado mediante una devolución."))
@@ -425,7 +427,13 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False,
     quantity = _decimal_value(raw_quantity) if raw_quantity is not None else Decimal("1")
     if quantity != Decimal("1"):
         raise InventoryServiceError(_("Cada linea de un item serializado debe mover exactamente una unidad."))
-    serial = database.session.execute(select(SerialNumber).filter_by(serial_no=serial_no)).scalar_one_or_none()
+    serial_query = select(SerialNumber).filter_by(serial_no=serial_no)
+    if outgoing:
+        # La transición del serial se serializa con el posteo: dos salidas
+        # concurrentes del mismo serial no pueden validar ambas como disponible
+        # antes de que una confirme (#1306).
+        serial_query = serial_query.with_for_update()
+    serial = database.session.execute(serial_query).scalar_one_or_none()
     if serial is not None and serial.item_code != item.code:
         raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
     if outgoing:
@@ -483,8 +491,14 @@ def validate_batch_serial_draft(lines: Sequence[Any]) -> None:
             raise ValueError(_("El item %(item)s requiere numero de serie.") % {"item": item_code})
 
 
-def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> None:
-    """Actualiza estado y bodega del serial despues del movimiento."""
+def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None, cancel_entry: bool = False) -> None:
+    """Actualiza estado y bodega del serial despues del movimiento.
+
+    ``cancel_entry`` distingue la reversa de una entrada de inventario de una
+    salida comercial: una recepción anulada no es una entrega, así que el serial
+    queda ``cancelled`` y puede volver a recibirse cuando no exista una entrada
+    activa para él (#1177).
+    """
     serial_no = getattr(line, "serial_no", None)
     if not serial_no:
         return
@@ -500,6 +514,10 @@ def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> 
             warehouse=warehouse,
         )
         database.session.add(serial)
+    if cancel_entry:
+        serial.serial_status = "cancelled"
+        serial.warehouse = None
+        return
     serial.serial_status = "delivered" if outgoing else "available"
     serial.warehouse = None if outgoing else warehouse
 

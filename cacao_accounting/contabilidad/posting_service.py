@@ -4089,6 +4089,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
             movement,
             outgoing=qty_change < 0,
             warehouse=movement.warehouse,
+            cancel_entry=_decimal_value(movement.qty_change) > 0,
         )
     return StockLedgerEntry(
         posting_date=posting_date,
@@ -5349,6 +5350,17 @@ def _create_gl_reversals(
     return reversals
 
 
+def _reversal_order(movements: list[StockLedgerEntry]) -> list[StockLedgerEntry]:
+    """Ordena las reversas para fijar un estado de serial determinista (#1177).
+
+    Las entradas se reversan antes que las salidas: al cancelar una
+    transferencia, la entrada de destino deja el serial ``cancelled`` y la
+    salida de origen lo restaura en su bodega, sin depender del orden que
+    devuelva la base de datos.
+    """
+    return sorted(movements, key=lambda movement: (-_decimal_value(movement.qty_change), movement.id))
+
+
 def _cancel_stock_movements_if_needed(
     document: Any, company: str, voucher_type: str, voucher_id: str, cancellation_date: Any
 ) -> None:
@@ -5376,7 +5388,7 @@ def _cancel_stock_movements_if_needed(
 
     _validate_stock_reversal_capacity(original_movements)
     stock_reversals: list[StockLedgerEntry] = []
-    for movement in original_movements:
+    for movement in _reversal_order(original_movements):
         stock_reversals.append(_create_stock_reversal(document, movement, cancellation_date))
         movement.is_cancelled = True
     database.session.add_all(stock_reversals)
