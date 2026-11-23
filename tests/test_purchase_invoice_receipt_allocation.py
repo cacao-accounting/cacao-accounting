@@ -40,6 +40,8 @@ from cacao_accounting.database import (
     database,
 )
 
+pytestmark = pytest.mark.database
+
 
 @pytest.fixture
 def allocation_scenario(tmp_path: Path):
