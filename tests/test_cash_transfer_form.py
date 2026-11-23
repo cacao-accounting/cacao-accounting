@@ -237,6 +237,58 @@ def test_nota_credito_persiste_reference_no(app, transferencia, authenticated_cl
         assert pago.payment_type == "credit_note"
 
 
+def test_dos_notas_pueden_compartir_la_referencia_externa(app, transferencia, authenticated_client):
+    """#2039: la referencia externa no es un identificador único del sistema."""
+    referencia = f"COMPARTIDA-{uuid4().hex[:8]}"
+    client = authenticated_client("admin")
+
+    for _ in range(2):
+        response = client.post(
+            "/cash_management/payment/debit-note/new",
+            data=_nota_json(transferencia, "debit_note", reference_no=referencia),
+        )
+        assert response.status_code == 302, response.get_data(as_text=True)
+
+    with app.app_context():
+        pagos = database.session.execute(database.select(PaymentEntry).filter_by(reference_no=referencia)).scalars().all()
+        assert len(pagos) == 2
+        assert all(pago.payment_type == "debit_note" for pago in pagos)
+
+
+def test_la_nota_no_consume_contadores_externos(app, transferencia, authenticated_client):
+    """#2039: postear una nota no avanza contadores ni auditoría externa."""
+    from cacao_accounting.database import (
+        ExternalCounter,
+        ExternalCounterAuditLog,
+        SeriesExternalCounterMap,
+        database,
+    )
+
+    with app.app_context():
+        contadores = {
+            (contador.id, contador.last_used)
+            for contador in database.session.execute(database.select(ExternalCounter)).scalars().all()
+        }
+        auditoria = len(database.session.execute(database.select(ExternalCounterAuditLog)).scalars().all())
+        mapeos = len(database.session.execute(database.select(SeriesExternalCounterMap)).scalars().all())
+
+    referencia = f"EXT-{uuid4().hex[:8]}"
+    response = authenticated_client("admin").post(
+        "/cash_management/payment/debit-note/new",
+        data=_nota_json(transferencia, "debit_note", reference_no=referencia),
+    )
+
+    assert response.status_code == 302, response.get_data(as_text=True)
+    with app.app_context():
+        contadores_despues = {
+            (contador.id, contador.last_used)
+            for contador in database.session.execute(database.select(ExternalCounter)).scalars().all()
+        }
+        assert contadores_despues == contadores
+        assert len(database.session.execute(database.select(ExternalCounterAuditLog)).scalars().all()) == auditoria
+        assert len(database.session.execute(database.select(SeriesExternalCounterMap)).scalars().all()) == mapeos
+
+
 def test_rechazo_conserva_los_datos_del_formulario(app, transferencia, authenticated_client):
     """#2044: un rechazo devuelve el formulario con los datos enviados."""
     referencia = f"REF-{uuid4().hex[:8]}"
