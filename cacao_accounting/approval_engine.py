@@ -950,6 +950,13 @@ class ApprovalEngine:
         if not cls.can_approve(document, user):
             raise ValueError(_("El usuario no cumple los permisos, límites o independencia requeridos para aprobar."))
 
+        # La orden pudo perder proveedor, actividad o membresía mientras
+        # esperaba aprobación (#1823).
+        if doctype == "purchase_order":
+            from cacao_accounting.compras.services import _validated_purchase_supplier
+
+            _validated_purchase_supplier(getattr(document, "supplier_id", None), company_id)
+
         cls._assert_approval_snapshot(req, document)
 
         rules = cls._get_user_rules(user.id, company_id, doctype)
@@ -1127,6 +1134,13 @@ class ApprovalEngine:
 
         if not cls.can_approve(document, user):
             raise ValueError(_("El usuario no cumple los permisos, límites o independencia requeridos para aprobar."))
+
+        # La orden pudo perder proveedor, actividad o membresía mientras
+        # esperaba aprobación (#1823).
+        if doctype == "purchase_order":
+            from cacao_accounting.compras.services import _validated_purchase_supplier
+
+            _validated_purchase_supplier(getattr(document, "supplier_id", None), company_id)
         rules = cls._get_user_rules(user.id, company_id, doctype)
         rule = rules[0] if rules else None
 
