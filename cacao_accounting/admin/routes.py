@@ -1958,10 +1958,10 @@ def _handle_session_security_post():
     """Process a session-security action POST, returning a redirect or None."""
     action = request.form.get("action")
     if action == "toggle":
-        if not smtp_is_configured():
+        new_state = request.form.get("enabled") == "on"
+        if new_state and not smtp_is_configured():
             flash(_("Debe configurar el servidor SMTP antes de activar la protección de orígenes."), "danger")
             return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
-        new_state = request.form.get("enabled") == "on"
         set_session_security_enabled(new_state)
         database.session.commit()
         estado = _("activada") if new_state else _("desactivada")

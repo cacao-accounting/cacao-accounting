@@ -28,7 +28,7 @@
         <input type="hidden" name="action" value="toggle">
         <div class="form-check form-switch mb-3">
           <input class="form-check-input" type="checkbox" role="switch" id="enabled"
-            name="enabled" {% if enabled %}checked{% endif %} {% if not smtp_configured %}disabled{% endif %}>
+            name="enabled" {% if enabled %}checked{% endif %} {% if not smtp_configured and not enabled %}disabled{% endif %}>
           <label class="form-check-label" for="enabled">
             {{ _("Proteger Inicio de Sesión de Orígenes no Verificados") }}
           </label>
@@ -36,7 +36,7 @@
             {{ _("Cuando está activado, los usuarios que inicien sesión desde un navegador nuevo recibirán un código de verificación por correo electrónico.") }}
           </div>
         </div>
-        {% if smtp_configured %}
+        {% if smtp_configured or enabled %}
         <button type="submit" class="btn btn-primary btn-sm">{{ _("Guardar") }}</button>
         {% endif %}
       </form>
