@@ -5,13 +5,24 @@
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.auth import proteger_passwd
-from cacao_accounting.database import SavedReportView, User, UserCompanyAccess, database
+from cacao_accounting.database import (
+    Accounts,
+    Book,
+    GLEntry,
+    SalesInvoice,
+    SavedReportView,
+    User,
+    UserCompanyAccess,
+    database,
+)
 from cacao_accounting.reportes.saved_views_service import (
     SavedReportViewError,
     create_saved_view,
@@ -223,3 +234,64 @@ def test_vista_restaura_usuarios_y_filtros_avanzados(app, entorno_contable, auth
     assert 'name="show_users" value="1" checked' in html
     assert 'id="financial-advanced-filters"' in html
     assert 'is-hidden" id="financial-advanced-filters"' not in html
+
+
+def test_vista_show_users_restaura_columnas_y_datos_de_autoria(app, entorno_contable, authenticated_client, monkeypatch):
+    """Aplicar la vista agrega columnas de autoría y el nombre del creador."""
+    import cacao_accounting.document_authorship as authorship
+
+    client = authenticated_client()
+    with app.app_context():
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        cuenta = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1101")).scalar_one()
+        libro = database.session.execute(database.select(Book).filter_by(code="DEFAULT_BOOK")).scalar_one()
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            document_no=f"AU-{uuid4().hex[:8]}",
+            created_by=admin.id,
+        )
+        database.session.add(factura)
+        database.session.flush()
+        database.session.add(
+            GLEntry(
+                company="cacao",
+                posting_date=date(2026, 5, 15),
+                ledger_id=libro.id,
+                account_id=cuenta.id,
+                account_code=cuenta.code,
+                debit=Decimal("125"),
+                credit=Decimal("0"),
+                voucher_type="sales_invoice",
+                voucher_id=factura.id,
+                created_by=admin.id,
+            )
+        )
+        database.session.commit()
+        view = create_saved_view(
+            "account-movement",
+            "cacao",
+            admin.id,
+            f"Autoria {uuid4().hex[:6]}",
+            _filters(account_code="1101"),
+            {"show_users": True},
+        )
+        view_id = view.id
+
+    monkeypatch.setattr(authorship, "is_cloud_mode", lambda: True)
+    original = app.jinja_env.globals.get("is_cloud_mode")
+    app.jinja_env.globals["is_cloud_mode"] = lambda: True
+    try:
+        con_vista = client.get(
+            f"/reports/account-movement?company=cacao&apply_filters=1&account_code=1101&page_size=100&saved_view={view_id}"
+        ).get_data(as_text=True)
+        sin_vista = client.get(
+            "/reports/account-movement?company=cacao&apply_filters=1&account_code=1101&page_size=100"
+        ).get_data(as_text=True)
+    finally:
+        app.jinja_env.globals["is_cloud_mode"] = original
+
+    assert "Creado por" in con_vista
+    assert "Admin" in con_vista
+    assert "Creado por" not in sin_vista
