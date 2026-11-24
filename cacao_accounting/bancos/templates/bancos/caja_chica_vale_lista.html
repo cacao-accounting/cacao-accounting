@@ -1,4 +1,4 @@
-{% extends "base.html" %} {% block contenido %} {%- if TESTING -%}
+{% extends "base.html" %} {% block contenido %} {% set acceso = permisos(modulo=id_modulo("cash"), usuario=usuario.id) %} {%- if TESTING -%}
 <div
   data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_vale_lista.html"
 ></div>
@@ -34,12 +34,14 @@
     <h5 class="ca-card-title">
       <i class="bi bi-receipt"></i> {{ _('Vales de Caja Chica') }}
     </h5>
+    {% if acceso.crear %}
     <a
       href="{{ url_for('bancos.caja_chica_vale_nuevo') }}"
       class="btn btn-sm btn-primary"
     >
       <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
+    {% endif %}
   </div>
   <table class="ca-table">
     <caption style="display: none">
@@ -78,7 +80,7 @@
           {% endif %}
         </td>
         <td class="d-flex gap-1 flex-wrap">
-          {% if item.voucher_status == 'borrador' %}
+          {% if item.voucher_status == 'borrador' and acceso.editar %}
           <form
             method="post"
             action="{{ url_for('bancos.caja_chica_vale_estado', v_id=item.id) }}"
@@ -90,13 +92,13 @@
               {{ _('Entregar') }}
             </button>
           </form>
-          {% elif item.voucher_status == 'entregado' %}
+          {% elif item.voucher_status == 'entregado' and acceso.crear %}
           <a
             class="btn btn-outline-success btn-sm"
             href="{{ url_for('bancos.caja_chica_vale_liquidar', v_id=item.id) }}"
             >{{ _('Liquidar') }}</a
           >
-          {% endif %} {% if item.voucher_status in ('borrador', 'entregado') %}
+          {% endif %} {% if item.voucher_status in ('borrador', 'entregado') and acceso.editar %}
           <form
             method="post"
             action="{{ url_for('bancos.caja_chica_vale_estado', v_id=item.id) }}"

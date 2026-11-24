@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
+{% set acceso = permisos(modulo=id_modulo("cash"), usuario=usuario.id) %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_gasto_lista.html"></div>
@@ -17,9 +18,11 @@
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
     <h5 class="ca-card-title"><i class="bi bi-receipt-cutoff"></i> {{ _('Gastos de Caja Chica') }}</h5>
+    {% if acceso.crear %}
     <a href="{{ url_for('bancos.caja_chica_gasto_nuevo') }}" class="btn btn-sm btn-primary">
       <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
+    {% endif %}
   </div>
   <table class="ca-table">
     <caption style="display: none;">{{ _('Listado de gastos de caja chica.') }}</caption>
@@ -60,7 +63,7 @@
           {% endif %}
         </td>
         <td>
-          {% if item.docstatus == 1 %}
+          {% if item.docstatus == 1 and acceso.anular %}
           <form method="post" action="{{ url_for('bancos.caja_chica_gasto_anular', e_id=item.id) }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="reason" value="{{ _('Anulacion por el usuario') }}">
