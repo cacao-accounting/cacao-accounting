@@ -1165,6 +1165,11 @@ def actualizar_precio_item(item_price_id: str):
     return redirect(url_for("admin.precios_item"))
 
 
+def _matching_config_form_is_complete() -> bool:
+    """Un POST incompleto no puede restablecer la configuración a valores de alta."""
+    return request.form.get("config_form") == "complete"
+
+
 def _save_purchase_matching_config(company: str):
     """Crea o actualiza la configuración de matching de compras desde el formulario."""
     from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
@@ -1215,6 +1220,9 @@ def config_conciliacion_compras():
         if not company:
             flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for("admin.config_conciliacion_compras"))
+        if not _matching_config_form_is_complete():
+            flash(_("El formulario de configuración de matching está incompleto; no se guardaron cambios."), "danger")
+            return redirect(url_for("admin.config_conciliacion_compras", company=company))
 
         try:
             pending = _save_purchase_matching_config(company)
@@ -1308,6 +1316,9 @@ def config_conciliacion_ventas():
         if not company:
             flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for("admin.config_conciliacion_ventas"))
+        if not _matching_config_form_is_complete():
+            flash(_("El formulario de configuración de matching está incompleto; no se guardaron cambios."), "danger")
+            return redirect(url_for("admin.config_conciliacion_ventas", company=company))
 
         config = database.session.execute(database.select(SalesMatchingConfig).filter_by(company=company)).scalar_one_or_none()
         if config is None:

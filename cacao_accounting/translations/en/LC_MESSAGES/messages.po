@@ -25060,3 +25060,7 @@ msgstr "e.g. PPTO-2026-BASE"
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py
 msgid "Esta solicitud ya fue respondida el %(responded)s por %(name)s %(last_name)s (%(email)s) y se encuentra cerrada."
 msgstr "This request was already answered on %(responded)s by %(name)s %(last_name)s (%(email)s) and is closed."
+
+#: cacao_accounting/admin/routes.py
+msgid "El formulario de configuración de matching está incompleto; no se guardaron cambios."
+msgstr "The matching configuration form is incomplete; no changes were saved."

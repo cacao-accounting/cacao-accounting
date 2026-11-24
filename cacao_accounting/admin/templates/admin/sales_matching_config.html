@@ -55,6 +55,7 @@
         <form method="post">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="company" value="{{ selected_company }}">
+          <input type="hidden" name="config_form" value="complete">
 
           <div class="mb-3">
             <label class="form-label fw-semibold">{{ _("Tipo de Matching") }}</label>
