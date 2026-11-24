@@ -12,18 +12,24 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
+from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
+from cacao_accounting.bancos.services import _resolve_bank_account_numbering_config
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AccountingPeriod,
     Bank,
     BankAccount,
     BankAccountNumberingConfig,
     Currency,
     Entity,
+    FiscalYear,
     Modules,
     ExternalCounter,
     NamingSeries,
@@ -34,6 +40,7 @@ from cacao_accounting.database import (
     UserCompanyAccess,
     database,
 )
+from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
 CONTRASENA = "numeracion-csrf-2026"
 
@@ -248,6 +255,93 @@ def test_configuracion_rechaza_tipo_incompatible_sin_guardado_parcial(numeracion
             .all()
             == []
         )
+
+
+def test_referencias_desactivadas_tras_guardar_no_se_usan(numeracion_csrf):
+    """Guardar una configuración válida no la valida si luego se desactivan sus referencias."""
+    application, account_id = numeracion_csrf
+    with application.app_context():
+        sufijo = uuid4().hex[:6]
+        serie = NamingSeries(
+            name=f"Serie pagos {sufijo}",
+            entity_type="bank_payment",
+            company="cacao",
+            prefix_template="PAG-*YYYY*-",
+            is_active=True,
+        )
+        chequera = ExternalCounter(
+            company="cacao",
+            name=f"Chequera {sufijo}",
+            counter_type="checkbook",
+            is_active=True,
+        )
+        database.session.add_all(
+            [
+                serie,
+                chequera,
+                FiscalYear(
+                    id=f"FY{sufijo}",
+                    entity="cacao",
+                    name=f"2026 {sufijo}",
+                    year_start_date=date(2026, 1, 1),
+                    year_end_date=date(2026, 12, 31),
+                    is_closed=False,
+                ),
+            ]
+        )
+        database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                id=f"P{sufijo}",
+                entity="cacao",
+                fiscal_year_id=f"FY{sufijo}",
+                name=f"Mayo {sufijo}",
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+                enabled=True,
+                is_closed=False,
+            )
+        )
+        database.session.commit()
+        serie_id = serie.id
+        chequera_id = chequera.id
+
+    client = application.test_client()
+    _login(client)
+    detail = client.get(f"/cash_management/bank-account/{account_id}")
+    valido = client.post(
+        f"/cash_management/bank-account/{account_id}/numbering-config",
+        json={
+            "configs": [
+                {
+                    "payment_type": "pay",
+                    "naming_series_id": serie_id,
+                    "use_external_counter": True,
+                    "external_counter_id": chequera_id,
+                }
+            ]
+        },
+        headers={"X-CSRFToken": _token(detail.get_data(as_text=True))},
+    )
+    assert valido.status_code == 200, valido.get_json()
+
+    with application.app_context():
+        database.session.get(NamingSeries, serie_id).is_active = False
+        database.session.get(ExternalCounter, chequera_id).is_active = False
+        database.session.commit()
+
+        config = _resolve_bank_account_numbering_config(account_id, "pay")
+        assert config is not None
+        documento = SimpleNamespace(id="pago-1982", company="cacao", document_no=None, posting_date=None)
+        with pytest.raises(IdentifierConfigurationError, match="inactiva"):
+            assign_document_identifier(
+                document=documento,
+                entity_type="bank_payment",
+                posting_date_raw=date(2026, 5, 15),
+                naming_series_id=config.naming_series_id,
+                external_counter_id=config.external_counter_id,
+            )
+        assert documento.document_no is None
 
 
 def test_usuario_solo_consulta_no_ve_edicion_y_no_guarda(numeracion_csrf):
