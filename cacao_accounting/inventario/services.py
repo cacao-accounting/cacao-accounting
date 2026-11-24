@@ -374,9 +374,14 @@ def _process_item_edit(item, formulario):
         return None
 
 
-def _uom_choices() -> list[tuple[str, str]]:
-    """Devuelve las UOM disponibles para el formulario de articulo."""
-    return [(u.code, u.name) for u in database.session.execute(database.select(UOM).order_by(UOM.name)).scalars().all()]
+def _uom_choices(include_codes: set[str] | None = None) -> list[tuple[str, str]]:
+    """Devuelve las UOM activas y las históricas expresamente incluidas."""
+    incluidas = include_codes or set()
+    return [
+        (u.code, u.name)
+        for u in database.session.execute(database.select(UOM).order_by(UOM.name)).scalars().all()
+        if u.is_active or u.code in incluidas
+    ]
 
 
 def _lote_item_choices() -> list[tuple[str, str]]:

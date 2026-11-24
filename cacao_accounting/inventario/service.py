@@ -817,6 +817,7 @@ def update_item_with_uoms(
     resolved_account_rows = params.account_rows or []
     resolved_item_type = params.item_type or "goods"
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
+    validate_item_uom_policy(params, item=item)
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
     validate_item_operational_uoms(params.default_uom, params.purchase_uom, params.sale_uom, resolved_uom_rows)
     validate_default_warehouse(params.default_warehouse_id, action="editar")
@@ -1011,6 +1012,48 @@ def parse_item_uom_rows(form: Mapping[str, Any]) -> list[ItemUOMRow]:
     return rows
 
 
+def validate_item_uom_policy(params: ItemParams, *, item: Item | None = None) -> None:
+    """Rechaza UOM inexistentes o inactivas nuevas, preservando las históricas.
+
+    Una UOM inactiva ya vinculada al artículo puede conservarse (y mostrarse) en
+    edición, pero no puede seleccionarse para una configuración nueva.
+    """
+    codes = {
+        code
+        for code in (
+            params.default_uom,
+            params.purchase_uom,
+            params.sale_uom,
+            params.weight_uom,
+            params.volume_uom,
+        )
+        if code
+    }
+    codes.update(row.uom_code for row in (params.uom_rows or []) if row.uom_code)
+    if not codes:
+        return
+
+    existentes = {uom.code: uom for uom in database.session.execute(select(UOM).where(UOM.code.in_(codes))).scalars().all()}
+    faltantes = codes - existentes.keys()
+    if faltantes:
+        raise InventoryServiceError(_("La unidad de medida %(uom)s no existe.") % {"uom": sorted(faltantes)[0]})
+
+    permitidas: set[str] = set()
+    if item is not None:
+        permitidas = {
+            code for code in (item.default_uom, item.purchase_uom, item.sale_uom, item.weight_uom, item.volume_uom) if code
+        }
+        permitidas.update(
+            database.session.execute(select(ItemUOMConversion.from_uom).filter_by(item_code=item.code)).scalars().all()
+        )
+    inactivas = {code for code, uom in existentes.items() if not uom.is_active} - permitidas
+    if inactivas:
+        raise InventoryServiceError(
+            _("La unidad de medida %(uom)s está inactiva y no puede usarse en una configuración nueva.")
+            % {"uom": sorted(inactivas)[0]}
+        )
+
+
 def validate_item_uom_rows(default_uom: str, rows: list[ItemUOMRow]) -> None:
     """Valida que las conversiones UOM sean coherentes con la unidad base."""
     if not default_uom:
@@ -1066,6 +1109,7 @@ def create_item_with_uoms(
     standard_rate = _validated_standard_rate(params.standard_rate)
     resolved_uom_rows = params.uom_rows or []
     resolved_account_rows = params.account_rows or []
+    validate_item_uom_policy(params)
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
     validate_item_operational_uoms(params.default_uom, params.purchase_uom, params.sale_uom, resolved_uom_rows)
     _validate_item_dimensions(params)

@@ -485,11 +485,16 @@ def inventario_articulo_editar(item_id):
     item = registro[0]
 
     formulario = FormularioArticulo(obj=item)
-    formulario.default_uom.choices = _uom_choices()
-    formulario.purchase_uom.choices = _uom_choices()
-    formulario.sale_uom.choices = _uom_choices()
-    formulario.weight_uom.choices = _uom_choices()
-    formulario.volume_uom.choices = _uom_choices()
+    historicas = {
+        code for code in (item.default_uom, item.purchase_uom, item.sale_uom, item.weight_uom, item.volume_uom) if code
+    }
+    historicas.update(conv.from_uom for conv in list_item_uom_conversions(item.code))
+    uom_choices = _uom_choices(historicas)
+    formulario.default_uom.choices = uom_choices
+    formulario.purchase_uom.choices = uom_choices
+    formulario.sale_uom.choices = uom_choices
+    formulario.weight_uom.choices = uom_choices
+    formulario.volume_uom.choices = uom_choices
     formulario.item_category_id.choices = _item_category_choices()
     formulario.currency.choices = _currency_choices()
     titulo = _("Editar") + f" {item.name} - " + APPNAME
@@ -536,7 +541,7 @@ def inventario_articulo_editar(item_id):
         registro=item,
         uom_rows=uom_rows,
         account_rows=account_rows,
-        uom_choices=_uom_choices(),
+        uom_choices=uom_choices,
         company_choices=_company_choices(),
         account_choices=_account_choices(),
         cost_center_choices=_cost_center_choices(),
