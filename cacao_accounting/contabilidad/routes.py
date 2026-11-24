@@ -3030,6 +3030,32 @@ def comprobantes_recurrentes():
     )
 
 
+def _recurring_template_form_state(formulario, form_data) -> dict[str, object]:
+    """Reconstruye el estado enviado para re-renderizar una plantilla inválida."""
+    import json
+
+    try:
+        lineas = json.loads(form_data.get("items_json") or "[]")
+    except (TypeError, ValueError):
+        lineas = []
+    if not isinstance(lineas, list):
+        lineas = []
+    return {
+        "code": formulario.code.data or "",
+        "name": formulario.name.data or "",
+        "company": formulario.company.data or "",
+        "naming_series_id": form_data.get("naming_series_id") or "",
+        "ledger_id": form_data.get("ledger_id") or formulario.ledger_id.data or "",
+        "start_date": formulario.start_date.data.isoformat() if formulario.start_date.data else "",
+        "end_date": formulario.end_date.data.isoformat() if formulario.end_date.data else "",
+        "frequency": formulario.frequency.data or "monthly",
+        "currency": formulario.currency.data or "",
+        "description": formulario.description.data or "",
+        "books": form_data.getlist("books"),
+        "lines": lineas,
+    }
+
+
 @contabilidad.route("/journal/recurring/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -3048,6 +3074,7 @@ def nuevo_comprobante_recurrente():
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.currency.choices = [("", "— Moneda local —")] + obtener_lista_monedas()
     formulario.ledger_id.choices = [("", "— Seleccione libro —")]
+    initial_journal: dict[str, object] | None = None
 
     if formulario.validate_on_submit():
         try:
@@ -3079,10 +3106,12 @@ def nuevo_comprobante_recurrente():
             return redirect(url_for("contabilidad.comprobantes_recurrentes"))
         except (RecurringJournalError, json.JSONDecodeError) as exc:
             flash_error(exc)
+            initial_journal = _recurring_template_form_state(formulario, request.form)
 
     return render_template(
         "contabilidad/recurring_journal_nuevo.html",
         form=formulario,
+        initial_journal=initial_journal,
         titulo=_("Nueva Plantilla Recurrente") + " - " + APPNAME,
     )
 
