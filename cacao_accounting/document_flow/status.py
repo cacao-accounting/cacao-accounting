@@ -206,13 +206,13 @@ def _primary_flow_targets(doctype: str) -> list[str]:
         "supplier_quotation": ["purchase_order"],
         "sales_order": ["delivery_note", "sales_invoice"],
         "delivery_note": ["sales_invoice"],
-        "sales_request": ["sales_quotation"],
+        "sales_request": ["sales_quotation", "sales_order"],
         "sales_quotation": ["sales_order"],
     }.get(doctype, [])
 
 
 def _find_flow_progress_with_activity(doctype: str, source_id: str, target_types: list[str]) -> FlowProgress | None:
-    return _first_matching_flow_progress(doctype, source_id, target_types, _flow_progress_has_pending)
+    return _first_matching_flow_progress(doctype, source_id, target_types, _flow_progress_has_activity)
 
 
 def _find_flow_progress_with_total(doctype: str, source_id: str, target_types: list[str]) -> FlowProgress | None:
@@ -234,8 +234,9 @@ def _first_matching_flow_progress(
     return None
 
 
-def _flow_progress_has_pending(progress: FlowProgress) -> bool:
-    return progress.pending_qty > 0
+def _flow_progress_has_activity(progress: FlowProgress) -> bool:
+    """Indica si el flujo ya tiene consumo o cierre efectivo."""
+    return progress.processed_qty > 0 or progress.closed_qty > 0
 
 
 def _flow_progress_has_total(progress: FlowProgress) -> bool:
@@ -258,7 +259,9 @@ def _flow_progress(source_type: str, source_id: str, target_type: str) -> FlowPr
             source_id,
             item.id,
             target_type,
-            exclude_draft_targets=True,
+            # La solicitud queda consumida al convertirse en orden, aunque la
+            # orden siga en borrador (#1621).
+            exclude_draft_targets=not (source_type == "sales_request" and target_type == "sales_order"),
         )
         closed += decimal_or_zero(getattr(state, "closed_qty", 0)) if state else Decimal("0")
     pending = total - processed - closed
