@@ -11,7 +11,10 @@ atenderlo; con consulta explícita, ambos deben funcionar.
 
 from __future__ import annotations
 
+import os
 from uuid import uuid4
+
+import pytest
 
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.database import (
@@ -27,6 +30,11 @@ from cacao_accounting.database import (
 ENLACE_FLUJO = 'href="/cash_management/cash-forecast/list"'
 ENLACE_COMPARATIVO = 'href="/cash_management/cash-forecast/compare"'
 ENLACE_ENTRADAS = 'href="/cash_management/cash-forecast/manual-entries"'
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="El pronóstico de caja no aplica en modo escritorio.",
+)
 
 
 def _cash_viewer(app, *, consultar: bool, reportes: bool) -> tuple[str, int]:

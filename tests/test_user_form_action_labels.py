@@ -19,6 +19,11 @@ import pytest
 
 from cacao_accounting.database import Modules, Roles, User, database
 
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="El módulo admin de usuarios no aplica en modo escritorio.",
+)
+
 BOTON_ENVIO = '<button type="submit" class="btn btn-primary">{texto}</button>'
 
 
@@ -96,6 +101,8 @@ def test_formulario_de_edicion_muestra_la_etiqueta_actualizar_usuario(app, authe
 
 def test_alta_en_ingles_traduce_la_accion_del_boton(app, authenticated_client, modulo_admin_activo):
     """#2022: con locale en el botón no queda en español."""
+    if os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}:
+        pytest.skip("El módulo admin de usuarios no aplica en modo escritorio.")
     from flask_babel import force_locale
 
     with force_locale("en"):

@@ -5,11 +5,18 @@
 
 from __future__ import annotations
 
+import os
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import inspect
 
 from cacao_accounting.database import CashForecast, FiscalYear, database
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="El pronóstico de caja no aplica en modo escritorio.",
+)
 
 
 def test_rechazo_conserva_datos_y_no_persiste_duplicado(app, authenticated_client, entorno_contable):

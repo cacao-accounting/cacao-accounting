@@ -10,9 +10,16 @@ sin guardar una configuración inutilizable ni afirmar éxito.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from cacao_accounting.database import CacaoConfig, Modules, database
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="La configuración SMTP no aplica en modo escritorio.",
+)
 
 CLAVES_SMTP = (
     "smtp_server",

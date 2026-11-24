@@ -5,12 +5,19 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import select
 
 from cacao_accounting.database import FiscalYear, UserCompanyAccess, database
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="El pronóstico de caja no aplica en modo escritorio.",
+)
 
 
 def test_el_selector_de_anio_fiscal_sigue_a_la_compania(app, entorno_contable, reference_users, authenticated_client):

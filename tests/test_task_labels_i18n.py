@@ -9,10 +9,18 @@ legibles que los filtros, sin exponer los códigos internos en inglés.
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from uuid import uuid4
 
+import pytest
+
 from cacao_accounting.database import DocumentTask, SalesOrder, User, database
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="Las tareas colaborativas no aplican en modo escritorio.",
+)
 
 
 def test_bandeja_y_panel_muestran_estado_y_prioridad_traducidos(app, authenticated_client, entorno_contable):

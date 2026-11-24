@@ -10,12 +10,18 @@ dejar filas ni provocar HTTP 500. La regla válida sí se guarda.
 
 from __future__ import annotations
 
+import os
 from uuid import uuid4
 
 import pytest
 
 from cacao_accounting.database import ApprovalMatrix, Modules, Roles, User, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="La matriz de aprobación no aplica en modo escritorio.",
+)
 
 
 @pytest.fixture

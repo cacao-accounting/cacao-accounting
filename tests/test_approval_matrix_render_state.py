@@ -10,6 +10,7 @@ sin texto.
 
 from __future__ import annotations
 
+import os
 import re
 from decimal import Decimal
 from uuid import uuid4
@@ -18,6 +19,11 @@ import pytest
 
 from cacao_accounting.database import ApprovalMatrix, Modules, Roles, database
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="La matriz de aprobación no aplica en modo escritorio.",
+)
 
 
 @pytest.fixture
