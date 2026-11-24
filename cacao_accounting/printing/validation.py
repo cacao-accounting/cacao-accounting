@@ -101,12 +101,17 @@ def calculate_validation_hash(canonical_payload: str) -> str:
 
 
 def validation_hash_matches(stored_hash: str, document_data: dict[str, Any]) -> bool:
-    """Acepta la huella canónica actual o la histórica anterior a #2019."""
+    """Acepta la huella canónica actual o una histórica equivalente.
+
+    Los QR anteriores a #2019 serializaban el ``Decimal`` con la escala que
+    tenía al emitirse. Al releer de ``Numeric`` la escala puede ser distinta,
+    así que se comparan todas las representaciones compatibles del mismo
+    importe. Las variantes nunca redondean: si el valor cambió, no coinciden.
+    """
     current = calculate_validation_hash(get_canonical_payload(document_data))
     if stored_hash == current:
         return True
-    legacy = calculate_validation_hash(get_canonical_payload(document_data, legacy=True))
-    return stored_hash == legacy
+    return stored_hash in _legacy_validation_hashes(document_data)
 
 
 class ValidationService:
@@ -405,6 +410,43 @@ def _json_value_legacy(value: Any) -> Any:
     if isinstance(value, Decimal):
         return format(value, "f")
     return value
+
+
+_LEGACY_MAX_DECIMALS = 8
+
+
+def _legacy_decimal_variants(value: Decimal) -> set[str]:
+    """Representaciones históricas del mismo importe con 0 a 8 decimales."""
+    if value == 0:
+        zero_variants = {"0", "-0"}
+        for scale in range(1, _LEGACY_MAX_DECIMALS + 1):
+            zeros = "0" * scale
+            zero_variants.update({f"0.{zeros}", f"-0.{zeros}"})
+        return zero_variants
+
+    variantes: set[str] = set()
+    for scale in range(_LEGACY_MAX_DECIMALS + 1):
+        quantum = Decimal(1).scaleb(-scale)
+        try:
+            quantized = value.quantize(quantum)
+        except InvalidOperation:
+            continue
+        if quantized == value:
+            variantes.add(format(quantized, "f"))
+    return variantes
+
+
+def _legacy_validation_hashes(document_data: dict[str, Any]) -> set[str]:
+    """Hashes legacy del payload actual y de sus escalas monetarias equivalentes."""
+    hashes = {calculate_validation_hash(get_canonical_payload(document_data, legacy=True))}
+    total = document_data.get("grand_total")
+    if isinstance(total, Decimal):
+        for variant in _legacy_decimal_variants(total):
+            if variant == _json_value_legacy(total):
+                continue
+            variante_datos = {**document_data, "grand_total": variant}
+            hashes.add(calculate_validation_hash(get_canonical_payload(variante_datos, legacy=True)))
+    return hashes
 
 
 def _as_decimal(value: Any) -> Decimal:

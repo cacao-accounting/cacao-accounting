@@ -68,6 +68,57 @@ def test_hash_historico_anterior_a_2019_sigue_siendo_valido():
     assert not validation_hash_matches("0" * 64, datos)
 
 
+@pytest.mark.parametrize(
+    ("escala_corta", "escala_larga"),
+    [
+        ("125.50", "125.5000"),
+        ("0.10", "0.100000"),
+        ("1000", "1000.00"),
+        ("7.1234", "7.12340000"),
+        ("-125.50", "-125.5000"),
+    ],
+)
+def test_hash_legacy_de_escala_corta_valida_al_recargar_en_escala_larga(escala_corta: str, escala_larga: str):
+    """Un QR emitido con 125.50 sigue válido cuando la base devuelve 125.5000."""
+    datos_cortos = {
+        "company_code": "cacao",
+        "company_tax_id": "J-1",
+        "document_type": "sales_invoice",
+        "document_id": "doc-2019-escala",
+        "document_number": "F-2019",
+        "document_date": date(2026, 5, 15),
+        "currency": "NIO",
+        "grand_total": Decimal(escala_corta),
+        "status": "submitted",
+        "party_tax_id": "J-2",
+        "line_count": 1,
+    }
+    datos_recargados = {**datos_cortos, "grand_total": Decimal(escala_larga)}
+    historico = calculate_validation_hash(get_canonical_payload(datos_cortos, legacy=True))
+
+    assert validation_hash_matches(historico, datos_recargados)
+    assert not validation_hash_matches(historico, {**datos_recargados, "grand_total": Decimal(escala_larga) + Decimal("0.01")})
+
+
+def test_hash_legacy_de_cero_negativo_valida_cero_recargado():
+    """La representación -0.00 del QR histórico equivale a cero."""
+    base = {
+        "company_code": "cacao",
+        "company_tax_id": "J-1",
+        "document_type": "sales_invoice",
+        "document_id": "doc-2019-cero",
+        "document_number": "F-2019",
+        "document_date": date(2026, 5, 15),
+        "currency": "NIO",
+        "status": "submitted",
+        "party_tax_id": "J-2",
+        "line_count": 0,
+    }
+    historico = calculate_validation_hash(get_canonical_payload({**base, "grand_total": Decimal("-0.00")}, legacy=True))
+
+    assert validation_hash_matches(historico, {**base, "grand_total": Decimal("0.0000")})
+
+
 @pytest.mark.database
 @pytest.mark.parametrize(
     ("currency_decimals", "amount"),
@@ -205,6 +256,108 @@ def test_token_sigue_valido_tras_recargar_factura_y_detecta_cambio_real(tmp_path
                 database.session.delete(entity)
             currency = database.session.get(Currency, currency_code)
             if currency:
+                database.session.delete(currency)
+            database.session.commit()
+            database.session.remove()
+            database.engine.dispose()
+
+
+@pytest.mark.database
+def test_qr_legacy_con_escala_corta_valida_tras_recargar_la_factura(tmp_path):
+    """Persiste el hash legacy 125.50, recarga 125.5000 y detecta cambios reales."""
+    configured_uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    database_uri = (
+        f"sqlite:///{tmp_path / 'public-validation-legacy.sqlite'}" if configured_uri.startswith("sqlite") else configured_uri
+    )
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": database_uri,
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "TESTING": True,
+            "SECRET_KEY": "decimal-legacy-canonicalization-test",
+        }
+    )
+    suffix = uuid4().hex[:7].upper()
+    currency_code = f"L{suffix}"
+    company_code = f"L{suffix}"
+    invoice_id = None
+    public_token = None
+
+    try:
+        with application.app_context():
+            database.create_all()
+            currency = Currency(
+                code=currency_code,
+                name=f"Moneda legacy {suffix}",
+                decimals=2,
+                active=True,
+            )
+            entity = Entity(
+                code=company_code,
+                name=f"Empresa legacy {suffix}",
+                company_name=f"Empresa legacy {suffix}",
+                tax_id=f"TL{suffix}",
+                currency=currency_code,
+                enabled=True,
+                status="activo",
+            )
+            database.session.add_all([currency, entity])
+            database.session.flush()
+            invoice = SalesInvoice(
+                company=company_code,
+                document_no=f"LEG-{suffix}",
+                document_type="sales_invoice",
+                posting_date=date(2026, 5, 15),
+                transaction_currency=currency_code,
+                base_currency=currency_code,
+                exchange_rate=Decimal("1"),
+                docstatus=1,
+                grand_total=Decimal("125.50"),
+            )
+            database.session.add(invoice)
+            database.session.commit()
+            invoice_id = str(invoice.id)
+
+            service = ValidationService()
+            document_data = service.extract_document_data(invoice)
+            assert document_data is not None
+            document_data["grand_total"] = Decimal("125.50")
+            validation = service.create_or_update_validation("sales_invoice", invoice_id, document_data)
+            assert validation is not None
+            validation.validation_hash = calculate_validation_hash(get_canonical_payload(document_data, legacy=True))
+            public_token = validation.public_token
+            database.session.commit()
+
+            database.session.remove()
+            assert service.validate_token(public_token)["status"] == "valid"
+
+            reloaded = database.session.get(SalesInvoice, invoice_id)
+            assert reloaded is not None
+            reloaded.grand_total = Decimal("125.51")
+            database.session.commit()
+            database.session.remove()
+            assert service.validate_token(public_token)["status"] == "invalid"
+    finally:
+        with application.app_context():
+            from cacao_accounting.printing.models import PublicDocumentValidation
+
+            database.session.rollback()
+            if public_token:
+                validation = database.session.execute(
+                    database.select(PublicDocumentValidation).filter_by(public_token=public_token)
+                ).scalar_one_or_none()
+                if validation is not None:
+                    database.session.delete(validation)
+            if invoice_id is not None:
+                invoice = database.session.get(SalesInvoice, invoice_id)
+                if invoice is not None:
+                    database.session.delete(invoice)
+            entity = database.session.get(Entity, company_code)
+            if entity is not None:
+                database.session.delete(entity)
+            currency = database.session.get(Currency, currency_code)
+            if currency is not None:
                 database.session.delete(currency)
             database.session.commit()
             database.session.remove()
