@@ -49,7 +49,18 @@ _RELATION_ONLY_CANCEL_DOCTYPES = frozenset(
         "sales_order",
     }
 )
-_POSTED_CANCEL_DOCTYPES = frozenset({"purchase_receipt", "purchase_invoice", "delivery_note", "sales_invoice"})
+_POSTED_CANCEL_DOCTYPES = frozenset(
+    {
+        "purchase_receipt",
+        "purchase_invoice",
+        "delivery_note",
+        "sales_invoice",
+        "sales_return",
+        "sales_credit_note",
+        "sales_debit_note",
+        "import_landed_cost",
+    }
+)
 
 
 def _submit_document_and_refresh_flow(doctype: str, document: Any) -> None:
