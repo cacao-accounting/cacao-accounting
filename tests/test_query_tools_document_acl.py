@@ -21,10 +21,13 @@ from cacao_accounting.database import (
     Currency,
     DocumentRelation,
     Entity,
+    Item,
     Modules,
     PaymentEntry,
     PurchaseInvoice,
     SalesInvoice,
+    SalesInvoiceItem,
+    UOM,
     database,
 )
 from cacao_accounting.query_tools.context import QueryContext
@@ -79,6 +82,18 @@ def document_acl_scenario():
             ]
         )
         database.session.flush()
+        database.session.add(UOM(code="UND", name="Unidad", is_active=True))
+        database.session.flush()
+        database.session.add(
+            Item(
+                code="ART-2252",
+                name="Artículo consultado",
+                item_type="goods",
+                is_stock_item=False,
+                default_uom="UND",
+            )
+        )
+        database.session.flush()
         sale = SalesInvoice(
             company="alpha",
             posting_date=date(2026, 5, 10),
@@ -108,6 +123,20 @@ def document_acl_scenario():
             paid_amount=100,
         )
         database.session.add_all([sale, purchase, payment])
+        database.session.flush()
+        database.session.add(
+            SalesInvoiceItem(
+                sales_invoice_id=sale.id,
+                item_code="ART-2252",
+                item_name="Artículo consultado",
+                qty=Decimal("2"),
+                qty_in_base_uom=Decimal("2"),
+                uom="UND",
+                rate=Decimal("50"),
+                amount=Decimal("100"),
+                base_amount=Decimal("100"),
+            )
+        )
         database.session.flush()
         database.session.add(
             DocumentRelation(
@@ -205,7 +234,15 @@ def test_sales_scope_reads_lines_and_status(document_acl_scenario):
         )
 
         assert lineas["found"] is True
-        assert lineas["items"] == []
+        assert len(lineas["items"]) == 1
+        linea = lineas["items"][0]
+        assert linea["item_code"] == "ART-2252"
+        assert linea["item_name"] == "Artículo consultado"
+        assert linea["qty"] == "2.000000000"
+        assert linea["uom"] == "UND"
+        assert linea["rate"] == "50.0000"
+        assert linea["amount"] == "100.0000"
+        assert lineas["page"]["total_items"] == 1
         assert estado["found"] is True
         assert detalle["found"] is True
 
