@@ -417,6 +417,11 @@ def verify_snapshot_hash(confirmation: BalanceConfirmation) -> bool:
     return hmac.compare_digest(compute_snapshot_hash(snapshot_data), confirmation.snapshot_hash)
 
 
+def _balance_confirmation_document_no(confirmation_id: str) -> str:
+    """Deriva el número visible del ULID completo para evitar colisiones."""
+    return f"CONF-{confirmation_id.upper()}"
+
+
 def create_balance_confirmation(
     company_id: str,
     party_id: str,
@@ -488,8 +493,9 @@ def create_balance_confirmation(
     database.session.add(confirmation)
     database.session.flush()
 
-    # Generar document_no único
-    confirmation.document_no = f"CONF-{confirmation.id[:8].upper()}"
+    # Generar document_no único: el ID completo evita la colisión del prefijo
+    # temporal de los ULID generados consecutivamente (#1703).
+    confirmation.document_no = _balance_confirmation_document_no(confirmation.id)
 
     # Log audit event
     log_balance_confirmation_event(
