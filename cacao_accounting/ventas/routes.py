@@ -2522,6 +2522,8 @@ def ventas_factura_venta_duplicar(invoice_id: str):
             uom=item.uom,
             rate=item.rate,
             amount=item.amount,
+            discount_percentage=item.discount_percentage,
+            discount_amount=item.discount_amount,
             warehouse=getattr(item, "warehouse", None),
             batch_id=item.batch_id,
             serial_no=item.serial_no,
