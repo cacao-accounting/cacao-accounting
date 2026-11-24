@@ -195,26 +195,23 @@ def obtener_id_rol_por_monbre(rol: str) -> str:
 def db_version():  # pragma: no cover
     """Return database version as text."""
     from flask import current_app
-    from cacao_accounting.database import database
     from sqlalchemy.sql import text
 
+    from cacao_accounting.database import database
+
     with current_app.app_context():
-        DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
-
-        if DABATASE_URI.startswith("mysql"):
-            Q = database.session.execute(text("SELECT version();"))
-            for i in Q:
-                db_version = str(i)
-        elif DABATASE_URI.startswith(("postgresql", "postgres")):
-            Q = database.session.execute(text("SELECT VERSION();"))
-            for i in Q:
-                db_version = str(i)
+        bind = database.session.get_bind()
+        dialect = bind.dialect.name if bind is not None else ""
+        if dialect in {"mysql", "mariadb"}:
+            query = text("SELECT version();")
+        elif dialect in {"postgresql", "postgres"}:
+            query = text("SELECT VERSION();")
         else:
-            Q = database.session.execute(text("select sqlite_version();"))
-            for i in Q:
-                db_version = str(i)
-
-    return db_version
+            query = text("select sqlite_version();")
+        result = database.session.execute(query)
+        for row in result:
+            return str(row)
+        return ""
 
 
 # <---------------------------------------------------------------------------------------------> #
