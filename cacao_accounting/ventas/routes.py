@@ -21,6 +21,7 @@ from flask_login import current_user, login_required
 from cacao_accounting.database import (
     DeliveryNote,
     DeliveryNoteItem,
+    DocumentRelation,
     Item,
     Party,
     SalesInvoice,
@@ -45,6 +46,7 @@ from cacao_accounting.contabilidad.posting import PostingError, cancel_document,
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 from cacao_accounting.document_flow import (
+    assert_relation_same_party,
     close_document_balances,
     get_target_line_source,
     lock_document_flow_document,
@@ -2062,6 +2064,45 @@ def ventas_entrega_editar(note_id: str):
     )
 
 
+def _copy_active_sales_document_relations(
+    source_id: str, target_id: str, target_company: str | None, item_ids: dict[str, str]
+) -> None:
+    """Copia relaciones activas de línea al borrador duplicado de ventas."""
+    relations = (
+        database.session.execute(
+            database.select(DocumentRelation)
+            .filter_by(target_id=source_id, status="active")
+            .order_by(DocumentRelation.created.asc(), DocumentRelation.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+    for relation in relations:
+        target_item_id = item_ids.get(relation.target_item_id) if relation.target_item_id else None
+        if relation.target_item_id and target_item_id is None:
+            continue
+        assert_relation_same_party(relation.source_type, relation.source_id, relation.target_type, target_id)
+        database.session.add(
+            DocumentRelation(
+                source_type=relation.source_type,
+                source_id=relation.source_id,
+                source_item_id=relation.source_item_id,
+                target_type=relation.target_type,
+                target_id=target_id,
+                target_item_id=target_item_id,
+                company=relation.company or target_company,
+                qty=relation.qty,
+                qty_in_base_uom=relation.qty_in_base_uom,
+                uom=relation.uom,
+                rate=relation.rate,
+                amount=relation.amount,
+                relation_type=relation.relation_type,
+                status="active",
+                metadata_json=relation.metadata_json,
+            )
+        )
+
+
 @ventas.route("/delivery-note/<note_id>/duplicate", methods=["POST"])
 @modulo_activo("inventory")
 @login_required
@@ -2098,6 +2139,7 @@ def ventas_entrega_duplicar(note_id: str):
         naming_series_id=None,
     )
     total = Decimal("0")
+    item_ids: dict[str, str] = {}
     for item in database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=origen.id)).scalars():
         linea = DeliveryNoteItem(
             delivery_note_id=duplicado.id,
@@ -2108,12 +2150,17 @@ def ventas_entrega_duplicar(note_id: str):
             uom=item.uom,
             rate=item.rate,
             amount=item.amount,
+            discount_percentage=item.discount_percentage,
+            discount_amount=item.discount_amount,
             warehouse=item.warehouse,
             batch_id=item.batch_id,
             serial_no=item.serial_no,
         )
         database.session.add(linea)
+        database.session.flush()
+        item_ids[item.id] = linea.id
         total += item.amount or Decimal("0")
+    _copy_active_sales_document_relations(origen.id, duplicado.id, duplicado.company, item_ids)
     _set_sales_document_totals(duplicado, total)
     log_create(duplicado)
     database.session.commit()
@@ -2512,6 +2559,7 @@ def ventas_factura_venta_duplicar(invoice_id: str):
         naming_series_id=None,
     )
     total = Decimal("0")
+    item_ids: dict[str, str] = {}
     for item in database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=origen.id)).scalars():
         linea = SalesInvoiceItem(
             sales_invoice_id=duplicado.id,
@@ -2530,7 +2578,10 @@ def ventas_factura_venta_duplicar(invoice_id: str):
             income_account_id=getattr(item, "income_account_id", None),
         )
         database.session.add(linea)
+        database.session.flush()
+        item_ids[item.id] = linea.id
         total += item.amount or Decimal("0")
+    _copy_active_sales_document_relations(origen.id, duplicado.id, duplicado.company, item_ids)
     duplicado.total = total
     duplicado.base_total = origen.base_total
     duplicado.grand_total = origen.grand_total
