@@ -1533,6 +1533,8 @@ def apply_advance_to_invoice(
         raise _document_flow_error(_("El pago/anticipo no existe."), 404)
     if payment.docstatus != 1:
         raise _document_flow_error(_("El pago/anticipo debe estar aprobado."), 409)
+    if not payment.is_advance:
+        raise _document_flow_error(_("El pago no está marcado como anticipo."), 409)
     invoice, reference_type, party_id = _load_advance_invoice(invoice_id)
     outstanding, outstanding_after, effective_rate = _validate_advance_allocation(
         payment, invoice, party_id, amount, allocation_date, exchange_rate
