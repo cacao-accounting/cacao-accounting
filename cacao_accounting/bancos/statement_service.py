@@ -87,6 +87,30 @@ def _find_auto_reconcile_rules(bank_account_id: str, company: str) -> list[BankM
     return list(rules)
 
 
+def _accumulate_exact_candidate(
+    seen: dict[tuple[str, str], tuple[BankCandidate, BankMatchingRule]],
+    candidate: BankCandidate,
+    rule: BankMatchingRule,
+) -> bool:
+    """Acumula un candidato exacto por destino y rechaza importes dispares.
+
+    El importe de un candidato se deriva del saldo pendiente del destino y del
+    importe bancario, no de la tolerancia de la regla. Por eso dos evaluaciones
+    del mismo destino sobre la misma transacción no deberían discrepir; el
+    rechazo protege la conciliación si el estado cambia entre evaluaciones.
+    """
+    key = (candidate.reference_type, candidate.reference_id)
+    existing = seen.get(key)
+    if existing is None:
+        seen[key] = (candidate, rule)
+        return True
+    if existing[0].amount != candidate.amount:
+        return False
+    if candidate.score > existing[0].score:
+        seen[key] = (candidate, rule)
+    return True
+
+
 def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconciliationResult:
     """Intenta conciliar automaticamente una transaccion contra un unico candidato exacto.
 
@@ -138,14 +162,8 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
         )
         exact_candidates = [candidate for candidate in candidates if candidate.status == "exact"]
         if len(exact_candidates) == 1:
-            candidate = exact_candidates[0]
-            key = (candidate.reference_type, candidate.reference_id)
-            existing = seen_candidates.get(key)
-            if existing is None:
-                seen_candidates[key] = (candidate, rule)
-            elif existing[0].amount != candidate.amount:
-                # #1644: el mismo destino evaluado con importes distintos no
-                # es una coincidencia inequívoca; no se elige por score.
+            # #1644: el mismo destino con importes dispares no es inequívoco.
+            if not _accumulate_exact_candidate(seen_candidates, exact_candidates[0], rule):
                 return BankAutoReconciliationResult(
                     bank_transaction_id=bank_transaction_id,
                     reconciled=False,
@@ -155,8 +173,6 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
                     allocated_amount=None,
                     reason="ambiguous",
                 )
-            elif candidate.score > existing[0].score:
-                seen_candidates[key] = (candidate, rule)
         elif len(exact_candidates) > 1:
             return BankAutoReconciliationResult(
                 bank_transaction_id=bank_transaction_id,

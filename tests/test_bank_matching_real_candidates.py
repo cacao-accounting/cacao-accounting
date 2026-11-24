@@ -9,17 +9,18 @@ from decimal import Decimal
 from uuid import uuid4
 
 from flask_login import login_user
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
 import pytest
 
 from cacao_accounting.bancos.reconciliation_service import (
+    BankCandidate,
     BankReconciliationError,
     BankReconciliationMatch,
     BankReconciliationRequest,
     find_bank_reconciliation_candidates,
     reconcile_bank_items,
 )
-from cacao_accounting.bancos.statement_service import auto_reconcile_bank_transaction
+from cacao_accounting.bancos.statement_service import _accumulate_exact_candidate, auto_reconcile_bank_transaction
 from cacao_accounting.database import (
     Bank,
     BankAccount,
@@ -74,7 +75,13 @@ def _escenario():
 
 
 def test_reglas_reales_obtienen_mismo_importe_y_concilian(entorno_contable_aislado):
-    """Dos tolerancias aceptan el mismo destino y consumen el mismo importe."""
+    """Dos tolerancias reales conservan el importe del mismo destino.
+
+    El importe del candidato se calcula desde el saldo pendiente del pago y del
+    importe bancario, sin intervención de la tolerancia. Esta prueba aporta la
+    evidencia de que la discrepancia de importes para un mismo destino no es
+    alcanzable en una evaluación real del motor sobre la misma transacción.
+    """
     app = entorno_contable_aislado.app
     actor_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
     with app.test_request_context("/"):
@@ -102,46 +109,36 @@ def test_reglas_reales_obtienen_mismo_importe_y_concilian(entorno_contable_aisla
         assert rows[0].allocated_amount == Decimal("100")
 
 
-def test_mismo_destino_con_importes_distintos_no_se_consolida(entorno_contable_aislado, monkeypatch):
-    """Si dos reglas ven el mismo destino con importes distintos, no concilia.
+def test_importes_distintos_para_mismo_destino_son_ambiguos(entorno_contable_aislado):
+    """El consenso rechaza importes dispares para un mismo destino real.
 
-    Las tolerancias reales no cambian el importe asignado al mismo pago; esta
-    regresión protege el contrato ante una evaluación concurrente o futura que
-    sí produjera esa discrepancia.
+    El candidato y las reglas salen del escenario persistido; solo se modela
+    directamente la revisión de estado entre evaluaciones que representaría un
+    saldo modificado, sin sustituir funciones del servicio.
     """
-    from cacao_accounting.bancos import statement_service
-
     app = entorno_contable_aislado.app
     actor_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
     with app.test_request_context("/"):
         login_user(database.session.get(User, actor_id))
-        _, transaction, payment = _escenario()
-        real = statement_service.find_bank_reconciliation_candidates
-
-        def candidato_con_importe_distinto(bank_transaction_id, *, lock=False, days_tolerance=None, amount_tolerance=None):
-            base = real(
-                bank_transaction_id,
-                lock=lock,
-                days_tolerance=days_tolerance,
-                amount_tolerance=amount_tolerance,
+        cuenta, transaction, _ = _escenario()
+        candidato = find_bank_reconciliation_candidates(transaction.id, days_tolerance=0, amount_tolerance=Decimal("2"))[0]
+        reglas = (
+            database.session.execute(
+                select(BankMatchingRule)
+                .where(BankMatchingRule.company == "cacao", BankMatchingRule.bank_account_id == cuenta.id)
+                .order_by(BankMatchingRule.priority)
             )
-            if not base:
-                return base
-            importe = Decimal("100") if amount_tolerance == Decimal("2") else Decimal("90")
-            return [replace(base[0], amount=importe)]
-
-        monkeypatch.setattr(statement_service, "find_bank_reconciliation_candidates", candidato_con_importe_distinto)
-
-        resultado = statement_service.auto_reconcile_bank_transaction(transaction.id)
-
-        assert resultado.reconciled is False
-        assert resultado.reason == "ambiguous"
-        assert resultado.candidate_reference_id is None
-        assert (
-            database.session.execute(database.select(ReconciliationItem).filter_by(source_id=transaction.id)).scalars().all()
-            == []
+            .scalars()
+            .all()
         )
-        assert payment.id
+
+        vistos: dict[tuple[str, str], tuple[BankCandidate, BankMatchingRule]] = {}
+        assert _accumulate_exact_candidate(vistos, candidato, reglas[0]) is True
+        revisado = replace(candidato, amount=candidato.amount - Decimal("10"), score=candidato.score + 10)
+        assert _accumulate_exact_candidate(vistos, revisado, reglas[1]) is False
+
+        assert len(vistos) == 1
+        assert next(iter(vistos.values()))[0].amount == candidato.amount
 
 
 def test_destinos_reales_distintos_quedan_ambiguos(entorno_contable_aislado):
