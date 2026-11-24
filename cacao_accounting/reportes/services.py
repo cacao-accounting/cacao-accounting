@@ -1159,6 +1159,33 @@ def _batch_no_map() -> dict[str, str]:
     }
 
 
+def _kardex_opening_balance(
+    filters: KardexFilters, window_start: date | None
+) -> dict[tuple[str, str], tuple[Decimal, Decimal]]:
+    """Acumula existencia y valor anteriores al inicio del Kardex."""
+    if window_start is None:
+        return {}
+    query = exclude_cancelled_stock_entries(
+        select(
+            StockLedgerEntry.item_code,
+            StockLedgerEntry.warehouse,
+            func.sum(StockLedgerEntry.qty_change),
+            func.sum(StockLedgerEntry.stock_value_difference),
+        ).filter_by(company=filters.company)
+    )
+    if filters.item_code:
+        query = query.filter_by(item_code=filters.item_code)
+    if filters.warehouse:
+        query = query.filter_by(warehouse=filters.warehouse)
+    query = query.where(StockLedgerEntry.posting_date < window_start).group_by(
+        StockLedgerEntry.item_code, StockLedgerEntry.warehouse
+    )
+    return {
+        (str(item_code), str(warehouse)): (_decimal_value(qty), _decimal_value(value))
+        for item_code, warehouse, qty, value in database.session.execute(query)
+    }
+
+
 def get_kardex(filters: KardexFilters) -> PaginatedReport:
     """Devuelve Kardex desde StockLedgerEntry."""
     window_start, window_end = _report_window(filters)
@@ -1177,7 +1204,7 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
     total_in = Decimal("0")
     total_out = Decimal("0")
     total_value = Decimal("0")
-    running: dict[tuple[str, str], tuple[Decimal, Decimal]] = {}
+    running = _kardex_opening_balance(filters, window_start)
     for entry in database.session.execute(
         query.order_by(StockLedgerEntry.posting_date, StockLedgerEntry.created, StockLedgerEntry.id)
     ).scalars():
@@ -1190,7 +1217,7 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
         running_qty = current_qty + qty
         running_value = current_value + value_change
         running[key] = (running_qty, running_value)
-        if filters.date_from and entry.posting_date < filters.date_from:
+        if window_start and entry.posting_date < window_start:
             continue
         total_in += incoming
         total_out += outgoing
