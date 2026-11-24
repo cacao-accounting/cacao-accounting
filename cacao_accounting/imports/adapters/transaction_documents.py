@@ -691,9 +691,11 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         de lote y se rechaza la fila cuando el lote no existe, en lugar de
         persistir un texto que el posting nunca podria validar.
         """
-        if batch_no in (None, ""):
+        if batch_no is None:
             return None
         cleaned = str(batch_no).strip()
+        if not cleaned:
+            return None
         batch = database.session.execute(
             database.select(Batch).filter_by(item_code=item_code, batch_no=cleaned)
         ).scalar_one_or_none()
