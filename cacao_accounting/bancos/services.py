@@ -540,6 +540,38 @@ def create_petty_cash_account(
     return registro
 
 
+def _petty_cash_name_exists(company: str, name: str, exclude_id: str) -> bool:
+    """Indica si otra caja de la compañía ya usa el nombre indicado."""
+    existing = database.session.execute(
+        database.select(PettyCashAccount.id).filter(
+            PettyCashAccount.company == company,
+            PettyCashAccount.name == name,
+            PettyCashAccount.id != exclude_id,
+        )
+    ).scalar_one_or_none()
+    return existing is not None
+
+
+def _is_petty_cash_name_conflict(error: IntegrityError) -> bool:
+    """Reconoce la violación de unicidad de nombre sin ocultar otros errores."""
+    message = str(getattr(error, "orig", error)).lower()
+    return "uq_petty_cash_account" in message or (
+        "petty_cash_account" in message and "unique" in message and "name" in message
+    )
+
+
+def _apply_petty_cash_name(petty_cash: PettyCashAccount, name: str | None) -> None:
+    """Valida y aplica el nombre editable de una caja chica."""
+    if name is None:
+        return
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError(_("El nombre de la caja chica es obligatorio."))
+    if _petty_cash_name_exists(petty_cash.company, normalized_name, petty_cash.id):
+        raise ValueError(_("Ya existe una caja chica con ese nombre en la compañía."))
+    petty_cash.name = normalized_name
+
+
 def update_petty_cash_account(
     petty_cash: PettyCashAccount,
     *,
@@ -552,20 +584,7 @@ def update_petty_cash_account(
 ) -> PettyCashAccount:
     """Actualiza los campos editables de una caja chica."""
     account = database.session.get(Accounts, petty_cash.account_id)
-    if name is not None:
-        normalized_name = name.strip()
-        if not normalized_name:
-            raise ValueError(_("El nombre de la caja chica es obligatorio."))
-        duplicate = database.session.execute(
-            database.select(PettyCashAccount).filter(
-                PettyCashAccount.company == petty_cash.company,
-                PettyCashAccount.name == normalized_name,
-                PettyCashAccount.id != petty_cash.id,
-            )
-        ).scalar_one_or_none()
-        if duplicate:
-            raise ValueError(_("Ya existe una caja chica con ese nombre en la compañía."))
-        petty_cash.name = normalized_name
+    _apply_petty_cash_name(petty_cash, name)
     if account_id:
         account = _validate_petty_cash_account(petty_cash.company, account_id)
         assert account is not None
@@ -585,7 +604,13 @@ def update_petty_cash_account(
         petty_cash.custodian_id = custodian_id or None
     if notes is not None:
         petty_cash.notes = notes
-    database.session.commit()
+    try:
+        database.session.commit()
+    except IntegrityError as exc:
+        database.session.rollback()
+        if _is_petty_cash_name_conflict(exc):
+            raise ValueError(_("Ya existe una caja chica con ese nombre en la compañía.")) from exc
+        raise
     return petty_cash
 
 
