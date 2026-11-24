@@ -624,11 +624,19 @@ def cargar_permisos_predeterminados() -> None:
         CONTROLLER,
         BI,
     ]
+    existentes = {
+        (fila.rol_id, fila.module_id)
+        for fila in database.session.execute(select(RolesAccess.rol_id, RolesAccess.module_id)).all()
+    }
+    pendientes: list[RolesAccess] = []
     for permisos in PERMISOS_PREDETERMINADOS:
-        if isinstance(permisos, list):
-            for MODULO in permisos:
-                database.session.add(MODULO)
-                database.session.commit()
-        else:
-            database.session.add(permisos)
-            database.session.commit()
+        candidatos = permisos if isinstance(permisos, list) else [permisos]
+        for permiso in candidatos:
+            clave = (permiso.rol_id, permiso.module_id)
+            if clave in existentes:
+                continue
+            existentes.add(clave)
+            pendientes.append(permiso)
+    if pendientes:
+        database.session.add_all(pendientes)
+        database.session.commit()
