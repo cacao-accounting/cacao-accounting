@@ -32,6 +32,7 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
 )
 
 from cacao_accounting.compras.purchase_request_comparison_service import (
+    comparison_line_base_rate,
     comparison_recommendations,
     create_purchase_orders_from_comparison,
     create_purchase_request_comparison,
@@ -1289,6 +1290,7 @@ def compras_comparativo_ofertas(rfq_id: str):
     offer_lines = {
         offer.id: {item.id: offer_line_for_item(offer.id, item, rfq_items) for item in rfq_items} for offer in offers
     }
+    base_rates = _rfq_offer_base_rates(registro, offers, rfq_items, offer_lines)
     award = (
         database.session.execute(
             database.select(PurchaseQuotationAward)
@@ -1306,6 +1308,7 @@ def compras_comparativo_ofertas(rfq_id: str):
         offers=offers,
         rfq_items=rfq_items,
         offer_lines=offer_lines,
+        base_rates=base_rates,
         sourcing_config=get_purchase_sourcing_config(),
         is_purchase_manager=is_purchase_manager(current_user.id),
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
@@ -1315,6 +1318,30 @@ def compras_comparativo_ofertas(rfq_id: str):
         **_purchase_action_permissions(),
         titulo=titulo,
     )
+
+
+def _rfq_offer_base_rates(
+    registro: PurchaseQuotation,
+    offers: list[SupplierQuotation],
+    rfq_items: list[PurchaseQuotationItem],
+    offer_lines: dict[str, dict[str, SupplierQuotationItem | None]],
+) -> dict[str, dict[str, Decimal | None]]:
+    """Calcula la tarifa comparable en moneda base para el comparativo."""
+    base_rates: dict[str, dict[str, Decimal | None]] = {}
+    for offer in offers:
+        base_rates[offer.id] = {}
+        for item in rfq_items:
+            line = offer_lines[offer.id][item.id]
+            if line is None:
+                base_rates[offer.id][item.id] = None
+                continue
+            try:
+                base_rates[offer.id][item.id] = comparison_line_base_rate(
+                    offer, line, registro.company or "", registro.posting_date
+                )
+            except ValueError:
+                base_rates[offer.id][item.id] = line.rate or Decimal("0")
+    return base_rates
 
 
 def _purchase_award_lines(

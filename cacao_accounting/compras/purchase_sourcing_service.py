@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     database,
 )
 
+from cacao_accounting.compras.purchase_request_comparison_service import comparison_line_base_rate
 from cacao_accounting.i18n import _
 
 REQUIRE_COMPARISON_KEY = "PURCHASE_REQUIRE_OFFER_COMPARISON"
@@ -258,7 +259,7 @@ def validate_award_request(
     )
     if not selections:
         raise PurchaseSourcingError(_("Debe adjudicar al menos una línea."))
-    manual_override_items = _find_manual_override_items(items, offers, selections)
+    manual_override_items = _find_manual_override_items(rfq, items, offers, selections)
     if manual_override_items and (not is_purchase_sourcing_authorizer(user_id) or not reason):
         raise PurchaseSourcingError(_("Seleccionar una oferta no recomendada requiere autorización y justificación."))
     return cast(list[PurchaseQuotationItem], items), offers, manual_override_items
@@ -283,9 +284,12 @@ def _validate_award_authorization(
 
 
 def _find_manual_override_items(
-    items: Sequence[PurchaseQuotationItem], offers: Sequence[SupplierQuotation], selections: dict[str, str]
+    rfq: PurchaseQuotation,
+    items: Sequence[PurchaseQuotationItem],
+    offers: Sequence[SupplierQuotation],
+    selections: dict[str, str],
 ) -> set[str]:
-    """Return selected items whose rate is above the best comparable offer."""
+    """Return selected items whose base rate is above the best comparable offer."""
     rfq_items = cast(list[PurchaseQuotationItem], items)
     overrides: set[str] = set()
     for item in items:
@@ -298,10 +302,22 @@ def _find_manual_override_items(
             raise PurchaseSourcingError(
                 _("La oferta seleccionada no cubre el artículo %(item_code)s.") % {"item_code": item.item_code}
             )
-        rates = [line.rate or Decimal("0") for offer in offers if (line := offer_line_for_item(offer.id, item, rfq_items))]
-        if rates and (selected_line.rate or Decimal("0")) > min(rates):
+        rates = [
+            _award_comparable_rate(rfq, offer, line)
+            for offer in offers
+            if (line := offer_line_for_item(offer.id, item, rfq_items))
+        ]
+        if rates and _award_comparable_rate(rfq, quotation, selected_line) > min(rates):
             overrides.add(item.id)
     return overrides
+
+
+def _award_comparable_rate(rfq: PurchaseQuotation, offer: SupplierQuotation, line: SupplierQuotationItem) -> Decimal:
+    """Normaliza la tarifa de la oferta a la moneda base de la compañía."""
+    try:
+        return comparison_line_base_rate(offer, line, rfq.company or "", rfq.posting_date)
+    except ValueError as exc:
+        raise PurchaseSourcingError(str(exc)) from exc
 
 
 def create_purchase_quotation_award(

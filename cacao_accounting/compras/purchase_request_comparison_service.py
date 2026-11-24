@@ -192,7 +192,7 @@ def _request_item_offer_line(
     return matching[occurrence] if occurrence < len(matching) else None
 
 
-def _comparison_line_base_rate(
+def comparison_line_base_rate(
     offer: SupplierQuotation,
     line: SupplierQuotationItem,
     company: str,
@@ -273,7 +273,7 @@ def purchase_request_comparison_recommendations(
                     "offer": offer,
                     "line": line,
                     "rate": Decimal(str(line.rate or 0)),
-                    "base_rate": _comparison_line_base_rate(
+                    "base_rate": comparison_line_base_rate(
                         offer,
                         line,
                         purchase_request.company,

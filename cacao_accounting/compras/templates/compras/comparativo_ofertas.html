@@ -146,7 +146,7 @@
                 {% set line = offer_lines[offer.id][item.id] %}
                 {% if line %}
                   <label class="d-flex gap-2 align-items-center">
-                    <input type="radio" name="award_item_{{ item.id }}" value="{{ offer.id }}" data-rate="{{ line.rate or 0 }}">
+                    <input type="radio" name="award_item_{{ item.id }}" value="{{ offer.id }}" data-rate="{{ line.rate or 0 }}" data-base-rate="{{ base_rates[offer.id][item.id] if base_rates[offer.id][item.id] is not none else line.rate or 0 }}">
                     <span>{{ format_money_with_currency(line.rate or 0, offer.transaction_currency or offer.base_currency) }} / {{ line.qty }}</span>
                   </label>
                 {% else %}<span class="text-muted">{{ _("Sin cobertura") }}</span>{% endif %}

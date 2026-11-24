@@ -3,6 +3,14 @@
   const reason = document.getElementById('authorization_reason');
   if (!form || !reason) return;
 
+  // El servidor compara tarifas en moneda base; usar el mismo valor evita
+  // exigir el motivo por precios nominales de monedas distintas.
+  const comparableRate = (input) => {
+    const baseRate = Number(input.dataset.baseRate);
+    if (input.dataset.baseRate !== undefined && !Number.isNaN(baseRate)) return baseRate;
+    return Number(input.dataset.rate);
+  };
+
   const updateReasonRequirement = () => {
     let override = false;
     const groups = [
@@ -12,9 +20,9 @@
     ];
     groups.forEach((name) => {
       const inputs = [...form.querySelectorAll(`input[name="${name}"]`)];
-      const rates = inputs.map((input) => Number(input.dataset.rate)).filter((rate) => !Number.isNaN(rate));
+      const rates = inputs.map(comparableRate).filter((rate) => !Number.isNaN(rate));
       const selected = inputs.find((input) => input.checked);
-      if (selected && rates.length && Number(selected.dataset.rate) > Math.min(...rates)) override = true;
+      if (selected && rates.length && comparableRate(selected) > Math.min(...rates)) override = true;
     });
     const insufficient = form.dataset.offersInsufficient === 'true';
     reason.required = insufficient || override;
