@@ -98,10 +98,11 @@ def _debe_registrar_version_database() -> bool:
 
 
 def _consultar_version_database(uri: str) -> tuple[str, str]:
-    match uri:
-        case s if s.startswith("mysql+pymysql"):
+    direccion = str(uri)
+    match direccion:
+        case s if s.startswith("mysql"):
             return "SELECT version();", "Running on MySQL."
-        case s if s.startswith("postgresql+"):
+        case s if s.startswith("postgresql") or s.startswith("postgres"):
             return "SELECT VERSION();", "Running on Postgresql."
         case _:
             return "select sqlite_version();", "Running on SQLITE."

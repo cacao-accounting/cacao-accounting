@@ -201,7 +201,7 @@ def db_version():  # pragma: no cover
     with current_app.app_context():
         DABATASE_URI = current_app.config.get("SQLALCHEMY_DATABASE_URI")
 
-        if DABATASE_URI.startswith("mysql+pymysql"):
+        if DABATASE_URI.startswith("mysql"):
             Q = database.session.execute(text("SELECT version();"))
             for i in Q:
                 db_version = str(i)
