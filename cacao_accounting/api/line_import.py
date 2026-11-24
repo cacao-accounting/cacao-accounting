@@ -424,6 +424,13 @@ def validate_lines() -> ResponseReturnValue:
     if party_error:
         return party_error
 
+    allocation_date = None
+    if str(payload.doctype) == "payment_reconciliation":
+        try:
+            allocation_date = _payment_reconciliation_allocation_date(payload.context)
+        except ValueError:
+            return _invalid_payload_response("allocation_date", _("La fecha de aplicación no es válida."), 400)
+
     errors: list[dict[str, Any]] = []
     validated_rows: list[dict[str, Any]] = []
     reconciliation_remaining: dict[str, Decimal] = {}
@@ -439,6 +446,7 @@ def validate_lines() -> ResponseReturnValue:
             party_id=party_id,
             reconciliation_remaining=reconciliation_remaining,
             document_remaining=document_remaining,
+            allocation_date=allocation_date,
         )
         errors.extend(row_errors)
         validated_rows.append(validated_row)
@@ -559,6 +567,7 @@ def _validate_import_row(
     party_id: str = "",
     reconciliation_remaining: dict[str, Decimal] | None = None,
     document_remaining: dict[str, Decimal] | None = None,
+    allocation_date: date | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Validate and enrich one imported line."""
     errors: list[dict[str, Any]] = []
@@ -577,6 +586,7 @@ def _validate_import_row(
             party_id=party_id,
             payment_remaining=reconciliation_remaining,
             document_remaining=document_remaining,
+            allocation_date=allocation_date,
         )
     return errors, validated_row
 
@@ -1104,6 +1114,14 @@ def _payment_reconciliation_party_context(
     return party_type, party_id, None
 
 
+def _payment_reconciliation_allocation_date(context: dict[str, Any]) -> date:
+    """Resuelve la fecha de aplicación con el mismo default que el POST real."""
+    raw_date = context.get("allocation_date")
+    if raw_date in (None, ""):
+        return date.today()
+    return date.fromisoformat(str(raw_date))
+
+
 def _append_payment_reconciliation_error(errors: list[dict[str, Any]], row_no: int, field: str, message: str) -> None:
     """Append a normalized payment reconciliation validation error."""
     errors.append({"row": row_no, "field": field, "message": message})
@@ -1161,9 +1179,14 @@ def _validate_payment_reconciliation_party(
 
 
 def _payment_reconciliation_rate(
-    row: dict[str, Any], payment: Any, reference: Any, row_no: int, errors: list[dict[str, Any]]
+    row: dict[str, Any],
+    payment: Any,
+    reference: Any,
+    row_no: int,
+    errors: list[dict[str, Any]],
+    allocation_date: date | None = None,
 ) -> Decimal:
-    """Resolve the exchange rate required to compare payment and document currencies."""
+    """Resuelve la tasa histórica usada por la aplicación, no la declarada."""
     document_currency = getattr(reference, "transaction_currency", None)
     payment_currency = getattr(payment, "currency", None)
     if not document_currency or not payment_currency or document_currency == payment_currency:
@@ -1174,7 +1197,18 @@ def _payment_reconciliation_rate(
             errors, row_no, "payment_exchange_rate", _("Se requiere una tasa para monedas distintas.")
         )
         return Decimal("1")
-    return Decimal(str(raw_rate))
+    from cacao_accounting.document_flow.payment import _require_available_reconciliation_rate
+
+    try:
+        return _require_available_reconciliation_rate(
+            document_currency,
+            payment_currency,
+            Decimal(str(raw_rate)),
+            allocation_date or date.today(),
+        )
+    except ValueError as exc:
+        _append_payment_reconciliation_error(errors, row_no, "payment_exchange_rate", str(exc))
+        return Decimal("1")
 
 
 def _reconciliation_available(
@@ -1256,6 +1290,7 @@ def _validate_payment_reconciliation_row(
     party_id: str = "",
     payment_remaining: dict[str, Decimal] | None = None,
     document_remaining: dict[str, Decimal] | None = None,
+    allocation_date: date | None = None,
 ) -> None:
     """Validate payment/document identity before reconciliation is applied."""
     payment = _get_payment_reconciliation_payment(row, company_id, row_no, errors)
@@ -1278,7 +1313,7 @@ def _validate_payment_reconciliation_row(
                 _("El tipo de pago no coincide con el documento de referencia."),
             )
         _validate_payment_reconciliation_party(payment, reference, reference_type, row_no, errors)
-        rate = _payment_reconciliation_rate(row, payment, reference, row_no, errors)
+        rate = _payment_reconciliation_rate(row, payment, reference, row_no, errors, allocation_date=allocation_date)
         _validate_payment_reconciliation_amounts(
             row,
             payment,
