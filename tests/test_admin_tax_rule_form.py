@@ -714,10 +714,10 @@ def test_tax_posting_rejects_account_owned_by_another_company(app, entorno_conta
             )
 
 
-def test_deleting_tax_rule_in_use_returns_controlled_response(
+def test_deactivating_tax_rule_preserves_history_and_removes_future_use(
     app, authenticated_client, entorno_contable, active_admin_module
 ):
-    """A referenced rule survives deletion and the admin receives a controlled message (#2018)."""
+    """Una regla en uso se desactiva sin borrar su evidencia y deja de aplicarse (#2014)."""
     assert entorno_contable.app is app
     rule_name = f"Regla fiscal en uso {uuid4().hex[:8]}"
     client = authenticated_client()
@@ -732,12 +732,27 @@ def test_deleting_tax_rule_in_use_returns_controlled_response(
         database.session.commit()
         rule_id = rule.id
 
-    response = client.post(f"/settings/tax-rules/{rule_id}/delete", follow_redirects=True)
+    pagina = client.get("/settings/tax-rules")
+    assert pagina.status_code == 200
+    cuerpo_listado = pagina.get_data(as_text=True)
+    assert f"/settings/tax-rules/{rule_id}/deactivate" in cuerpo_listado
+    assert f"/settings/tax-rules/{rule_id}/delete" not in cuerpo_listado
+
+    response = client.post(f"/settings/tax-rules/{rule_id}/deactivate", follow_redirects=True)
 
     assert response.status_code == 200
-    assert "No se puede eliminar una regla fiscal en uso." in response.get_data(as_text=True)
+    assert "Regla fiscal desactivada correctamente." in response.get_data(as_text=True)
     with app.app_context():
-        assert database.session.get(TaxRule, rule_id) is not None
+        persistida = database.session.get(TaxRule, rule_id)
+        assert persistida is not None
+        assert persistida.is_active is False
+        contextos = build_tax_rule_contexts(
+            company="cacao",
+            applies_to="sales",
+            currency="NIO",
+            recognition_event="sales_invoice_confirmed",
+        )
+        assert all(contexto.rule_id != rule_id for contexto in contextos)
 
 
 @pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])

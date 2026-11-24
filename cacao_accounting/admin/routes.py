@@ -139,7 +139,7 @@ from cacao_accounting.ventas.services import is_sales_price_editor
 from cacao_accounting.tax_rule_service import (
     TaxRuleServiceError,
     create_tax_rule,
-    delete_tax_rule,
+    deactivate_tax_rule,
     get_tax_rule,
     list_tax_rules,
     update_tax_rule,
@@ -887,24 +887,19 @@ def editar_regla_fiscal(rule_id: str):
     return render_template("admin/tax_rules.html", rules=rules, editing_rule=form_state or rule)
 
 
-@admin.route("/settings/tax-rules/<rule_id>/delete", methods=["POST"])
+@admin.route("/settings/tax-rules/<rule_id>/deactivate", methods=["POST"])
 @login_required
 @modulo_activo("admin")
-def eliminar_regla_fiscal(rule_id: str):
-    """Elimina una regla fiscal."""
+def desactivar_regla_fiscal(rule_id: str):
+    """Desactiva una regla fiscal sin borrar su evidencia histórica."""
     _require_system_admin()
     rule = get_tax_rule(rule_id)
     if rule is None:
         abort(404)
     assert rule is not None
-    delete_tax_rule(rule)
-    try:
-        database.session.commit()
-    except IntegrityError:
-        database.session.rollback()
-        flash(_("No se puede eliminar una regla fiscal en uso."), "danger")
-    else:
-        flash(_("Regla fiscal eliminada correctamente."), "success")
+    deactivate_tax_rule(rule)
+    database.session.commit()
+    flash(_("Regla fiscal desactivada correctamente."), "success")
     return redirect(url_for("admin.lista_reglas_fiscales"))
 
 

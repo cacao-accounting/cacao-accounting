@@ -113,9 +113,9 @@
       <td>{{ _('Sí') if listed_rule.is_active else _('No') }}</td>
       <td class="d-flex gap-2">
         <a href="{{ url_for('admin.editar_regla_fiscal', rule_id=listed_rule.id) }}">{{ _("Editar") }}</a>
-        <form method="post" action="{{ url_for('admin.eliminar_regla_fiscal', rule_id=listed_rule.id) }}">
+        <form method="post" action="{{ url_for('admin.desactivar_regla_fiscal', rule_id=listed_rule.id) }}" onsubmit="return confirm('{{ _('¿Desactivar esta regla fiscal?') }}')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-link btn-sm p-0">{{ _("Eliminar") }}</button>
+          <button type="submit" class="btn btn-link btn-sm p-0">{{ _("Desactivar") }}</button>
         </form>
       </td>
     </tr>

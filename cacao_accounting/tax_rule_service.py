@@ -53,9 +53,9 @@ def update_tax_rule(rule: TaxRule, values: Mapping[str, str | None]) -> TaxRule:
     return rule
 
 
-def delete_tax_rule(rule: TaxRule) -> None:
-    """Elimina una regla fiscal."""
-    database.session.delete(rule)
+def deactivate_tax_rule(rule: TaxRule) -> None:
+    """Retira una regla fiscal del uso futuro conservando su evidencia histórica."""
+    rule.is_active = False
 
 
 def build_tax_rule_contexts(

@@ -2211,6 +2211,14 @@ msgstr "Tax line added successfully."
 msgid "Regla fiscal creada correctamente."
 msgstr "Tax rule created successfully."
 
+#: cacao_accounting/admin/routes.py
+msgid "Regla fiscal desactivada correctamente."
+msgstr "Tax rule deactivated successfully."
+
+#: cacao_accounting/admin/templates/admin/tax_rules.html
+msgid "¿Desactivar esta regla fiscal?"
+msgstr "Deactivate this tax rule?"
+
 #: cacao_accounting/admin/routes.py:664 cacao_accounting/admin/routes.py:693
 msgid "Ya existe un tipo de tercero con ese nombre."
 msgstr "A party type with that name already exists."
