@@ -2549,6 +2549,10 @@ msgstr "The SMTP port must be an integer between 1 and 65535."
 msgid "El correo remitente SMTP no es válido."
 msgstr "The SMTP sender email address is not valid."
 
+#: cacao_accounting/admin/services.py
+msgid "El correo remitente SMTP es obligatorio."
+msgstr "The SMTP sender email address is required."
+
 #: cacao_accounting/admin/services.py:485
 msgid "Debe habilitar las aprobaciones para exigir cuatro ojos."
 msgstr "You must enable approvals to require four eyes."

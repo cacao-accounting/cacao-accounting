@@ -304,11 +304,12 @@ def _save_email_settings() -> None:
     if not 1 <= port <= 65535:
         raise ValueError(_("El puerto SMTP debe ser un número entero entre 1 y 65535."))
     from_email = (request.form.get("smtp_from_email") or "").strip()
-    if from_email:
-        try:
-            from_email = validate_email(from_email, check_deliverability=False).normalized
-        except EmailNotValidError as exc:
-            raise ValueError(_("El correo remitente SMTP no es válido.")) from exc
+    if not from_email:
+        raise ValueError(_("El correo remitente SMTP es obligatorio."))
+    try:
+        from_email = validate_email(from_email, check_deliverability=False).normalized
+    except EmailNotValidError as exc:
+        raise ValueError(_("El correo remitente SMTP no es válido.")) from exc
     settings = {
         "smtp_server": server,
         "smtp_port": str(port),
