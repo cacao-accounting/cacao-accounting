@@ -1483,6 +1483,10 @@ msgstr "Cancelled"
 msgid "Cliente"
 msgstr "Customer"
 
+#: cacao_accounting/reportes/helpers.py
+msgid "Nombre del cliente"
+msgstr "Customer name"
+
 #: cacao_accounting/admin/templates/admin/party_groups.html:62 cacao_accounting/api/dashboard.py:634
 #: cacao_accounting/app/templates/app.html:137 cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html:48
 #: cacao_accounting/bancos/templates/bancos/pago_nuevo.html:732 cacao_accounting/compras/forms.py:74

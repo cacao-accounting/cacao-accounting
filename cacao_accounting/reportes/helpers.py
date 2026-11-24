@@ -139,6 +139,10 @@ _COLUMN_LABELS = {
     "project": "Proyecto",
     "party_type": "Tipo de tercero",
     "party_id": "Tercero",
+    "customer_id": "Cliente",
+    "customer_name": "Nombre del cliente",
+    "qty": "Cantidad",
+    "gross_margin_percentage": "Margen bruto (%)",
     "created_by": "Creado por",
     "created": "Fecha de creación",
     "created_at": "Fecha de creación",
@@ -1662,13 +1666,19 @@ def _operational_filters(modulo: str = "accounting") -> OperationalReportFilters
 def _render_operational_report(report_name: str, report, modulo: str = "accounting"):
     company = resolve_required_company(request.args.get("company"), modulo)
     period_picker = _period_picker_payload(company)
+    rows = getattr(report, "rows", [])
+    totals = getattr(report, "totals", {}) or {}
+    column_keys = set(totals)
+    for row in rows:
+        column_keys.update(getattr(row, "values", {}) or {})
+    column_labels = {key: _column_label(key, None) for key in column_keys}
     return render_template(
         REPORT_TABLE_HTML,
         titulo=report_name + " - " + APPNAME,
         report_title=report_name,
-        rows=report.rows,
-        totals=report.totals,
-        column_labels={},
+        rows=rows,
+        totals=totals,
+        column_labels=column_labels,
         total_rows=getattr(report, "total_rows", len(getattr(report, "rows", []))),
         periods=period_picker["periods"],
         period_from=period_picker["period_from"],
