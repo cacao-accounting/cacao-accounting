@@ -160,7 +160,7 @@
         {% for cfg in configs %}
         <tr>
           <td><a href="{{ url_for('admin.cuentas_predeterminadas', company=cfg.company) }}">{{ cfg.company }}</a></td>
-          <td>{{ definitions | length }}</td>
+          <td>{{ configured_counts.get(cfg.company, 0) }}</td>
         </tr>
         {% endfor %}
       </tbody>

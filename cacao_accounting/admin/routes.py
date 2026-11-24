@@ -1441,11 +1441,15 @@ def cuentas_predeterminadas():
         .scalars()
         .all()
     )
+    configured_counts = {
+        cfg.company: sum(1 for field in DEFAULT_ACCOUNT_FIELDS if getattr(cfg, field, None)) for cfg in configs
+    }
 
     return render_template(
         "admin/default_accounts.html",
         companies=companies,
         configs=configs,
+        configured_counts=configured_counts,
         definitions=DEFAULT_ACCOUNT_DEFINITIONS,
         rows=default_account_rows(config),
         selected_company=selected_company,
