@@ -1448,6 +1448,35 @@ describe('transaction-form', function () {
     assert.match(component.importModal.errors[0].message, /fórmulas/);
   });
 
+  it('clears batch and serial requirements when switching to a plain item', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [
+        { code: 'TRACKED', name: 'Tracked', default_uom: 'UND', has_batch: true, allowed_uoms: ['UND'] },
+        { code: 'PLAIN', name: 'Plain', default_uom: 'UND', has_batch: false, allowed_uoms: ['UND'] },
+      ],
+      uoms: [{ code: 'UND', name: 'Unidad' }],
+      defaultRows: 1,
+    });
+    component.init();
+    const line = component.newLine();
+    line.item_code = 'TRACKED';
+    component.syncLineFromItem(line, false);
+    line.batch_id = 'BATCH-1';
+    line.batch_no = 'BATCH-1';
+    line.serial_no = 'SERIAL-1';
+
+    line.item_code = 'PLAIN';
+    component.syncLineFromItem(line, false);
+
+    assert.strictEqual(line.has_batch, false);
+    assert.strictEqual(line.has_serial_no, false);
+    assert.strictEqual(line.has_expiry_date, false);
+    assert.strictEqual(line.batch_id, '');
+    assert.strictEqual(line.batch_no, '');
+    assert.strictEqual(line.serial_no, '');
+  });
+
   it('clears the previous XLSX preview when a replacement file cannot be parsed', async function () {
     globalThis.ExcelJS = {
       Workbook: class {
