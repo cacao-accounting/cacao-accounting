@@ -51,11 +51,11 @@ def import_csrf_pages(app, entorno_contable, authenticated_client, tmp_path):
     app.config["MODO_ESCRITORIO"] = previous_desktop
 
 
-def _form_token(html: str, action: str | None = None) -> str:
-    """Return the token embedded in the form posting to ``action``.
+def _form_token(html: str, action: str | None = None, marker: str | None = None) -> str:
+    """Return the token embedded in the form identified by ``action`` or ``marker``.
 
-    When ``action`` is provided the token is taken from that exact form, so a
-    token from another form on the same page cannot mask a missing token.
+    The form must be selected explicitly: a token from the site header would
+    otherwise satisfy the POST even if the wizard form lost its own token.
     """
     forms = re.findall(r"<form\b([^>]*)>(.*?)</form>", html, flags=re.DOTALL)
     for attributes, body in forms:
@@ -63,10 +63,12 @@ def _form_token(html: str, action: str | None = None) -> str:
             form_action = re.search(r'action="([^"]+)"', attributes)
             if form_action is None or form_action.group(1) != action:
                 continue
+        if marker is not None and marker not in body:
+            continue
         token = re.search(r'name="csrf_token"\s+value="([^"]+)"', body)
         if token is not None:
             return token.group(1)
-    pytest.fail(f"No CSRF token found for form action {action!r}")
+    pytest.fail(f"No CSRF token found for form action={action!r} marker={marker!r}")
 
 
 def test_new_import_form_rejects_missing_token_and_accepts_valid_token(import_csrf_pages):
@@ -74,7 +76,7 @@ def test_new_import_form_rejects_missing_token_and_accepts_valid_token(import_cs
     _app, client, _batches = import_csrf_pages
     page = client.get("/imports/new")
     assert page.status_code == 200
-    token = _form_token(page.get_data(as_text=True))
+    token = _form_token(page.get_data(as_text=True), marker='name="record_type"')
 
     rejected = client.post("/imports/new", data={"company_id": "cacao", "record_type": "customer"})
     assert rejected.status_code == 400
@@ -104,7 +106,7 @@ def test_new_import_rejects_series_for_other_type_or_company(
     """Creation rejects a naming series whose type or company differs from the batch."""
     app, client, _batches = import_csrf_pages
     page = client.get("/imports/new")
-    token = _form_token(page.get_data(as_text=True))
+    token = _form_token(page.get_data(as_text=True), marker='name="record_type"')
     with app.app_context():
         if (
             series_company == "alpha"
@@ -156,7 +158,7 @@ def test_new_import_persists_series_matching_type_and_company(import_csrf_pages)
     """A valid company-specific series remains attached to the new batch."""
     app, client, _batches = import_csrf_pages
     page = client.get("/imports/new")
-    token = _form_token(page.get_data(as_text=True))
+    token = _form_token(page.get_data(as_text=True), marker='name="record_type"')
     with app.app_context():
         series = NamingSeries(
             name="SER-PO-CACAO",
