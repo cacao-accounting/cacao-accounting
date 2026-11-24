@@ -58,6 +58,76 @@ def test_unit_create_valid_post_persists_row(app, authenticated_client, accounti
         assert unit.entity == "cacao"
 
 
+def test_unit_create_rejects_missing_parent(app, authenticated_client, accounting_catalog_cleanup):
+    """A unit with a non-existent parent is rejected before persisting."""
+    code = f"U{uuid4().hex[:6].upper()}"
+    accounting_catalog_cleanup["unit"].append(code)
+
+    response = authenticated_client().post(
+        "/accounting/unit/new",
+        data={
+            "id": code,
+            "nombre": "Unidad con padre inválido",
+            "entidad": "cacao",
+            "parent_id": "parent-does-not-exist",
+            "habilitado": "on",
+        },
+    )
+
+    assert response.status_code == 200
+    with app.app_context():
+        assert database.session.execute(database.select(Unit).filter_by(code=code)).scalar_one_or_none() is None
+
+
+def test_unit_edit_rejects_missing_parent(app, authenticated_client, accounting_catalog_cleanup):
+    """Editing a unit cannot leave an orphan parent in SQLite."""
+    code = f"U{uuid4().hex[:6].upper()}"
+    accounting_catalog_cleanup["unit"].append(code)
+    with app.app_context():
+        database.session.add(Unit(code=code, name="Unidad sin padre", entity="cacao", enabled=True))
+        database.session.commit()
+        unit_id = database.session.execute(database.select(Unit.id).filter_by(code=code)).scalar_one()
+
+    response = authenticated_client().post(
+        f"/accounting/unit/{unit_id}/edit",
+        data={
+            "id": code,
+            "nombre": "Unidad sin padre",
+            "entidad": "cacao",
+            "parent_id": "parent-does-not-exist",
+            "habilitado": "on",
+        },
+    )
+
+    assert response.status_code == 200
+    with app.app_context():
+        unit = database.session.execute(database.select(Unit).filter_by(code=code)).scalar_one()
+        assert unit.parent_id is None
+
+
+def test_project_create_rejects_missing_parent(app, authenticated_client, accounting_catalog_cleanup):
+    """A project with a non-existent parent is rejected before persisting."""
+    code = f"P{uuid4().hex[:6].upper()}"
+    accounting_catalog_cleanup["project"].append(code)
+
+    response = authenticated_client().post(
+        "/accounting/project/new",
+        data={
+            "id": code,
+            "nombre": "Proyecto con padre inválido",
+            "entidad": "cacao",
+            "parent_id": "parent-does-not-exist",
+            "presupuesto": "10",
+            "status": "open",
+            "habilitado": "on",
+        },
+    )
+
+    assert response.status_code == 200
+    with app.app_context():
+        assert database.session.execute(database.select(Project).filter_by(code=code)).scalar_one_or_none() is None
+
+
 def test_project_create_rejects_invalid_budget_without_defaulting_to_zero(app, authenticated_client):
     """An unparsable budget keeps the project form invalid and creates no project."""
     code = "INVALID-BUDGET-TEST"
