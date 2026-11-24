@@ -149,3 +149,105 @@ def test_ventas_hidrata_configuracion_existente(app, authenticated_client, match
     assert 'value="4.5000"' in _input(cuerpo, "price_tolerance_value")
     assert "checked" not in _input(cuerpo, "require_sales_order")
     assert "checked" in _input(cuerpo, "allow_price_difference")
+
+
+CAMPOS_COMPRAS_GUARDADOS = CAMPOS_COMPRAS + (
+    "require_purchase_order",
+    "bridge_account_required",
+    "auto_reconcile",
+    "allow_price_difference",
+)
+CAMPOS_VENTAS_GUARDADOS = CAMPOS_COMPRAS[:3] + ("require_sales_order", "allow_price_difference")
+
+
+def _instantanea(app, modelo, company: str, campos: tuple[str, ...]) -> tuple[str, ...]:
+    """Devuelve los valores persistentes relevantes para la comparación."""
+    with app.app_context():
+        config = database.session.execute(database.select(modelo).filter_by(company=company)).scalar_one()
+        valores = tuple(str(getattr(config, campo)) for campo in campos)
+        if modelo is PurchaseMatchingConfig:
+            adelantos = database.session.execute(
+                database.select(CompanyDefaultAccount.apply_advances_automatically).filter_by(company=company)
+            ).scalar_one()
+            valores += (str(bool(adelantos)),)
+        return valores
+
+
+@pytest.mark.parametrize(
+    ("ruta", "modelo", "campos", "datos"),
+    [
+        (
+            "/settings/purchase-reconciliation",
+            PurchaseMatchingConfig,
+            CAMPOS_COMPRAS_GUARDADOS,
+            {
+                "config_form": "complete",
+                "matching_type": "2-way",
+                "price_tolerance_type": "absolute",
+                "price_tolerance_value": "5.0000",
+                "qty_tolerance_type": "absolute",
+                "qty_tolerance_value": "3.0000",
+                "allow_price_difference": "on",
+                "apply_advances_automatically": "on",
+            },
+        ),
+        (
+            "/settings/sales-matching",
+            SalesMatchingConfig,
+            CAMPOS_VENTAS_GUARDADOS,
+            {
+                "config_form": "complete",
+                "matching_type": "2-way",
+                "price_tolerance_type": "absolute",
+                "price_tolerance_value": "4.5000",
+                "allow_price_difference": "on",
+            },
+        ),
+    ],
+)
+def test_post_completo_preserva_la_politica_guardada(
+    app, authenticated_client, matching_hidratado, ruta, modelo, campos, datos
+):
+    """El formulario renderizado republicado no altera la configuración vigente."""
+    anterior = app.config.get("MODO_ESCRITORIO")
+    app.config["MODO_ESCRITORIO"] = True
+    cliente = authenticated_client("admin")
+    try:
+        pagina = cliente.get(f"{ruta}?company={matching_hidratado}")
+        assert 'name="config_form" value="complete"' in pagina.get_data(as_text=True)
+        antes = _instantanea(app, modelo, matching_hidratado, campos)
+        respuesta = cliente.post(ruta, data={**datos, "company": matching_hidratado})
+        assert respuesta.status_code == 302
+        assert _instantanea(app, modelo, matching_hidratado, campos) == antes
+    finally:
+        app.config["MODO_ESCRITORIO"] = anterior
+
+
+@pytest.mark.parametrize(
+    ("ruta", "modelo", "campos"),
+    [
+        ("/settings/purchase-reconciliation", PurchaseMatchingConfig, CAMPOS_COMPRAS_GUARDADOS),
+        ("/settings/sales-matching", SalesMatchingConfig, CAMPOS_VENTAS_GUARDADOS),
+    ],
+)
+def test_post_parcial_se_rechaza_sin_modificar(app, authenticated_client, matching_hidratado, ruta, modelo, campos):
+    """Un POST que omite el marcador del formulario no resetea valores de alta."""
+    anterior = app.config.get("MODO_ESCRITORIO")
+    app.config["MODO_ESCRITORIO"] = True
+    cliente = authenticated_client("admin")
+    try:
+        antes = _instantanea(app, modelo, matching_hidratado, campos)
+        respuesta = cliente.post(
+            ruta,
+            data={
+                "company": matching_hidratado,
+                "matching_type": "3-way",
+                "price_tolerance_type": "percentage",
+            },
+        )
+        assert respuesta.status_code == 302
+        assert _instantanea(app, modelo, matching_hidratado, campos) == antes
+        detalle = cliente.get(respuesta.headers["Location"])
+        assert "incompleto" in detalle.get_data(as_text=True)
+    finally:
+        app.config["MODO_ESCRITORIO"] = anterior
