@@ -12,6 +12,7 @@ import pytest
 
 from cacao_accounting.database import Modules, User, database
 from cacao_accounting.imports.models import ImportBatch
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 
 @pytest.fixture(autouse=True)
@@ -42,6 +43,7 @@ def _lote(record_type: str, estado: int) -> str:
     return lote.id
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Imports deshabilitado en modo desktop.")
 def test_nuevo_rechaza_tipo_sin_adaptador(app, authenticated_client, entorno_contable):
     """El POST no crea lotes con tipos que el servicio no puede resolver."""
     del entorno_contable
@@ -60,6 +62,7 @@ def test_nuevo_rechaza_tipo_sin_adaptador(app, authenticated_client, entorno_con
     assert despues == antes
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Imports deshabilitado en modo desktop.")
 def test_upload_rechaza_lote_con_tipo_sin_adaptador(app, authenticated_client, entorno_contable):
     """Un lote inválido preexistente no acepta archivos ni cambia de estado."""
     del entorno_contable
@@ -84,6 +87,7 @@ def test_upload_rechaza_lote_con_tipo_sin_adaptador(app, authenticated_client, e
             database.session.commit()
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Imports deshabilitado en modo desktop.")
 def test_detalle_no_falla_con_tipo_sin_adaptador(app, authenticated_client, entorno_contable):
     """El detalle de un lote legado no intenta previsualizar sin adaptador."""
     del entorno_contable

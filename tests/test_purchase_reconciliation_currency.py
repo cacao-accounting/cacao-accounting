@@ -32,8 +32,10 @@ def test_purchase_reconciliation_labels_order_invoice_receipt_and_panel_amounts(
         item = database.session.execute(database.select(Item).filter_by(code="ART01")).scalar_one()
         uom = database.session.execute(database.select(UOM).filter_by(code="UND")).scalar_one()
         warehouse = database.session.execute(database.select(Warehouse).filter_by(code="BOD01")).scalar_one()
-        database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
-        database.session.flush()
+        eur = database.session.execute(database.select(Currency).filter_by(code="EUR")).scalar_one_or_none()
+        if eur is None:
+            database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
+            database.session.flush()
         order = PurchaseOrder(
             company="cacao",
             document_no=f"PO-{suffix}",
