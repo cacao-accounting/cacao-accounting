@@ -2581,6 +2581,14 @@ msgstr "Approval rule disabled."
 msgid "El rol seleccionado no existe."
 msgstr "The selected role does not exist."
 
+#: cacao_accounting/admin/services.py
+msgid "La compañía de la regla de aprobación no existe."
+msgstr "The approval rule company does not exist."
+
+#: cacao_accounting/admin/services.py
+msgid "El tipo de documento de la regla de aprobación no es válido."
+msgstr "The approval rule document type is not valid."
+
 #: cacao_accounting/admin/services.py:535
 msgid "El usuario seleccionado no existe."
 msgstr "The selected user does not exist."

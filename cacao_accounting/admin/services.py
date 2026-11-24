@@ -595,7 +595,14 @@ def _toggle_approval_rule(rule_id: str | None) -> None:
 
 
 def _approval_rule_from_form(company: str) -> ApprovalMatrix:
-    """Construye una regla validando que el receptor exista."""
+    """Construye una regla validando compañía, documento y receptor."""
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    if database.session.execute(database.select(Entity.id).filter_by(code=company)).scalar_one_or_none() is None:
+        raise ValueError(_("La compañía de la regla de aprobación no existe."))
+    document_type = (request.form.get("document_type") or "").strip()
+    if document_type not in DOCUMENT_TYPES:
+        raise ValueError(_("El tipo de documento de la regla de aprobación no es válido."))
     max_amount = request.form.get("max_amount")
     role_id = request.form.get("role_id") or None
     user_id = request.form.get("user_id") or None
@@ -623,7 +630,7 @@ def _approval_rule_from_form(company: str) -> ApprovalMatrix:
         raise ValueError(_("El nivel de aprobación debe ser un entero mayor o igual a uno."))
     return ApprovalMatrix(
         company_id=company,
-        document_type=request.form.get("document_type") or "",
+        document_type=document_type,
         role_id=role_id,
         user_id=user_id,
         min_amount=min_value,
