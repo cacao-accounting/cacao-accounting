@@ -1073,12 +1073,29 @@ def _submitted_stock_reconciliation_lines() -> list[dict[str, str]]:
     return [{field: request.form.get(f"{field}_{index}", "") for field in fields} for index in indexes]
 
 
+def _stock_entry_snapshot_value(value: Any) -> Any:
+    """Serializa valores de cabecera para comparar snapshots de auditoría."""
+    if isinstance(value, (date, Decimal)):
+        return str(value)
+    return value
+
+
 def _capture_stock_entry_state(registro: StockEntry) -> dict:
-    """Captura el estado del registro antes/después de la edición."""
+    """Captura el estado completo de la cabecera antes/después de la edición."""
     state = {
         "purpose": registro.purpose,
         "company": registro.company,
-        "posting_date": str(registro.posting_date or ""),
+        "posting_date": _stock_entry_snapshot_value(registro.posting_date or ""),
+        "from_warehouse": registro.from_warehouse,
+        "to_warehouse": registro.to_warehouse,
+        "adjustment_account_id": registro.adjustment_account_id,
+        "cost_center_code": registro.cost_center_code,
+        "unit_code": registro.unit_code,
+        "project_code": registro.project_code,
+        "transaction_currency": registro.transaction_currency,
+        "base_currency": registro.base_currency,
+        "exchange_rate": _stock_entry_snapshot_value(registro.exchange_rate),
+        "total_amount": _stock_entry_snapshot_value(registro.total_amount),
         "remarks": registro.remarks or "",
     }
 
