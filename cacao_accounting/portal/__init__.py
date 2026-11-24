@@ -119,11 +119,16 @@ def _portal_page(query, ordering: Any, page: int = 1) -> tuple[list[Any], int]:
 
     El portal pagina cada listado en bloques de ``PORTAL_PAGE_SIZE``; el total
     se calcula sobre la consulta completa para que la plantilla pueda mostrar
-    el conjunto real y la navegación entre páginas.
+    el conjunto real y la navegación entre páginas. El orden siempre incluye
+    la PK como desempate para que dos páginas no repitan ni omitan filas.
     """
     total = database.session.execute(database.select(database.func.count()).select_from(query.subquery())).scalar_one()
     offset = (page - 1) * PORTAL_PAGE_SIZE
-    rows = database.session.execute(query.order_by(ordering).offset(offset).limit(PORTAL_PAGE_SIZE)).scalars().all()
+    terms = list(ordering) if isinstance(ordering, (list, tuple)) else [ordering]
+    entity = query.column_descriptions[0].get("entity") if getattr(query, "column_descriptions", None) else None
+    if entity is not None and hasattr(entity, "id"):
+        terms.append(entity.id.asc())
+    rows = database.session.execute(query.order_by(*terms).offset(offset).limit(PORTAL_PAGE_SIZE)).scalars().all()
     return list(rows), int(total)
 
 

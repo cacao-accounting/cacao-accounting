@@ -130,3 +130,24 @@ def test_pagina_dos_expone_los_documentos_posteriores(portal_truncado):
     cuerpo_segunda = segunda.get_data(as_text=True)
     assert cuerpo_segunda.count("/portal/customer/invoice/") == 1
     assert "Página 2 de 2" in cuerpo_segunda
+
+
+def _invoice_ids(body: str) -> set[str]:
+    """Extrae los IDs de factura enlazados por el portal."""
+    import re
+
+    return set(re.findall(r"/portal/customer/invoice/([A-Za-z0-9]+)", body))
+
+
+def test_paginas_no_repten_ni_omitan_facturas_con_la_misma_fecha(portal_truncado):
+    """El desempate por PK evita solapamientos aunque compartan posting_date."""
+    application, ids = portal_truncado
+    client = _client_for(application, ids["user"])
+
+    primera = _invoice_ids(client.get("/portal/customer").get_data(as_text=True))
+    segunda = _invoice_ids(client.get("/portal/customer?page=2").get_data(as_text=True))
+
+    assert len(primera) == 100
+    assert len(segunda) == 1
+    assert primera.isdisjoint(segunda)
+    assert len(primera | segunda) == TOTAL_FACTURAS
