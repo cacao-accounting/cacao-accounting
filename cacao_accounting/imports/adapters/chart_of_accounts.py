@@ -19,13 +19,14 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
     required_columns = ["codigo", "nombre", "clasificacion"]
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
-        """Validate an existing account parent; batch validation resolves imported parents."""
+        """Validate account domains and an existing account parent."""
+        errors = self._validate_domains(document_data)
         if not document_data:
-            return []
+            return errors
         row = document_data[0]
         parent_code = _normalized_parent(row.get("padre"))
         if parent_code is None:
-            return []
+            return errors
 
         company_id = (context or {}).get("company_id")
         parent = database.session.execute(
@@ -34,12 +35,29 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
         if parent is None:
             # A parent may be another row in this file; the batch validator
             # resolves it after seeing the complete catalog.
-            return []
+            return errors
         if not parent.active or not parent.enabled:
-            return [_("La cuenta padre debe estar activa.")]
-        if not parent.group:
-            return [_("La cuenta padre debe ser una cuenta de grupo.")]
-        return []
+            errors.append(_("La cuenta padre debe estar activa."))
+        elif not parent.group:
+            errors.append(_("La cuenta padre debe ser una cuenta de grupo."))
+        return errors
+
+    @staticmethod
+    def _validate_domains(document_data: List[Dict[str, Any]]) -> List[str]:
+        """Reject classifications and account types outside the catalog domain."""
+        from cacao_accounting.contabilidad.forms import ACCOUNT_TYPE_CHOICES
+        from cacao_accounting.reportes.services import account_classification_is_known
+
+        allowed_types = {value for value, _label in ACCOUNT_TYPE_CHOICES if value}
+        errors: List[str] = []
+        for row in document_data:
+            classification = str(row.get("clasificacion") or "").strip()
+            if classification and not account_classification_is_known(classification):
+                errors.append(_("Clasificación no permitida para cuentas contables."))
+            account_type = str(row.get("tipo") or "").strip().lower()
+            if account_type and account_type not in allowed_types:
+                errors.append(_("Tipo de cuenta no permitido para cuentas contables."))
+        return errors
 
     def validate_batch_documents(self, documents: Dict[str, List[Dict[str, Any]]], context: Dict[str, Any]) -> List[str]:
         """Validate parent references and cycles across the complete imported catalog."""
@@ -112,8 +130,8 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
             parent=_normalized_parent(row.get("padre")),
             group=_is_group_account(row.get("grupo")),
             currency=_normalized_currency(row.get("moneda")),
-            classification=row.get("clasificacion"),
-            account_type=row.get("tipo"),
+            classification=(str(row.get("clasificacion") or "").strip() or None),
+            account_type=(str(row.get("tipo") or "").strip().lower() or None),
             active=True,
             enabled=True,
         )

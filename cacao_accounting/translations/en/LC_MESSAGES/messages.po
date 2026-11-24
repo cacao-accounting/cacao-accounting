@@ -13655,6 +13655,10 @@ msgstr "Cost"
 msgid "Clasificación no permitida para cuentas contables."
 msgstr "Classification not allowed for accounts."
 
+#: cacao_accounting/imports/adapters/chart_of_accounts.py
+msgid "Tipo de cuenta no permitido para cuentas contables."
+msgstr "Account type not allowed for accounting accounts."
+
 #: cacao_accounting/contabilidad/forms.py:259 cacao_accounting/contabilidad/forms.py:284
 msgid "Grupo"
 msgstr "Group"
