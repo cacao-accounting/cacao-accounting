@@ -38,3 +38,13 @@ def test_catalogo_devuelve_el_msgid_cuando_falta_la_entrada():
     catalogo = _catalogo_ingles()
 
     assert catalogo.gettext("cadena inexistente qa3 2026-11-23") == "cadena inexistente qa3 2026-11-23"
+
+
+def test_booleano_invalido_tiene_traduccion():
+    """#1197: el error de booleano del importador no queda sin traducir."""
+    catalogo = _catalogo_ingles()
+
+    assert (
+        catalogo.gettext("El campo %(field)s debe ser un valor booleano válido.")
+        == "The %(field)s field must be a valid boolean value."
+    )
