@@ -22,7 +22,7 @@ from cacao_accounting.database import (
 )
 
 
-def test_award_view_shows_supplier_names_and_hides_out_of_scope_references(app, reference_users):
+def test_award_view_shows_supplier_names_and_hides_out_of_scope_references(app, authenticated_client):
     """Names resolve per awarded quotation and foreign or missing RFQ references stay hidden."""
     with app.app_context():
         suffix = uuid4().hex[:10]
@@ -125,12 +125,7 @@ def test_award_view_shows_supplier_names_and_hides_out_of_scope_references(app, 
         item_code = item.code
         uom_code = uom.code
         party_id = party.id
-        user_id = reference_users["admin"].id
-
-    client = app.test_client()
-    with client.session_transaction() as session:
-        session["_user_id"] = user_id
-        session["_fresh"] = True
+    client = authenticated_client("admin")
     try:
         response = client.get(f"/buying/request-for-quotation/{rfq_id}/offers")
         page = response.get_data(as_text=True)

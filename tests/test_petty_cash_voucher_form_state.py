@@ -97,7 +97,9 @@ def caja_vale_estado():
         database.session.add(rol_creador)
         database.session.flush()
         modulo_caja = database.session.execute(database.select(Modules).filter_by(module="cash")).scalar_one()
-        database.session.add(RolesAccess(rol_id=rol_creador.id, module_id=modulo_caja.id, access=True, create=True, view=True))
+        database.session.add(
+            RolesAccess(rol_id=rol_creador.id, module_id=modulo_caja.id, access=True, create=True, edit=True, view=True)
+        )
         database.session.add(RolesUser(user_id="cajera-vales", role_id=rol_creador.id, active=True))
         database.session.flush()
         cuenta = Accounts(

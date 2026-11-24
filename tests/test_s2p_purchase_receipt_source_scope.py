@@ -698,6 +698,7 @@ def test_devolucion_desde_recepcion_resuelve_tarifa_en_servidor(receipt_source_s
         data={
             "company": "alpha",
             "posting_date": "2026-10-20",
+            "to_warehouse": "ALPHA-WH",
             "item_code_0": "RECEIPT-ITEM",
             "item_name_0": "Artículo de recepción",
             "qty_0": "1",

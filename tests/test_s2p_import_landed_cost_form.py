@@ -47,11 +47,9 @@ class _FormFieldParser(HTMLParser):
             self.names[field_name] += 1
 
 
-def test_import_landed_cost_form_renders_company_and_date_once(client, reference_users):
+def test_import_landed_cost_form_renders_company_and_date_once(authenticated_client):
     """The shared header owns company/date fields without duplicate controls."""
-    with client.session_transaction() as session:
-        session["_user_id"] = str(reference_users["admin"].id)
-        session["_fresh"] = True
+    client = authenticated_client("admin")
 
     response = client.get("/buying/import-landed-cost/new?company=alpha&posting_date=2026-10-31")
 
@@ -67,11 +65,9 @@ def test_import_landed_cost_form_renders_company_and_date_once(client, reference
     assert parser.transaction_config["initialHeader"] == {"company": "alpha", "posting_date": "2026-10-31"}
 
 
-def test_import_landed_cost_form_preserves_fields_after_invalid_post(client, reference_users):
+def test_import_landed_cost_form_preserves_fields_after_invalid_post(authenticated_client):
     """An invalid allocation method returns the submitted company and date to the form."""
-    with client.session_transaction() as session:
-        session["_user_id"] = str(reference_users["admin"].id)
-        session["_fresh"] = True
+    client = authenticated_client("admin")
 
     response = client.post(
         "/buying/import-landed-cost/new",
@@ -85,11 +81,9 @@ def test_import_landed_cost_form_preserves_fields_after_invalid_post(client, ref
     assert parser.transaction_config["initialHeader"] == {"company": "alpha", "posting_date": "2026-10-31"}
 
 
-def test_import_landed_cost_invalid_post_prefers_submitted_values_over_query(client, reference_users):
+def test_import_landed_cost_invalid_post_prefers_submitted_values_over_query(authenticated_client):
     """An invalid POST re-renders the submitted values, not stale URL filters."""
-    with client.session_transaction() as session:
-        session["_user_id"] = str(reference_users["admin"].id)
-        session["_fresh"] = True
+    client = authenticated_client("admin")
 
     response = client.post(
         "/buying/import-landed-cost/new?company=alpha&posting_date=2026-10-30",
