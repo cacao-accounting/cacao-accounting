@@ -487,6 +487,52 @@ def test_tax_rule_edit_preserves_existing_values_for_invalid_references(
         assert persisted.account_id is None
 
 
+def test_invalid_tax_rule_update_rerenders_submitted_values_including_range_and_sequence(
+    app, authenticated_client, entorno_contable, active_admin_module
+):
+    """An invalid edit keeps the proposed range, order and values in the re-rendered form (#2017)."""
+    assert entorno_contable.app is app
+    suffix = uuid4().hex[:8]
+    original_name = f"Regla original {suffix}"
+    proposed_name = f"Regla propuesta {suffix}"
+    client = authenticated_client()
+    assert client.post("/settings/tax-rules", data=_tax_rule_payload(original_name)).status_code == 302
+    with app.app_context():
+        rule_id = database.session.execute(database.select(TaxRule.id).filter_by(name=original_name)).scalar_one()
+
+    proposed = _tax_rule_payload(
+        proposed_name,
+        concept="iva propuesto",
+        rate="Infinity",
+        sequence="42",
+        valid_from="2026-01-15",
+        valid_to="2026-12-31",
+        country="NI",
+        allocation_method="by_amount",
+    )
+    response = client.post(f"/settings/tax-rules/{rule_id}/edit", data=proposed)
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "finito" in html.lower()
+    assert f'value="{proposed_name}"' in html
+    assert 'name="concept"' in html and 'value="iva propuesto"' in html
+    assert 'name="rate"' in html and 'value="Infinity"' in html
+    assert 'name="sequence"' in html and 'value="42"' in html
+    assert 'name="valid_from"' in html and 'value="2026-01-15"' in html
+    assert 'name="valid_to"' in html and 'value="2026-12-31"' in html
+    assert 'name="country"' in html and 'value="NI"' in html
+    assert 'name="allocation_method"' in html and 'value="by_amount"' in html
+    with app.app_context():
+        database.session.expire_all()
+        persisted = database.session.get(TaxRule, rule_id)
+        assert persisted is not None
+        assert persisted.name == original_name
+        assert persisted.sequence == 10
+        assert persisted.valid_from is None
+        assert persisted.valid_to is None
+
+
 def test_tax_rule_accepts_same_company_account_and_exposes_it_to_context(
     app, authenticated_client, entorno_contable, active_admin_module
 ):
