@@ -141,7 +141,21 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
             candidate = exact_candidates[0]
             key = (candidate.reference_type, candidate.reference_id)
             existing = seen_candidates.get(key)
-            if existing is None or candidate.score > existing[0].score:
+            if existing is None:
+                seen_candidates[key] = (candidate, rule)
+            elif existing[0].amount != candidate.amount:
+                # #1644: el mismo destino evaluado con importes distintos no
+                # es una coincidencia inequívoca; no se elige por score.
+                return BankAutoReconciliationResult(
+                    bank_transaction_id=bank_transaction_id,
+                    reconciled=False,
+                    rule_id=None,
+                    candidate_reference_type=None,
+                    candidate_reference_id=None,
+                    allocated_amount=None,
+                    reason="ambiguous",
+                )
+            elif candidate.score > existing[0].score:
                 seen_candidates[key] = (candidate, rule)
         elif len(exact_candidates) > 1:
             return BankAutoReconciliationResult(
