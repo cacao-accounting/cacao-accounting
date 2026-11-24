@@ -12,7 +12,9 @@ from uuid import uuid4
 import pytest
 from flask_login import login_user
 
-from cacao_accounting.contabilidad.posting_service import PostingError, post_stock_entry
+from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document, post_stock_entry
+from cacao_accounting.approval_engine import approved_execution
+from cacao_accounting.internal_control_service import audit_actor
 from cacao_accounting.database import (
     Accounts,
     CompanyDefaultAccount,
@@ -211,8 +213,8 @@ def test_agotamiento_con_residuo_regulariza_bin_sle_svl_y_gl(entorno_contable_ai
 
 
 def test_agotamiento_exacto_no_genera_residuo(entorno_contable_aislado):
-    app = entorno_contable_aislado.app
     """Sin diferencia de valor no se crea una regularización extra."""
+    app = entorno_contable_aislado.app
     codigo_item, codigo_bodega = _escenario(app, qty="1", stock_value="10", layer_value="10")
     with app.app_context():
         entrada = _entrada(codigo_item, codigo_bodega, "adjustment_negative", "1", "10")
@@ -229,3 +231,31 @@ def test_agotamiento_exacto_no_genera_residuo(entorno_contable_aislado):
             .all()
             == []
         )
+
+
+def test_reversion_de_documento_regularizado_no_falla(entorno_contable_aislado):
+    """La reversa también atraviesa la regularización de residuo append-only."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        entidad = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
+        entidad.valuation_method = "fifo"
+        database.session.commit()
+    codigo_item, codigo_bodega = _escenario(app, qty="1", stock_value="10.0001", layer_value="10.0000")
+    with app.app_context():
+        entrada = _entrada(codigo_item, codigo_bodega, "adjustment_negative", "1", "10")
+        _postear(app, entrada)
+        database.session.commit()
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        with audit_actor(actor.id, actor.name), approved_execution(entrada, actor.id):
+            cancel_document(
+                entrada,
+                reason="Reversa del residuo",
+                actor_user_id=actor.id,
+                cancellation_date=FECHA,
+            )
+        database.session.commit()
+        bin_final = database.session.execute(
+            database.select(StockBin).filter_by(item_code=codigo_item, warehouse=codigo_bodega)
+        ).scalar_one()
+        assert bin_final.actual_qty == Decimal("1")
+        assert bin_final.stock_value == Decimal("10.0001")

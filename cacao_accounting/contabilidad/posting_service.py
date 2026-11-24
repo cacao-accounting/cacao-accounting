@@ -4138,6 +4138,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
         qty_change=qty_change,
         valuation_rate=valuation_rate,
         value_change=value_change,
+        allow_value_adjustment_without_stock=_decimal_value(movement.qty_change) == 0,
     )
     database.session.add(
         StockValuationLayer(
