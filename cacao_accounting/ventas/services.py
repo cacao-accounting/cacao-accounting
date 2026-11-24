@@ -41,7 +41,7 @@ from cacao_accounting.database import (
     database,
 )
 
-from sqlalchemy import func, or_
+from sqlalchemy import exists, func, or_
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -2584,7 +2584,18 @@ def _validate_credit_limit_and_overdue(
 
 
 def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInvoice]:
-    """Obtiene facturas aprobadas del cliente y compañía."""
+    """Obtiene facturas aprobadas del cliente y compañía.
+
+    Las notas de débito vinculadas ya están reflejadas en el saldo de su
+    factura origen y se excluyen. Una nota sin vínculo activo sí incrementa la
+    exposición del cliente y debe incluirse.
+    """
+    linked_reversal = exists().where(
+        DocumentRelation.source_type == "sales_invoice",
+        DocumentRelation.target_type == "sales_debit_note",
+        DocumentRelation.target_id == SalesInvoice.id,
+        DocumentRelation.status == "active",
+    )
     query = (
         database.select(SalesInvoice)
         .filter_by(
@@ -2593,7 +2604,7 @@ def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInv
             docstatus=1,
             is_return=False,
         )
-        .where(SalesInvoice.document_type != "sales_debit_note")
+        .where(or_(SalesInvoice.document_type != "sales_debit_note", ~linked_reversal))
     )
     return list(database.session.execute(query).scalars().all())
 
