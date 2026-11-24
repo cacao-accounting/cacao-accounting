@@ -41,12 +41,15 @@ def calculate_document_total_with_taxes(
         tax_result = calculate_taxes(document, template_id)
         total = subtotal + tax_result.payable_delta
     else:
-        total = _document_total_from_canonical_tax_lines(
-            company=str(getattr(document, "company", "") or ""),
-            subtotal=subtotal,
-            tax_lines_payload=tax_lines_payload,
-        )
-        if not _normalize_lines_payload(tax_lines_payload):
+        lines_payload = _normalize_lines_payload(tax_lines_payload)
+        if lines_payload:
+            _validate_client_tax_lines(document, lines_payload)
+            total = _document_total_from_canonical_tax_lines(
+                company=str(getattr(document, "company", "") or ""),
+                subtotal=subtotal,
+                tax_lines_payload=tax_lines_payload,
+            )
+        else:
             total = _document_total_from_active_rules(document=document, items=items, subtotal=subtotal)
     if not total.is_finite():
         raise ValueError(_("El total fiscal debe ser finito."))
@@ -60,6 +63,48 @@ def _reject_duplicate_tax_line_ids(lines_payload: list[dict[str, Any]]) -> None:
     duplicate_rule_id = find_duplicate_rule_id(_document_tax_line_rule_id(line) for line in lines_payload)
     if duplicate_rule_id is not None:
         raise ValueError(_("Las líneas fiscales no pueden repetir el identificador '%(rule)s'.") % {"rule": duplicate_rule_id})
+
+
+def _applicable_tax_rule_ids(document: Any) -> set[str]:
+    """Devuelve las reglas vigentes que el servidor resolvería para el documento."""
+    company = getattr(document, "company", None)
+    if not company:
+        return set()
+    from cacao_accounting.tax_rule_service import build_tax_rule_contexts
+
+    document_type = str(getattr(document, "document_type", None) or getattr(document, "__tablename__", "sales_invoice"))
+    applies_to = "purchase" if document_type.startswith("purchase") else "sales"
+    event = "purchase_invoice_confirmed" if applies_to == "purchase" else "sales_invoice_confirmed"
+    currency = str(getattr(document, "transaction_currency", None) or getattr(document, "base_currency", None) or "")
+    contexts = build_tax_rule_contexts(
+        company=company,
+        applies_to=applies_to,
+        currency=currency or None,
+        at_date=getattr(document, "posting_date", None),
+        recognition_event=event,
+    )
+    return {str(context.rule_id) for context in contexts}
+
+
+def _client_tax_rule_ids(lines_payload: list[dict[str, Any]]) -> set[str]:
+    """Extrae los IDs de reglas enviados por el navegador, ignorando manuales."""
+    rule_ids: set[str] = set()
+    for line_payload in lines_payload:
+        rule_id = _document_tax_line_rule_id(line_payload)
+        if not rule_id or bool(line_payload.get("manual")) or str(rule_id).startswith("MANUAL-"):
+            continue
+        rule_ids.add(str(rule_id))
+    return rule_ids
+
+
+def _validate_client_tax_lines(document: Any, lines_payload: list[dict[str, Any]]) -> None:
+    """Rechaza reglas no aplicables y la omisión de reglas obligatorias."""
+    applicable = _applicable_tax_rule_ids(document)
+    sent = _client_tax_rule_ids(lines_payload)
+    if not sent.issubset(applicable):
+        raise ValueError(_("La regla fiscal seleccionada no corresponde a este documento."))
+    if not applicable.issubset(sent):
+        raise ValueError(_("Faltan reglas fiscales aplicables en el documento."))
 
 
 def _document_total_from_canonical_tax_lines(*, company: str, subtotal: Decimal, tax_lines_payload: Any) -> Decimal:

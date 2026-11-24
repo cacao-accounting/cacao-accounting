@@ -23,6 +23,7 @@ from cacao_accounting.accounting_engine.common.context import (
 )
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
 from cacao_accounting.config import configuracion
+from cacao_accounting.database import database
 from cacao_accounting.fiscal_persistence_service import (
     _decimal_or_none,
     _to_decimal,
@@ -48,7 +49,12 @@ def fiscal_app():
             "MODO_ESCRITORIO": False,
         }
     )
+    with app.app_context():
+        database.create_all()
     yield app
+    with app.app_context():
+        database.session.remove()
+        database.engine.dispose()
 
 
 @pytest.mark.parametrize("value", NON_FINITE)

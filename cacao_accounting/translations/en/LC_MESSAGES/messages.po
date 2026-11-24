@@ -1397,6 +1397,14 @@ msgstr "The tax template does not match the selected party type."
 msgid "La regla fiscal seleccionada no existe."
 msgstr "The selected tax rule does not exist."
 
+#: cacao_accounting/fiscal_persistence_service.py
+msgid "La regla fiscal seleccionada no corresponde a este documento."
+msgstr "The selected tax rule does not apply to this document."
+
+#: cacao_accounting/fiscal_persistence_service.py
+msgid "Faltan reglas fiscales aplicables en el documento."
+msgstr "Applicable tax rules are missing from the document."
+
 #: cacao_accounting/party_settings.py:480
 msgid "La regla fiscal debe pertenecer a la misma compañía."
 msgstr "The tax rule must belong to the same company."
