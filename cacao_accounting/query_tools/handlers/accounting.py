@@ -26,6 +26,7 @@ from cacao_accounting.query_tools.permissions import (
     validate_permission,
 )
 from cacao_accounting.i18n import _l
+from cacao_accounting.reportes.services import account_classification_filter_values
 
 _PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
 
@@ -118,7 +119,6 @@ def list_accounting_periods(
             "query": {"type": "string"},
             "classification": {
                 "type": "string",
-                "enum": ["Activo", "Pasivo", "Patrimonio", "Ingresos", "Gastos"],
             },
             "page": {"type": "integer", "default": 1},
             "page_size": {"type": "integer", "default": 100, "maximum": 500},
@@ -151,7 +151,8 @@ def search_accounts(
         like = f"%{query}%"
         q = q.where(or_(Accounts.code.ilike(like), Accounts.name.ilike(like)))
     if classification:
-        q = q.where(Accounts.classification == classification)
+        values = account_classification_filter_values(classification)
+        q = q.where(func.lower(func.trim(Accounts.classification)).in_(values))
 
     total = database.session.execute(database.select(func.count()).select_from(q.subquery())).scalar() or 0
 

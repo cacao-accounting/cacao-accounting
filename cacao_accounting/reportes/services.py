@@ -305,6 +305,21 @@ def account_classification_is_known(value: str | None) -> bool:
     return normalize_account_classification_value(value) in KNOWN_ACCOUNT_CLASSIFICATIONS
 
 
+def account_classification_filter_values(value: str) -> set[str]:
+    """Return recognized persisted spellings for the same accounting classification."""
+    normalized = normalize_account_classification_value(value)
+    groups = (
+        {"activo", "asset"},
+        {"pasivo", "liability"},
+        {"patrimonio", "equity"},
+        {"ingreso", "income"},
+        {"costo", "cost"},
+        {"gasto", "expense"},
+    )
+    group = next((group for group in groups if normalized in group), set())
+    return group | {alias for alias, canonical in _CLASSIFICATION_ALIASES.items() if canonical in group}
+
+
 def normalize_account_classification(classification: str | None, account_type: str | None = None) -> str:
     """Resuelve la clasificación contable que usan los reportes financieros.
 

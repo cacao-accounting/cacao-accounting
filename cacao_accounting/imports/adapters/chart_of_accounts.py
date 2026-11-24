@@ -6,7 +6,7 @@
 from graphlib import TopologicalSorter
 from typing import List, Dict, Any
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
-from cacao_accounting.database import Accounts, database
+from cacao_accounting.database import Accounts, Currency, database
 from cacao_accounting.default_scope import lock_default_scope
 from cacao_accounting.contabilidad.services import _validate_account_parent
 from cacao_accounting.i18n import _
@@ -21,6 +21,7 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
         """Validate account domains and an existing account parent."""
         errors = self._validate_domains(document_data)
+        errors.extend(self._validate_currencies(document_data))
         if not document_data:
             return errors
         row = document_data[0]
@@ -40,6 +41,19 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
             errors.append(_("La cuenta padre debe estar activa."))
         elif not parent.group:
             errors.append(_("La cuenta padre debe ser una cuenta de grupo."))
+        return errors
+
+    @staticmethod
+    def _validate_currencies(document_data: List[Dict[str, Any]]) -> List[str]:
+        """Reject missing or inactive currencies while allowing an empty cell."""
+        errors: List[str] = []
+        for row in document_data:
+            code = _normalized_currency(row.get("moneda"))
+            if code is None:
+                continue
+            currency = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none()
+            if currency is None or not currency.active:
+                errors.append(_("La moneda no existe o está inactiva."))
         return errors
 
     @staticmethod
@@ -121,6 +135,8 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
         """Build an Accounts object from the data."""
+        from cacao_accounting.reportes.services import normalize_account_classification_value
+
         # Una cuenta por fila
         row = document_data[0]
         cuenta = Accounts(
@@ -130,7 +146,7 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
             parent=_normalized_parent(row.get("padre")),
             group=_is_group_account(row.get("grupo")),
             currency=_normalized_currency(row.get("moneda")),
-            classification=(str(row.get("clasificacion") or "").strip() or None),
+            classification=normalize_account_classification_value(str(row.get("clasificacion") or "")),
             account_type=(str(row.get("tipo") or "").strip().lower() or None),
             active=True,
             enabled=True,
@@ -140,6 +156,9 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
     def persist_document(self, document: Any) -> None:
         """Serialize hierarchy writes and revalidate the parent at persistence time."""
         lock_default_scope("account_hierarchy", document.entity)
+        errors = self._validate_currencies([{"moneda": document.currency}])
+        if errors:
+            raise ValueError(errors[0])
         document.parent = _validate_account_parent(document.entity, document.parent, current_code=document.code)
         database.session.add(document)
 
