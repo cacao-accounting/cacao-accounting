@@ -460,6 +460,8 @@
     </section>
     <h6 class="small fw-semibold text-muted text-uppercase">{{ _('Tareas del documento') }}</h6>
     {% if tasks %}
+    {% set task_priority_labels = {'low': _('baja'), 'normal': _('normal'), 'high': _('alta')} %}
+    {% set task_status_labels = {'open': _('abierta'), 'in_progress': _('en curso'), 'completed': _('completada'), 'cancelled': _('anulada')} %}
     <div class="table-responsive">
       <p class="text-muted small mb-2">{{ _('Detalle de tareas vinculadas al documento, con prioridad, estado y vencimiento.') }}</p>
       <table class="table table-sm align-middle mb-0">
@@ -467,7 +469,7 @@
         <thead><tr><th>{{ _('Titulo') }}</th><th>{{ _('Prioridad') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Vencimiento') }}</th></tr></thead>
         <tbody>
           {% for task in tasks %}
-          <tr><td>{{ task.title }}</td><td>{{ task.priority }}</td><td>{{ task.status }}</td><td>{{ task.due_date or '-' }}</td></tr>
+          <tr><td>{{ task.title }}</td><td>{{ task_priority_labels.get(task.priority, task.priority) }}</td><td>{{ task_status_labels.get(task.status, task.status) }}</td><td>{{ task.due_date or '-' }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
