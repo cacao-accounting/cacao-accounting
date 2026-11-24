@@ -24878,3 +24878,11 @@ msgstr "The award does not match the order's supplier or lines."
 #: cacao_accounting/ventas/services.py
 msgid "La modalidad 3-way exige una Orden de Venta y una Nota de Entrega vinculadas a la factura."
 msgstr "3-way matching requires a sales order and a delivery note linked to the invoice."
+
+#: cacao_accounting/bancos/templates/bancos/caja_chica_reposicion_lista.html
+msgid "Solicitado"
+msgstr "Requested"
+
+#: cacao_accounting/bancos/templates/bancos/caja_chica_reposicion_lista.html
+msgid "Reembolsado"
+msgstr "Reimbursed"
