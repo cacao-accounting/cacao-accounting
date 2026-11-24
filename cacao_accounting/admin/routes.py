@@ -1545,7 +1545,7 @@ def crear_usuario():
             database.session.rollback()
             if not _user_email_is_taken(form.e_mail.data):
                 raise
-            form.e_mail.errors.append("El correo electrónico ya está en uso.")
+            form.e_mail.errors.append(_("El correo electrónico ya está en uso."))
         else:
             flash(_("Usuario creado correctamente."), "success")
             return redirect(url_for(LISTA_USUARIOS))
@@ -1585,7 +1585,7 @@ def editar_usuario(user_id: str):
                 database.session.rollback()
                 if not email_changed or not _user_email_is_taken(form.e_mail.data, exclude_user_id=usuario.id):
                     raise
-                form.e_mail.errors.append("El correo electrónico ya está en uso.")
+                form.e_mail.errors.append(_("El correo electrónico ya está en uso."))
             else:
                 if not committed:
                     flash(str(LAST_ADMIN_REQUIRED_MESSAGE), "danger")
@@ -1716,7 +1716,7 @@ def usuario_password(user_id: str):
     if form.validate_on_submit():
         if not helpers.validar_clave_segura(form.password.data):
             form.password.errors.append(
-                "Contraseña muy débil. Use al menos 8 caracteres, mayúsculas, minúsculas, números y símbolos."
+                _("Contraseña muy débil. Use al menos 8 caracteres, mayúsculas, minúsculas, números y símbolos.")
             )
         else:
             usuario.password = proteger_passwd(form.password.data)

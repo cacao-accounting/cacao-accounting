@@ -359,10 +359,10 @@ def _validate_portal_fields(form: UserCreateForm | UserEditForm) -> bool:
         return True
     valid = True
     if not form.party_id.data:
-        form.party_id.errors.append("Los usuarios de portal requieren un tercero asociado.")
+        form.party_id.errors.append(_("Los usuarios de portal requieren un tercero asociado."))
         valid = False
     if not form.company.data:
-        form.company.errors.append("Los usuarios de portal requieren una compañía asociada.")
+        form.company.errors.append(_("Los usuarios de portal requieren una compañía asociada."))
         valid = False
     if not valid:
         return False
@@ -372,7 +372,7 @@ def _validate_portal_fields(form: UserCreateForm | UserEditForm) -> bool:
         or (form.classification.data == "supplier" and party.is_supplier)
     )
     if not matches_type:
-        form.party_id.errors.append("El tercero no corresponde a la clasificación del portal.")
+        form.party_id.errors.append(_("El tercero no corresponde a la clasificación del portal."))
         return False
     return True
 
@@ -478,12 +478,12 @@ def _validar_creacion_usuario(form: UserCreateForm) -> bool:
     valid_password = helpers.validar_clave_segura(form.password.data)
     match (existen_usuario, existe_email, valid_password):
         case (usuario, _, _) if usuario is not None:
-            form.usuario.errors.append("El nombre de usuario ya está en uso.")
+            form.usuario.errors.append(_("El nombre de usuario ya está en uso."))
         case (_, True, _):
-            form.e_mail.errors.append("El correo electrónico ya está en uso.")
+            form.e_mail.errors.append(_("El correo electrónico ya está en uso."))
         case (_, _, False):
             form.password.errors.append(
-                "Contraseña muy débil. Use al menos 8 caracteres, mayúsculas, minúsculas, números y símbolos."
+                _("Contraseña muy débil. Use al menos 8 caracteres, mayúsculas, minúsculas, números y símbolos.")
             )
         case _:
             return True
@@ -499,10 +499,10 @@ def _apply_user_edit(form, usuario) -> bool:
     current_email = normalize_user_email(usuario.e_mail)
     existe_email = email != current_email and _user_email_is_taken(email, exclude_user_id=usuario.id)
     if existe_usuario is not None:
-        form.usuario.errors.append("El nombre de usuario ya está en uso.")
+        form.usuario.errors.append(_("El nombre de usuario ya está en uso."))
         return False
     if existe_email:
-        form.e_mail.errors.append("El correo electrónico ya está en uso.")
+        form.e_mail.errors.append(_("El correo electrónico ya está en uso."))
         return False
 
     usuario.user = form.usuario.data
@@ -515,16 +515,16 @@ def _apply_user_edit(form, usuario) -> bool:
     usuario.phone = form.phone.data or None
     new_classification = form.classification.data or None
     if new_classification in {"customer", "supplier"} and not form.party_id.data:
-        form.party_id.errors.append("Los usuarios de portal requieren un tercero asociado.")
+        form.party_id.errors.append(_("Los usuarios de portal requieren un tercero asociado."))
         return False
     if new_classification in {"customer", "supplier"} and not form.company.data:
-        form.company.errors.append("Los usuarios de portal requieren una compañía asociada.")
+        form.company.errors.append(_("Los usuarios de portal requieren una compañía asociada."))
         return False
     if (
         new_classification in {"customer", "supplier"}
         and database.session.execute(database.select(RolesUser).filter_by(user_id=usuario.id)).first()
     ):
-        form.classification.errors.append("Retire los roles antes de convertir el usuario en portal.")
+        form.classification.errors.append(_("Retire los roles antes de convertir el usuario en portal."))
         return False
     if _would_leave_no_admin(usuario, active=bool(form.active.data), classification=new_classification):
         form.classification.errors.append(str(LAST_ADMIN_REQUIRED_MESSAGE))

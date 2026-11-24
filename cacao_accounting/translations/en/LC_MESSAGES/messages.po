@@ -2416,6 +2416,30 @@ msgstr "User %(user)s %(status)s successfully."
 msgid "Usuario creado correctamente."
 msgstr "User created successfully."
 
+#: cacao_accounting/admin/services.py
+msgid "Los usuarios de portal requieren un tercero asociado."
+msgstr "Portal users require an associated party."
+
+#: cacao_accounting/admin/services.py
+msgid "Los usuarios de portal requieren una compañía asociada."
+msgstr "Portal users require an associated company."
+
+#: cacao_accounting/admin/services.py
+msgid "El tercero no corresponde a la clasificación del portal."
+msgstr "The party does not match the portal classification."
+
+#: cacao_accounting/admin/services.py
+msgid "El nombre de usuario ya está en uso."
+msgstr "The username is already in use."
+
+#: cacao_accounting/admin/services.py cacao_accounting/admin/routes.py
+msgid "El correo electrónico ya está en uso."
+msgstr "The email address is already in use."
+
+#: cacao_accounting/admin/services.py
+msgid "Retire los roles antes de convertir el usuario en portal."
+msgstr "Remove the roles before converting the user to a portal user."
+
 #: cacao_accounting/admin/routes.py:1476
 msgid "Crear Usuario"
 msgstr "Create User"
