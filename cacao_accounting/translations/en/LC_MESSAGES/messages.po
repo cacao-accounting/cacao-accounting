@@ -15157,6 +15157,10 @@ msgstr "A monthly close already exists for that period."
 msgid "Cierre mensual creado."
 msgstr "Monthly close created."
 
+#: cacao_accounting/contabilidad/routes.py
+msgid "La corrida de cierre está cerrada. Reabra el período antes de ejecutar pasos adicionales."
+msgstr "The close run is closed. Reopen the period before running additional steps."
+
 #: cacao_accounting/contabilidad/routes.py:3248
 #, python-format
 msgid "La capitalización automática de proyectos finalizó con %(count)s registros procesados."
@@ -24962,3 +24966,7 @@ msgstr "Inventory value cannot be adjusted without positive stock."
 #: cacao_accounting/contabilidad/posting_service.py
 msgid "Regularización de residuo de inventario"
 msgstr "Inventory rounding residual adjustment"
+
+#: cacao_accounting/numbers.py
+msgid "El campo %(field)s debe ser un valor booleano válido."
+msgstr "The %(field)s field must be a valid boolean value."

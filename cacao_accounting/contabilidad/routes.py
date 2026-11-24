@@ -3291,6 +3291,10 @@ def ejecutar_capitalizacion_cierre(identifier: str):
         flash(CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE, "danger")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
+    if close_run.run_status == "closed":
+        flash(_("La corrida de cierre está cerrada. Reabra el período antes de ejecutar pasos adicionales."), "warning")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
     try:
         success_count, errors = ProjectCapitalizationService().run_capitalization(
             company=close_run.company, period_id=str(period.id), user_id=str(current_user.id)
@@ -3408,6 +3412,10 @@ def aplicar_recurrentes_cierre(identifier: str):
     period = database.session.get(AccountingPeriod, close_run.period_id)
     if not period:
         flash(CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE, "danger")
+        return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
+
+    if close_run.run_status == "closed":
+        flash(_("La corrida de cierre está cerrada. Reabra el período antes de ejecutar pasos adicionales."), "warning")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
     template_ids = request.form.getlist("template_ids")
