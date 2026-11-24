@@ -29,7 +29,7 @@
     </div>
     <div class="col-md-6">
       <div><strong>{{ _("Total de la solicitud de cotización") }}</strong></div>
-      <div>{{ registro.grand_total or "0" }}</div>
+      <div>{{ format_money_with_currency(registro.grand_total or 0, registro.transaction_currency or registro.base_currency) }}</div>
     </div>
   </div>
 </div>
@@ -88,7 +88,7 @@
           <a href="{{ url_for('compras.compras_cotizacion_proveedor', quotation_id=quotation.id) }}">{{ _("Ver") }}</a>
           {% else %}-{% endif %}
         </td>
-        <td>{{ line.qty }}</td><td>{{ line.rate }}</td><td>{{ line.amount }}</td>
+        <td>{{ line.qty }}</td><td>{{ format_money_with_currency(line.rate or 0, quotation.transaction_currency or quotation.base_currency) }}</td><td>{{ format_money_with_currency(line.amount or 0, quotation.transaction_currency or quotation.base_currency) }}</td>
       </tr>
     {% endfor %}</tbody>
   </table>
@@ -115,7 +115,7 @@
       <tr>
         <td>{{ offer.supplier_name or offer.supplier_id or "-" }}</td>
         <td>{{ offer.document_no or offer.id }}</td>
-        <td>{{ offer.grand_total or "" }}</td>
+        <td>{{ format_money_with_currency(offer.grand_total or 0, offer.transaction_currency or offer.base_currency) }}</td>
         <td>
           <a href="{{ url_for('compras.compras_cotizacion_proveedor', quotation_id=offer.id) }}" class="btn btn-sm btn-outline-secondary">{{ _("Ver") }}</a>
         </td>
@@ -147,7 +147,7 @@
                 {% if line %}
                   <label class="d-flex gap-2 align-items-center">
                     <input type="radio" name="award_item_{{ item.id }}" value="{{ offer.id }}" data-rate="{{ line.rate or 0 }}">
-                    <span>{{ line.rate or 0 }} / {{ line.qty }}</span>
+                    <span>{{ format_money_with_currency(line.rate or 0, offer.transaction_currency or offer.base_currency) }} / {{ line.qty }}</span>
                   </label>
                 {% else %}<span class="text-muted">{{ _("Sin cobertura") }}</span>{% endif %}
               </td>
