@@ -156,6 +156,21 @@ def test_supplier_elegible_accede_al_portal(portal_usuarios):
     assert client.get("/portal/supplier").status_code == 200
 
 
+def test_portal_respeta_idioma_del_usuario(portal_usuarios):
+    """El HTML del portal declara el idioma configurado, no un es fijo."""
+    with portal_usuarios.app_context():
+        usuario = database.session.execute(database.select(User).filter_by(user="portal_cliente")).scalar_one()
+        usuario.language = "en"
+        database.session.commit()
+    client = portal_usuarios.test_client()
+    _login(client, "portal_cliente")
+
+    html = client.get("/portal/customer").get_data(as_text=True)
+
+    assert '<html lang="en">' in html
+    assert '<html lang="es">' not in html
+
+
 def test_desktop_login_no_redirige_y_el_guard_rechaza_el_portal():
     """En Desktop el login y el guard mantienen al portal deshabilitado."""
     application = create_app(
