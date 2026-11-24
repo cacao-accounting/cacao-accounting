@@ -219,7 +219,7 @@ def _seed_worker_base_data(app: Flask) -> None:
                 )
             )
 
-        for module_name in ("accounting", "sales", "purchases", "cash", "inventory"):
+        for module_name in ("accounting", "sales", "purchases", "cash", "inventory", "admin", "imports"):
             if database.session.execute(select(Modules).filter_by(module=module_name)).scalar_one_or_none() is None:
                 database.session.add(Modules(module=module_name, default=module_name == "accounting", enabled=True))
 

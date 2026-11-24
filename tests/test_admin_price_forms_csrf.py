@@ -65,18 +65,24 @@ def csrf_price_forms(app, entorno_contable, authenticated_client):
     app.config["WTF_CSRF_ENABLED"] = previous_csrf
 
 
-def _form_token(html: str, action: str | None = None) -> str:
-    """Devuelve el token del formulario que apunta a ``action``."""
+def _form_token(html: str, action: str | None = None, marker: str | None = None) -> str:
+    """Devuelve el token del formulario identificado por ``action`` o ``marker``.
+
+    Seleccionar el formulario de forma explícita evita que el token del encabezado
+    enmascare la ausencia del campo oculto en el formulario bajo prueba.
+    """
     forms = re.findall(r"<form\b([^>]*)>(.*?)</form>", html, flags=re.DOTALL)
     for attributes, body in forms:
         if action is not None:
             form_action = re.search(r'action="([^"]+)"', attributes)
             if form_action is None or form_action.group(1) != action:
                 continue
+        if marker is not None and marker not in body:
+            continue
         token = re.search(r'name="csrf_token"\s+value="([^"]+)"', body)
         if token is not None:
             return token.group(1)
-    pytest.fail(f"No CSRF token found for form action {action!r}")
+    pytest.fail(f"No CSRF token found for form action={action!r} marker={marker!r}")
 
 
 def test_price_list_form_sends_its_own_csrf_token(csrf_price_forms):
@@ -84,7 +90,7 @@ def test_price_list_form_sends_its_own_csrf_token(csrf_price_forms):
     app, client, _ids = csrf_price_forms
     page = client.get("/settings/price-lists")
     assert page.status_code == 200
-    token = _form_token(page.get_data(as_text=True))
+    token = _form_token(page.get_data(as_text=True), marker='name="name"')
 
     without_token = client.post(
         "/settings/price-lists",
@@ -119,7 +125,7 @@ def test_item_price_creation_form_sends_its_own_csrf_token(csrf_price_forms):
     item_code, price_list_id, _item_price_id = ids
     page = client.get("/settings/item-prices")
     assert page.status_code == 200
-    token = _form_token(page.get_data(as_text=True))
+    token = _form_token(page.get_data(as_text=True), marker='name="item_code"')
 
     data = {"price_list_id": price_list_id, "item_code": item_code, "price": "12.50", "min_qty": "0"}
     assert client.post("/settings/item-prices", data=data).status_code == 400
