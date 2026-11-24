@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 from cacao_accounting.database import (
     Accounts,
     Batch,
+    DocumentRelation,
     Item,
     ItemCategory,
     ItemUOMConversion,
@@ -975,6 +976,29 @@ def inventario_salida_inventario_nuevo():
     return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="adjustment_negative"))
 
 
+def _attach_stock_entry_line_sources(items: list[StockEntryItem], entry_id: str) -> list[StockEntryItem]:
+    """Adjunta la relación de origen activa a cada línea del movimiento."""
+    relaciones = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                target_type="stock_entry",
+                target_id=entry_id,
+                status="active",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    por_linea = {rel.target_item_id: rel for rel in relaciones if rel.target_item_id}
+    for item in items:
+        relacion = por_linea.get(item.id)
+        if relacion is not None:
+            setattr(item, "source_type", relacion.source_type)
+            setattr(item, "source_id", relacion.source_id)
+            setattr(item, "source_item_id", relacion.source_item_id)
+    return items
+
+
 @inventario.route("/stock-entry/<entry_id>")
 @modulo_activo("inventory")
 @login_required
@@ -986,7 +1010,9 @@ def inventario_entrada(entry_id):
     if not registro:
         abort(404)
     exige_acceso_compania("inventory", registro.company, "consultar")
-    items = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry_id)).all()
+    filas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry_id)).all()
+    lineas = _attach_stock_entry_line_sources([fila[0] for fila in filas], entry_id)
+    items = [(linea,) for linea in lineas]
     titulo = (registro.document_no or entry_id) + " - " + APPNAME
     return render_template(
         "inventario/entrada.html",

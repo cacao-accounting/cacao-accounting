@@ -52,6 +52,8 @@
       (_('Propósito'), registro.purpose),
       (_('Compañía'), registro.company),
       (_('Fecha'), registro.posting_date),
+      (_('Bodega Origen'), registro.from_warehouse),
+      (_('Bodega Destino'), registro.to_warehouse),
       (_('Monto Total'), format_money_with_currency(registro.total_amount, currency_code)),
       (_('Moneda'), currency_code),
       (_('Observaciones'), registro.remarks)

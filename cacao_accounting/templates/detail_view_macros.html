@@ -134,6 +134,8 @@
             data-rate="{{ format_money_with_currency(item.rate|default('', true) or item.basic_rate|default('', true), currency_code) }}"
             data-amount="{{ format_money_with_currency(item.amount|default(0, true), currency_code) }}"
             data-warehouse="{{ item.warehouse|default('', true) or item.source_warehouse|default('', true) or item.target_warehouse|default('', true) }}"
+            data-source-warehouse="{{ item.source_warehouse|default('', true) }}"
+            data-target-warehouse="{{ item.target_warehouse|default('', true) }}"
             data-account="{{ item.account|default('', true) }}"
             data-cost-center="{{ item.cost_center|default('', true) }}"
             data-unit="{{ item.unit|default('', true) }}"
@@ -246,6 +248,14 @@
   function readValue(value) {
     return value && value.trim() ? value : '-';
   }
+  function warehouseLabel(data) {
+    var source = readValue(data.sourceWarehouse);
+    var target = readValue(data.targetWarehouse);
+    if (source !== '-' && target !== '-') {
+      return source === target ? source : source + ' → ' + target;
+    }
+    return readValue(data.warehouse);
+  }
 
   document.addEventListener('DOMContentLoaded', function () {
     var rows = Array.prototype.slice.call(document.querySelectorAll('.journal-line-row'));
@@ -262,7 +272,7 @@
       document.getElementById('line-rate').textContent = data.rate || '0';
       document.getElementById('line-amount').textContent = data.amount || '0';
       {% endif %}
-      document.getElementById('line-warehouse').textContent = readValue(data.warehouse);
+      document.getElementById('line-warehouse').textContent = warehouseLabel(data);
       document.getElementById('line-account').textContent = readValue(data.account);
       document.getElementById('line-cost-center').textContent = readValue(data.costCenter);
       document.getElementById('line-unit').textContent = readValue(data.unit);
@@ -281,7 +291,7 @@
       document.getElementById('modal-line-rate').textContent = data.rate || '0';
       document.getElementById('modal-line-amount').textContent = data.amount || '0';
       {% endif %}
-      document.getElementById('modal-line-warehouse').textContent = readValue(data.warehouse);
+      document.getElementById('modal-line-warehouse').textContent = warehouseLabel(data);
       document.getElementById('modal-line-account').textContent = readValue(data.account);
       document.getElementById('modal-line-cost-center').textContent = readValue(data.costCenter);
       document.getElementById('modal-line-unit').textContent = readValue(data.unit);
