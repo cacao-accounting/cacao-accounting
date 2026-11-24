@@ -24954,3 +24954,11 @@ msgstr "Requested"
 #: cacao_accounting/bancos/templates/bancos/caja_chica_reposicion_lista.html
 msgid "Reembolsado"
 msgstr "Reimbursed"
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "No se puede ajustar el valor de un inventario sin existencias positivas."
+msgstr "Inventory value cannot be adjusted without positive stock."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "Regularización de residuo de inventario"
+msgstr "Inventory rounding residual adjustment"

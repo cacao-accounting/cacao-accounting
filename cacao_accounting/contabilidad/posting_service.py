@@ -2477,6 +2477,7 @@ def _upsert_stock_bin(
     value_change: Decimal,
     preserve_reserved_qty: bool = False,
     reject_negative_stock_value: bool = False,
+    allow_value_adjustment_without_stock: bool = False,
 ) -> tuple[Decimal, Decimal]:
     """Actualiza StockBin con FOR UPDATE para evitar condiciones de carrera.
 
@@ -2504,6 +2505,9 @@ def _upsert_stock_bin(
         bin_row = _insert_stock_bin_race_safe(company, item_code, warehouse)
 
     current_stock_value = _decimal_value(bin_row.stock_value)
+    current_qty = _decimal_value(bin_row.actual_qty)
+    if qty_change == 0 and value_change != 0 and current_qty <= 0 and not allow_value_adjustment_without_stock:
+        raise PostingError(_("No se puede ajustar el valor de un inventario sin existencias positivas."))
     stock_value_after = current_stock_value + value_change
     if reject_negative_stock_value and stock_value_after < 0:
         raise PostingError(_("El ajuste de valor no puede reducir el valor del inventario por debajo de cero."))
@@ -2523,6 +2527,57 @@ def _upsert_stock_bin(
         bin_row.valuation_rate = Decimal("0")
 
     return bin_row.actual_qty, bin_row.stock_value
+
+
+def _regularize_zero_stock_value(
+    document: Any,
+    line: Any,
+    warehouse: str,
+    qty_after: Decimal,
+    stock_value_after: Decimal,
+) -> StockLedgerEntry | None:
+    """Regulariza con evidencia append-only el valor residual sin existencias."""
+    if qty_after != 0 or stock_value_after == 0:
+        return None
+    residual = stock_value_after
+    _upsert_stock_bin(
+        company=document.company,
+        item_code=line.item_code,
+        warehouse=warehouse,
+        qty_change=Decimal("0"),
+        valuation_rate=Decimal("0"),
+        value_change=-residual,
+        allow_value_adjustment_without_stock=True,
+    )
+    database.session.add(
+        StockValuationLayer(
+            item_code=line.item_code,
+            warehouse=warehouse,
+            company=document.company,
+            qty=Decimal("0"),
+            rate=Decimal("0"),
+            stock_value_difference=-residual,
+            remaining_qty=Decimal("0"),
+            remaining_stock_value=Decimal("0"),
+            voucher_type=_get_voucher_type(document),
+            voucher_id=_get_voucher_id(document),
+            posting_date=document.posting_date,
+        )
+    )
+    line._inventory_rounding_residual = _decimal_value(getattr(line, "_inventory_rounding_residual", None)) + residual
+    return StockLedgerEntry(
+        posting_date=document.posting_date,
+        item_code=line.item_code,
+        warehouse=warehouse,
+        company=document.company,
+        qty_change=Decimal("0"),
+        qty_after_transaction=qty_after,
+        valuation_rate=Decimal("0"),
+        stock_value_difference=-residual,
+        stock_value=Decimal("0"),
+        voucher_type=_get_voucher_type(document),
+        voucher_id=_get_voucher_id(document),
+    )
 
 
 def _has_landed_cost_allocations(document: Any) -> bool:
@@ -2716,7 +2771,8 @@ def _create_stock_movement(
     _skip_layer_consumption: bool = False,
     source_layer_id: str | None = None,
     reject_negative_stock_value: bool = False,
-) -> StockLedgerEntry:
+) -> list[StockLedgerEntry]:
+    """Crea los movimientos de inventario y regulariza el residuo sin existencias."""
     from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
 
     if not warehouse:
@@ -2802,7 +2858,7 @@ def _create_stock_movement(
             batch_id=getattr(line, "batch_id", None),
         )
     )
-    return StockLedgerEntry(
+    movement = StockLedgerEntry(
         posting_date=document.posting_date,
         item_code=line.item_code,
         warehouse=warehouse,
@@ -2817,6 +2873,8 @@ def _create_stock_movement(
         batch_id=getattr(line, "batch_id", None),
         serial_no=getattr(line, "serial_no", None),
     )
+    residual = _regularize_zero_stock_value(document, line, warehouse, qty_after, stock_value_after)
+    return [movement, residual] if residual is not None else [movement]
 
 
 def _reconciliation_warehouse(document: StockEntry, line: StockEntryItem) -> str:
@@ -3211,16 +3269,14 @@ def _movement_inflow_receipt(document: StockEntry, line: Any, purpose: str, qty:
         raise PostingError(_("La entrada de inventario requiere un valor funcional mayor que cero."))
     valuation_rate = value / qty if qty else valuation_rate
     line._inventory_cost_amount = value
-    return [
-        _create_stock_movement(
-            document=document,
-            line=line,
-            warehouse=line.target_warehouse or document.to_warehouse,
-            qty_change=qty,
-            valuation_rate=valuation_rate,
-            value_change=value,
-        )
-    ]
+    return _create_stock_movement(
+        document=document,
+        line=line,
+        warehouse=line.target_warehouse or document.to_warehouse,
+        qty_change=qty,
+        valuation_rate=valuation_rate,
+        value_change=value,
+    )
 
 
 def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> list[StockLedgerEntry]:
@@ -3233,32 +3289,28 @@ def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> li
         # El GL consume el costo funcional ya convertido, no el importe
         # transaccional de la línea (#1879).
         line._inventory_cost_amount = value
-        return [
-            _create_stock_movement(
-                document=document,
-                line=line,
-                warehouse=source_warehouse,
-                qty_change=Decimal("0"),
-                valuation_rate=fallback_rate,
-                value_change=-value,
-                reject_negative_stock_value=True,
-            )
-        ]
-    cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
-        document, line, source_warehouse, qty
-    )
-    return [
-        _create_stock_movement(
+        return _create_stock_movement(
             document=document,
             line=line,
             warehouse=source_warehouse,
-            qty_change=-qty,
-            valuation_rate=cost_rate,
-            value_change=-cost_amount,
-            _skip_layer_consumption=True,
-            source_layer_id=source_layer_id,
+            qty_change=Decimal("0"),
+            valuation_rate=fallback_rate,
+            value_change=-value,
+            reject_negative_stock_value=True,
         )
-    ]
+    cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
+        document, line, source_warehouse, qty
+    )
+    return _create_stock_movement(
+        document=document,
+        line=line,
+        warehouse=source_warehouse,
+        qty_change=-qty,
+        valuation_rate=cost_rate,
+        value_change=-cost_amount,
+        _skip_layer_consumption=True,
+        source_layer_id=source_layer_id,
+    )
 
 
 def _movement_transfer(document: StockEntry, line: Any, qty: Decimal) -> list[StockLedgerEntry]:
@@ -3270,7 +3322,7 @@ def _movement_transfer(document: StockEntry, line: Any, qty: Decimal) -> list[St
         document, line, source_warehouse, qty
     )
     return [
-        _create_stock_movement(
+        *_create_stock_movement(
             document=document,
             line=line,
             warehouse=source_warehouse,
@@ -3280,7 +3332,7 @@ def _movement_transfer(document: StockEntry, line: Any, qty: Decimal) -> list[St
             _skip_layer_consumption=True,
             source_layer_id=source_layer_id,
         ),
-        _create_stock_movement(
+        *_create_stock_movement(
             document=document,
             line=line,
             warehouse=target_warehouse,
@@ -3871,7 +3923,7 @@ def _create_delivery_return_movements(
         entry_qty = entry["qty"]
         entry_cost = (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001"))
         entry_rate = entry_cost / entry_qty if entry_qty else Decimal("0")
-        movements.append(
+        movements.extend(
             _create_stock_movement(
                 document=document,
                 line=line,
@@ -4766,6 +4818,17 @@ def _create_stock_entry_gl_entries(
     return entries
 
 
+def _inventory_rounding_account_id(document: Any, line: StockEntryItem, company: str, purpose: str) -> str:
+    """Resuelve la cuenta de regularización o el offset del documento."""
+    from cacao_accounting.database import CompanyDefaultAccount
+
+    defaults = database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalar_one_or_none()
+    rounding_account_id = getattr(defaults, "default_rounding_account_id", None)
+    if rounding_account_id:
+        return str(rounding_account_id)
+    return _get_offset_account_for_line(document, line, company, purpose)
+
+
 def _add_stock_entry_line_gl_entries(
     entries: list[GLEntry],
     context: LedgerContext,
@@ -4774,9 +4837,10 @@ def _add_stock_entry_line_gl_entries(
     line: StockEntryItem,
     purpose: str,
 ) -> None:
-    """Add GL entries for a single stock entry line."""
+    """Add GL entries for a single stock entry line y su residuo de redondeo."""
     amount = _get_stock_entry_line_amount(document, line, purpose)
-    if amount <= 0:
+    residual = _decimal_value(getattr(line, "_inventory_rounding_residual", None))
+    if amount <= 0 and residual == 0:
         return
 
     dimension_kwargs = _get_dimension_kwargs(document)
@@ -4825,6 +4889,24 @@ def _add_stock_entry_line_gl_entries(
                 **dimension_kwargs,
                 debit_remarks="Costo de material",
                 credit_remarks="Salida de inventario",
+            )
+        )
+
+    if residual != 0:
+        rounding_account_id = _inventory_rounding_account_id(document, line, company, purpose)
+        if residual > 0:
+            debit_account_id, credit_account_id = rounding_account_id, inventory_account_id
+        else:
+            debit_account_id, credit_account_id = inventory_account_id, rounding_account_id
+        entries.extend(
+            _normal_entries_for_amount(
+                context=context,
+                debit_account_id=debit_account_id,
+                credit_account_id=credit_account_id,
+                amount=abs(residual),
+                **dimension_kwargs,
+                debit_remarks=_("Regularización de residuo de inventario"),
+                credit_remarks=_("Regularización de residuo de inventario"),
             )
         )
 
