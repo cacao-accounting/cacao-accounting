@@ -973,11 +973,12 @@ def _validate_journal_line(company: str, line: JournalLineInput, account_cache: 
     if line.account not in account_cache:
         account = _account_record(company, line.account)
         account_cache[line.account] = account
-    if account is not None:
-        if not account.active or not account.enabled or account.group:
-            raise JournalValidationError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
-        if account.account_type == "expense" and not line.cost_center:
-            raise JournalValidationError(_("Las cuentas de gasto requieren centro de costo."))
+    if account is None:
+        raise JournalValidationError(_("La cuenta contable indicada no existe para la compañia."))
+    if not account.active or not account.enabled or account.group:
+        raise JournalValidationError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
+    if account.account_type == "expense" and not line.cost_center:
+        raise JournalValidationError(_("Las cuentas de gasto requieren centro de costo."))
 
 
 def _validate_journal_line_dimensions(company: str, line: JournalLineInput) -> None:
