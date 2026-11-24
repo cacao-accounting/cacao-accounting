@@ -2206,7 +2206,7 @@ def get_monthly_withholding_report(company: str, year: int, month: int) -> Pagin
         .all()
     )
     rows: list[ReportRow] = []
-    total_withheld = Decimal("0")
+    withheld_by_currency: dict[str, Decimal] = {}
     line_count = 0
     for certificate in certificates:
         try:
@@ -2221,7 +2221,8 @@ def get_monthly_withholding_report(company: str, year: int, month: int) -> Pagin
             if not isinstance(line, dict):
                 continue
             amount = _decimal_value(line.get("amount"))
-            total_withheld += amount
+            currency_code = certificate.currency or ""
+            withheld_by_currency[currency_code] = withheld_by_currency.get(currency_code, Decimal("0")) + amount
             line_count += 1
             rows.append(
                 ReportRow(
@@ -2242,7 +2243,9 @@ def get_monthly_withholding_report(company: str, year: int, month: int) -> Pagin
     return PaginatedReport(
         rows=rows,
         totals={
-            "withheld_amount": total_withheld,
+            # #1636: no se suman monedas distintas; el formateador del reporte
+            # presenta cada codigo con su importe.
+            "withheld_amount": withheld_by_currency,
             "certificate_count": Decimal(len(certificates)),
             "line_count": Decimal(line_count),
         },
