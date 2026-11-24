@@ -187,11 +187,29 @@ def _payment_status(doctype: str, document: Any) -> DocumentStatusInfo | None:
 
 def _primary_flow_progress(doctype: str, document: Any) -> FlowProgress | None:
     """Devuelve el flujo operativo que debe gobernar el estado principal."""
-    target_types = _primary_flow_targets(doctype)
+    target_types = _flow_targets_for_document(doctype, document)
     progress = _find_flow_progress_with_activity(doctype, document.id, target_types)
     if progress:
         return progress
     return _find_flow_progress_with_total(doctype, document.id, target_types)
+
+
+def _flow_targets_for_document(doctype: str, document: Any) -> list[str]:
+    """Ajusta los destinos primarios según la naturaleza de las líneas."""
+    targets = _primary_flow_targets(doctype)
+    if doctype != "purchase_order" or "purchase_receipt" not in targets:
+        return targets
+    from cacao_accounting.database import Item, database
+
+    item_codes = {str(item.item_code) for item in get_document_items(doctype, document.id) if getattr(item, "item_code", None)}
+    if not item_codes:
+        return targets
+    requires_receipt = (
+        database.session.query(Item).filter(Item.code.in_(item_codes), Item.is_stock_item.is_(True)).first() is not None
+    )
+    if requires_receipt:
+        return targets
+    return [target for target in targets if target != "purchase_receipt"]
 
 
 def _primary_flow_targets(doctype: str) -> list[str]:
