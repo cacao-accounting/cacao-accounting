@@ -57,33 +57,46 @@ def movimientos_en_dos_periodos(app, entorno_contable):
         ]
         database.session.add_all(periodos)
         database.session.flush()
-        for fecha, voucher in (
-            (date(2026, 1, 15), "V-DENTRO"),
-            (date(2026, 2, 15), "V-DENTRO-2"),
-            (date(2026, 3, 15), "V-FUERA"),
+        vouchers = {
+            "dentro": f"V-{sufijo}-DENTRO",
+            "dentro_2": f"V-{sufijo}-DENTRO-2",
+            "fuera": f"V-{sufijo}-FUERA",
+        }
+        movimientos = []
+        for fecha, clave in (
+            (date(2026, 1, 15), "dentro"),
+            (date(2026, 2, 15), "dentro_2"),
+            (date(2026, 3, 15), "fuera"),
         ):
-            database.session.add(
-                GLEntry(
-                    company="cacao",
-                    ledger_id=libro.id,
-                    account_id=cuenta.id,
-                    account_code=cuenta.code,
-                    account_currency="NIO",
-                    company_currency="NIO",
-                    exchange_rate=Decimal("1"),
-                    posting_date=fecha,
-                    debit=Decimal("10"),
-                    credit=Decimal("0"),
-                    voucher_type="journal_entry",
-                    voucher_id=voucher,
-                )
+            movimiento = GLEntry(
+                company="cacao",
+                ledger_id=libro.id,
+                account_id=cuenta.id,
+                account_code=cuenta.code,
+                account_currency="NIO",
+                company_currency="NIO",
+                exchange_rate=Decimal("1"),
+                posting_date=fecha,
+                debit=Decimal("10"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id=vouchers[clave],
             )
+            database.session.add(movimiento)
+            movimientos.append(movimiento)
         database.session.commit()
-        ids = {"desde": periodos[0].id, "hasta": periodos[1].id}
+        ids = {
+            "desde": periodos[0].id,
+            "hasta": periodos[1].id,
+            "vouchers": vouchers,
+            "movimientos": [movimiento.id for movimiento in movimientos],
+        }
     yield ids
     with app.app_context():
-        database.session.execute(database.delete(GLEntry).where(GLEntry.voucher_id.in_(["V-DENTRO", "V-DENTRO-2", "V-FUERA"])))
-        database.session.execute(database.delete(AccountingPeriod).where(AccountingPeriod.id.in_(ids.values())))
+        database.session.execute(database.delete(GLEntry).where(GLEntry.id.in_(ids["movimientos"])))
+        database.session.execute(
+            database.delete(AccountingPeriod).where(AccountingPeriod.id.in_([ids["desde"], ids["hasta"]]))
+        )
         database.session.commit()
 
 
@@ -114,5 +127,6 @@ def test_el_enlace_del_reporte_conserva_el_rango_y_el_destino_lo_aplica(
     detalle = client.get(f"{enlace}&apply_filters=1")
     assert detalle.status_code == 200
     cuerpo_detalle = detalle.get_data(as_text=True)
-    assert "V-DENTRO" in cuerpo_detalle
-    assert "V-FUERA" not in cuerpo_detalle
+    assert ids["vouchers"]["dentro"] in cuerpo_detalle
+    assert ids["vouchers"]["dentro_2"] in cuerpo_detalle
+    assert ids["vouchers"]["fuera"] not in cuerpo_detalle
