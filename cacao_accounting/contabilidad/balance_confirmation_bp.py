@@ -680,12 +680,15 @@ def public_confirm_balance(token: str):
     if confirmation.status in ("confirmed", "disputed"):
         responded_at = _as_utc(confirmation.responded_at)
         responded_label = responded_at.strftime("%d/%m/%Y %H:%M UTC") if responded_at else _("fecha no registrada")
-        msg = (
-            f"Esta solicitud ya fue respondida el "
-            f"{responded_label} por "
-            f"{confirmation.respondent_first_name or ''} {confirmation.respondent_last_name or ''} "
-            f"({confirmation.respondent_email or ''}) y se encuentra cerrada."
-        )
+        msg = _(
+            "Esta solicitud ya fue respondida el %(responded)s por %(name)s %(last_name)s (%(email)s) "
+            "y se encuentra cerrada."
+        ) % {
+            "responded": responded_label,
+            "name": confirmation.respondent_first_name or "",
+            "last_name": confirmation.respondent_last_name or "",
+            "email": confirmation.respondent_email or "",
+        }
         return render_template(
             TEMPLATE_CONFIRM_BALANCE_STATUS,
             title=_("Cerrada"),

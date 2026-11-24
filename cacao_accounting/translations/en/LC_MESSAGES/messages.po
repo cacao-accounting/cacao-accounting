@@ -25018,3 +25018,7 @@ msgstr "The unit of measure %(uom)s is inactive and cannot be used in a new conf
 #: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/form.html
 msgid "ej. PPTO-2026-BASE"
 msgstr "e.g. PPTO-2026-BASE"
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py
+msgid "Esta solicitud ya fue respondida el %(responded)s por %(name)s %(last_name)s (%(email)s) y se encuentra cerrada."
+msgstr "This request was already answered on %(responded)s by %(name)s %(last_name)s (%(email)s) and is closed."

@@ -66,3 +66,17 @@ def test_placeholder_de_presupuesto_tiene_traduccion():
     catalogo = _catalogo_ingles()
 
     assert catalogo.gettext("ej. PPTO-2026-BASE") == "e.g. PPTO-2026-BASE"
+
+
+def test_estado_terminal_de_confirmacion_tiene_traduccion():
+    """#1702: el estado terminal no queda construido como f-string sin gettext."""
+    catalogo = _catalogo_ingles()
+
+    assert (
+        catalogo.gettext(
+            "Esta solicitud ya fue respondida el %(responded)s por %(name)s %(last_name)s (%(email)s) "
+            "y se encuentra cerrada."
+        )
+        == "This request was already answered on %(responded)s by %(name)s %(last_name)s (%(email)s) "
+        "and is closed."
+    )
