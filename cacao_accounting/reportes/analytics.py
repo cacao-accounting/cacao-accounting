@@ -114,6 +114,8 @@ def _convert_to_ledger_currency(
 
 
 def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = None) -> dict[str, Decimal]:
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
     query = (
         select(GLEntry, Accounts)
         .outerjoin(Accounts, (Accounts.id == GLEntry.account_id) & (Accounts.entity == company))
@@ -121,8 +123,7 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
             GLEntry.company == company,
             GLEntry.posting_date >= start,
             GLEntry.posting_date <= end,
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
+            *effective_gl_scope(),
             GLEntry.is_fiscal_year_closing.is_(False),
         )
     )
