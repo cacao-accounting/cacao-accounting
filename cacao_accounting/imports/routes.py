@@ -301,12 +301,21 @@ def _valid_csv_fallback(chunk: bytes) -> bool:
         text = chunk.decode("utf-8-sig")
     except UnicodeDecodeError:
         return False
-    if not text.strip() or "\n" not in text and "," not in text and ";" not in text:
+    if not text.strip():
         return False
     try:
         sample = text[:2048]
-        csv.Sniffer().sniff(sample, delimiters=",;")
-        rows = list(csv.reader(io.StringIO(text)))
+        dialect: Any
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;")
+        except csv.Error:
+            # Un CSV de una sola columna no tiene delimitador que oler. El
+            # lector cae al dialecto excel; rechazamos tabulaciones para no
+            # aceptar un TSV que luego se leeria como una sola columna.
+            if "\t" in sample:
+                return False
+            dialect = csv.get_dialect("excel")
+        rows = list(csv.reader(io.StringIO(text), dialect))
     except (csv.Error, ValueError):
         return False
     return bool(rows and any(cell.strip() for row in rows for cell in row))

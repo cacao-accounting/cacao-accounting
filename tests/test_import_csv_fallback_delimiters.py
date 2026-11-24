@@ -17,3 +17,9 @@ def test_fallback_conserva_coma_y_punto_y_coma():
     """Los delimitadores soportados por CSVReader siguen aceptándose."""
     assert _valid_csv_fallback(b"cuenta,debito,credito\n1101,100,0\n") is True
     assert _valid_csv_fallback(b"cuenta;debito;credito\n1101;100;0\n") is True
+
+
+def test_fallback_acepta_csv_de_una_sola_columna():
+    """Un archivo de una columna no tiene delimitador que Sniffer pueda inferir."""
+    assert _valid_csv_fallback(b"codigo\nART01\n") is True
+    assert _valid_csv_fallback(b"codigo") is True
