@@ -1138,6 +1138,12 @@ def bancos_cuenta_bancaria_numbering_config(account_id: str) -> ResponseReturnVa
         except IdentifierConfigurationError as exc:
             database.session.rollback()
             return {"status": "error", "message": str(exc)}, 400
+        except IntegrityError:
+            database.session.rollback()
+            return {
+                "status": "error",
+                "message": _("La configuración de numeración cambió en otra sesión. Recargue e intente de nuevo."),
+            }, 409
 
     exige_acceso_compania("cash", bank_account.company, "consultar")
     return _build_numbering_config_response(bank_account)

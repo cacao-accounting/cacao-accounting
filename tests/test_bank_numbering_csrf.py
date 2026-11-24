@@ -17,9 +17,11 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting import create_app
 from cacao_accounting.auth import proteger_passwd
+from cacao_accounting.bancos import routes as bank_routes
 from cacao_accounting.bancos.services import _resolve_bank_account_numbering_config
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
@@ -342,6 +344,35 @@ def test_referencias_desactivadas_tras_guardar_no_se_usan(numeracion_csrf):
                 external_counter_id=config.external_counter_id,
             )
         assert documento.document_no is None
+
+
+def test_conflicto_de_configuracion_devuelve_409(monkeypatch, numeracion_csrf):
+    """Un IntegrityError concurrente se traduce a conflicto controlado."""
+    application, account_id = numeracion_csrf
+    client = application.test_client()
+    _login(client)
+    detail = client.get(f"/cash_management/bank-account/{account_id}")
+    token = _token(detail.get_data(as_text=True))
+
+    def _conflicto(_bank_account):
+        raise IntegrityError("insert", {}, Exception("unique"))
+
+    monkeypatch.setattr(bank_routes, "_save_numbering_configs", _conflicto)
+    response = client.post(
+        f"/cash_management/bank-account/{account_id}/numbering-config",
+        json={"configs": [{"payment_type": "pay", "use_external_counter": False}]},
+        headers={"X-CSRFToken": token},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["status"] == "error"
+    with application.app_context():
+        assert (
+            database.session.execute(database.select(BankAccountNumberingConfig).filter_by(bank_account_id=account_id))
+            .scalars()
+            .all()
+            == []
+        )
 
 
 def test_usuario_solo_consulta_no_ve_edicion_y_no_guarda(numeracion_csrf):
