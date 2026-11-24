@@ -4713,6 +4713,8 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
         if total_value != 0:
             raise PostingError(_("El comprobante contable no está balanceado en la moneda del libro."))
 
+    if not entries:
+        raise PostingError(_("El comprobante contable no generó ninguna entrada en los libros activos."))
     return _add_entries(entries)
 
 

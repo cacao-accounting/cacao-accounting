@@ -14459,6 +14459,10 @@ msgstr "The reversal line does not match its source GL line."
 msgid "El comprobante contable no contiene lineas."
 msgstr "The accounting entry does not contain lines."
 
+#: cacao_accounting/contabilidad/posting_service.py:4717
+msgid "El comprobante contable no generó ninguna entrada en los libros activos."
+msgstr "The accounting entry produced no GL entries in the active books."
+
 #: cacao_accounting/contabilidad/posting_service.py:4506
 msgid "El comprobante contable no está balanceado en la moneda del libro."
 msgstr "The accounting entry is not balanced in the book currency."
