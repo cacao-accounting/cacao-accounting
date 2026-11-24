@@ -3425,6 +3425,7 @@ def _create_payment_entry(
         reference_date=reference_date,
         mode_of_payment=mode_of_payment,
         remarks=cast(str | None, payload.get("remarks")),
+        is_advance=bool(payload.get("advance_mode")),
         docstatus=0,
     )
 
