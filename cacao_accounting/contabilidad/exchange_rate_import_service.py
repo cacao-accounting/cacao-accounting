@@ -270,9 +270,7 @@ class ExchangeRateImportService:
         for row in tables[0].getElementsByType(TableRow):
             row_values: list[str] = []
             for cell in row.getElementsByType(TableCell):
-                repeat_attr = cell.getAttributeNS("urn:oasis:names:tc:opendocument:xmlns:table:1.0", "number-columns-repeated")
-                if not repeat_attr:
-                    repeat_attr = cell.getAttribute("numbercolumnsrepeated")
+                repeat_attr = cell.getAttribute("numbercolumnsrepeated")
                 try:
                     repeat = int(repeat_attr) if repeat_attr else 1
                 except (ValueError, TypeError):

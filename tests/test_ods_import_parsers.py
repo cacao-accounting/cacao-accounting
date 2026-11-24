@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+
+"""#1625: los parsers ODS de tasas y presupuesto funcionan con odfpy."""
+
+from __future__ import annotations
+
+import io
+
+from odf.opendocument import OpenDocumentSpreadsheet
+from odf.table import Table, TableCell, TableRow
+from odf.text import P
+
+from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
+from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportService
+
+
+def _ods_bytes(rows: list[list[str]], repeat_first_data_cell: bool = False) -> bytes:
+    documento = OpenDocumentSpreadsheet()
+    tabla = Table(name="Datos")
+    for row_index, values in enumerate(rows):
+        fila = TableRow()
+        for cell_index, value in enumerate(values):
+            repetir = repeat_first_data_cell and row_index == 1 and cell_index == 0
+            atributos = {"valuetype": "string"}
+            if repetir:
+                atributos["numbercolumnsrepeated"] = "2"
+            celda = TableCell(**atributos)
+            celda.addElement(P(text=str(value)))
+            fila.addElement(celda)
+        tabla.addElement(fila)
+    documento.spreadsheet.addElement(tabla)
+    salida = io.BytesIO()
+    documento.save(salida)
+    return salida.getvalue()
+
+
+def test_tasas_parsea_ods_real():
+    """El parser de tasas no invoca getAttributeNS y conserva la fila."""
+    contenido = _ods_bytes(
+        [
+            ["Moneda Origen", "Moneda Destino", "Fecha", "Tasa"],
+            ["USD", "NIO", "2026-05-15", "36.5"],
+        ]
+    )
+
+    filas = ExchangeRateImportService()._parse_ods(contenido)
+
+    assert filas == [{"Moneda Origen": "USD", "Moneda Destino": "NIO", "Fecha": "2026-05-15", "Tasa": "36.5"}]
+
+
+def test_presupuesto_parsea_ods_real():
+    """El parser de presupuesto procesa celdas y encabezados ODS."""
+    contenido = _ods_bytes(
+        [
+            ["Cuenta", "Centro de Costo", "Mayo 2026"],
+            ["1101", "ADM", "10"],
+        ]
+    )
+
+    filas = BudgetImportService()._parse_ods(contenido)
+
+    assert filas == [{"Cuenta": "1101", "Centro de Costo": "ADM", "Mayo 2026": "10"}]
+
+
+def test_presupuesto_parsea_celdas_repetidas_ods():
+    """La repetición de columnas usa getAttribute y replica el valor."""
+    contenido = _ods_bytes(
+        [
+            ["Cuenta", "Descripción", "Mayo 2026"],
+            ["1101", "Caja", "10"],
+        ],
+        repeat_first_data_cell=True,
+    )
+
+    filas = BudgetImportService()._parse_ods(contenido)
+
+    assert filas and filas[0]["Cuenta"] == "1101"
+    assert filas[0]["Descripción"] == "1101"

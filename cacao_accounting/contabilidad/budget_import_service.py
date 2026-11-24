@@ -221,9 +221,7 @@ class BudgetImportService:
         return row_values
 
     def _ods_cell_repeat(self, cell) -> int:
-        repeat = cell.getAttributeNS("urn:oasis:names:tc:opendocument:xmlns:table:1.0", "number-columns-repeated")
-        if not repeat:
-            repeat = cell.getAttribute("numbercolumnsrepeated")
+        repeat = cell.getAttribute("numbercolumnsrepeated")
         try:
             return int(repeat) if repeat else 1
         except (ValueError, TypeError):
