@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 from sqlalchemy import or_, select
 
-from cacao_accounting.database import Book, database
+from cacao_accounting.database import Accounts, Book, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter, normalize_header_date
 from cacao_accounting.contabilidad.journal_service import create_journal_draft
 from cacao_accounting.imports.utils.validation import is_period_open
@@ -100,8 +100,20 @@ class JournalEntryAdapter(BaseImportAdapter):
             )
 
             canonical_rows = self.build_document(document_data, context or {}).get("lines", [])
-            lines = [_normalize_line(row, index + 1) for index, row in enumerate(canonical_rows)]
             company = str((context or {}).get("company_id") or "")
+            for row in canonical_rows:
+                account = database.session.execute(
+                    select(Accounts.id).where(
+                        Accounts.entity == company,
+                        Accounts.code == row.get("account"),
+                    )
+                ).scalar_one_or_none()
+                if account is None:
+                    return [
+                        _("La cuenta %(account_code)s no existe en la compania %(company)s.")
+                        % {"account_code": row.get("account"), "company": company}
+                    ]
+            lines = [_normalize_line(row, index + 1) for index, row in enumerate(canonical_rows)]
             _validate_balanced_lines(company, lines, (context or {}).get("transaction_currency"))
             _validate_line_books(company, (context or {}).get("books"), lines)
             _validate_ar_ap_lines(company, lines)
