@@ -157,6 +157,18 @@ def _acumula_importe_de_concepto(
     concept_amounts[concept] = concept_amounts.get(concept, Decimal("0")) + amount
 
 
+def _company_country(company: str | None) -> str | None:
+    """Devuelve el país normalizado de la compañía para filtrar reglas."""
+    from cacao_accounting.database import Entity, database
+
+    if not company:
+        return None
+    entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalars().first()
+    value = getattr(entity, "country", None)
+    normalized = str(value).strip().upper() if value else ""
+    return normalized or None
+
+
 def _document_total_from_active_rules(*, document: Any, items: list[Any], subtotal: Decimal) -> Decimal:
     """Calculate totals from the active rules used by the fallback posting path."""
     if not getattr(document, "company", None):
@@ -211,7 +223,7 @@ def _document_total_from_active_rules(*, document: Any, items: list[Any], subtot
             company_currency=str(getattr(document, "base_currency", None) or currency),
             items=contexts,
             tax_rules=rules,
-            references=AccountingReferences(),
+            references=AccountingReferences(country=_company_country(getattr(document, "company", None))),
         )
     )
     if result.errors:

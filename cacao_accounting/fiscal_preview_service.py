@@ -228,6 +228,18 @@ def get_fiscal_document_profile(document_type: str, payment_type: str | None = N
     return profile
 
 
+def _company_country(company: str | None) -> str | None:
+    """Devuelve el país normalizado de la compañía para el preview fiscal."""
+    from cacao_accounting.database import Entity, database
+
+    if not company:
+        return None
+    entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalars().first()
+    value = getattr(entity, "country", None)
+    normalized = str(value).strip().upper() if value else ""
+    return normalized or None
+
+
 def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
     """Calcula el preview fiscal unificado para los formularios MVP."""
     document_type = str(payload.get("document_type") or "").strip()
@@ -272,7 +284,7 @@ def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
         company_currency=company_currency,
         items=item_contexts,
         tax_rules=tax_rules,
-        references=AccountingReferences(),
+        references=AccountingReferences(country=_company_country(company)),
     )
     result = FiscalEngine().calculate(context)
     tax_lines = [

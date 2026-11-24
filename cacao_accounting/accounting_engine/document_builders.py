@@ -1255,6 +1255,7 @@ def _build_references(
         cash_account=cash_account or getattr(defaults, "default_bank", None) or getattr(defaults, "default_cash", None),
         open_balance=open_balance,
         default_tax_accounts=default_tax_accounts,
+        country=_company_country(company),
         custom_references=custom,
     )
 
@@ -1860,6 +1861,14 @@ def _company_defaults(company: str) -> CompanyDefaultAccount | None:
 def _company_entity(company: str) -> Entity | None:
     """Resolve an entity by the company code used on transactions."""
     return database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
+
+
+def _company_country(company: str) -> str | None:
+    """Resolve the normalized country configured for the company."""
+    entity = _company_entity(company)
+    value = getattr(entity, "country", None)
+    normalized = str(value).strip().upper() if value else ""
+    return normalized or None
 
 
 def _document_currency(document: Any, company: str) -> str:

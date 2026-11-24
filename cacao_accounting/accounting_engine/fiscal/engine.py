@@ -6,7 +6,7 @@
 from __future__ import annotations
 from decimal import Decimal
 from heapq import heappop, heappush
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from cacao_accounting.accounting_engine.common.context import (
     AuditStep,
@@ -75,6 +75,20 @@ def _restricted_goods_total(rule: TaxRuleContext, items: list[ItemContext], good
     return sum((item.net_amount for item in matching), Decimal("0"))
 
 
+def _normalized_country(value: Any) -> str | None:
+    """Normaliza un código de país para comparar reglas fiscales."""
+    normalized = str(value or "").strip().upper()
+    return normalized or None
+
+
+def _rule_matches_country(rule: Any, country: str | None) -> bool:
+    """Una regla sin país aplica siempre; una con país exige coincidencia."""
+    rule_country = _normalized_country(getattr(rule, "country", None))
+    if rule_country is None:
+        return True
+    return country is not None and rule_country == country
+
+
 class FiscalEngine:
     """Deterministic fiscal calculation engine."""
 
@@ -86,17 +100,20 @@ class FiscalEngine:
         warnings: list[str] = []
         errors: list[str] = []
 
-        duplicate_rule_id = find_duplicate_rule_id(rule.rule_id for rule in context.tax_rules)
+        transaction_country = _normalized_country(getattr(context.references, "country", None))
+        tax_rules = [rule for rule in context.tax_rules if _rule_matches_country(rule, transaction_country)]
+
+        duplicate_rule_id = find_duplicate_rule_id(rule.rule_id for rule in tax_rules)
         if duplicate_rule_id is not None:
             return FiscalResult(
                 errors=[_("Las líneas fiscales no pueden repetir el identificador '%(rule)s'.") % {"rule": duplicate_rule_id}]
             )
 
-        restricted_errors = _restricted_rule_errors(context.tax_rules)
+        restricted_errors = _restricted_rule_errors(tax_rules)
         if restricted_errors:
             return FiscalResult(errors=restricted_errors)
 
-        sorted_rules = self._order_rules(context.tax_rules)
+        sorted_rules = self._order_rules(tax_rules)
         if sorted_rules is None:
             return FiscalResult(errors=["Circular dependency detected in tax rules."])
 
