@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -35,6 +36,9 @@ from cacao_accounting.database import (
     Modules,
     ExternalCounter,
     NamingSeries,
+    PaymentEntry,
+    Sequence,
+    SeriesSequenceMap,
     Roles,
     RolesAccess,
     RolesUser,
@@ -259,8 +263,8 @@ def test_configuracion_rechaza_tipo_incompatible_sin_guardado_parcial(numeracion
         )
 
 
-def test_referencias_desactivadas_tras_guardar_no_se_usan(numeracion_csrf):
-    """Guardar una configuración válida no la valida si luego se desactivan sus referencias."""
+def _configurar_referencias(numeracion_csrf):
+    """Crea serie, chequera y un pago existente, y guarda la configuración."""
     application, account_id = numeracion_csrf
     with application.app_context():
         sufijo = uuid4().hex[:6]
@@ -275,12 +279,21 @@ def test_referencias_desactivadas_tras_guardar_no_se_usan(numeracion_csrf):
             company="cacao",
             name=f"Chequera {sufijo}",
             counter_type="checkbook",
+            last_used=0,
             is_active=True,
+        )
+        secuencia = Sequence(
+            name=f"Secuencia {sufijo}",
+            current_value=0,
+            increment=1,
+            padding=5,
+            reset_policy="never",
         )
         database.session.add_all(
             [
                 serie,
                 chequera,
+                secuencia,
                 FiscalYear(
                     id=f"FY{sufijo}",
                     entity="cacao",
@@ -292,6 +305,7 @@ def test_referencias_desactivadas_tras_guardar_no_se_usan(numeracion_csrf):
             ]
         )
         database.session.flush()
+        database.session.add(SeriesSequenceMap(naming_series_id=serie.id, sequence_id=secuencia.id, priority=0))
         database.session.add(
             AccountingPeriod(
                 id=f"P{sufijo}",
@@ -304,9 +318,25 @@ def test_referencias_desactivadas_tras_guardar_no_se_usan(numeracion_csrf):
                 is_closed=False,
             )
         )
+        pago = PaymentEntry(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            document_no=f"PAG-EXIST-{sufijo}",
+            payment_type="pay",
+            currency="NIO",
+            exchange_rate=Decimal("1"),
+            paid_amount=Decimal("1"),
+            base_paid_amount=Decimal("1"),
+        )
+        database.session.add(pago)
         database.session.commit()
-        serie_id = serie.id
-        chequera_id = chequera.id
+        ids = {
+            "serie": serie.id,
+            "chequera": chequera.id,
+            "pago": pago.id,
+            "pago_no": pago.document_no,
+        }
 
     client = application.test_client()
     _login(client)
@@ -317,33 +347,60 @@ def test_referencias_desactivadas_tras_guardar_no_se_usan(numeracion_csrf):
             "configs": [
                 {
                     "payment_type": "pay",
-                    "naming_series_id": serie_id,
+                    "naming_series_id": ids["serie"],
                     "use_external_counter": True,
-                    "external_counter_id": chequera_id,
+                    "external_counter_id": ids["chequera"],
                 }
             ]
         },
         headers={"X-CSRFToken": _token(detail.get_data(as_text=True))},
     )
     assert valido.status_code == 200, valido.get_json()
+    return application, account_id, ids
 
+
+def _intentar_nuevo_pago(account_id: str) -> SimpleNamespace:
+    """Intenta asignar número a un documento nuevo y devuelve el documento."""
+    config = _resolve_bank_account_numbering_config(account_id, "pay")
+    assert config is not None
+    documento = SimpleNamespace(id="pago-1982", company="cacao", document_no=None, posting_date=None)
+    with pytest.raises(IdentifierConfigurationError, match="inactiv"):
+        assign_document_identifier(
+            document=documento,
+            entity_type="bank_payment",
+            posting_date_raw=date(2026, 5, 15),
+            naming_series_id=config.naming_series_id,
+            external_counter_id=config.external_counter_id,
+        )
+    return documento
+
+
+def test_serie_desactivada_tras_guardar_no_se_usa(numeracion_csrf):
+    """La serie inactiva bloquea un pago nuevo y no consume la chequera."""
+    application, account_id, ids = _configurar_referencias(numeracion_csrf)
     with application.app_context():
-        database.session.get(NamingSeries, serie_id).is_active = False
-        database.session.get(ExternalCounter, chequera_id).is_active = False
+        database.session.get(NamingSeries, ids["serie"]).is_active = False
         database.session.commit()
 
-        config = _resolve_bank_account_numbering_config(account_id, "pay")
-        assert config is not None
-        documento = SimpleNamespace(id="pago-1982", company="cacao", document_no=None, posting_date=None)
-        with pytest.raises(IdentifierConfigurationError, match="inactiva"):
-            assign_document_identifier(
-                document=documento,
-                entity_type="bank_payment",
-                posting_date_raw=date(2026, 5, 15),
-                naming_series_id=config.naming_series_id,
-                external_counter_id=config.external_counter_id,
-            )
+        documento = _intentar_nuevo_pago(account_id)
         assert documento.document_no is None
+        pago = database.session.get(PaymentEntry, ids["pago"])
+        assert pago.document_no == ids["pago_no"]
+        assert database.session.get(ExternalCounter, ids["chequera"]).last_used == 0
+
+
+def test_chequera_desactivada_tras_guardar_no_se_usa(numeracion_csrf):
+    """La chequera inactiva bloquea un pago nuevo sin tocar el pago existente."""
+    application, account_id, ids = _configurar_referencias(numeracion_csrf)
+    with application.app_context():
+        database.session.get(ExternalCounter, ids["chequera"]).is_active = False
+        database.session.commit()
+
+        documento = _intentar_nuevo_pago(account_id)
+        assert documento.document_no is None
+        pago = database.session.get(PaymentEntry, ids["pago"])
+        assert pago.document_no == ids["pago_no"]
+        assert database.session.get(ExternalCounter, ids["chequera"]).last_used == 0
 
 
 def test_conflicto_de_configuracion_devuelve_409(monkeypatch, numeracion_csrf):

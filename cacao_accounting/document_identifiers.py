@@ -626,6 +626,15 @@ def assign_document_identifier(
         naming_series_id=naming_series_id,
     )
     sequence_id = _pick_sequence_id(naming_series.id, external_context)
+    # #1982: resolver y validar el contador antes de asignar el número interno;
+    # una referencia inactiva no debe dejar document_no parcial.
+    counter = _resolve_external_counter(
+        naming_series_id=naming_series.id,
+        context=external_context,
+        explicit_counter_id=external_counter_id,
+    )
+    if counter and counter.company != company_code:
+        raise IdentifierConfigurationError(_("El contador externo no pertenece a la compañía indicada."))
 
     identifier = generate_identifier(
         entity_type=entity_type,
@@ -641,15 +650,7 @@ def assign_document_identifier(
     setattr(document, "document_no", identifier)
 
     # 2. Identificador externo (opcional)
-    counter = _resolve_external_counter(
-        naming_series_id=naming_series.id,
-        context=external_context,
-        explicit_counter_id=external_counter_id,
-    )
-
     if counter:
-        if counter.company != company_code:
-            raise IdentifierConfigurationError(_("El contador externo no pertenece a la compañía indicada."))
         ext_num = external_number or counter.next_suggested_formatted
         _validate_and_register_external_number(
             counter=counter,
