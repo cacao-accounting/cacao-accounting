@@ -2584,6 +2584,7 @@ PURCHASE_AUDIT_FIELDS = (
     "delivery_date",
     "delivery_place",
     "purchase_terms",
+    "landed_cost_estimates_json",
     "purchase_request_id",
     "purchase_quotation_id",
     "supplier_quotation_id",

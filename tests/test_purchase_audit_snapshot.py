@@ -27,6 +27,8 @@ from cacao_accounting.database import (
     PurchaseInvoiceItem,
     PurchaseMatchingConfig,
     PurchaseOrder,
+    SupplierQuotation,
+    SupplierQuotationItem,
     TaxTemplate,
     database,
 )
@@ -310,3 +312,147 @@ def test_snapshot_incluye_evidencia_fiscal_antes_de_editar(app, authenticated_cl
     assert antes["tax_summary"]["document_tax_total"] == "2.0000"
     assert antes["tax_lines"][0]["concept"] == "IVA de prueba"
     assert "tax_summary" in despues
+
+
+@pytest.fixture
+def cotizacion_con_landed_cost(app, entorno_contable):
+    """Cotización de proveedor borrador con un estimado inicial de landed costs."""
+    sufijo = uuid4().hex[:10]
+    inicial = json.dumps([{"concept": "Flete inicial", "amount": "10"}], ensure_ascii=False, separators=(",", ":"))
+    with app.app_context():
+        proveedor = Party(code=f"PRV-LC-{sufijo}", name=f"Proveedor LC {sufijo}", is_supplier=True)
+        database.session.add(proveedor)
+        database.session.flush()
+        cotizacion = SupplierQuotation(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=0,
+            document_no=f"SQ-LC-{sufijo}",
+            supplier_id=proveedor.id,
+            supplier_name=proveedor.name,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            landed_cost_estimates_json=inicial,
+        )
+        database.session.add(cotizacion)
+        database.session.flush()
+        database.session.add(
+            SupplierQuotationItem(
+                supplier_quotation_id=cotizacion.id,
+                item_code="ART01",
+                qty=Decimal("2"),
+                qty_in_base_uom=Decimal("2"),
+                uom="UND",
+                rate=Decimal("3"),
+                amount=Decimal("6"),
+            )
+        )
+        database.session.commit()
+        ids = {"cotizacion": cotizacion.id, "proveedor": proveedor.id, "inicial": inicial}
+    yield ids
+    with app.app_context():
+        database.session.execute(
+            database.delete(SupplierQuotationItem).where(SupplierQuotationItem.supplier_quotation_id == ids["cotizacion"])
+        )
+        cotizacion = database.session.get(SupplierQuotation, ids["cotizacion"])
+        if cotizacion is not None:
+            database.session.delete(cotizacion)
+        proveedor = database.session.get(Party, ids["proveedor"])
+        if proveedor is not None:
+            database.session.delete(proveedor)
+        database.session.commit()
+
+
+def _datos_cotizacion(ids, landed_cost: str | None = None) -> dict:
+    """Formulario de edición de la cotización con los landed costs indicados."""
+    datos = {
+        "supplier_id": ids["proveedor"],
+        "company": "cacao",
+        "posting_date": "2026-05-15",
+        "remarks": "Edición con landed costs",
+        "item_code_0": "ART01",
+        "item_name_0": "Articulo Comercial",
+        "qty_0": "2",
+        "uom_0": "UND",
+        "rate_0": "3",
+        "amount_0": "6",
+    }
+    if landed_cost is not None:
+        datos["landed_cost_estimates_json"] = landed_cost
+    return datos
+
+
+def _ultimo_cambio_cotizacion(app, cotizacion_id):
+    """Devuelve la última entrada de auditoría de actualización de la cotización."""
+    with app.app_context():
+        entrada = database.session.execute(
+            database.select(AuditTrail)
+            .filter_by(document_type="supplier_quotation", document_id=cotizacion_id, action="updated")
+            .order_by(AuditTrail.timestamp.desc(), AuditTrail.id.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        assert entrada is not None, "La edición no registró una entrada de auditoría."
+        return (
+            json.loads(entrada.changes_json),
+            json.loads(entrada.before_json),
+            json.loads(entrada.after_json),
+        )
+
+
+def test_edicion_cotizacion_registra_landed_costs_en_auditoria(app, authenticated_client, cotizacion_con_landed_cost):
+    """El cambio de landed_cost_estimates_json queda registrado con antes y después."""
+    ids = cotizacion_con_landed_cost
+    nuevo = json.dumps([{"concept": "Flete editado", "amount": "15"}], ensure_ascii=False, separators=(",", ":"))
+
+    respuesta = authenticated_client("admin").post(
+        f"/buying/supplier-quotation/{ids['cotizacion']}/edit",
+        data=_datos_cotizacion(ids, nuevo),
+        follow_redirects=True,
+    )
+
+    assert respuesta.status_code == 200
+    cambios, antes, despues = _ultimo_cambio_cotizacion(app, ids["cotizacion"])
+    assert cambios["landed_cost_estimates_json"]["before"] == ids["inicial"]
+    assert cambios["landed_cost_estimates_json"]["after"] == nuevo
+    assert antes["landed_cost_estimates_json"] == ids["inicial"]
+    assert despues["landed_cost_estimates_json"] == nuevo
+
+
+def test_edicion_cotizacion_rechaza_landed_cost_invalido_sin_nueva_auditoria(
+    app, authenticated_client, cotizacion_con_landed_cost
+):
+    """Un JSON inválido se rechaza sin mutar el documento ni generar auditoría."""
+    ids = cotizacion_con_landed_cost
+    with app.app_context():
+        total_antes = database.session.execute(
+            database.select(database.func.count())
+            .select_from(AuditTrail)
+            .where(
+                AuditTrail.document_type == "supplier_quotation",
+                AuditTrail.document_id == ids["cotizacion"],
+                AuditTrail.action == "updated",
+            )
+        ).scalar_one()
+
+    respuesta = authenticated_client("admin").post(
+        f"/buying/supplier-quotation/{ids['cotizacion']}/edit",
+        data=_datos_cotizacion(ids, "{no es json"),
+        follow_redirects=True,
+    )
+
+    assert respuesta.status_code == 200
+    assert "landed costs estimados deben ser un JSON válido" in respuesta.get_data(as_text=True)
+    with app.app_context():
+        cotizacion = database.session.get(SupplierQuotation, ids["cotizacion"])
+        assert cotizacion.landed_cost_estimates_json == ids["inicial"]
+        total_despues = database.session.execute(
+            database.select(database.func.count())
+            .select_from(AuditTrail)
+            .where(
+                AuditTrail.document_type == "supplier_quotation",
+                AuditTrail.document_id == ids["cotizacion"],
+                AuditTrail.action == "updated",
+            )
+        ).scalar_one()
+        assert total_despues == total_antes
