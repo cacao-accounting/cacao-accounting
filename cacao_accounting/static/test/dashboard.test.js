@@ -108,6 +108,7 @@ describe("dashboard", function () {
     const currentRequest = deferred();
     const dashboard = loadDashboard(() => currentRequest.promise);
     dashboard.filters.company = "COMP";
+    dashboard.payload = { sections: { version: "old" } };
 
     dashboard.fetchData();
     currentRequest.reject(new Error("network failure"));
@@ -115,6 +116,7 @@ describe("dashboard", function () {
 
     assert.strictEqual(dashboard.error, "No se pudo cargar el dashboard.");
     assert.strictEqual(dashboard.loading, false);
+    assert.deepStrictEqual(dashboard.payload, { sections: {} });
   });
 
   it("invalidates pending requests when the company filter is cleared", async function () {

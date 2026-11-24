@@ -116,6 +116,7 @@
           })
           .catch(() => {
             if (requestId !== latestRequestId) return;
+            this.payload = { sections: {} };
             this.error = config.messages.dashboardLoadError;
           })
           .finally(() => {
