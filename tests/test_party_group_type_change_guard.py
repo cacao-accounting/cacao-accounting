@@ -102,19 +102,22 @@ def test_bloquea_cambio_con_tercero_incompatible(app, party_group_admin, group_t
         _limpiar(app, group_id, party_id)
 
 
-def test_permite_cambio_si_el_tercero_tiene_ambos_roles(app, party_group_admin):
-    """Un tercero dual es compatible con el nuevo tipo y no requiere reasignación."""
+def test_bloquea_cambio_con_tercero_dual(app, party_group_admin):
+    """Un tercero con ambos roles no puede quedar en un grupo de un solo tipo."""
     client = _admin_client(app, party_group_admin)
-    group_id, _, party_id = _crear_grupo_y_tercero(app, group_type="customer", is_customer=True, is_supplier=True)
+    group_id, group_name, party_id = _crear_grupo_y_tercero(app, group_type="customer", is_customer=True, is_supplier=True)
     try:
         response = client.post(
             f"/settings/party-groups/{group_id}/edit",
-            data={"group_type": "supplier", "name": "Grupo convertible", "is_active": "on"},
+            data={"group_type": "supplier", "name": "Grupo no convertible", "is_active": "on"},
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert "Reasigne esas relaciones primero." in response.get_data(as_text=True)
         with app.app_context():
-            assert database.session.get(PartyGroup, group_id).group_type == "supplier"
+            group = database.session.get(PartyGroup, group_id)
+            assert group.group_type == "customer"
+            assert group.name == group_name
     finally:
         _limpiar(app, group_id, party_id)
 

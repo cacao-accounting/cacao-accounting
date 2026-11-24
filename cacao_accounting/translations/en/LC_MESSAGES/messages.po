@@ -24994,3 +24994,7 @@ msgstr "The username must be between 3 and 15 characters."
 #: cacao_accounting/auth/forms.py
 msgid "La contraseña debe tener al menos 8 caracteres."
 msgstr "The password must be at least 8 characters long."
+
+#: cacao_accounting/admin/routes.py
+msgid "No se puede cambiar el tipo del grupo mientras existan terceros asignados incompatibles con el nuevo tipo. Reasigne esas relaciones primero."
+msgstr "The party group type cannot be changed while assigned parties are incompatible with the new type. Reassign those relations first."

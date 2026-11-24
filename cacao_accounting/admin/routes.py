@@ -674,12 +674,15 @@ def lista_reglas_fiscales():
 
 
 def _party_group_type_change_blocked(group: PartyGroup, submitted_type: str) -> bool:
-    """Indica si el cambio de tipo dejaría terceros con un rol incompatible."""
+    """Indica si el cambio de tipo dejaría terceros incompatibles con el grupo."""
     if submitted_type == group.group_type:
         return False
-    role_column = Party.is_customer if submitted_type == "customer" else Party.is_supplier
+    if submitted_type == "customer":
+        incompatible = database.or_(Party.is_customer.is_(False), Party.is_supplier.is_(True))
+    else:
+        incompatible = database.or_(Party.is_supplier.is_(False), Party.is_customer.is_(True))
     dependiente = database.session.execute(
-        database.select(Party.id).where(Party.party_group_id == group.id, role_column.is_(False))
+        database.select(Party.id).where(Party.party_group_id == group.id, incompatible)
     ).first()
     return dependiente is not None
 
@@ -739,7 +742,7 @@ def editar_grupo_tercero(group_id: str):
             flash(
                 _(
                     "No se puede cambiar el tipo del grupo mientras existan terceros asignados "
-                    "que no tengan el nuevo rol. Reasigne esas relaciones primero."
+                    "incompatibles con el nuevo tipo. Reasigne esas relaciones primero."
                 ),
                 "danger",
             )
