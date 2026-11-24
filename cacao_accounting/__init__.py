@@ -202,6 +202,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(permisos=Permisos)
             app.jinja_env.globals.update(tiene_acceso_bi_empresa=tiene_acceso_bi_empresa)
             app.jinja_env.globals.update(_=_)
+            app.jinja_env.globals.update(locale_actual=_get_locale)
             app.jinja_env.globals.update(MODO_ESCRITORIO=is_desktop_mode())
             app.jinja_env.globals.update(is_desktop_mode=is_desktop_mode)
             app.jinja_env.globals.update(is_cloud_mode=is_cloud_mode)
