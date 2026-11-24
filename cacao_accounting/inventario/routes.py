@@ -1139,6 +1139,8 @@ def inventario_entrada_duplicar(entry_id: str):
         database.session.add(linea)
         total += item.amount or Decimal("0")
     duplicado.total_amount = total
+    origen_referencia = origen.document_no or origen.id
+    log_create(duplicado, comment=_("Duplicado de %(origen)s") % {"origen": origen_referencia})
     database.session.commit()
     flash(_("Movimiento de inventario duplicado como nuevo borrador."), "success")
     return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=duplicado.id))

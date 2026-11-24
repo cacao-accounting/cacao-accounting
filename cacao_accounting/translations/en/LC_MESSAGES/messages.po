@@ -19076,6 +19076,10 @@ msgstr "Review the batch form data."
 msgid "Movimiento de inventario duplicado como nuevo borrador."
 msgstr "Inventory Movement duplicated as a new draft."
 
+#: cacao_accounting/inventario/routes.py:1144
+msgid "Duplicado de %(origen)s"
+msgstr "Duplicated from %(origen)s"
+
 #: cacao_accounting/inventario/routes.py:1147
 msgid "Entrada de almacen aprobada y contabilizada."
 msgstr "Warehouse entry approved and posted."

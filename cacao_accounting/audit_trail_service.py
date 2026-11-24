@@ -189,9 +189,9 @@ def _log(
     return entry
 
 
-def log_create(document: Any) -> AuditTrail:
-    """Log that a document was created."""
-    return _log("created", document, after=document)
+def log_create(document: Any, comment: str | None = None) -> AuditTrail:
+    """Log that a document was created, optionally recording its origin."""
+    return _log("created", document, after=document, comment=comment)
 
 
 def log_update(document: Any, before: Any, after: Any, comment: str | None = None) -> AuditTrail:
