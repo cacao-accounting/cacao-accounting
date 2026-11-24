@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
@@ -71,6 +72,7 @@ def _preparar(app) -> dict[str, str]:
         database.session.flush()
         anticipo_id = _crear_cuenta_anticipo()
         defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+        previous_advance = defaults.supplier_advance_account_id
         defaults.supplier_advance_account_id = anticipo_id
         orden = PurchaseOrder(
             company="cacao",
@@ -105,6 +107,7 @@ def _preparar(app) -> dict[str, str]:
             "orden": orden.id,
             "factura": factura.id,
             "proveedor": supplier.id,
+            "previous_advance": previous_advance,
         }
 
 
@@ -123,19 +126,9 @@ def _pagar(client, ids: dict[str, str], *, advance: bool, amount: str, lines: li
     }
     response = client.post("/cash_management/payment/new", data={"payment_payload": json.dumps(payload)})
     assert response.status_code == 302, response.get_data(as_text=True)
-
-
-def _ultimo_pago(company: str) -> str:
-    """Devuelve el último pago persistido de la compañía."""
-    pago = (
-        database.session.execute(
-            database.select(PaymentEntry).filter_by(company=company).order_by(PaymentEntry.created.desc())
-        )
-        .scalars()
-        .first()
-    )
-    assert pago is not None
-    return pago.id
+    match = re.search(r"/payment/([^/?#]+)", response.headers["Location"])
+    assert match is not None, response.headers["Location"]
+    return match.group(1)
 
 
 def _aprobar(app, payment_id: str) -> None:
@@ -153,9 +146,11 @@ def test_anticipo_creado_en_banca_persiste_recarga_y_se_aplica(app, entorno_cont
     ids = _preparar(app)
     client = authenticated_client("admin")
     original_mode = app.config.get("MODO_ESCRITORIO")
+    original_controls = app.config.get("INTERNAL_CONTROLS_ENFORCE")
     app.config["MODO_ESCRITORIO"] = False
+    app.config["INTERNAL_CONTROLS_ENFORCE"] = True
     try:
-        _pagar(
+        payment_id = _pagar(
             client,
             ids,
             advance=True,
@@ -163,7 +158,6 @@ def test_anticipo_creado_en_banca_persiste_recarga_y_se_aplica(app, entorno_cont
             lines=[],
         )
         with app.app_context():
-            payment_id = _ultimo_pago("cacao")
             database.session.remove()
             recargado = database.session.get(PaymentEntry, payment_id)
             assert recargado is not None
@@ -190,7 +184,12 @@ def test_anticipo_creado_en_banca_persiste_recarga_y_se_aplica(app, entorno_cont
             assert referencia.allocated_amount == Decimal("25")
             assert database.session.get(PaymentReference, referencia.id) is not None
     finally:
+        with app.app_context():
+            defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+            defaults.supplier_advance_account_id = ids["previous_advance"]
+            database.session.commit()
         app.config["MODO_ESCRITORIO"] = original_mode
+        app.config["INTERNAL_CONTROLS_ENFORCE"] = original_controls
 
 
 def test_pago_normal_persiste_sin_advance_y_no_se_aplica_como_anticipo(app, entorno_contable, authenticated_client):
@@ -198,11 +197,12 @@ def test_pago_normal_persiste_sin_advance_y_no_se_aplica_como_anticipo(app, ento
     ids = _preparar(app)
     client = authenticated_client("admin")
     original_mode = app.config.get("MODO_ESCRITORIO")
+    original_controls = app.config.get("INTERNAL_CONTROLS_ENFORCE")
     app.config["MODO_ESCRITORIO"] = False
+    app.config["INTERNAL_CONTROLS_ENFORCE"] = True
     try:
-        _pagar(client, ids, advance=False, amount="10", lines=[])
+        payment_id = _pagar(client, ids, advance=False, amount="10", lines=[])
         with app.app_context():
-            payment_id = _ultimo_pago("cacao")
             database.session.remove()
             recargado = database.session.get(PaymentEntry, payment_id)
             assert recargado is not None
@@ -220,4 +220,9 @@ def test_pago_normal_persiste_sin_advance_y_no_se_aplica_como_anticipo(app, ento
                 )
                 database.session.commit()
     finally:
+        with app.app_context():
+            defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+            defaults.supplier_advance_account_id = ids["previous_advance"]
+            database.session.commit()
         app.config["MODO_ESCRITORIO"] = original_mode
+        app.config["INTERNAL_CONTROLS_ENFORCE"] = original_controls
