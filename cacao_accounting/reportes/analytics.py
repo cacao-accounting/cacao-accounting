@@ -146,8 +146,15 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
     return totals
 
 
+def _validate_period(start: date, end: date) -> None:
+    """Rechaza un rango invertido antes de consultar o devolver vacío."""
+    if start > end:
+        raise ValueError(_("La fecha inicial no puede ser posterior a la fecha final."))
+
+
 def metric_value(company: str, metric: str, start: date, end: date) -> Decimal:
     """Calculate one approved metric for a company and date range."""
+    _validate_period(start, end)
     if metric not in ALLOWED_METRICS:
         raise ValueError(_("Métrica no permitida: %(metric)s") % {"metric": metric})
     if metric == "sales":
@@ -229,6 +236,7 @@ def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = 
     all invoice-based totals are converted to the ledger currency so that
     metrics are expressed in a single, explicit currency.
     """
+    _validate_period(start, end)
     base_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
     ledger_currency = base_currency
     ledger_id: str | None = None
@@ -345,6 +353,7 @@ def compare_periods(
 
 def get_trend(company: str, metric: str, start: date, end: date) -> list[dict[str, Any]]:
     """Return monthly values for one approved metric."""
+    _validate_period(start, end)
     if metric not in ALLOWED_METRICS:
         raise ValueError(_("Métrica no permitida: %(metric)s") % {"metric": metric})
     buckets: list[tuple[date, date]] = []
@@ -368,6 +377,7 @@ def get_trend(company: str, metric: str, start: date, end: date) -> list[dict[st
 
 def get_concentration(company: str, dimension: str, start: date, end: date, limit: int = 10) -> list[dict[str, Any]]:
     """Return the largest contributors for an approved dimension."""
+    _validate_period(start, end)
     if dimension not in ALLOWED_DIMENSIONS:
         raise ValueError(_("Dimensión no permitida: %(dimension)s") % {"dimension": dimension})
     totals = _concentration_totals(company, dimension, start, end)

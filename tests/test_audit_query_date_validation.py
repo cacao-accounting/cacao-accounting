@@ -62,3 +62,37 @@ def test_los_handlers_restantes_traducen_la_fecha_invalida(app, monkeypatch, mod
 
     assert exc.value.code == ErrorCode.INVALID_PARAMETER
     assert "ISO 8601" in exc.value.message
+
+
+@pytest.mark.parametrize(
+    ("funcion", "kwargs"),
+    [
+        ("get_kpi_snapshot_tool", {"date_from": "2026-12-31", "date_to": "2026-01-01"}),
+        ("get_trend_tool", {"metric": "income", "date_from": "2026-12-31", "date_to": "2026-01-01"}),
+        (
+            "get_concentration_tool",
+            {"dimension": "customer", "date_from": "2026-12-31", "date_to": "2026-01-01"},
+        ),
+        (
+            "compare_periods_tool",
+            {
+                "metric": "income",
+                "base_date_from": "2026-12-31",
+                "base_date_to": "2026-01-01",
+                "compare_date_from": "2026-01-01",
+                "compare_date_to": "2026-12-31",
+            },
+        ),
+    ],
+)
+def test_analytics_rechaza_rango_invertido(app, monkeypatch, funcion, kwargs):
+    """Un rango invertido es INVALID_PARAMETER, no una respuesta vacía."""
+    modulo_obj = importlib.import_module("cacao_accounting.query_tools.handlers.analytics")
+    monkeypatch.setattr(modulo_obj, "validate_permission", lambda *a, **k: None)
+
+    with app.app_context():
+        with pytest.raises(QueryToolError) as exc:
+            getattr(modulo_obj, funcion).handler(context=_contexto(), company_id="cacao", **kwargs)
+
+    assert exc.value.code == ErrorCode.INVALID_PARAMETER
+    assert "fecha inicial" in exc.value.message

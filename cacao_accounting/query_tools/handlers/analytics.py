@@ -10,6 +10,7 @@ from typing import Any, cast
 
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
+from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
 from cacao_accounting.query_tools.handlers.advanced import _json_value
 from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.permissions import validate_permission
@@ -22,13 +23,26 @@ from cacao_accounting.reportes.analytics import (
     get_kpi_snapshot,
     get_trend,
 )
-from cacao_accounting.i18n import _l
+from cacao_accounting.i18n import _, _l
 
 _PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
 
 
 def _date(value: str) -> date:
     return cast(date, parse_iso_date(value, required=True))
+
+
+def _date_range(context: QueryContext, date_from: str, date_to: str) -> tuple[date, date]:
+    """Parsea y valida que el rango no esté invertido."""
+    start = _date(date_from)
+    end = _date(date_to)
+    if start > end:
+        raise QueryToolError(
+            code=ErrorCode.INVALID_PARAMETER,
+            message=_("La fecha inicial no puede ser posterior a la fecha final."),
+            request_id=getattr(context, "request_id", None),
+        )
+    return start, end
 
 
 def _json(value: Any) -> Any:
@@ -72,8 +86,9 @@ _PERIOD_SCHEMA: dict[str, Any] = {
 )
 def get_kpi_snapshot_tool(*, context: QueryContext, company_id: str, date_from: str, date_to: str) -> dict[str, Any]:
     _validate(context, company_id)
+    start, end = _date_range(context, date_from, date_to)
     return _envelope(
-        _json(get_kpi_snapshot(company_id, _date(date_from), _date(date_to))),
+        _json(get_kpi_snapshot(company_id, start, end)),
         company_id,
         date_from=date_from,
         date_to=date_to,
@@ -109,15 +124,17 @@ def compare_periods_tool(
     compare_date_to: str,
 ) -> dict[str, Any]:
     _validate(context, company_id)
+    base_start, base_end = _date_range(context, base_date_from, base_date_to)
+    compare_start, compare_end = _date_range(context, compare_date_from, compare_date_to)
     return _envelope(
         _json(
             compare_periods(
                 company_id,
                 metric,
-                _date(base_date_from),
-                _date(base_date_to),
-                _date(compare_date_from),
-                _date(compare_date_to),
+                base_start,
+                base_end,
+                compare_start,
+                compare_end,
             )
         ),
         company_id,
@@ -142,8 +159,9 @@ def compare_periods_tool(
 )
 def get_trend_tool(*, context: QueryContext, company_id: str, metric: str, date_from: str, date_to: str) -> dict[str, Any]:
     _validate(context, company_id)
+    start, end = _date_range(context, date_from, date_to)
     return _envelope(
-        {"items": _json(get_trend(company_id, metric, _date(date_from), _date(date_to))), "complete": True},
+        {"items": _json(get_trend(company_id, metric, start, end)), "complete": True},
         company_id,
         metric=metric,
         date_from=date_from,
@@ -170,8 +188,9 @@ def get_concentration_tool(
     *, context: QueryContext, company_id: str, dimension: str, date_from: str, date_to: str, limit: int = 10
 ) -> dict[str, Any]:
     _validate(context, company_id)
+    start, end = _date_range(context, date_from, date_to)
     return _envelope(
-        {"items": _json(get_concentration(company_id, dimension, _date(date_from), _date(date_to), limit)), "complete": True},
+        {"items": _json(get_concentration(company_id, dimension, start, end, limit)), "complete": True},
         company_id,
         dimension=dimension,
         date_from=date_from,
