@@ -59,3 +59,10 @@ def test_uom_inexistente_e_inactiva_tienen_traduccion():
         catalogo.gettext("La unidad de medida %(uom)s está inactiva y no puede usarse en una configuración nueva.")
         == "The unit of measure %(uom)s is inactive and cannot be used in a new configuration."
     )
+
+
+def test_placeholder_de_presupuesto_tiene_traduccion():
+    """#1780: el ejemplo del código de presupuesto se traduce al inglés."""
+    catalogo = _catalogo_ingles()
+
+    assert catalogo.gettext("ej. PPTO-2026-BASE") == "e.g. PPTO-2026-BASE"

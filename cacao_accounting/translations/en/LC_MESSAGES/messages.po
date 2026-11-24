@@ -25014,3 +25014,7 @@ msgstr "The unit of measure %(uom)s does not exist."
 #: cacao_accounting/inventario/services.py
 msgid "La unidad de medida %(uom)s está inactiva y no puede usarse en una configuración nueva."
 msgstr "The unit of measure %(uom)s is inactive and cannot be used in a new configuration."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/form.html
+msgid "ej. PPTO-2026-BASE"
+msgstr "e.g. PPTO-2026-BASE"
