@@ -343,6 +343,8 @@ class ImportService:
     def _collect_business_errors(self, adapter: Any, batch_id: str, company_id: str, docs: Dict[str, List]) -> int:
         """Recolecta errores de negocio de filas y documentos."""
         errors_count = 0
+        batch = database.session.get(ImportBatch, batch_id)
+        context = {"company_id": company_id, "accounting_book_id": batch.accounting_book_id if batch else None}
         for ref, rows in docs.items():
             for i, row in enumerate(rows, start=1):
                 for err_msg in adapter.validate_row(row):
@@ -357,14 +359,14 @@ class ImportService:
                         )
                     )
 
-            for err_msg in adapter.validate_document(rows, {"company_id": company_id}):
+            for err_msg in adapter.validate_document(rows, context):
                 errors_count += 1
                 database.session.add(
                     ImportBatchError(batch_id=batch_id, document_ref=ref, error_type="BUSINESS_RULE", message=err_msg)
                 )
         batch_validator = getattr(adapter, "validate_batch_documents", None)
         if callable(batch_validator):
-            for err_msg in batch_validator(docs, {"company_id": company_id}):
+            for err_msg in batch_validator(docs, context):
                 errors_count += 1
                 database.session.add(ImportBatchError(batch_id=batch_id, error_type="BUSINESS_RULE", message=err_msg))
         return errors_count

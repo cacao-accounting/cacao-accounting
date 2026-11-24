@@ -4170,6 +4170,12 @@ msgstr "Valuation method"
 msgid "Costo promedio"
 msgstr "Average cost"
 
+msgid "La cuenta contable debe estar activa y habilitada."
+msgstr "The ledger account must be active and enabled."
+
+msgid "No se pudo validar el comprobante contable. Revise el registro de errores."
+msgstr "The journal entry could not be validated. Check the error log."
+
 #: cacao_accounting/admin/templates/admin/inventory_valuation.html:62
 msgid "Costo promedio recalcula el costo unitario global; FIFO consume las capas más antiguas primero."
 msgstr "Average cost recalculates the global unit cost; FIFO consumes the oldest layers first."

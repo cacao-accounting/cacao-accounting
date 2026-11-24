@@ -93,17 +93,18 @@ class JournalEntryAdapter(BaseImportAdapter):
         """Aplica las mismas validaciones de líneas que el formulario de asientos."""
         try:
             from cacao_accounting.contabilidad.journal_service import (
-                _normalize_line,
+                _normalize_journal_payload,
                 _validate_ar_ap_lines,
                 _validate_balanced_lines,
                 _validate_line_books,
             )
 
-            canonical_rows = self.build_document(document_data, context or {}).get("lines", [])
+            payload = self.build_document(document_data, context or {})
+            canonical_rows = payload.get("lines", [])
             company = str((context or {}).get("company_id") or "")
             for row in canonical_rows:
                 account = database.session.execute(
-                    select(Accounts.id).where(
+                    select(Accounts).where(
                         Accounts.entity == company,
                         Accounts.code == row.get("account"),
                     )
@@ -113,12 +114,17 @@ class JournalEntryAdapter(BaseImportAdapter):
                         _("La cuenta %(account_code)s no existe en la compania %(company)s.")
                         % {"account_code": row.get("account"), "company": company}
                     ]
-            lines = [_normalize_line(row, index + 1) for index, row in enumerate(canonical_rows)]
-            _validate_balanced_lines(company, lines, (context or {}).get("transaction_currency"))
-            _validate_line_books(company, (context or {}).get("books"), lines)
-            _validate_ar_ap_lines(company, lines)
-        except RuntimeError:
-            return []
+                if not account.active or not account.enabled:
+                    return [_("La cuenta contable debe estar activa y habilitada.")]
+            data = _normalize_journal_payload(payload)
+            _validate_balanced_lines(company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
+            _validate_line_books(company, data.books, data.lines)
+            _validate_ar_ap_lines(company, data.lines)
+        except RuntimeError as exc:
+            from cacao_accounting.logs import log
+
+            log.exception("Falló la validación contable del comprobante importado: {}", exc)
+            return [_("No se pudo validar el comprobante contable. Revise el registro de errores.")]
         except (ValueError, InvalidOperation) as exc:
             return [str(exc)]
         return []
@@ -175,7 +181,7 @@ class JournalEntryAdapter(BaseImportAdapter):
             "reference": reference,
             "memo": f"Importación masiva: {reference}",
             "transaction_currency": context.get("transaction_currency") or self._value(document_data[0], "moneda", "currency"),
-            "exchange_rate": context.get("exchange_rate"),
+            "exchange_rate": context.get("exchange_rate") or self._value(document_data[0], "tipo_cambio", "exchange_rate"),
             "lines": lines,
             "created_by": context.get("created_by"),
         }

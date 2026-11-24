@@ -464,8 +464,18 @@ def _sembrar_entorno(
                         name=name,
                         classification=classification,
                         account_type=account_type,
+                        group=False,
+                        active=True,
+                        enabled=True,
                     )
                 )
+            else:
+                if account.active is None:
+                    account.active = True
+                if account.enabled is None:
+                    account.enabled = True
+                if account.group is None:
+                    account.group = False
 
         database.session.flush()
 

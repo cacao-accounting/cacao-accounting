@@ -476,10 +476,17 @@ def _warehouse_inventory_account_id(document: Any, line: Any, company: str) -> s
 
 
 def _account_id_for_comprobante_line(line: Any, company: str) -> str:
+    """Resuelve la cuenta de una línea y revalida su vigencia al contabilizar.
+
+    El importador hace un prechequeo, pero entre la validación del lote y el
+    posteo la cuenta puede desactivarse. La operación final vuelve a exigir
+    existencia, compañía, estado activo/habilitado y que sea cuenta hoja.
+    """
     explicit_account_id = getattr(line, "account_id", None)
     if explicit_account_id:
-        return _require_account(
+        return _require_company_account(
             str(explicit_account_id),
+            company,
             "No existe cuenta contable configurada para la línea del comprobante contable.",
         )
 
@@ -492,7 +499,11 @@ def _account_id_for_comprobante_line(line: Any, company: str) -> str:
         raise PostingError(
             _("La cuenta contable '%(account_code)s' no existe para la compañía.") % {"account_code": account_code}
         )
-    return account.id
+    return _require_company_account(
+        account.id,
+        company,
+        "No existe cuenta contable configurada para la línea del comprobante contable.",
+    )
 
 
 def _resolve_bank_gl_account_id(document: PaymentEntry, destination: bool) -> str | None:
