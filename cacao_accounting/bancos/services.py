@@ -124,6 +124,9 @@ LABEL_FACTURA_VENTA = "Factura de Venta"
 
 PAYMENT_TYPES = ("pay", "receive", "internal_transfer", "debit_note", "credit_note")
 
+#: Escala monetaria máxima soportada por las columnas ``Numeric(..., 4)``.
+PETTY_CASH_MAX_DECIMALS = 4
+
 
 def _safe_bank_reconciliation_candidates(transaction: BankTransaction) -> list[Any]:
     """Obtiene sugerencias sin romper el panel por datos bancarios históricos inválidos."""
@@ -990,7 +993,10 @@ def _validate_petty_cash_expense_precision(amount: Decimal, fund: PettyCashAccou
         if currency_code
         else None
     )
-    decimals = int(currency.decimals) if currency is not None and currency.decimals is not None else 2
+    configured_decimals = int(currency.decimals) if currency is not None and currency.decimals is not None else 2
+    # #2090: el contrato de precisión fija escala 4 para importes monetarios;
+    # una moneda con más decimales no puede persistirse sin redondeo.
+    decimals = min(configured_decimals, PETTY_CASH_MAX_DECIMALS)
     exponent = amount.normalize().as_tuple().exponent
     scale = abs(exponent) if isinstance(exponent, int) and exponent < 0 else 0
     if scale > decimals:

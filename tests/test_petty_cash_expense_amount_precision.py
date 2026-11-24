@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -68,6 +69,71 @@ def fondos_monetarios(app, entorno_contable):
         database.session.commit()
 
 
+@pytest.fixture
+def fondo_precision(app, entorno_contable):
+    """Crea un fondo con moneda de N decimales, tasa y centro de costo propios."""
+    creados: list[tuple[str, str, str]] = []
+    account_id = str(inspect(entorno_contable.caja).identity[0])
+
+    def crear(decimals: int) -> tuple[str, str, str]:
+        suffix = uuid4().hex[:6].upper()
+        code = f"P{decimals}{suffix}"
+        cost_center_code = f"CC{decimals}{suffix}"
+        with app.app_context():
+            database.session.add(Currency(code=code, name=f"Moneda {code}", decimals=decimals, active=True))
+            database.session.add(ExchangeRate(origin=code, destination="NIO", rate=Decimal("1"), date=date(2026, 5, 15)))
+            database.session.add(
+                CostCenter(entity="cacao", code=cost_center_code, name=f"Centro {code}", active=True, enabled=True)
+            )
+            database.session.flush()
+            fondo = PettyCashAccount(
+                company="cacao",
+                account_id=account_id,
+                name=f"Fondo precisión {code}",
+                currency=code,
+                float_amount=Decimal("100"),
+                is_default=False,
+                is_active=True,
+            )
+            database.session.add(fondo)
+            database.session.commit()
+            creados.append((fondo.id, code, cost_center_code))
+            return fondo.id, code, cost_center_code
+
+    yield crear
+
+    with app.app_context():
+        for fondo_id, code, cost_center_code in creados:
+            gastos = list(
+                database.session.execute(database.select(PettyCashExpense).filter_by(petty_cash_id=fondo_id)).scalars()
+            )
+            journal_ids = [gasto.journal_id for gasto in gastos if gasto.journal_id]
+            if gastos:
+                database.session.execute(database.delete(PettyCashExpense).where(PettyCashExpense.petty_cash_id == fondo_id))
+                database.session.flush()
+            for journal_id in journal_ids:
+                database.session.execute(database.delete(GLEntry).where(GLEntry.voucher_id == journal_id))
+                database.session.execute(
+                    database.delete(ComprobanteContableDetalle).where(ComprobanteContableDetalle.transaction_id == journal_id)
+                )
+                database.session.execute(database.delete(ComprobanteContable).where(ComprobanteContable.id == journal_id))
+            fondo = database.session.get(PettyCashAccount, fondo_id)
+            if fondo is not None:
+                database.session.delete(fondo)
+            database.session.execute(
+                database.delete(ExchangeRate).where(
+                    ExchangeRate.origin == code,
+                    ExchangeRate.destination == "NIO",
+                    ExchangeRate.date == date(2026, 5, 15),
+                )
+            )
+            database.session.execute(
+                database.delete(CostCenter).where(CostCenter.entity == "cacao", CostCenter.code == cost_center_code)
+            )
+            database.session.execute(database.delete(Currency).where(Currency.code == code))
+        database.session.commit()
+
+
 def test_el_paso_del_importe_se_deriva_de_la_moneda_del_fondo(app, entorno_contable, fondos_monetarios, authenticated_client):
     """El formulario publica el paso de cada fondo según Currency.decimals."""
     del entorno_contable
@@ -81,6 +147,75 @@ def test_el_paso_del_importe_se_deriva_de_la_moneda_del_fondo(app, entorno_conta
     assert f'"{fondo_tres}": "0.001"' in cuerpo
     assert f'"{fondo_dos}": "0.01"' in cuerpo
     assert 'step="0.01"' in cuerpo
+
+
+@pytest.mark.parametrize(
+    ("decimals", "step"),
+    [(0, "1"), (2, "0.01"), (4, "0.0001"), (5, "0.0001"), (8, "0.0001")],
+)
+def test_el_formulario_limita_el_paso_a_la_escala_soportada(
+    app, entorno_contable, fondo_precision, authenticated_client, decimals, step
+):
+    """La UI no ofrece más de cuatro decimales aunque Currency.decimals sea mayor."""
+    del entorno_contable
+    fondo_id, _code, _cost_center = fondo_precision(decimals)
+
+    response = authenticated_client("admin").get("/cash_management/petty-cash-expense/new")
+
+    assert response.status_code == 200
+    cuerpo = response.get_data(as_text=True)
+    assert f'"{fondo_id}": "{step}"' in cuerpo
+
+
+@pytest.mark.parametrize(
+    ("decimals", "accepted", "rejected"),
+    [
+        (0, "1", "1.1"),
+        (2, "1.01", "1.001"),
+        (4, "1.0001", "1.00001"),
+        (5, "1.0001", "1.00001"),
+        (8, "1.0001", "1.00001"),
+    ],
+)
+def test_la_precision_efectiva_se_limita_a_cuatro(app, entorno_contable, fondo_precision, decimals, accepted, rejected):
+    """Una moneda de 5–8 decimales conserva hasta la escala monetaria de 4."""
+    del entorno_contable
+    fondo_id, _code, _cost_center = fondo_precision(decimals)
+    with app.app_context():
+        fondo = database.session.get(PettyCashAccount, fondo_id)
+        assert fondo is not None
+        _validate_petty_cash_expense_precision(Decimal(accepted), fondo)
+        with pytest.raises(ValueError, match=f"{min(decimals, 4)} decimales"):
+            _validate_petty_cash_expense_precision(Decimal(rejected), fondo)
+
+
+@pytest.mark.parametrize(
+    ("decimals", "amount"),
+    [(0, "1.1"), (2, "1.001"), (4, "1.00001"), (5, "1.00001"), (8, "1.00001")],
+)
+def test_post_rechaza_exceso_de_escala_sin_persistir(
+    app, entorno_contable, fondo_precision, authenticated_client, decimals, amount
+):
+    """El POST rechaza la escala no soportada sin crear el gasto."""
+    del entorno_contable
+    fondo_id, _code, cost_center_code = fondo_precision(decimals)
+    antes = _conteo_gastos(app)
+
+    response = authenticated_client("admin").post(
+        "/cash_management/petty-cash-expense/new",
+        data={
+            "company": "cacao",
+            "petty_cash_id": fondo_id,
+            "posting_date": FECHA,
+            "concept": "Compra fuera de escala",
+            "amount": amount,
+            "cost_center_code": cost_center_code,
+        },
+    )
+
+    assert response.status_code == 200
+    assert f"{min(decimals, 4)} decimales" in response.get_data(as_text=True)
+    assert _conteo_gastos(app) == antes
 
 
 def test_el_servicio_conserva_tres_decimales_y_rechaza_exceso_en_dos(
@@ -169,3 +304,45 @@ def test_el_servicio_persiste_tres_decimales_sin_redondear(app, entorno_contable
         if centro is not None:
             database.session.delete(centro)
         database.session.commit()
+
+
+@pytest.mark.parametrize(
+    ("decimals", "amount"),
+    [(0, "1"), (2, "1.01"), (4, "1.0001"), (5, "1.0001"), (8, "1.0001")],
+)
+def test_persistencia_y_gl_respetan_la_escala_soportada(
+    app, entorno_contable, reference_users, fondo_precision, decimals, amount
+):
+    """El importe aceptado se conserva al recargar y cuadra en el GL."""
+    del entorno_contable
+    fondo_id, code, cost_center_code = fondo_precision(decimals)
+
+    with app.app_context():
+        gasto = create_petty_cash_expense(
+            company="cacao",
+            petty_cash_id=fondo_id,
+            expense_account_code="5201",
+            concept="Compra con precisión soportada",
+            amount=Decimal(amount),
+            cost_center_code=cost_center_code,
+            posted_date=date(2026, 5, 15),
+            actor_id=str(reference_users["admin"].id),
+        )
+        gasto_id = gasto.id
+        journal_id = gasto.journal_id
+
+        database.session.remove()
+        recargado = database.session.get(PettyCashExpense, gasto_id)
+        assert recargado is not None
+        assert Decimal(recargado.amount) == Decimal(amount)
+
+        entries = database.session.execute(database.select(GLEntry).where(GLEntry.voucher_id == journal_id)).scalars().all()
+        assert len(entries) >= 2
+        balances: dict[str, tuple[Decimal, Decimal]] = {}
+        for entry in entries:
+            debit, credit = balances.get(entry.ledger_id, (Decimal("0"), Decimal("0")))
+            balances[entry.ledger_id] = (debit + entry.debit, credit + entry.credit)
+        assert balances
+        assert all(debit == Decimal(amount) and credit == Decimal(amount) for debit, credit in balances.values())
+        assert {entry.account_currency for entry in entries} == {code}
+        assert {entry.company_currency for entry in entries} == {"NIO"}
