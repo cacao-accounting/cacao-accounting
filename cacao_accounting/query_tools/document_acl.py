@@ -126,3 +126,16 @@ def allowed_doctypes(context: QueryContext, company_id: str) -> set[str]:
         if modules and any(_module_allowed(context, module, company_id) for module in modules):
             allowed.add(doctype)
     return allowed
+
+
+def can_read_relation_amount(context: QueryContext, company_id: str, *document_types: str) -> bool:
+    """Exige permiso comercial o contable para importes de relaciones logísticas."""
+    for document_type in document_types:
+        doctype = normalize_doctype(document_type)
+        if doctype in _ALTERNATE_MODULES:
+            if not _module_allowed(context, _ALTERNATE_MODULES[doctype][0], company_id):
+                return False
+        elif read_modules_for(doctype) == ("inventory",):
+            if not _module_allowed(context, "accounting", company_id):
+                return False
+    return True

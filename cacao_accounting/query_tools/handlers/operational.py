@@ -24,7 +24,7 @@ from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
-from cacao_accounting.query_tools.document_acl import allowed_doctypes
+from cacao_accounting.query_tools.document_acl import allowed_doctypes, can_read_relation_amount
 from cacao_accounting.query_tools.permissions import validate_permission
 
 
@@ -315,6 +315,10 @@ def search_document_relations(
         .scalars()
         .all()
     )
+    amount_access = {
+        doctype: can_read_relation_amount(context, company_id, doctype)
+        for doctype in {doc for row in rows for doc in (row.source_type, row.target_type)}
+    }
     items = [
         {
             "id": row.id,
@@ -327,7 +331,11 @@ def search_document_relations(
             "target_item_id": row.target_item_id,
             "relation_type": row.relation_type,
             "qty": _decimal(row.qty),
-            "amount": _decimal(row.amount),
+            "amount": (
+                _decimal(row.amount)
+                if row.amount is not None and amount_access[row.source_type] and amount_access[row.target_type]
+                else None
+            ),
         }
         for row in rows
     ]

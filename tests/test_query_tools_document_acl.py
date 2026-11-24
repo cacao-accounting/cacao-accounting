@@ -25,9 +25,16 @@ from cacao_accounting.database import (
     Modules,
     PaymentEntry,
     PurchaseInvoice,
+    PurchaseOrder,
+    PurchaseReceipt,
+    Roles,
+    RolesAccess,
+    RolesUser,
     SalesInvoice,
     SalesInvoiceItem,
     UOM,
+    User,
+    UserCompanyAccess,
     database,
 )
 from cacao_accounting.query_tools.context import QueryContext
@@ -185,6 +192,60 @@ def _denied(callable_) -> None:
         ErrorCode.MODULE_DISABLED,
         ErrorCode.COMPANY_ACCESS_DENIED,
     }
+
+
+def test_logistica_ve_flujo_sin_importes_comerciales(document_acl_scenario):
+    """Inventario conserva trazabilidad sin revelar importes de compras."""
+    app, _ids = document_acl_scenario
+    with app.app_context():
+        orden = PurchaseOrder(company="alpha", posting_date=date(2026, 5, 10), docstatus=1)
+        recepcion = PurchaseReceipt(company="alpha", posting_date=date(2026, 5, 10), docstatus=1)
+        database.session.add_all([orden, recepcion])
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_order",
+                source_id=orden.id,
+                target_type="purchase_receipt",
+                target_id=recepcion.id,
+                company="alpha",
+                qty=Decimal("2"),
+                amount=Decimal("123.45"),
+                relation_type="receipt",
+                status="active",
+            )
+        )
+        database.session.commit()
+        inventario = _context({"documents.reports.read", "inventory.reports.read"})
+        compras = _context({"documents.reports.read", "payables.reports.read"})
+        for contexto, esperado in ((inventario, None), (compras, "123.4500")):
+            flujo = get_document_flow.handler(
+                context=contexto, company_id="alpha", document_type="purchase_order", document_id=orden.id
+            )
+            busqueda = search_document_relations.handler(context=contexto, company_id="alpha", document_id=orden.id)
+            assert len(flujo["items"]) == len(busqueda["items"]) == 1
+            assert flujo["items"][0]["amount"] == esperado
+            assert busqueda["items"][0]["amount"] == esperado
+            assert Decimal(flujo["items"][0]["qty"]) == 2
+
+        usuario = User(user="logistica", name="Logística", password=b"unused", active=True)
+        rol = Roles(name="logistica", note="Consulta inventario")
+        database.session.add_all([usuario, rol])
+        database.session.flush()
+        modulo = database.session.execute(database.select(Modules).filter_by(module="inventory")).scalar_one()
+        database.session.add_all(
+            [
+                RolesUser(user_id=usuario.id, role_id=rol.id, active=True),
+                RolesAccess(rol_id=rol.id, module_id=modulo.id, access=True, view=True),
+                UserCompanyAccess(user_id=usuario.id, company_code="alpha"),
+            ]
+        )
+        database.session.commit()
+        contexto_usuario = QueryContext(user_id=usuario.id, company_ids=["alpha"], permissions={"documents.reports.read"})
+        resultado = get_document_flow.handler(
+            context=contexto_usuario, company_id="alpha", document_type="purchase_order", document_id=orden.id
+        )
+        assert resultado["items"][0]["amount"] is None
 
 
 def test_document_tools_require_the_owning_module(document_acl_scenario):

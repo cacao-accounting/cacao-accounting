@@ -19,6 +19,7 @@ from cacao_accounting.query_tools.pagination import (
 )
 from cacao_accounting.query_tools.document_acl import (
     allowed_doctypes,
+    can_read_relation_amount,
     require_document_id_read,
     require_document_read,
 )
@@ -85,6 +86,11 @@ def get_document_flow(
         .all()
     )
 
+    amount_access = {
+        doctype: can_read_relation_amount(context, company_id, doctype)
+        for doctype in {doc for r in rows for doc in (r.source_type, r.target_type)}
+    }
+
     items = [
         {
             "id": r.id,
@@ -97,7 +103,11 @@ def get_document_flow(
             "relation_type": r.relation_type,
             "status": r.status,
             "qty": str(r.qty),
-            "amount": str(r.amount) if r.amount is not None else None,
+            "amount": (
+                str(r.amount)
+                if r.amount is not None and amount_access[r.source_type] and amount_access[r.target_type]
+                else None
+            ),
             "company": r.company,
             "created": r.created.isoformat() if r.created else None,
         }
