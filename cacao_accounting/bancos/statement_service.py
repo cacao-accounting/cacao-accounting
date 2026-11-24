@@ -129,8 +129,7 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
             reason="no_active_rule",
         )
 
-    seen_candidates: dict[tuple[str, str], BankCandidate] = {}
-    best_rule: BankMatchingRule | None = None
+    seen_candidates: dict[tuple[str, str], tuple[BankCandidate, BankMatchingRule]] = {}
     for rule in rules:
         candidates = find_bank_reconciliation_candidates(
             bank_transaction_id,
@@ -142,9 +141,8 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
             candidate = exact_candidates[0]
             key = (candidate.reference_type, candidate.reference_id)
             existing = seen_candidates.get(key)
-            if existing is None or candidate.score > existing.score:
-                seen_candidates[key] = candidate
-                best_rule = rule
+            if existing is None or candidate.score > existing[0].score:
+                seen_candidates[key] = (candidate, rule)
         elif len(exact_candidates) > 1:
             return BankAutoReconciliationResult(
                 bank_transaction_id=bank_transaction_id,
@@ -167,7 +165,21 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
             reason="no_unique_exact_match",
         )
 
-    candidate = max(seen_candidates.values(), key=lambda candidate: candidate.score)
+    # #1721: reglas distintas pueden aportar candidatos exactos diferentes.
+    # El contrato exige no conciliar mientras exista más de un candidato exacto
+    # distinto, aunque cada regla individualmente solo devuelva uno.
+    if len(seen_candidates) > 1:
+        return BankAutoReconciliationResult(
+            bank_transaction_id=bank_transaction_id,
+            reconciled=False,
+            rule_id=None,
+            candidate_reference_type=None,
+            candidate_reference_id=None,
+            allocated_amount=None,
+            reason="ambiguous",
+        )
+
+    candidate, best_rule = next(iter(seen_candidates.values()))
     transaction_amount = _bank_amount(transaction)
     allocated = min(transaction_amount, candidate.amount)
     reconciliation = reconcile_bank_items(
