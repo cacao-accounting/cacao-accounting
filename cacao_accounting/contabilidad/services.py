@@ -1403,20 +1403,25 @@ def _update_counter_from_form(counter: Any, form: Any) -> None:
 
 
 def _sync_counter_naming_series_map(counter: Any, new_naming_series_id: str | None) -> None:
-    """Synchronize the SeriesExternalCounterMap for a counter."""
+    """Synchronize every SeriesExternalCounterMap row for a counter.
+
+    El modelo es N:M y una cuenta bancaria puede generar una fila por condición;
+    actualizar solo la primera perdería mapeos o fallaría con MultipleResultsFound.
+    """
     from cacao_accounting.database import SeriesExternalCounterMap
 
     if counter.naming_series_id == new_naming_series_id:
         return
 
     counter.naming_series_id = new_naming_series_id
-    existing_map = database.session.execute(
-        database.select(SeriesExternalCounterMap).filter_by(external_counter_id=counter.id)
-    ).scalar_one_or_none()
+    existing_maps = list(
+        database.session.execute(database.select(SeriesExternalCounterMap).filter_by(external_counter_id=counter.id)).scalars()
+    )
 
     if new_naming_series_id:
-        if existing_map:
-            existing_map.naming_series_id = new_naming_series_id
+        if existing_maps:
+            for mapping in existing_maps:
+                mapping.naming_series_id = new_naming_series_id
         else:
             database.session.add(
                 SeriesExternalCounterMap(
@@ -1426,5 +1431,6 @@ def _sync_counter_naming_series_map(counter: Any, new_naming_series_id: str | No
                     condition_json=None,
                 )
             )
-    elif existing_map:
-        database.session.delete(existing_map)
+    else:
+        for mapping in existing_maps:
+            database.session.delete(mapping)
