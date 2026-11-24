@@ -564,7 +564,10 @@ def upsert_party_company_settings(
     company_party.is_active = params.is_active
     company_party.tax_template_id = params.tax_template_id
     company_party.default_tax_rule_id = params.default_tax_rule_id
-    company_party.default_price_list_id = default_price_list_id
+    # #1725: el formulario de proveedor no edita la lista de ventas del rol
+    # cliente; en un tercero dual la configuración de proveedor debe conservarla.
+    if role == "customer":
+        company_party.default_price_list_id = default_price_list_id
     company_party.allow_purchase_invoice_without_order = params.allow_purchase_invoice_without_order
     company_party.allow_purchase_invoice_without_receipt = params.allow_purchase_invoice_without_receipt
     if is_new or update_extended:
