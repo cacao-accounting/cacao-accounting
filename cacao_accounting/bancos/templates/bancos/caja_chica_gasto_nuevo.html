@@ -145,6 +145,14 @@
 </div>
 
 <script>
+  document.addEventListener('company-selected', function () {
+    var currency = document.getElementById('pc_currency');
+    if (currency) {
+      currency.value = '';
+    }
+  });
+</script>
+<script>
   globalThis.pettyCashFundSteps = {{ fund_amount_steps|tojson }};
   document.addEventListener('fund-selected', function (event) {
     var amount = document.getElementById('amount');

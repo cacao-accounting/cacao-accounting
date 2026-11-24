@@ -237,3 +237,18 @@ def test_formulario_limpia_la_moneda_al_cambiar_compania(caja_vale_estado):
     cuerpo = response.get_data(as_text=True)
     assert "company-selected" in cuerpo
     assert "getElementById('pc_currency')" in cuerpo
+
+
+def test_formulario_de_gasto_limpia_la_moneda_al_cambiar_compania(caja_vale_estado):
+    """El formulario original de gastos no conserva la moneda del fondo al cambiar compañía."""
+    application, _ids = caja_vale_estado
+    client = application.test_client()
+    _iniciar(client)
+
+    response = client.get("/cash_management/petty-cash-expense/new")
+
+    assert response.status_code == 200
+    cuerpo = response.get_data(as_text=True)
+    assert "company-selected" in cuerpo
+    assert "getElementById('pc_currency')" in cuerpo
+    assert "fund-selected" in cuerpo
