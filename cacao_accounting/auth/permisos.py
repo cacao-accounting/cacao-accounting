@@ -69,6 +69,7 @@ class Permisos:
         "editar": "edit",
         "eliminar": "delete",
         "importar": "import_",
+        "listar": "view",
         "reportes": "report",
         "solicitar": "request",
         "validar": "validate",
@@ -90,6 +91,7 @@ class Permisos:
     editar: bool
     eliminar: bool
     importar: bool
+    listar: bool
     reportes: bool
     solicitar: bool
     validar: bool

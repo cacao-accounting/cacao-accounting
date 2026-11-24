@@ -65,7 +65,7 @@ def validate_request_scenario():
         database.session.add_all(
             [
                 RolesAccess(rol_id=validating_role.id, module_id=module_id, access=True, view=True, validate=True),
-                RolesAccess(rol_id=plain_role.id, module_id=module_id, access=True, view=True),
+                RolesAccess(rol_id=plain_role.id, module_id=module_id, access=True, view=False),
                 RolesUser(user_id=validator.id, role_id=validating_role.id, active=True),
                 RolesUser(user_id=plain.id, role_id=plain_role.id, active=True),
             ]
@@ -104,3 +104,17 @@ def test_validate_request_is_false_without_validate_field(validate_request_scena
 
     assert permissions.validar is False
     assert permissions.validar_solicitud is False
+
+
+def test_listar_refleja_el_campo_view(validate_request_scenario):
+    """La accion Listar del diagnostico usa el mismo campo view que consultar."""
+    app, ids = validate_request_scenario
+
+    with app.app_context():
+        con_vista = Permisos(modulo=ids["module_id"], usuario=ids["validator"])
+        sin_vista = Permisos(modulo=ids["module_id"], usuario=ids["plain"])
+
+    assert con_vista.listar is True
+    assert con_vista.consultar is True
+    assert sin_vista.listar is False
+    assert sin_vista.consultar is False
