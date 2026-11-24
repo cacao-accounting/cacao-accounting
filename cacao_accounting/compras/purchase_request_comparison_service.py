@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow import create_document_relation, create_target_document, lock_document_flow_document
+from cacao_accounting.document_flow.service import pending_qty
 from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_identifiers import assign_document_identifier
 
@@ -515,9 +516,11 @@ def purchase_request_is_ready_to_close(purchase_request: PurchaseRequest) -> boo
     )
     if not request_item_ids:
         return False
-    covered = purchase_request_comparison_covered_item_ids(purchase_request) | purchase_request_direct_order_item_ids(
-        purchase_request
-    )
+    covered = purchase_request_comparison_covered_item_ids(purchase_request) | {
+        item_id
+        for item_id in purchase_request_direct_order_item_ids(purchase_request)
+        if pending_qty("purchase_request", purchase_request.id, item_id, "purchase_order") <= 0
+    }
     return request_item_ids.issubset(covered)
 
 
