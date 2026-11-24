@@ -301,7 +301,7 @@ def _valid_csv_fallback(chunk: bytes) -> bool:
         return False
     try:
         sample = text[:2048]
-        csv.Sniffer().sniff(sample, delimiters=",;\t")
+        csv.Sniffer().sniff(sample, delimiters=",;")
         rows = list(csv.reader(io.StringIO(text)))
     except (csv.Error, ValueError):
         return False
