@@ -34,6 +34,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.document_flow.status import calculate_document_status
 from cacao_accounting.i18n import _
 from cacao_accounting.modulos import (
     MODULE_ACCOUNTING,
@@ -272,6 +273,17 @@ def get_accounting_data(
     }
 
 
+def _open_purchase_orders(company: str) -> int:
+    """Cuenta órdenes aprobadas cuyo flujo documental sigue abierto."""
+    orders = database.session.query(PurchaseOrder).filter_by(company=company, docstatus=1).all()
+    return sum(
+        1
+        for order in orders
+        if str(getattr(order, "status", "") or "").lower() not in {"closed", "cancelled"}
+        and calculate_document_status("purchase_order", order).code != "completed"
+    )
+
+
 def get_banks_data(
     company: str,
     currency: str,
@@ -331,7 +343,7 @@ def get_purchases_data(
         "outstanding_amount",
         include_returns=False,
     )
-    open_orders = database.session.query(PurchaseOrder).filter_by(company=company, docstatus=1).count()
+    open_orders = _open_purchase_orders(company)
     suppliers = _active_parties(company, "supplier")
 
     return {
