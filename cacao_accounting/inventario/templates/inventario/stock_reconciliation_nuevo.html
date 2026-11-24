@@ -193,6 +193,7 @@
 function stockReconciliationForm(config = {}) {
   const configuredHeader = config.header || {};
   const configuredLines = config.lines || [];
+  const snapshotTokens = new Map();
   return {
     header: {
       company: '',
@@ -246,14 +247,20 @@ function stockReconciliationForm(config = {}) {
     },
     async loadSnapshot(line) {
       if (!this.header.company || !line.item_code || !line.warehouse) return;
+      const itemCode = line.item_code;
+      const warehouse = line.warehouse;
+      const token = (snapshotTokens.get(line.uid) || 0) + 1;
+      snapshotTokens.set(line.uid, token);
       const params = new URLSearchParams({
         company: this.header.company,
-        item_code: line.item_code,
-        warehouse: line.warehouse,
+        item_code: itemCode,
+        warehouse,
       });
       const response = await fetch(`/api/inventory/stock-bin-snapshot?${params.toString()}`, { credentials: 'same-origin' });
       if (!response.ok) return;
       const snapshot = await response.json();
+      if (snapshotTokens.get(line.uid) !== token) return;
+      if (line.item_code !== itemCode || line.warehouse !== warehouse) return;
       line.current_qty = Number(snapshot.actual_qty || 0);
       line.counted_qty = line.current_qty;
       line.current_valuation_rate = Number(snapshot.valuation_rate || 0);
