@@ -1600,9 +1600,11 @@ def caja_chica_conciliacion_lista():
     if scope is not None:
         query = query.where(PettyCashReconciliation.company.in_(scope))
     registros = list(database.session.execute(query).scalars())
+    fondos = _petty_cash_fund_labels({registro.petty_cash_id for registro in registros})
     return render_template(
         "bancos/caja_chica_conciliacion_lista.html",
         registros=registros,
+        fondos=fondos,
         titulo=_("Conciliaciones de Caja Chica") + " - " + APPNAME,
     )
 
@@ -1667,6 +1669,7 @@ def caja_chica_conciliacion_editar(r_id):
     return render_template(
         "bancos/caja_chica_conciliacion_nueva.html",
         fondos=[],
+        fondo=database.session.get(PettyCashAccount, conciliacion.petty_cash_id),
         registro=conciliacion,
         edit=True,
         submitted_data=request.form if request.method == "POST" else {},
