@@ -21,7 +21,7 @@ class XLSXReader(BaseReader):
     def read(self, file_path: str) -> TabularBook:
         """Lee un archivo XLSX y devuelve un TabularBook canónico."""
         validate_archive_size(file_path)
-        wb = openpyxl.load_workbook(file_path, data_only=True, read_only=True)
+        wb = openpyxl.load_workbook(file_path, data_only=False, read_only=True)
         try:
             ws = wb.active
             ws.reset_dimensions()

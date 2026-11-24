@@ -207,6 +207,11 @@
     if (value === null || value === undefined) return '';
     if (value instanceof Date) return localIsoDate(value);
     if (typeof value === 'object') {
+      if (value.formula !== undefined || value.sharedFormula !== undefined) {
+        const error = new Error(i18n.errorFormulaNotAllowed || 'El archivo contiene fórmulas. Reemplace las celdas por valores fijos.');
+        error.code = 'FORMULA_NOT_ALLOWED';
+        throw error;
+      }
       if (Array.isArray(value.richText)) {
         return value.richText.map((part) => part.text || '').join('');
       }
@@ -1721,7 +1726,14 @@
             if (requestId !== importFileRequestId) return;
             console.error("Error processing XLSX:", err);
             this.importModal.parsedRows = [];
-            this.importModal.errors = [{ message: "Error al procesar el archivo XLSX." }];
+            this.importModal.errors = [
+              {
+                message:
+                  err && err.code === "FORMULA_NOT_ALLOWED"
+                    ? err.message
+                    : "Error al procesar el archivo XLSX.",
+              },
+            ];
           } finally {
             if (requestId === importFileRequestId) this.importModal.fileLoading = false;
           }

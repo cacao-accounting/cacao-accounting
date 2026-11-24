@@ -1401,6 +1401,53 @@ describe('transaction-form', function () {
     assert.strictEqual(component.importModal.fileLoading, false);
   });
 
+  it('rejects XLSX formulas even when they carry a cached result', async function () {
+    const rows = [
+      [{ value: 'Item' }, { value: 'Quantity' }],
+      [{ value: 'ITEM-1' }, { value: { formula: '1+1', result: 999 } }],
+    ];
+    globalThis.ExcelJS = {
+      Workbook: class {
+        constructor() {
+          this.worksheets = [{
+            eachRow(_options, callback) {
+              for (const values of rows) {
+                callback({ cellCount: values.length, getCell: (index) => values[index - 1] });
+              }
+            },
+          }];
+          this.xlsx = { load: () => Promise.resolve() };
+        }
+      },
+    };
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_invoice',
+      initialHeader: { company: 'company-a' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    const originalError = console.error;
+    console.error = () => {};
+
+    component.init();
+    component.importModal.schema = {
+      columns: [{ key: 'item_code', label: 'Item' }, { key: 'quantity', label: 'Quantity' }],
+    };
+    await component.handleFileUpload({
+      target: {
+        files: [{ name: 'formulas.xlsx', arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }],
+        value: 'formulas.xlsx',
+      },
+    });
+    console.error = originalError;
+
+    assert.deepStrictEqual(component.importModal.parsedRows, []);
+    assert.strictEqual(component.importModal.errors.length, 1);
+    assert.match(component.importModal.errors[0].message, /fórmulas/);
+  });
+
   it('clears the previous XLSX preview when a replacement file cannot be parsed', async function () {
     globalThis.ExcelJS = {
       Workbook: class {

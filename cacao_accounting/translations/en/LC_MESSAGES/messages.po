@@ -5927,6 +5927,10 @@ msgstr "The header is duplicated."
 msgid "Las fórmulas no están permitidas."
 msgstr "Formulas are not allowed."
 
+#: cacao_accounting/__init__.py
+msgid "El archivo contiene fórmulas. Reemplace las celdas por valores fijos antes de importar."
+msgstr "The file contains formulas. Replace the cells with fixed values before importing."
+
 #: cacao_accounting/api/line_import.py:313 cacao_accounting/api/line_import.py:521
 msgid "Límite máximo de 500 líneas excedido."
 msgstr "Maximum limit of 500 lines exceeded."
