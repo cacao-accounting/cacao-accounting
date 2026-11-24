@@ -2448,6 +2448,10 @@ msgstr "Password updated successfully."
 msgid "Rol creado correctamente."
 msgstr "Role created successfully."
 
+#: cacao_accounting/admin/routes.py
+msgid "El nombre del rol ya está en uso."
+msgstr "The role name is already in use."
+
 #: cacao_accounting/admin/routes.py:1671
 msgid "Crear Rol"
 msgstr "Create Role"

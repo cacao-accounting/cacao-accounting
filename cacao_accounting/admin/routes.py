@@ -1753,7 +1753,7 @@ def crear_rol():
     if form.validate_on_submit():
         existe_rol = database.session.execute(database.select(Roles).filter_by(name=form.name.data)).scalar_one_or_none()
         if existe_rol is not None:
-            form.name.errors.append("El nombre del rol ya está en uso.")
+            form.name.errors.append(_("El nombre del rol ya está en uso."))
         else:
             nuevo_rol = Roles(name=form.name.data, note=form.note.data or "")
             database.session.add(nuevo_rol)
@@ -1786,7 +1786,7 @@ def editar_rol(role_id: str):
             database.select(Roles).filter(Roles.name == form.name.data).filter(Roles.id != rol.id)
         ).scalar_one_or_none()
         if existe_rol is not None:
-            form.name.errors.append("El nombre del rol ya está en uso.")
+            form.name.errors.append(_("El nombre del rol ya está en uso."))
         else:
             rol.name = form.name.data
             rol.note = form.note.data or ""
