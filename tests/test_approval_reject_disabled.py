@@ -13,29 +13,35 @@ from cacao_accounting.database import (
     ApprovalAction,
     ApprovalRequest,
     CacaoConfig,
+    GLEntry,
     SalesInvoice,
     User,
     database,
 )
 
 
-def _deshabilitar_motor() -> None:
-    """Marca el motor de aprobación como deshabilitado para la compañía."""
+def _deshabilitar_motor() -> tuple[str | None, bool]:
+    """Deshabilita el motor y devuelve el valor y existencia previos."""
     clave = "approval_engine_enabled_cacao"
     registro = database.session.execute(database.select(CacaoConfig).filter_by(key=clave)).scalar_one_or_none()
+    anterior = None if registro is None else registro.value
+    creado = registro is None
     if registro is None:
         database.session.add(CacaoConfig(key=clave, value="false"))
     else:
         registro.value = "false"
     database.session.commit()
+    return anterior, creado
 
 
 def test_rechazo_http_con_solicitud_pendiente_ignora_motor_deshabilitado(app, entorno_contable, authenticated_client):
     """Con una solicitud pendiente el rechazo aplica la transición y registra la acción."""
     del entorno_contable
     sufijo = uuid4().hex[:8]
+    anterior = None
+    creado = True
     with app.app_context():
-        _deshabilitar_motor()
+        anterior, creado = _deshabilitar_motor()
         admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
         factura = SalesInvoice(
             company="cacao",
@@ -85,6 +91,11 @@ def test_rechazo_http_con_solicitud_pendiente_ignora_motor_deshabilitado(app, en
             assert len(acciones) == 1
             assert acciones[0].action == "reject"
             assert acciones[0].comments == "Rechazo con motor off"
+            factura_tras = database.session.get(SalesInvoice, factura_id)
+            assert factura_tras is not None
+            assert factura_tras.docstatus == 0
+            assert factura_tras.grand_total == Decimal("10")
+            assert database.session.execute(database.select(GLEntry).filter_by(voucher_id=factura_id)).scalars().all() == []
     finally:
         with app.app_context():
             database.session.execute(database.delete(ApprovalAction).where(ApprovalAction.approval_request_id == solicitud_id))
@@ -96,5 +107,8 @@ def test_rechazo_http_con_solicitud_pendiente_ignora_motor_deshabilitado(app, en
                 database.select(CacaoConfig).filter_by(key="approval_engine_enabled_cacao")
             ).scalar_one_or_none()
             if registro is not None:
-                database.session.delete(registro)
+                if creado:
+                    database.session.delete(registro)
+                else:
+                    registro.value = anterior
             database.session.commit()
