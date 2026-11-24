@@ -514,8 +514,20 @@ def validate_batch_serial_draft(lines: Sequence[Any]) -> None:
             continue
         if (item.has_batch or item.has_expiry_date) and not getattr(line, "batch_id", None):
             raise ValueError(_("El item %(item)s requiere lote.") % {"item": item_code})
-        if item.has_serial_no and not getattr(line, "serial_no", None):
-            raise ValueError(_("El item %(item)s requiere numero de serie.") % {"item": item_code})
+        _validate_draft_serial(line, item_code, item)
+
+
+def _validate_draft_serial(line: Any, item_code: str, item: Any) -> None:
+    """Valida serie presente y una unidad base en un borrador controlado."""
+    if not item.has_serial_no:
+        return
+    if not getattr(line, "serial_no", None):
+        raise ValueError(_("El item %(item)s requiere numero de serie.") % {"item": item_code})
+    quantity = getattr(line, "qty_in_base_uom", None)
+    if quantity is None:
+        quantity = getattr(line, "qty", None)
+    if _decimal_value(quantity) != Decimal("1"):
+        raise ValueError(_("Cada linea de un item serializado debe mover exactamente una unidad."))
 
 
 def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None, cancel_entry: bool = False) -> None:

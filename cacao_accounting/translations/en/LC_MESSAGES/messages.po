@@ -18605,6 +18605,18 @@ msgstr "Warehouse '%(warehouse)s' does not belong to the company or is inactive.
 msgid "El item de inventario '%(item)s' requiere una bodega."
 msgstr "Inventory item '%(item)s' requires a warehouse."
 
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El item de inventario '%(item)s' requiere numero de serie."
+msgstr "Inventory item '%(item)s' requires a serial number."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "Cada linea del item serializado '%(item)s' debe mover exactamente una unidad."
+msgstr "Each line of serialized item '%(item)s' must move exactly one unit."
+
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El numero de serie '%(serial)s' ya esta registrado para otro articulo."
+msgstr "Serial number '%(serial)s' is already registered for another item."
+
 #: cacao_accounting/imports/adapters/transaction_documents.py:169
 msgid "La columna tercero es obligatoria para este tipo de registro."
 msgstr "The party column is required for this record type."

@@ -36,6 +36,7 @@ from cacao_accounting.database import (
     SalesQuotationItem,
     SalesRequest,
     SalesRequestItem,
+    SerialNumber,
     SupplierQuotation,
     SupplierQuotationItem,
     database,
@@ -343,6 +344,35 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         ):
             errors.append(_("El item de inventario '%(item)s' requiere una bodega.") % {"item": item.code})
         errors.extend(self._validate_row_batch(row.get("producto"), row.get("lote"), posting_date))
+        errors.extend(
+            self._validate_row_serial(
+                row.get("producto"),
+                row.get("cantidad"),
+                row.get("uom"),
+                row.get("numero_serie"),
+            )
+        )
+
+    def _validate_row_serial(self, item_code: Any, quantity: Any, uom: Any, serial_no: Any) -> list[str]:
+        """Valida serie obligatoria, unicidad de articulo y una unidad por linea."""
+        if not self.config.include_batch_serial or not item_code:
+            return []
+        item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
+        if item is None or not item.has_serial_no:
+            return []
+        cleaned = str(serial_no or "").strip()
+        if not cleaned:
+            return [_("El item de inventario '%(item)s' requiere numero de serie.") % {"item": item.code}]
+        try:
+            base_quantity = qty_in_base_uom(item.code, quantity, uom)
+        except ValueError:
+            return []
+        if base_quantity != Decimal("1"):
+            return [_("Cada linea del item serializado '%(item)s' debe mover exactamente una unidad.") % {"item": item.code}]
+        existing = database.session.execute(database.select(SerialNumber).filter_by(serial_no=cleaned)).scalar_one_or_none()
+        if existing is not None and existing.item_code != item.code:
+            return [_("El numero de serie '%(serial)s' ya esta registrado para otro articulo.") % {"serial": cleaned}]
+        return []
 
     def validate_document(self, document_data: list[dict[str, Any]], context: dict[str, Any] | None = None) -> list[str]:
         """Valida fecha, período, origen, bodega, tercero y moneda del documento."""
