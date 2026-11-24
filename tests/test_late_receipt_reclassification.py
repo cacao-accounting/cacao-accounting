@@ -9,17 +9,33 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
-from cacao_accounting.accounting_engine.document_builders import _subtract_late_receipt_reclassifications
+from cacao_accounting.accounting_engine.document_builders import (
+    _late_two_way_invoice_amounts,
+    _subtract_late_receipt_reclassifications,
+)
+from cacao_accounting.approval_engine import approved_execution
+from cacao_accounting.contabilidad.posting_service import post_purchase_invoice, post_purchase_receipt
 from cacao_accounting.database import (
+    Accounts,
+    CompanyDefaultAccount,
+    GLEntry,
     Item,
     Party,
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseInvoiceReceiptAllocation,
+    PurchaseMatchingConfig,
+    PurchaseOrder,
+    PurchaseOrderItem,
     PurchaseReceipt,
     PurchaseReceiptItem,
+    UOM,
+    User,
+    Warehouse,
+    WarehouseCompanyAccount,
     database,
 )
+from cacao_accounting.internal_control_service import audit_actor
 
 FECHA = date(2026, 5, 15)
 
@@ -178,6 +194,217 @@ def test_las_asignaciones_activas_se_acumulan_y_las_canceladas_no_descuentan(app
         _subtract_late_receipt_reclassifications(receipts[0], amounts, posting_dates, receipts)
 
         assert amounts == {codes[0]: Decimal("50"), codes[1]: Decimal("100")}
+
+
+def test_asignacion_de_otra_factura_no_descuenta_la_reclasificacion(app, entorno_contable):
+    """Solo las asignaciones de las facturas 2-way integradas descuentan."""
+    suffix = uuid4().hex[:8]
+    supplier_id = _supplier_id(app)
+    with app.app_context():
+        code = f"ART-X-{suffix}"
+        _sembrar_articulos(suffix, [code])
+        receipts, item_ids = _sembrar_recepciones(suffix, [(code, "100")])
+        invoice_items = _sembrar_factura(suffix, [code], supplier_id)
+        otra_factura = _sembrar_factura(f"OTRA-{suffix}", [code], supplier_id)
+        database.session.add_all(
+            [
+                _asignacion(invoice_items[code], item_ids[code], "20"),
+                _asignacion(otra_factura[code], item_ids[code], "80"),
+            ]
+        )
+        database.session.commit()
+        amounts = {code: Decimal("100")}
+        posting_dates = {code: date(2026, 5, 1)}
+
+        _subtract_late_receipt_reclassifications(
+            receipts[0],
+            amounts,
+            posting_dates,
+            receipts,
+            invoice_item_ids={invoice_items[code]},
+        )
+
+        assert amounts == {code: Decimal("80")}
+
+
+def _preparar_ciclo_real(app):
+    """Publica una factura 2-way y dos recepciones sucesivas con GL real."""
+    with app.app_context():
+        defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+        bridge = database.session.execute(
+            database.select(Accounts).filter_by(entity="cacao", code="2103")
+        ).scalar_one_or_none()
+        if bridge is None:
+            bridge = Accounts(
+                entity="cacao", code="2103", name="Puente compras", classification="liability", account_type="bridge"
+            )
+            database.session.add(bridge)
+            database.session.flush()
+        inventory = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1109")).scalar_one()
+        defaults.bridge_account_id = bridge.id
+        matching = database.session.execute(
+            database.select(PurchaseMatchingConfig).filter_by(company="cacao")
+        ).scalar_one_or_none()
+        if matching is None:
+            matching = PurchaseMatchingConfig(company="cacao", matching_type="2-way", auto_reconcile=False)
+            database.session.add(matching)
+        else:
+            matching.matching_type = "2-way"
+            matching.require_purchase_order = False
+            matching.auto_reconcile = False
+        mapping = database.session.execute(
+            database.select(WarehouseCompanyAccount).filter_by(warehouse_code="BOD01", company="cacao")
+        ).scalar_one_or_none()
+        if mapping is None:
+            database.session.add(
+                WarehouseCompanyAccount(warehouse_code="BOD01", company="cacao", inventory_account_id=inventory.id)
+            )
+        else:
+            mapping.inventory_account_id = inventory.id
+
+        supplier = database.session.execute(database.select(Party).filter_by(code="PRV001")).scalar_one()
+        item = database.session.execute(database.select(Item).filter_by(code="ART01")).scalar_one()
+        uom = database.session.execute(database.select(UOM).filter_by(code="UND")).scalar_one()
+        warehouse = database.session.execute(database.select(Warehouse).filter_by(code="BOD01", company="cacao")).scalar_one()
+        suffix = uuid4().hex[:8]
+        order = PurchaseOrder(
+            company="cacao",
+            document_no=f"PO-LATE-{suffix}",
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            posting_date=date(2026, 5, 1),
+            docstatus=1,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(order)
+        database.session.flush()
+        database.session.add(
+            PurchaseOrderItem(
+                purchase_order_id=order.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom=uom.code,
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+            )
+        )
+        invoice = PurchaseInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 5),
+            docstatus=1,
+            document_no=f"PI-LATE-{suffix}",
+            document_type="purchase_invoice",
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            purchase_order_id=order.id,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            total=Decimal("100"),
+            base_total=Decimal("100"),
+            grand_total=Decimal("100"),
+            outstanding_amount=Decimal("100"),
+            base_outstanding_amount=Decimal("100"),
+        )
+        database.session.add(invoice)
+        database.session.flush()
+        database.session.add(
+            PurchaseInvoiceItem(
+                purchase_invoice_id=invoice.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom=uom.code,
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+            )
+        )
+        receipts = []
+        for index, amount in enumerate(("50", "50"), start=1):
+            receipt = PurchaseReceipt(
+                company="cacao",
+                posting_date=date(2026, 5, 10 + index),
+                docstatus=1,
+                document_no=f"PR-LATE-{suffix}-{index}",
+                supplier_id=supplier.id,
+                supplier_name=supplier.name,
+                purchase_order_id=order.id,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+                total=Decimal(amount),
+                base_total=Decimal(amount),
+                grand_total=Decimal(amount),
+            )
+            database.session.add(receipt)
+            database.session.flush()
+            database.session.add(
+                PurchaseReceiptItem(
+                    purchase_receipt_id=receipt.id,
+                    item_code=item.code,
+                    item_name=item.name,
+                    qty=Decimal("0.5"),
+                    qty_in_base_uom=Decimal("0.5"),
+                    uom=uom.code,
+                    rate=Decimal("100"),
+                    amount=Decimal(amount),
+                    base_amount=Decimal(amount),
+                    warehouse=warehouse.code,
+                )
+            )
+            receipts.append(receipt)
+        database.session.commit()
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        with audit_actor(actor.id, actor.name):
+            with approved_execution(invoice, actor.id):
+                post_purchase_invoice(invoice)
+            database.session.commit()
+            for receipt in receipts:
+                with approved_execution(receipt, actor.id):
+                    post_purchase_receipt(receipt)
+                database.session.commit()
+        return {
+            "invoice": invoice.id,
+            "receipts": [receipt.id for receipt in receipts],
+            "item": item.code,
+        }
+
+
+def _gasto_por_libro(voucher_id: str, field: str) -> dict[str, Decimal]:
+    """Suma debe o haber de la cuenta de gasto por libro."""
+    rows = database.session.execute(
+        database.select(GLEntry).where(GLEntry.voucher_id == voucher_id, GLEntry.account_code == "5201")
+    ).scalars()
+    totals: dict[str, Decimal] = {}
+    for row in rows:
+        totals[row.ledger_id] = totals.get(row.ledger_id, Decimal("0")) + getattr(row, field)
+    return totals
+
+
+def test_ciclo_real_reconcilia_reclasificacion_con_gl(entorno_contable_aislado):
+    """Las recepciones reales y sus créditos GL cuadran con la factura 2-way."""
+    app = entorno_contable_aislado.app
+    ids = _preparar_ciclo_real(app)
+    with app.app_context():
+        receipt1, receipt2 = ids["receipts"]
+        gasto_factura = _gasto_por_libro(ids["invoice"], "debit")
+        credito_1 = _gasto_por_libro(receipt1, "credit")
+        credito_2 = _gasto_por_libro(receipt2, "credit")
+        assert gasto_factura
+        assert set(credito_1) == set(credito_2) == set(gasto_factura)
+        for libro, importe in gasto_factura.items():
+            assert importe == Decimal("100.0000")
+            assert credito_1[libro] == Decimal("50.0000")
+            assert credito_2[libro] == Decimal("50.0000")
+            assert credito_1[libro] + credito_2[libro] == importe
+
+        pendiente = _late_two_way_invoice_amounts(database.session.get(PurchaseReceipt, receipt2))
+        assert pendiente[ids["item"]] == Decimal("50.0000")
 
 
 def test_la_asignacion_activa_no_excede_el_pendiente_del_articulo(app, entorno_contable):

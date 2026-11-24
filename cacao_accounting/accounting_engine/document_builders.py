@@ -374,7 +374,7 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
         .scalars()
         .all()
     )
-    amounts, invoice_posting_dates = _late_invoice_amounts(invoices)
+    amounts, invoice_posting_dates, invoice_item_ids = _late_invoice_amounts(invoices)
 
     prior_receipts = (
         database.session.execute(
@@ -395,24 +395,30 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
     )
 
     if prior_receipts and amounts:
-        _subtract_late_receipt_reclassifications(document, amounts, invoice_posting_dates, prior_receipts)
+        _subtract_late_receipt_reclassifications(
+            document, amounts, invoice_posting_dates, prior_receipts, invoice_item_ids=invoice_item_ids
+        )
 
     return amounts
 
 
-def _late_invoice_amounts(invoices: Iterable[PurchaseInvoice]) -> tuple[dict[str, Decimal], dict[str, date]]:
-    """Aggregate two-way invoice values and their earliest posting dates."""
+def _late_invoice_amounts(
+    invoices: Iterable[PurchaseInvoice],
+) -> tuple[dict[str, Decimal], dict[str, date], set[str]]:
+    """Aggregate two-way invoice values, dates and the source item identities."""
     amounts: dict[str, Decimal] = {}
     posting_dates: dict[str, date] = {}
+    invoice_item_ids: set[str] = set()
     for invoice in invoices:
         items = database.session.execute(
             select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id, is_superseded=False)
         ).scalars()
         for item in items:
+            invoice_item_ids.add(str(item.id))
             amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
             if item.item_code not in posting_dates or invoice.posting_date < posting_dates[item.item_code]:
                 posting_dates[item.item_code] = invoice.posting_date
-    return amounts, posting_dates
+    return amounts, posting_dates, invoice_item_ids
 
 
 def _subtract_late_receipt_reclassifications(
@@ -420,6 +426,8 @@ def _subtract_late_receipt_reclassifications(
     amounts: dict[str, Decimal],
     posting_dates: dict[str, date],
     prior_receipts: Iterable[PurchaseReceipt],
+    *,
+    invoice_item_ids: set[str] | None = None,
 ) -> None:
     """Resta las reclasificaciones previas conservando la identidad del artículo.
 
@@ -441,20 +449,21 @@ def _subtract_late_receipt_reclassifications(
             .all()
         )
     allocated_amounts: dict[str, Decimal] = {}
+    receipt_by_id = {receipt.id: receipt for receipt in prior_receipts_list}
     if receipt_items:
-        rows = database.session.execute(
-            select(PurchaseInvoiceReceiptAllocation).where(
-                PurchaseInvoiceReceiptAllocation.company == document.company,
-                PurchaseInvoiceReceiptAllocation.status == "active",
-                PurchaseInvoiceReceiptAllocation.receipt_item_id.in_([item.id for item in receipt_items]),
-            )
-        ).scalars()
+        query = select(PurchaseInvoiceReceiptAllocation).where(
+            PurchaseInvoiceReceiptAllocation.company == document.company,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+            PurchaseInvoiceReceiptAllocation.receipt_item_id.in_([item.id for item in receipt_items]),
+        )
+        if invoice_item_ids is not None:
+            query = query.where(PurchaseInvoiceReceiptAllocation.invoice_item_id.in_(invoice_item_ids))
+        rows = database.session.execute(query).scalars()
         for row in rows:
             key = str(row.receipt_item_id)
             allocated_amounts[key] = allocated_amounts.get(key, Decimal("0")) + _decimal_value(row.invoice_amount)
 
     remaining = dict(amounts)
-    receipt_by_id = {receipt.id: receipt for receipt in prior_receipts_list}
     for item in receipt_items:
         item_code = item.item_code
         available = remaining.get(item_code, Decimal("0"))
