@@ -21,7 +21,7 @@ pytestmark = pytest.mark.database
 
 
 @pytest.fixture
-def admin_app(tmp_path):
+def admin_app(tmp_path, isolated_admin_registry):
     uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
     if uri.startswith("sqlite"):
         uri = f"sqlite:///{tmp_path / 'last-admin.sqlite'}"
@@ -43,31 +43,32 @@ def admin_app(tmp_path):
         }
     )
     sufijo = uuid4().hex[:6]
-    with app.app_context():
-        database.create_all()
-        database.session.add_all(
-            [
-                User(
-                    id=f"adm-a-{sufijo}",
-                    user=f"adm-a-{sufijo}",
-                    name="A",
-                    password=b"x",
-                    active=True,
-                    classification="admin",
-                ),
-                User(
-                    id=f"adm-b-{sufijo}",
-                    user=f"adm-b-{sufijo}",
-                    name="B",
-                    password=b"x",
-                    active=True,
-                    classification="admin",
-                ),
-            ]
-        )
-        database.session.commit()
-        ids = [f"adm-a-{sufijo}", f"adm-b-{sufijo}"]
-    yield app, ids
+    with isolated_admin_registry(app):
+        with app.app_context():
+            database.create_all()
+            database.session.add_all(
+                [
+                    User(
+                        id=f"adm-a-{sufijo}",
+                        user=f"adm-a-{sufijo}",
+                        name="A",
+                        password=b"x",
+                        active=True,
+                        classification="admin",
+                    ),
+                    User(
+                        id=f"adm-b-{sufijo}",
+                        user=f"adm-b-{sufijo}",
+                        name="B",
+                        password=b"x",
+                        active=True,
+                        classification="admin",
+                    ),
+                ]
+            )
+            database.session.commit()
+            ids = [f"adm-a-{sufijo}", f"adm-b-{sufijo}"]
+        yield app, ids
 
 
 def _desactivar(app, user_id: str, barrera: Barrier) -> str:

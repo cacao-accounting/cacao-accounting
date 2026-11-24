@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -12,7 +13,7 @@ from typing import Any
 import pytest
 from argon2 import PasswordHasher
 from flask import Flask
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, or_, select
 from sqlalchemy.dialects import sqlite as sqlite_dialect
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -93,6 +94,73 @@ def _create_all_fast(*args: Any, **kwargs: Any) -> None:
 
 
 database.create_all = _create_all_fast
+
+
+def _suspend_other_admins() -> list[tuple[str, str, list[tuple[str, bool]]]]:
+    """Retira temporalmente el privilegio administrativo de las filas existentes.
+
+    Los motores externos de CI usan una base ya inicializada que siempre contiene
+    al administrador base. Las pruebas del invariante de último administrador
+    necesitan un escenario controlado, por lo que este helper oculta esos
+    privilegios y devuelve un snapshot para restaurarlos al finalizar la prueba.
+    """
+    admin_role = database.session.execute(select(Roles).where(Roles.name == "admin")).scalar_one_or_none()
+    asignaciones: dict[str, list[RolesUser]] = {}
+    if admin_role is not None:
+        activas = (
+            database.session.execute(select(RolesUser).where(RolesUser.role_id == admin_role.id, RolesUser.active.is_(True)))
+            .scalars()
+            .all()
+        )
+        for asignacion in activas:
+            asignaciones.setdefault(asignacion.user_id, []).append(asignacion)
+
+    condiciones = [User.classification == "admin"]
+    if asignaciones:
+        condiciones.append(User.id.in_(list(asignaciones)))
+    usuarios = database.session.execute(select(User).where(User.active.is_(True), or_(*condiciones))).scalars().all()
+
+    snapshot: list[tuple[str, str, list[tuple[str, bool]]]] = []
+    for usuario in usuarios:
+        roles_usuario = asignaciones.get(usuario.id, [])
+        snapshot.append((usuario.id, usuario.classification, [(rol.id, rol.active) for rol in roles_usuario]))
+        if usuario.classification == "admin":
+            usuario.classification = "system"
+        for asignacion in roles_usuario:
+            asignacion.active = False
+    database.session.commit()
+    return snapshot
+
+
+def _restore_admins(snapshot: list[tuple[str, str, list[tuple[str, bool]]]]) -> None:
+    """Restaura la clasificación y los roles suspendidos por ``_suspend_other_admins``."""
+    for user_id, classification, asignaciones in snapshot:
+        usuario = database.session.get(User, user_id)
+        if usuario is not None:
+            usuario.classification = classification
+        for asignacion_id, estaba_activa in asignaciones:
+            asignacion = database.session.get(RolesUser, asignacion_id)
+            if asignacion is not None:
+                asignacion.active = estaba_activa
+    database.session.commit()
+
+
+@pytest.fixture
+def isolated_admin_registry():
+    """Aísla el registro global de administradores durante una prueba."""
+
+    @contextmanager
+    def _aislar(app: Flask):
+        with app.app_context():
+            database.create_all()
+            snapshot = _suspend_other_admins()
+        try:
+            yield
+        finally:
+            with app.app_context():
+                _restore_admins(snapshot)
+
+    return _aislar
 
 
 def pytest_addoption(parser):

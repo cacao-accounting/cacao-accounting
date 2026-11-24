@@ -60,78 +60,84 @@ def _crear_app(tmp_path):
 
 
 @pytest.fixture
-def last_admin_app(tmp_path):
+def last_admin_app(tmp_path, isolated_admin_registry):
     """Dos administradores por clasificación en la base dedicada de la prueba."""
     app = _crear_app(tmp_path)
     suffix = uuid4().hex[:8]
     ids = {}
-    with app.app_context():
-        database.create_all()
-        if database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none() is None:
-            database.session.add(Modules(module="admin", default=False, enabled=True))
-        admin_role = Roles(name=f"admin-{suffix}", note="admin")
-        database.session.add(admin_role)
-        database.session.flush()
-        for label in ("a", "b"):
-            user_id = f"admin-{label}-{suffix}"
-            user = User(
-                id=user_id,
-                user=user_id,
-                name=f"Admin {label}",
-                password=b"unused",
-                active=True,
-                classification="admin",
-            )
-            database.session.add(user)
+    with isolated_admin_registry(app):
+        with app.app_context():
+            database.create_all()
+            if database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none() is None:
+                database.session.add(Modules(module="admin", default=False, enabled=True))
+            admin_role = Roles(name=f"admin-{suffix}", note="admin")
+            database.session.add(admin_role)
             database.session.flush()
-            database.session.add(RolesUser(user_id=user_id, role_id=admin_role.id, active=True))
-            ids[label] = user_id
-        ids["admin_role"] = admin_role.id
-        database.session.commit()
+            for label in ("a", "b"):
+                user_id = f"admin-{label}-{suffix}"
+                user = User(
+                    id=user_id,
+                    user=user_id,
+                    name=f"Admin {label}",
+                    password=b"unused",
+                    active=True,
+                    classification="admin",
+                )
+                database.session.add(user)
+                database.session.flush()
+                database.session.add(RolesUser(user_id=user_id, role_id=admin_role.id, active=True))
+                ids[label] = user_id
+            ids["admin_role"] = admin_role.id
+            database.session.commit()
 
-    yield app, ids
+        yield app, ids
 
-    with app.app_context():
-        database.session.execute(database.delete(RolesUser).where(RolesUser.user_id.in_([ids["a"], ids["b"]])))
-        database.session.execute(database.delete(User).where(User.id.in_([ids["a"], ids["b"]])))
-        database.session.execute(database.delete(Roles).where(Roles.id == ids["admin_role"]))
-        database.session.commit()
-        database.session.remove()
-        database.engine.dispose()
+        with app.app_context():
+            database.session.execute(database.delete(RolesUser).where(RolesUser.user_id.in_([ids["a"], ids["b"]])))
+            database.session.execute(database.delete(User).where(User.id.in_([ids["a"], ids["b"]])))
+            database.session.execute(database.delete(Roles).where(Roles.id == ids["admin_role"]))
+            database.session.commit()
+            database.session.remove()
+            database.engine.dispose()
 
 
-def _single_admin_app(tmp_path, *, classification: str = "admin", with_role: bool = False):
+@pytest.fixture
+def single_admin_app(tmp_path, request, isolated_admin_registry):
     """Escenario con un único administrador y sin otros privilegiados."""
+    parametros = getattr(request, "param", {})
+    classification = parametros.get("classification", "admin")
+    with_role = parametros.get("with_role", False)
     app = _crear_app(tmp_path)
     suffix = uuid4().hex[:8]
     user_id = f"sole-{suffix}"
     username = f"sole-{suffix}"
-    with app.app_context():
-        database.create_all()
-        modulo_admin = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
-        if modulo_admin is None:
-            database.session.add(Modules(module="admin", default=False, enabled=True))
-        else:
-            modulo_admin.enabled = True
-        database.session.add(
-            User(
-                id=user_id,
-                user=username,
-                name="Administrador único",
-                password=b"unused",
-                active=True,
-                classification=classification,
+    with isolated_admin_registry(app):
+        with app.app_context():
+            database.create_all()
+            modulo_admin = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
+            if modulo_admin is None:
+                database.session.add(Modules(module="admin", default=False, enabled=True))
+            else:
+                modulo_admin.enabled = True
+            database.session.add(
+                User(
+                    id=user_id,
+                    user=username,
+                    name="Administrador único",
+                    password=b"unused",
+                    active=True,
+                    classification=classification,
+                )
             )
-        )
-        if with_role:
-            admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
-            if admin_role is None:
-                admin_role = Roles(name="admin", note="admin")
-                database.session.add(admin_role)
-                database.session.flush()
-            database.session.add(RolesUser(user_id=user_id, role_id=admin_role.id, active=True))
-        database.session.commit()
-    return app, user_id, username
+            if with_role:
+                admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
+                if admin_role is None:
+                    admin_role = Roles(name="admin", note="admin")
+                    database.session.add(admin_role)
+                    database.session.flush()
+                database.session.add(RolesUser(user_id=user_id, role_id=admin_role.id, active=True))
+            database.session.commit()
+        yield app, user_id, username
 
 
 def _authenticated(app, user_id: str):
@@ -235,9 +241,10 @@ def test_concurrent_demotions_cannot_remove_all_admins(last_admin_app):
     assert _active_admin_total(app) == 1
 
 
-def test_toggle_http_rechaza_desactivar_al_ultimo_admin(tmp_path):
+@pytest.mark.parametrize("single_admin_app", [{}], indirect=True)
+def test_toggle_http_rechaza_desactivar_al_ultimo_admin(single_admin_app):
     """POST real al listado: el último administrador no puede desactivarse."""
-    app, user_id, _ = _single_admin_app(tmp_path)
+    app, user_id, _ = single_admin_app
     client = _authenticated(app, user_id)
 
     response = client.post(
@@ -252,9 +259,10 @@ def test_toggle_http_rechaza_desactivar_al_ultimo_admin(tmp_path):
         assert database.session.get(User, user_id).active is True
 
 
-def test_edicion_http_rechaza_desclasificar_al_ultimo_admin(tmp_path):
+@pytest.mark.parametrize("single_admin_app", [{}], indirect=True)
+def test_edicion_http_rechaza_desclasificar_al_ultimo_admin(single_admin_app):
     """POST real a la edición: el último administrador conserva su clasificación."""
-    app, user_id, username = _single_admin_app(tmp_path)
+    app, user_id, username = single_admin_app
     client = _authenticated(app, user_id)
 
     response = client.post(
@@ -269,9 +277,10 @@ def test_edicion_http_rechaza_desclasificar_al_ultimo_admin(tmp_path):
         assert database.session.get(User, user_id).classification == "admin"
 
 
-def test_roles_http_rechaza_retirar_el_rol_admin_al_ultimo_admin(tmp_path):
+@pytest.mark.parametrize("single_admin_app", [{"classification": "system", "with_role": True}], indirect=True)
+def test_roles_http_rechaza_retirar_el_rol_admin_al_ultimo_admin(single_admin_app):
     """POST real a roles: un administrador por rol no puede quedarse sin él."""
-    app, user_id, _ = _single_admin_app(tmp_path, classification="system", with_role=True)
+    app, user_id, _ = single_admin_app
     client = _authenticated(app, user_id)
 
     response = client.post(f"/settings/users/{user_id}/roles", data={}, follow_redirects=True)
