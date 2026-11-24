@@ -23,6 +23,9 @@ TELEFONO = _l("Teléfono")
 NUEVA_CONTRASENA = _l("Nueva contraseña")
 CONFIRMAR_CONTRASENA = _l("Confirmar contraseña")
 CONTRASENAS_NO_COINCIDEN = _l("Las contraseñas deben coincidir")
+NOMBRE_MAX_LENGTH = 80
+CORREO_MAX_LENGTH = 150
+TELEFONO_MAX_LENGTH = 50
 
 
 class LoginForm(FlaskForm):
@@ -36,12 +39,12 @@ class LoginForm(FlaskForm):
 class ProfileForm(FlaskForm):
     """Formulario para actualizar información personal."""
 
-    name = StringField(_l("Nombre"), validators=[Optional()])
-    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional()])
-    last_name = StringField(_l("Apellido"), validators=[Optional()])
-    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
-    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
-    phone = StringField(TELEFONO, validators=[Optional()])
+    name = StringField(_l("Nombre"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    last_name = StringField(_l("Apellido"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email(), Length(max=CORREO_MAX_LENGTH)])
+    phone = StringField(TELEFONO, validators=[Optional(), Length(max=TELEFONO_MAX_LENGTH)])
     language = SelectField(
         _l("Idioma"),
         choices=[
@@ -70,12 +73,12 @@ class UserCreateForm(FlaskForm):
     """Formulario para crear usuarios."""
 
     usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
-    name = StringField(_l("Nombre"), validators=[Optional()])
-    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional()])
-    last_name = StringField(_l("Apellido"), validators=[Optional()])
-    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
-    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
-    phone = StringField(TELEFONO, validators=[Optional()])
+    name = StringField(_l("Nombre"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    last_name = StringField(_l("Apellido"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email(), Length(max=CORREO_MAX_LENGTH)])
+    phone = StringField(TELEFONO, validators=[Optional(), Length(max=TELEFONO_MAX_LENGTH)])
     classification = SelectField(
         _l("Clasificación"),
         choices=[
@@ -101,12 +104,12 @@ class UserEditForm(FlaskForm):
     """Formulario para editar usuarios."""
 
     usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
-    name = StringField(_l("Nombre"), validators=[Optional()])
-    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional()])
-    last_name = StringField(_l("Apellido"), validators=[Optional()])
-    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
-    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
-    phone = StringField(TELEFONO, validators=[Optional()])
+    name = StringField(_l("Nombre"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    last_name = StringField(_l("Apellido"), validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional(), Length(max=NOMBRE_MAX_LENGTH)])
+    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email(), Length(max=CORREO_MAX_LENGTH)])
+    phone = StringField(TELEFONO, validators=[Optional(), Length(max=TELEFONO_MAX_LENGTH)])
     classification = SelectField(
         _l("Clasificación"),
         choices=[
