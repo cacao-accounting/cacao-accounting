@@ -119,7 +119,7 @@ def get_user_activity_summary(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "audit.reports.read", "audit", company_id)
+    validate_permission(context, "audit.reports.read", None, company_id)
     current_page, size = paginate(page, page_size)
     query = database.select(
         AuditTrail.actor_user_id,
