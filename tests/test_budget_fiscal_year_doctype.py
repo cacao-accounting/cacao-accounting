@@ -21,12 +21,15 @@ def _assert_doctype_valido(cuerpo: str) -> None:
 
 
 def test_alta_de_presupuesto_usa_el_doctype_registrado(app, authenticated_client, entorno_contable):
-    """El formulario de alta apunta al doctype que el API registra."""
+    """El formulario de alta apunta al doctype que el API registra y no filtra Jinja."""
     del entorno_contable
     response = authenticated_client("admin").get("/accounting/presupuestos/new")
 
     assert response.status_code == 200
-    _assert_doctype_valido(response.get_data(as_text=True))
+    cuerpo = response.get_data(as_text=True)
+    _assert_doctype_valido(cuerpo)
+    assert 'placeholder="ej. PPTO-2026-BASE"' in cuerpo
+    assert "{{ _(" not in cuerpo
 
 
 def test_reporte_real_vs_presupuesto_usa_el_doctype_registrado(app, authenticated_client, entorno_contable):
