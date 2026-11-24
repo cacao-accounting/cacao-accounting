@@ -2,6 +2,7 @@
 {% block contenido %}
 <div class="ca-page-header"><h4>{{ _("Precios por Item") }}</h4></div>
 <form method="post" class="mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
   <div class="row g-2">
     <div class="col-md-2"><input class="form-control" name="item_code" placeholder="{{ _('Artículo') }}" required></div>
     <div class="col-md-3"><select class="form-select" name="price_list_id">{% for price_list in price_lists %}<option value="{{ price_list.id }}">{{ price_list.name }}</option>{% endfor %}</select></div>
@@ -24,6 +25,7 @@
       <td>{{ item_price.item_code }}</td><td>{{ item_price.price_list_id }}</td><td>{{ item_price.uom or "" }}</td><td>{{ item_price.price }}</td>
       <td>
         <form method="post" action="{{ url_for('admin.actualizar_precio_item', item_price_id=item_price.id) }}" class="d-flex gap-1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input class="form-control form-control-sm" name="price" type="number" step="0.0001" min="0" value="{{ item_price.price }}" aria-label="{{ _('Precio') }}">
           <input type="hidden" name="min_qty" value="{{ item_price.min_qty or 0 }}">
           <input type="hidden" name="valid_from" value="{{ item_price.valid_from or '' }}">
