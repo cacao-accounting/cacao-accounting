@@ -526,7 +526,7 @@
                         name: "expense_account_id",
                         minChars: 2,
                         initialValue: row.expense_account_id,
-                        filters: { company: row.company, account_type: ["expense"], is_active: true },
+                        filters: { company: function () { return row.company; }, account_type: ["expense"], is_active: true },
                         requiredFilters: ["company"],
                         messages: {
                           placeholder: {{ _('Buscar cuenta de gasto')|tojson }},
@@ -558,7 +558,7 @@
                         name: "income_account_id",
                         minChars: 2,
                         initialValue: row.income_account_id,
-                        filters: { company: row.company, account_type: ["income"], is_active: true },
+                        filters: { company: function () { return row.company; }, account_type: ["income"], is_active: true },
                         requiredFilters: ["company"],
                         messages: {
                           placeholder: {{ _('Buscar cuenta de ingresos')|tojson }},
@@ -590,7 +590,7 @@
                         name: "cogs_account_id",
                         minChars: 2,
                         initialValue: row.cogs_account_id,
-                        filters: { company: row.company, account_type: ["cost_of_goods_sold"], is_active: true },
+                        filters: { company: function () { return row.company; }, account_type: ["cost_of_goods_sold"], is_active: true },
                         requiredFilters: ["company"],
                         messages: {
                           placeholder: {{ _('Buscar cuenta COGS')|tojson }},
@@ -622,7 +622,7 @@
                         name: "stock_adjustment_account_id",
                         minChars: 2,
                         initialValue: row.stock_adjustment_account_id,
-                        filters: { company: row.company, account_type: ["expense", "income", "inventory_adjustment"], is_active: true },
+                        filters: { company: function () { return row.company; }, account_type: ["expense", "income", "inventory_adjustment"], is_active: true },
                         requiredFilters: ["company"],
                         messages: {
                           placeholder: {{ _('Buscar cuenta de ajuste de inventario')|tojson }},
