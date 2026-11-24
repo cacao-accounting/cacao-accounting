@@ -18,6 +18,7 @@ from uuid import uuid4
 import pytest
 
 from cacao_accounting import create_app
+from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     CompanyParty,
@@ -33,6 +34,7 @@ from cacao_accounting.database import (
 )
 
 FECHA = date(2026, 5, 15)
+CONTRASENA_PORTAL = "PortalPass-2026!"
 
 
 @pytest.fixture
@@ -75,7 +77,7 @@ def portal_revocable():
                     id=f"portal-cliente-{suffix}",
                     user=f"portal_cliente_{suffix}",
                     name="Cliente Portal",
-                    password=b"x",
+                    password=proteger_passwd(CONTRASENA_PORTAL),
                     active=True,
                     classification="customer",
                     party_id=cliente.id,
@@ -85,7 +87,7 @@ def portal_revocable():
                     id=f"portal-proveedor-{suffix}",
                     user=f"portal_proveedor_{suffix}",
                     name="Proveedor Portal",
-                    password=b"x",
+                    password=proteger_passwd(CONTRASENA_PORTAL),
                     active=True,
                     classification="supplier",
                     party_id=proveedor.id,
@@ -95,7 +97,7 @@ def portal_revocable():
                     id=f"portal-mixto-{suffix}",
                     user=f"portal_mixto_{suffix}",
                     name="Cliente con rol admin",
-                    password=b"x",
+                    password=proteger_passwd(CONTRASENA_PORTAL),
                     active=True,
                     classification="customer",
                     party_id=cliente.id,
@@ -272,6 +274,62 @@ def test_login_redirige_al_portal_con_vinculo_vigente(portal_revocable):
         with application.test_request_context("/"):
             login_user(user)
             assert portal_home_for_user() == "/portal/customer"
+
+
+def _login_http(application: Any, user_id: str):
+    """Inicia sesión por la ruta real y devuelve el cliente y el redirect."""
+    with application.app_context():
+        username = database.session.get(User, user_id).user
+    client = application.test_client()
+    response = client.post(
+        "/login",
+        data={"usuario": username, "acceso": CONTRASENA_PORTAL},
+    )
+    return client, response
+
+
+def test_login_http_redirige_al_portal_de_cliente(portal_revocable):
+    """Control positivo del flujo real: cliente vigente llega a su portal."""
+    application, ids = portal_revocable
+
+    _client, response = _login_http(application, ids["cliente_user"])
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/portal/customer")
+
+
+def test_login_http_redirige_al_portal_de_proveedor(portal_revocable):
+    """Control positivo del flujo real: proveedor vigente llega a su portal."""
+    application, ids = portal_revocable
+
+    _client, response = _login_http(application, ids["proveedor_user"])
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/portal/supplier")
+
+
+def test_login_http_no_redirige_al_portal_con_vinculo_revocado(portal_revocable):
+    """Un vínculo inactivo se resuelve en /index, no en un portal que daría 403."""
+    application, ids = portal_revocable
+    _deactivate_link(application, ids["cliente"])
+
+    client, response = _login_http(application, ids["cliente_user"])
+
+    assert response.status_code == 302
+    assert "/portal/" not in response.headers["Location"]
+    assert client.get("/portal/customer").status_code == 403
+
+
+def test_login_http_no_redirige_al_portal_con_tercero_inactivo(portal_revocable):
+    """Un proveedor inactivo tampoco es enviado al portal."""
+    application, ids = portal_revocable
+    _deactivate_party(application, ids["proveedor"])
+
+    client, response = _login_http(application, ids["proveedor_user"])
+
+    assert response.status_code == 302
+    assert "/portal/" not in response.headers["Location"]
+    assert client.get("/portal/supplier").status_code == 403
 
 
 def test_perfil_mixto_admin_solo_ve_sus_documentos(portal_revocable):
