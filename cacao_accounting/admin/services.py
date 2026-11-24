@@ -219,14 +219,16 @@ def _commit_last_admin_transition() -> bool:
 
 
 def _active_admin_count(exclude_user_id: str | None = None) -> int:
-    """Cuenta los administradores activos, opcionalmente excluyendo uno."""
-    consulta = database.select(database.func.count(User.id)).where(
+    """Cuenta administradores con una lectura actual bajo motores Cloud."""
+    consulta = database.select(User.id).where(
         User.active.is_(True),
         _active_admin_filter(),
     )
     if exclude_user_id:
         consulta = consulta.where(User.id != exclude_user_id)
-    return int(database.session.execute(consulta).scalar() or 0)
+    if database.engine.dialect.name != "sqlite":
+        consulta = consulta.with_for_update()
+    return len(database.session.execute(consulta.execution_options(populate_existing=True)).scalars().all())
 
 
 def _would_leave_no_admin(

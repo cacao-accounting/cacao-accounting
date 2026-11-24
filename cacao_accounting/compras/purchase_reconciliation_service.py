@@ -339,13 +339,14 @@ def _item_qty_in_base_uom(item: Any) -> Decimal:
 
 def _allocated_invoice_qty(invoice_item_id: str) -> Decimal:
     """Return the active quantity already allocated from an invoice line."""
-    value = database.session.execute(
-        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.qty_in_base_uom), 0)).where(
-            PurchaseInvoiceReceiptAllocation.invoice_item_id == invoice_item_id,
-            PurchaseInvoiceReceiptAllocation.status == "active",
-        )
-    ).scalar_one()
-    return _decimal_value(value)
+    consulta = select(PurchaseInvoiceReceiptAllocation.qty_in_base_uom).where(
+        PurchaseInvoiceReceiptAllocation.invoice_item_id == invoice_item_id,
+        PurchaseInvoiceReceiptAllocation.status == "active",
+    )
+    if database.engine.dialect.name != "sqlite":
+        consulta = consulta.with_for_update()
+    cantidades = database.session.execute(consulta).scalars().all()
+    return sum((_decimal_value(cantidad) for cantidad in cantidades), Decimal("0"))
 
 
 def _allocated_receipt_qty(receipt_item_id: str) -> Decimal:

@@ -13,7 +13,7 @@ from logging import getLogger
 
 from typing import Any, Sequence, cast
 
-from sqlalchemy import and_, func, or_, update
+from sqlalchemy import and_, or_, update
 from sqlalchemy.exc import DBAPIError
 
 from cacao_accounting.exceptions import flash_error
@@ -1650,7 +1650,7 @@ def _award_consumed_base_quantity(
         ),
     )
     query = (
-        database.select(func.coalesce(func.sum(DocumentRelation.qty_in_base_uom), 0))
+        database.select(DocumentRelation.qty_in_base_uom)
         .join(PurchaseOrder, PurchaseOrder.id == DocumentRelation.target_id)
         .where(
             PurchaseOrder.purchase_award_id == award.id,
@@ -1661,7 +1661,10 @@ def _award_consumed_base_quantity(
     )
     if current_order_id:
         query = query.where(PurchaseOrder.id != current_order_id)
-    return _award_decimal(database.session.execute(query).scalar_one())
+    if database.engine.dialect.name != "sqlite":
+        query = query.with_for_update()
+    cantidades = database.session.execute(query).scalars().all()
+    return sum((_award_decimal(cantidad) for cantidad in cantidades), Decimal("0"))
 
 
 def _award_line_matches_supplier(award_line: PurchaseQuotationAwardItem, supplier_id: str | None) -> bool:

@@ -108,8 +108,11 @@ def _single_admin_app(tmp_path, *, classification: str = "admin", with_role: boo
     username = f"sole-{suffix}"
     with app.app_context():
         database.create_all()
-        if database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none() is None:
+        modulo_admin = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
+        if modulo_admin is None:
             database.session.add(Modules(module="admin", default=False, enabled=True))
+        else:
+            modulo_admin.enabled = True
         database.session.add(
             User(
                 id=user_id,
