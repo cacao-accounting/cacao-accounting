@@ -20,8 +20,6 @@ from cacao_accounting.i18n import _
 class JournalEntryAdapter(BaseImportAdapter):
     """Adaptador para Comprobantes Contables."""
 
-    _BALANCE_TOLERANCE = Decimal("0.0001")
-
     @staticmethod
     def _amount(value: Any) -> Decimal:
         """Parsea un importe sin perder precisión ni aceptar valores no finitos."""
@@ -66,20 +64,16 @@ class JournalEntryAdapter(BaseImportAdapter):
         return default
 
     def _validate_amounts(self, document_data: List[Dict[str, Any]]) -> List[str]:
-        """Valida importes y balance global de las líneas importadas."""
+        """Valida importes parseables; el balance por libro lo resuelve el motor."""
         errors: List[str] = []
         if len(document_data) < 2:
             errors.append("Un comprobante contable debe tener al menos dos líneas.")
-        total_debit = Decimal("0")
-        total_credit = Decimal("0")
         for row in document_data:
             try:
-                total_debit += self._amount(self._value(row, "debito", "debit"))
-                total_credit += self._amount(self._value(row, "credito", "credit"))
+                self._amount(self._value(row, "debito", "debit"))
+                self._amount(self._value(row, "credito", "credit"))
             except (InvalidOperation, ValueError, TypeError):
                 errors.append(f"Monto inválido en referencia {self._value(row, 'document_ref', 'reference')}")
-        if document_data and abs(total_debit - total_credit) > self._BALANCE_TOLERANCE:
-            errors.append(f"El comprobante {self._value(document_data[0], 'document_ref', 'reference')} no está balanceado.")
         return errors
 
     def _validate_period(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None) -> List[str]:
