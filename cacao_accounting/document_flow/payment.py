@@ -398,6 +398,9 @@ def compute_outstanding_amount(
     """
     if as_of_date is None:
         as_of_date = date.today()
+    posting_date = getattr(document, "posting_date", None)
+    if posting_date is not None and posting_date > as_of_date:
+        return Decimal("0")
     from cacao_accounting.database import ARAPLedgerEntry
 
     document_type = normalize_doctype(str(getattr(document, "document_type", None) or getattr(document, "__tablename__", "")))
