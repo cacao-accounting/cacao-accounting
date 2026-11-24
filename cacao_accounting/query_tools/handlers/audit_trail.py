@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import func
@@ -14,6 +14,7 @@ from cacao_accounting.audit_trail_service import get_document_timeline_page
 from cacao_accounting.database import AuditTrail, database
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import (
     PaginatedResult,
@@ -91,19 +92,6 @@ def get_document_timeline_handler(
     return result.to_dict()
 
 
-def _parse_iso_date(value: str | None) -> date | None:
-    """Convierte una fecha ISO del schema o falla como error de parámetro (#1969)."""
-    if not value:
-        return None
-    try:
-        return date.fromisoformat(value)
-    except (TypeError, ValueError) as exc:
-        raise QueryToolError(
-            code=ErrorCode.INVALID_PARAMETER,
-            message=_l("La fecha debe usar el formato ISO 8601 (AAAA-MM-DD)."),
-        ) from exc
-
-
 @query_tool(
     name="audit.get_user_activity_summary",
     description=_l("Resume eventos de auditoría por usuario y acción, sin exponer payloads internos."),
@@ -140,8 +128,8 @@ def get_user_activity_summary(
         AuditTrail.document_type,
         func.count(AuditTrail.id).label("event_count"),
     ).where(AuditTrail.company == company_id)
-    inicio = _parse_iso_date(date_from)
-    fin = _parse_iso_date(date_to)
+    inicio = parse_iso_date(date_from)
+    fin = parse_iso_date(date_to)
     if inicio and fin and inicio > fin:
         raise QueryToolError(
             code=ErrorCode.INVALID_PARAMETER,

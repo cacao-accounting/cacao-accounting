@@ -22,6 +22,7 @@ from cacao_accounting.database import (
 from cacao_accounting.document_flow.payment import compute_payment_unallocated_amount
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.document_acl import allowed_doctypes
 from cacao_accounting.query_tools.permissions import validate_permission
@@ -33,7 +34,7 @@ _PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
 
 def _parse_date(value: str | None) -> date | None:
-    return date.fromisoformat(value) if value else None
+    return parse_iso_date(value)
 
 
 def _decimal(value: Any) -> str:

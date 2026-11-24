@@ -14,6 +14,7 @@ from cacao_accounting.database import CashForecast, database
 from cacao_accounting.reportes.services import MaturityFilters, get_maturity_schedule
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
 
@@ -174,7 +175,7 @@ def get_maturity_schedule_handler(
     report = get_maturity_schedule(
         MaturityFilters(
             company=company_id,
-            as_of_date=date.fromisoformat(as_of_date),
+            as_of_date=parse_iso_date(as_of_date, required=True),
             party_type=party_type,
             party_id=party_id,
             horizon_days=horizon_days,

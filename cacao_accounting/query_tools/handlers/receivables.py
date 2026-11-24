@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
 from sqlalchemy import func
@@ -17,6 +16,7 @@ from cacao_accounting.database import (
 from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.handlers.aging import AgingQuery, get_aging_result
 from cacao_accounting.query_tools.pagination import (
     PaginatedResult,
@@ -61,7 +61,8 @@ def get_receivables_aging(
         required_module="sales",
         company_id=company_id,
     )
-    cutoff_date = date.fromisoformat(as_of_date)
+    cutoff_date = parse_iso_date(as_of_date, required=True)
+    assert cutoff_date is not None
     return get_aging_result(
         AgingQuery(
             company_id=company_id,

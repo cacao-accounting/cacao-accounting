@@ -13,6 +13,7 @@ from typing import Any, Callable
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.errors import QueryToolError
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.permissions import validate_permission
 from cacao_accounting.reportes.services import (
     BankingFilters,
@@ -102,7 +103,7 @@ def _report_result(report: Any, company_id: str | None = None, filters: Any = No
 
 
 def _date(value: str | None) -> date | None:
-    return date.fromisoformat(value) if value else None
+    return parse_iso_date(value)
 
 
 def _aging_result(report: Any) -> dict[str, Any]:

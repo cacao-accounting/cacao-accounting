@@ -21015,6 +21015,10 @@ msgstr "Select a compatible period or date range."
 msgid "La fecha inicial no puede ser posterior a la fecha final."
 msgstr "The start date cannot be later than the end date."
 
+#: cacao_accounting/query_tools/handlers/dates.py
+msgid "La fecha debe usar el formato ISO 8601 (AAAA-MM-DD)."
+msgstr "The date must use ISO 8601 format (YYYY-MM-DD)."
+
 #: cacao_accounting/reportes/periods.py:46
 msgid "Período contable inválido o perteneciente a otra compañía."
 msgstr "Invalid accounting period or one that belongs to another company."

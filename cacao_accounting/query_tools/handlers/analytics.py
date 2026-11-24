@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.handlers.advanced import _json_value
+from cacao_accounting.query_tools.handlers.dates import parse_iso_date
 from cacao_accounting.query_tools.permissions import validate_permission
 
 from cacao_accounting.reportes.analytics import (
@@ -27,7 +28,7 @@ _PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
 
 
 def _date(value: str) -> date:
-    return date.fromisoformat(value)
+    return cast(date, parse_iso_date(value, required=True))
 
 
 def _json(value: Any) -> Any:
