@@ -664,9 +664,15 @@ def ventas_pedido_venta_duplicar(request_id: str):
     if origen.docstatus == 2:
         abort(400)
 
+    try:
+        customer = _validated_customer(origen.customer_id)
+    except ValueError as exc:
+        flash_error(exc)
+        return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
+
     duplicado = SalesRequest(
         customer_id=origen.customer_id,
-        customer_name=origen.customer_name,
+        customer_name=customer.name if customer else None,
         company=origen.company,
         transaction_currency=origen.transaction_currency,
         base_currency=origen.base_currency,
