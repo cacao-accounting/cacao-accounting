@@ -60,6 +60,7 @@ from cacao_accounting.contabilidad.services import (
     _build_journal_lineas,
     _get_journal_currency_label,
     _update_series_sequence,
+    validate_monthly_reset_prefix,
     _update_counter_from_form,
     _sync_counter_naming_series_map,
     enforce_close_and_recurring_company_access,
@@ -4068,6 +4069,15 @@ def naming_series_new():
     form.company.choices = company_choices
 
     if form.validate_on_submit():
+        try:
+            validate_monthly_reset_prefix(form.prefix_template.data, form.reset_policy.data)
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+            return render_template(
+                "contabilidad/naming_series_nueva.html",
+                form=form,
+                titulo=_("Nueva Serie de Numeracion") + " - " + APPNAME,
+            )
         company = form.company.data or None
         is_default = bool(form.is_default.data)
 
@@ -4182,6 +4192,16 @@ def naming_series_edit(series_id: str):
         )
 
     company = form.company.data or None
+    try:
+        validate_monthly_reset_prefix(form.prefix_template.data, form.reset_policy.data)
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+        return render_template(
+            "contabilidad/naming_series_nueva.html",
+            form=form,
+            titulo=_("Editar Serie de Numeracion") + " - " + APPNAME,
+            edit=True,
+        )
     if form.is_default.data:
         lock_default_scopes(
             "naming_series",

@@ -13593,6 +13593,10 @@ msgstr "Increment"
 msgid "Politica de Reinicio"
 msgstr "Reset Policy"
 
+#: cacao_accounting/contabilidad/services.py
+msgid "La política de reinicio mensual requiere que el prefijo incluya *MM* o *MMM*."
+msgstr "The monthly reset policy requires the prefix to include *MM* or *MMM*."
+
 #: cacao_accounting/contabilidad/forms.py:193
 msgid "Predeterminada para esta compañía y documento"
 msgstr "Default for this company and document"
