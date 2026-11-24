@@ -57,8 +57,22 @@ def _plantilla_impuesto(sufijo: str) -> TaxTemplate:
     return plantilla
 
 
-def test_duplicado_recalcula_el_total_fiscal(app, entorno_contable, authenticated_client):
+def _cliente_aislado(escenario):
+    """Autentica un cliente en la app aislada del escenario."""
+    from sqlalchemy import inspect
+
+    app = escenario.app
+    user_id = str(inspect(escenario.admin_user).identity[0])
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_fresh"] = True
+    return client
+
+
+def test_duplicado_recalcula_el_total_fiscal(entorno_contable_aislado):
     """El borrador duplicado usa la plantilla real y conserva el total al enviarse."""
+    app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:8]
     with app.app_context():
         matching = database.session.execute(
@@ -126,7 +140,7 @@ def test_duplicado_recalcula_el_total_fiscal(app, entorno_contable, authenticate
         origen_id = origen.id
         plantilla_id = plantilla.id
 
-    client = authenticated_client()
+    client = _cliente_aislado(entorno_contable_aislado)
     respuesta = client.post(f"/buying/purchase-invoice/{origen_id}/duplicate")
 
     assert respuesta.status_code == 302
