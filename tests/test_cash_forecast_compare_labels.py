@@ -39,6 +39,21 @@ def _crear_pronostico(cliente, version: str) -> str:
     return ruta.rsplit("/", 1)[-1]
 
 
+def _agregar_entrada(cliente, forecast_id: str, monto: str) -> None:
+    """Registra una proyección manual en moneda funcional."""
+    respuesta = cliente.post(
+        f"/cash_management/cash-forecast/{forecast_id}/entry/add",
+        data={
+            "type": "Income",
+            "concept": f"Ingreso {monto}",
+            "currency": "NIO",
+            "amount": monto,
+            "estimated_date": "2026-12-15",
+        },
+    )
+    assert respuesta.status_code in (302, 303), respuesta.get_data(as_text=True)
+
+
 def test_comparativo_muestra_estados_y_zonas_traducidos(app, authenticated_client, entorno_contable):
     """El comparativo usa Borrador/Aprobado y zonas traducidas, nunca códigos crudos."""
     if os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}:
@@ -50,6 +65,8 @@ def test_comparativo_muestra_estados_y_zonas_traducidos(app, authenticated_clien
 
     borrador_id = _crear_pronostico(cliente, f"base-{sufijo}")
     aprobado_id = _crear_pronostico(cliente, f"escenario-{sufijo}")
+    _agregar_entrada(cliente, borrador_id, "100")
+    _agregar_entrada(cliente, aprobado_id, "50")
     aprobacion = cliente.post(f"/cash_management/cash-forecast/{aprobado_id}/approve")
     assert aprobacion.status_code in (302, 303), "El pronóstico borrador debe poder aprobarse."
 
@@ -76,3 +93,7 @@ def test_comparativo_muestra_estados_y_zonas_traducidos(app, authenticated_clien
     # Ningún código interno llega al HTML como etiqueta.
     for codigo in ("Current", "Projected", "Draft", "Approved"):
         assert codigo not in html, f"El código crudo {codigo} no debe aparecer en el comparativo."
+
+    # Los importes se muestran en la moneda funcional de la compañía.
+    assert "NIO 100.00" in html
+    assert "NIO 50.00" in html
