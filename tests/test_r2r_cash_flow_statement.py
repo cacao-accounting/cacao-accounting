@@ -271,7 +271,7 @@ def test_cash_flow_includes_an_active_interperiod_reversal(cash_flow_business_ca
                 debit=debit,
                 credit=credit,
                 voucher_type="journal_entry",
-                voucher_id=f"prior-sale-{base.voucher_id}",
+                voucher_id=f"prior-{base.id[:20]}",
                 fiscal_year_id=base.fiscal_year_id,
             )
             database.session.add(original)
@@ -295,7 +295,7 @@ def test_cash_flow_includes_an_active_interperiod_reversal(cash_flow_business_ca
                     debit=debit,
                     credit=credit,
                     voucher_type="journal_entry",
-                    voucher_id=f"reversal-{base.voucher_id}",
+                    voucher_id=f"revr-{base.id[:21]}",
                     fiscal_year_id=base.fiscal_year_id,
                     accounting_period_id=filters.accounting_period,
                     is_reversal=True,
