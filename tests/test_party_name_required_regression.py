@@ -14,17 +14,33 @@ from cacao_accounting.database import CompanyParty, Party, database
 
 @pytest.fixture(autouse=True)
 def _modulos_de_terceros(app):
-    """Asegura que las rutas de ventas y compras estén activas."""
+    """Activa ventas/compras y restaura su estado previo al terminar."""
+    previos: dict[str, tuple[bool, bool | None]] = {}
     with app.app_context():
         from cacao_accounting.database import Modules
 
         for module in ("sales", "purchases"):
             registro = database.session.execute(database.select(Modules).filter_by(module=module)).scalar_one_or_none()
+            previos[module] = (registro is None, None if registro is None else registro.enabled)
             if registro is None:
                 database.session.add(Modules(module=module, default=False, enabled=True))
             else:
                 registro.enabled = True
         database.session.commit()
+    try:
+        yield
+    finally:
+        with app.app_context():
+            from cacao_accounting.database import Modules
+
+            for module, (no_existia, enabled) in previos.items():
+                registro = database.session.execute(database.select(Modules).filter_by(module=module)).scalar_one_or_none()
+                if registro is not None:
+                    if no_existia:
+                        database.session.delete(registro)
+                    else:
+                        registro.enabled = enabled
+            database.session.commit()
 
 
 @pytest.mark.parametrize(
