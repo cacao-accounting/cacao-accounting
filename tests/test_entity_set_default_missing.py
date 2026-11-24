@@ -27,3 +27,10 @@ def test_set_default_inexistente_responde_404(app, entorno_contable, authenticat
             .all()
         )
         assert despues == antes
+
+
+def test_editar_entidad_inexistente_responde_404(app, entorno_contable, authenticated_client):
+    """La ruta de edición incluida en el alcance no responde 500."""
+    response = authenticated_client("admin").get("/accounting/entity/edit/ENTIDAD-QUE-NO-EXISTE")
+
+    assert response.status_code == 404
