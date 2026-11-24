@@ -20,7 +20,7 @@ from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_do
 from cacao_accounting.document_flow.repository import document_matches_type, get_document, get_document_company
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
-from cacao_accounting.query_tools.permissions import validate_company_access, validate_module_active
+from cacao_accounting.query_tools.permissions import validate_company_access
 from cacao_accounting.i18n import _
 
 _MODULE_PERMISSION_FAMILY: dict[str, str] = {
@@ -88,9 +88,6 @@ def require_document_read(context: QueryContext, document_type: str, company_id:
             request_id=context.request_id,
         )
     validate_company_access(context, company_id)
-    if context.is_service_principal:
-        for module in modules:
-            validate_module_active(module)
     if not any(_module_allowed(context, module, company_id) for module in modules):
         raise QueryToolError(
             code=ErrorCode.PERMISSION_DENIED,

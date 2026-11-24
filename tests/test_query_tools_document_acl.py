@@ -31,6 +31,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.query_tools.context import QueryContext
+from cacao_accounting.query_tools.document_acl import require_document_read
 from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
 from cacao_accounting.query_tools.handlers.documents import (
     get_document_details_handler,
@@ -359,3 +360,40 @@ def test_real_service_scopes_open_sales_documents(document_acl_scenario):
         )
 
     assert sale["found"] is True
+
+
+@pytest.mark.parametrize(
+    ("purchases_enabled", "inventory_enabled", "permission"),
+    [
+        (True, False, "payables.reports.read"),
+        (False, True, "inventory.reports.read"),
+    ],
+)
+def test_purchase_receipt_acepta_cualquier_modulo_alternativo(
+    document_acl_scenario, purchases_enabled, inventory_enabled, permission
+):
+    """Basta un módulo dueño habilitado y autorizado para leer la recepción."""
+    app, _ids = document_acl_scenario
+    context = _context({"documents.reports.read", permission})
+    with app.app_context():
+        for nombre, enabled in (("purchases", purchases_enabled), ("inventory", inventory_enabled)):
+            modulo = database.session.execute(database.select(Modules).filter_by(module=nombre)).scalar_one()
+            modulo.enabled = enabled
+        database.session.commit()
+
+        assert require_document_read(context, "purchase_receipt", "alpha") == ("purchases", "inventory")
+
+
+def test_purchase_receipt_rechaza_si_ningun_alternativo_esta_habilitado(document_acl_scenario):
+    """Sin ningún módulo dueño habilitado no hay lectura posible."""
+    app, _ids = document_acl_scenario
+    context = _context({"documents.reports.read", "payables.reports.read", "inventory.reports.read"})
+    with app.app_context():
+        for nombre in ("purchases", "inventory"):
+            modulo = database.session.execute(database.select(Modules).filter_by(module=nombre)).scalar_one()
+            modulo.enabled = False
+        database.session.commit()
+
+        with pytest.raises(QueryToolError) as excinfo:
+            require_document_read(context, "purchase_receipt", "alpha")
+        assert excinfo.value.code in {ErrorCode.MODULE_DISABLED, ErrorCode.PERMISSION_DENIED}
