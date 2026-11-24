@@ -111,7 +111,7 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
             name=row.get("nombre"),
             parent=_normalized_parent(row.get("padre")),
             group=_is_group_account(row.get("grupo")),
-            currency=row.get("moneda"),
+            currency=_normalized_currency(row.get("moneda")),
             classification=row.get("clasificacion"),
             account_type=row.get("tipo"),
             active=True,
@@ -137,6 +137,14 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
 
 def _normalized_parent(value: Any) -> str | None:
     """Normalize an optional parent code so blank cells represent a root account."""
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _normalized_currency(value: Any) -> str | None:
+    """Normalize the optional currency cell so blank values mean no currency."""
     if value is None:
         return None
     normalized = str(value).strip()
