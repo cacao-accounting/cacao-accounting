@@ -323,8 +323,20 @@ def _canonical_xlsx_rows(
 
 
 def _xlsx_rows(path: str, schema: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Read an XLSX sheet and return canonical rows plus structural errors."""
+    """Read an XLSX sheet and return canonical rows plus structural errors.
+
+    El libro se cierra siempre para liberar el descriptor del archivo; en
+    Windows el archivo temporal no se puede eliminar mientras siga abierto.
+    """
     workbook = load_workbook(path, read_only=True, data_only=False, keep_links=False)
+    try:
+        return _read_xlsx_workbook(workbook, schema)
+    finally:
+        workbook.close()
+
+
+def _read_xlsx_workbook(workbook, schema: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Extrae filas canónicas de un libro XLSX ya abierto."""
     worksheet, structure_errors = _select_xlsx_worksheet(workbook)
     if structure_errors or worksheet is None:
         return [], structure_errors
