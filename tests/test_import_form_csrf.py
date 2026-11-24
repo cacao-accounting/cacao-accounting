@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import io
 import re
 
 import pytest
@@ -50,13 +51,22 @@ def import_csrf_pages(app, entorno_contable, authenticated_client, tmp_path):
     app.config["MODO_ESCRITORIO"] = previous_desktop
 
 
-def _form_token(html: str) -> str:
-    """Return the token embedded in a rendered POST form."""
-    form = re.search(r"<form\b[^>]*>(.*?)</form>", html, flags=re.DOTALL)
-    assert form is not None
-    token = re.search(r'name="csrf_token"\s+value="([^"]+)"', form.group(1))
-    assert token is not None
-    return token.group(1)
+def _form_token(html: str, action: str | None = None) -> str:
+    """Return the token embedded in the form posting to ``action``.
+
+    When ``action`` is provided the token is taken from that exact form, so a
+    token from another form on the same page cannot mask a missing token.
+    """
+    forms = re.findall(r"<form\b([^>]*)>(.*?)</form>", html, flags=re.DOTALL)
+    for attributes, body in forms:
+        if action is not None:
+            form_action = re.search(r'action="([^"]+)"', attributes)
+            if form_action is None or form_action.group(1) != action:
+                continue
+        token = re.search(r'name="csrf_token"\s+value="([^"]+)"', body)
+        if token is not None:
+            return token.group(1)
+    pytest.fail(f"No CSRF token found for form action {action!r}")
 
 
 def test_new_import_form_rejects_missing_token_and_accepts_valid_token(import_csrf_pages):
@@ -182,16 +192,40 @@ def test_new_import_persists_series_matching_type_and_company(import_csrf_pages)
     [(0, "upload"), (1, "validate"), (3, "execute"), (4, "cancel")],
 )
 def test_import_detail_forms_carry_csrf_and_reach_their_route(import_csrf_pages, status, action):
-    """Upload, validation, execution and cancellation forms submit their token."""
-    _app, client, batches = import_csrf_pages
+    """Each action form sends its own token and completes its state transition."""
+    app, client, batches = import_csrf_pages
     batch_id = batches[status]
     page = client.get(f"/imports/{batch_id}")
     assert page.status_code == 200
-    token = _form_token(page.get_data(as_text=True))
     url = f"/imports/{batch_id}/{action}"
+    token = _form_token(page.get_data(as_text=True), url)
 
-    rejected = client.post(url)
+    def payload() -> dict:
+        data: dict = {"csrf_token": token}
+        if action == "upload":
+            data["file"] = (io.BytesIO(b"name,email\nCliente,cliente@example.test\n"), "customer.csv", "text/csv")
+        return data
+
+    data_without_token = payload()
+    data_without_token.pop("csrf_token")
+    rejected = client.post(url, data=data_without_token)
     assert rejected.status_code == 400
 
-    accepted = client.post(url, data={"csrf_token": token})
-    assert accepted.status_code != 400
+    accepted = client.post(url, data=payload())
+    assert accepted.status_code == 302
+    assert f"/imports/{batch_id}" in accepted.headers["Location"]
+
+    with app.app_context():
+        database.session.expire_all()
+        batch = database.session.get(ImportBatch, batch_id)
+        assert batch is not None
+        if action == "upload":
+            assert batch.import_status == 1
+            assert batch.source_filename == "customer.csv"
+        elif action == "validate":
+            assert batch.import_status in (2, 3, 7)
+            assert batch.started_at is None
+        elif action == "execute":
+            assert batch.import_status != 3
+        else:
+            assert batch.cancel_requested is True
