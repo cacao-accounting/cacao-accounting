@@ -7,16 +7,27 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sqlalchemy.engine import make_url
+
+from cacao_accounting.config import _database_url_from_environment
+
 RAIZ = Path(__file__).resolve().parents[1]
 
 
-def test_compose_declara_driver_psycopg_en_la_uri():
-    """Sin driver explícito SQLAlchemy busca psycopg2, que la imagen no instala."""
+def test_compose_declara_driver_psycopg_en_la_uri(monkeypatch):
+    """Compose entrega componentes y la aplicación genera la URI con psycopg 3."""
     compose = (RAIZ / "docker-compose.yml").read_text(encoding="utf-8")
-    lineas = [linea for linea in compose.splitlines() if "CACAO_DATABASE_URL" in linea]
+    assert "CACAO_DB_PASSWORD=${DB_PASSWORD" in compose
+    assert "CACAO_DB_USER=${DB_USER" in compose
+    assert "CACAO_DB_NAME=${DB_NAME" in compose
 
-    assert lineas, "docker-compose.yml no define CACAO_DATABASE_URL"
-    assert any("postgresql+psycopg://" in linea for linea in lineas)
+    monkeypatch.setenv("CACAO_DB_USER", "cacao")
+    monkeypatch.setenv("CACAO_DB_PASSWORD", "clave@segura:2026/01")
+    monkeypatch.setenv("CACAO_DB_NAME", "cacaodb")
+    parsed = make_url(_database_url_from_environment())
+
+    assert parsed.drivername == "postgresql+psycopg"
+    assert parsed.password == "clave@segura:2026/01"
 
 
 def test_compose_requiere_password_y_alinea_healthcheck_con_postgres():
