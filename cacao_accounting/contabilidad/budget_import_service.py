@@ -84,7 +84,7 @@ class BudgetImportService:
 
     def _parse_csv(self, file_content: bytes) -> List[Dict[str, str]]:
         """Parsea un archivo CSV."""
-        text_stream = io.StringIO(file_content.decode("utf-8"))
+        text_stream = io.StringIO(file_content.decode("utf-8-sig"))
         reader = csv.DictReader(text_stream)
         return [row for row in reader]
 
@@ -249,12 +249,14 @@ class BudgetImportService:
 
     def validate_import(self, budget_id: str, filename: str, file_content: bytes, user_id: str) -> BudgetImport:
         """Valida e inicializa un lote de importación en staging."""
-        rows = self.parse_file(filename, file_content)
         budget = database.session.get(Budget, budget_id)
         if not budget:
             raise BudgetError(_("Presupuesto no encontrado."))
         if budget.status != "draft":
             raise BudgetError(_("Solo se pueden importar líneas a presupuestos en borrador."))
+        rows = self.parse_file(filename, file_content)
+        if not rows:
+            raise BudgetError(_("El archivo no contiene filas de datos."))
 
         import_batch = self._create_import_batch(budget_id, filename, len(rows), user_id)
         caches = self._build_caches(budget)
