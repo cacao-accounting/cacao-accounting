@@ -2048,8 +2048,8 @@ def _process_bank_transactions(
     return rows
 
 
-def _compute_running_balance(rows: list[ReportRow]) -> Decimal:
-    running_balance = Decimal("0")
+def _compute_running_balance(rows: list[ReportRow], opening_balance: Decimal = Decimal("0")) -> Decimal:
+    running_balance = opening_balance
     for row in rows:
         running_balance += _decimal_value(row.values["incoming_amount"]) - _decimal_value(row.values["outgoing_amount"])
         row.values["running_balance"] = running_balance
@@ -2106,6 +2106,42 @@ def _bank_movement_totals(
     return incoming, outgoing, {currency: incoming[currency] - outgoing[currency] for currency in incoming}
 
 
+def _bank_opening_balance(
+    effective_filters: BankingFilters,
+    bank_accounts: dict[str, BankAccount],
+    party_names: dict[str, str],
+) -> Decimal | dict[str, Decimal]:
+    """Calcula el saldo anterior al inicio del rango consultado."""
+    from dataclasses import replace
+
+    if effective_filters.date_from is None:
+        return Decimal("0")
+    prior_filters = replace(
+        effective_filters,
+        date_from=None,
+        date_to=effective_filters.date_from - timedelta(days=1),
+    )
+    prior_rows = _bank_movement_rows(prior_filters, bank_accounts, party_names)
+    if not prior_rows:
+        return Decimal("0")
+    currencies = {str(row.values.get("currency")) for row in prior_rows if row.values.get("currency") is not None}
+    if len(currencies) <= 1:
+        return sum(
+            (
+                _decimal_value(row.values.get("incoming_amount")) - _decimal_value(row.values.get("outgoing_amount"))
+                for row in prior_rows
+            ),
+            Decimal("0"),
+        )
+    totals: dict[str, Decimal] = {currency: Decimal("0") for currency in currencies}
+    for row in prior_rows:
+        currency = str(row.values.get("currency"))
+        totals[currency] += _decimal_value(row.values.get("incoming_amount")) - _decimal_value(
+            row.values.get("outgoing_amount")
+        )
+    return totals
+
+
 def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     """Devuelve detalle de movimiento bancario desde pagos y extractos."""
     from dataclasses import replace
@@ -2123,12 +2159,15 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     party_names = {party.id: party.name for party in database.session.execute(select(Party)).scalars().all()}
 
     rows = _bank_movement_rows(effective_filters, bank_accounts, party_names)
-    running_balance = _compute_running_balance(rows)
+    opening_balance = _bank_opening_balance(effective_filters, bank_accounts, party_names)
+    initial = opening_balance if isinstance(opening_balance, Decimal) else Decimal("0")
+    running_balance = _compute_running_balance(rows, initial)
     total_incoming, total_outgoing, total_running_balance = _bank_movement_totals(rows, running_balance)
 
     return PaginatedReport(
         rows=rows,
         totals={
+            "opening_balance": opening_balance,
             "incoming_amount": total_incoming,
             "outgoing_amount": total_outgoing,
             "running_balance": total_running_balance,
