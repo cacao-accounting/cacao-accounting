@@ -1186,7 +1186,7 @@ def compras_comparativo_colocar_ordenes_solicitud(comparison_id: str):
         orders = create_purchase_orders_from_comparison(comparison, current_user.id)
         database.session.commit()
         flash(_("Se crearon {} Órdenes de Compra correctamente.").format(len(orders)), "success")
-    except (DocumentFlowError, IdentifierConfigurationError, SQLAlchemyError) as exc:
+    except (DocumentFlowError, IdentifierConfigurationError, SQLAlchemyError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
     return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison_id))
