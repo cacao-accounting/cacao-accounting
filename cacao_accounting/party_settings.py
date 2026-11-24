@@ -562,8 +562,12 @@ def upsert_party_company_settings(
         is_new = False
 
     company_party.is_active = params.is_active
-    company_party.tax_template_id = params.tax_template_id
-    company_party.default_tax_rule_id = params.default_tax_rule_id
+    # #1725: la fila es única por tercero+compañía. Un formulario de proveedor
+    # no debe borrar la plantilla/regla del cliente cuando el campo llega vacío.
+    if params.tax_template_id or is_new:
+        company_party.tax_template_id = params.tax_template_id
+    if params.default_tax_rule_id or is_new:
+        company_party.default_tax_rule_id = params.default_tax_rule_id
     # #1725: el formulario de proveedor no edita la lista de ventas del rol
     # cliente; en un tercero dual la configuración de proveedor debe conservarla.
     if role == "customer":

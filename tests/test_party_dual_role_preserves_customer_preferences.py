@@ -26,6 +26,8 @@ from cacao_accounting.database import (
     Party,
     PartyAccount,
     PriceList,
+    TaxRule,
+    TaxTemplate,
     database,
 )
 from cacao_accounting.party_settings import (
@@ -207,3 +209,43 @@ def test_lista_invalida_no_borra_la_lista_de_venta(party_scene):
         database.session.rollback()
 
     assert _company_party(application, ids["party"]).default_price_list_id == ids["selling"]
+
+
+def test_editar_proveedor_conserva_plantilla_y_regla_del_cliente(party_scene):
+    """#1725: un formulario de proveedor sin campos fiscales no borra los del cliente."""
+    application, ids = party_scene
+    with application.app_context():
+        plantilla = TaxTemplate(
+            name="Plantilla venta 1725",
+            company="cacao",
+            template_type="selling",
+            is_active=True,
+        )
+        regla = TaxRule(
+            company="cacao",
+            name="Regla venta 1725",
+            concept="iva",
+            applies_to="sales",
+            tax_type="tax",
+            recognition_event="invoice",
+            is_active=True,
+        )
+        database.session.add_all([plantilla, regla])
+        database.session.flush()
+        database.session.add(
+            CompanyParty(
+                company="cacao",
+                party_id=ids["party"],
+                is_active=True,
+                tax_template_id=plantilla.id,
+                default_tax_rule_id=regla.id,
+            )
+        )
+        database.session.commit()
+
+        upsert_party_company_settings_rows(ids["party"], "supplier", _supplier_form(ids))
+        database.session.commit()
+
+        link = database.session.execute(database.select(CompanyParty).filter_by(party_id=ids["party"])).scalar_one()
+        assert link.tax_template_id == plantilla.id
+        assert link.default_tax_rule_id == regla.id
