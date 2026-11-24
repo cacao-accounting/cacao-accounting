@@ -159,7 +159,9 @@ class ChartOfAccountsAdapter(BaseImportAdapter):
         errors = self._validate_currencies([{"moneda": document.currency}])
         if errors:
             raise ValueError(errors[0])
-        document.parent = _validate_account_parent(document.entity, document.parent, current_code=document.code)
+        document.parent = _validate_account_parent(
+            document.entity, document.parent, current_code=document.code, for_update=True
+        )
         database.session.add(document)
 
     def order_documents(self, documents: Dict[str, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:

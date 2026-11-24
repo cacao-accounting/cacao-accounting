@@ -258,16 +258,24 @@ def _validate_entity_can_be_deactivated(company_code: str) -> None:
         raise ValueError(_("No se puede desactivar la única entidad activa en modo escritorio."))
 
 
-def _account_descendant_codes(entity: str, account_code: str) -> set[str]:
+def _account_select(statement, *, for_update: bool):
+    """Aplica lectura actual bajo lock, conservando el snapshot refresh."""
+    statement = statement.execution_options(populate_existing=True)
+    return statement.with_for_update() if for_update else statement
+
+
+def _account_descendant_codes(entity: str, account_code: str, *, for_update: bool = False) -> set[str]:
     from cacao_accounting.database import Accounts
 
     descendants: set[str] = set()
     pending = [account_code]
     while pending:
         current = pending.pop()
-        children = database.session.execute(
-            database.select(Accounts.code).filter(Accounts.entity == entity, Accounts.parent == current)
-        ).scalars()
+        sentencia = _account_select(
+            database.select(Accounts.code).filter(Accounts.entity == entity, Accounts.parent == current),
+            for_update=for_update,
+        )
+        children = database.session.execute(sentencia).scalars()
         for child_code in children:
             if child_code not in descendants:
                 descendants.add(child_code)
@@ -275,7 +283,7 @@ def _account_descendant_codes(entity: str, account_code: str) -> set[str]:
     return descendants
 
 
-def _resolve_account_parent(entity: str, parent_ref: str) -> tuple[str, str]:
+def _resolve_account_parent(entity: str, parent_ref: str, *, for_update: bool = False) -> tuple[str, str]:
     from cacao_accounting.database import Accounts
 
     normalized_ref = str(parent_ref).strip()
@@ -289,33 +297,38 @@ def _resolve_account_parent(entity: str, parent_ref: str) -> tuple[str, str]:
     parent = None
     if id_value is not None:
         parent = database.session.execute(
-            database.select(Accounts)
-            .filter(Accounts.entity == entity, Accounts.id == id_value)
-            .execution_options(populate_existing=True)
+            _account_select(
+                database.select(Accounts).filter(Accounts.entity == entity, Accounts.id == id_value),
+                for_update=for_update,
+            )
         ).scalar_one_or_none()
     if parent is None:
         parent = database.session.execute(
-            database.select(Accounts)
-            .filter(Accounts.entity == entity, Accounts.code == normalized_ref)
-            .execution_options(populate_existing=True)
+            _account_select(
+                database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == normalized_ref),
+                for_update=for_update,
+            )
         ).scalar_one_or_none()
     if parent is None:
         raise ValueError(_("La cuenta padre indicada no existe para la entidad seleccionada."))
     return parent.code, f"{parent.code} - {parent.name}"
 
 
-def _validate_account_parent(entity: str, parent_ref: str | None, *, current_code: str | None = None) -> str | None:
+def _validate_account_parent(
+    entity: str, parent_ref: str | None, *, current_code: str | None = None, for_update: bool = False
+) -> str | None:
     from cacao_accounting.database import Accounts
 
     if not parent_ref:
         return None
-    parent_code, _parent_label = _resolve_account_parent(entity, parent_ref)
+    parent_code, _parent_label = _resolve_account_parent(entity, parent_ref, for_update=for_update)
     if current_code and parent_code == current_code:
         raise ValueError(_("Una cuenta no puede ser padre de si misma."))
     parent = database.session.execute(
-        database.select(Accounts)
-        .filter(Accounts.entity == entity, Accounts.code == parent_code)
-        .execution_options(populate_existing=True)
+        _account_select(
+            database.select(Accounts).filter(Accounts.entity == entity, Accounts.code == parent_code),
+            for_update=for_update,
+        )
     ).scalar_one_or_none()
     if parent is None:
         raise ValueError(_("La cuenta padre indicada no existe para la entidad seleccionada."))
@@ -323,9 +336,21 @@ def _validate_account_parent(entity: str, parent_ref: str | None, *, current_cod
         raise ValueError(_("La cuenta padre debe estar activa."))
     if not bool(parent.group):
         raise ValueError(_("La cuenta padre debe ser una cuenta de grupo."))
-    if current_code and parent_code in _account_descendant_codes(entity, current_code):
+    if current_code and parent_code in _account_descendant_codes(entity, current_code, for_update=for_update):
         raise ValueError(_("La cuenta padre seleccionada genera un ciclo jerarquico."))
     return parent_code
+
+
+def _lock_account_row(entity: str, account_id: str):
+    """Recarga la cuenta bajo `FOR UPDATE` tras adquirir el lock de jerarquía."""
+    from cacao_accounting.database import Accounts
+
+    return database.session.execute(
+        _account_select(
+            database.select(Accounts).filter(Accounts.entity == entity, Accounts.id == account_id),
+            for_update=True,
+        )
+    ).scalar_one_or_none()
 
 
 def _build_cost_center_edit_form(registro):

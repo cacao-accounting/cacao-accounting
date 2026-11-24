@@ -1613,7 +1613,7 @@ def nueva_cuenta():
 
         lock_default_scope("account_hierarchy", formulario.entidad.data)
         try:
-            parent_code = _validate_account_parent(formulario.entidad.data, formulario.padre.data or None)
+            parent_code = _validate_account_parent(formulario.entidad.data, formulario.padre.data or None, for_update=True)
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -1689,12 +1689,17 @@ def editar_cuenta(id_cta):
     from cacao_accounting.default_scope import lock_default_scope
 
     lock_default_scope("account_hierarchy", registro.entity)
-    database.session.refresh(registro)
+    from cacao_accounting.contabilidad.services import _lock_account_row
+
+    registro = _lock_account_row(registro.entity, registro.id)
+    if registro is None:
+        abort(404)
     try:
         parent_code = _validate_account_parent(
             formulario.entidad.data,
             formulario.padre.data or None,
             current_code=registro.code,
+            for_update=True,
         )
     except ValueError as error:
         flash_error(error)
@@ -1708,7 +1713,11 @@ def editar_cuenta(id_cta):
         )
     from cacao_accounting.contabilidad.services import _account_descendant_codes
 
-    if registro.group and not bool(formulario.grupo.data) and _account_descendant_codes(registro.entity, registro.code):
+    if (
+        registro.group
+        and not bool(formulario.grupo.data)
+        and _account_descendant_codes(registro.entity, registro.code, for_update=True)
+    ):
         flash_error(_("No se puede quitar la condición de grupo porque la cuenta tiene cuentas hijas."))
         return render_template(
             _TPL_CUENTA_CREAR,
