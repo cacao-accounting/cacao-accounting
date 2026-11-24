@@ -10,7 +10,10 @@ from decimal import Decimal
 from uuid import uuid4
 
 from cacao_accounting.database import (
+    Accounts,
+    Book,
     CompanyParty,
+    GLEntry,
     Party,
     PurchaseInvoice,
     PurchaseInvoiceItem,
@@ -26,6 +29,7 @@ FECHA = date(2026, 5, 15)
 
 def _plantilla_impuesto(sufijo: str) -> TaxTemplate:
     """Crea un impuesto real de 15% y su plantilla de compra."""
+    cuenta_iva = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="2105")).scalar_one()
     impuesto = Tax(
         id=f"TAX-DUP-{sufijo}",
         name=f"IVA {sufijo}",
@@ -33,6 +37,7 @@ def _plantilla_impuesto(sufijo: str) -> TaxTemplate:
         tax_type="percentage",
         applies_to="purchase",
         is_active=True,
+        account_id=cuenta_iva.id,
     )
     plantilla = TaxTemplate(
         name=f"Plantilla duplicado {sufijo}",
@@ -162,3 +167,27 @@ def test_duplicado_recalcula_el_total_fiscal(entorno_contable_aislado):
         assert enviada.docstatus == 1, "La copia no se contabilizó"
         assert enviada.grand_total == Decimal("115.00")
         assert enviada.outstanding_amount == Decimal("115.00")
+
+        libros = (
+            database.session.execute(database.select(Book.id).where(Book.entity == "cacao", Book.status == "activo"))
+            .scalars()
+            .all()
+        )
+        assert libros
+        for libro in libros:
+            filas = (
+                database.session.execute(
+                    database.select(GLEntry).where(GLEntry.voucher_id == copia_id, GLEntry.ledger_id == libro)
+                )
+                .scalars()
+                .all()
+            )
+            asientos = {fila.account_code: (Decimal(fila.debit), Decimal(fila.credit)) for fila in filas}
+            assert asientos == {
+                "5201": (Decimal("100.0000"), Decimal("0.0000")),
+                "2105": (Decimal("15.0000"), Decimal("0.0000")),
+                "2101": (Decimal("0.0000"), Decimal("115.0000")),
+            }
+            total_debito = sum((debito for debito, _credito in asientos.values()), Decimal("0"))
+            total_credito = sum((credito for _debito, credito in asientos.values()), Decimal("0"))
+            assert total_debito == total_credito == enviada.grand_total
