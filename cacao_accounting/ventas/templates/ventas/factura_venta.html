@@ -29,7 +29,8 @@
   </button>
 </form>
 {% endif %}
-{% if (registro.docstatus == 0 and can_approve) or (registro.docstatus == 1 and can_cancel) %}
+{% set estado_documento = document_status_info(registro.document_type or 'sales_invoice', registro) %}
+{% if (registro.docstatus == 0 and can_approve) or (registro.docstatus == 1 and can_cancel and estado_documento.code != 'pending_cancellation') %}
 {{ macros.workflow_buttons(
             registro.docstatus,
             url_for('ventas.ventas_factura_venta_submit', invoice_id=registro.id),
