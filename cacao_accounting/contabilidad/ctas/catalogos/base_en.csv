@@ -18,7 +18,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 11.02.001.001,Accounts Receivable from Customers,11.02.001,0,Asset,,receivable
 11.02.001.002,Inventory Shipped Not Invoiced,11.02.001,0,Asset,,
 11.02.001.003,Uninvoiced Services,11.02.001,0,Asset,,
-11.02.001.004,Estimación Bad Debts,11.02.001,0,Asset,,
+11.02.001.004,Bad Debt Provision,11.02.001,0,Asset,,
 11.03,Inventories,11,1,Asset,,
 11.03.001,Inventory Warehouse for Sale,11.03,0,Asset,,inventory
 11.03.002,Inventory Warehouse for Consumption,11.03,0,Asset,,inventory

@@ -19,9 +19,11 @@ CATALOGOS = Path(__file__).resolve().parents[1] / "cacao_accounting" / "contabil
 IDENTICOS_PERMITIDOS = {"INATEC", "Internet"}
 PALABRAS_ESPANOLAS = re.compile(
     r"\b(de|del|y|por|para|en|las|los|cuentas|otros|otras|gastos|ingresos|"
-    r"proveedores|clientes|activos|pasivos|efectivo|anticipos|impuestos|pagos|cobros)\b",
+    r"proveedores|clientes|activos|pasivos|efectivo|anticipos|impuestos|pagos|cobros|"
+    r"estimación|estimacion|incobrables|deterioro)\b",
     re.IGNORECASE,
 )
+ACENTOS_ESPANOLES = re.compile(r"[áéíóúüñ]", re.IGNORECASE)
 
 
 def _catalogo(nombre: str) -> dict[str, dict[str, str]]:
@@ -53,3 +55,6 @@ def test_base_en_no_reutiliza_nombres_en_espanol():
 
     con_espanol = {codigo: fila["nombre"] for codigo, fila in ingles.items() if PALABRAS_ESPANOLAS.search(fila["nombre"])}
     assert con_espanol == {}
+
+    con_acentos = {codigo: fila["nombre"] for codigo, fila in ingles.items() if ACENTOS_ESPANOLES.search(fila["nombre"])}
+    assert con_acentos == {}, "El catálogo inglés conserva palabras acentuadas en español"
