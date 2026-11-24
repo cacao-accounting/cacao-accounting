@@ -236,3 +236,82 @@ def test_cash_flow_statement_reconciles_opening_operating_and_investing_activity
     assert report.totals["cash_opening"] == Decimal("50.0000")
     assert report.totals["cash_closing"] == Decimal("120.0000")
     assert report.totals["difference"] == Decimal("0.0000")
+
+
+def test_cash_flow_includes_an_active_interperiod_reversal(cash_flow_business_case):
+    """Una reversa del período revierte utilidad y efectivo, y sigue cuadrando."""
+    app, company_code, _currency_code, filters = cash_flow_business_case
+    with app.app_context():
+        base = (
+            database.session.execute(
+                database.select(GLEntry).where(GLEntry.company == company_code, GLEntry.posting_date == date(2026, 4, 30))
+            )
+            .scalars()
+            .first()
+        )
+        accounts = {
+            account.account_type: account
+            for account in database.session.execute(database.select(Accounts).where(Accounts.entity == company_code)).scalars()
+        }
+        originales = []
+        for account_type, debit, credit in (
+            ("cash", Decimal("100"), Decimal("0")),
+            ("income", Decimal("0"), Decimal("100")),
+        ):
+            account = accounts[account_type]
+            original = GLEntry(
+                company=company_code,
+                ledger_id=base.ledger_id,
+                account_id=account.id,
+                account_code=account.code,
+                account_currency=base.account_currency,
+                company_currency=base.company_currency,
+                exchange_rate=Decimal("1"),
+                posting_date=date(2026, 4, 15),
+                debit=debit,
+                credit=credit,
+                voucher_type="journal_entry",
+                voucher_id=f"prior-sale-{base.voucher_id}",
+                fiscal_year_id=base.fiscal_year_id,
+            )
+            database.session.add(original)
+            originales.append(original)
+        database.session.flush()
+        for account_type, debit, credit in (
+            ("income", Decimal("100"), Decimal("0")),
+            ("cash", Decimal("0"), Decimal("100")),
+        ):
+            account = accounts[account_type]
+            database.session.add(
+                GLEntry(
+                    company=company_code,
+                    ledger_id=base.ledger_id,
+                    account_id=account.id,
+                    account_code=account.code,
+                    account_currency=base.account_currency,
+                    company_currency=base.company_currency,
+                    exchange_rate=Decimal("1"),
+                    posting_date=date(2026, 5, 26),
+                    debit=debit,
+                    credit=credit,
+                    voucher_type="journal_entry",
+                    voucher_id=f"reversal-{base.voucher_id}",
+                    fiscal_year_id=base.fiscal_year_id,
+                    accounting_period_id=filters.accounting_period,
+                    is_reversal=True,
+                    reversal_of=originales[0].id,
+                )
+            )
+        database.session.commit()
+
+        report = get_cash_flow_statement(filters)
+        database.session.execute(
+            database.delete(GLEntry).where(GLEntry.company == company_code, GLEntry.is_reversal.is_(True))
+        )
+        database.session.commit()
+
+    assert report.totals["net_profit"] == Decimal("-20.0000")
+    assert report.totals["net_change_cash"] == Decimal("-30.0000")
+    assert report.totals["cash_opening"] == Decimal("150.0000")
+    assert report.totals["cash_closing"] == Decimal("120.0000")
+    assert report.totals["difference"] == Decimal("0.0000")

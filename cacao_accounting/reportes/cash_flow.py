@@ -236,15 +236,15 @@ def save_cash_flow_mappings(company: str, overrides: dict[str, str | None]) -> N
 def _movement_scope_filters(company: str, ledger: Book, period_start: Any, period_end: Any) -> list[Any]:
     """Filtros comunes del alcance contable del EFE.
 
-    Excluye anulados, reversas y comprobantes de cierre fiscal: mismas bases
-    de la balanza de comprobación por defecto, de modo que la utilidad y los
-    movimientos de balance provengan del mismo universo de líneas.
+    Conserva las reversiones interperíodo vigentes y excluye las anulaciones
+    del mismo período mediante el alcance efectivo del GL.
     """
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
     filters = [
         GLEntry.company == company,
         GLEntry.ledger_id == ledger.id,
-        GLEntry.is_cancelled.is_(False),
-        GLEntry.is_reversal.is_(False),
+        *effective_gl_scope(),
         GLEntry.is_fiscal_year_closing.is_(False),
     ]
     if period_start:
