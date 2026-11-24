@@ -3,6 +3,7 @@
 
 """Tax-rule administration preserves input and enforces fiscal domains."""
 
+import re
 from datetime import date
 from dataclasses import replace
 from decimal import Decimal
@@ -531,6 +532,110 @@ def test_invalid_tax_rule_update_rerenders_submitted_values_including_range_and_
         assert persisted.sequence == 10
         assert persisted.valid_from is None
         assert persisted.valid_to is None
+
+
+def _valor_de_input(html: str, campo: str) -> str:
+    """Extrae el valor renderizado de un input por su nombre."""
+    coincidencia = re.search(rf'name="{campo}"[^>]*value="([^"]*)"', html)
+    assert coincidencia is not None, f"El campo {campo} no se renderizó"
+    return coincidencia.group(1)
+
+
+def test_invalid_tax_rule_creation_preserves_empty_fields(app, authenticated_client, entorno_contable, active_admin_module):
+    """Un alta rechazada conserva vacíos rate, amount, sequence y fechas (#2017)."""
+    assert entorno_contable.app is app
+    suffix = uuid4().hex[:8]
+    rule_name = f"Regla vacía {suffix}"
+    data = _tax_rule_payload(
+        rule_name,
+        rate="",
+        amount="",
+        sequence="",
+        valid_from="",
+        valid_to="",
+        country="",
+        allocation_method="",
+        accounting_treatment="",
+        recognition_event="",
+        account_id=f"MISSING-{suffix}",
+    )
+
+    response = authenticated_client().post("/settings/tax-rules", data=data)
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    for campo in (
+        "rate",
+        "amount",
+        "sequence",
+        "valid_from",
+        "valid_to",
+        "country",
+        "allocation_method",
+        "accounting_treatment",
+        "recognition_event",
+    ):
+        assert _valor_de_input(html, campo) == "", campo
+    with app.app_context():
+        assert database.session.execute(database.select(TaxRule).filter_by(name=rule_name)).scalar_one_or_none() is None
+
+
+def test_invalid_tax_rule_edit_preserves_empty_fields_and_persisted_row(
+    app, authenticated_client, entorno_contable, active_admin_module
+):
+    """Una edición rechazada conserva vacíos enviados y la fila original (#2017)."""
+    assert entorno_contable.app is app
+    suffix = uuid4().hex[:8]
+    original_name = f"Regla original vacía {suffix}"
+    proposed_name = f"Regla propuesta vacía {suffix}"
+    client = authenticated_client()
+    assert client.post("/settings/tax-rules", data=_tax_rule_payload(original_name)).status_code == 302
+    with app.app_context():
+        rule = database.session.execute(database.select(TaxRule).filter_by(name=original_name)).scalar_one()
+        rule_id = rule.id
+        original = (rule.name, rule.rate, rule.amount, rule.sequence, rule.valid_from, rule.valid_to)
+
+    proposed = _tax_rule_payload(
+        proposed_name,
+        rate="",
+        amount="",
+        sequence="",
+        valid_from="",
+        valid_to="",
+        country="",
+        allocation_method="",
+        accounting_treatment="",
+        recognition_event="",
+        account_id=f"MISSING-{suffix}",
+    )
+    response = client.post(f"/settings/tax-rules/{rule_id}/edit", data=proposed)
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    for campo in (
+        "rate",
+        "amount",
+        "sequence",
+        "valid_from",
+        "valid_to",
+        "country",
+        "allocation_method",
+        "accounting_treatment",
+        "recognition_event",
+    ):
+        assert _valor_de_input(html, campo) == "", campo
+    with app.app_context():
+        database.session.expire_all()
+        persisted = database.session.get(TaxRule, rule_id)
+        assert persisted is not None
+        assert (
+            persisted.name,
+            persisted.rate,
+            persisted.amount,
+            persisted.sequence,
+            persisted.valid_from,
+            persisted.valid_to,
+        ) == original
 
 
 def test_tax_rule_accepts_same_company_account_and_exposes_it_to_context(

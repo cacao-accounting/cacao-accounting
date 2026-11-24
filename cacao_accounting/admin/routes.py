@@ -630,7 +630,9 @@ def _tax_rule_form_state(rule: Any, form: Any) -> SimpleNamespace:
         "valid_to": None,
         "allocation_method": "",
     }
-    values = {field: form.get(field) or default for field, default in defaults.items()}
+    # #2017: `form.get(field, default)` conserva una cadena vacía enviada por
+    # el usuario; solo aplica el default cuando el campo no viene en el POST.
+    values = {field: form.get(field, default) for field, default in defaults.items()}
     values.update(
         {
             field: form.get(field) is not None
