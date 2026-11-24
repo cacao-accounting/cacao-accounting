@@ -1336,7 +1336,7 @@ def get_negative_stock(filters: OperationalReportFilters) -> PaginatedReport:
 
 
 def get_reorder_alerts(filters: OperationalReportFilters) -> PaginatedReport:
-    """Detecta existencias por debajo del mínimo o punto de reorden configurado."""
+    """Detecta existencias bajo el punto de reorden; el mínimo aplica si aquel falta."""
     query = (
         select(StockBin, Item)
         .join(Item, Item.code == StockBin.item_code)
@@ -1345,7 +1345,11 @@ def get_reorder_alerts(filters: OperationalReportFilters) -> PaginatedReport:
             Item.is_active.is_(True),
             or_(
                 and_(Item.reorder_level.is_not(None), StockBin.actual_qty <= Item.reorder_level),
-                and_(Item.min_stock_qty.is_not(None), StockBin.actual_qty <= Item.min_stock_qty),
+                and_(
+                    Item.reorder_level.is_(None),
+                    Item.min_stock_qty.is_not(None),
+                    StockBin.actual_qty <= Item.min_stock_qty,
+                ),
             ),
         )
     )
