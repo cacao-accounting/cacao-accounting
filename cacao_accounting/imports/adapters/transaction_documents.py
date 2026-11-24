@@ -316,7 +316,9 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             return None
         return ((source_type, str(source_id), str(source_line_id)), base_qty)
 
-    def _validate_document_row(self, row: dict[str, Any], company_id: str, errors: list[str]) -> None:
+    def _validate_document_row(
+        self, row: dict[str, Any], company_id: str, errors: list[str], posting_date: date | None = None
+    ) -> None:
         """Validate warehouse, stock-item and batch constraints for one row."""
         item, item_error = validate_import_item(row.get("producto"), self.config.entity_type)
         if item_error:
@@ -340,7 +342,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             and self.config.entity_type in {"purchase_receipt", "delivery_note"}
         ):
             errors.append(_("El item de inventario '%(item)s' requiere una bodega.") % {"item": item.code})
-        errors.extend(self._validate_row_batch(row.get("producto"), row.get("lote")))
+        errors.extend(self._validate_row_batch(row.get("producto"), row.get("lote"), posting_date))
 
     def validate_document(self, document_data: list[dict[str, Any]], context: dict[str, Any] | None = None) -> list[str]:
         """Valida fecha, período, origen, bodega, tercero y moneda del documento."""
@@ -375,14 +377,14 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                     _("El tercero debe existir, estar activo, tener el rol requerido y estar habilitado para la compañía.")
                 )
         for row in document_data:
-            self._validate_document_row(row, company_id, errors)
+            self._validate_document_row(row, company_id, errors, posting_date)
         try:
             self._currency_and_rate(first_row, source, company_id, posting_date)
         except ValueError as exc:
             errors.append(str(exc))
         return errors
 
-    def _validate_row_batch(self, item_code: Any, batch_no: Any) -> list[str]:
+    def _validate_row_batch(self, item_code: Any, batch_no: Any, posting_date: date | None = None) -> list[str]:
         """Valida que el lote de la fila exista en el maestro y aplique al item."""
         if not self.config.include_batch_serial or not item_code:
             return []
@@ -401,6 +403,11 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             return [f"El lote '{cleaned}' del item '{item.code}' no existe en el maestro de lotes."]
         if not batch.is_active:
             return [f"El lote '{cleaned}' del item '{item.code}' está inactivo."]
+        if item.has_expiry_date and batch.expiry_date and posting_date and batch.expiry_date <= posting_date:
+            return [
+                _("El lote '%(batch)s' del item '%(item)s' está vencido para la fecha de contabilización.")
+                % {"batch": cleaned, "item": item.code}
+            ]
         return []
 
     def build_document(self, document_data: list[dict[str, Any]], context: dict[str, Any]) -> dict[str, Any]:

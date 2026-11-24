@@ -19189,6 +19189,10 @@ msgstr "The batch requires an expiration date."
 msgid "El lote está vencido para la fecha de contabilización."
 msgstr "The batch is expired for the posting date."
 
+#: cacao_accounting/imports/adapters/transaction_documents.py
+msgid "El lote '%(batch)s' del item '%(item)s' está vencido para la fecha de contabilización."
+msgstr "The batch '%(batch)s' of item '%(item)s' is expired for the posting date."
+
 #: cacao_accounting/inventario/service.py:440
 #, python-format
 msgid "El item %(item)s requiere lote."
