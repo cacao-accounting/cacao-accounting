@@ -1472,8 +1472,9 @@ def caja_chica_gasto_lista():
     registros = []
     for company in companies:
         registros.extend(petty_cash_expenses(company))
+    fondos = _petty_cash_fund_labels({registro.petty_cash_id for registro in registros if registro.petty_cash_id})
     titulo = _("Listado de Gastos de Caja Chica") + " - " + APPNAME
-    return render_template("bancos/caja_chica_gasto_lista.html", registros=registros, titulo=titulo)
+    return render_template("bancos/caja_chica_gasto_lista.html", registros=registros, fondos=fondos, titulo=titulo)
 
 
 def _currency_input_step(currency_code: str | None) -> str:

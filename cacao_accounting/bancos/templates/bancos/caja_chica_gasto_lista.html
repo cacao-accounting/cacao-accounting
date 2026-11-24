@@ -26,6 +26,8 @@
     <thead>
       <tr>
         <th scope="col">{{ _('Documento') }}</th>
+        <th scope="col">{{ _('Compañía') }}</th>
+        <th scope="col">{{ _('Fondo') }}</th>
         <th scope="col">{{ _('Fecha') }}</th>
         <th scope="col">{{ _('Beneficiario') }}</th>
         <th scope="col">{{ _('Concepto') }}</th>
@@ -40,6 +42,8 @@
       {% for item in registros -%}
       <tr>
         <td>{{ item.document_no or item.id }}</td>
+        <td>{{ item.company }}</td>
+        <td>{% set fondo = fondos.get(item.petty_cash_id) %}{{ fondo[0] if fondo else item.petty_cash_id }}</td>
         <td>{{ item.posting_date or '-' }}</td>
         <td>{{ item.beneficiary or '-' }}</td>
         <td>{{ item.concept }}</td>
@@ -67,7 +71,7 @@
       </tr>
       {%- else %}
       <tr>
-        <td colspan="9" class="text-center text-muted">{{ _('No hay gastos de caja chica registrados.') }}</td>
+        <td colspan="11" class="text-center text-muted">{{ _('No hay gastos de caja chica registrados.') }}</td>
       </tr>
       {%- endfor %}
     </tbody>
