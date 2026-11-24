@@ -25002,3 +25002,11 @@ msgstr "The password must be at least 8 characters long."
 #: cacao_accounting/admin/routes.py
 msgid "No se puede cambiar el tipo del grupo mientras existan terceros asignados incompatibles con el nuevo tipo. Reasigne esas relaciones primero."
 msgstr "The party group type cannot be changed while assigned parties are incompatible with the new type. Reassign those relations first."
+
+#: cacao_accounting/inventario/services.py
+msgid "La unidad de medida %(uom)s no existe."
+msgstr "The unit of measure %(uom)s does not exist."
+
+#: cacao_accounting/inventario/services.py
+msgid "La unidad de medida %(uom)s está inactiva y no puede usarse en una configuración nueva."
+msgstr "The unit of measure %(uom)s is inactive and cannot be used in a new configuration."

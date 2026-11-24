@@ -629,6 +629,7 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
     uom = request.form.get(f"uom_{index}") or default_uom
     if not uom:
         raise ValueError(_("La linea del item %(item_code)s requiere una unidad de medida.") % {"item_code": item_code})
+    _validate_active_stock_uom(uom)
     qty_in_base_uom = qty
     if uom and default_uom:
         try:
@@ -715,6 +716,17 @@ def _item_default_uom(item_code: str) -> str | None:
     return item.default_uom if item else None
 
 
+def _validate_active_stock_uom(uom_code: str) -> None:
+    """Rechaza UOM inexistentes o inactivas en una línea de inventario."""
+    uom = database.session.execute(database.select(UOM).filter_by(code=uom_code)).scalars().first()
+    if uom is None:
+        raise ValueError(_("La unidad de medida %(uom)s no existe.") % {"uom": uom_code})
+    if not uom.is_active:
+        raise ValueError(
+            _("La unidad de medida %(uom)s está inactiva y no puede usarse en una configuración nueva.") % {"uom": uom_code}
+        )
+
+
 def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: str, warehouse: str) -> Decimal:
     """Create one reconciliation line from the locked stock snapshot."""
     _validate_stock_entry_warehouses(entry, warehouse)
@@ -722,6 +734,7 @@ def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: st
     uom = request.form.get(f"uom_{index}") or _item_default_uom(item_code)
     if not uom:
         raise ValueError(_("La conciliación del item %(item_code)s requiere una unidad de medida.") % {"item_code": item_code})
+    _validate_active_stock_uom(uom)
     default_uom = _item_default_uom(item_code)
     if not default_uom:
         raise ValueError(_("El item %(item_code)s requiere una UOM base configurada.") % {"item_code": item_code})

@@ -51,6 +51,7 @@ from cacao_accounting.database import (
     StockLedgerBookEntry,
     StockLedgerEntry,
     StockValuationLayer,
+    UOM,
     Unit,
     Project,
     Entity,
@@ -1929,6 +1930,16 @@ def _stock_item_for(line: Any) -> Item:
         raise PostingError(_("La linea de inventario referencia un item inexistente."))
     if item.item_type == "service" or not item.is_stock_item:
         raise PostingError(_("Solo los bienes inventariables pueden generar Stock Ledger."))
+    uom_code = getattr(line, "uom", None)
+    if uom_code:
+        uom = database.session.execute(select(UOM).filter_by(code=uom_code)).scalars().first()
+        if uom is None:
+            raise PostingError(_("La unidad de medida %(uom)s no existe.") % {"uom": uom_code})
+        if not uom.is_active:
+            raise PostingError(
+                _("La unidad de medida %(uom)s está inactiva y no puede usarse en una configuración nueva.")
+                % {"uom": uom_code}
+            )
     return item
 
 

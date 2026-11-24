@@ -48,3 +48,14 @@ def test_booleano_invalido_tiene_traduccion():
         catalogo.gettext("El campo %(field)s debe ser un valor booleano válido.")
         == "The %(field)s field must be a valid boolean value."
     )
+
+
+def test_uom_inexistente_e_inactiva_tienen_traduccion():
+    """#1927: los errores de UOM de inventario no quedan sin traducir."""
+    catalogo = _catalogo_ingles()
+
+    assert catalogo.gettext("La unidad de medida %(uom)s no existe.") == "The unit of measure %(uom)s does not exist."
+    assert (
+        catalogo.gettext("La unidad de medida %(uom)s está inactiva y no puede usarse en una configuración nueva.")
+        == "The unit of measure %(uom)s is inactive and cannot be used in a new configuration."
+    )
