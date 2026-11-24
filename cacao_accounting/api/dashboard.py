@@ -280,11 +280,11 @@ def get_banks_data(
 ) -> dict[str, Any]:
     """Obtiene saldos bancarios, conciliaciones y pagos pendientes."""
     accounts = database.session.query(BankAccount).filter_by(company=company, is_active=True).all()
-    balances = _bank_balances(company, accounts)
+    base_balances, account_balances = _bank_balances(company, accounts)
     account_ids = [account.id for account in accounts]
     unreconciled = _bank_transactions_query(account_ids, start_date, end_date).filter_by(is_reconciled=False).count()
     pending_payments = _document_query(PaymentEntry, company, start_date, end_date).filter_by(docstatus=0).count()
-    total_balance = sum(balances.values())
+    total_balance = sum(base_balances.values())
 
     return {
         "kpis": {
@@ -299,7 +299,7 @@ def get_banks_data(
                 {
                     "name": account.account_name,
                     "account_no": account.account_no,
-                    "balance": balances.get(account.gl_account_id, 0),
+                    "balance": account_balances.get(account.gl_account_id, 0),
                     "currency": account.currency or currency,
                 }
                 for account in accounts
@@ -539,22 +539,42 @@ def _accounting_monthly_result(
     return list(months.values())
 
 
-def _bank_balances(company: str, accounts: list[BankAccount]) -> dict[str | None, Decimal]:
-    """Obtiene saldos de GL por cuenta bancaria."""
+def _bank_balances(company: str, accounts: list[BankAccount]) -> tuple[dict[str | None, Decimal], dict[str | None, Decimal]]:
+    """Obtiene saldos de GL en moneda base y en moneda de cada cuenta."""
     gl_account_ids = [account.gl_account_id for account in accounts if account.gl_account_id]
     if not gl_account_ids:
-        return {}
-    results = (
+        return {}, {}
+    base_query = (
         database.session.query(GLEntry.account_id, func.sum(GLEntry.debit - GLEntry.credit))
         .filter(GLEntry.account_id.in_(gl_account_ids), GLEntry.company == company)
         .group_by(GLEntry.account_id)
     )
-    results = exclude_cancelled_gl_entries(results)
+    base_query = _scope_bank_balance_query(company, base_query)
+    account_query = (
+        database.session.query(
+            GLEntry.account_id,
+            func.sum(
+                func.coalesce(GLEntry.debit_in_account_currency, GLEntry.debit)
+                - func.coalesce(GLEntry.credit_in_account_currency, GLEntry.credit)
+            ),
+        )
+        .filter(GLEntry.account_id.in_(gl_account_ids), GLEntry.company == company)
+        .group_by(GLEntry.account_id)
+    )
+    account_query = _scope_bank_balance_query(company, account_query)
+    return (
+        {row[0]: Decimal(str(row[1] or 0)) for row in base_query.all()},
+        {row[0]: Decimal(str(row[1] or 0)) for row in account_query.all()},
+    )
+
+
+def _scope_bank_balance_query(company: str, query):
+    """Aplica cancelación y libro primario a una consulta de saldos bancarios."""
+    query = exclude_cancelled_gl_entries(query)
     ledger_id = primary_ledger_id(company)
     if ledger_id:
-        results = results.filter(GLEntry.ledger_id == ledger_id)
-    results = results.all()
-    return {row[0]: Decimal(str(row[1] or 0)) for row in results}
+        query = query.filter(GLEntry.ledger_id == ledger_id)
+    return query
 
 
 def _bank_transactions_query(
