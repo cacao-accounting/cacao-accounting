@@ -10,6 +10,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import inspect
 from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.auth import proteger_passwd
@@ -236,13 +237,18 @@ def test_vista_restaura_usuarios_y_filtros_avanzados(app, entorno_contable, auth
     assert 'is-hidden" id="financial-advanced-filters"' not in html
 
 
-def test_vista_show_users_restaura_columnas_y_datos_de_autoria(app, entorno_contable, authenticated_client, monkeypatch):
+def test_vista_show_users_restaura_columnas_y_datos_de_autoria(entorno_contable_aislado, monkeypatch):
     """Aplicar la vista agrega columnas de autoría y el nombre del creador."""
     import cacao_accounting.document_authorship as authorship
 
-    client = authenticated_client()
+    app = entorno_contable_aislado.app
+    admin_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = admin_id
+        session["_fresh"] = True
     with app.app_context():
-        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        admin = database.session.get(User, admin_id)
         cuenta = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1101")).scalar_one()
         libro = database.session.execute(database.select(Book).filter_by(code="DEFAULT_BOOK")).scalar_one()
         factura = SalesInvoice(
@@ -283,15 +289,19 @@ def test_vista_show_users_restaura_columnas_y_datos_de_autoria(app, entorno_cont
     original = app.jinja_env.globals.get("is_cloud_mode")
     app.jinja_env.globals["is_cloud_mode"] = lambda: True
     try:
-        con_vista = client.get(
+        respuesta_con_vista = client.get(
             f"/reports/account-movement?company=cacao&apply_filters=1&account_code=1101&page_size=100&saved_view={view_id}"
-        ).get_data(as_text=True)
-        sin_vista = client.get(
+        )
+        respuesta_sin_vista = client.get(
             "/reports/account-movement?company=cacao&apply_filters=1&account_code=1101&page_size=100"
-        ).get_data(as_text=True)
+        )
     finally:
         app.jinja_env.globals["is_cloud_mode"] = original
 
+    assert respuesta_con_vista.status_code == 200
+    assert respuesta_sin_vista.status_code == 200
+    con_vista = respuesta_con_vista.get_data(as_text=True)
+    sin_vista = respuesta_sin_vista.get_data(as_text=True)
     assert "Creado por" in con_vista
     assert "Admin" in con_vista
     assert "Creado por" not in sin_vista
