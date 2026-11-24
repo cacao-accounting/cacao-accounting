@@ -71,8 +71,12 @@ def generate_validation_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def get_canonical_payload(document_data: dict[str, Any]) -> str:
-    """Serialize validation-safe document data deterministically."""
+def get_canonical_payload(document_data: dict[str, Any], *, legacy: bool = False) -> str:
+    """Serialize validation-safe document data deterministically.
+
+    ``legacy=True`` reproduce la serialización anterior a #2019 para que los
+    tokens QR emitidos entonces sigan siendo verificables.
+    """
     allowed_keys = {
         "company_code",
         "company_tax_id",
@@ -86,13 +90,23 @@ def get_canonical_payload(document_data: dict[str, Any]) -> str:
         "party_tax_id",
         "line_count",
     }
-    payload = {key: _json_value(value) for key, value in document_data.items() if key in allowed_keys}
+    serializador = _json_value_legacy if legacy else _json_value
+    payload = {key: serializador(value) for key, value in document_data.items() if key in allowed_keys}
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 def calculate_validation_hash(canonical_payload: str) -> str:
     """Return the SHA256 hash for a canonical payload."""
     return hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+
+
+def validation_hash_matches(stored_hash: str, document_data: dict[str, Any]) -> bool:
+    """Acepta la huella canónica actual o la histórica anterior a #2019."""
+    current = calculate_validation_hash(get_canonical_payload(document_data))
+    if stored_hash == current:
+        return True
+    legacy = calculate_validation_hash(get_canonical_payload(document_data, legacy=True))
+    return stored_hash == legacy
 
 
 class ValidationService:
@@ -157,8 +171,10 @@ class ValidationService:
         if status == "reverted":
             return {"status": VALIDATION_STATUS_REVERTED, "record": record, "data": current_data}
 
-        current_hash = calculate_validation_hash(get_canonical_payload(current_data))
-        result = VALIDATION_STATUS_VALID if current_hash == record.validation_hash else VALIDATION_STATUS_INVALID
+        if validation_hash_matches(record.validation_hash, current_data):
+            result = VALIDATION_STATUS_VALID
+        else:
+            result = VALIDATION_STATUS_INVALID
         return {"status": result, "record": record, "data": current_data}
 
     def build_public_view(self, validation_result: dict[str, Any]) -> PublicValidationView | None:
@@ -379,6 +395,15 @@ def _json_value(value: Any) -> Any:
         if value == 0:
             return "0"
         return format(value.normalize(), "f")
+    return value
+
+
+def _json_value_legacy(value: Any) -> Any:
+    """Serializa como antes de #2019 para verificar QR históricos."""
+    if isinstance(value, (date, datetime)):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, Decimal):
+        return format(value, "f")
     return value
 
 

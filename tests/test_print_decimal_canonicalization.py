@@ -14,7 +14,13 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Currency, Entity, Item, SalesInvoice, SalesInvoiceItem, UOM, database
-from cacao_accounting.printing.validation import ValidationService, _json_value
+from cacao_accounting.printing.validation import (
+    ValidationService,
+    _json_value,
+    calculate_validation_hash,
+    get_canonical_payload,
+    validation_hash_matches,
+)
 
 
 @pytest.mark.parametrize(
@@ -35,6 +41,31 @@ def test_la_misma_cantidad_produce_el_mismo_texto(escala_corta: str, escala_larg
 def test_cero_tiene_una_sola_forma(cero: str):
     """Todas las representaciones de cero colapsan al mismo token."""
     assert _json_value(Decimal(cero)) == "0"
+
+
+def test_hash_historico_anterior_a_2019_sigue_siendo_valido():
+    """Un QR emitido con la serialización previa conserva su verificación."""
+    datos = {
+        "company_code": "cacao",
+        "company_tax_id": "J-1",
+        "document_type": "sales_invoice",
+        "document_id": "doc-2019",
+        "document_number": "F-2019",
+        "document_date": date(2026, 5, 15),
+        "currency": "NIO",
+        "grand_total": Decimal("125.5000"),
+        "status": "submitted",
+        "party_tax_id": "J-2",
+        "line_count": 1,
+    }
+    historico = calculate_validation_hash(get_canonical_payload(datos, legacy=True))
+    canonico = calculate_validation_hash(get_canonical_payload(datos))
+
+    assert historico != canonico
+    assert validation_hash_matches(historico, datos)
+    assert validation_hash_matches(canonico, datos)
+    assert not validation_hash_matches(historico, {**datos, "grand_total": Decimal("125.51")})
+    assert not validation_hash_matches("0" * 64, datos)
 
 
 @pytest.mark.database
