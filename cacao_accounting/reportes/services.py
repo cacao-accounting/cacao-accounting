@@ -1344,7 +1344,13 @@ def get_inventory_transfers(filters: OperationalReportFilters) -> PaginatedRepor
     if filters.item_code:
         query = query.where(StockEntryItem.item_code == filters.item_code)
     if filters.warehouse:
-        query = query.where(or_(StockEntry.from_warehouse == filters.warehouse, StockEntry.to_warehouse == filters.warehouse))
+        query = query.where(
+            or_(
+                func.coalesce(func.nullif(StockEntryItem.source_warehouse, ""), StockEntry.from_warehouse)
+                == filters.warehouse,
+                func.coalesce(func.nullif(StockEntryItem.target_warehouse, ""), StockEntry.to_warehouse) == filters.warehouse,
+            )
+        )
     if filters.date_from:
         query = query.where(StockEntry.posting_date >= filters.date_from)
     if filters.date_to:
