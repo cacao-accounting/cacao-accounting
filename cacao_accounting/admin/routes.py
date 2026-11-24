@@ -41,6 +41,7 @@ from cacao_accounting.database import (
     ItemPrice,
     Modules,
     PartyGroup,
+    Party,
     PriceList,
     PurchaseMatchingConfig,
     Roles,
@@ -672,6 +673,17 @@ def lista_reglas_fiscales():
     return render_template("admin/tax_rules.html", rules=rules, editing_rule=editing_rule)
 
 
+def _party_group_type_change_blocked(group: PartyGroup, submitted_type: str) -> bool:
+    """Indica si el cambio de tipo dejaría terceros con un rol incompatible."""
+    if submitted_type == group.group_type:
+        return False
+    role_column = Party.is_customer if submitted_type == "customer" else Party.is_supplier
+    dependiente = database.session.execute(
+        database.select(Party.id).where(Party.party_group_id == group.id, role_column.is_(False))
+    ).first()
+    return dependiente is not None
+
+
 @admin.route("/settings/party-groups", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -721,6 +733,16 @@ def editar_grupo_tercero(group_id: str):
         submitted_type = request.form.get("group_type") or group.group_type
         if submitted_type not in _PARTY_GROUP_TYPES:
             flash(_("El tipo de grupo de terceros debe ser cliente o proveedor."), "danger")
+        elif _party_group_type_change_blocked(group, submitted_type):
+            # #1724: el FK conservaría el grupo y dejaría terceros con un rol
+            # incompatible; se exige reasignarlos antes de cambiar el tipo.
+            flash(
+                _(
+                    "No se puede cambiar el tipo del grupo mientras existan terceros asignados "
+                    "que no tengan el nuevo rol. Reasigne esas relaciones primero."
+                ),
+                "danger",
+            )
         else:
             group.group_type = submitted_type
             group.name = request.form.get("name") or ""

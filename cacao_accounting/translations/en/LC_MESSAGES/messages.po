@@ -2235,6 +2235,14 @@ msgstr "Type of party created successfully."
 msgid "Tipo de tercero actualizado correctamente."
 msgstr "Type of party updated successfully."
 
+#: cacao_accounting/admin/routes.py
+msgid ""
+"No se puede cambiar el tipo del grupo mientras existan terceros asignados "
+"que no tengan el nuevo rol. Reasigne esas relaciones primero."
+msgstr ""
+"The group type cannot be changed while assigned parties lack the new role. "
+"Reassign those relationships first."
+
 #: cacao_accounting/admin/routes.py:714
 msgid "Estado del tipo de tercero actualizado correctamente."
 msgstr "Status of the type of party updated successfully."
