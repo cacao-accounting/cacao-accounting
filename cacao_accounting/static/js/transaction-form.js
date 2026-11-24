@@ -492,7 +492,7 @@
 
         syncLineInputs() {
           const root = this.$root || document;
-          const fields = ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount',
+          const fields = ['item_code', 'item_name', 'description', 'uom', 'qty', 'rate', 'amount',
             'batch_id', 'serial_no', 'account',
             'cost_center', 'unit', 'project', 'remarks', 'source_type', 'source_id', 'source_item_id'];
           const monetaryFields = new Set(['qty', 'rate', 'amount']);
@@ -545,6 +545,7 @@
             uid: createUid(),
             item_code: '',
             item_name: '',
+            description: '',
             qty: 1,
             uom: '',
             rate: 0,
@@ -866,6 +867,7 @@
             uid: line.uid || '',
             item_code: line.item_code || '',
             item_name: line.item_name || '',
+            description: line.description || '',
             qty: toCurrencyString(line.qty),
             uom: line.uom || '',
             rate: toCurrencyString(line.rate),

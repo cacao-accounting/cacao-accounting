@@ -470,7 +470,9 @@ describe('transaction-form', function () {
     component.init();
     component.importModal.doctype = 'purchase_request';
     component.importModal.isValidated = true;
-    component.importModal.parsedRows = [{ item_code: 'ITEM-001', item_name: 'Caja de cacao', quantity: 2, uom: 'UND' }];
+    component.importModal.parsedRows = [
+      { item_code: 'ITEM-001', item_name: 'Caja de cacao', description: 'Detalle importado', quantity: 2, uom: 'UND' },
+    ];
 
     component.insertImportedLines();
 
@@ -482,6 +484,29 @@ describe('transaction-form', function () {
     assert.strictEqual(component.lines[0].amount, 15);
     assert.strictEqual(component.lines[1].item_code, 'ITEM-001');
     assert.strictEqual(component.lines[1].qty, 2);
+    assert.strictEqual(component.lines[1].description, 'Detalle importado');
+    assert.strictEqual(component.buildFiscalPayload().lines[1].description, 'Detalle importado');
+  });
+
+  it('keeps imported description for operational types without a destination column', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      items: [{ code: 'ITEM-002', name: 'Servicio', uom: 'UND' }],
+      uoms: [{ code: 'UND', name: 'Unidad' }],
+      defaultRows: 1,
+    });
+
+    component.init();
+    component.importModal.doctype = 'sales_order';
+    component.importModal.isValidated = true;
+    component.importModal.parsedRows = [
+      { item_code: 'ITEM-002', item_name: 'Servicio', description: 'Alcance solicitado', quantity: 1, uom: 'UND' },
+    ];
+
+    component.insertImportedLines();
+
+    assert.strictEqual(component.lines[0].description, 'Alcance solicitado');
+    assert.strictEqual(component.buildFiscalPayload().lines[0].description, 'Alcance solicitado');
   });
 
   it('enables line import for operational doctypes', function () {
