@@ -14,14 +14,27 @@ from cacao_accounting.database import Modules, Tax, TaxTemplate, database
 
 @pytest.fixture
 def admin_modulo(app):
-    """Habilita el módulo administrativo para las rutas."""
+    """Habilita el módulo administrativo y restaura su estado previo."""
     with app.app_context():
         modulo = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
+        creado = modulo is None
+        anterior = None if creado else modulo.enabled
         if modulo is None:
             database.session.add(Modules(module="admin", default=False, enabled=True))
         else:
             modulo.enabled = True
         database.session.commit()
+    try:
+        yield
+    finally:
+        with app.app_context():
+            modulo = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
+            if modulo is not None:
+                if creado:
+                    database.session.delete(modulo)
+                else:
+                    modulo.enabled = anterior
+                database.session.commit()
 
 
 @pytest.mark.parametrize(("casilla", "esperado"), [(None, False), ("on", True)])
