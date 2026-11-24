@@ -1148,6 +1148,7 @@ def _process_target_line(
         "item_name": getattr(source_item, "item_name", None),
         "description": getattr(source_item, "description", None),
         "qty": qty,
+        "qty_in_base_uom": _relation_qty_in_base_uom(source_item, qty, getattr(source_item, "uom", None)),
         "uom": getattr(source_item, "uom", None),
         "rate": rate,
         "amount": amount,
