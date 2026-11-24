@@ -673,7 +673,14 @@ def _validate_and_register_external_number(
 
     Raises:
         ExternalNumberDuplicateError: Si el numero ya fue utilizado con este contador.
+        IdentifierConfigurationError: Si el numero no respeta el prefijo del contador.
     """
+    prefix = counter.prefix or ""
+    if prefix and not external_number.startswith(prefix):
+        raise IdentifierConfigurationError(
+            _("El número externo debe comenzar con el prefijo '%(prefix)s'.") % {"prefix": prefix}
+        )
+
     existing = database.session.execute(
         database.select(ExternalNumberUsage).filter_by(
             external_counter_id=counter.id,
@@ -696,8 +703,7 @@ def _validate_and_register_external_number(
 
     # Intentar extraer el valor numerico del numero externo (despues del prefijo)
     prefix = counter.prefix or ""
-    prefix_len = len(prefix)
-    raw = external_number[prefix_len:]
+    raw = external_number[len(prefix) :]
     try:
         sequence_value = int(raw)
     except ValueError:
