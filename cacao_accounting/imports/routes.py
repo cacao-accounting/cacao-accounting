@@ -145,6 +145,10 @@ def new():
             flash(sequence_error or _("Debe seleccionar compañía y tipo de registro."), "danger")
             return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
 
+        if record_type not in ImportService.ADAPTERS:
+            flash(_("Tipo de registro no soportado: %(record_type)s") % {"record_type": record_type}, "danger")
+            return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
+
         exige_acceso_compania("imports", company_id, "crear")
 
         if record_type != "journal_entry" and accounting_book_id:
@@ -224,7 +228,7 @@ def detail(batch_id):
     batch = _batch_or_404(batch_id)
     service = ImportService()
     preview_data = {}
-    if batch.import_status >= 1:  # Archivo cargado
+    if batch.import_status >= 1 and batch.record_type in ImportService.ADAPTERS:  # Archivo cargado
         preview_data = service.preview(batch_id)
 
     return render_template("imports/detail.html", batch=batch, preview=preview_data)
@@ -325,6 +329,9 @@ def upload(batch_id):
     """Subir un archivo a un lote de importación."""
     check_permission("actualizar")
     batch = _batch_or_404(batch_id, "editar")
+    if batch.record_type not in ImportService.ADAPTERS:
+        flash(_("Tipo de registro no soportado: %(record_type)s") % {"record_type": batch.record_type}, "danger")
+        return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
     if batch.import_status in _PROCESSED_IMPORT_STATUSES or batch.success_rows or batch.processed_rows or batch.started_at:
         flash(_("El estado actual del lote no permite esta acción."), "warning")
         return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
