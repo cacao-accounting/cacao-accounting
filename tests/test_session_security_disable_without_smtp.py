@@ -5,12 +5,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cacao_accounting.admin.session_security_service import (
     SESSION_SECURITY_KEY,
     is_session_security_enabled,
     set_session_security_enabled,
 )
 from cacao_accounting.database import CacaoConfig, Modules, database
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 CLAVES = (SESSION_SECURITY_KEY, "smtp_server", "smtp_from_email")
 
@@ -25,6 +28,8 @@ def _limpiar(app, previos: dict[str, str]) -> None:
 def test_desactiva_proteccion_sin_smtp(app, authenticated_client):
     """Con la protección activa y sin SMTP el formulario permite apagarla."""
     with app.app_context():
+        if is_desktop_mode():
+            pytest.skip("La ruta de seguridad de sesión no existe en modo Desktop.")
         modulo = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
         if modulo is None:
             modulo = Modules(module="admin", default=False, enabled=True)
