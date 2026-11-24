@@ -24974,3 +24974,23 @@ msgstr "The %(field)s field must be a valid boolean value."
 #: cacao_accounting/document_flow/payment.py
 msgid "El pago no está marcado como anticipo."
 msgstr "The payment is not marked as an advance."
+
+#: cacao_accounting/auth/forms.py
+msgid "El nombre o apellido no puede superar los 80 caracteres."
+msgstr "The name or surname cannot exceed 80 characters."
+
+#: cacao_accounting/auth/forms.py
+msgid "El correo electrónico no puede superar los 150 caracteres."
+msgstr "The email address cannot exceed 150 characters."
+
+#: cacao_accounting/auth/forms.py
+msgid "El teléfono no puede superar los 50 caracteres."
+msgstr "The phone number cannot exceed 50 characters."
+
+#: cacao_accounting/auth/forms.py
+msgid "El usuario debe tener entre 3 y 15 caracteres."
+msgstr "The username must be between 3 and 15 characters."
+
+#: cacao_accounting/auth/forms.py
+msgid "La contraseña debe tener al menos 8 caracteres."
+msgstr "The password must be at least 8 characters long."

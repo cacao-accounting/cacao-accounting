@@ -78,6 +78,7 @@ def test_el_perfil_http_no_persiste_un_nombre_demasiado_largo(app, authenticated
 
     assert response.status_code == 200
     cuerpo = response.get_data(as_text=True)
-    assert "80" in cuerpo
+    assert "El nombre o apellido no puede superar los 80 caracteres." in cuerpo
+    assert "Field must be at most 80 characters long." not in cuerpo
     with app.app_context():
         assert database.session.get(User, user_id).name == anterior
