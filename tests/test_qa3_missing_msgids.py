@@ -80,3 +80,4 @@ def test_estado_terminal_de_confirmacion_tiene_traduccion():
         == "This request was already answered on %(responded)s by %(name)s %(last_name)s (%(email)s) "
         "and is closed."
     )
+    assert catalogo.gettext("fecha no registrada") == "date not recorded"

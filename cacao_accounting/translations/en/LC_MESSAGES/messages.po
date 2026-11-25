@@ -25076,3 +25076,7 @@ msgstr "The transaction currency is required to resolve catalog prices."
 #: cacao_accounting/ventas/services.py
 msgid "La lista de precios %(name)s no tiene moneda configurada."
 msgstr "The price list %(name)s has no currency configured."
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py
+msgid "fecha no registrada"
+msgstr "date not recorded"
