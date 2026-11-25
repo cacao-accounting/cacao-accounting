@@ -13,7 +13,7 @@ import pytest
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
-from cacao_accounting.compras.routes import _purchase_order_has_closed_source_request
+from cacao_accounting.compras.services import purchase_order_has_closed_source_request
 from cacao_accounting.compras.purchase_request_comparison_service import (
     purchase_request_comparison_covered_item_ids,
     purchase_request_is_ready_to_close,
@@ -228,4 +228,4 @@ def test_ordenes_que_cubren_la_cantidad_cierran_la_solicitud(request_order_scene
         assert purchase_request_is_ready_to_close(solicitud) is True
         solicitud.status = "closed"
         database.session.commit()
-        assert _purchase_order_has_closed_source_request(order_id) is True
+        assert purchase_order_has_closed_source_request(order_id) is True

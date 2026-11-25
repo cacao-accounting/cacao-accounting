@@ -372,6 +372,31 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
     return paginated
 
 
+def purchase_order_source_request_id(order_id: str) -> str | None:
+    """Devuelve la solicitud de compra activa que originó una orden."""
+    return database.session.execute(
+        database.select(DocumentRelation.source_id)
+        .where(
+            DocumentRelation.source_type == "purchase_request",
+            DocumentRelation.target_type == "purchase_order",
+            DocumentRelation.target_id == order_id,
+            DocumentRelation.status == "active",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def purchase_order_has_closed_source_request(order_id: str) -> bool:
+    """Indica si la orden consume una solicitud de compra ya cerrada."""
+    request_id = purchase_order_source_request_id(order_id)
+    if not request_id:
+        return False
+    status = database.session.execute(
+        database.select(PurchaseRequest.status).where(PurchaseRequest.id == request_id)
+    ).scalar_one_or_none()
+    return status == "closed"
+
+
 def _require_purchase_document_access(document: Any, action: str = "consultar") -> None:
     """Require company-scoped access before exposing a purchase document."""
     company = getattr(document, "company", None)

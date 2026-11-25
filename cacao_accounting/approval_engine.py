@@ -571,6 +571,11 @@ class ApprovalEngine:
     @staticmethod
     def _validate_final_cancellation(doctype: str, document: Any) -> None:
         """Recheck downstream dependencies at the moment cancellation executes."""
+        if doctype == "purchase_order":
+            from cacao_accounting.compras.services import purchase_order_has_closed_source_request
+
+            if purchase_order_has_closed_source_request(str(document.id)):
+                raise ValueError(_("La orden de compra pertenece a una solicitud de compra cerrada."))
         if doctype in {"sales_order", "delivery_note", "sales_invoice", "purchase_order", "purchase_receipt"}:
             from cacao_accounting.document_flow.repository import has_active_source_relations
 
