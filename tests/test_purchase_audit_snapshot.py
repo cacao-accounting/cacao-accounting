@@ -456,3 +456,61 @@ def test_edicion_cotizacion_rechaza_landed_cost_invalido_sin_nueva_auditoria(
             )
         ).scalar_one()
         assert total_despues == total_antes
+
+
+def test_edicion_registra_cambio_de_proveedor_y_nombre(app, authenticated_client, cotizacion_con_landed_cost):
+    """Cambiar supplier_id actualiza supplier_name y ambos quedan en changes_json."""
+    ids = cotizacion_con_landed_cost
+    sufijo = uuid4().hex[:8]
+    with app.app_context():
+        cotizacion = database.session.get(SupplierQuotation, ids["cotizacion"])
+        nombre_original = cotizacion.supplier_name
+        nuevo = Party(code=f"PRV-NUEVO-{sufijo}", name=f"Proveedor nuevo {sufijo}", is_supplier=True)
+        database.session.add(nuevo)
+        database.session.commit()
+        nuevo_id = nuevo.id
+
+    datos = _datos_cotizacion(ids)
+    datos["supplier_id"] = nuevo_id
+    respuesta = authenticated_client("admin").post(
+        f"/buying/supplier-quotation/{ids['cotizacion']}/edit",
+        data=datos,
+        follow_redirects=True,
+    )
+
+    assert respuesta.status_code == 200
+    cambios, antes, despues = _ultimo_cambio_cotizacion(app, ids["cotizacion"])
+    assert cambios["supplier_id"]["after"] == nuevo_id
+    assert cambios["supplier_name"]["before"] == nombre_original
+    assert cambios["supplier_name"]["after"] == f"Proveedor nuevo {sufijo}"
+    assert antes["supplier_name"] != despues["supplier_name"]
+
+
+def test_edicion_registra_recuperacion_de_base_currency(app, authenticated_client, factura_editable):
+    """Una factura sin base_currency recupera la funcional y el delta se audita."""
+    ids = factura_editable
+    with app.app_context():
+        factura = database.session.get(PurchaseInvoice, ids["factura"])
+        factura.base_currency = None
+        database.session.commit()
+
+    datos = {
+        "supplier_id": ids["proveedor"],
+        "company": "cacao",
+        "posting_date": "2026-05-15",
+        "supplier_invoice_no": ids["sufijo"],
+        "tax_template_id": "",
+        "item_code_0": "ART01",
+        "item_name_0": "Articulo Comercial",
+        "qty_0": "2",
+        "uom_0": "UND",
+        "rate_0": "10",
+        "amount_0": "20",
+    }
+    _editar_factura(authenticated_client, ids["factura"], datos)
+
+    cambios, antes, despues = _ultimo_cambio_de_factura(app, ids["factura"])
+    assert cambios["base_currency"]["before"] is None
+    assert cambios["base_currency"]["after"] == "NIO"
+    assert antes["base_currency"] is None
+    assert despues["base_currency"] == "NIO"

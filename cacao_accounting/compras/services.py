@@ -2562,6 +2562,7 @@ def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_
 
 PURCHASE_AUDIT_FIELDS = (
     "supplier_id",
+    "supplier_name",
     "company",
     "posting_date",
     "total",
@@ -2569,6 +2570,7 @@ PURCHASE_AUDIT_FIELDS = (
     "supplier_invoice_no",
     "tax_template_id",
     "transaction_currency",
+    "base_currency",
     "exchange_rate",
     "base_total",
     "tax_total",
