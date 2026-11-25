@@ -13,6 +13,7 @@ cantidad devuelta no exceda lo recibido.
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
@@ -44,6 +45,11 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.internal_control_service import audit_actor
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="La aprobación de devoluciones no aplica en modo escritorio.",
+)
 
 
 def _sembrar_cuentas(escenario) -> None:

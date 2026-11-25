@@ -52,7 +52,7 @@ def test_main_posteable_gana_sobre_default_legacy_en_motor_externo() -> None:
                 Entity(
                     code=company,
                     name="Cacao",
-                    company_name="Cacao SA",
+                    company_name=f"Cacao {sufijo} SA",
                     tax_id=f"J-{sufijo}",
                     currency="NIO",
                     enabled=True,
@@ -125,7 +125,7 @@ def test_fallback_legacy_es_determinista_en_motor_externo() -> None:
                 Entity(
                     code=company,
                     name="Cacao",
-                    company_name="Cacao SA",
+                    company_name=f"Cacao {sufijo} SA",
                     tax_id=f"J-{sufijo}",
                     currency="NIO",
                     enabled=True,

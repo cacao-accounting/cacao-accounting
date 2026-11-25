@@ -371,6 +371,7 @@ def _limpiar_carrera_mysql(application, ids: dict[str, Any]) -> None:
             database.delete(PurchaseReceiptItem).where(PurchaseReceiptItem.purchase_receipt_id.in_(ids["receipts"]))
         )
         database.session.execute(database.delete(PurchaseReceipt).where(PurchaseReceipt.id.in_(ids["receipts"])))
+        database.session.execute(database.delete(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == ids["order"]))
         database.session.execute(database.delete(PurchaseOrder).where(PurchaseOrder.id == ids["order"]))
         database.session.execute(database.delete(Item).where(Item.code == ids["item"]))
         database.session.execute(database.delete(Entity).where(Entity.code == ids["company"]))
@@ -437,7 +438,9 @@ def test_mysql_recepcion_ve_consumo_confirmado_tras_snapshot():
             finally:
                 database.session.remove()
 
-    event.listen(database.engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
+    with application.app_context():
+        engine = database.engine
+    event.listen(engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
     try:
         with ThreadPoolExecutor(max_workers=1) as workers:
             futuro = workers.submit(perdedor)
@@ -461,7 +464,7 @@ def test_mysql_recepcion_ve_consumo_confirmado_tras_snapshot():
             assert aprobadas[0].id == ids["receipts"][0]
     finally:
         ganador_confirmo.set()
-        event.remove(database.engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
+        event.remove(engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
         _limpiar_carrera_mysql(application, ids)
         with application.app_context():
             database.engine.dispose()

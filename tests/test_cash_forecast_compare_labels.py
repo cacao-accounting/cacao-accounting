@@ -12,10 +12,12 @@ nunca debe mostrar los códigos internos "Current"/"Projected" ni los estados
 from __future__ import annotations
 
 import os
-
 import re
 from urllib.parse import urlsplit
 from uuid import uuid4
+
+import pytest
+from sqlalchemy import inspect
 
 ETIQUETAS_ZONA_TRADUCIDAS = {"Real", "Actual", "Proyectado"}
 INSIGNIA_ZONA = re.compile(r'badge bg-light text-dark small ms-1">([^<]+)</span>')
@@ -54,14 +56,22 @@ def _agregar_entrada(cliente, forecast_id: str, monto: str) -> None:
     assert respuesta.status_code in (302, 303), respuesta.get_data(as_text=True)
 
 
-def test_comparativo_muestra_estados_y_zonas_traducidos(app, authenticated_client, entorno_contable):
+def test_comparativo_muestra_estados_y_zonas_traducidos(entorno_contable_aislado):
     """El comparativo usa Borrador/Aprobado y zonas traducidas, nunca códigos crudos."""
     if os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}:
-        import pytest
-
         pytest.skip("El comparativo de pronósticos no aplica en modo escritorio.")
+    app = entorno_contable_aislado.app
+    admin_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
+
+    def _cliente():
+        cliente = app.test_client()
+        with cliente.session_transaction() as sesion:
+            sesion["_user_id"] = admin_id
+            sesion["_fresh"] = True
+        return cliente
+
     sufijo = uuid4().hex[:8]
-    cliente = authenticated_client()
+    cliente = _cliente()
 
     borrador_id = _crear_pronostico(cliente, f"base-{sufijo}")
     aprobado_id = _crear_pronostico(cliente, f"escenario-{sufijo}")
@@ -71,7 +81,7 @@ def test_comparativo_muestra_estados_y_zonas_traducidos(app, authenticated_clien
     assert aprobacion.status_code in (302, 303), "El pronóstico borrador debe poder aprobarse."
 
     # Cliente nuevo: sin mensajes flash de la aprobación en la página comparada.
-    respuesta = authenticated_client().get(
+    respuesta = _cliente().get(
         f"/cash_management/cash-forecast/compare?company=cacao&base_id={borrador_id}&compare_id={aprobado_id}"
     )
 

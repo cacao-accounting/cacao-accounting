@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -12,6 +13,11 @@ import pytest
 
 from cacao_accounting.approval_engine import ApprovalEngine
 from cacao_accounting.database import ApprovalAction, ApprovalRequest, User, database
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="El motor de aprobaciones no aplica en modo escritorio.",
+)
 
 
 def _solicitud(app):

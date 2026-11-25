@@ -10,6 +10,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import inspect
 
 from cacao_accounting.database import PaymentEntry, database
 
@@ -23,9 +24,10 @@ LISTADOS = [
 
 
 @pytest.mark.parametrize(("payment_type", "ruta"), LISTADOS)
-def test_la_paginacion_conserva_ruta_y_filtros(app, entorno_contable, authenticated_client, payment_type, ruta):
+def test_la_paginacion_conserva_ruta_y_filtros(entorno_contable_aislado, payment_type, ruta):
     """La página siguiente usa su endpoint especializado y mantiene búsqueda y compañía."""
-    del entorno_contable
+    app = entorno_contable_aislado.app
+    admin_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
     sufijo = uuid4().hex[:8]
     ids: list[str] = []
     with app.app_context():
@@ -46,7 +48,10 @@ def test_la_paginacion_conserva_ruta_y_filtros(app, entorno_contable, authentica
         database.session.commit()
 
     try:
-        client = authenticated_client("admin")
+        client = app.test_client()
+        with client.session_transaction() as sesion:
+            sesion["_user_id"] = admin_id
+            sesion["_fresh"] = True
         primera = client.get(f"{ruta}?search={sufijo}&company=cacao")
         segunda = client.get(f"{ruta}?search={sufijo}&company=cacao&page=2")
 

@@ -5,10 +5,12 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import inspect
 
 from cacao_accounting.approval_engine import ApprovalEngine, approved_execution
@@ -37,6 +39,11 @@ from cacao_accounting.database import (
 )
 
 FECHA = date(2026, 5, 12)
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"},
+    reason="La aprobación de devoluciones no aplica en modo escritorio.",
+)
 
 
 def _preparar_asiento(escenario) -> str:

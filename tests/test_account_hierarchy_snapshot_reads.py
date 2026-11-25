@@ -58,7 +58,14 @@ def _sembrar_padre(app, company: str, parent_code: str) -> None:
             database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True))
             database.session.flush()
         database.session.add(
-            Entity(code=company, name="Cacao", company_name="Cacao SA", tax_id="J1", currency="NIO", enabled=True)
+            Entity(
+                code=company,
+                name="Cacao",
+                company_name=f"Cacao {company} SA",
+                tax_id=f"J-{company}",
+                currency="NIO",
+                enabled=True,
+            )
         )
         database.session.flush()
         database.session.add(Accounts(entity=company, code=parent_code, name="Grupo", group=True, active=True, enabled=True))

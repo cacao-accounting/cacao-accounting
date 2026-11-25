@@ -648,7 +648,9 @@ def test_mysql_orden_manual_ve_estado_confirmado_durante_snapshot(adjudicaciones
             database.session.remove()
         return resultado, mensajes
 
-    event.listen(database.engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
+    with application.app_context():
+        engine = database.engine
+    event.listen(engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
     try:
         with ThreadPoolExecutor(max_workers=1) as workers:
             futuro = workers.submit(orden_manual_tras_snapshot)
@@ -661,7 +663,7 @@ def test_mysql_orden_manual_ve_estado_confirmado_durante_snapshot(adjudicaciones
             ganador_confirmo.set()
             resultado, mensajes = futuro.result(timeout=30)
     finally:
-        event.remove(database.engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
+        event.remove(engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
 
     assert resultado is None
     assert "La adjudicación seleccionada no es válida." in mensajes

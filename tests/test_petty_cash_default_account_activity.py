@@ -43,8 +43,9 @@ def _limpiar_cuentas(company: str, codes: tuple[str, ...]) -> None:
     database.session.flush()
 
 
-def test_setup_omite_cuentas_inactivas_y_elige_la_activa(app, entorno_contable):
+def test_setup_omite_cuentas_inactivas_y_elige_la_activa(entorno_contable_aislado):
     """Una cuenta petty_cash inactiva no se elige sobre la activa disponible."""
+    app = entorno_contable_aislado.app
     company = "cacao"
     with app.app_context():
         _limpiar_fondos(company)
@@ -61,8 +62,9 @@ def test_setup_omite_cuentas_inactivas_y_elige_la_activa(app, entorno_contable):
         database.session.commit()
 
 
-def test_setup_omite_cuentas_deshabilitadas(app, entorno_contable):
+def test_setup_omite_cuentas_deshabilitadas(entorno_contable_aislado):
     """Una cuenta petty_cash deshabilitada tampoco se elige."""
+    app = entorno_contable_aislado.app
     company = "cacao"
     with app.app_context():
         _limpiar_fondos(company)
@@ -79,8 +81,9 @@ def test_setup_omite_cuentas_deshabilitadas(app, entorno_contable):
         database.session.commit()
 
 
-def test_setup_sin_cuenta_utilizable_no_crea_fondo(app, entorno_contable):
+def test_setup_sin_cuenta_utilizable_no_crea_fondo(entorno_contable_aislado):
     """Si solo hay cuentas inactivas, el setup deja el fondo sin crear."""
+    app = entorno_contable_aislado.app
     company = "cacao"
     with app.app_context():
         _limpiar_fondos(company)
@@ -94,8 +97,9 @@ def test_setup_sin_cuenta_utilizable_no_crea_fondo(app, entorno_contable):
         database.session.commit()
 
 
-def test_setup_idempotente_conserva_el_fondo_existente(app, entorno_contable):
+def test_setup_idempotente_conserva_el_fondo_existente(entorno_contable_aislado):
     """Si ya existe un fondo por defecto, no se crea otro ni se reasigna."""
+    app = entorno_contable_aislado.app
     company = "cacao"
     with app.app_context():
         _limpiar_fondos(company)
@@ -123,10 +127,11 @@ def test_setup_idempotente_conserva_el_fondo_existente(app, entorno_contable):
         database.session.commit()
 
 
-def test_finalize_setup_informa_cuando_no_crea_fondo(app, entorno_contable, monkeypatch):
+def test_finalize_setup_informa_cuando_no_crea_fondo(entorno_contable_aislado, monkeypatch):
     """#1265: sin cuenta utilizable el setup informa y no crea el fondo."""
     from cacao_accounting.setup import service as setup_service
 
+    app = entorno_contable_aislado.app
     company = "cacao"
     with app.app_context():
         _limpiar_fondos(company)
@@ -142,8 +147,9 @@ def test_finalize_setup_informa_cuando_no_crea_fondo(app, entorno_contable, monk
         database.session.commit()
 
 
-def test_finalize_setup_true_cuando_crea_fondo(app, entorno_contable):
+def test_finalize_setup_true_cuando_crea_fondo(entorno_contable_aislado):
     """Control positivo: con cuenta utilizable el setup crea el fondo."""
+    app = entorno_contable_aislado.app
     company = "cacao"
     with app.app_context():
         _limpiar_fondos(company)
