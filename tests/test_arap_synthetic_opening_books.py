@@ -35,6 +35,7 @@ from cacao_accounting.database import (
     GLEntry,
     Party,
     PaymentEntry,
+    PurchaseInvoice,
     SalesInvoice,
     database,
 )
@@ -99,10 +100,21 @@ def _crear_app():
             enabled=True,
             account_type="receivable",
         )
+        cuenta_pagar = Accounts(
+            code="2.01.02.001",
+            name="Cuentas por pagar",
+            entity="cacao",
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="payable",
+        )
         cliente = Party(code="CUST-1", name="Cliente", is_customer=True, is_active=True)
-        database.session.add_all([libro_nio, libro_usd, cuenta, cliente])
+        proveedor = Party(code="SUP-1", name="Proveedor", is_supplier=True, is_active=True)
+        database.session.add_all([libro_nio, libro_usd, cuenta, cuenta_pagar, cliente, proveedor])
         database.session.flush()
         cliente_id = str(cliente.id)
+        proveedor_id = str(proveedor.id)
         factura = SalesInvoice(
             company="cacao",
             posting_date=FECHA,
@@ -196,6 +208,105 @@ def _crear_app():
                     party_id=cliente_id,
                 )
             )
+
+        factura_compra = PurchaseInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            supplier_id=proveedor_id,
+            supplier_name="Proveedor",
+            grand_total=100,
+            transaction_currency="NIO",
+        )
+        factura_compra_sin_gl = PurchaseInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            supplier_id=proveedor_id,
+            supplier_name="Proveedor",
+            grand_total=200,
+            transaction_currency="NIO",
+        )
+        factura_compra_usd_sin_gl = PurchaseInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            supplier_id=proveedor_id,
+            supplier_name="Proveedor",
+            grand_total=200,
+            transaction_currency="USD",
+            exchange_rate=Decimal("35"),
+        )
+        pago_proveedor = PaymentEntry(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="PAY-AP-2118",
+            payment_type="pay",
+            party_type="supplier",
+            party_id=proveedor_id,
+            party_name="Proveedor",
+            currency="NIO",
+            exchange_rate=Decimal("1"),
+            paid_amount=Decimal("80"),
+            base_paid_amount=Decimal("80"),
+            unallocated_amount=Decimal("80"),
+        )
+        pago_proveedor_usd_sin_gl = PaymentEntry(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="PAY-AP-USD-2118",
+            payment_type="pay",
+            party_type="supplier",
+            party_id=proveedor_id,
+            party_name="Proveedor",
+            currency="USD",
+            exchange_rate=Decimal("35"),
+            paid_amount=Decimal("200"),
+            base_paid_amount=Decimal("7000"),
+            unallocated_amount=Decimal("200"),
+        )
+        database.session.add_all(
+            [
+                factura_compra,
+                factura_compra_sin_gl,
+                factura_compra_usd_sin_gl,
+                pago_proveedor,
+                pago_proveedor_usd_sin_gl,
+            ]
+        )
+        database.session.flush()
+        for libro, importe in ((libro_nio, Decimal("100")), (libro_usd, Decimal("28"))):
+            database.session.add(
+                GLEntry(
+                    posting_date=FECHA,
+                    company="cacao",
+                    ledger_id=libro.id,
+                    account_id=cuenta_pagar.id,
+                    debit=Decimal("0"),
+                    credit=importe,
+                    voucher_type="purchase_invoice",
+                    voucher_id=factura_compra.id,
+                    party_type="supplier",
+                    party_id=proveedor_id,
+                )
+            )
+        for libro, importe in ((libro_nio, Decimal("80")), (libro_usd, Decimal("20"))):
+            database.session.add(
+                GLEntry(
+                    posting_date=FECHA,
+                    company="cacao",
+                    ledger_id=libro.id,
+                    account_id=cuenta_pagar.id,
+                    debit=importe,
+                    credit=Decimal("0"),
+                    voucher_type="payment_entry",
+                    voucher_id=pago_proveedor.id,
+                    party_type="supplier",
+                    party_id=proveedor_id,
+                )
+            )
         database.session.commit()
         ids = {
             "nio": libro_nio.id,
@@ -206,6 +317,12 @@ def _crear_app():
             "pago": pago.id,
             "pago_usd_sin_gl": pago_usd_sin_gl.id,
             "cliente": cliente_id,
+            "proveedor": proveedor_id,
+            "factura_compra": factura_compra.id,
+            "factura_compra_sin_gl": factura_compra_sin_gl.id,
+            "factura_compra_usd_sin_gl": factura_compra_usd_sin_gl.id,
+            "pago_proveedor": pago_proveedor.id,
+            "pago_proveedor_usd_sin_gl": pago_proveedor_usd_sin_gl.id,
         }
     return application, ids
 
@@ -245,6 +362,19 @@ def _valoracion_por_libro(apertura) -> dict[str, Decimal]:
         database.session.execute(database.select(ARAPLedgerBookEntry).filter_by(ledger_entry_id=apertura.id)).scalars().all()
     )
     return {fila.ledger_id: fila.book_amount for fila in filas}
+
+
+def _sin_aperturas(document_id: str) -> bool:
+    """Indica si el documento no dejó movimientos AR/AP ni valoración por libro."""
+    entrada = database.session.execute(
+        database.select(ARAPLedgerEntry.id).filter_by(document_id=document_id)
+    ).scalar_one_or_none()
+    libros = database.session.execute(
+        database.select(ARAPLedgerBookEntry.id)
+        .join(ARAPLedgerEntry, ARAPLedgerBookEntry.ledger_entry_id == ARAPLedgerEntry.id)
+        .where(ARAPLedgerEntry.document_id == document_id)
+    ).scalar_one_or_none()
+    return entrada is None and libros is None
 
 
 def test_la_apertura_sintetica_del_pago_valora_todos_los_libros():
@@ -413,6 +543,179 @@ def test_apertura_sintetica_del_pago_sin_gl_usa_la_tasa_del_pago():
             por_libro = _valoracion_por_libro(apertura)
             assert por_libro[ids["nio"]] == Decimal("-7000")
             assert por_libro[ids["usd"]] == Decimal("-200")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_ap_valora_libros_desde_gl():
+    """Una factura de proveedor toma el signo AP de sus líneas GL por libro."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            factura = database.session.get(PurchaseInvoice, ids["factura_compra"])
+            apertura, _cache, nuevas = _resolve_application_target_item(
+                "cacao",
+                factura,
+                "purchase_invoice",
+                "NIO",
+                "supplier",
+                ids["proveedor"],
+                "AP",
+                Decimal("100"),
+                FECHA,
+            )
+            database.session.flush()
+
+            assert nuevas == [apertura]
+            por_libro = _valoracion_por_libro(apertura)
+            assert por_libro[ids["nio"]] == Decimal("100")
+            assert por_libro[ids["usd"]] == Decimal("28")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_ap_sin_gl_usa_tasa_del_documento():
+    """La factura de proveedor en USD usa la tasa histórica del documento."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            factura = database.session.get(PurchaseInvoice, ids["factura_compra_usd_sin_gl"])
+            apertura, _cache, nuevas = _resolve_application_target_item(
+                "cacao",
+                factura,
+                "purchase_invoice",
+                "USD",
+                "supplier",
+                ids["proveedor"],
+                "AP",
+                Decimal("200"),
+                FECHA,
+            )
+            database.session.flush()
+
+            assert nuevas == [apertura]
+            por_libro = _valoracion_por_libro(apertura)
+            assert por_libro[ids["nio"]] == Decimal("7000")
+            assert por_libro[ids["usd"]] == Decimal("200")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_ap_sin_tasa_bloquea_sin_filas():
+    """Una factura de proveedor sin GL ni tasa no deja evidencia parcial."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            factura = database.session.get(PurchaseInvoice, ids["factura_compra_usd_sin_gl"])
+            factura.exchange_rate = None
+            with pytest.raises(PostingError):
+                _resolve_application_target_item(
+                    "cacao",
+                    factura,
+                    "purchase_invoice",
+                    "USD",
+                    "supplier",
+                    ids["proveedor"],
+                    "AP",
+                    Decimal("200"),
+                    FECHA,
+                )
+            database.session.rollback()
+            assert _sin_aperturas(ids["factura_compra_usd_sin_gl"])
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_pago_ap_valora_libros_desde_gl():
+    """Un pago a proveedor conserva el signo AP por libro."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            pago = database.session.get(PaymentEntry, ids["pago_proveedor"])
+            apertura, _cache, nuevas = _resolve_application_payment_item(
+                "cacao",
+                pago,
+                "payment_entry",
+                pago.id,
+                "NIO",
+                "supplier",
+                ids["proveedor"],
+                "AP",
+                Decimal("80"),
+                FECHA,
+            )
+            database.session.flush()
+
+            assert nuevas == [apertura]
+            por_libro = _valoracion_por_libro(apertura)
+            assert por_libro[ids["nio"]] == Decimal("-80")
+            assert por_libro[ids["usd"]] == Decimal("-20")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_pago_ap_sin_gl_usa_tasa_del_pago():
+    """Un pago a proveedor en USD usa su tasa histórica y signo AP."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            pago = database.session.get(PaymentEntry, ids["pago_proveedor_usd_sin_gl"])
+            apertura, _cache, nuevas = _resolve_application_payment_item(
+                "cacao",
+                pago,
+                "payment_entry",
+                pago.id,
+                "USD",
+                "supplier",
+                ids["proveedor"],
+                "AP",
+                Decimal("200"),
+                FECHA,
+            )
+            database.session.flush()
+
+            assert nuevas == [apertura]
+            por_libro = _valoracion_por_libro(apertura)
+            assert por_libro[ids["nio"]] == Decimal("-7000")
+            assert por_libro[ids["usd"]] == Decimal("-200")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_pago_ap_sin_tasa_bloquea_sin_filas():
+    """Un pago a proveedor sin GL ni tasa no deja aperturas ni libros."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            pago = database.session.get(PaymentEntry, ids["pago_proveedor_usd_sin_gl"])
+            pago.exchange_rate = None
+            with pytest.raises(PostingError):
+                _resolve_application_payment_item(
+                    "cacao",
+                    pago,
+                    "payment_entry",
+                    pago.id,
+                    "USD",
+                    "supplier",
+                    ids["proveedor"],
+                    "AP",
+                    Decimal("200"),
+                    FECHA,
+                )
+            database.session.rollback()
+            assert _sin_aperturas(ids["pago_proveedor_usd_sin_gl"])
     finally:
         with application.app_context():
             database.session.remove()
