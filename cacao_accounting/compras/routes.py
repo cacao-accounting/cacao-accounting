@@ -2474,6 +2474,11 @@ def compras_orden_compra_submit(order_id: str):
     source_request_ids = purchase_order_source_request_ids(order_id)
     for source_request_id in source_request_ids:
         lock_document_flow_document("purchase_request", source_request_id)
+    registro = database.session.execute(
+        database.select(PurchaseOrder).where(PurchaseOrder.id == order_id).execution_options(populate_existing=True)
+    ).scalar_one()
+    if registro.docstatus != 0:
+        abort(400)
     if source_request_ids and purchase_order_has_closed_source_request(order_id):
         flash(_("No se puede aprobar la orden de compra porque su Solicitud de Compra ya está cerrada."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
@@ -2529,13 +2534,14 @@ def compras_orden_compra_cancel(order_id: str):
     source_request_ids = purchase_order_source_request_ids(order_id)
     for source_request_id in source_request_ids:
         lock_document_flow_document("purchase_request", source_request_id)
-    if source_request_ids:
-        registro = database.session.execute(
-            database.select(PurchaseOrder).where(PurchaseOrder.id == order_id).execution_options(populate_existing=True)
-        ).scalar_one()
-        if purchase_order_has_closed_source_request(order_id):
-            flash(_("No se puede cancelar la orden de compra porque su Solicitud de Compra ya está cerrada."), "danger")
-            return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
+    registro = database.session.execute(
+        database.select(PurchaseOrder).where(PurchaseOrder.id == order_id).execution_options(populate_existing=True)
+    ).scalar_one()
+    if registro.docstatus != 1:
+        abort(400)
+    if source_request_ids and purchase_order_has_closed_source_request(order_id):
+        flash(_("No se puede cancelar la orden de compra porque su Solicitud de Compra ya está cerrada."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     if has_active_source_relations("purchase_order", order_id):
         flash(_("No se puede cancelar la orden de compra porque tiene recepciones o facturas activas."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
