@@ -64,6 +64,7 @@ def companias_caja():
     beta = f"b{suffix}"
     sin_compania = f"sc{suffix}"
     con_alpha = f"ca{suffix}"
+    admin_alpha = f"aa{suffix}"
 
     with application.app_context():
         database.create_all()
@@ -100,10 +101,23 @@ def companias_caja():
             [
                 User(id=sin_compania, user=sin_compania, name="Sin compañía", password=b"unused", active=True),
                 User(id=con_alpha, user=con_alpha, name="Solo Alfa", password=b"unused", active=True),
+                User(
+                    id=admin_alpha,
+                    user=admin_alpha,
+                    name="Admin solo Alfa",
+                    password=b"unused",
+                    classification="admin",
+                    active=True,
+                ),
             ]
         )
         database.session.flush()
-        database.session.add_all([UserCompanyAccess(user_id=con_alpha, company_code=alpha)])
+        database.session.add_all(
+            [
+                UserCompanyAccess(user_id=con_alpha, company_code=alpha),
+                UserCompanyAccess(user_id=admin_alpha, company_code=alpha),
+            ]
+        )
         role = Roles(name=f"cash-creator-{suffix}", note="Alta de caja")
         database.session.add(role)
         database.session.flush()
@@ -144,72 +158,152 @@ def companias_caja():
             enabled=True,
             account_type="bank",
         )
-        gl_caja = Accounts(
-            entity=beta,
+        gl_caja_alpha = Accounts(
+            entity=alpha,
             code=f"3{suffix}",
-            name="Caja contable",
+            name="Caja contable Alfa",
             group=False,
             active=True,
             enabled=True,
             account_type="petty_cash",
         )
-        database.session.add_all([gl_banco_alpha, gl_banco_beta, gl_caja])
-        database.session.flush()
-        database.session.add(
-            BankAccount(
-                bank_id=banco.id,
-                company=beta,
-                account_name="Cuenta Beta",
-                account_no=f"BETA-{suffix}",
-                currency="NIO",
-                gl_account_id=gl_banco_beta.id,
-            )
+        gl_caja_beta = Accounts(
+            entity=beta,
+            code=f"4{suffix}",
+            name="Caja contable Beta",
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="petty_cash",
         )
-        fondo = PettyCashAccount(
+        database.session.add_all([gl_banco_alpha, gl_banco_beta, gl_caja_alpha, gl_caja_beta])
+        database.session.flush()
+        cuenta_banco_alpha = BankAccount(
+            bank_id=banco.id,
+            company=alpha,
+            account_name="Cuenta Alfa",
+            account_no=f"ALFA-{suffix}",
+            currency="NIO",
+            gl_account_id=gl_banco_alpha.id,
+        )
+        cuenta_banco_beta = BankAccount(
+            bank_id=banco.id,
             company=beta,
-            account_id=gl_caja.id,
+            account_name="Cuenta Beta",
+            account_no=f"BETA-{suffix}",
+            currency="NIO",
+            gl_account_id=gl_banco_beta.id,
+        )
+        fondo_alpha = PettyCashAccount(
+            company=alpha,
+            account_id=gl_caja_alpha.id,
+            name=f"Fondo Alfa {suffix}",
+            currency="NIO",
+            float_amount=Decimal("500"),
+            is_default=True,
+            is_active=True,
+        )
+        fondo_beta = PettyCashAccount(
+            company=beta,
+            account_id=gl_caja_beta.id,
             name=f"Fondo Beta {suffix}",
             currency="NIO",
             float_amount=Decimal("500"),
             is_default=True,
             is_active=True,
         )
-        database.session.add(fondo)
+        database.session.add_all([cuenta_banco_alpha, cuenta_banco_beta, fondo_alpha, fondo_beta])
         database.session.flush()
-        database.session.add_all(
-            [
-                PettyCashVoucher(
-                    company=beta,
-                    petty_cash_id=fondo.id,
-                    voucher_no=f"VALE-BETA-{suffix}",
-                    voucher_status="entregado",
-                    delivered_to="Empleado beta",
-                    concept="Viáticos beta",
-                    amount=Decimal("25"),
-                    posting_date=date(2026, 11, 20),
-                    transaction_currency="NIO",
-                ),
-                PettyCashExpense(
-                    company=beta,
-                    petty_cash_id=fondo.id,
-                    document_no=f"GTO-BETA-{suffix}",
-                    concept="Gasto beta",
-                    expense_account_code="5.01.01.001",
-                    amount=Decimal("10"),
-                    posting_date=date(2026, 11, 20),
-                    docstatus=1,
-                    transaction_currency="NIO",
-                ),
-            ]
+        vale_alpha_draft = PettyCashVoucher(
+            company=alpha,
+            petty_cash_id=fondo_alpha.id,
+            voucher_no=f"VALE-ALFA-DRAFT-{suffix}",
+            voucher_status="borrador",
+            delivered_to="Empleado alfa",
+            concept="Viáticos alfa borrador",
+            amount=Decimal("25"),
+            posting_date=date(2026, 11, 20),
+            transaction_currency="NIO",
         )
+        vale_alpha_sent = PettyCashVoucher(
+            company=alpha,
+            petty_cash_id=fondo_alpha.id,
+            voucher_no=f"VALE-ALFA-SENT-{suffix}",
+            voucher_status="entregado",
+            delivered_to="Empleado alfa",
+            concept="Viáticos alfa entregado",
+            amount=Decimal("25"),
+            posting_date=date(2026, 11, 20),
+            transaction_currency="NIO",
+        )
+        vale_beta_draft = PettyCashVoucher(
+            company=beta,
+            petty_cash_id=fondo_beta.id,
+            voucher_no=f"VALE-BETA-DRAFT-{suffix}",
+            voucher_status="borrador",
+            delivered_to="Empleado beta",
+            concept="Viáticos beta borrador",
+            amount=Decimal("25"),
+            posting_date=date(2026, 11, 20),
+            transaction_currency="NIO",
+        )
+        vale_beta_sent = PettyCashVoucher(
+            company=beta,
+            petty_cash_id=fondo_beta.id,
+            voucher_no=f"VALE-BETA-SENT-{suffix}",
+            voucher_status="entregado",
+            delivered_to="Empleado beta",
+            concept="Viáticos beta entregado",
+            amount=Decimal("25"),
+            posting_date=date(2026, 11, 20),
+            transaction_currency="NIO",
+        )
+        gasto_alpha = PettyCashExpense(
+            company=alpha,
+            petty_cash_id=fondo_alpha.id,
+            document_no=f"GTO-ALFA-{suffix}",
+            concept="Gasto alfa",
+            expense_account_code="5.01.01.001",
+            amount=Decimal("10"),
+            posting_date=date(2026, 11, 20),
+            docstatus=1,
+            transaction_currency="NIO",
+        )
+        gasto_beta = PettyCashExpense(
+            company=beta,
+            petty_cash_id=fondo_beta.id,
+            document_no=f"GTO-BETA-{suffix}",
+            concept="Gasto beta",
+            expense_account_code="5.01.01.001",
+            amount=Decimal("10"),
+            posting_date=date(2026, 11, 20),
+            docstatus=1,
+            transaction_currency="NIO",
+        )
+        database.session.add_all([vale_alpha_draft, vale_alpha_sent, vale_beta_draft, vale_beta_sent, gasto_alpha, gasto_beta])
         database.session.commit()
         ids = {
             "alpha": alpha,
             "beta": beta,
             "sin_compania": sin_compania,
             "con_alpha": con_alpha,
+            "admin_alpha": admin_alpha,
             "bank_id": banco.id,
             "gl_account_id": gl_banco_alpha.id,
+            "bank_alpha": cuenta_banco_alpha.id,
+            "bank_beta": cuenta_banco_beta.id,
+            "bank_alpha_no": cuenta_banco_alpha.account_no,
+            "bank_beta_no": cuenta_banco_beta.account_no,
+            "vale_alpha_draft": vale_alpha_draft.id,
+            "vale_alpha_sent": vale_alpha_sent.id,
+            "vale_beta_draft": vale_beta_draft.id,
+            "vale_beta_sent": vale_beta_sent.id,
+            "vale_alpha_draft_no": vale_alpha_draft.voucher_no,
+            "vale_beta_draft_no": vale_beta_draft.voucher_no,
+            "gasto_alpha": gasto_alpha.id,
+            "gasto_beta": gasto_beta.id,
+            "gasto_alpha_no": gasto_alpha.document_no,
+            "gasto_beta_no": gasto_beta.document_no,
         }
     yield application, ids
     with application.app_context():
@@ -273,9 +367,80 @@ def test_con_compania_no_ofrece_acciones_de_otra_compania(companias_caja):
         assert enlace in response.get_data(as_text=True), path
 
     vales = client.get("/cash_management/petty-cash-voucher/list").get_data(as_text=True)
-    assert "Liquidar" not in vales
+    assert f"/petty-cash-voucher/{ids['vale_alpha_draft']}/status" in vales
+    assert f"/petty-cash-voucher/{ids['vale_alpha_sent']}/liquidate" in vales
+    assert ids["vale_beta_draft_no"] not in vales
+    assert ids["vale_beta_sent"] not in vales
     gastos = client.get("/cash_management/petty-cash-expense/list").get_data(as_text=True)
-    assert "Anular" not in gastos
+    assert f"/petty-cash-expense/{ids['gasto_alpha']}/cancel" in gastos
+    assert ids["gasto_beta_no"] not in gastos
+
+
+def test_admin_cloud_con_uca_parcial_oculta_acciones_de_beta(companias_caja):
+    """El admin ve filas globales, pero solo opera las acciones de su compañía."""
+    application, ids = companias_caja
+    client = _cliente(application, ids["admin_alpha"])
+
+    bancos = client.get("/cash_management/bank-account/list")
+    assert bancos.status_code == 200
+    cuerpo_bancos = bancos.get_data(as_text=True)
+    assert ids["bank_alpha_no"] in cuerpo_bancos
+    assert ids["bank_beta_no"] in cuerpo_bancos
+
+    vales = client.get("/cash_management/petty-cash-voucher/list")
+    assert vales.status_code == 200
+    cuerpo_vales = vales.get_data(as_text=True)
+    assert ids["vale_alpha_draft_no"] in cuerpo_vales
+    assert ids["vale_beta_draft_no"] in cuerpo_vales
+    assert f"/petty-cash-voucher/{ids['vale_alpha_draft']}/status" in cuerpo_vales
+    assert f"/petty-cash-voucher/{ids['vale_beta_draft']}/status" not in cuerpo_vales
+    assert f"/petty-cash-voucher/{ids['vale_alpha_sent']}/liquidate" in cuerpo_vales
+    assert f"/petty-cash-voucher/{ids['vale_beta_sent']}/liquidate" not in cuerpo_vales
+
+    gastos = client.get("/cash_management/petty-cash-expense/list")
+    assert gastos.status_code == 200
+    cuerpo_gastos = gastos.get_data(as_text=True)
+    assert ids["gasto_alpha_no"] in cuerpo_gastos
+    assert ids["gasto_beta_no"] in cuerpo_gastos
+    assert f"/petty-cash-expense/{ids['gasto_alpha']}/cancel" in cuerpo_gastos
+    assert f"/petty-cash-expense/{ids['gasto_beta']}/cancel" not in cuerpo_gastos
+
+    assert client.get(f"/cash_management/bank-account/{ids['bank_alpha']}").status_code == 200
+    assert client.get(f"/cash_management/bank-account/{ids['bank_beta']}").status_code == 403
+
+
+def test_acciones_de_beta_se_rechazan_sin_mutar(companias_caja):
+    """Un usuario con acceso solo a Alfa no puede ejecutar acciones sobre Beta."""
+    application, ids = companias_caja
+    client = _cliente(application, ids["con_alpha"])
+
+    assert (
+        client.post(
+            f"/cash_management/petty-cash-voucher/{ids['vale_beta_draft']}/status",
+            data={"status": "entregado"},
+        ).status_code
+        == 403
+    )
+    assert client.get(f"/cash_management/petty-cash-voucher/{ids['vale_beta_sent']}/liquidate").status_code == 403
+    assert (
+        client.post(
+            f"/cash_management/petty-cash-expense/{ids['gasto_beta']}/cancel",
+            data={"reason": "No autorizado"},
+        ).status_code
+        == 403
+    )
+    with application.app_context():
+        assert database.session.get(PettyCashVoucher, ids["vale_beta_draft"]).voucher_status == "borrador"
+        assert database.session.get(PettyCashExpense, ids["gasto_beta"]).docstatus == 1
+
+
+def test_anonimo_no_accede_a_listados_de_caja(companias_caja):
+    """Sin sesión, las listas no exponen registros ni acciones."""
+    application, ids = companias_caja
+    response = application.test_client().get("/cash_management/bank-account/list")
+
+    assert response.status_code == 302
+    assert ids["bank_alpha_no"] not in response.get_data(as_text=True)
 
 
 def test_alta_entre_companias_es_rechazada_en_get_y_post(companias_caja):
