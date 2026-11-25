@@ -353,7 +353,6 @@
       const columnsList = resolveColumnsList(config);
       const flowLockedFields = resolveFlowLockedFields(config);
       const catalogPriceRequestIds = new WeakMap();
-      const catalogPriceApplied = new WeakMap();
       let catalogPriceRequestSequence = 0;
       let taxPreviewRequestId = 0;
       let sourceRequestSequence = 0;
@@ -442,6 +441,7 @@
             if (this.formKey.startsWith('purchases.')) this.header.party_type = 'supplier';
           }
           this.lines = (config.initialLines || []).map(normalizeLineWithCb(this));
+          this._seedAppliedCatalogPrices();
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
           if (typeof this.$watch === 'function') {
             const pricingFields = new Set(['company', 'party', 'currency', 'posting_date']);
@@ -713,7 +713,7 @@
 
         onRateInput(line) {
           this._invalidateCatalogPriceRequest(line);
-          catalogPriceApplied.delete(line);
+          delete line._catalogPriceApplied;
           this.calcAmount(line);
         },
 
@@ -721,20 +721,18 @@
           catalogPriceRequestIds.set(line, ++catalogPriceRequestSequence);
         },
 
-        _clearStaleCatalogPrice(line, signature) {
-          const applied = catalogPriceApplied.get(line);
-          if (!applied || applied.signature === signature || toNumber(line.rate) !== applied.rate) return;
-          line.rate = 0;
-          line.price_list_name = '';
-          catalogPriceApplied.delete(line);
-          this.calcAmount(line);
+        _seedAppliedCatalogPrices() {
+          for (const line of this.lines) {
+            if (!line.price_list_name || !toNumber(line.rate)) continue;
+            line._catalogPriceApplied = {
+              signature: JSON.stringify(this._pricingContext(line)),
+              rate: toNumber(line.rate)
+            };
+          }
         },
 
-        async refreshCatalogPrice(line) {
-          if (!this.enableSalesPriceLookup || line.source_item_id || !line.item_code || !this.header.company) return;
-          const requestId = ++catalogPriceRequestSequence;
-          catalogPriceRequestIds.set(line, requestId);
-          const getPricingContext = () => ({
+        _pricingContext(line) {
+          return {
             company: this.header.company,
             customer_id: this.header.party || '',
             currency: this.header.currency || this.header.transaction_currency || '',
@@ -742,7 +740,23 @@
             qty: toCurrencyString(line.qty || 1),
             uom: line.uom || '',
             posting_date: this.header.posting_date || '',
-          });
+          };
+        },
+
+        _clearStaleCatalogPrice(line, signature) {
+          const applied = line._catalogPriceApplied;
+          if (!applied || applied.signature === signature || toNumber(line.rate) !== applied.rate) return;
+          line.rate = 0;
+          line.price_list_name = '';
+          delete line._catalogPriceApplied;
+          this.calcAmount(line);
+        },
+
+        async refreshCatalogPrice(line) {
+          if (!this.enableSalesPriceLookup || line.source_item_id || !line.item_code || !this.header.company) return;
+          const requestId = ++catalogPriceRequestSequence;
+          catalogPriceRequestIds.set(line, requestId);
+          const getPricingContext = () => this._pricingContext(line);
           const requestedContext = getPricingContext();
           const signature = JSON.stringify(requestedContext);
           // Un precio de otra moneda (o fecha, cantidad, UOM, etc.) no debe
@@ -762,13 +776,13 @@
             if (payload.price === null) {
               line.rate = 0;
               line.price_list_name = '';
-              catalogPriceApplied.delete(line);
+              delete line._catalogPriceApplied;
               this.calcAmount(line);
               return;
             }
             line.rate = toNumber(payload.price);
             line.price_list_name = payload.price_list_name || '';
-            catalogPriceApplied.set(line, { signature, rate: line.rate });
+            line._catalogPriceApplied = { signature, rate: line.rate };
             this.calcAmount(line);
           } catch (err) {
             console.warn('transactionForm catalog price lookup failed', err);
