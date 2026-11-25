@@ -5,26 +5,29 @@
 
 La comprobación de duplicados y la inserción se serializan por la identidad
 de la regla (libro origen, libro destino y cuenta origen). La variante
-PostgreSQL ejerce además la rama `ON CONFLICT` + `SELECT FOR UPDATE` del lock.
+PostgreSQL ejerce la rama `ON CONFLICT` + `SELECT FOR UPDATE` y confirma en
+`pg_stat_activity` que la segunda sesión espera realmente por el lock.
 """
 
 from __future__ import annotations
 
 import os
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from threading import Barrier, Event
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Event, Lock
+from time import monotonic
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
+import cacao_accounting.default_scope as default_scope
 from cacao_accounting.contabilidad.ledger_mapping_service import (
     LedgerMappingError,
     create_ledger_mapping_rule,
 )
 from cacao_accounting.database import Accounts, Book, Currency, Entity, LedgerMappingRule, database
-from cacao_accounting.default_scope import lock_default_scope
 
 
 def _create_app(uri: str):
@@ -189,9 +192,29 @@ def test_concurrent_mapping_rules_keep_one_target_sqlite(tmp_path):
             database.engine.dispose()
 
 
+def _confirmar_espera_por_lock(app, pid: int, timeout: float) -> str:
+    """Confirma en pg_stat_activity que la sesión indicada espera por un lock."""
+    limite = monotonic() + timeout
+    with app.app_context():
+        while monotonic() < limite:
+            espera = (
+                database.session.execute(
+                    text("SELECT wait_event_type, wait_event FROM pg_stat_activity WHERE pid = :pid"),
+                    {"pid": pid},
+                )
+                .mappings()
+                .first()
+            )
+            if espera is not None and espera["wait_event_type"] == "Lock":
+                return str(espera["wait_event"])
+            database.session.remove()
+    pytest.fail(f"La sesión {pid} no esperó por el lock en {timeout} s.")
+    return ""
+
+
 @pytest.mark.database
-def test_concurrent_mapping_rules_keep_one_target_postgresql():
-    """PostgreSQL serializa por el lock y la segunda alta ve la regla confirmada."""
+def test_concurrent_mapping_rules_keep_one_target_postgresql(monkeypatch):
+    """La segunda sesión espera por el lock real antes de ver la regla confirmada."""
     configured_uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
     if not configured_uri.startswith("postgresql"):
         pytest.skip("Este caso requiere el lock ON CONFLICT de PostgreSQL.")
@@ -200,37 +223,41 @@ def test_concurrent_mapping_rules_keep_one_target_postgresql():
 
     app = _create_app(configured_uri)
     ids = _seed_identidad(app)
-    first_locked = Event()
-    second_started = Event()
+    real_lock = default_scope.lock_default_scope
+    primera_bloqueada = Event()
+    liberar_primera = Event()
+    segunda_en_lock = Event()
+    pid_segundo: list[int] = []
+    contador = 0
+    guarda = Lock()
 
-    def create_first() -> str:
+    def lock_instrumentado(*partes: str | None) -> None:
+        """Pausa la primera transacción y registra el PID de la segunda."""
+        nonlocal contador
+        with guarda:
+            contador += 1
+            orden = contador
+        if orden == 1:
+            real_lock(*partes)
+            primera_bloqueada.set()
+            assert liberar_primera.wait(timeout=25)
+            return
+        if orden == 2:
+            pid = database.session.execute(text("SELECT pg_backend_pid()")).scalar_one()
+            pid_segundo.append(int(pid))
+            segunda_en_lock.set()
+        real_lock(*partes)
+
+    monkeypatch.setattr(default_scope, "lock_default_scope", lock_instrumentado)
+
+    def create(target_account_id: str) -> str:
         with app.app_context():
             try:
-                lock_default_scope("ledger_mapping", ids["source_book"], ids["target_book"], ids["source_account"])
-                first_locked.set()
                 create_ledger_mapping_rule(
                     source_book=ids["source_book"],
                     target_book=ids["target_book"],
                     source_account_id=ids["source_account"],
-                    target_account_id=ids["targets"][0],
-                )
-                return "created"
-            except LedgerMappingError:
-                database.session.rollback()
-                return "rejected"
-            finally:
-                database.session.remove()
-
-    def create_second() -> str:
-        with app.app_context():
-            try:
-                assert first_locked.wait(timeout=15)
-                second_started.set()
-                create_ledger_mapping_rule(
-                    source_book=ids["source_book"],
-                    target_book=ids["target_book"],
-                    source_account_id=ids["source_account"],
-                    target_account_id=ids["targets"][1],
+                    target_account_id=target_account_id,
                 )
                 return "created"
             except LedgerMappingError:
@@ -241,16 +268,18 @@ def test_concurrent_mapping_rules_keep_one_target_postgresql():
 
     try:
         with ThreadPoolExecutor(max_workers=2) as workers:
-            first = workers.submit(create_first)
-            assert first_locked.wait(timeout=15)
-            second = workers.submit(create_second)
-            assert second_started.wait(timeout=15)
-            with pytest.raises(TimeoutError):
-                second.result(timeout=0.5)
-            assert first.result(timeout=20) == "created"
-            assert second.result(timeout=20) == "rejected"
+            first = workers.submit(create, ids["targets"][0])
+            assert primera_bloqueada.wait(timeout=15)
+            second = workers.submit(create, ids["targets"][1])
+            assert segunda_en_lock.wait(timeout=15)
+            wait_event = _confirmar_espera_por_lock(app, pid_segundo[0], timeout=15)
+            assert wait_event
+            liberar_primera.set()
+            assert first.result(timeout=25) == "created"
+            assert second.result(timeout=25) == "rejected"
         _assert_una_regla_activa(app, ids)
     finally:
-        first_locked.set()
-        second_started.set()
+        liberar_primera.set()
+        primera_bloqueada.set()
+        segunda_en_lock.set()
         _limpiar(app, ids)
