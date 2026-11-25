@@ -676,7 +676,12 @@ def check_hierarchy_cycle(node_class, node_id, proposed_parent_id, *, entity: st
 
 
 def update_hierarchy_attributes(node) -> None:
-    """Calcula y actualiza recursivamente nivel y path (RN-004)."""
+    """Calcula y actualiza recursivamente nivel y path (RN-004).
+
+    Los hijos se releen con ``FOR UPDATE`` después de cada flush para no
+    reutilizar una colección ``children`` cacheada antes del commit rival
+    (#2188). Los motores que ignoran el lock mantienen la lectura actual.
+    """
     if not node.parent_id:
         node.level = 0
         node.path = node.name
@@ -689,7 +694,14 @@ def update_hierarchy_attributes(node) -> None:
             node.level = 0
             node.path = node.name
     database.session.flush()
-    for child in node.children:
+    children = database.session.execute(
+        database.select(type(node))
+        .where(type(node).parent_id == node.id)
+        .order_by(type(node).id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalars()
+    for child in children:
         update_hierarchy_attributes(child)
 
 
