@@ -332,8 +332,8 @@ def reset_password(token: str):  # pragma: no cover
 
         user.password = proteger_passwd(form.new_password.data)
         user.auth_version = User.auth_version + 1
-        database.session.commit()
         user.token = None
+        database.session.commit()
         flash(_("Contraseña actualizada correctamente. Puede iniciar sesión."), "success")
         return redirect(url_for("login.inicio_sesion"))
 
@@ -352,6 +352,7 @@ def cerrar_sesion():  # pragma: no cover
     """Finaliza la sesion actual con una solicitud protegida por CSRF."""
     if current_user and current_user.is_authenticated:
         current_user.token = None
+        database.session.commit()
     logout_user()
     session.clear()
     cookie_name = "__Secure-device-id" if request.is_secure else "device-id"

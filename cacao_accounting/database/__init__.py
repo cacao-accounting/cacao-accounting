@@ -8,6 +8,7 @@
 from decimal import Decimal
 from dataclasses import dataclass
 import hashlib
+import hmac
 import logging
 from typing import Any
 
@@ -333,6 +334,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     classification = database.Column(database.String(15))
     active = database.Column(database.Boolean())
     auth_version = database.Column(database.Integer(), nullable=False, default=0, server_default="0")
+    api_token_hash = database.Column(database.String(64), nullable=True, index=True)
     genre = database.Column(database.String(10))
     birthday = database.Column(database.Date())
     phone = database.Column(database.String(50))
@@ -389,8 +391,9 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @token.setter
     def token(self, value: str | None) -> None:
-        """Establece el token de autenticación en la caché y de forma volátil."""
+        """Guarda la huella del JWT vigente y lo publica en la caché si está disponible."""
         self._token_volatile = value
+        self.api_token_hash = hashlib.sha256(value.encode("utf-8")).hexdigest() if value else None
         if self.id:
             try:
                 from cacao_accounting.cache import cache
@@ -402,6 +405,18 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
             except Exception as exc:
                 # Credential-version checks revoke stale JWTs even when cache cleanup is unavailable.
                 LOGGER.warning("JWT token cache update failed (%s)", type(exc).__name__)
+
+    def token_matches(self, candidate: str | None) -> bool:
+        """Compara un JWT con la huella persistida, sin depender de la caché.
+
+        La huella es la única autoridad: un valor volátil o una caché obsoleta
+        no pueden revalidar un token revocado. Las filas previas a la columna
+        no tienen huella y requieren un nuevo inicio de sesión.
+        """
+        if not candidate or not self.api_token_hash:
+            return False
+        fingerprint = hashlib.sha256(candidate.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(self.api_token_hash, fingerprint)
 
 
 class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]

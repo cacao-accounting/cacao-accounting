@@ -270,3 +270,52 @@ def test_jwt_without_auth_version_claim_is_rejected(api_con_usuarios):
     response = client.get("/api/test", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
+
+
+class _CacheRedisCaido:
+    """Caché que falla en todas las operaciones, como Redis inaccesible."""
+
+    def get(self, _key):
+        raise ConnectionError("redis caído")
+
+    def set(self, _key, _value, timeout=0):
+        raise ConnectionError("redis caído")
+
+    def delete(self, _key):
+        raise ConnectionError("redis caído")
+
+
+def test_login_y_peticion_api_independiente_sin_redis(api_con_usuarios, monkeypatch):
+    """#2270: el JWT sigue vigente entre peticiones aunque la caché esté caída."""
+    from cacao_accounting import cache as cache_module
+    from cacao_accounting.auth import helpers as auth_helpers
+
+    application, client = api_con_usuarios
+    cache_original = cache_module.cache
+    monkeypatch.setattr(cache_module, "cache", _CacheRedisCaido())
+    emitidos: dict[str, str] = {}
+    asignar_original = auth_helpers.asignar_token_para_usuario
+
+    def asignar_y_capturar(identidad):
+        asignar_original(identidad)
+        emitidos["token"] = identidad.token
+
+    monkeypatch.setattr(auth_helpers, "asignar_token_para_usuario", asignar_y_capturar)
+
+    _iniciar_sesion(client, "vendedor")
+    token = emitidos["token"]
+
+    # Otra petición, otra sesión de navegador y la caché sin responder.
+    assert _llamar_api_test(application.test_client(), token) == 200
+
+    # La recuperación de la caché no cambia la autoridad de la huella persistida.
+    monkeypatch.setattr(cache_module, "cache", cache_original)
+    assert _llamar_api_test(application.test_client(), token) == 200
+
+    client.post("/logout")
+    assert _llamar_api_test(application.test_client(), token) == 401
+
+    _iniciar_sesion(client, "vendedor")
+    nuevo_token = emitidos["token"]
+    assert nuevo_token != token
+    assert _llamar_api_test(application.test_client(), nuevo_token) == 200

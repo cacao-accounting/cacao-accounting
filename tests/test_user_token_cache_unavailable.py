@@ -1,12 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+# SPDX-FileCopyrightText: 2026 William José Moreno Reyes
 
-"""#1679: `User.token` funciona con Redis configurado pero inaccesible."""
+"""#1679 y #2270: `User.token` degrada sin caché y conserva la revocación persistida."""
 
 from __future__ import annotations
 
+import hashlib
+
+from sqlalchemy import inspect as sa_inspect, text
+
 from cacao_accounting import cache as cache_module
 from cacao_accounting.database import User, database
+from cacao_accounting.database.helpers import _ensure_user_api_token_hash_column
 
 
 class _CacheNoDisponible(Exception):
@@ -39,6 +44,7 @@ def test_token_usa_fallback_volatil_si_la_cache_falla(app, reference_users, monk
 
         assert usuario._token_volatile == "token-nuevo"
         assert usuario.token == "token-nuevo"
+        assert usuario.api_token_hash == hashlib.sha256(b"token-nuevo").hexdigest()
 
 
 def test_token_sin_valor_volatil_devuelve_none_si_la_cache_falla(app, reference_users, monkeypatch):
@@ -49,3 +55,98 @@ def test_token_sin_valor_volatil_devuelve_none_si_la_cache_falla(app, reference_
         usuario._token_volatile = None
 
         assert usuario.token is None
+
+
+def test_huella_del_token_autoriza_otra_sesion_sin_cache(entorno_contable_aislado, monkeypatch):
+    """Una instancia nueva reconoce el JWT aunque la caché esté caída."""
+    application = entorno_contable_aislado.app
+    monkeypatch.setattr(cache_module, "cache", _CacheRoto())
+    with application.app_context():
+        usuario = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        usuario.token = "token-de-la-sesion-anterior"
+        database.session.commit()
+
+    with application.app_context():
+        otra_instancia = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        assert otra_instancia.token is None
+        assert otra_instancia.token_matches("token-de-la-sesion-anterior") is True
+        assert otra_instancia.token_matches("token-obsoleto") is False
+        assert "token-de-la-sesion-anterior" not in (otra_instancia.api_token_hash or "")
+
+
+def test_limpiar_token_revoca_la_huella_persistida(entorno_contable_aislado, monkeypatch):
+    """El cierre de sesión elimina la huella aunque falle la caché."""
+    application = entorno_contable_aislado.app
+    monkeypatch.setattr(cache_module, "cache", _CacheRoto())
+    with application.app_context():
+        usuario = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        usuario.token = "token-a-revocar"
+        database.session.commit()
+        assert usuario.token_matches("token-a-revocar") is True
+
+        usuario.token = None
+        database.session.commit()
+
+    with application.app_context():
+        otra_instancia = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        assert otra_instancia.api_token_hash is None
+        assert otra_instancia.token_matches("token-a-revocar") is False
+
+
+class _CacheConTokenViejo:
+    """Caché que sigue devolviendo un JWT ya sustituido."""
+
+    def get(self, _key):
+        return "token-viejo"
+
+    def set(self, _key, _value, timeout=0):
+        return None
+
+    def delete(self, _key):
+        return None
+
+
+def test_cache_obsoleta_no_revalida_token_revocado(app, reference_users, monkeypatch):
+    """La huella persistida prevalece sobre un valor volátil o de caché viejo."""
+    monkeypatch.setattr(cache_module, "cache", _CacheConTokenViejo())
+    with app.app_context():
+        usuario = database.session.get(User, reference_users["admin"].id)
+        usuario.token = "token-nuevo"
+        assert usuario.token_matches("token-nuevo") is True
+        assert usuario.token_matches("token-viejo") is False
+
+
+def test_filas_legacy_sin_huella_requieren_nuevo_login(app, reference_users):
+    """Sin huella persistida no se autoriza un JWT aunque exista valor volátil."""
+    with app.app_context():
+        usuario = database.session.get(User, reference_users["admin"].id)
+        usuario.api_token_hash = None
+        usuario._token_volatile = "token-legacy"
+        database.session.commit()
+
+        assert usuario.token_matches("token-legacy") is False
+
+
+def test_helper_agrega_columna_sin_backfill(entorno_contable_aislado):
+    """Esquemas previos reciben la columna, pero no se inventan huellas antiguas."""
+    application = entorno_contable_aislado.app
+    with application.app_context():
+        inspector = sa_inspect(database.engine)
+        for index in inspector.get_indexes("user"):
+            if "api_token_hash" in index["column_names"]:
+                database.session.execute(text(f'DROP INDEX "{index["name"]}"'))
+        database.session.execute(text("ALTER TABLE user DROP COLUMN api_token_hash"))
+        database.session.commit()
+
+        assert "api_token_hash" not in {column["name"] for column in sa_inspect(database.engine).get_columns("user")}
+
+        _ensure_user_api_token_hash_column()
+
+        assert "api_token_hash" in {column["name"] for column in sa_inspect(database.engine).get_columns("user")}
+        usuarios = database.session.execute(database.select(User)).scalars().all()
+        assert all(usuario.api_token_hash is None for usuario in usuarios)
+
+        admin = next(usuario for usuario in usuarios if usuario.user == "admin")
+        admin.token = "token-posterior-al-helper"
+        database.session.commit()
+        assert admin.token_matches("token-posterior-al-helper") is True

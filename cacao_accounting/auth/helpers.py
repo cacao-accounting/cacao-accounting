@@ -98,6 +98,8 @@ def asignar_token_para_usuario(identidad: User) -> None:
             current_app.config["SECRET_KEY"],
             algorithm="HS256",
         )
+        # La huella persistida es la autoridad cuando la caché no está disponible.
+        database.session.commit()
         assert identidad.token is not None  # nosec
     except (KeyError, PyJWTError) as exc:
         assert exc is not None  # nosec

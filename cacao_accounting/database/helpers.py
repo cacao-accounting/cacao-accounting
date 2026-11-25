@@ -145,6 +145,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             _ensure_party_tax_id_key_column()
             _ensure_purchase_invoice_supplier_key()
             _ensure_user_auth_version_column()
+            _ensure_user_api_token_hash_column()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -1142,6 +1143,32 @@ def _ensure_user_auth_version_column() -> None:
         database.session.execute(database.text(f"ALTER TABLE {table_name} ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0"))
         database.session.commit()
         log.info("Columna user.auth_version agregada al esquema existente.")
+    except SQLAlchemyError:
+        database.session.rollback()
+        raise
+
+
+def _ensure_user_api_token_hash_column() -> None:
+    """Añade `user.api_token_hash` a esquemas existentes (#2270).
+
+    La huella persistida sustituye a la caché como autoridad para validar el JWT
+    cuando Redis no está disponible. Se agrega sin valor por defecto y sin
+    backfill: en pre alpha los tokens anteriores se rechazan hasta un nuevo
+    inicio de sesión.
+    """
+    from cacao_accounting.database import User
+
+    engine = database.engine
+    if not sa_inspect(engine).has_table(User.__tablename__):
+        return
+    columns = {column["name"] for column in sa_inspect(engine).get_columns(User.__tablename__)}
+    if "api_token_hash" in columns:
+        return
+    table_name = engine.dialect.identifier_preparer.quote(User.__tablename__)
+    try:
+        database.session.execute(database.text(f"ALTER TABLE {table_name} ADD COLUMN api_token_hash VARCHAR(64)"))
+        database.session.commit()
+        log.info("Columna user.api_token_hash agregada al esquema existente.")
     except SQLAlchemyError:
         database.session.rollback()
         raise
