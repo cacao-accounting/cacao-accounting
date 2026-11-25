@@ -221,7 +221,12 @@ def test_plantilla_muestra_mensaje_como_texto_y_ofrece_recuperacion(numeracion_c
         ),
         (
             {"status": 400, "contentType": "application/json", "payload": {"status": "error", "message": "Serie inactiva"}},
-            "Serie inactiva",
+            MENSAJE_GENERICO,
+            False,
+        ),
+        (
+            {"status": 500, "contentType": "application/json", "payload": {"status": "error", "message": "Fallo interno"}},
+            MENSAJE_GENERICO,
             False,
         ),
         (
@@ -240,6 +245,11 @@ def test_plantilla_muestra_mensaje_como_texto_y_ofrece_recuperacion(numeracion_c
         ),
         (
             {"status": 409, "contentType": "application/json", "invalidJson": True},
+            MENSAJE_GENERICO,
+            True,
+        ),
+        (
+            {"status": 409, "contentType": "application/json", "payload": {"status": "error"}},
             MENSAJE_GENERICO,
             True,
         ),

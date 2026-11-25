@@ -296,8 +296,9 @@
             body: JSON.stringify({ configs: payload })
           });
           if (!response.ok) {
-            this.errorMessage = (await this.serverMessage(response)) || '{{ _("Error al guardar la configuracion.") }}';
             this.conflict = response.status === 409;
+            const detail = this.conflict ? await this.serverMessage(response) : '';
+            this.errorMessage = detail || '{{ _("Error al guardar la configuracion.") }}';
             return;
           }
           this.editing = false;
