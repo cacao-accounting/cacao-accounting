@@ -63,6 +63,31 @@ describe("dashboard", function () {
     assert.strictEqual(dashboard.payload.sections.version, "new");
   });
 
+  it("hides previous figures while the new period request is pending", async function () {
+    const firstRequest = deferred();
+    const secondRequest = deferred();
+    const requests = [firstRequest, secondRequest];
+    const dashboard = loadDashboard(() => requests.shift().promise);
+    dashboard.filters.company = "COMP";
+
+    dashboard.fetchData();
+    firstRequest.resolve(response({ sections: { version: "old" } }));
+    await flushPromises();
+    assert.strictEqual(dashboard.payload.sections.version, "old");
+
+    dashboard.filters.period = "PER-NEW";
+    dashboard.fetchData();
+
+    assert.deepStrictEqual(dashboard.payload, { sections: {} });
+    assert.strictEqual(dashboard.loading, true);
+
+    secondRequest.resolve(response({ sections: { version: "new" } }));
+    await flushPromises();
+
+    assert.strictEqual(dashboard.payload.sections.version, "new");
+    assert.strictEqual(dashboard.loading, false);
+  });
+
   it("does not let a late response replace newer data or its error state", async function () {
     const oldRequest = deferred();
     const newRequest = deferred();

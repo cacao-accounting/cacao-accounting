@@ -100,6 +100,9 @@
 
         this.loading = true;
         this.error = "";
+        // La cuadrícula depende del payload: vaciarlo evita seguir mostrando
+        // cifras del período anterior mientras llega la respuesta solicitada.
+        this.payload = { sections: {} };
         const params = new URLSearchParams({ company: this.filters.company });
         if (this.filters.period) {
           params.set("period", this.filters.period);
