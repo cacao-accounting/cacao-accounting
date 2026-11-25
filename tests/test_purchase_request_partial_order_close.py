@@ -369,6 +369,22 @@ def test_submit_orden_con_dos_solicitudes_bloquea_si_una_esta_cerrada(request_or
         assert database.session.get(PurchaseOrder, order_id).docstatus == 0
 
 
+def test_cancelar_oc_reabre_pendiente_tras_comparativo_finalizado(request_order_scene):
+    """Cancelar la OC reabre la SC aunque el comparativo siga finalizado."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10")
+    _agregar_comparativo_finalizado(application, ids)
+
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-order/{order_id}/cancel", data={"reason": "Prueba"})
+    assert respuesta.status_code == 302
+
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        assert database.session.get(PurchaseOrder, order_id).docstatus == 2
+        assert purchase_request_is_ready_to_close(solicitud) is False
+        assert purchase_request_line_closure_reasons(solicitud) == {}
+
+
 def test_ruta_aprobar_rechaza_oc_borrador_de_solicitud_cerrada(request_order_scene):
     """El POST de aprobación no activa una OC borrador de una SC cerrada."""
     application, ids = request_order_scene
