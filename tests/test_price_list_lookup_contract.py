@@ -82,3 +82,53 @@ def test_vigencia_y_lista_de_venta(entorno_contable_aislado):
         resuelto = resolve_sales_catalog_price("cacao", cliente.id, item.code, Decimal("1"), "UND", DENTRO)
         assert resuelto is not None
         assert resuelto[1].id == venta.id
+
+
+def test_listas_inactivas_configurada_y_predeterminada_no_se_resuelven(entorno_contable_aislado):
+    """Una lista inactiva no desplaza a la predeterminada activa de venta."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        sufijo = uuid4().hex[:6]
+        cliente = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one()
+        item = database.session.execute(database.select(Item).filter_by(code="ART01")).scalar_one()
+        activa = PriceList(
+            name=f"Venta activa {sufijo}",
+            company="cacao",
+            currency="NIO",
+            is_selling=True,
+            is_buying=False,
+            is_default=True,
+            is_active=True,
+        )
+        inactiva = PriceList(
+            name=f"Venta inactiva {sufijo}",
+            company="cacao",
+            currency="NIO",
+            is_selling=True,
+            is_buying=False,
+            is_default=True,
+            is_active=False,
+        )
+        database.session.add_all([activa, inactiva])
+        database.session.flush()
+        for lista, precio in ((activa, Decimal("10")), (inactiva, Decimal("99"))):
+            database.session.add(
+                ItemPrice(
+                    item_code=item.code,
+                    price_list_id=lista.id,
+                    uom="UND",
+                    price=precio,
+                    valid_from=DENTRO,
+                    valid_upto=DENTRO,
+                )
+            )
+        company_party = database.session.execute(
+            database.select(CompanyParty).filter_by(company="cacao", party_id=cliente.id)
+        ).scalar_one()
+        company_party.default_price_list_id = inactiva.id
+        database.session.commit()
+
+        resuelto = resolve_sales_catalog_price("cacao", cliente.id, item.code, Decimal("1"), "UND", DENTRO)
+        assert resuelto is not None
+        assert resuelto[0] == Decimal("10.0000")
+        assert resuelto[1].id == activa.id

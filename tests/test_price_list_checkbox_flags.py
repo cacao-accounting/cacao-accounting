@@ -135,6 +135,39 @@ def test_crea_lista_solo_compras_e_inactiva_sin_tocar_la_default():
             database.engine.dispose()
 
 
+def test_lista_inactiva_no_puede_desplazar_la_predeterminada():
+    """Un POST venta + predeterminada sin actividad se rechaza antes de escribir."""
+    application = _crear_app()
+    try:
+        client = _cliente(application)
+        respuesta = client.post(
+            "/settings/price-lists",
+            data={
+                "name": "Inactiva default",
+                "company": "CACAO",
+                "currency": "NIO",
+                "is_selling": "on",
+                "is_default": "on",
+            },
+            follow_redirects=True,
+        )
+
+        assert respuesta.status_code == 200
+        assert "inactiva" in respuesta.get_data(as_text=True)
+        with application.app_context():
+            assert (
+                database.session.execute(database.select(PriceList).filter_by(name="Inactiva default")).scalar_one_or_none()
+                is None
+            )
+            predeterminada = database.session.execute(database.select(PriceList).filter_by(name="Venta vigente")).scalar_one()
+            assert predeterminada.is_default is True
+            assert database.session.execute(database.select(ItemPrice)).scalars().all() == []
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
 def test_las_casillas_marcadas_persisten_true():
     """El control positivo conserva venta y vigencia marcadas."""
     application = _crear_app()

@@ -1003,6 +1003,9 @@ def lista_precios():
             is_active=request.form.get("is_active") is not None,
         )
         _require_price_list_company_access(price_list)
+        if price_list.is_default and not price_list.is_active:
+            flash(_("Una lista inactiva no puede ser predeterminada."), "danger")
+            return redirect(url_for("admin.lista_precios"))
         database.session.add(price_list)
         database.session.flush()
         if price_list.is_default and price_list.is_selling:

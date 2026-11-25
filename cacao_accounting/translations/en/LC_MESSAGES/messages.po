@@ -2311,6 +2311,10 @@ msgstr "Mapping rule deactivated successfully."
 msgid "Lista de precios creada correctamente."
 msgstr "Price list created successfully."
 
+#: cacao_accounting/admin/routes.py:1005
+msgid "Una lista inactiva no puede ser predeterminada."
+msgstr "An inactive price list cannot be set as default."
+
 #: cacao_accounting/admin/routes.py:973
 msgid "Listas de Precios"
 msgstr "Price Lists"
