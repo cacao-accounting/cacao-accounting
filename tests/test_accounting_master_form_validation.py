@@ -11,6 +11,13 @@ from uuid import uuid4
 import pytest
 
 from cacao_accounting.database import Entity, Project, Unit, database
+from cacao_accounting.database.helpers import check_hierarchy_cycle
+
+MENSAJE_PADRE_INEXISTENTE = "El registro padre seleccionado no existe."
+MENSAJE_PADRE_AJENO = "Los registros de una jerarquía deben pertenecer a la misma compañía."
+MENSAJE_CONFLICTO_GENERICO = (
+    "No se pudo guardar porque los datos entran en conflicto " + "con otro registro. Revise el código y las referencias."
+)
 
 
 @pytest.fixture
@@ -109,6 +116,9 @@ def test_unit_create_rejects_missing_parent(app, authenticated_client, accountin
     )
 
     assert response.status_code == 200
+    cuerpo = response.get_data(as_text=True)
+    assert MENSAJE_PADRE_INEXISTENTE in cuerpo
+    assert MENSAJE_CONFLICTO_GENERICO not in cuerpo
     with app.app_context():
         assert database.session.execute(database.select(Unit).filter_by(code=code)).scalar_one_or_none() is None
 
@@ -134,6 +144,9 @@ def test_unit_edit_rejects_missing_parent(app, authenticated_client, accounting_
     )
 
     assert response.status_code == 200
+    cuerpo = response.get_data(as_text=True)
+    assert MENSAJE_PADRE_INEXISTENTE in cuerpo
+    assert MENSAJE_CONFLICTO_GENERICO not in cuerpo
     with app.app_context():
         unit = database.session.execute(database.select(Unit).filter_by(code=code)).scalar_one()
         assert unit.parent_id is None
@@ -158,6 +171,9 @@ def test_project_create_rejects_missing_parent(app, authenticated_client, accoun
     )
 
     assert response.status_code == 200
+    cuerpo = response.get_data(as_text=True)
+    assert MENSAJE_PADRE_INEXISTENTE in cuerpo
+    assert MENSAJE_CONFLICTO_GENERICO not in cuerpo
     with app.app_context():
         assert database.session.execute(database.select(Project).filter_by(code=code)).scalar_one_or_none() is None
 
@@ -181,7 +197,9 @@ def test_unit_create_rejects_parent_from_another_company(
     )
 
     assert response.status_code == 200
-    assert "compañía" in response.get_data(as_text=True).lower()
+    cuerpo = response.get_data(as_text=True)
+    assert MENSAJE_PADRE_AJENO in cuerpo
+    assert MENSAJE_CONFLICTO_GENERICO not in cuerpo
     with app.app_context():
         assert database.session.execute(database.select(Unit).filter_by(code=code)).scalar_one_or_none() is None
 
@@ -209,6 +227,9 @@ def test_unit_edit_rejects_parent_from_another_company(
     )
 
     assert response.status_code == 200
+    cuerpo = response.get_data(as_text=True)
+    assert MENSAJE_PADRE_AJENO in cuerpo
+    assert MENSAJE_CONFLICTO_GENERICO not in cuerpo
     with app.app_context():
         unidad = database.session.execute(database.select(Unit).filter_by(code=code)).scalar_one()
         assert unidad.parent_id is None
@@ -235,7 +256,9 @@ def test_project_create_rejects_parent_from_another_company(
     )
 
     assert response.status_code == 200
-    assert "compañía" in response.get_data(as_text=True).lower()
+    cuerpo = response.get_data(as_text=True)
+    assert MENSAJE_PADRE_AJENO in cuerpo
+    assert MENSAJE_CONFLICTO_GENERICO not in cuerpo
     with app.app_context():
         assert database.session.execute(database.select(Project).filter_by(code=code)).scalar_one_or_none() is None
 
@@ -285,3 +308,86 @@ def test_project_create_persists_valid_budget(app, authenticated_client, account
         assert project.name == "Proyecto válido"
         assert project.budget == Decimal("123.45")
         assert project.budget_currency_code == "NIO"
+
+
+@pytest.fixture
+def proyecto_con_padre_local(app, accounting_catalog_cleanup):
+    """Proyecto con padre válido de la misma compañía para probar ediciones rechazadas."""
+    sufijo = uuid4().hex[:8].upper()
+    codigo_padre = f"PP{sufijo}"
+    codigo_hijo = f"PH{sufijo}"
+    accounting_catalog_cleanup["project"].extend([codigo_hijo, codigo_padre])
+    with app.app_context():
+        padre = Project(code=codigo_padre, name="Proyecto padre local", entity="cacao", enabled=True)
+        database.session.add(padre)
+        database.session.flush()
+        hijo = Project(
+            code=codigo_hijo,
+            name="Proyecto hijo local",
+            entity="cacao",
+            enabled=True,
+            parent_id=padre.id,
+        )
+        database.session.add(hijo)
+        database.session.commit()
+        ids = {"hijo": hijo.id, "padre": padre.id, "ruta_padre": padre.path}
+    return ids
+
+
+@pytest.mark.parametrize("modelo", [Unit, Project])
+def test_check_hierarchy_cycle_rechaza_padre_inexistente_con_error_especifico(app, modelo):
+    """La guarda aplicacional falla por su propio motivo, sin depender de la FK."""
+    with app.app_context():
+        with pytest.raises(ValueError, match=MENSAJE_PADRE_INEXISTENTE):
+            check_hierarchy_cycle(modelo, None, "padre-inexistente-sin-fk", entity="cacao")
+
+
+@pytest.mark.parametrize(("modelo", "clave"), [(Unit, "unit"), (Project, "project")])
+def test_check_hierarchy_cycle_rechaza_padre_ajeno_con_error_especifico(app, padres_otra_compania, modelo, clave):
+    """La misma guarda distingue el padre de otra compañía de un conflicto de base."""
+    with app.app_context():
+        with pytest.raises(ValueError, match=MENSAJE_PADRE_AJENO):
+            check_hierarchy_cycle(modelo, None, padres_otra_compania[clave], entity="cacao")
+
+
+@pytest.mark.parametrize(
+    ("clave_origen", "mensaje"),
+    [
+        pytest.param(None, MENSAJE_PADRE_INEXISTENTE, id="inexistente"),
+        pytest.param("project", MENSAJE_PADRE_AJENO, id="ajeno"),
+    ],
+)
+def test_project_edit_rejects_invalid_parent_and_preserves_existing_parent(
+    app,
+    authenticated_client,
+    proyecto_con_padre_local,
+    padres_otra_compania,
+    clave_origen,
+    mensaje,
+):
+    """Editar un proyecto no puede reemplazar su padre válido por una referencia inválida."""
+    ids = proyecto_con_padre_local
+    padre_invalido = "parent-does-not-exist" if clave_origen is None else padres_otra_compania[clave_origen]
+
+    respuesta = authenticated_client().post(
+        f"/accounting/project/{ids['hijo']}/edit",
+        data={
+            "id": ids["hijo"],
+            "nombre": "Proyecto hijo local",
+            "entidad": "cacao",
+            "parent_id": padre_invalido,
+            "presupuesto": "10",
+            "status": "open",
+            "habilitado": "on",
+        },
+    )
+
+    assert respuesta.status_code == 200
+    cuerpo = respuesta.get_data(as_text=True)
+    assert mensaje in cuerpo
+    assert MENSAJE_CONFLICTO_GENERICO not in cuerpo
+    with app.app_context():
+        hijo = database.session.get(Project, ids["hijo"])
+        padre = database.session.get(Project, ids["padre"])
+        assert hijo.parent_id == ids["padre"]
+        assert padre.path == ids["ruta_padre"]
