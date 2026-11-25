@@ -2558,6 +2558,7 @@ def ventas_factura_venta_duplicar(invoice_id: str):
         base_currency=origen.base_currency,
         exchange_rate=origen.exchange_rate,
         tax_template_id=origen.tax_template_id,
+        update_inventory=origen.update_inventory,
         sales_order_id=origen.sales_order_id,
         delivery_note_id=origen.delivery_note_id,
         reversal_of=origen.reversal_of,
@@ -2594,6 +2595,14 @@ def ventas_factura_venta_duplicar(invoice_id: str):
         item_ids[item.id] = linea.id
         total += item.amount or Decimal("0")
     _copy_active_sales_document_relations(origen.id, duplicado.id, duplicado.company, item_ids)
+    from cacao_accounting.fiscal_persistence_service import copy_document_fiscal_snapshot
+
+    copy_document_fiscal_snapshot(
+        source_document_type=origen.document_type or "sales_invoice",
+        source_document_id=origen.id,
+        target_document_type=duplicado.document_type or "sales_invoice",
+        target_document_id=duplicado.id,
+    )
     duplicado.total = total
     duplicado.base_total = origen.base_total
     duplicado.grand_total = origen.grand_total

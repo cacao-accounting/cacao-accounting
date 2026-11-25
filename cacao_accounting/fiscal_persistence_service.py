@@ -309,6 +309,58 @@ def load_document_fiscal_lines(document_type: str, document_id: str) -> list[Doc
     )
 
 
+def copy_document_fiscal_snapshot(
+    *,
+    source_document_type: str,
+    source_document_id: str,
+    target_document_type: str,
+    target_document_id: str,
+) -> None:
+    """Copia el snapshot fiscal a otro documento sin reutilizar sus identificadores."""
+    summary = _get_document_summary(document_type=source_document_type, document_id=source_document_id)
+    if summary is None:
+        return
+    copied = DocumentTaxSummary(
+        company=summary.company,
+        document_type=target_document_type,
+        document_id=target_document_id,
+        currency=summary.currency,
+        subtotal=summary.subtotal,
+        document_tax_total=summary.document_tax_total,
+        capitalizable_tax_total=summary.capitalizable_tax_total,
+        separate_tax_total=summary.separate_tax_total,
+        withholding_total=summary.withholding_total,
+        grand_total=summary.grand_total,
+        source_payload_json=summary.source_payload_json,
+    )
+    database.session.add(copied)
+    database.session.flush()
+    for line in _load_document_tax_lines(summary.id):
+        database.session.add(
+            DocumentTaxLine(
+                document_tax_summary_id=copied.id,
+                line_index=line.line_index,
+                rule_id=line.rule_id,
+                concept=line.concept,
+                tax_type=line.tax_type,
+                calculation_method=line.calculation_method,
+                base_amount=line.base_amount,
+                rate=line.rate,
+                amount=line.amount,
+                accounting_treatment=line.accounting_treatment,
+                account_id=line.account_id,
+                affects_inventory=line.affects_inventory,
+                affects_document_total=line.affects_document_total,
+                included_in_price=line.included_in_price,
+                notes=line.notes,
+                allocation_method=line.allocation_method,
+                metadata_json=line.metadata_json,
+                rule_snapshot_json=line.rule_snapshot_json,
+                source_payload_json=line.source_payload_json,
+            )
+        )
+
+
 def _get_document_summary(*, document_type: str, document_id: str) -> DocumentTaxSummary | None:
     return database.session.execute(
         select(DocumentTaxSummary).filter_by(document_type=document_type, document_id=document_id)
