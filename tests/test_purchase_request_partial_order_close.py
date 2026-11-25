@@ -284,6 +284,18 @@ def _agregar_segunda_sc_cerrada(application, order_id: str) -> None:
         )
         database.session.add(linea)
         database.session.flush()
+        order_line = PurchaseOrderItem(
+            purchase_order_id=order_id,
+            item_code="ART01",
+            item_name="Artículo de prueba",
+            qty=Decimal("1"),
+            uom="UND",
+            qty_in_base_uom=Decimal("1"),
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+        )
+        database.session.add(order_line)
+        database.session.flush()
         database.session.add(
             DocumentRelation(
                 source_type="purchase_request",
@@ -291,7 +303,7 @@ def _agregar_segunda_sc_cerrada(application, order_id: str) -> None:
                 source_item_id=linea.id,
                 target_type="purchase_order",
                 target_id=order_id,
-                target_item_id=f"{order_id}-segunda",
+                target_item_id=order_line.id,
                 company="cacao",
                 qty=Decimal("1"),
                 qty_in_base_uom=Decimal("1"),
@@ -352,6 +364,7 @@ def test_motor_aprobaciones_revalida_sc_cerrada(request_order_scene, monkeypatch
     """El submit y la cancelación del motor rechazan una SC cerrada."""
     application, ids = request_order_scene
     order_id = _agregar_orden(application, ids, "10", docstatus=0)
+    _agregar_segunda_sc_cerrada(application, order_id)
     with application.app_context():
         solicitud = database.session.get(PurchaseRequest, ids["request"])
         solicitud.status = "closed"
