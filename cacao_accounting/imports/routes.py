@@ -27,8 +27,9 @@ from cacao_accounting.database import Book, NamingSeries, database
 from sqlalchemy import or_
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.imports.csv_dialect import (
-    CSV_SAMPLE_CHARS,
+    CSV_SAMPLE_BYTES,
     contains_unquoted_tab,
+    csv_sample_from_bytes,
     parse_csv_rows,
     sniff_csv_dialect,
 )
@@ -276,7 +277,7 @@ def _validate_mime_type(file: Any) -> bool:
         return True
     magic_modulo = _load_magic()
     if magic_modulo is None:
-        chunk = file.read(2048)
+        chunk = file.read(CSV_SAMPLE_BYTES)
         file.seek(0)
         extension = _extract_file_extension(getattr(file, "filename", ""))
         if extension == "csv" and _valid_csv_fallback(chunk):
@@ -303,17 +304,16 @@ def _validate_mime_type(file: Any) -> bool:
 def _valid_csv_fallback(chunk: bytes) -> bool:
     """Validate minimal CSV structure when python-magic is unavailable."""
     try:
-        text = chunk.decode("utf-8-sig")
+        text = csv_sample_from_bytes(chunk)
     except UnicodeDecodeError:
         return False
     if not text.strip():
         return False
     try:
-        sample = text[:CSV_SAMPLE_CHARS]
-        dialect = sniff_csv_dialect(sample)
+        dialect = sniff_csv_dialect(text)
         # La tabulación solo es contenido válido dentro de un campo citado;
         # fuera de comillas sería un delimitador que el lector no soporta.
-        if contains_unquoted_tab(sample, dialect):
+        if contains_unquoted_tab(text, dialect):
             return False
         rows = parse_csv_rows(text, dialect)
     except (csv.Error, ValueError):

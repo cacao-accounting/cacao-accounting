@@ -10,6 +10,7 @@ import pytest
 from cacao_accounting.imports.csv_dialect import (
     CSV_SAMPLE_CHARS,
     ImportCSVFormatError,
+    csv_sample_from_bytes,
     sniff_csv_dialect,
 )
 from cacao_accounting.imports.readers.csv_reader import CSVReader
@@ -66,4 +67,33 @@ def test_lector_y_fallback_olen_la_misma_muestra(tmp_path):
     archivo.write_text(contenido, encoding="utf-8")
     tabla = CSVReader().read(str(archivo))
     assert len(tabla.columns) == 3
+    assert tabla.rows == [["1101", "100", "0"]]
+
+
+def test_comilla_literal_no_oculta_tabulacion():
+    """Una comilla en medio del campo no habilita un citado que oculte la tabulación."""
+    contenido = b'cuenta;detalle;credito\n1101;cuenta"rara\tcon tab;0\n'
+    assert _valid_csv_fallback(contenido) is False
+
+
+def test_lector_rechaza_tabulacion_tras_comilla_literal(tmp_path):
+    """La carga y el lector coinciden también cuando la comilla es contenido literal."""
+    archivo = tmp_path / "comilla_literal.csv"
+    archivo.write_text('cuenta;detalle;credito\n1101;cuenta"rara\tcon tab;0\n', encoding="utf-8")
+    with pytest.raises(ImportCSVFormatError):
+        CSVReader().read(str(archivo))
+
+
+def test_ventana_multibyte_es_la_misma_en_carga_y_lector(tmp_path):
+    """La muestra de bytes cubre los mismos caracteres que lee CSVReader."""
+    contenido = f'{"é" * 1100};debito;credito\n1101;100;0\n'
+    muestra = csv_sample_from_bytes(contenido.encode("utf-8"))
+    assert muestra == contenido[:CSV_SAMPLE_CHARS]
+    assert sniff_csv_dialect(muestra).delimiter == ";"
+    assert _valid_csv_fallback(contenido.encode("utf-8")) is True
+
+    archivo = tmp_path / "multibyte.csv"
+    archivo.write_text(contenido, encoding="utf-8")
+    tabla = CSVReader().read(str(archivo))
+    assert tabla.columns == ["é" * 1100, "debito", "credito"]
     assert tabla.rows == [["1101", "100", "0"]]
