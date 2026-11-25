@@ -7,8 +7,14 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+from sqlalchemy.pool import StaticPool
+
+from cacao_accounting import create_app
+from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad.budget_service import BudgetService
-from cacao_accounting.database import CostCenter, Entity, database
+from cacao_accounting.database import CostCenter, Currency, Entity, database
+from cacao_accounting.datos.dev import cargar_centros_de_costos, demo_entidad
 from cacao_accounting.datos.dev.data import _make_centros_de_costos
 
 
@@ -20,8 +26,8 @@ def test_los_centros_demo_no_son_default() -> None:
         assert any(centro.entity == entidad and not centro.group and centro.active and centro.enabled for centro in centros)
 
 
-def _sembrar_centros(app, company: str) -> None:
-    """Crea MAIN, los centros demo y un agrupador default heredado."""
+def _sembrar_centros(app, company: str, *, main_default: bool = False) -> None:
+    """Crea MAIN, centros demo y candidatos legacy no canónicos."""
     with app.app_context():
         database.session.add(
             Entity(
@@ -33,6 +39,16 @@ def _sembrar_centros(app, company: str) -> None:
                 enabled=True,
             )
         )
+        database.session.add(
+            Entity(
+                code=f"{company}-O",
+                name="Otra compañía",
+                company_name="Otra compañía SA",
+                tax_id=f"TAX-{company}-O",
+                currency="NIO",
+                enabled=True,
+            )
+        )
         database.session.flush()
         database.session.add(
             CostCenter(
@@ -40,7 +56,7 @@ def _sembrar_centros(app, company: str) -> None:
                 code="MAIN",
                 name="Centro principal",
                 group=False,
-                default=True,
+                default=main_default,
                 active=True,
                 enabled=True,
             )
@@ -49,32 +65,65 @@ def _sembrar_centros(app, company: str) -> None:
             if centro.entity == "CACAO":
                 centro.entity = company
                 database.session.add(centro)
-        database.session.add(
-            CostCenter(
-                entity=company,
-                code="GRUPO",
-                name="Agrupador heredado",
-                group=True,
-                default=True,
-                active=True,
-                enabled=True,
-            )
+        database.session.add_all(
+            [
+                CostCenter(
+                    entity=company,
+                    code="GRUPO",
+                    name="Agrupador heredado",
+                    group=True,
+                    default=True,
+                    active=True,
+                    enabled=True,
+                ),
+                CostCenter(
+                    entity=company,
+                    code="INA",
+                    name="Centro inactivo",
+                    group=False,
+                    default=True,
+                    active=False,
+                    enabled=True,
+                ),
+                CostCenter(
+                    entity=company,
+                    code="DIS",
+                    name="Centro deshabilitado",
+                    group=False,
+                    default=True,
+                    active=True,
+                    enabled=False,
+                ),
+                CostCenter(
+                    entity=f"{company}-O",
+                    code="AJENA",
+                    name="Default de otra compañía",
+                    group=False,
+                    default=True,
+                    active=True,
+                    enabled=True,
+                ),
+            ]
         )
         database.session.commit()
 
 
 def _limpiar(app, company: str) -> None:
-    """Retira la compañía y sus centros al finalizar la prueba."""
+    """Retira las compañías y sus centros al finalizar la prueba."""
     with app.app_context():
-        database.session.execute(database.delete(CostCenter).where(CostCenter.entity == company))
-        database.session.execute(database.delete(Entity).where(Entity.code == company))
+        database.session.execute(database.delete(CostCenter).where(CostCenter.entity.in_((company, f"{company}-O"))))
+        database.session.execute(database.delete(Entity).where(Entity.code.in_((company, f"{company}-O"))))
         database.session.commit()
 
 
-def test_resolver_usa_main_de_forma_repetible(app):
-    """La resolución implícita elige MAIN aunque exista un agrupador default."""
+def test_resolver_usa_main_posteable_aun_sin_default(app) -> None:
+    """MAIN gana aunque otro centro posteable sea el único default heredado."""
     company = f"CC{uuid4().hex[:6].upper()}"
     _sembrar_centros(app, company)
+    with app.app_context():
+        otro = database.session.execute(database.select(CostCenter).filter_by(entity=company, code="A00000")).scalar_one()
+        otro.default = True
+        database.session.commit()
     try:
         with app.app_context():
             servicio = BudgetService()
@@ -84,8 +133,51 @@ def test_resolver_usa_main_de_forma_repetible(app):
         _limpiar(app, company)
 
 
-def test_resolver_ignora_agrupadores_y_es_determinista_para_legacy(app):
-    """Sin MAIN posteable, solo se consideran centros operativos y default."""
+@pytest.mark.parametrize("codigo", ["GRUPO", "INA", "DIS"])
+def test_default_no_posteable_no_se_resuelve(app, codigo) -> None:
+    """Un default que es agrupador, inactivo o deshabilitado no se selecciona."""
+    company = f"CC{uuid4().hex[:6].upper()}"
+    _sembrar_centros(app, company)
+    try:
+        with app.app_context():
+            for centro in database.session.execute(
+                database.select(CostCenter).filter_by(entity=company, default=True)
+            ).scalars():
+                centro.default = centro.code == codigo
+            principal = database.session.execute(
+                database.select(CostCenter).filter_by(entity=company, code="MAIN")
+            ).scalar_one()
+            principal.active = False
+            database.session.commit()
+        with app.app_context():
+            assert BudgetService().resolve_cost_center("", company) is None
+    finally:
+        _limpiar(app, company)
+
+
+def test_resolver_no_cruza_companias_sin_candidato_local(app) -> None:
+    """El default de otra compañía no resuelve un centro local ausente."""
+    company = f"CC{uuid4().hex[:6].upper()}"
+    _sembrar_centros(app, company)
+    try:
+        with app.app_context():
+            for centro in database.session.execute(
+                database.select(CostCenter).filter_by(entity=company, default=True)
+            ).scalars():
+                centro.default = False
+            principal = database.session.execute(
+                database.select(CostCenter).filter_by(entity=company, code="MAIN")
+            ).scalar_one()
+            principal.active = False
+            database.session.commit()
+        with app.app_context():
+            assert BudgetService().resolve_cost_center("", company) is None
+    finally:
+        _limpiar(app, company)
+
+
+def test_resolver_legacy_es_determinista_por_codigo(app) -> None:
+    """Sin MAIN posteable, el fallback elige el default posteable menor por código."""
     company = f"CC{uuid4().hex[:6].upper()}"
     _sembrar_centros(app, company)
     try:
@@ -94,6 +186,22 @@ def test_resolver_ignora_agrupadores_y_es_determinista_para_legacy(app):
                 database.select(CostCenter).filter_by(entity=company, code="MAIN")
             ).scalar_one()
             principal.active = False
+            for centro in database.session.execute(
+                database.select(CostCenter).filter_by(entity=company, default=True)
+            ).scalars():
+                centro.default = False
+            for code in ("Z99999", "M99999"):
+                database.session.add(
+                    CostCenter(
+                        entity=company,
+                        code=code,
+                        name=f"Legacy {code}",
+                        group=False,
+                        default=True,
+                        active=True,
+                        enabled=True,
+                    )
+                )
             heredado = database.session.execute(
                 database.select(CostCenter).filter_by(entity=company, code="A00000")
             ).scalar_one()
@@ -105,3 +213,51 @@ def test_resolver_ignora_agrupadores_y_es_determinista_para_legacy(app):
             assert resultado.code == "A00000"
     finally:
         _limpiar(app, company)
+
+
+def test_seed_demo_crea_un_main_posteable_por_compania() -> None:
+    """El seed real crea MAIN sin defaults competidores en cada compañía demo."""
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+            "SQLALCHEMY_ENGINE_OPTIONS": {
+                "poolclass": StaticPool,
+                "connect_args": {"check_same_thread": False},
+            },
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    try:
+        with application.app_context():
+            database.create_all()
+            database.session.add_all(
+                [
+                    Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                    Currency(code="USD", name="Dólar", decimals=2, active=True),
+                    Currency(code="EUR", name="Euro", decimals=2, active=True),
+                ]
+            )
+            database.session.commit()
+            demo_entidad()
+            cargar_centros_de_costos()
+            companias = database.session.execute(database.select(Entity.code)).scalars().all()
+            assert {"CACAO", "CAFE", "DULCE"}.issubset(set(companias))
+            for company in ("CACAO", "CAFE", "DULCE"):
+                defaults = (
+                    database.session.execute(database.select(CostCenter).filter_by(entity=company, default=True))
+                    .scalars()
+                    .all()
+                )
+                assert [centro.code for centro in defaults] == ["MAIN"]
+                assert defaults[0].group is False
+                assert defaults[0].active is True
+                assert defaults[0].enabled is True
+                assert BudgetService().resolve_cost_center("", company).code == "MAIN"
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
