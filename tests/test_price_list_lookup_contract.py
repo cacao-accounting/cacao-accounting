@@ -132,3 +132,37 @@ def test_listas_inactivas_configurada_y_predeterminada_no_se_resuelven(entorno_c
         assert resuelto is not None
         assert resuelto.price == Decimal("10.0000")
         assert resuelto.price_list.id == activa.id
+
+
+def test_unica_predeterminada_inactiva_no_se_resuelve(entorno_contable_aislado):
+    """Sin una predeterminada activa, el resolvedor no elige la inactiva."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        sufijo = uuid4().hex[:6]
+        item = database.session.execute(database.select(Item).filter_by(code="ART01")).scalar_one()
+        inactiva = PriceList(
+            name=f"Venta inactiva única {sufijo}",
+            company="cacao",
+            currency="NIO",
+            is_selling=True,
+            is_buying=False,
+            is_default=True,
+            is_active=False,
+        )
+        database.session.add(inactiva)
+        database.session.flush()
+        database.session.add(
+            ItemPrice(
+                item_code=item.code,
+                price_list_id=inactiva.id,
+                uom="UND",
+                price=Decimal("99"),
+                valid_from=DENTRO,
+                valid_upto=DENTRO,
+            )
+        )
+        database.session.commit()
+
+        resuelto = resolve_sales_catalog_price("cacao", None, item.code, Decimal("1"), "UND", DENTRO, "NIO")
+
+        assert resuelto is None
