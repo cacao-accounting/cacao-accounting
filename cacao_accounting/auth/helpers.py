@@ -4,7 +4,9 @@
 """Utilidades de autenticación."""
 
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from uuid import uuid4
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
@@ -80,18 +82,24 @@ def puede_iniciar_en_escritorio(identidad: User) -> bool:
     return True
 
 
+def _utcnow() -> datetime:
+    """Devuelve el instante UTC actual para la emisión del token."""
+    return datetime.now(timezone.utc)
+
+
 def asignar_token_para_usuario(identidad: User) -> None:
     """Genera y asigna el token de autenticación para la API REST."""
     try:
-        from datetime import datetime, timedelta, timezone
-
-        ahora = datetime.now(timezone.utc)
+        ahora = _utcnow()
         payload = {
             "user_id": identidad.id,
             "auth_version": identidad.auth_version,
             "iat": ahora,
             "nbf": ahora,
             "exp": ahora + timedelta(hours=8),
+            # Un identificador único evita que dos emisiones en el mismo
+            # segundo produzcan el mismo JWT y reactiven uno revocado.
+            "jti": uuid4().hex,
         }
         identidad.token = encode(
             payload,

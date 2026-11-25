@@ -127,6 +127,32 @@ def test_filas_legacy_sin_huella_requieren_nuevo_login(app, reference_users):
         assert usuario.token_matches("token-legacy") is False
 
 
+def test_tokens_del_mismo_segundo_son_distintos_y_revocan_el_anterior(app, reference_users, monkeypatch):
+    """#2270: logout y login en el mismo segundo no reactivan el JWT cerrado."""
+    from datetime import datetime, timezone
+
+    from cacao_accounting.api import _identity_for_api_token
+    from cacao_accounting.auth import helpers as auth_helpers
+
+    instante = datetime.now(timezone.utc).replace(microsecond=0)
+    monkeypatch.setattr(auth_helpers, "_utcnow", lambda: instante)
+    with app.app_context():
+        usuario = database.session.get(User, reference_users["admin"].id)
+        auth_helpers.asignar_token_para_usuario(usuario)
+        primer_token = usuario.token
+        usuario.token = None
+        database.session.commit()
+
+        auth_helpers.asignar_token_para_usuario(usuario)
+        segundo_token = usuario.token
+
+        assert primer_token != segundo_token
+        assert usuario.token_matches(primer_token) is False
+        assert usuario.token_matches(segundo_token) is True
+        assert _identity_for_api_token(primer_token) is None
+        assert _identity_for_api_token(segundo_token).id == usuario.id
+
+
 def test_helper_agrega_columna_sin_backfill(entorno_contable_aislado):
     """Esquemas previos reciben la columna, pero no se inventan huellas antiguas."""
     application = entorno_contable_aislado.app
