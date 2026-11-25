@@ -26,7 +26,9 @@ from cacao_accounting.database import (
     BankAccount,
     BankMatchingRule,
     BankTransaction,
+    Entity,
     PaymentEntry,
+    Reconciliation,
     ReconciliationItem,
     User,
     database,
@@ -207,3 +209,174 @@ def test_saldo_cambiado_rechaza_candidato_obsoleto(entorno_contable_aislado):
             == []
         )
         assert auto_reconcile_bank_transaction(transaction.id).reason == "no_unique_exact_match"
+
+
+def _escenario_reglas_disjuntas():
+    """Crea dos reglas reales cuyos únicos exactos son pagos distintos (#1644)."""
+    suffix = uuid4().hex[:8]
+    bank = Bank(name=f"Banco Disjunto {suffix}", is_active=True)
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name=f"Cuenta Disjunta {suffix}",
+        account_no=suffix,
+        currency="NIO",
+    )
+    database.session.add(account)
+    database.session.flush()
+    transaction = BankTransaction(
+        bank_account_id=account.id,
+        posting_date=date(2026, 5, 15),
+        deposit=Decimal("100"),
+        withdrawal=Decimal("0"),
+    )
+    pago_cercano = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 15),
+        docstatus=1,
+        payment_type="receive",
+        bank_account_id=account.id,
+        currency="NIO",
+        received_amount=Decimal("102"),
+        reference_no=f"CERCANO-{suffix}",
+    )
+    pago_lejano = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 18),
+        docstatus=1,
+        payment_type="receive",
+        bank_account_id=account.id,
+        currency="NIO",
+        received_amount=Decimal("100"),
+        reference_no=f"LEJANO-{suffix}",
+    )
+    database.session.add_all([transaction, pago_cercano, pago_lejano])
+    database.session.add_all(
+        [
+            BankMatchingRule(
+                company="cacao",
+                bank_account_id=account.id,
+                name=f"Ventana estrecha {suffix}",
+                days_tolerance=0,
+                amount_tolerance=Decimal("5"),
+                priority=1,
+                is_active=True,
+                auto_reconcile=True,
+            ),
+            BankMatchingRule(
+                company="cacao",
+                bank_account_id=account.id,
+                name=f"Ventana amplia {suffix}",
+                days_tolerance=5,
+                amount_tolerance=Decimal("0"),
+                priority=2,
+                is_active=True,
+                auto_reconcile=True,
+            ),
+        ]
+    )
+    database.session.commit()
+    return account, transaction, pago_cercano, pago_lejano
+
+
+def _ids_exactos(bank_transaction_id: str, *, days_tolerance: int, amount_tolerance: Decimal) -> set[str]:
+    """Devuelve los destinos exactos que el motor real encuentra con esas tolerancias."""
+    candidatos = find_bank_reconciliation_candidates(
+        bank_transaction_id,
+        days_tolerance=days_tolerance,
+        amount_tolerance=amount_tolerance,
+    )
+    return {candidato.reference_id for candidato in candidatos if candidato.status == "exact"}
+
+
+def test_reglas_reales_con_exactos_disjuntos_quedan_ambiguos(entorno_contable_aislado):
+    """Cada regla ve un pago exacto distinto y el servicio no concilia ninguno."""
+    app = entorno_contable_aislado.app
+    actor_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
+    with app.test_request_context("/"):
+        login_user(database.session.get(User, actor_id))
+        _, transaction, pago_cercano, pago_lejano = _escenario_reglas_disjuntas()
+
+        assert _ids_exactos(transaction.id, days_tolerance=0, amount_tolerance=Decimal("5")) == {pago_cercano.id}
+        assert _ids_exactos(transaction.id, days_tolerance=5, amount_tolerance=Decimal("0")) == {pago_lejano.id}
+
+        resultado = auto_reconcile_bank_transaction(transaction.id)
+
+        assert resultado.reconciled is False
+        assert resultado.reason == "ambiguous"
+        assert resultado.rule_id is None
+        assert resultado.candidate_reference_id is None
+        assert resultado.allocated_amount is None
+        assert database.session.get(BankTransaction, transaction.id).is_reconciled is False
+        assert database.session.get(BankTransaction, transaction.id).payment_entry_id is None
+        assert (
+            database.session.execute(database.select(ReconciliationItem).filter_by(source_id=transaction.id)).scalars().all()
+            == []
+        )
+        assert database.session.execute(database.select(Reconciliation).filter_by(company="cacao")).scalars().all() == []
+
+
+def test_cambio_persistido_de_importe_para_mismo_destino_es_ambiguo(entorno_contable_aislado):
+    """Dos lecturas reales del mismo pago con importe modificado no se consolidan."""
+    app = entorno_contable_aislado.app
+    actor_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
+    with app.test_request_context("/"):
+        login_user(database.session.get(User, actor_id))
+        _, transaction, pago, _ = _escenario_reglas_disjuntas()
+        regla = database.session.execute(select(BankMatchingRule).where(BankMatchingRule.priority == 1)).scalar_one()
+        tolerancia = Decimal("5")
+
+        primeros = find_bank_reconciliation_candidates(transaction.id, days_tolerance=0, amount_tolerance=tolerancia)
+        assert len(primeros) == 1
+        assert primeros[0].status == "exact"
+        assert primeros[0].amount == Decimal("100")
+
+        pago.received_amount = Decimal("98")
+        database.session.commit()
+        segundos = find_bank_reconciliation_candidates(transaction.id, days_tolerance=0, amount_tolerance=tolerancia)
+        assert len(segundos) == 1
+        assert segundos[0].status == "exact"
+        assert segundos[0].amount == Decimal("98")
+
+        vistos = {}
+        assert _accumulate_exact_candidate(vistos, primeros[0], regla) is True
+        assert _accumulate_exact_candidate(vistos, segundos[0], regla) is False
+        assert next(iter(vistos.values()))[0].amount == Decimal("100")
+
+
+@pytest.mark.parametrize("alcance", ["inactiva", "otra_cuenta", "otra_compania"])
+def test_reglas_fuera_de_alcance_no_habilitan_matching_automatico(entorno_contable_aislado, alcance):
+    """Solo aplican reglas activas de la compañía y la cuenta de la transacción."""
+    app = entorno_contable_aislado.app
+    actor_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
+    with app.test_request_context("/"):
+        login_user(database.session.get(User, actor_id))
+        account, transaction, _, _ = _escenario_reglas_disjuntas()
+
+        if alcance == "inactiva":
+            database.session.execute(database.update(BankMatchingRule).values(is_active=False))
+        elif alcance == "otra_cuenta":
+            otra_cuenta = BankAccount(
+                bank_id=account.bank_id,
+                company="cacao",
+                account_name=f"Otra cuenta {uuid4().hex[:8]}",
+                account_no=uuid4().hex[:8],
+                currency="NIO",
+            )
+            database.session.add(otra_cuenta)
+            database.session.flush()
+            database.session.execute(database.update(BankMatchingRule).values(bank_account_id=otra_cuenta.id))
+        else:
+            database.session.add(
+                Entity(code="otra", name="Otra", company_name="Otra SA", tax_id="OTRA-1", currency="NIO", enabled=True)
+            )
+            database.session.flush()
+            database.session.execute(database.update(BankMatchingRule).values(company="otra"))
+        database.session.commit()
+
+        resultado = auto_reconcile_bank_transaction(transaction.id)
+        assert resultado.reconciled is False
+        assert resultado.reason == "no_active_rule"
+        assert database.session.get(BankTransaction, transaction.id).is_reconciled is False
