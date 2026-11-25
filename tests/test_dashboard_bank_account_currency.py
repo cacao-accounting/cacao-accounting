@@ -175,3 +175,53 @@ def test_segunda_cuenta_en_otra_moneda_conserva_su_propio_saldo(bank_balance_sce
     assert filas["EUR-1597"]["currency"] == "EUR"
     assert Decimal(str(filas["USD-1607"]["balance"])) == Decimal("100")
     assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("7000")
+
+
+def test_cuentas_comparten_gl_con_moneda_distinta(bank_balance_scene):
+    """#2262: cada banco ve solo el saldo de su moneda aunque comparta cuenta GL."""
+    with bank_balance_scene.app_context():
+        cuenta = database.session.query(Accounts).filter_by(entity="cacao", code="1102").first()
+        libro = database.session.query(Book).filter_by(entity="cacao").first()
+        database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
+        banco = Bank(name="Banco compartido", is_active=True)
+        database.session.add(banco)
+        database.session.flush()
+        database.session.add(
+            BankAccount(
+                company="cacao",
+                bank_id=banco.id,
+                account_name="Cuenta EUR compartida",
+                account_no="EUR-2262",
+                currency="EUR",
+                gl_account_id=cuenta.id,
+                is_active=True,
+            )
+        )
+        database.session.add(
+            GLEntry(
+                posting_date=date(2026, 5, 17),
+                company="cacao",
+                account_id=cuenta.id,
+                ledger_id=libro.id,
+                debit=Decimal("1700"),
+                credit=Decimal("0"),
+                debit_in_account_currency=Decimal("50"),
+                credit_in_account_currency=Decimal("0"),
+                account_currency="EUR",
+                company_currency="NIO",
+                exchange_rate=Decimal("34"),
+                voucher_type="journal_entry",
+                voucher_id="JE-2262",
+                is_cancelled=False,
+            )
+        )
+        database.session.commit()
+
+        payload = get_banks_data("cacao", "NIO", None, None)
+
+    filas = {fila["account_no"]: fila for fila in payload["tables"]["account_balances"]}
+    assert Decimal(str(filas["USD-1607"]["balance"])) == Decimal("100")
+    assert filas["USD-1607"]["currency"] == "USD"
+    assert Decimal(str(filas["EUR-2262"]["balance"])) == Decimal("50")
+    assert filas["EUR-2262"]["currency"] == "EUR"
+    assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("5300")

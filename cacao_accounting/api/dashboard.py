@@ -311,7 +311,7 @@ def get_banks_data(
                 {
                     "name": account.account_name,
                     "account_no": account.account_no,
-                    "balance": account_balances.get(account.gl_account_id, 0),
+                    "balance": _bank_account_balance(account, account_balances, currency),
                     "currency": account.currency or currency,
                 }
                 for account in accounts
@@ -551,8 +551,15 @@ def _accounting_monthly_result(
     return list(months.values())
 
 
-def _bank_balances(company: str, accounts: list[BankAccount]) -> tuple[dict[str | None, Decimal], dict[str | None, Decimal]]:
-    """Obtiene saldos de GL en moneda base y en moneda de cada cuenta."""
+def _bank_balances(
+    company: str, accounts: list[BankAccount]
+) -> tuple[dict[str | None, Decimal], dict[tuple[str | None, str | None], Decimal]]:
+    """Obtiene saldos de GL en moneda base y por cuenta GL y moneda.
+
+    Varias cuentas bancarias pueden compartir la misma cuenta contable con
+    monedas distintas (#2262); agrupar solo por ``account_id`` mezclaría sus
+    saldos y asignaría el mismo importe a todas las cuentas.
+    """
     gl_account_ids = [account.gl_account_id for account in accounts if account.gl_account_id]
     if not gl_account_ids:
         return {}, {}
@@ -562,22 +569,40 @@ def _bank_balances(company: str, accounts: list[BankAccount]) -> tuple[dict[str 
         .group_by(GLEntry.account_id)
     )
     base_query = _scope_bank_balance_query(company, base_query)
+    entry_currency = func.coalesce(GLEntry.account_currency, GLEntry.company_currency)
     account_query = (
         database.session.query(
             GLEntry.account_id,
+            entry_currency.label("balance_currency"),
             func.sum(
                 func.coalesce(GLEntry.debit_in_account_currency, GLEntry.debit)
                 - func.coalesce(GLEntry.credit_in_account_currency, GLEntry.credit)
             ),
         )
         .filter(GLEntry.account_id.in_(gl_account_ids), GLEntry.company == company)
-        .group_by(GLEntry.account_id)
+        .group_by(GLEntry.account_id, entry_currency)
     )
     account_query = _scope_bank_balance_query(company, account_query)
     return (
         {row[0]: Decimal(str(row[1] or 0)) for row in base_query.all()},
-        {row[0]: Decimal(str(row[1] or 0)) for row in account_query.all()},
+        {(row[0], row[1]): Decimal(str(row[2] or 0)) for row in account_query.all()},
     )
+
+
+def _bank_account_balance(
+    account: BankAccount,
+    account_balances: dict[tuple[str | None, str | None], Decimal],
+    default_currency: str,
+) -> Decimal:
+    """Devuelve el saldo de la cuenta en su propia moneda, nunca el de otra pierna."""
+    if not account.gl_account_id:
+        return Decimal("0")
+    currency = account.currency or default_currency
+    balance = account_balances.get((account.gl_account_id, currency))
+    if balance is not None:
+        return balance
+    # Asientos heredados sin moneda conservan su saldo original en moneda base.
+    return account_balances.get((account.gl_account_id, None), Decimal("0"))
 
 
 def _scope_bank_balance_query(company: str, query):
