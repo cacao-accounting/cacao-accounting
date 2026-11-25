@@ -1208,8 +1208,14 @@ def _active_invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
     )
 
 
-def _purchase_receipt_source_rate(index: int, receipt: PurchaseReceipt | None, item_code: str) -> Decimal | None:
-    """Resolve a sourced receipt line's rate from its approved source document."""
+def _purchase_receipt_source_rate(
+    index: int,
+    receipt: PurchaseReceipt | None,
+    item_code: str,
+    qty: Decimal,
+    line_base_qty: Decimal,
+) -> Decimal | None:
+    """Resolve a sourced line's rate in the presentation UOM of the new line."""
     source_type = request.form.get(f"source_type_{index}")
     source_id = request.form.get(f"source_id_{index}")
     source_item_id = request.form.get(f"source_item_id_{index}")
@@ -1233,7 +1239,29 @@ def _purchase_receipt_source_rate(index: int, receipt: PurchaseReceipt | None, i
         raise DocumentFlowError(_("El documento origen debe pertenecer a la misma compañía."), 400)
     if source_item.item_code != item_code:
         raise DocumentFlowError(_("El artículo debe coincidir con la línea del documento origen."), 400)
-    return coerce_decimal(source_item.rate or 0, field_name=_("tarifa"), non_negative=True)
+    return _sourced_line_rate(source_item, qty, line_base_qty)
+
+
+def _sourced_line_rate(source_item: Any, qty: Decimal, line_base_qty: Decimal) -> Decimal:
+    """Deriva la tarifa destino desde el valor por unidad base de la línea origen."""
+    source_rate = coerce_decimal(source_item.rate or 0, field_name=_("tarifa"), non_negative=True)
+    source_qty = coerce_decimal(getattr(source_item, "qty", 0) or 0, field_name=_("Cantidad"), non_negative=True)
+    source_base_qty = coerce_decimal(
+        getattr(source_item, "qty_in_base_uom", None) or source_qty,
+        field_name=_("Cantidad"),
+        non_negative=True,
+    )
+    source_amount = coerce_decimal(
+        getattr(source_item, "amount", None) or source_rate * source_qty,
+        field_name=_("Importe"),
+        non_negative=True,
+    )
+    if source_base_qty <= 0 or qty <= 0 or line_base_qty <= 0:
+        raise DocumentFlowError(_("No se puede convertir la tarifa del documento origen a la UOM de la devolución."), 400)
+    # La línea origen fija el valor por unidad base; la tarifa destino se deriva
+    # de esa misma unidad para que amount = qty * rate no mezcle presentaciones.
+    base_rate = source_amount / source_base_qty
+    return base_rate * line_base_qty / qty
 
 
 def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
@@ -1253,9 +1281,6 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
                 raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
-            source_rate = _purchase_receipt_source_rate(i, receipt, item_code)
-            rate = source_rate if source_rate is not None else _form_decimal(f"rate_{i}", "0")
-            amount = qty * rate
             uom = request.form.get(f"uom_{i}") or None
             warehouse_code = (
                 request.form.get("to_warehouse") or request.form.get("warehouse") or request.form.get(f"warehouse_{i}") or None
@@ -1267,13 +1292,18 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
                 item_name=request.form.get(f"item_name_{i}", ""),
                 qty=qty,
                 uom=uom,
-                rate=rate,
-                amount=amount,
+                rate=Decimal("0"),
+                amount=Decimal("0"),
                 warehouse=warehouse_code,
                 batch_id=request.form.get(f"batch_id_{i}") or None,
                 serial_no=request.form.get(f"serial_no_{i}") or None,
             )
             linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
+            source_rate = _purchase_receipt_source_rate(i, receipt, item_code, qty, linea.qty_in_base_uom)
+            rate = source_rate if source_rate is not None else _form_decimal(f"rate_{i}", "0")
+            amount = qty * rate
+            linea.rate = rate
+            linea.amount = amount
             linea.base_amount, _base_rate = _compute_base_amounts(amount, exchange_rate)
             database.session.add(linea)
             database.session.flush()

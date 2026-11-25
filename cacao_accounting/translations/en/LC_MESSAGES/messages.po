@@ -25179,3 +25179,17 @@ msgstr "The invoice has no linked Sales Order and cannot be duplicated in this m
 
 msgid "La modalidad 3-way no permite duplicar facturas positivas."
 msgstr "3-way matching does not allow duplicating positive invoices."
+
+#: cacao_accounting/compras/services.py
+msgid "La devolución debe usar la recepción original como origen."
+msgstr "The return must use the original receipt as its source."
+
+
+#: cacao_accounting/compras/services.py
+msgid "El artículo debe coincidir con la línea del documento origen."
+msgstr "The item must match the source document line."
+
+
+#: cacao_accounting/compras/services.py
+msgid "No se puede convertir la tarifa del documento origen a la UOM de la devolución."
+msgstr "The source document rate cannot be converted to the return UOM."
