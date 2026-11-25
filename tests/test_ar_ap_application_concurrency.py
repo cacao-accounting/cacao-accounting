@@ -672,9 +672,11 @@ def test_posted_customer_balance_reconciles_and_appears_in_journal_selector(arap
         for line in reconciliation_body["lines"]
         if line["party_type"] == "customer" and line["party_id"] == seed["customer_id"]
     )
-    assert customer_line["subledger_amount"] == "100.0000"
-    assert customer_line["gl_amount"] == "100.0000"
-    assert customer_line["difference"] == "0.0000"
+    # La serialización expone el texto decimal exacto; la escala depende de la
+    # columna (el GL conserva hasta ocho decimales), así que se compara el valor.
+    assert Decimal(customer_line["subledger_amount"]) == Decimal("100")
+    assert Decimal(customer_line["gl_amount"]) == Decimal("100")
+    assert Decimal(customer_line["difference"]) == Decimal("0")
 
     open_items = client.get(
         "/api/line-import/open-items",
@@ -691,7 +693,7 @@ def test_posted_customer_balance_reconciles_and_appears_in_journal_selector(arap
     assert len(results) == 1
     assert results[0]["document_id"] == journal_id
     assert results[0]["label"] == document_number
-    assert results[0]["outstanding"] == "100.0000"
+    assert Decimal(results[0]["outstanding"]) == Decimal("100")
 
 
 @pytest.mark.parametrize("party_type", ["customer", "supplier"])

@@ -292,7 +292,12 @@ def test_gross_margin_and_kpis_share_the_cost_classification(reference_cost_case
         dashboard_balances = _income_expense_balances(COMPANY, POSTING_DATE, POSTING_DATE)
         monthly_result = _accounting_monthly_result(COMPANY, POSTING_DATE, POSTING_DATE)
     assert dashboard_balances == {"income": Decimal("1000"), "expenses": Decimal("500")}
-    assert monthly_result == [{"month": 5, "income": "1000.0000", "expenses": "500.0000"}]
+    assert len(monthly_result) == 1
+    assert monthly_result[0]["month"] == 5
+    # `_accounting_monthly_result` serializa importes como texto decimal exacto;
+    # la escala del GL es de ocho decimales, no de cuatro.
+    assert Decimal(monthly_result[0]["income"]) == Decimal("1000")
+    assert Decimal(monthly_result[0]["expenses"]) == Decimal("500")
 
 
 def test_dashboard_keeps_typed_cost_with_missing_or_unknown_classification(cost_accounts, app):
@@ -312,8 +317,31 @@ def test_dashboard_keeps_typed_cost_with_missing_or_unknown_classification(cost_
         income_statement = get_income_statement_report(_income_statement_filters())
 
     assert balances == {"income": Decimal("100"), "expenses": Decimal("50")}
-    assert monthly_result == [{"month": 5, "income": "100.0000", "expenses": "50.0000"}]
+    assert len(monthly_result) == 1
+    assert monthly_result[0]["month"] == 5
+    assert Decimal(monthly_result[0]["income"]) == Decimal("100")
+    assert Decimal(monthly_result[0]["expenses"]) == Decimal("50")
     assert income_statement.totals["cost"] == Decimal("50")
+
+
+def test_monthly_result_preserves_eight_decimal_precision(cost_accounts, app):
+    """El dashboard serializa importes de ocho decimales sin redondearlos."""
+    _post_entries(
+        app,
+        cost_accounts,
+        [
+            ("precision-income", cost_accounts["codes"]["income"], "0", "0.00000001"),
+            ("precision-cost", cost_accounts["codes"]["cogs"], "0.00000001", "0"),
+        ],
+    )
+    with app.app_context():
+        monthly_result = _accounting_monthly_result(COMPANY, POSTING_DATE, POSTING_DATE)
+    assert len(monthly_result) == 1
+    assert monthly_result[0]["month"] == 5
+    # La notación científica es válida mientras el valor sea exacto y no se
+    # haya redondeado a la escala anterior de cuatro decimales.
+    assert Decimal(monthly_result[0]["income"]) == Decimal("0.00000001")
+    assert Decimal(monthly_result[0]["expenses"]) == Decimal("0.00000001")
 
 
 def test_budget_committed_amount_keeps_cost_accounts_debit_positive(reference_cost_case, app):
