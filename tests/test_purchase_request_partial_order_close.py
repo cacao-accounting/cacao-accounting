@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
+from cacao_accounting.approval_engine import ApprovalEngine
 from cacao_accounting.compras.services import purchase_order_has_closed_source_request
 from cacao_accounting.compras.purchase_request_comparison_service import (
     purchase_request_comparison_covered_item_ids,
@@ -260,6 +261,59 @@ def test_ruta_cancelar_rechaza_oc_de_solicitud_cerrada(request_order_scene):
         )
 
 
+def test_orden_con_dos_solicitudes_bloquea_si_una_esta_cerrada(request_order_scene):
+    """El guard considera todas las SC origen, no solo la primera relación."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10")
+    with application.app_context():
+        otra = PurchaseRequest(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            status="closed",
+        )
+        database.session.add(otra)
+        database.session.flush()
+        linea = PurchaseRequestItem(
+            purchase_request_id=otra.id,
+            item_code="ART01",
+            item_name="Artículo de prueba",
+            qty=Decimal("1"),
+            uom="UND",
+            qty_in_base_uom=Decimal("1"),
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+        )
+        database.session.add(linea)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=otra.id,
+                source_item_id=linea.id,
+                target_type="purchase_order",
+                target_id=order_id,
+                target_item_id=f"{order_id}-segunda",
+                company="cacao",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("10"),
+                amount=Decimal("10"),
+                relation_type="order",
+                status="active",
+            )
+        )
+        database.session.commit()
+
+    with application.app_context():
+        assert purchase_order_has_closed_source_request(order_id) is True
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-order/{order_id}/cancel", data={"reason": "Prueba"})
+    assert respuesta.status_code == 302
+    with application.app_context():
+        assert database.session.get(PurchaseOrder, order_id).docstatus == 1
+
+
 def test_ruta_aprobar_rechaza_oc_borrador_de_solicitud_cerrada(request_order_scene):
     """El POST de aprobación no activa una OC borrador de una SC cerrada."""
     application, ids = request_order_scene
@@ -274,6 +328,24 @@ def test_ruta_aprobar_rechaza_oc_borrador_de_solicitud_cerrada(request_order_sce
     assert respuesta.status_code == 302
     with application.app_context():
         assert database.session.get(PurchaseOrder, order_id).docstatus == 0
+
+
+def test_motor_aprobaciones_revalida_sc_cerrada(request_order_scene, monkeypatch):
+    """El submit y la cancelación del motor rechazan una SC cerrada."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10", docstatus=0)
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        solicitud.status = "closed"
+        database.session.commit()
+        order = database.session.get(PurchaseOrder, order_id)
+        user = database.session.get(User, "admin")
+        assert order is not None and user is not None
+        monkeypatch.setattr(ApprovalEngine, "_validate_final_submission", classmethod(lambda cls, doctype, document: None))
+        with pytest.raises(ValueError, match="solicitud de compra cerrada"):
+            ApprovalEngine._execute_submit("purchase_order", order, user)
+        with pytest.raises(ValueError, match="solicitud de compra cerrada"):
+            ApprovalEngine._validate_final_cancellation("purchase_order", order)
 
 
 def test_ordenes_que_cubren_la_cantidad_cierran_la_solicitud(request_order_scene):
