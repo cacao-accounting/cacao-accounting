@@ -67,6 +67,17 @@ class BankAutoReconciliationResult:
     reconciliation_id: str | None = None
 
 
+def _rule_reference_matches(rule: BankMatchingRule, reference_number: str | None) -> bool:
+    """Indica si la referencia de la transacción satisface el filtro de la regla.
+
+    La comparación es literal e insensible a mayúsculas en todos los motores,
+    de modo que el filtro manual y el automático aplican el mismo contrato.
+    """
+    if not rule.reference_contains:
+        return True
+    return str(rule.reference_contains).casefold() in str(reference_number or "").casefold()
+
+
 def _find_auto_reconcile_rules(
     bank_account_id: str, company: str, reference_number: str | None = None
 ) -> list[BankMatchingRule]:
@@ -88,10 +99,7 @@ def _find_auto_reconcile_rules(
         ),
     )
     rules = database.session.execute(query.order_by(BankMatchingRule.priority)).scalars().all()
-    if reference_number is None:
-        return list(rules)
-    referencia = str(reference_number).casefold()
-    return [rule for rule in rules if not rule.reference_contains or str(rule.reference_contains).casefold() in referencia]
+    return [rule for rule in rules if _rule_reference_matches(rule, reference_number)]
 
 
 def _accumulate_exact_candidate(
@@ -263,7 +271,12 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
 
 
 def apply_bank_matching_rule(rule_id: str, bank_account_id: str, date_range: tuple[date, date]) -> BankMatchingRun:
-    """Ejecuta una regla y devuelve candidatos por transaccion."""
+    """Ejecuta una regla y devuelve candidatos por transaccion.
+
+    El filtro de referencia es literal e insensible a mayúsculas, el mismo que
+    aplica la auto conciliación, para que ambos modos coincidan en todos los
+    motores de base de datos (#1509).
+    """
     rule = database.session.get(BankMatchingRule, rule_id)
     if not rule or not rule.is_active:
         raise BankStatementError(_("La regla de matching no existe o esta inactiva."))
@@ -282,10 +295,10 @@ def apply_bank_matching_rule(rule_id: str, bank_account_id: str, date_range: tup
         .where(BankTransaction.posting_date >= date_range[0])
         .where(BankTransaction.posting_date <= date_range[1])
     )
-    if rule.reference_contains:
-        query = query.where(BankTransaction.reference_number.contains(rule.reference_contains))
     result: dict[str, list[BankCandidate]] = {}
     for transaction in database.session.execute(query).scalars().all():
+        if not _rule_reference_matches(rule, transaction.reference_number):
+            continue
         result[transaction.id] = find_bank_reconciliation_candidates(
             transaction.id,
             days_tolerance=rule.days_tolerance,
