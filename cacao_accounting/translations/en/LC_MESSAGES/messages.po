@@ -18704,6 +18704,10 @@ msgstr "Subclasses must implement read()"
 msgid "El archivo excede los límites de recursos de importación."
 msgstr "The file exceeds the import resource limits."
 
+#: cacao_accounting/imports/csv_dialect.py:28
+msgid "El archivo CSV usa tabulaciones fuera de un campo entrecomillado."
+msgstr "The CSV file uses tabs outside a quoted field."
+
 #: cacao_accounting/imports/services/import_service.py:105
 #, python-format
 msgid "Formato no soportado: %(format)s"

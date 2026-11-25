@@ -5,6 +5,12 @@
 
 import csv
 from typing import Any, TextIO
+from cacao_accounting.imports.csv_dialect import (
+    CSV_SAMPLE_CHARS,
+    ImportCSVFormatError,
+    contains_unquoted_tab,
+    sniff_csv_dialect,
+)
 from cacao_accounting.imports.readers.base import BaseReader, TabularBook
 from cacao_accounting.imports.readers.limits import ImportReadLimitError, ReadBudget, validate_file_size
 
@@ -16,14 +22,12 @@ class CSVReader(BaseReader):
         """Lee un archivo CSV y devuelve un TabularBook canónico."""
         validate_file_size(file_path)
         with open(file_path, mode="r", encoding="utf-8-sig") as f:
-            # Intentar detectar el delimitador (normalmente , o ;)
-            dialect: Any
-            try:
-                sample = f.read(1024)
-                f.seek(0)
-                dialect = csv.Sniffer().sniff(sample, delimiters=",;")
-            except csv.Error:
-                dialect = csv.get_dialect("excel")  # Fallback a coma
+            # Misma muestra y reglas que usa la validación MIME al cargar.
+            sample = f.read(CSV_SAMPLE_CHARS)
+            f.seek(0)
+            dialect = sniff_csv_dialect(sample)
+            if contains_unquoted_tab(sample, dialect):
+                raise ImportCSVFormatError()
 
             _validate_shape(f, dialect)
             f.seek(0)

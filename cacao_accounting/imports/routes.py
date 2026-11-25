@@ -5,7 +5,6 @@
 
 import os
 import csv
-import io
 import openpyxl
 from odf import opendocument, table as odf_table
 from odf.text import P as odf_paragraph
@@ -27,6 +26,12 @@ from werkzeug.utils import secure_filename
 from cacao_accounting.database import Book, NamingSeries, database
 from sqlalchemy import or_
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.imports.csv_dialect import (
+    CSV_SAMPLE_CHARS,
+    contains_unquoted_tab,
+    parse_csv_rows,
+    sniff_csv_dialect,
+)
 from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.auth.permisos import Permisos
@@ -304,18 +309,13 @@ def _valid_csv_fallback(chunk: bytes) -> bool:
     if not text.strip():
         return False
     try:
-        sample = text[:2048]
-        dialect: Any
-        try:
-            dialect = csv.Sniffer().sniff(sample, delimiters=",;")
-        except csv.Error:
-            # Un CSV de una sola columna no tiene delimitador que oler. El
-            # lector cae al dialecto excel; rechazamos tabulaciones para no
-            # aceptar un TSV que luego se leeria como una sola columna.
-            if "\t" in sample:
-                return False
-            dialect = csv.get_dialect("excel")
-        rows = list(csv.reader(io.StringIO(text), dialect))
+        sample = text[:CSV_SAMPLE_CHARS]
+        dialect = sniff_csv_dialect(sample)
+        # La tabulación solo es contenido válido dentro de un campo citado;
+        # fuera de comillas sería un delimitador que el lector no soporta.
+        if contains_unquoted_tab(sample, dialect):
+            return False
+        rows = parse_csv_rows(text, dialect)
     except (csv.Error, ValueError):
         return False
     return bool(rows and any(cell.strip() for row in rows for cell in row))

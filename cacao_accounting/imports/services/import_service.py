@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from cacao_accounting.database import database
 from cacao_accounting.imports.column_labels import canonical_columns
+from cacao_accounting.imports.csv_dialect import ImportCSVFormatError
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
 from cacao_accounting.imports.readers.csv_reader import CSVReader
 from cacao_accounting.imports.readers.limits import ImportReadLimitError
@@ -436,8 +437,9 @@ class ImportService:
     ) -> Dict[str, Any]:
         """Devuelve el detalle del lote cuando el lector no puede abrir la fuente."""
         is_resource_limit = isinstance(error, ImportReadLimitError)
+        is_bad_csv = isinstance(error, ImportCSVFormatError)
         error_type = "RESOURCE_LIMIT" if is_resource_limit else "SYSTEM_ERROR"
-        message = str(error) if is_resource_limit else _("No se pudo leer el archivo de importación.")
+        message = str(error) if is_resource_limit or is_bad_csv else _("No se pudo leer el archivo de importación.")
         errors = [
             item
             for item in persisted_errors
