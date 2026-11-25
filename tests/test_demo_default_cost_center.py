@@ -5,9 +5,12 @@
 
 from __future__ import annotations
 
+import os
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
@@ -261,3 +264,61 @@ def test_seed_demo_crea_un_main_posteable_por_compania() -> None:
         with application.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+@pytest.mark.database
+def test_seed_demo_postgresql_crea_un_main_posteable_por_compania() -> None:
+    """El seed real resuelve MAIN en PostgreSQL, sin defaults competidores."""
+    uri = str(configuracion.get("SQLALCHEMY_DATABASE_URI", ""))
+    if not uri.startswith("postgresql"):
+        pytest.skip("Este caso valida el orden de lectura de PostgreSQL.")
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
+
+    schema_name = f"demo_default_cc_{uuid4().hex[:12]}"
+    bootstrap_engine = create_engine(uri)
+    with bootstrap_engine.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{schema_name}"'))
+    engine_options: Any = {"pool_size": 4, "max_overflow": 0, "connect_args": {"options": f"-csearch_path={schema_name}"}}
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": uri,
+            "SQLALCHEMY_ENGINE_OPTIONS": cast(Any, engine_options),
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    try:
+        with application.app_context():
+            database.create_all()
+            database.session.add_all(
+                [
+                    Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                    Currency(code="USD", name="Dólar", decimals=2, active=True),
+                    Currency(code="EUR", name="Euro", decimals=2, active=True),
+                ]
+            )
+            database.session.commit()
+            demo_entidad()
+            cargar_centros_de_costos()
+            for company in ("CACAO", "CAFE", "DULCE"):
+                defaults = (
+                    database.session.execute(database.select(CostCenter).filter_by(entity=company, default=True))
+                    .scalars()
+                    .all()
+                )
+                assert [centro.code for centro in defaults] == ["MAIN"]
+                assert defaults[0].group is False
+                assert defaults[0].active is True
+                assert defaults[0].enabled is True
+                assert BudgetService().resolve_cost_center("", company).code == "MAIN"
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+        with bootstrap_engine.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA "{schema_name}" CASCADE'))
+        bootstrap_engine.dispose()
