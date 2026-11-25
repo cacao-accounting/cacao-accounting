@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#1854: duplicar un movimiento de inventario deja evidencia en el nuevo documento.
+"""#1854: duplicar un movimiento de inventario deja un único evento en el nuevo documento.
 
 La duplicación crea un borrador independiente con sus propias líneas, sin
 vínculos documentales ni movimientos de GL/stock. El AuditTrail del duplicado
-debe registrar quién lo creó y referenciar el documento de origen.
+debe registrar quién lo creó y referenciar el documento de origen, tanto en
+Desktop como en Cloud, sin duplicar el evento automático de la inserción.
 """
 
 from datetime import date
@@ -13,6 +14,8 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from flask_login import login_user
+from sqlalchemy import inspect, select
 
 from cacao_accounting.audit_trail_service import format_document_timeline
 from cacao_accounting.database import (
@@ -22,8 +25,10 @@ from cacao_accounting.database import (
     StockEntry,
     StockEntryItem,
     StockLedgerEntry,
+    User,
     database,
 )
+from cacao_accounting.inventario.routes import inventario_entrada_duplicar
 
 
 def _seed_entry(app) -> dict[str, str]:
@@ -71,9 +76,19 @@ def _seed_entry(app) -> dict[str, str]:
         return {"entry": entry.id, "document_no": entry.document_no, "remarks": entry.remarks, "line": line.id}
 
 
-def test_duplicar_stock_entry_registra_creacion_con_origen(app, entorno_contable, authenticated_client):
-    """El duplicado queda como borrador con un evento created y la referencia al origen."""
+def _configurar_modo(app, monkeypatch, escritorio: bool) -> None:
+    """Fija el modo y los controles internos antes de ejecutar la petición."""
+    monkeypatch.setitem(app.config, "MODO_ESCRITORIO", escritorio)
+    monkeypatch.setitem(app.config, "INTERNAL_CONTROLS_ENFORCE", not escritorio)
+
+
+@pytest.mark.parametrize("escritorio", [True, False])
+def test_duplicar_stock_entry_deja_un_created_visible_en_ambos_modos(
+    app, entorno_contable, authenticated_client, monkeypatch, escritorio
+):
+    """El duplicado conserva un solo evento con origen, actor y documento íntegro."""
     origen = _seed_entry(app)
+    _configurar_modo(app, monkeypatch, escritorio)
 
     respuesta = authenticated_client("admin").post(f"/inventory/stock-entry/{origen['entry']}/duplicate")
 
@@ -81,7 +96,7 @@ def test_duplicar_stock_entry_registra_creacion_con_origen(app, entorno_contable
     with app.app_context():
         duplicados = (
             database.session.execute(
-                database.select(StockEntry).where(
+                select(StockEntry).where(
                     StockEntry.company == "cacao",
                     StockEntry.remarks == origen["remarks"],
                     StockEntry.id != origen["entry"],
@@ -94,22 +109,29 @@ def test_duplicar_stock_entry_registra_creacion_con_origen(app, entorno_contable
         duplicado = duplicados[0]
         assert duplicado.docstatus == 0
 
-        evento = database.session.execute(
-            database.select(AuditTrail).filter_by(document_type="stock_entry", document_id=duplicado.id, action="created")
-        ).scalar_one_or_none()
-        assert evento is not None, "La duplicación no registró evento de auditoría."
+        eventos = (
+            database.session.execute(
+                select(AuditTrail).filter_by(
+                    document_type="stock_entry",
+                    document_id=duplicado.id,
+                    action="created",
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(eventos) == 1, "La duplicación no debe emitir un created automático y otro explícito."
+        evento = eventos[0]
         assert evento.actor_user_id is not None
         assert origen["document_no"] in (evento.comment or "")
 
-        lineas = (
-            database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=duplicado.id)).scalars().all()
-        )
+        lineas = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=duplicado.id)).scalars().all()
         assert len(lineas) == 1
         assert lineas[0].item_code == "ART01" and lineas[0].amount == Decimal("20.0000")
 
-        vínculos = (
+        vinculos = (
             database.session.execute(
-                database.select(DocumentRelation.id).where(
+                select(DocumentRelation.id).where(
                     DocumentRelation.target_type == "stock_entry",
                     DocumentRelation.target_id == duplicado.id,
                 )
@@ -117,11 +139,11 @@ def test_duplicar_stock_entry_registra_creacion_con_origen(app, entorno_contable
             .scalars()
             .all()
         )
-        assert vínculos == [], "El duplicado no debe heredar vínculos documentales."
+        assert vinculos == [], "El duplicado no debe heredar vínculos documentales."
 
         movimientos_stock = (
             database.session.execute(
-                database.select(StockLedgerEntry.id).where(
+                select(StockLedgerEntry.id).where(
                     StockLedgerEntry.voucher_type == "stock_entry",
                     StockLedgerEntry.voucher_id == duplicado.id,
                 )
@@ -132,7 +154,7 @@ def test_duplicar_stock_entry_registra_creacion_con_origen(app, entorno_contable
         assert movimientos_stock == []
         movimientos_gl = (
             database.session.execute(
-                database.select(GLEntry.id).where(
+                select(GLEntry.id).where(
                     GLEntry.voucher_type == "stock_entry",
                     GLEntry.voucher_id == duplicado.id,
                 )
@@ -142,37 +164,49 @@ def test_duplicar_stock_entry_registra_creacion_con_origen(app, entorno_contable
         )
         assert movimientos_gl == []
 
-
-@pytest.mark.parametrize("modo_escritorio", [True, False])
-def test_timeline_del_duplicado_es_visible_en_desktop_y_cloud(app, authenticated_client, monkeypatch, modo_escritorio):
-    """La vista de detalle muestra el evento created y su origen en ambos modos."""
-    origen = _seed_entry(app)
-    respuesta = authenticated_client("admin").post(f"/inventory/stock-entry/{origen['entry']}/duplicate")
-    assert respuesta.status_code == 302
-
-    with app.app_context():
-        duplicado = (
-            database.session.execute(
-                database.select(StockEntry).where(
-                    StockEntry.company == "cacao",
-                    StockEntry.remarks == origen["remarks"],
-                    StockEntry.id != origen["entry"],
-                )
-            )
-            .scalars()
-            .one()
-        )
+        timeline = format_document_timeline("stock_entry", duplicado.id)
+        creados = [fila["event"] for fila in timeline if fila["event"].action == "created"]
+        assert len(creados) == 1
+        assert origen["document_no"] in (creados[0].comment or "")
+        assert creados[0].actor_name or creados[0].actor_user_id
         duplicado_id = duplicado.id
-        monkeypatch.setitem(app.config, "MODO_ESCRITORIO", modo_escritorio)
-        timeline = format_document_timeline("stock_entry", duplicado_id)
-
-    creados = [fila["event"] for fila in timeline if fila["event"].action == "created"]
-    assert len(creados) == 1
-    assert origen["document_no"] in (creados[0].comment or "")
-    assert creados[0].actor_name or creados[0].actor_user_id
 
     detalle = authenticated_client("admin").get(f"/inventory/stock-entry/{duplicado_id}")
     assert detalle.status_code == 200
     cuerpo = detalle.get_data(as_text=True)
     assert "Historial del documento" in cuerpo
     assert origen["document_no"] in cuerpo
+
+
+def test_duplicacion_fallida_no_persiste_documento_ni_eventos(app, entorno_contable, monkeypatch):
+    """Si falla el commit, la transacción no deja duplicado ni eventos."""
+    origen = _seed_entry(app)
+    _configurar_modo(app, monkeypatch, escritorio=False)
+    actor_id = str(inspect(entorno_contable.admin_user).identity[0])
+    with app.test_request_context(f"/inventory/stock-entry/{origen['entry']}/duplicate", method="POST"):
+        login_user(database.session.get(User, actor_id))
+        ids_antes = set(database.session.execute(select(StockEntry.id)).scalars().all())
+
+        def _falla_commit(*args, **kwargs):
+            raise RuntimeError("fallo de commit")
+
+        monkeypatch.setattr(database.session, "commit", _falla_commit)
+
+        with pytest.raises(RuntimeError, match="fallo de commit"):
+            inventario_entrada_duplicar(origen["entry"])
+
+        database.session.rollback()
+        ids_despues = set(database.session.execute(select(StockEntry.id)).scalars().all())
+        assert ids_despues == ids_antes
+        eventos = (
+            database.session.execute(
+                select(AuditTrail.id).where(
+                    AuditTrail.document_type == "stock_entry",
+                    AuditTrail.action == "created",
+                    AuditTrail.document_id.notin_(ids_antes),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert eventos == []

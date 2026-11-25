@@ -40,6 +40,7 @@ _BANK_RECONCILIATION_TRANSITION: ContextVar[frozenset[int]] = ContextVar(
 )
 _CONFIG_VALUE_TRANSITION: ContextVar[frozenset[str]] = ContextVar("icfr_config_value_transition", default=frozenset())
 _AUDIT_TRAIL_INSERT_ACTIVE: ContextVar[bool] = ContextVar("icfr_audit_trail_insert_active", default=False)
+_SUPPRESSED_CREATED_EVENTS: ContextVar[frozenset[int]] = ContextVar("icfr_suppressed_created_events", default=frozenset())
 _ORM_FLUSH_ACTIVE: ContextVar[bool] = ContextVar("icfr_orm_flush_active", default=False)
 _LEDGER_CANCELLATION_ACTIVE: ContextVar[tuple[str, str] | None] = ContextVar("icfr_ledger_cancellation_active", default=None)
 _BALANCE_CONFIRMATION_RESPONSE_TRANSITION: ContextVar[frozenset[str]] = ContextVar(
@@ -304,6 +305,22 @@ def stock_valuation_balance_transition(*layers: Any) -> Iterator[None]:
 
 
 @contextmanager
+def suppress_created_event(*documents: Any) -> Iterator[None]:
+    """Suppress the automatic created audit event for the supplied new rows.
+
+    Callers that emit a canonical ``log_create()`` event with additional context
+    must wrap only the insert/flush of the row, so a single creation produces a
+    single meaningful audit entry in both Desktop and Cloud.
+    """
+    suppressed = _SUPPRESSED_CREATED_EVENTS.get().union(id(document) for document in documents)
+    token = _SUPPRESSED_CREATED_EVENTS.set(suppressed)
+    try:
+        yield
+    finally:
+        _SUPPRESSED_CREATED_EVENTS.reset(token)
+
+
+@contextmanager
 def balance_confirmation_response_transition(confirmation_id: str) -> Iterator[None]:
     """Authorize the first external response for one balance confirmation."""
     if not confirmation_id:
@@ -464,7 +481,9 @@ def _write_event(mapper: Any, connection: Any, target: Any, action: str) -> None
 
 
 def _audit_insert(mapper: Any, connection: Any, target: Any) -> None:
-    """Record a newly persisted sensitive object."""
+    """Record a newly persisted sensitive object unless the caller logs it explicitly."""
+    if id(target) in _SUPPRESSED_CREATED_EVENTS.get():
+        return
     _write_event(mapper, connection, target, "created")
 
 

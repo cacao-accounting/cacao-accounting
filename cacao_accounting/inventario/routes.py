@@ -52,6 +52,7 @@ from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
 
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
+from cacao_accounting.internal_control_service import suppress_created_event
 
 from cacao_accounting.inventario.service import (
     InventoryServiceError,
@@ -1105,7 +1106,8 @@ def inventario_entrada_duplicar(entry_id: str):
         docstatus=0,
     )
     database.session.add(duplicado)
-    database.session.flush()
+    with suppress_created_event(duplicado):
+        database.session.flush()
     assign_document_identifier(
         document=duplicado,
         entity_type="stock_entry",
