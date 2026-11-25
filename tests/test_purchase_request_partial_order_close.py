@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from threading import Event, Thread
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
+from cacao_accounting.document_flow import lock_document_flow_document
 from cacao_accounting.approval_engine import ApprovalEngine
 from cacao_accounting.compras import routes as compras_routes
 from cacao_accounting.compras.services import purchase_order_has_closed_source_request
@@ -425,10 +427,11 @@ def test_cancelar_oc_reabre_pendiente_tras_comparativo_finalizado(request_order_
         assert purchase_request_line_closure_reasons(solicitud) == {}
 
 
-def test_submit_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch):
-    """El submit bloquea PO y SC antes de la lectura FOR UPDATE del estado."""
+@pytest.mark.parametrize(("accion", "docstatus"), [("submit", 0), ("cancel", 1)])
+def test_guard_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch, accion, docstatus):
+    """Submit y cancelación bloquean PO y SC antes de leer el estado."""
     application, ids = request_order_scene
-    order_id = _agregar_orden(application, ids, "10", docstatus=0)
+    order_id = _agregar_orden(application, ids, "10", docstatus=docstatus)
     with application.app_context():
         solicitud = database.session.get(PurchaseRequest, ids["request"])
         solicitud.status = "closed"
@@ -448,7 +451,10 @@ def test_submit_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch):
 
     monkeypatch.setattr(compras_routes, "lock_document_flow_document", tracking_lock)
     monkeypatch.setattr(database.session, "execute", tracking_execute)
-    respuesta = _cliente_admin(application).post(f"/buying/purchase-order/{order_id}/submit")
+    respuesta = _cliente_admin(application).post(
+        f"/buying/purchase-order/{order_id}/{accion}",
+        data={"reason": "Prueba"} if accion == "cancel" else {},
+    )
 
     assert respuesta.status_code == 302
     assert eventos[:3] == ["lock:purchase_order", "lock:purchase_request", "for_update"]
@@ -487,6 +493,100 @@ def test_motor_aprobaciones_revalida_sc_cerrada(request_order_scene, monkeypatch
             ApprovalEngine._execute_submit("purchase_order", order, user)
         with pytest.raises(ValueError, match="solicitud de compra cerrada"):
             ApprovalEngine._validate_final_cancellation("purchase_order", order)
+
+
+def test_guard_relee_sc_cerrada_tras_lock(tmp_path):
+    """Dos sesiones: el cierre confirmado por otra sesión se observa tras el lock."""
+    app = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'purchase-request-lock.sqlite'}",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": True,
+        }
+    )
+    suffix = uuid4().hex[:6]
+    with app.app_context():
+        database.create_all()
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        database.session.add(UOM(code="UND", name="Unidad"))
+        database.session.add(
+            Entity(
+                code=f"L{suffix}",
+                name="Lock",
+                company_name="Lock SA",
+                tax_id=f"L-{suffix}",
+                currency="NIO",
+                enabled=True,
+            )
+        )
+        database.session.flush()
+        request = PurchaseRequest(company=f"L{suffix}", posting_date=date(2026, 5, 15), docstatus=1, status="open")
+        database.session.add(request)
+        database.session.flush()
+        order = PurchaseOrder(company=f"L{suffix}", posting_date=date(2026, 5, 15), docstatus=0)
+        database.session.add(order)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=request.id,
+                target_type="purchase_order",
+                target_id=order.id,
+                company=f"L{suffix}",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("1"),
+                amount=Decimal("1"),
+                relation_type="order",
+                status="active",
+            )
+        )
+        database.session.commit()
+        request_id, order_id = request.id, order.id
+
+    order_read = Event()
+    request_closed = Event()
+
+    def close_request() -> None:
+        assert order_read.wait(timeout=20)
+        with app.app_context():
+            try:
+                request = database.session.get(PurchaseRequest, request_id)
+                request.status = "closed"
+                database.session.commit()
+                request_closed.set()
+            finally:
+                database.session.remove()
+
+    def read_after_lock() -> None:
+        with app.app_context():
+            try:
+                order = database.session.get(PurchaseOrder, order_id)
+                assert order is not None
+                order_read.set()
+                assert request_closed.wait(timeout=20)
+                lock_document_flow_document("purchase_order", order_id)
+                lock_document_flow_document("purchase_request", request_id)
+                assert purchase_order_has_closed_source_request(order_id) is True
+            finally:
+                database.session.remove()
+
+    try:
+        closer = Thread(target=close_request)
+        reader = Thread(target=read_after_lock)
+        closer.start()
+        reader.start()
+        closer.join(timeout=30)
+        reader.join(timeout=30)
+        assert not closer.is_alive() and not reader.is_alive()
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
 
 
 def test_ordenes_que_cubren_la_cantidad_cierran_la_solicitud(request_order_scene):
