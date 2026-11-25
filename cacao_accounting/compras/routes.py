@@ -2496,6 +2496,25 @@ def compras_orden_compra_submit(order_id: str):
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
 
 
+def _purchase_order_has_closed_source_request(order_id: str) -> bool:
+    """Indica si la OC consume una solicitud de compra ya cerrada."""
+    return (
+        database.session.execute(
+            database.select(PurchaseRequest.id)
+            .join(DocumentRelation, DocumentRelation.source_id == PurchaseRequest.id)
+            .where(
+                DocumentRelation.source_type == "purchase_request",
+                DocumentRelation.target_type == "purchase_order",
+                DocumentRelation.target_id == order_id,
+                DocumentRelation.status == "active",
+                PurchaseRequest.status == "closed",
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
 @compras.route("/purchase-order/<order_id>/cancel", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -2508,6 +2527,9 @@ def compras_orden_compra_cancel(order_id: str):
     exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    if _purchase_order_has_closed_source_request(order_id):
+        flash(_("No se puede cancelar la orden de compra porque su Solicitud de Compra ya está cerrada."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     if has_active_source_relations("purchase_order", order_id):
         flash(_("No se puede cancelar la orden de compra porque tiene recepciones o facturas activas."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))

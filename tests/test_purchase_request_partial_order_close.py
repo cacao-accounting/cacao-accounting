@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
+from cacao_accounting.compras.routes import _purchase_order_has_closed_source_request
 from cacao_accounting.compras.purchase_request_comparison_service import (
     purchase_request_comparison_covered_item_ids,
     purchase_request_is_ready_to_close,
@@ -100,7 +101,7 @@ def request_order_scene():
         database.engine.dispose()
 
 
-def _agregar_orden(application, ids, cantidad: str, *, docstatus: int = 1) -> None:
+def _agregar_orden(application, ids, cantidad: str, *, docstatus: int = 1) -> str:
     with application.app_context():
         orden = PurchaseOrder(company="cacao", posting_date=date(2026, 5, 15), docstatus=docstatus, status="open")
         database.session.add(orden)
@@ -136,6 +137,7 @@ def _agregar_orden(application, ids, cantidad: str, *, docstatus: int = 1) -> No
             )
         )
         database.session.commit()
+        return str(orden.id)
 
 
 def _agregar_comparativo_finalizado(application, ids) -> None:
@@ -219,8 +221,11 @@ def test_ordenes_que_cubren_la_cantidad_cierran_la_solicitud(request_order_scene
     """Al cubrir las 10 unidades, la solicitud queda lista para cerrar."""
     application, ids = request_order_scene
     _agregar_orden(application, ids, "4")
-    _agregar_orden(application, ids, "6")
+    order_id = _agregar_orden(application, ids, "6")
 
     with application.app_context():
         solicitud = database.session.get(PurchaseRequest, ids["request"])
         assert purchase_request_is_ready_to_close(solicitud) is True
+        solicitud.status = "closed"
+        database.session.commit()
+        assert _purchase_order_has_closed_source_request(order_id) is True

@@ -25157,3 +25157,6 @@ msgstr "Comparison %(document)s finalized with a selected offer."
 
 msgid "Orden de Compra directa %(document)s sin comparativo."
 msgstr "Direct Purchase Order %(document)s without a comparison."
+
+msgid "No se puede cancelar la orden de compra porque su Solicitud de Compra ya está cerrada."
+msgstr "The purchase order cannot be cancelled because its Purchase Request is already closed."
