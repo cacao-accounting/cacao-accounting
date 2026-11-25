@@ -167,7 +167,7 @@ from cacao_accounting.compras.services import (
     _paginate_list,
     _require_purchase_document_access,
     purchase_order_has_closed_source_request,
-    purchase_order_source_request_id,
+    purchase_order_source_request_ids,
     _require_requested_purchase_company_access,
     _can_manage_purchase_receipts,
     _supplier_quotation_origin_ids,
@@ -2462,12 +2462,12 @@ def compras_orden_compra_submit(order_id: str):
     exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
-    source_request_id = purchase_order_source_request_id(order_id)
-    if source_request_id:
+    source_request_ids = purchase_order_source_request_ids(order_id)
+    for source_request_id in source_request_ids:
         lock_document_flow_document("purchase_request", source_request_id)
-        if purchase_order_has_closed_source_request(order_id):
-            flash(_("No se puede aprobar la orden de compra porque su Solicitud de Compra ya está cerrada."), "danger")
-            return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
+    if source_request_ids and purchase_order_has_closed_source_request(order_id):
+        flash(_("No se puede aprobar la orden de compra porque su Solicitud de Compra ya está cerrada."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     try:
         items = (
             database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id))
@@ -2516,9 +2516,10 @@ def compras_orden_compra_cancel(order_id: str):
     exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
-    source_request_id = purchase_order_source_request_id(order_id)
-    if source_request_id:
+    source_request_ids = purchase_order_source_request_ids(order_id)
+    for source_request_id in source_request_ids:
         lock_document_flow_document("purchase_request", source_request_id)
+    if source_request_ids:
         registro = database.session.execute(
             database.select(PurchaseOrder).where(PurchaseOrder.id == order_id).execution_options(populate_existing=True)
         ).scalar_one()

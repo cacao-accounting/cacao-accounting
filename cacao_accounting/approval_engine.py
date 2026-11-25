@@ -572,8 +572,14 @@ class ApprovalEngine:
     def _validate_final_cancellation(doctype: str, document: Any) -> None:
         """Recheck downstream dependencies at the moment cancellation executes."""
         if doctype == "purchase_order":
-            from cacao_accounting.compras.services import purchase_order_has_closed_source_request
+            from cacao_accounting.compras.services import (
+                purchase_order_has_closed_source_request,
+                purchase_order_source_request_ids,
+            )
+            from cacao_accounting.document_flow import lock_document_flow_document
 
+            for request_id in purchase_order_source_request_ids(str(document.id)):
+                lock_document_flow_document("purchase_request", request_id)
             if purchase_order_has_closed_source_request(str(document.id)):
                 raise ValueError(_("La orden de compra pertenece a una solicitud de compra cerrada."))
         if doctype in {"sales_order", "delivery_note", "sales_invoice", "purchase_order", "purchase_receipt"}:
@@ -1055,6 +1061,17 @@ class ApprovalEngine:
         from cacao_accounting.audit_trail_service import log_submit
 
         cls._validate_final_submission(doctype, document)
+        if doctype == "purchase_order":
+            from cacao_accounting.compras.services import (
+                purchase_order_has_closed_source_request,
+                purchase_order_source_request_ids,
+            )
+            from cacao_accounting.document_flow import lock_document_flow_document
+
+            for request_id in purchase_order_source_request_ids(str(document.id)):
+                lock_document_flow_document("purchase_request", request_id)
+            if purchase_order_has_closed_source_request(str(document.id)):
+                raise ValueError(_("La orden de compra pertenece a una solicitud de compra cerrada."))
 
         if doctype == "journal_entry":
             from cacao_accounting.contabilidad.journal_service import submit_journal
