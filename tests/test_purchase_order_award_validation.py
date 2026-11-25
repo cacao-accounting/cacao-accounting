@@ -13,10 +13,12 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
-from threading import Barrier
+from threading import Barrier, Event, current_thread
 from uuid import uuid4
 
 import pytest
+from flask import get_flashed_messages
+from sqlalchemy import event, text
 
 from cacao_accounting import create_app
 from cacao_accounting.compras import services as compras_services
@@ -606,6 +608,65 @@ def test_ordenes_concurrentes_no_superan_saldo_adjudicado(adjudicaciones, monkey
             .all()
         )
         assert len(orders) == 1
+
+
+def test_mysql_orden_manual_ve_estado_confirmado_durante_snapshot(adjudicaciones, monkeypatch):
+    """En MySQL la orden manual no reutiliza un award agotado mientras esperaba el lock."""
+    application, ids = adjudicaciones
+    with application.app_context():
+        if database.session.get_bind().dialect.name != "mysql":
+            pytest.skip("La regresión de snapshot requiere MySQL.")
+        isolation = database.session.execute(text("SELECT @@transaction_isolation")).scalar_one()
+        if str(isolation).replace("_", "-").upper() != "REPEATABLE-READ":
+            pytest.skip("La regresión requiere el aislamiento MySQL REPEATABLE READ.")
+        database.session.remove()
+
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    monkeypatch.setattr(compras_services, "log_create", lambda *args, **kwargs: None)
+    hilo_perdedor = []
+    lock_alcanzado = Event()
+    ganador_confirmo = Event()
+
+    def detener_al_perdedor_antes_del_lock(_conn, _cursor, statement, _params, _context, _executemany) -> None:
+        if current_thread() is not hilo_perdedor[0] or "document_flow_lock" not in statement.lower():
+            return
+        lock_alcanzado.set()
+        if not ganador_confirmo.wait(timeout=30):
+            raise RuntimeError("La transacción ganadora no confirmó a tiempo.")
+
+    def orden_manual_tras_snapshot():
+        hilo_perdedor.append(current_thread())
+        form = _form_orden(ids, qty_0="0.3")
+        with application.app_context():
+            with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
+                from flask_login import login_user
+
+                login_user(database.session.get(User, ids["user"]))
+                resultado = _create_purchase_order_from_request(form)
+                mensajes = list(get_flashed_messages())
+            database.session.remove()
+        return resultado, mensajes
+
+    event.listen(database.engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as workers:
+            futuro = workers.submit(orden_manual_tras_snapshot)
+            assert lock_alcanzado.wait(timeout=15)
+            with application.app_context():
+                award = database.session.get(PurchaseQuotationAward, ids["award"])
+                compras_services._create_purchase_orders_from_award(award)
+                database.session.commit()
+                database.session.remove()
+            ganador_confirmo.set()
+            resultado, mensajes = futuro.result(timeout=30)
+    finally:
+        event.remove(database.engine, "before_cursor_execute", detener_al_perdedor_antes_del_lock)
+
+    assert resultado is None
+    assert "La adjudicación seleccionada no es válida." in mensajes
+    with application.app_context():
+        award = database.session.get(PurchaseQuotationAward, ids["award"])
+        assert award.status == "used"
 
 
 def _form_orden(ids, **overrides):

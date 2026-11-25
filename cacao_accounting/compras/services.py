@@ -1517,18 +1517,18 @@ def _validate_purchase_order_award(
         flash_error(PurchaseSourcingError(_("La adjudicación no corresponde al origen seleccionado.")))
         return None, False
     try:
-        award_items = _award_items(award)
-        _lock_award_consumption(award, award_items)
-        database.session.refresh(award)
+        award, award_items = _lock_and_reload_award(award)
     except DBAPIError:
         database.session.rollback()
         flash_error(DocumentFlowError(_("Otra orden está usando esta adjudicación. Intente nuevamente."), 409))
         return None, False
-    if award.status != "finalized":
+    if not _award_still_valid(award, company, source):
         flash_error(PurchaseSourcingError(_("La adjudicación seleccionada no es válida.")))
         return None, False
     try:
-        matches_order = _award_matches_supplier_and_lines(award, supplier_id, form, source, current_order_id)
+        matches_order = _award_matches_supplier_and_lines(
+            award, supplier_id, form, source, current_order_id, award_items=award_items
+        )
     except DocumentFlowError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1538,6 +1538,40 @@ def _validate_purchase_order_award(
         flash_error(PurchaseSourcingError(_("La adjudicación no corresponde al proveedor o líneas de la orden.")))
         return None, False
     return award, True
+
+
+def _award_still_valid(award: PurchaseQuotationAward | None, company: str | None, source: Any) -> bool:
+    """Recheck the reloaded award before any quantity is accepted."""
+    return bool(
+        award is not None and award.status == "finalized" and award.company == company and _award_matches_source(award, source)
+    )
+
+
+def _lock_and_reload_award(
+    award: PurchaseQuotationAward,
+) -> tuple[PurchaseQuotationAward | None, list[PurchaseQuotationAwardItem]]:
+    """Serialize the award and read its confirmed header and lines under lock.
+
+    En MySQL ``REPEATABLE READ`` una lectura normal posterior al bloqueo sigue
+    viendo la instantánea anterior al commit rival. La cabecera y las líneas se
+    recargan con ``FOR UPDATE`` y ``populate_existing`` para que la validación
+    observe el estado realmente confirmado.
+    """
+    _lock_award_consumption(award, _award_items(award))
+    current_award = _fetch_award_locked(str(award.id))
+    if current_award is None:
+        return None, []
+    return current_award, _award_items(current_award, for_update=True)
+
+
+def _fetch_award_locked(award_id: str) -> PurchaseQuotationAward | None:
+    """Return the award as currently committed, refreshing the identity map."""
+    return database.session.execute(
+        database.select(PurchaseQuotationAward)
+        .where(PurchaseQuotationAward.id == award_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
 
 
 def _award_matches_source(award: PurchaseQuotationAward, source: Any) -> bool:
@@ -1564,9 +1598,11 @@ def _award_matches_supplier_and_lines(
     form: Any,
     source: Any,
     current_order_id: str | None = None,
+    *,
+    award_items: list[PurchaseQuotationAwardItem] | None = None,
 ) -> bool:
     """Return whether award items cover the selected supplier and submitted lines."""
-    award_items = _award_items(award)
+    award_items = award_items if award_items is not None else _award_items(award)
     if not award_items:
         return False
     if form is None:
@@ -1603,9 +1639,12 @@ def _award_matches_supplier_and_lines(
     return True
 
 
-def _award_items(award: PurchaseQuotationAward) -> list[PurchaseQuotationAwardItem]:
-    """Return the persisted lines of an award."""
-    return list(database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalars())
+def _award_items(award: PurchaseQuotationAward, *, for_update: bool = False) -> list[PurchaseQuotationAwardItem]:
+    """Return the persisted lines of an award, optionally as a current read."""
+    query = database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)
+    if for_update:
+        query = query.with_for_update()
+    return list(database.session.execute(query.execution_options(populate_existing=for_update)).scalars())
 
 
 def _lock_award_consumption(award: PurchaseQuotationAward, award_items: list[PurchaseQuotationAwardItem]) -> None:
@@ -1661,7 +1700,7 @@ def _award_consumed_base_quantity(
     )
     if current_order_id:
         query = query.where(PurchaseOrder.id != current_order_id)
-    if database.engine.dialect.name != "sqlite":
+    if database.session.get_bind().dialect.name != "sqlite":
         query = query.with_for_update()
     cantidades = database.session.execute(query).scalars().all()
     return sum((_award_decimal(cantidad) for cantidad in cantidades), Decimal("0"))
