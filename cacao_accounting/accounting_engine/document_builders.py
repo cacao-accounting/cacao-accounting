@@ -421,6 +421,39 @@ def _late_invoice_amounts(
     return amounts, posting_dates, invoice_item_ids
 
 
+def _allocation_amounts_by_receipt_item(
+    document: PurchaseReceipt,
+    receipt_item_ids: list[str],
+    invoice_item_ids: set[str] | None,
+) -> dict[str, list[tuple[Decimal, date | None]]]:
+    """Return each allocation with the posting date of its source invoice.
+
+    La fecha de la factura es necesaria para decidir si la asignación ya
+    existía cuando se contabilizó la recepción previa. Una factura posterior a
+    esa recepción no pudo generar el crédito GL que se quiere descontar.
+    """
+    from cacao_accounting.database import PurchaseInvoiceReceiptAllocation
+
+    query = (
+        select(PurchaseInvoiceReceiptAllocation, PurchaseInvoice.posting_date)
+        .join(PurchaseInvoiceItem, PurchaseInvoiceReceiptAllocation.invoice_item_id == PurchaseInvoiceItem.id)
+        .join(PurchaseInvoice, PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id)
+        .where(
+            PurchaseInvoiceReceiptAllocation.company == document.company,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+            PurchaseInvoiceReceiptAllocation.receipt_item_id.in_(receipt_item_ids),
+        )
+    )
+    if invoice_item_ids is not None:
+        query = query.where(PurchaseInvoiceReceiptAllocation.invoice_item_id.in_(invoice_item_ids))
+    result: dict[str, list[tuple[Decimal, date | None]]] = {}
+    for allocation, invoice_date in database.session.execute(query):
+        result.setdefault(str(allocation.receipt_item_id), []).append(
+            (_decimal_value(allocation.invoice_amount), invoice_date)
+        )
+    return result
+
+
 def _subtract_late_receipt_reclassifications(
     document: PurchaseReceipt,
     amounts: dict[str, Decimal],
@@ -434,10 +467,9 @@ def _subtract_late_receipt_reclassifications(
     Los créditos del GL se agregan por cuenta de gasto y no conservan la
     dimensión de artículo. La reclasificación se reconstruye desde las líneas
     de recepción y sus asignaciones auditables, de modo que cada crédito se
-    resta una sola vez del artículo que lo originó.
+    resta una sola vez del artículo que lo originó. Solo se consideran
+    asignaciones cuya factura ya estaba contabilizada al postear la recepción.
     """
-    from cacao_accounting.database import PurchaseInvoiceReceiptAllocation
-
     prior_receipts_list = sorted(prior_receipts, key=lambda receipt: (receipt.posting_date, receipt.id))
     receipt_items: list[PurchaseReceiptItem] = []
     for receipt in prior_receipts_list:
@@ -448,20 +480,16 @@ def _subtract_late_receipt_reclassifications(
             .scalars()
             .all()
         )
-    allocated_amounts: dict[str, Decimal] = {}
-    receipt_by_id = {receipt.id: receipt for receipt in prior_receipts_list}
-    if receipt_items:
-        query = select(PurchaseInvoiceReceiptAllocation).where(
-            PurchaseInvoiceReceiptAllocation.company == document.company,
-            PurchaseInvoiceReceiptAllocation.status == "active",
-            PurchaseInvoiceReceiptAllocation.receipt_item_id.in_([item.id for item in receipt_items]),
+    allocated_amounts = (
+        _allocation_amounts_by_receipt_item(
+            document,
+            [item.id for item in receipt_items],
+            invoice_item_ids,
         )
-        if invoice_item_ids is not None:
-            query = query.where(PurchaseInvoiceReceiptAllocation.invoice_item_id.in_(invoice_item_ids))
-        rows = database.session.execute(query).scalars()
-        for row in rows:
-            key = str(row.receipt_item_id)
-            allocated_amounts[key] = allocated_amounts.get(key, Decimal("0")) + _decimal_value(row.invoice_amount)
+        if receipt_items
+        else {}
+    )
+    receipt_by_id = {receipt.id: receipt for receipt in prior_receipts_list}
 
     remaining = dict(amounts)
     for item in receipt_items:
@@ -473,8 +501,16 @@ def _subtract_late_receipt_reclassifications(
         invoice_date = posting_dates.get(item_code)
         if prior_receipt is None or invoice_date is None or prior_receipt.posting_date < invoice_date:
             continue
-        allocated = allocated_amounts.get(str(item.id), Decimal("0"))
-        reclassified = allocated if allocated > 0 else min(_line_amount(item), available)
+        rows = allocated_amounts.get(str(item.id), [])
+        if rows:
+            as_of = prior_receipt.posting_date
+            reclassified = sum(
+                (amount for amount, source_date in rows if as_of is None or source_date is None or source_date <= as_of),
+                Decimal("0"),
+            )
+        else:
+            # Sin evidencia de asignación se conserva la reconstrucción legacy.
+            reclassified = min(_line_amount(item), available)
         reclassified = min(reclassified, available)
         if reclassified <= 0:
             continue

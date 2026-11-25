@@ -424,3 +424,315 @@ def test_la_asignacion_activa_no_excede_el_pendiente_del_articulo(app, entorno_c
         _subtract_late_receipt_reclassifications(receipts[0], amounts, posting_dates, receipts)
 
         assert amounts == {code: Decimal("0")}
+
+
+def test_factura_posterior_a_recepcion_no_descuenta_su_reclasificacion(app, entorno_contable):
+    """I1/R1/I2/R2: I2 no pudo reclasificar el GL de R1 al calcular R2."""
+    suffix = uuid4().hex[:8]
+    supplier_id = _supplier_id(app)
+    with app.app_context():
+        code = f"ART-T-{suffix}"
+        _sembrar_articulos(suffix, [code])
+        supplier = database.session.get(Party, supplier_id)
+        uom = database.session.execute(database.select(UOM).filter_by(code="UND")).scalar_one()
+        order = PurchaseOrder(
+            company="cacao",
+            document_no=f"PO-T-{suffix}",
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            posting_date=date(2026, 5, 1),
+            docstatus=1,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(order)
+        database.session.flush()
+        database.session.add(
+            PurchaseOrderItem(
+                purchase_order_id=order.id,
+                item_code=code,
+                item_name=code,
+                qty=Decimal("2"),
+                qty_in_base_uom=Decimal("2"),
+                uom=uom.code,
+                rate=Decimal("100"),
+                amount=Decimal("200"),
+            )
+        )
+
+        def crear_factura(numero: str, fecha: date) -> tuple[PurchaseInvoice, PurchaseInvoiceItem]:
+            factura = PurchaseInvoice(
+                company="cacao",
+                posting_date=fecha,
+                docstatus=1,
+                document_no=f"PI-T-{suffix}-{numero}",
+                document_type="purchase_invoice",
+                supplier_id=supplier.id,
+                supplier_name=supplier.name,
+                purchase_order_id=order.id,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+                grand_total=Decimal("100"),
+            )
+            database.session.add(factura)
+            database.session.flush()
+            linea = PurchaseInvoiceItem(
+                purchase_invoice_id=factura.id,
+                item_code=code,
+                item_name=code,
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom=uom.code,
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+            )
+            database.session.add(linea)
+            database.session.flush()
+            return factura, linea
+
+        def crear_recepcion(numero: str, fecha: date) -> tuple[PurchaseReceipt, PurchaseReceiptItem]:
+            recepcion = PurchaseReceipt(
+                company="cacao",
+                posting_date=fecha,
+                docstatus=1,
+                document_no=f"PR-T-{suffix}-{numero}",
+                supplier_id=supplier.id,
+                supplier_name=supplier.name,
+                purchase_order_id=order.id,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+            )
+            database.session.add(recepcion)
+            database.session.flush()
+            linea = PurchaseReceiptItem(
+                purchase_receipt_id=recepcion.id,
+                item_code=code,
+                item_name=code,
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom=uom.code,
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+            )
+            database.session.add(linea)
+            database.session.flush()
+            return recepcion, linea
+
+        invoice1, invoice_item1 = crear_factura("I1", date(2026, 5, 2))
+        receipt1, receipt_item1 = crear_recepcion("R1", date(2026, 5, 5))
+        invoice2, invoice_item2 = crear_factura("I2", date(2026, 5, 10))
+        receipt2, _ = crear_recepcion("R2", date(2026, 5, 15))
+        database.session.add_all(
+            [
+                _asignacion(invoice_item1.id, receipt_item1.id, "100"),
+                _asignacion(invoice_item2.id, receipt_item1.id, "100"),
+            ]
+        )
+        database.session.commit()
+
+        pendiente = _late_two_way_invoice_amounts(database.session.get(PurchaseReceipt, receipt2.id))
+
+        assert invoice1.posting_date < receipt1.posting_date < invoice2.posting_date < receipt2.posting_date
+        assert pendiente[code] == Decimal("100.0000")
+
+
+def _preparar_ciclo_temporal_real(app):
+    """Publica I1/R1/I2/R2 con GL real y siembra una asignación tardía inválida."""
+    with app.app_context():
+        defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+        bridge = database.session.execute(
+            database.select(Accounts).filter_by(entity="cacao", code="2103")
+        ).scalar_one_or_none()
+        if bridge is None:
+            bridge = Accounts(
+                entity="cacao", code="2103", name="Puente compras temporal", classification="liability", account_type="bridge"
+            )
+            database.session.add(bridge)
+            database.session.flush()
+        defaults.bridge_account_id = bridge.id
+        matching = database.session.execute(
+            database.select(PurchaseMatchingConfig).filter_by(company="cacao")
+        ).scalar_one_or_none()
+        if matching is None:
+            matching = PurchaseMatchingConfig(company="cacao", matching_type="2-way", auto_reconcile=False)
+            database.session.add(matching)
+        else:
+            matching.matching_type = "2-way"
+            matching.require_purchase_order = False
+            matching.auto_reconcile = False
+        mapping = database.session.execute(
+            database.select(WarehouseCompanyAccount).filter_by(warehouse_code="BOD01", company="cacao")
+        ).scalar_one_or_none()
+        if mapping is None:
+            inventory = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1109")).scalar_one()
+            database.session.add(
+                WarehouseCompanyAccount(warehouse_code="BOD01", company="cacao", inventory_account_id=inventory.id)
+            )
+
+        supplier = database.session.execute(database.select(Party).filter_by(code="PRV001")).scalar_one()
+        item = database.session.execute(database.select(Item).filter_by(code="ART01")).scalar_one()
+        uom = database.session.execute(database.select(UOM).filter_by(code="UND")).scalar_one()
+        warehouse = database.session.execute(database.select(Warehouse).filter_by(code="BOD01", company="cacao")).scalar_one()
+        suffix = uuid4().hex[:8]
+        order = PurchaseOrder(
+            company="cacao",
+            document_no=f"PO-TEMP-{suffix}",
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            posting_date=date(2026, 5, 1),
+            docstatus=1,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(order)
+        database.session.flush()
+        database.session.add(
+            PurchaseOrderItem(
+                purchase_order_id=order.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("2"),
+                qty_in_base_uom=Decimal("2"),
+                uom=uom.code,
+                rate=Decimal("100"),
+                amount=Decimal("200"),
+            )
+        )
+
+        def crear_factura(dia: int, numero: str) -> tuple[PurchaseInvoice, PurchaseInvoiceItem]:
+            factura = PurchaseInvoice(
+                company="cacao",
+                posting_date=date(2026, 5, dia),
+                docstatus=1,
+                document_no=f"PI-TEMP-{suffix}-{numero}",
+                document_type="purchase_invoice",
+                supplier_id=supplier.id,
+                supplier_name=supplier.name,
+                purchase_order_id=order.id,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+                total=Decimal("100"),
+                base_total=Decimal("100"),
+                grand_total=Decimal("100"),
+                outstanding_amount=Decimal("100"),
+                base_outstanding_amount=Decimal("100"),
+            )
+            database.session.add(factura)
+            database.session.flush()
+            linea = PurchaseInvoiceItem(
+                purchase_invoice_id=factura.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom=uom.code,
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+            )
+            database.session.add(linea)
+            database.session.flush()
+            return factura, linea
+
+        def crear_recepcion(dia: int, numero: str) -> tuple[PurchaseReceipt, PurchaseReceiptItem]:
+            recepcion = PurchaseReceipt(
+                company="cacao",
+                posting_date=date(2026, 5, dia),
+                docstatus=1,
+                document_no=f"PR-TEMP-{suffix}-{numero}",
+                supplier_id=supplier.id,
+                supplier_name=supplier.name,
+                purchase_order_id=order.id,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+                total=Decimal("100"),
+                base_total=Decimal("100"),
+                grand_total=Decimal("100"),
+            )
+            database.session.add(recepcion)
+            database.session.flush()
+            linea = PurchaseReceiptItem(
+                purchase_receipt_id=recepcion.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom=uom.code,
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+                base_amount=Decimal("100"),
+                warehouse=warehouse.code,
+            )
+            database.session.add(linea)
+            database.session.flush()
+            return recepcion, linea
+
+        invoice1, invoice_item1 = crear_factura(2, "I1")
+        receipt1, receipt_item1 = crear_recepcion(5, "R1")
+        invoice2, invoice_item2 = crear_factura(10, "I2")
+        receipt2, _receipt_item2 = crear_recepcion(15, "R2")
+        database.session.commit()
+
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        with audit_actor(actor.id, actor.name):
+            with approved_execution(invoice1, actor.id):
+                post_purchase_invoice(invoice1)
+            database.session.commit()
+            with approved_execution(receipt1, actor.id):
+                post_purchase_receipt(receipt1)
+            database.session.commit()
+            with approved_execution(invoice2, actor.id):
+                post_purchase_invoice(invoice2)
+            database.session.commit()
+            with approved_execution(receipt2, actor.id):
+                post_purchase_receipt(receipt2)
+            database.session.commit()
+
+        # Asignación tardía: I2 se contabilizó después de R1, por lo que no
+        # pudo originar el crédito GL que esa recepción ya había publicado.
+        database.session.add(_asignacion(invoice_item2.id, receipt_item1.id, "100"))
+        database.session.commit()
+        return {
+            "invoices": [invoice1.id, invoice2.id],
+            "receipts": [receipt1.id, receipt2.id],
+            "item": item.code,
+            "late_invoice_item": invoice_item2.id,
+            "early_invoice_item": invoice_item1.id,
+        }
+
+
+def _movimiento_por_libro(voucher_ids: list[str], field: str) -> dict[str, Decimal]:
+    """Suma debe o haber de todas las cuentas de un conjunto de comprobantes."""
+    entries = database.session.execute(database.select(GLEntry).where(GLEntry.voucher_id.in_(voucher_ids))).scalars()
+    totals: dict[str, Decimal] = {}
+    for entry in entries:
+        totals[entry.ledger_id] = totals.get(entry.ledger_id, Decimal("0")) + getattr(entry, field)
+    return totals
+
+
+def test_ciclo_temporal_reconcilia_reclasificacion_con_gl(entorno_contable_aislado):
+    """El GL por libro y el saldo 2-way solo descuentan lo contabilizado en cada fecha."""
+    app = entorno_contable_aislado.app
+    ids = _preparar_ciclo_temporal_real(app)
+    with app.app_context():
+        debitos = _movimiento_por_libro(ids["invoices"], "debit")
+        creditos = _movimiento_por_libro(ids["receipts"], "credit")
+        gasto_1 = _gasto_por_libro(ids["receipts"][0], "credit")
+        gasto_2 = _gasto_por_libro(ids["receipts"][1], "credit")
+
+        assert debitos and creditos
+        assert set(debitos) == set(creditos) == set(gasto_1) == set(gasto_2)
+        for libro in debitos:
+            # I1 carga gasto e I2 carga el puente porque R1 ya estaba contabilizada.
+            assert debitos[libro] == Decimal("200.00000000")
+            assert creditos[libro] == Decimal("200.00000000")
+            assert gasto_1[libro] == Decimal("100.00000000")
+            assert gasto_2[libro] == Decimal("100.00000000")
+
+        pendiente = _late_two_way_invoice_amounts(database.session.get(PurchaseReceipt, ids["receipts"][1]))
+        assert pendiente[ids["item"]] == gasto_2[next(iter(gasto_2))]
