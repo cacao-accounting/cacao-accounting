@@ -26,6 +26,7 @@ from cacao_accounting.contabilidad.arap_ledger_service import (
 from cacao_accounting.contabilidad.posting_service import PostingError
 from cacao_accounting.database import (
     ARAPLedgerBookEntry,
+    ARAPLedgerEntry,
     Accounts,
     Book,
     Currency,
@@ -163,7 +164,22 @@ def _crear_app():
             transaction_currency="USD",
             exchange_rate=Decimal("35"),
         )
-        database.session.add_all([pago, factura_sin_gl, factura_usd_sin_gl])
+        pago_usd_sin_gl = PaymentEntry(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            document_no="PAY-USD-2118",
+            payment_type="receive",
+            party_type="customer",
+            party_id=cliente_id,
+            party_name="Cliente",
+            currency="USD",
+            exchange_rate=Decimal("35"),
+            received_amount=Decimal("200"),
+            base_received_amount=Decimal("7000"),
+            unallocated_amount=Decimal("200"),
+        )
+        database.session.add_all([pago, factura_sin_gl, factura_usd_sin_gl, pago_usd_sin_gl])
         database.session.flush()
         for libro, importe in ((libro_nio, Decimal("80")), (libro_usd, Decimal("20"))):
             database.session.add(
@@ -188,6 +204,7 @@ def _crear_app():
             "factura_sin_gl": factura_sin_gl.id,
             "factura_usd_sin_gl": factura_usd_sin_gl.id,
             "pago": pago.id,
+            "pago_usd_sin_gl": pago_usd_sin_gl.id,
             "cliente": cliente_id,
         }
     return application, ids
@@ -366,6 +383,77 @@ def test_apertura_sintetica_sin_tasa_de_documento_bloquea_el_registro():
                 )
             database.session.rollback()
             assert database.session.execute(database.select(ARAPLedgerBookEntry.id)).scalar_one_or_none() is None
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_del_pago_sin_gl_usa_la_tasa_del_pago():
+    """Sin GL, el pago en moneda extranjera valoriza sus libros con su tasa histórica."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            pago = database.session.get(PaymentEntry, ids["pago_usd_sin_gl"])
+            apertura, _cache, nuevas = _resolve_application_payment_item(
+                "cacao",
+                pago,
+                "payment_entry",
+                pago.id,
+                "USD",
+                "customer",
+                ids["cliente"],
+                "AR",
+                Decimal("200"),
+                FECHA,
+            )
+            database.session.flush()
+
+            assert nuevas == [apertura]
+            por_libro = _valoracion_por_libro(apertura)
+            assert por_libro[ids["nio"]] == Decimal("-7000")
+            assert por_libro[ids["usd"]] == Decimal("-200")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_apertura_sintetica_del_pago_sin_tasa_bloquea_el_registro():
+    """Un pago sin GL ni tasa no crea apertura ni valoración por libro."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            pago = database.session.get(PaymentEntry, ids["pago_usd_sin_gl"])
+            pago.exchange_rate = None
+            with pytest.raises(PostingError):
+                _resolve_application_payment_item(
+                    "cacao",
+                    pago,
+                    "payment_entry",
+                    pago.id,
+                    "USD",
+                    "customer",
+                    ids["cliente"],
+                    "AR",
+                    Decimal("200"),
+                    FECHA,
+                )
+            database.session.rollback()
+            assert (
+                database.session.execute(
+                    database.select(ARAPLedgerEntry.id).filter_by(document_id=ids["pago_usd_sin_gl"])
+                ).scalar_one_or_none()
+                is None
+            )
+            assert (
+                database.session.execute(
+                    database.select(ARAPLedgerBookEntry.id)
+                    .join(ARAPLedgerEntry, ARAPLedgerBookEntry.ledger_entry_id == ARAPLedgerEntry.id)
+                    .where(ARAPLedgerEntry.document_id == ids["pago_usd_sin_gl"])
+                ).scalar_one_or_none()
+                is None
+            )
     finally:
         with application.app_context():
             database.session.remove()
