@@ -726,8 +726,37 @@ def nueva_entidad():
             )
 
         from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
+        from cacao_accounting.database import Roles, RolesUser, User, UserCompanyAccess
 
         seed_matching_config_for_company(ENTIDAD.code)
+
+        admin_role = database.session.execute(database.select(Roles.id).filter_by(name="admin")).scalar_one_or_none()
+        role_user_ids = set()
+        if admin_role:
+            role_user_ids = set(
+                database.session.execute(
+                    database.select(RolesUser.user_id).where(RolesUser.role_id == admin_role, RolesUser.active.is_(True))
+                ).scalars()
+            )
+        admin_users = [
+            user
+            for user in database.session.execute(database.select(User).where(User.active.is_(True))).scalars()
+            if user.classification == "admin" or user.id in role_user_ids
+        ]
+        existing = {
+            (row.user_id, row.company_code)
+            for row in database.session.execute(
+                database.select(UserCompanyAccess.user_id, UserCompanyAccess.company_code).where(
+                    UserCompanyAccess.company_code == ENTIDAD.code
+                )
+            ).all()
+        }
+        for user in admin_users:
+            key = (user.id, ENTIDAD.code)
+            if key not in existing:
+                database.session.add(UserCompanyAccess(user_id=user.id, company_code=ENTIDAD.code))
+                existing.add(key)
+
         database.session.commit()
         invalidate_cache("companies")
         invalidate_cache("smart-select-master-data")

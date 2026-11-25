@@ -124,6 +124,10 @@ def normaliza_direccion_base_datos(uri: str) -> tuple[str, dict[str, dict[str, s
         sslmode = query.pop("sslmode", "").lower()
         query.pop("channel_binding", None)
 
+        # Neon/serverless Postgres can close idle connections; pre-ping avoids
+        # AdminShutdown/OperationalError surfacing to users on the next request.
+        opciones_motor["pool_pre_ping"] = True
+        opciones_motor["pool_recycle"] = int(environ.get("CACAO_DB_POOL_RECYCLE", "280"))
         if sslmode in {"require", "verify-ca", "verify-full"}:
             opciones_motor["connect_args"] = {"sslmode": sslmode}
 

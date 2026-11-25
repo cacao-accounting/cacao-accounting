@@ -255,6 +255,49 @@ def _activate_and_set_default_currency(currency_code: str) -> None:
         currency.default = is_selected
 
 
+def _grant_initial_company_access(company_code: str, *, is_initial_entity: bool) -> None:
+    """Asegura que la primera compañía quede usable por el admin que la crea."""
+    from cacao_accounting.database import Entity, Roles, RolesUser, User, UserCompanyAccess, database
+
+    company = database.session.execute(database.select(Entity.code).filter_by(code=company_code)).scalar_one_or_none()
+    if not company:
+        return
+
+    admin_role = database.session.execute(database.select(Roles.id).filter_by(name="admin")).scalar_one_or_none()
+    role_user_ids = set()
+    if admin_role:
+        role_user_ids = set(
+            database.session.execute(
+                database.select(RolesUser.user_id).where(RolesUser.role_id == admin_role, RolesUser.active.is_(True))
+            ).scalars()
+        )
+
+    user_query = database.select(User).where(User.active.is_(True))
+    admin_users = [
+        user
+        for user in database.session.execute(user_query).scalars()
+        if user.classification == "admin" or user.id in role_user_ids
+    ]
+    if not admin_users:
+        return
+
+    # First setup/initial entity: grant access to active admins so the
+    # creating admin can actually use the company in cloud and desktop.
+    existing = {
+        (row.user_id, row.company_code)
+        for row in database.session.execute(
+            database.select(UserCompanyAccess.user_id, UserCompanyAccess.company_code).where(
+                UserCompanyAccess.company_code == company_code
+            )
+        ).all()
+    }
+    for user in admin_users:
+        key = (user.id, company_code)
+        if key not in existing:
+            database.session.add(UserCompanyAccess(user_id=user.id, company_code=company_code))
+            existing.add(key)
+
+
 class SetupAlreadyComplete(RuntimeError):
     """La instalación ya completó el asistente inicial."""
 
@@ -317,6 +360,7 @@ def finalize_setup(
         _activate_and_set_default_currency(company_data.get("moneda", ""))
         create_default_party_groups(idioma)
         save_company_details(company_data)
+        _grant_initial_company_access(entity.code, is_initial_entity=is_initial_entity)
         database.session.commit()
     except Exception:
         database.session.rollback()
