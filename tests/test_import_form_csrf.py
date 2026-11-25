@@ -19,6 +19,8 @@ from cacao_accounting.database import (
     Modules,
     NamingSeries,
     Party,
+    Sequence,
+    SequencePeriodCounter,
     database,
 )
 from cacao_accounting.imports.models import ImportBatch
@@ -43,6 +45,12 @@ def import_csrf_pages(app, entorno_contable, authenticated_client, tmp_path):
         initial_series = set(database.session.execute(database.select(NamingSeries.id)).scalars().all())
         initial_entities = set(database.session.execute(database.select(Entity.id)).scalars().all())
         initial_identifiers = set(database.session.execute(database.select(GeneratedIdentifierLog.id)).scalars().all())
+        initial_sequences = {
+            row.id: row.current_value for row in database.session.execute(database.select(Sequence)).scalars()
+        }
+        initial_counters = {
+            row.id: row.current_value for row in database.session.execute(database.select(SequencePeriodCounter)).scalars()
+        }
         sufijo = uuid4().hex[:8]
         nombre_cliente = f"Cliente QA {sufijo}"
         source_path = tmp_path / "customer.csv"
@@ -94,6 +102,26 @@ def import_csrf_pages(app, entorno_contable, authenticated_client, tmp_path):
                 database.session.execute(
                     database.delete(GeneratedIdentifierLog).where(GeneratedIdentifierLog.id.in_(created_identifiers))
                 )
+            current_sequences = {row.id: row for row in database.session.execute(database.select(Sequence)).scalars()}
+            current_counters = {
+                row.id: row for row in database.session.execute(database.select(SequencePeriodCounter)).scalars()
+            }
+            created_sequences = set(current_sequences) - set(initial_sequences)
+            created_counters = set(current_counters) - set(initial_counters)
+            for sequence_id, value in initial_sequences.items():
+                sequence = current_sequences.get(sequence_id)
+                if sequence is not None and sequence.current_value != value:
+                    sequence.current_value = value
+            for counter_id, value in initial_counters.items():
+                counter = current_counters.get(counter_id)
+                if counter is not None and counter.current_value != value:
+                    counter.current_value = value
+            if created_counters:
+                database.session.execute(
+                    database.delete(SequencePeriodCounter).where(SequencePeriodCounter.id.in_(created_counters))
+                )
+            if created_sequences:
+                database.session.execute(database.delete(Sequence).where(Sequence.id.in_(created_sequences)))
             current_module = database.session.execute(
                 database.select(Modules).filter_by(module="imports")
             ).scalar_one_or_none()

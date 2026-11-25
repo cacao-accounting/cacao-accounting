@@ -44,14 +44,6 @@
         this.$watch('header.company', () => {
             this.header.bank_account_id = '';
             this.header.currency = '';
-            const notifyFilters = () => {
-                const source = typeof document.querySelector === 'function' ? document.querySelector('#company_val') : null;
-                if (!source) return;
-                source.dispatchEvent(new Event('input', { bubbles: true }));
-                source.dispatchEvent(new Event('change', { bubbles: true }));
-            };
-            if (typeof this.$nextTick === 'function') this.$nextTick(notifyFilters);
-            else notifyFilters();
         });
       },
 
@@ -104,7 +96,7 @@
             doctype: "company",
             name: "company"
           })'>
-          <input type="hidden" x-model="selectedValue" x-effect="header.company = selectedValue">
+          <input type="hidden" id="company" name="company" x-model="selectedValue" x-effect="header.company = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
@@ -118,11 +110,10 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "naming_series",
             name: "naming_series_id",
-            filters: { company: { selector: "#company_val" }, entity_type: function() { return "payment_entry" } },
-            filterSources: ["#company_val"],
+            filters: { company: { selector: "#company" }, entity_type: function() { return "payment_entry" } },
+            filterSources: ["#company"],
             autoSelectDefault: true
           })'>
-          <input type="hidden" id="company_val" x-model="header.company">
           <input type="hidden" x-model="selectedValue" x-effect="header.naming_series_id = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
@@ -138,8 +129,8 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "bank_account",
             name: "bank_account_id",
-            filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
-            filterSources: ["#company_val"],
+            filters: { company: { selector: "#company" }, is_active: function() { return "True" } },
+            filterSources: ["#company"],
             onSelect: function(opt) { $dispatch("bank-account-selected", opt) },
             onClear: function() { header.bank_account_id = ''; header.currency = ''; }
           })'>
@@ -174,8 +165,8 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "cost_center",
             name: "cost_center_code",
-            filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
-            filterSources: ["#company_val"]
+            filters: { company: { selector: "#company" }, is_active: function() { return "True" } },
+            filterSources: ["#company"]
           })'>
           <input type="hidden" x-model="selectedValue" x-effect="header.cost_center_code = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar centro de costo...') }}">
@@ -191,8 +182,8 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "unit",
             name: "unit_code",
-            filters: { company: { selector: "#company_val" } },
-            filterSources: ["#company_val"]
+            filters: { company: { selector: "#company" } },
+            filterSources: ["#company"]
           })'>
           <input type="hidden" x-model="selectedValue" x-effect="header.unit_code = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar unidad de negocio...') }}">
@@ -208,8 +199,8 @@
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "project",
             name: "project_code",
-            filters: { company: { selector: "#company_val" } },
-            filterSources: ["#company_val"]
+            filters: { company: { selector: "#company" } },
+            filterSources: ["#company"]
           })'>
           <input type="hidden" x-model="selectedValue" x-effect="header.project_code = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar proyecto...') }}">
@@ -231,8 +222,8 @@
             <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "account",
                 name: "paid_to_account_id",
-                filters: { company: { selector: "#company_val" } },
-                filterSources: ["#company_val"]
+                filters: { company: { selector: "#company" } },
+                filterSources: ["#company"]
               })'>
               <input type="hidden" x-model="selectedValue" x-effect="header.paid_to_account_id = selectedValue">
               <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta contable...') }}" required>
@@ -247,8 +238,8 @@
             <div class="ca-smart-select" x-data='smartSelect({
                 doctype: "account",
                 name: "paid_from_account_id",
-                filters: { company: { selector: "#company_val" } },
-                filterSources: ["#company_val"]
+                filters: { company: { selector: "#company" } },
+                filterSources: ["#company"]
               })'>
               <input type="hidden" x-model="selectedValue" x-effect="header.paid_from_account_id = selectedValue">
               <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta contable...') }}" required>

@@ -30,6 +30,28 @@ function extractScript(source, marker) {
   return script.replace(/<script>|<\/script>/g, '');
 }
 
+function loadSmartSelect(dom) {
+  let factory = null;
+  globalThis.document = dom.window.document;
+  globalThis.Alpine = {
+    data: (name, create) => {
+      if (name === 'smartSelect') factory = create;
+    },
+  };
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ results: [] }) });
+  const modulePath = require.resolve('../js/smart-select.js');
+  delete require.cache[modulePath];
+  require(modulePath);
+  dom.window.document.dispatchEvent(new dom.window.Event('alpine:init'));
+  return factory;
+}
+
+function dispatchFilterChange(dom, element, value) {
+  element.value = value;
+  element.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  element.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+}
+
 describe('bank selector clear synchronization', function () {
   afterEach(function () {
     delete globalThis.document;
@@ -40,6 +62,10 @@ describe('bank selector clear synchronization', function () {
     delete globalThis.pettyCashFundSteps;
     delete globalThis.bankNoteForm;
     delete globalThis.cacaoLocalIsoDate;
+    delete globalThis.Alpine;
+    delete globalThis.fetch;
+    delete globalThis.header;
+    delete globalThis.alert;
   });
 
   it('clears and restores the petty cash currency and amount step', function () {
@@ -74,36 +100,153 @@ describe('bank selector clear synchronization', function () {
     assert.strictEqual(amount.step, '0.0001');
   });
 
-  it('dispatches the company filter event when the bank note company changes', function () {
+  it('clears the dependent bank note selector when the company changes', function () {
+    const dom = new JSDOM('<!doctype html><html><body><input id="company" value="OLD"></body></html>');
+    const factory = loadSmartSelect(dom);
+    const header = { bank_account_id: 'BANK-OLD', currency: 'NIO' };
+    const component = factory({
+      doctype: 'bank_account',
+      name: 'bank_account_id',
+      filters: { company: { selector: '#company' }, is_active: () => 'True' },
+      filterSources: ['#company'],
+      onClear: () => {
+        header.bank_account_id = '';
+        header.currency = '';
+      },
+    });
+    component.selectedValue = 'BANK-OLD';
+    component.selectedLabel = 'Cuenta anterior';
+    component.search = 'Cuenta anterior';
+    component.options = [{ value: 'BANK-OLD', display_name: 'Cuenta anterior' }];
+    component.init();
+
+    dispatchFilterChange(dom, document.getElementById('company'), 'NEW');
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(component.search, '');
+    assert.deepStrictEqual(component.options, []);
+    assert.strictEqual(header.bank_account_id, '');
+    assert.strictEqual(header.currency, '');
+  });
+
+  it('clears the bank note header when the selected account is edited', function () {
+    const dom = new JSDOM('<!doctype html><html><body><input id="company" value="OLD"></body></html>');
+    const factory = loadSmartSelect(dom);
+    const header = { bank_account_id: 'BANK-OLD', currency: 'NIO' };
+    const component = factory({
+      doctype: 'bank_account',
+      name: 'bank_account_id',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      onClear: () => {
+        header.bank_account_id = '';
+        header.currency = '';
+      },
+    });
+    component.selectedValue = 'BANK-OLD';
+    component.selectedLabel = 'Cuenta anterior';
+    component.search = 'Cuenta anterior';
+    component.options = [{ value: 'BANK-OLD', display_name: 'Cuenta anterior' }];
+    component.init();
+
+    component.onInput({ target: { value: 'Otra cuenta' } });
+
+    assert.strictEqual(component.selectedValue, '');
+    assert.strictEqual(header.bank_account_id, '');
+    assert.strictEqual(header.currency, '');
+  });
+
+  it('blocks the bank note submit without a bank account and sends the selected one', function () {
     const source = readTemplate('nota_nueva.html');
     const noteScript = extractScript(source, 'bankNoteForm');
-    const dom = new JSDOM('<!doctype html><html><body><input id="company_val" value="OLD"></body></html>');
+    const dom = new JSDOM('<!doctype html><html><body></body></html>');
     globalThis.document = dom.window.document;
     globalThis.Event = dom.window.Event;
     globalThis.cacaoLocalIsoDate = () => '2026-01-01';
+    globalThis.alert = () => {};
     // eslint-disable-next-line no-eval
     (0, eval)(noteScript);
 
     const component = globalThis.bankNoteForm({ paymentType: 'debit_note' });
-    const watchers = {};
-    component.$watch = (expression, callback) => {
-      watchers[expression] = callback;
+    component.header.company = 'COMP';
+    component.header.paid_amount = 10;
+    const blocked = { prevented: false, preventDefault() { this.prevented = true; } };
+    component.prepareSubmit(blocked);
+    assert.strictEqual(blocked.prevented, true);
+
+    component.header.bank_account_id = 'BANK-NEW';
+    const accepted = { prevented: false, preventDefault() { this.prevented = true; } };
+    component.prepareSubmit(accepted);
+    assert.strictEqual(accepted.prevented, false);
+    const payload = JSON.parse(component.payload);
+    assert.strictEqual(payload.company, 'COMP');
+    assert.strictEqual(payload.bank_account_id, 'BANK-NEW');
+  });
+
+  it('clears the transfer currencies and resets the exchange rate', function () {
+    const source = readTemplate('transferencia_nueva.html');
+    const originClearSource = extractFunction(source, 'on_clear', 'header.currency');
+    const targetClearSource = extractFunction(source, 'on_clear', 'header.target_currency');
+    globalThis.header = { currency: 'NIO', target_currency: 'USD', exchange_rate: 36 };
+    // eslint-disable-next-line no-eval
+    const originClear = (0, eval)(`(${originClearSource})`);
+    // eslint-disable-next-line no-eval
+    const targetClear = (0, eval)(`(${targetClearSource})`);
+
+    originClear();
+    assert.strictEqual(globalThis.header.currency, '');
+    assert.strictEqual(globalThis.header.exchange_rate, 1);
+
+    globalThis.header.currency = 'NIO';
+    globalThis.header.exchange_rate = 36;
+    targetClear();
+    assert.strictEqual(globalThis.header.target_currency, '');
+    assert.strictEqual(globalThis.header.exchange_rate, 1);
+  });
+
+  it('clears both transfer selectors when the company changes', function () {
+    const dom = new JSDOM('<!doctype html><html><body><input id="company" value="OLD"></body></html>');
+    const factory = loadSmartSelect(dom);
+    const header = {
+      bank_account_id: 'ORIGIN-OLD',
+      currency: 'NIO',
+      target_bank_account_id: 'TARGET-OLD',
+      target_currency: 'USD',
     };
-    component.$nextTick = (callback) => callback();
-    const events = [];
-    const companyValue = document.getElementById('company_val');
-    companyValue.addEventListener('input', () => events.push('input'));
-    companyValue.addEventListener('change', () => events.push('change'));
-    component.init();
+    const origin = factory({
+      doctype: 'bank_account',
+      name: 'bank_account_id',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      onClear: () => {
+        header.currency = '';
+        header.exchange_rate = 1;
+      },
+    });
+    const target = factory({
+      doctype: 'bank_account',
+      name: 'target_bank_account_id',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      onClear: () => {
+        header.target_currency = '';
+        header.exchange_rate = 1;
+      },
+    });
+    for (const component of [origin, target]) {
+      component.selectedValue = 'SEL-OLD';
+      component.selectedLabel = 'Cuenta anterior';
+      component.search = 'Cuenta anterior';
+      component.options = [{ value: 'SEL-OLD', display_name: 'Cuenta anterior' }];
+      component.init();
+    }
 
-    component.header.bank_account_id = 'BANK-OLD';
-    component.header.currency = 'NIO';
-    companyValue.value = 'NEW';
-    component.header.company = 'NEW';
-    watchers['header.company']();
+    dispatchFilterChange(dom, document.getElementById('company'), 'NEW');
 
-    assert.strictEqual(component.header.bank_account_id, '');
-    assert.strictEqual(component.header.currency, '');
-    assert.deepStrictEqual(events, ['input', 'change']);
+    assert.strictEqual(origin.selectedValue, '');
+    assert.strictEqual(target.selectedValue, '');
+    assert.strictEqual(header.currency, '');
+    assert.strictEqual(header.target_currency, '');
+    assert.strictEqual(header.exchange_rate, 1);
   });
 });
