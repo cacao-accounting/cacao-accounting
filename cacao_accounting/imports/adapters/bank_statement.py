@@ -129,33 +129,34 @@ class BankStatementAdapter(BaseImportAdapter):
         errors = super().validate_row(row_data)
         bank_account = database.session.get(BankAccount, _text(row_data.get("bank_account_id")))
         if bank_account is None:
-            errors.append(f"Cuenta bancaria no encontrada: {row_data.get('bank_account_id')}")
+            errors.append(_("Cuenta bancaria no encontrada: %(account)s") % {"account": row_data.get("bank_account_id")})
         raw_date = row_data.get("posting_date")
         try:
             if not parse_import_date(raw_date, field="fecha bancaria"):
                 raise ValueError
         except (TypeError, ValueError):
-            errors.append(f"Fecha bancaria inválida: {raw_date}")
+            errors.append(_("Fecha bancaria inválida: %(date)s") % {"date": raw_date})
 
         amounts: dict[str, Decimal | None] = {}
+        invalid_amount = False
         for field in ("deposit", "withdrawal"):
             try:
                 amounts[field] = self._optional_amount(row_data.get(field))
             except (InvalidOperation, TypeError, ValueError) as exc:
                 amounts[field] = None
-                errors.append(f"Monto bancario inválido en columna '{field}': {row_data.get(field)} ({exc})")
+                invalid_amount = True
+                errors.append(
+                    _("Monto bancario inválido en columna '%(field)s': %(value)s (%(detail)s).")
+                    % {"field": field, "value": row_data.get(field), "detail": exc}
+                )
             else:
                 amt = amounts[field]
                 if amt is not None and amt < 0:
-                    errors.append(f"El monto bancario en columna '{field}' no puede ser negativo.")
-        if (
-            amounts["deposit"] is None
-            and amounts["withdrawal"] is None
-            and not any(f"columna '{field}'" in error for error in errors for field in ("deposit", "withdrawal"))
-        ):
-            errors.append("La fila bancaria debe contener un depósito o un retiro mayor que cero.")
+                    errors.append(_("El monto bancario en columna '%(field)s' no puede ser negativo.") % {"field": field})
+        if amounts["deposit"] is None and amounts["withdrawal"] is None and not invalid_amount:
+            errors.append(_("La fila bancaria debe contener un depósito o un retiro mayor que cero."))
         if amounts["deposit"] is not None and amounts["withdrawal"] is not None:
-            errors.append("Una fila bancaria no puede contener depósito y retiro simultáneamente.")
+            errors.append(_("Una fila bancaria no puede contener depósito y retiro simultáneamente."))
         return errors
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
@@ -168,15 +169,21 @@ class BankStatementAdapter(BaseImportAdapter):
             bank_account = database.session.get(BankAccount, _text(row.get("bank_account_id")))
             if bank_account and bank_account.company != company_id:
                 errors.append(
-                    f"La cuenta bancaria {bank_account.id} pertenece a la compañía "
-                    f"{bank_account.company}, no a {company_id}."
+                    _("La cuenta bancaria %(bank_account_id)s pertenece a la compañía %(bank_company)s, no a %(company_id)s.")
+                    % {
+                        "bank_account_id": bank_account.id,
+                        "bank_company": bank_account.company,
+                        "company_id": company_id,
+                    }
                 )
             try:
                 posting_date = parse_import_date(row.get("posting_date"), field="fecha bancaria")
             except (TypeError, ValueError):
                 continue
             if not is_period_open(company_id, posting_date):
-                errors.append(f"El periodo contable para la fecha {posting_date} está cerrado o no existe.")
+                errors.append(
+                    _("El periodo contable para la fecha %(date)s está cerrado o no existe.") % {"date": posting_date}
+                )
         return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:

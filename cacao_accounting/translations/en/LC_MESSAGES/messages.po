@@ -18534,6 +18534,20 @@ msgstr "The bank amount cannot be negative."
 msgid "El monto bancario excede la precisión exacta de 11 dígitos enteros."
 msgstr "The bank amount exceeds the exact precision of 11 integer digits."
 
+#: cacao_accounting/imports/adapters/bank_statement.py
+#, python-format
+msgid "Monto bancario inválido en columna '%(field)s': %(value)s (%(detail)s)."
+msgstr "Invalid bank amount in column '%(field)s': %(value)s (%(detail)s)."
+
+#: cacao_accounting/imports/adapters/bank_statement.py
+#, python-format
+msgid "El monto bancario en columna '%(field)s' no puede ser negativo."
+msgstr "The bank amount in column '%(field)s' cannot be negative."
+
+#: cacao_accounting/imports/adapters/bank_statement.py
+msgid "La fila bancaria debe contener un depósito o un retiro mayor que cero."
+msgstr "The bank row must contain a deposit or a withdrawal greater than zero."
+
 #: cacao_accounting/imports/adapters/bank_statement.py:152
 msgid "Una fila bancaria no puede contener depósito y retiro simultáneamente."
 msgstr "A bank row cannot contain a deposit and withdrawal simultaneously."
