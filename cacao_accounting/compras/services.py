@@ -1491,6 +1491,23 @@ def _validate_purchase_order_sourcing(
     return True
 
 
+def _award_status_allows_edit(award: PurchaseQuotationAward, current_order_id: str | None) -> bool:
+    """Allow a used award only while editing the order it originally generated."""
+    if award.status == "finalized":
+        return True
+    if award.status != "used" or not current_order_id:
+        return False
+    return (
+        database.session.execute(
+            database.select(PurchaseOrder.id).where(
+                PurchaseOrder.id == current_order_id,
+                PurchaseOrder.purchase_award_id == award.id,
+            )
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
 def _validate_purchase_order_award(
     award_id: str | None,
     company: str | None,
@@ -1500,9 +1517,9 @@ def _validate_purchase_order_award(
     form: Any = None,
     current_order_id: str | None = None,
 ) -> Any:
-    """Load a finalized award and verify company, source, supplier and lines."""
+    """Load an applicable award and verify company, source, supplier and lines."""
     award = database.session.get(PurchaseQuotationAward, award_id) if award_id else None
-    if award_id and (not award or award.status != "finalized"):
+    if award_id and (not award or not _award_status_allows_edit(award, current_order_id)):
         flash_error(PurchaseSourcingError(_("La adjudicación seleccionada no es válida.")))
         return None, False
     if award and award.company != company:
@@ -1522,7 +1539,7 @@ def _validate_purchase_order_award(
         database.session.rollback()
         flash_error(DocumentFlowError(_("Otra orden está usando esta adjudicación. Intente nuevamente."), 409))
         return None, False
-    if not _award_still_valid(award, company, source):
+    if not _award_still_valid(award, company, source, current_order_id):
         flash_error(PurchaseSourcingError(_("La adjudicación seleccionada no es válida.")))
         return None, False
     try:
@@ -1540,10 +1557,18 @@ def _validate_purchase_order_award(
     return award, True
 
 
-def _award_still_valid(award: PurchaseQuotationAward | None, company: str | None, source: Any) -> bool:
+def _award_still_valid(
+    award: PurchaseQuotationAward | None,
+    company: str | None,
+    source: Any,
+    current_order_id: str | None = None,
+) -> bool:
     """Recheck the reloaded award before any quantity is accepted."""
     return bool(
-        award is not None and award.status == "finalized" and award.company == company and _award_matches_source(award, source)
+        award is not None
+        and _award_status_allows_edit(award, current_order_id)
+        and award.company == company
+        and _award_matches_source(award, source)
     )
 
 
@@ -1792,13 +1817,13 @@ def _purchase_order_context(form: dict):
     source = _purchase_order_source(form)
     if not _validate_purchase_order_sourcing(sourcing_config, source, award_id, exception_reason):
         return None
-    award, valid_award = _validate_purchase_order_award(
+    valid_award = _validate_purchase_order_award(
         award_id,
         form.get("company") or None,
         source=source,
         supplier_id=form.get("supplier_id") or None,
         form=form,
-    )
+    )[1]
     if not valid_award:
         return None
     supplier_id = form.get("supplier_id") or None
@@ -1905,14 +1930,14 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     source = None
     if registro.purchase_award_id:
         source = _purchase_order_edit_source(registro)
-        award, valid_award = _validate_purchase_order_award(
+        valid_award = _validate_purchase_order_award(
             registro.purchase_award_id,
             registro.company,
             source=source,
             supplier_id=request.form.get("supplier_id") or None,
             form=request.form,
             current_order_id=registro.id,
-        )
+        )[1]
         if not valid_award:
             return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
     revert_relations_for_target("purchase_order", registro.id, reason="draft_edited")

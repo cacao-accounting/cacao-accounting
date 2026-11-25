@@ -29,6 +29,7 @@ from cacao_accounting.compras.services import (
 )
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
+    AuditTrail,
     CompanyParty,
     DocumentRelation,
     Currency,
@@ -1023,3 +1024,70 @@ def test_edicion_no_duplica_cantidad_con_alias_de_linea(adjudicaciones, monkeypa
 
     assert _linea_orden(application, orden_id).id == linea_id
     assert _relaciones_de_orden(application, orden_id) == relaciones
+
+
+def test_orden_generada_desde_adjudicacion_usada_se_edita_por_http(adjudicaciones, monkeypatch):
+    """#2135: una orden creada desde el award sigue editable cuando este pasa a used."""
+    application, ids = adjudicaciones
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    monkeypatch.setattr(compras_services, "log_create", lambda *args, **kwargs: None)
+    with application.app_context():
+        award = database.session.get(PurchaseQuotationAward, ids["award"])
+        ordenes = compras_services._create_purchase_orders_from_award(award)
+        database.session.commit()
+        assert award.status == "used"
+        orden = next(item for item in ordenes if item.supplier_id == ids["proveedor_a"])
+        orden_id = orden.id
+        award_id = orden.purchase_award_id
+        cantidad = orden.total_qty
+
+    client = application.test_client()
+    with client.session_transaction() as sesion:
+        sesion["_user_id"] = ids["user"]
+        sesion["_fresh"] = True
+    form = _form_orden(ids, qty_0="5", remarks="Editada por HTTP")
+    respuesta = client.post(f"/buying/purchase-order/{orden_id}/edit", data=form)
+
+    assert respuesta.status_code == 302, respuesta.get_data(as_text=True)[:500]
+    with application.app_context():
+        orden = database.session.get(PurchaseOrder, orden_id)
+        assert orden.purchase_award_id == award_id
+        assert orden.remarks == "Editada por HTTP"
+        assert orden.total_qty == cantidad
+        auditoria = (
+            database.session.execute(database.select(AuditTrail).filter_by(document_id=orden_id, action="updated"))
+            .scalars()
+            .all()
+        )
+        assert len(auditoria) == 1
+
+
+def test_adjudicacion_usada_sigue_rechazando_nueva_orden_manual(adjudicaciones, monkeypatch):
+    """#2135: permitir editar la orden generada no habilita altas desde el award usado."""
+    application, ids = adjudicaciones
+    monkeypatch.setattr(compras_services, "assign_document_identifier", lambda **kwargs: None)
+    monkeypatch.setattr(compras_services, "log_create", lambda *args, **kwargs: None)
+    with application.app_context():
+        award = database.session.get(PurchaseQuotationAward, ids["award"])
+        ordenes_generadas = len(compras_services._create_purchase_orders_from_award(award))
+        database.session.commit()
+        database.session.remove()
+
+    from flask import get_flashed_messages
+    from flask_login import login_user
+
+    form = _form_orden(ids, qty_0="1")
+    with application.test_request_context("/buying/purchase-order/new", method="POST", data=form):
+        login_user(database.session.get(User, ids["user"]))
+        resultado = _create_purchase_order_from_request(form)
+        mensajes = list(get_flashed_messages())
+
+    assert resultado is None
+    assert "La adjudicación seleccionada no es válida." in mensajes
+    with application.app_context():
+        ordenes = (
+            database.session.execute(database.select(PurchaseOrder).where(PurchaseOrder.company == ids["company"]))
+            .scalars()
+            .all()
+        )
+        assert len(ordenes) == ordenes_generadas
