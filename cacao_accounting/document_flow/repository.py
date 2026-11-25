@@ -107,6 +107,7 @@ def iter_active_relations_for_source(
     *,
     exclude_draft_targets: bool = False,
     include_target_id: str | None = None,
+    for_update: bool = False,
 ) -> list[DocumentRelation]:
     """Devuelve relaciones cuyo target no esta cancelado.
 
@@ -114,7 +115,10 @@ def iter_active_relations_for_source(
     validaciones de submit y la trazabilidad. Con ``exclude_draft_targets``
     se omiten los destinos en borrador (docstatus=0) salvo el documento
     identificado por ``include_target_id``, evitando que borradores
-    abandonados consuman la disponibilidad del origen.
+    abandonados consuman la disponibilidad del origen. Con ``for_update``
+    las filas se releen bajo lock y en orden determinista: en motores con
+    aislamiento repetible esto impide validar contra una instantánea anterior
+    al commit de otra transacción (#2098).
     """
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type) if target_type else None
@@ -127,6 +131,9 @@ def iter_active_relations_for_source(
     )
     if target_key:
         query = query.filter_by(target_type=target_key)
+    query = query.order_by(DocumentRelation.id)
+    if for_update:
+        query = query.with_for_update().execution_options(populate_existing=True)
 
     active: list[DocumentRelation] = []
     relations = database.session.execute(query).scalars().all()
@@ -141,11 +148,12 @@ def iter_active_relations_for_source(
 
     for tt, target_ids in ids_by_type.items():
         spec = get_document_type(tt)
-        docs = (
-            database.session.execute(database.select(spec.header_model).where(spec.header_model.id.in_(target_ids)))
-            .scalars()
-            .all()
+        target_query = (
+            database.select(spec.header_model).where(spec.header_model.id.in_(target_ids)).order_by(spec.header_model.id)
         )
+        if for_update:
+            target_query = target_query.with_for_update().execution_options(populate_existing=True)
+        docs = database.session.execute(target_query).scalars().all()
         for doc in docs:
             targets_by_type_id[(tt, doc.id)] = doc
 
@@ -167,6 +175,7 @@ def consumed_qty_for_source(
     *,
     exclude_draft_targets: bool = False,
     include_target_id: str | None = None,
+    for_update: bool = False,
 ) -> Decimal:
     """Suma la cantidad consumida por relaciones activas.
 
@@ -174,6 +183,7 @@ def consumed_qty_for_source(
     una unidad común y no mutar evidencia durante consultas. Con
     ``exclude_draft_targets`` no se
     consumen destinos en borrador salvo el indicado por ``include_target_id``.
+    ``for_update`` relee bajo lock las relaciones y sus destinos (#2098).
     """
 
     def relation_qty_in_base(relation: DocumentRelation) -> Decimal:
@@ -194,6 +204,7 @@ def consumed_qty_for_source(
         target_type,
         exclude_draft_targets=exclude_draft_targets,
         include_target_id=include_target_id,
+        for_update=for_update,
     )
     consumed = sum((relation_qty_in_base(relation) for relation in relations), Decimal("0"))
 

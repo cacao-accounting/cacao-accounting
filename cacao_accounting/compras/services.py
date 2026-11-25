@@ -2322,7 +2322,9 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
         _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
         # #2098: serializar la validación contra la OC y sus líneas: sin
         # bloqueo, dos recepciones concurrentes leen consumo 0 y exceden la
-        # cantidad ordenada del mismo ítem.
+        # cantidad ordenada del mismo ítem. En MySQL REPEATABLE READ el
+        # consumo además se relee bajo lock para no usar la instantánea
+        # anterior al commit rival.
         database.session.execute(
             database.select(PurchaseOrder)
             .filter_by(id=receipt.purchase_order_id)
@@ -2358,6 +2360,7 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
             "purchase_receipt",
             exclude_draft_targets=True,
             include_target_id=receipt_id,
+            for_update=True,
         )
         ordered = source_qty_in_base_uom(po_item)
         if consumed > ordered:
