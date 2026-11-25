@@ -237,6 +237,31 @@ def test_orden_parcial_no_cierra_la_solicitud(request_order_scene):
         assert purchase_request_is_ready_to_close(solicitud) is False
 
 
+@pytest.mark.parametrize(("cantidad", "estado_esperado"), [("4", "open"), ("10", "closed")])
+def test_ruta_cierre_solicitud_revalida_pendiente(request_order_scene, cantidad, estado_esperado):
+    """El POST de cierre solo marca closed cuando la cantidad queda cubierta."""
+    application, ids = request_order_scene
+    _agregar_orden(application, ids, cantidad)
+
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-request/{ids['request']}/close")
+
+    assert respuesta.status_code == 302
+    with application.app_context():
+        assert database.session.get(PurchaseRequest, ids["request"]).status == estado_esperado
+
+
+def test_ruta_cierre_solicitud_rechaza_comparativo_sin_orden(request_order_scene):
+    """Un comparativo finalizado sin orden no permite cerrar por POST."""
+    application, ids = request_order_scene
+    _agregar_comparativo_finalizado(application, ids)
+
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-request/{ids['request']}/close")
+
+    assert respuesta.status_code == 302
+    with application.app_context():
+        assert database.session.get(PurchaseRequest, ids["request"]).status == "open"
+
+
 def test_ruta_cancelar_rechaza_oc_de_solicitud_cerrada(request_order_scene):
     """El POST de cancelación no revierte una OC que cubre una SC cerrada."""
     application, ids = request_order_scene
