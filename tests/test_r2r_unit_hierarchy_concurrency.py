@@ -23,7 +23,7 @@ from sqlalchemy import create_engine, text
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Currency, Entity, Unit, database, helpers
-from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids
+from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids, update_hierarchy_attributes
 
 pytestmark = pytest.mark.database
 
@@ -271,6 +271,99 @@ def test_las_anclas_se_bloquean_antes_que_los_nodos(monkeypatch):
         with bootstrap_engine.begin() as connection:
             connection.execute(text(f'DROP SCHEMA "{schema_name}" CASCADE'))
         bootstrap_engine.dispose()
+
+
+def test_actualizacion_ve_hija_confirmada_despues_del_snapshot_mysql():
+    """MySQL REPEATABLE READ: el hijo confirmado tras el snapshot recibe nivel/path."""
+    uri = str(configuracion.get("SQLALCHEMY_DATABASE_URI", ""))
+    if not uri.startswith(("mysql", "mariadb")):
+        pytest.skip("Este caso valida el snapshot REPEATABLE READ de MySQL/MariaDB.")
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
+
+    app = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": uri,
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    sufijo = uuid4().hex[:6].upper()
+    company_code = f"M{sufijo}"
+    currency_code = f"M{sufijo}"
+    root_code = f"R{sufijo}"
+    child_code = f"H{sufijo}"
+    snapshot_ready = Event()
+    child_committed = Event()
+    ids: dict[str, str] = {}
+    try:
+        with app.app_context():
+            database.create_all()
+            database.session.add(Currency(code=currency_code, name="Moneda snapshot", decimals=2, active=True, default=False))
+            database.session.add(
+                Entity(
+                    code=company_code,
+                    name=f"Empresa snapshot {sufijo}",
+                    company_name=f"Empresa snapshot {sufijo} SA",
+                    tax_id=f"M{sufijo}",
+                    currency=currency_code,
+                    enabled=True,
+                    status="activo",
+                )
+            )
+            database.session.flush()
+            root = Unit(entity=company_code, code=root_code, name="Raíz", enabled=True)
+            database.session.add(root)
+            database.session.commit()
+            ids["root"] = str(root.id)
+
+        def parent_update() -> None:
+            with app.app_context():
+                try:
+                    root = database.session.get(Unit, ids["root"])
+                    assert root is not None
+                    snapshot_ready.set()
+                    assert child_committed.wait(timeout=20)
+                    update_hierarchy_attributes(root)
+                    database.session.commit()
+                finally:
+                    database.session.remove()
+
+        def child_insert() -> None:
+            assert snapshot_ready.wait(timeout=20)
+            with app.app_context():
+                try:
+                    database.session.add(
+                        Unit(entity=company_code, code=child_code, name="Hija", enabled=True, parent_id=ids["root"])
+                    )
+                    database.session.commit()
+                    child_committed.set()
+                finally:
+                    database.session.remove()
+
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            update_future = workers.submit(parent_update)
+            child_future = workers.submit(child_insert)
+            update_future.result(timeout=30)
+            child_future.result(timeout=30)
+
+        with app.app_context():
+            child = database.session.execute(database.select(Unit).filter_by(code=child_code)).scalar_one()
+            assert child.level == 1
+            assert child.path == "Raíz / Hija"
+    finally:
+        child_committed.set()
+        with app.app_context():
+            database.session.rollback()
+            database.session.execute(database.delete(Unit).filter_by(code=child_code))
+            database.session.execute(database.delete(Unit).filter_by(code=root_code))
+            database.session.execute(database.delete(Entity).filter_by(code=company_code))
+            database.session.execute(database.delete(Currency).filter_by(code=currency_code))
+            database.session.commit()
+            database.session.remove()
+            database.engine.dispose()
 
 
 def test_la_enumeracion_de_descendientes_usa_lectura_bloqueante(app, monkeypatch):
