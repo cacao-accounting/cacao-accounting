@@ -353,6 +353,7 @@
       const columnsList = resolveColumnsList(config);
       const flowLockedFields = resolveFlowLockedFields(config);
       const catalogPriceRequestIds = new WeakMap();
+      const catalogPriceApplied = new WeakMap();
       let catalogPriceRequestSequence = 0;
       let taxPreviewRequestId = 0;
       let sourceRequestSequence = 0;
@@ -443,7 +444,7 @@
           this.lines = (config.initialLines || []).map(normalizeLineWithCb(this));
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
           if (typeof this.$watch === 'function') {
-            const pricingFields = new Set(['company', 'party', 'posting_date']);
+            const pricingFields = new Set(['company', 'party', 'currency', 'posting_date']);
             const fiscalFields = ['company', 'currency', 'posting_date', 'party_type', 'party', 'purpose', 'payment_type'];
             for (const field of fiscalFields) {
               this.$watch(`header.${field}`, () => {
@@ -712,11 +713,21 @@
 
         onRateInput(line) {
           this._invalidateCatalogPriceRequest(line);
+          catalogPriceApplied.delete(line);
           this.calcAmount(line);
         },
 
         _invalidateCatalogPriceRequest(line) {
           catalogPriceRequestIds.set(line, ++catalogPriceRequestSequence);
+        },
+
+        _clearStaleCatalogPrice(line, signature) {
+          const applied = catalogPriceApplied.get(line);
+          if (!applied || applied.signature === signature || toNumber(line.rate) !== applied.rate) return;
+          line.rate = 0;
+          line.price_list_name = '';
+          catalogPriceApplied.delete(line);
+          this.calcAmount(line);
         },
 
         async refreshCatalogPrice(line) {
@@ -733,13 +744,17 @@
             posting_date: this.header.posting_date || '',
           });
           const requestedContext = getPricingContext();
+          const signature = JSON.stringify(requestedContext);
+          // Un precio de otra moneda (o fecha, cantidad, UOM, etc.) no debe
+          // permanecer en la línea si la nueva consulta falla o no responde.
+          this._clearStaleCatalogPrice(line, signature);
           const params = new URLSearchParams(requestedContext);
           try {
             const response = await fetch(`/api/sales/catalog-price?${params.toString()}`, { credentials: 'same-origin' });
             const payload = await response.json();
             if (
               requestId !== catalogPriceRequestIds.get(line) ||
-              JSON.stringify(getPricingContext()) !== JSON.stringify(requestedContext) ||
+              JSON.stringify(getPricingContext()) !== signature ||
               line.source_item_id ||
               !response.ok ||
               (payload.transaction_currency && payload.transaction_currency !== requestedContext.currency)
@@ -747,11 +762,13 @@
             if (payload.price === null) {
               line.rate = 0;
               line.price_list_name = '';
+              catalogPriceApplied.delete(line);
               this.calcAmount(line);
               return;
             }
             line.rate = toNumber(payload.price);
             line.price_list_name = payload.price_list_name || '';
+            catalogPriceApplied.set(line, { signature, rate: line.rate });
             this.calcAmount(line);
           } catch (err) {
             console.warn('transactionForm catalog price lookup failed', err);

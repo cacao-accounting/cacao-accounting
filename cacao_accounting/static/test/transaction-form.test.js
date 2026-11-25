@@ -853,6 +853,125 @@ describe('transaction-form', function () {
     assert.strictEqual(new URL(urls[1], 'http://localhost').searchParams.get('currency'), 'EUR');
   });
 
+  it('refreshes catalog prices and clears the previous currency rate when the currency changes', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    const urls = [];
+    globalThis.fetch = (url) => {
+      urls.push(url);
+      return requests.shift().promise;
+    };
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 0 }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+    const line = component.lines[0];
+
+    assert.strictEqual(typeof watchers['header.currency'], 'function');
+    const initialLookup = component.refreshCatalogPrice(line);
+    oldRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '100', price_list_name: 'USD list', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+    });
+    await initialLookup;
+    assert.strictEqual(line.rate, 100);
+
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    assert.strictEqual(line.rate, 0);
+    assert.strictEqual(line.price_list_name, '');
+
+    newRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '92', price_list_name: 'EUR list', price_list_currency: 'USD', transaction_currency: 'EUR', exchange_rate: '0.92' }),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(line.rate, 92);
+    assert.strictEqual(line.price_list_name, 'EUR list');
+    assert.strictEqual(new URL(urls[0], 'http://localhost').searchParams.get('currency'), 'USD');
+    assert.strictEqual(new URL(urls[1], 'http://localhost').searchParams.get('currency'), 'EUR');
+  });
+
+  it('does not keep a catalog rate when the new currency has no exchange rate', async function () {
+    const responses = [
+      {
+        ok: true,
+        json: () => Promise.resolve({ price: '100', price_list_name: 'USD list', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+      },
+      { ok: false, json: () => Promise.resolve({ error: 'No hay tasa de cambio vigente para la fecha.' }) },
+    ];
+    globalThis.fetch = () => responses.shift();
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 0 }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+    const line = component.lines[0];
+
+    await component.refreshCatalogPrice(line);
+    assert.strictEqual(line.rate, 100);
+
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(line.rate, 0);
+    assert.strictEqual(line.price_list_name, '');
+  });
+
+  it('keeps a manually edited rate when the catalog lookup for a new currency is pending', async function () {
+    const responses = [
+      {
+        ok: true,
+        json: () => Promise.resolve({ price: '100', price_list_name: 'USD list', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+      },
+    ];
+    const pending = deferred();
+    globalThis.fetch = () => responses.shift() || pending.promise;
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+      initialLines: [{ item_code: 'ITEM-001', item_name: 'Cacao', qty: 1, uom: 'EA', rate: 0 }],
+    });
+    const watchers = {};
+    component.$watch = (expression, callback) => {
+      watchers[expression] = callback;
+    };
+    component.init();
+    const line = component.lines[0];
+
+    await component.refreshCatalogPrice(line);
+    line.rate = 75;
+    component.onRateInput(line);
+    component.header.currency = 'EUR';
+    watchers['header.currency']();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(line.rate, 75);
+  });
+
   it('refreshes the sales catalog price when the line UOM changes', async function () {
     let requestUrl = '';
     globalThis.fetch = async (url) => {
