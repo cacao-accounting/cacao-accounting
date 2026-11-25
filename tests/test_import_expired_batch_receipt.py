@@ -9,6 +9,8 @@ import csv
 from datetime import date
 from uuid import uuid4
 
+import pytest
+
 from cacao_accounting.database import Batch, Item, Party, PurchaseReceipt, PurchaseReceiptItem, User, database
 from cacao_accounting.imports.adapters.transaction_documents import PurchaseReceiptAdapter
 from cacao_accounting.imports.models import ImportBatch, ImportBatchError
@@ -113,8 +115,9 @@ def _archivo_y_lote(app, tmp_path, *, sufijo: str, fecha: date, numero_lote: str
         return lote.id
 
 
-def test_el_flujo_de_importacion_no_crea_borrador_con_lote_vencido(entorno_contable_aislado, tmp_path):
-    """La fecha igual al vencimiento se rechaza antes de persistir la recepción."""
+@pytest.mark.parametrize("fecha", [date(2026, 5, 20), date(2026, 5, 21)])
+def test_el_flujo_de_importacion_no_crea_borrador_con_lote_vencido(entorno_contable_aislado, tmp_path, fecha):
+    """La fecha igual o posterior al vencimiento se rechaza antes de persistir la recepción."""
     app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:6]
     numero_lote = f"LOTE-{sufijo}"
@@ -126,7 +129,7 @@ def test_el_flujo_de_importacion_no_crea_borrador_con_lote_vencido(entorno_conta
         database.session.add(Batch(item_code="ART01", batch_no=numero_lote, expiry_date=date(2026, 5, 20), is_active=True))
         database.session.commit()
 
-    lote_id = _archivo_y_lote(app, tmp_path, sufijo=sufijo, fecha=date(2026, 5, 21), numero_lote=numero_lote)
+    lote_id = _archivo_y_lote(app, tmp_path, sufijo=sufijo, fecha=fecha, numero_lote=numero_lote)
     with app.app_context():
         assert ImportService().execute(lote_id) is True
         database.session.expire_all()
