@@ -108,3 +108,89 @@ def test_kardex_sin_movimientos_previos_parte_de_cero(kardex_entorno):
         reporte = get_kardex(KardexFilters(company="cacao", date_from=date(2025, 12, 1), date_to=date(2026, 1, 1)))
 
     assert [fila.values["balance_qty"] for fila in reporte.rows] == [Decimal("10")]
+
+
+def _sembrar_reversa(entorno, fecha_original: date, fecha_reversa: date) -> str:
+    """Registra un movimiento de diciembre y su reversa en enero sobre el mismo voucher."""
+    with entorno.app_context():
+        database.session.add(
+            Item(code="ART-2263", name="Reversa interperiodo", item_type="goods", is_stock_item=True, default_uom="UND")
+        )
+        database.session.add(Warehouse(code="BOD-2263", name="Bodega reversa", company="cacao"))
+        database.session.flush()
+        original = StockLedgerEntry(
+            posting_date=fecha_original,
+            company="cacao",
+            item_code="ART-2263",
+            warehouse="BOD-2263",
+            qty_change=Decimal("10"),
+            stock_value_difference=Decimal("100"),
+            voucher_type="stock_entry",
+            voucher_id="SLE-2263",
+            is_cancelled=True,
+        )
+        database.session.add(original)
+        database.session.flush()
+        database.session.add(
+            StockLedgerEntry(
+                posting_date=fecha_reversa,
+                company="cacao",
+                item_code="ART-2263",
+                warehouse="BOD-2263",
+                qty_change=Decimal("-10"),
+                stock_value_difference=Decimal("-100"),
+                voucher_type="stock_entry",
+                voucher_id="SLE-2263",
+                is_reversal=True,
+                reversal_of=original.id,
+            )
+        )
+        database.session.commit()
+        return str(original.id)
+
+
+def _filtros_2263(fecha_desde: date, fecha_hasta: date) -> KardexFilters:
+    return KardexFilters(
+        company="cacao",
+        item_code="ART-2263",
+        warehouse="BOD-2263",
+        date_from=fecha_desde,
+        date_to=fecha_hasta,
+    )
+
+
+def test_kardex_conserva_el_movimiento_original_en_su_corte(kardex_entorno):
+    """#2263: la reversa de enero no borra la entrada real de diciembre."""
+    _sembrar_reversa(kardex_entorno, date(2025, 12, 31), date(2026, 1, 5))
+
+    with kardex_entorno.app_context():
+        reporte = get_kardex(_filtros_2263(date(2025, 12, 1), date(2025, 12, 31)))
+
+    assert len(reporte.rows) == 1
+    assert reporte.rows[0].values["incoming_qty"] == Decimal("10")
+    assert reporte.rows[0].values["balance_qty"] == Decimal("10")
+    assert reporte.rows[0].values["stock_value"] == Decimal("100")
+
+
+def test_kardex_muestra_la_reversa_en_el_periodo_en_que_se_registro(kardex_entorno):
+    """El saldo de enero parte de 10 y la reversa lo devuelve a cero."""
+    _sembrar_reversa(kardex_entorno, date(2025, 12, 31), date(2026, 1, 5))
+
+    with kardex_entorno.app_context():
+        reporte = get_kardex(_filtros_2263(date(2026, 1, 1), date(2026, 1, 31)))
+
+    assert len(reporte.rows) == 1
+    fila = reporte.rows[0].values
+    assert fila["outgoing_qty"] == Decimal("10")
+    assert fila["balance_qty"] == Decimal("0")
+    assert fila["stock_value"] == Decimal("0")
+
+
+def test_kardex_excluye_anulacion_del_mismo_dia(kardex_entorno):
+    """Una anulación sin efecto neto sigue sin aparecer en el Kardex."""
+    _sembrar_reversa(kardex_entorno, date(2025, 12, 31), date(2025, 12, 31))
+
+    with kardex_entorno.app_context():
+        reporte = get_kardex(_filtros_2263(date(2025, 12, 1), date(2025, 12, 31)))
+
+    assert reporte.rows == []

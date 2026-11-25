@@ -1171,7 +1171,8 @@ def _kardex_opening_balance(
             StockLedgerEntry.warehouse,
             func.sum(StockLedgerEntry.qty_change),
             func.sum(StockLedgerEntry.stock_value_difference),
-        ).filter_by(company=filters.company)
+        ).filter_by(company=filters.company),
+        include_interperiod_reversals=True,
     )
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
@@ -1189,7 +1190,10 @@ def _kardex_opening_balance(
 def get_kardex(filters: KardexFilters) -> PaginatedReport:
     """Devuelve Kardex desde StockLedgerEntry."""
     window_start, window_end = _report_window(filters)
-    query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
+    query = exclude_cancelled_stock_entries(
+        select(StockLedgerEntry).filter_by(company=filters.company),
+        include_interperiod_reversals=True,
+    )
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
@@ -1266,7 +1270,10 @@ def get_inventory_existence(filters: KardexFilters) -> PaginatedReport:
     """Devuelve existencias de inventario a una fecha clave desde stock ledger."""
     _, window_end = _report_window(filters)
     as_of_date = filters.date_to or filters.date_from or window_end
-    query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
+    query = exclude_cancelled_stock_entries(
+        select(StockLedgerEntry).filter_by(company=filters.company),
+        include_interperiod_reversals=True,
+    )
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
