@@ -380,11 +380,12 @@ class BudgetService:
                 cc = database.session.query(CostCenter).filter_by(code=cp.default_cost_center, entity=company).first()
                 if cc:
                     return cc
-        cc = database.session.query(CostCenter).filter_by(entity=company, default=True).first()
-        if cc:
-            return cc
-        cc = database.session.query(CostCenter).filter_by(entity=company, code="MAIN").first()
-        return cc
+        consulta = database.session.query(CostCenter).filter_by(entity=company, group=False, active=True, enabled=True)
+        canonical = consulta.filter_by(code="MAIN").first()
+        if canonical:
+            return canonical
+        # Compatibilidad con bases que aún conservan otro default posteable.
+        return consulta.filter_by(default=True).order_by(CostCenter.code).first()
 
     @staticmethod
     def _no_budget_result(amount: Decimal) -> Dict[str, Any]:

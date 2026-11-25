@@ -242,11 +242,15 @@ def _make_cuentas() -> tuple:
 
 
 def _make_centros_de_costos() -> tuple:
-    """Crea instancias frescas de Centros de Costos."""
+    """Crea instancias frescas de Centros de Costos.
+
+    El centro predeterminado canónico es MAIN, creado por el seed de compañía.
+    Los centros demo no marcan ``default`` para no resolver implícitamente a un
+    agrupador ni dejar varias opciones igualmente válidas por entidad.
+    """
     return (
         CostCenter(
             active=True,
-            default=True,
             enabled=True,
             entity="CACAO",
             group=False,
@@ -256,7 +260,6 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            default=True,
             enabled=True,
             entity="CACAO",
             group=True,
@@ -266,7 +269,6 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            default=True,
             enabled=True,
             entity="CACAO",
             group=True,
@@ -277,7 +279,6 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            default=True,
             enabled=True,
             entity="CACAO",
             group=True,
@@ -288,7 +289,6 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            default=True,
             enabled=True,
             entity="CACAO",
             group=True,
@@ -299,7 +299,6 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            default=True,
             enabled=True,
             entity="CACAO",
             group=True,
@@ -310,7 +309,6 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            default=True,
             enabled=True,
             entity="CACAO",
             group=False,
@@ -345,7 +343,6 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            default=True,
             enabled=True,
             entity="CAFE",
             group=False,
@@ -355,7 +352,6 @@ def _make_centros_de_costos() -> tuple:
         ),
         CostCenter(
             active=True,
-            default=True,
             enabled=True,
             entity="DULCE",
             group=False,
