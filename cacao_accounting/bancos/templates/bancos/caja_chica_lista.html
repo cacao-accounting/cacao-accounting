@@ -18,7 +18,7 @@
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
     <h5 class="ca-card-title"><i class="bi bi-cash-coin"></i> {{ _('Cajas Chicas') }}</h5>
-    {% if acceso.crear %}
+    {% if acceso.crear and creatable_companies %}
     <a href="{{ url_for('bancos.caja_chica_nuevo') }}" class="btn btn-sm btn-primary">
       <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>

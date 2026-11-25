@@ -231,6 +231,17 @@ def _cash_can_edit(company: str | None) -> bool:
     return bool(permissions.editar and permissions.tiene_acceso_compania(company))
 
 
+def _cash_creatable_companies() -> list[str]:
+    """Devuelve las compañías donde el usuario puede crear registros de caja."""
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("cash"),
+        usuario=current_user.id,
+    )
+    if not permissions.crear:
+        return []
+    return permissions.obtener_companias_autorizadas()
+
+
 from cacao_accounting.bancos import cash_forecast as _cf  # noqa: F401, E402
 
 
@@ -275,7 +286,12 @@ def bancos_cuenta_bancaria_lista():
         include_status=False,
     )
     titulo = _("Listado de Cuentas Bancarias") + " - " + APPNAME
-    return render_template("bancos/banco_cuenta_lista.html", consulta=consulta, titulo=titulo)
+    return render_template(
+        "bancos/banco_cuenta_lista.html",
+        consulta=consulta,
+        creatable_companies=_cash_creatable_companies(),
+        titulo=titulo,
+    )
 
 
 @bancos.route("/payment/list")
@@ -953,6 +969,8 @@ def bancos_cuenta_bancaria_nuevo():
             formulario.company.choices.append((submitted_company, company_record.name or submitted_company))
     formulario.currency.choices = [("", "")] + obtener_lista_monedas_activas()
     selected_company = request.values.get("company") or None
+    if selected_company:
+        exige_acceso_compania("cash", selected_company, "crear")
     formulario.gl_account_id.choices = [("", "")] + [
         (str(account.id), f"{account.code} - {account.name}")
         for account in database.session.execute(
@@ -1176,6 +1194,7 @@ def caja_chica_lista():
         esperados=esperados,
         pendientes=pendientes,
         responsables=responsables,
+        creatable_companies=_cash_creatable_companies(),
         titulo=titulo,
     )
 
@@ -1354,7 +1373,12 @@ def caja_chica_vale_lista():
     for company in companies:
         registros.extend(petty_cash_vouchers(company))
     titulo = _("Listado de Vales de Caja Chica") + " - " + APPNAME
-    return render_template("bancos/caja_chica_vale_lista.html", registros=registros, titulo=titulo)
+    return render_template(
+        "bancos/caja_chica_vale_lista.html",
+        registros=registros,
+        creatable_companies=_cash_creatable_companies(),
+        titulo=titulo,
+    )
 
 
 @bancos.route("/petty-cash-voucher/new", methods=["GET", "POST"])
@@ -1481,7 +1505,13 @@ def caja_chica_gasto_lista():
         registros.extend(petty_cash_expenses(company))
     fondos = _petty_cash_fund_labels({registro.petty_cash_id for registro in registros if registro.petty_cash_id})
     titulo = _("Listado de Gastos de Caja Chica") + " - " + APPNAME
-    return render_template("bancos/caja_chica_gasto_lista.html", registros=registros, fondos=fondos, titulo=titulo)
+    return render_template(
+        "bancos/caja_chica_gasto_lista.html",
+        registros=registros,
+        fondos=fondos,
+        creatable_companies=_cash_creatable_companies(),
+        titulo=titulo,
+    )
 
 
 def _currency_input_step(currency_code: str | None) -> str:
