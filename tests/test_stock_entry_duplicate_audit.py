@@ -12,6 +12,9 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
+from cacao_accounting.audit_trail_service import format_document_timeline
 from cacao_accounting.database import (
     AuditTrail,
     DocumentRelation,
@@ -138,3 +141,38 @@ def test_duplicar_stock_entry_registra_creacion_con_origen(app, entorno_contable
             .all()
         )
         assert movimientos_gl == []
+
+
+@pytest.mark.parametrize("modo_escritorio", [True, False])
+def test_timeline_del_duplicado_es_visible_en_desktop_y_cloud(app, authenticated_client, monkeypatch, modo_escritorio):
+    """La vista de detalle muestra el evento created y su origen en ambos modos."""
+    origen = _seed_entry(app)
+    respuesta = authenticated_client("admin").post(f"/inventory/stock-entry/{origen['entry']}/duplicate")
+    assert respuesta.status_code == 302
+
+    with app.app_context():
+        duplicado = (
+            database.session.execute(
+                database.select(StockEntry).where(
+                    StockEntry.company == "cacao",
+                    StockEntry.remarks == origen["remarks"],
+                    StockEntry.id != origen["entry"],
+                )
+            )
+            .scalars()
+            .one()
+        )
+        duplicado_id = duplicado.id
+        monkeypatch.setitem(app.config, "MODO_ESCRITORIO", modo_escritorio)
+        timeline = format_document_timeline("stock_entry", duplicado_id)
+
+    creados = [fila["event"] for fila in timeline if fila["event"].action == "created"]
+    assert len(creados) == 1
+    assert origen["document_no"] in (creados[0].comment or "")
+    assert creados[0].actor_name or creados[0].actor_user_id
+
+    detalle = authenticated_client("admin").get(f"/inventory/stock-entry/{duplicado_id}")
+    assert detalle.status_code == 200
+    cuerpo = detalle.get_data(as_text=True)
+    assert "Historial del documento" in cuerpo
+    assert origen["document_no"] in cuerpo
