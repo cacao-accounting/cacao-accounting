@@ -8532,6 +8532,10 @@ msgstr "Configuration saved successfully."
 msgid "Error al guardar la configuracion."
 msgstr "Error saving configuration."
 
+#: cacao_accounting/bancos/templates/bancos/banco_cuenta.html:156
+msgid "Recargar"
+msgstr "Reload"
+
 #: cacao_accounting/bancos/templates/bancos/banco_cuenta_lista.html:19
 msgid "Listado de Cuentas Bancarias."
 msgstr "Bank account list."

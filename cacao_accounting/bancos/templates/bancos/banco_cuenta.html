@@ -129,6 +129,35 @@
       ></button>
     </div>
 
+    <div x-show="errorMessage" class="alert alert-danger py-2" role="alert">
+      <span x-text="errorMessage"></span>
+      <div class="d-flex gap-2 mt-2">
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          @click="dismissError"
+        >
+          {{ _('Cerrar') }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-primary btn-sm"
+          @click="save"
+          :disabled="saving"
+        >
+          <i class="bi bi-arrow-repeat me-1"></i>{{ _('Reintentar') }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          x-show="conflict"
+          @click="reload"
+        >
+          <i class="bi bi-arrow-clockwise me-1"></i>{{ _('Recargar') }}
+        </button>
+      </div>
+    </div>
+
     <table class="ca-table">
       <thead>
         <tr>
@@ -216,6 +245,8 @@
       editing: false,
       saving: false,
       savedMessage: '',
+      errorMessage: '',
+      conflict: false,
       configs: {},
       init() {
         {% for cfg in numbering_configs %}
@@ -234,8 +265,29 @@
         this.editing = false;
         this.init();
       },
+      dismissError() {
+        this.errorMessage = '';
+        this.conflict = false;
+      },
+      reload() {
+        window.location.reload();
+      },
+      async serverMessage(response) {
+        try {
+          const type = response.headers.get('content-type') || '';
+          if (!type.includes('application/json')) return '';
+          const data = await response.json();
+          return data && typeof data.message === 'string' ? data.message : '';
+        } catch (e) {
+          return '';
+        }
+      },
       async save() {
+        if (this.saving) return;
         this.saving = true;
+        this.errorMessage = '';
+        this.conflict = false;
+        this.savedMessage = '';
         try {
           const payload = Object.values(this.configs);
           const response = await fetch('{{ url_for("bancos.bancos_cuenta_bancaria_numbering_config", account_id=registro.id) }}', {
@@ -243,12 +295,16 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
             body: JSON.stringify({ configs: payload })
           });
-          if (!response.ok) throw new Error('Error al guardar');
+          if (!response.ok) {
+            this.errorMessage = (await this.serverMessage(response)) || '{{ _("Error al guardar la configuracion.") }}';
+            this.conflict = response.status === 409;
+            return;
+          }
           this.editing = false;
           this.savedMessage = '{{ _("Configuracion guardada correctamente.") }}';
           setTimeout(() => { this.savedMessage = ''; }, 3000);
         } catch (e) {
-          alert('{{ _("Error al guardar la configuracion.") }}');
+          this.errorMessage = '{{ _("Error al guardar la configuracion.") }}';
         } finally {
           this.saving = false;
         }
