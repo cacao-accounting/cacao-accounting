@@ -38,27 +38,28 @@ LIMITE = 5
 def _sembrar_confirmacion(sufijo: str, token: str, code: str) -> dict[str, str]:
     """Siembra la confirmación y la invitación que compiten por los cupos."""
     database.create_all()
-    database.session.add_all(
-        [
-            Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-            Modules(module="accounting", default=True, enabled=True),
-            Entity(
-                code="alpha",
-                name="Alfa",
-                company_name=f"Compañía Alfa {sufijo}",
-                tax_id=f"TAX-{sufijo}",
-                currency="NIO",
-                enabled=True,
-                status="default",
-            ),
-        ]
+    company_code = f"a{sufijo}"
+    if database.session.get(Currency, "NIO") is None:
+        database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+    if database.session.execute(database.select(Modules.id).filter_by(module="accounting")).scalar_one_or_none() is None:
+        database.session.add(Modules(module="accounting", default=True, enabled=True))
+    database.session.add(
+        Entity(
+            code=company_code,
+            name="Alfa",
+            company_name=f"Compañía Alfa {sufijo}",
+            tax_id=f"TAX-{sufijo}",
+            currency="NIO",
+            enabled=True,
+            status="default",
+        )
     )
     database.session.flush()
     party = Party(code=f"CLI-{sufijo}", name="Cliente", is_customer=True, is_active=True)
     database.session.add(party)
     database.session.flush()
     confirmation = BalanceConfirmation(
-        company="alpha",
+        company=company_code,
         document_no=f"BC-{sufijo}",
         party_type="customer",
         party_id=party.id,
@@ -214,7 +215,36 @@ def test_reclamo_otp_mysql_con_intercalado_determinista() -> None:
                 )
             ).scalar_one()
             assert contador == LIMITE
+
+        respuesta = application.test_client().post(
+            f"/confirm-balance/{token}/verify",
+            data={
+                "first_name": "Cliente",
+                "last_name": "Prueba",
+                "email": "cliente@example.test",
+                "code": "123456",
+                "authorized": "on",
+            },
+            follow_redirects=True,
+        )
+        assert respuesta.status_code == 200
+        assert "Se ha excedido el número de intentos permitidos" in respuesta.get_data(as_text=True)
+        with application.app_context():
+            invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+            assert invitation.status == "pending"
+            assert invitation.failed_attempts == LIMITE
     finally:
+        if "ids" in locals():
+            with application.app_context():
+                database.session.execute(
+                    database.delete(BalanceConfirmationInvitation).where(BalanceConfirmationInvitation.id == ids["invitation"])
+                )
+                database.session.execute(
+                    database.delete(BalanceConfirmation).where(BalanceConfirmation.document_no == f"BC-{sufijo}")
+                )
+                database.session.execute(database.delete(Party).where(Party.code == f"CLI-{sufijo}"))
+                database.session.execute(database.delete(Entity).where(Entity.code == f"a{sufijo}"))
+                database.session.commit()
         with application.app_context():
             database.session.remove()
             database.engine.dispose()
