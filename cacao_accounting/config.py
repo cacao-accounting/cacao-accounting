@@ -104,14 +104,17 @@ else:
 SECRET_KEY = environ.get("CACAO_SECRET_KEY") or environ.get("CACAO_KEY") or environ.get("SECRET_KEY")
 
 
-def normaliza_direccion_base_datos(uri: str) -> tuple[str, dict[str, dict[str, str]]]:
+EngineOptions = dict[str, bool | int | dict[str, str]]
+
+
+def normaliza_direccion_base_datos(uri: str) -> tuple[str, EngineOptions]:
     """Normaliza la URI de base de datos para compatibilidad entre proveedores.
 
     Las URL ``postgres://`` y ``postgresql://`` (sin driver explícito) se
     resuelven al driver ``psycopg`` (psycopg 3), que es el único soportado.
     """
     direccion = str(uri)
-    opciones_motor: dict[str, dict[str, str]] = {}
+    opciones_motor: EngineOptions = {}
 
     if direccion.startswith("postgres://"):
         direccion = direccion.replace("postgres://", "postgresql+psycopg://", 1)
@@ -158,7 +161,7 @@ def valida_direccion_base_datos(uri: str) -> bool:
             return False
 
 
-configuracion: dict[str, bool | str | int | dict[str, dict[str, str]]] = {}
+configuracion: dict[str, bool | str | int | EngineOptions] = {}
 
 DATABASE_URL_NORMALIZADA, DATABASE_ENGINE_OPTIONS = normaliza_direccion_base_datos(DATABASE_URL)
 
