@@ -11,8 +11,16 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import DeliveryNote, DocumentRelation, Party, SalesInvoice, SalesOrder, database
-from cacao_accounting.ventas.services import _approved_customer_order_exposure
+from cacao_accounting.database import (
+    CompanyParty,
+    DeliveryNote,
+    DocumentRelation,
+    Party,
+    SalesInvoice,
+    SalesOrder,
+    database,
+)
+from cacao_accounting.ventas.services import _approved_customer_order_exposure, _validate_credit_limit_and_overdue
 
 FECHA = date(2026, 5, 15)
 
@@ -23,6 +31,7 @@ def _documentos(
     document_type: str = "sales_invoice",
     por_cabecera: bool = False,
     por_entrega: bool = False,
+    docstatus: int = 1,
 ) -> tuple[str, str, str]:
     """Crea una orden y una factura del mismo cliente con importes conocidos."""
     suffix = uuid4().hex[:8]
@@ -52,7 +61,7 @@ def _documentos(
         invoice = SalesInvoice(
             company="cacao",
             posting_date=FECHA,
-            docstatus=1,
+            docstatus=docstatus,
             document_no=f"SI-EXP-{suffix}",
             customer_id=cliente.id,
             customer_name=cliente.name,
@@ -145,6 +154,26 @@ def test_factura_vinculada_por_entrega_descuenta_la_exposicion(app, entorno_cont
 
     with app.app_context():
         assert _approved_customer_order_exposure("cacao", cliente_id) == Decimal("200")
+
+
+def test_validacion_previa_descuenta_factura_actual_por_linea(app, entorno_contable):
+    """La factura en borrador no duplica la orden al validar el límite de crédito."""
+    cliente_id, order_id, invoice_id = _documentos(app, docstatus=0)
+    _relacion(app, order_id, invoice_id, "100")
+    with app.app_context():
+        database.session.add(
+            CompanyParty(
+                company="cacao",
+                party_id=cliente_id,
+                is_active=True,
+                credit_limit=Decimal("350"),
+            )
+        )
+        database.session.commit()
+        factura = database.session.get(SalesInvoice, invoice_id)
+        assert _approved_customer_order_exposure("cacao", cliente_id, factura) == Decimal("200")
+
+        _validate_credit_limit_and_overdue("cacao", cliente_id, Decimal("100"), factura)
 
 
 @pytest.mark.parametrize("document_type", ["sales_credit_note", "sales_return", "sales_debit_note"])

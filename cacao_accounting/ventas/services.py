@@ -2684,6 +2684,105 @@ def _sales_base_amount(document: Any, amount: Decimal, *, use_stored_total: bool
     return (Decimal(str(amount)) * Decimal(str(exchange_rate))).quantize(Decimal("0.0001"))
 
 
+def _current_order_id_for_exposure(current_document: Any | None) -> str | None:
+    """Resuelve la orden de la factura actual, incluso si solo está vinculada por línea."""
+    current_order_id = getattr(current_document, "sales_order_id", None)
+    current_dn_id = getattr(current_document, "delivery_note_id", None) if current_document else None
+    if not current_order_id and current_dn_id:
+        delivery_note = database.session.get(DeliveryNote, current_dn_id)
+        current_order_id = delivery_note.sales_order_id if delivery_note else None
+    current_document_id = str(getattr(current_document, "id", "") or "")
+    if current_order_id or not current_document_id:
+        return current_order_id
+    relation = (
+        database.session.execute(
+            database.select(DocumentRelation)
+            .where(
+                DocumentRelation.source_type == "sales_order",
+                DocumentRelation.target_type == "sales_invoice",
+                DocumentRelation.target_id == current_document_id,
+                DocumentRelation.status == "active",
+            )
+            .order_by(DocumentRelation.created.desc())
+        )
+        .scalars()
+        .first()
+    )
+    return relation.source_id if relation is not None else None
+
+
+def _line_linked_amounts_for_order(order_id: str) -> dict[str, Decimal]:
+    """Agrupa los importes facturados de la orden por factura enlazada por línea."""
+    rows = database.session.execute(
+        database.select(DocumentRelation.target_id, func.sum(DocumentRelation.amount))
+        .where(
+            DocumentRelation.source_type == "sales_order",
+            DocumentRelation.source_id == order_id,
+            DocumentRelation.target_type == "sales_invoice",
+            DocumentRelation.status == "active",
+        )
+        .group_by(DocumentRelation.target_id)
+    ).all()
+    return {target_id: Decimal(str(amount or 0)) for target_id, amount in rows}
+
+
+def _billed_total_for_order(
+    company: str,
+    customer_id: str,
+    order_id: str,
+    delivery_note_ids: set[str],
+    line_linked_amounts: dict[str, Decimal],
+) -> Decimal:
+    """Suma la facturación aprobada atribuible a una orden."""
+    billed_invoices = database.session.execute(
+        database.select(SalesInvoice).where(
+            SalesInvoice.company == company,
+            SalesInvoice.customer_id == customer_id,
+            SalesInvoice.docstatus == 1,
+            SalesInvoice.is_return.is_(False),
+            SalesInvoice.document_type.notin_(("sales_credit_note", "sales_return", "sales_debit_note")),
+            or_(
+                SalesInvoice.sales_order_id == order_id,
+                SalesInvoice.delivery_note_id.in_(delivery_note_ids),
+                SalesInvoice.id.in_(line_linked_amounts),
+            ),
+        )
+    ).scalars()
+    billed_total = Decimal("0")
+    for invoice in billed_invoices:
+        if invoice.sales_order_id == order_id or invoice.delivery_note_id in delivery_note_ids:
+            billed_total += _sales_base_amount(invoice, Decimal(str(invoice.grand_total or "0")))
+        else:
+            billed_total += _sales_base_amount(
+                invoice,
+                line_linked_amounts.get(invoice.id, Decimal("0")),
+                use_stored_total=False,
+            )
+    return billed_total
+
+
+def _current_document_base_amount(
+    current_document: Any | None,
+    current_document_id: str,
+    line_linked_amounts: dict[str, Decimal],
+) -> Decimal:
+    """Obtiene el importe de la factura actual que debe restarse de su orden."""
+    if current_document is None:
+        return Decimal("0")
+    has_header_link = bool(getattr(current_document, "sales_order_id", None))
+    has_delivery_link = bool(getattr(current_document, "delivery_note_id", None))
+    if current_document_id in line_linked_amounts and not has_header_link and not has_delivery_link:
+        return _sales_base_amount(
+            current_document,
+            line_linked_amounts[current_document_id],
+            use_stored_total=False,
+        )
+    return _sales_base_amount(
+        current_document,
+        Decimal(str(getattr(current_document, "grand_total", 0) or 0)),
+    )
+
+
 def _approved_customer_order_exposure(company: str, customer_id: str, current_document: Any | None = None) -> Decimal:
     """Calculate exposure from approved sales orders that remain open.
 
@@ -2699,56 +2798,20 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
         )
     ).scalars()
     exposure = Decimal("0")
-    current_order_id = getattr(current_document, "sales_order_id", None)
-    current_dn_id = getattr(current_document, "delivery_note_id", None) if current_document else None
-    if not current_order_id and current_dn_id:
-        delivery_note = database.session.get(DeliveryNote, current_dn_id)
-        current_order_id = delivery_note.sales_order_id if delivery_note else None
+    current_document_id = str(getattr(current_document, "id", "") or "")
+    current_order_id = _current_order_id_for_exposure(current_document)
     for order in orders:
         order_total = _sales_base_amount(order, Decimal(str(order.grand_total or "0")))
         delivery_note_ids = set(
             database.session.execute(database.select(DeliveryNote.id).filter_by(sales_order_id=order.id)).scalars().all()
         )
-        line_links = database.session.execute(
-            database.select(DocumentRelation.target_id, func.sum(DocumentRelation.amount))
-            .where(
-                DocumentRelation.source_type == "sales_order",
-                DocumentRelation.source_id == order.id,
-                DocumentRelation.target_type == "sales_invoice",
-                DocumentRelation.status == "active",
-            )
-            .group_by(DocumentRelation.target_id)
-        ).all()
-        line_linked_amounts = {target_id: Decimal(str(amount or 0)) for target_id, amount in line_links}
-        billed_invoices = database.session.execute(
-            database.select(SalesInvoice).where(
-                SalesInvoice.company == company,
-                SalesInvoice.customer_id == customer_id,
-                SalesInvoice.docstatus == 1,
-                SalesInvoice.is_return.is_(False),
-                SalesInvoice.document_type.notin_(("sales_credit_note", "sales_return", "sales_debit_note")),
-                or_(
-                    SalesInvoice.sales_order_id == order.id,
-                    SalesInvoice.delivery_note_id.in_(delivery_note_ids),
-                    SalesInvoice.id.in_(line_linked_amounts),
-                ),
-            )
-        ).scalars()
-        billed_total = Decimal("0")
-        for invoice in billed_invoices:
-            if invoice.sales_order_id == order.id or invoice.delivery_note_id in delivery_note_ids:
-                billed_total += _sales_base_amount(invoice, Decimal(str(invoice.grand_total or "0")))
-            else:
-                billed_total += _sales_base_amount(
-                    invoice,
-                    line_linked_amounts.get(invoice.id, Decimal("0")),
-                    use_stored_total=False,
-                )
+        line_linked_amounts = _line_linked_amounts_for_order(order.id)
+        billed_total = _billed_total_for_order(company, customer_id, order.id, delivery_note_ids, line_linked_amounts)
         pending = max(Decimal("0"), order_total - billed_total)
         if order.id == current_order_id:
             pending = max(
                 Decimal("0"),
-                pending - _sales_base_amount(current_document, Decimal(str(getattr(current_document, "grand_total", 0) or 0))),
+                pending - _current_document_base_amount(current_document, current_document_id, line_linked_amounts),
             )
         exposure += pending
     return exposure
