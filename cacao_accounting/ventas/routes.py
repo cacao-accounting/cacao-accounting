@@ -515,13 +515,13 @@ def ventas_pedido_venta_nuevo():
     if request.method == "POST":
         try:
             customer_id = request.form.get("customer_id") or None
-            customer = _validated_customer(customer_id)
             posting_date = _parse_date(request.form.get("posting_date"))
             company, transaction_currency = validate_immutable_header(
                 None,
                 request.form.get("company") or None,
                 request.form.get("currency") or request.form.get("transaction_currency") or None,
             )
+            customer = _validated_customer(customer_id, company)
             exige_acceso_compania("sales", company, "crear")
             pedido = SalesRequest(
                 customer_id=customer_id,
@@ -667,7 +667,7 @@ def ventas_pedido_venta_duplicar(request_id: str):
         abort(400)
 
     try:
-        customer = _validated_customer(origen.customer_id)
+        customer = _validated_customer(origen.customer_id, origen.company)
     except ValueError as exc:
         flash_error(exc)
         return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
@@ -1380,6 +1380,12 @@ def ventas_orden_venta_duplicar(order_id: str):
     if origen.docstatus == 2:
         abort(400)
 
+    try:
+        _validated_customer(origen.customer_id, origen.company)
+    except ValueError as exc:
+        flash_error(exc)
+        return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
+
     duplicado = SalesOrder(
         customer_id=origen.customer_id,
         customer_name=origen.customer_name,
@@ -1438,13 +1444,13 @@ def _create_sales_quotation_from_request(from_request_id: str | None, source: An
     """Create a quotation from the submitted form and return its redirect."""
     try:
         customer_id = request.form.get("customer_id") or None
-        customer = database.session.get(Party, customer_id) if customer_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
         company, transaction_currency = validate_immutable_header(
             source,
             request.form.get("company") or None,
             request.form.get("currency") or request.form.get("transaction_currency") or None,
         )
+        customer = _validated_customer(customer_id, company)
         exige_acceso_compania("sales", company, "crear")
         quotation = SalesQuotation(
             customer_id=customer_id,
@@ -1661,6 +1667,12 @@ def ventas_cotizacion_duplicar(quotation_id: str):
     _require_sales_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
+
+    try:
+        _validated_customer(origen.customer_id, origen.company)
+    except ValueError as exc:
+        flash_error(exc)
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
     duplicado = SalesQuotation(
         customer_id=origen.customer_id,

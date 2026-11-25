@@ -146,20 +146,8 @@ def _msg_cantidad_item(item_code: str) -> str:
     return _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}
 
 
-def _validated_customer(customer_id: str | None) -> Party | None:
-    """Carga el cliente y exige el rol cuando se informa un tercero."""
-    if not customer_id:
-        return None
-    customer = database.session.get(Party, customer_id)
-    if customer is None:
-        raise ValueError(_("El tercero no existe."))
-    if not customer.is_customer:
-        raise ValueError(_("El tercero seleccionado no está habilitado como cliente."))
-    return customer
-
-
-def _validated_delivery_customer(customer_id: str | None, company: str | None) -> Party | None:
-    """Valida cliente activo, con rol y vínculo vigente en la compañía."""
+def _validated_customer(customer_id: str | None, company: str | None) -> Party | None:
+    """Exige cliente activo, con rol y vínculo vigente en la compañía."""
     if not customer_id:
         return None
     customer = database.session.get(Party, customer_id)
@@ -173,6 +161,11 @@ def _validated_delivery_customer(customer_id: str | None, company: str | None) -
     if membership is None:
         raise ValueError(_("El tercero no está habilitado para la compañía seleccionada."))
     return customer
+
+
+def _validated_delivery_customer(customer_id: str | None, company: str | None) -> Party | None:
+    """Valida cliente activo, con rol y vínculo vigente en la compañía."""
+    return _validated_customer(customer_id, company)
 
 
 def _validate_delivery_customer_source(registro: DeliveryNote, customer_id: str | None) -> None:
@@ -921,7 +914,7 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
     refresh_source_caches_for_target("sales_request", registro.id)
     customer_id = form.get("customer_id") or None
     try:
-        customer = _validated_customer(customer_id)
+        customer = _validated_customer(customer_id, registro.company)
     except ValueError as error:
         database.session.rollback()
         flash_error(error)
@@ -962,7 +955,12 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
     revert_relations_for_target("sales_order", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("sales_order", registro.id)
     customer_id = form.get("customer_id") or None
-    customer = database.session.get(Party, customer_id) if customer_id else None
+    try:
+        customer = _validated_customer(customer_id, registro.company)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(endpoint, order_id=order_id))
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
     requested_company = form.get("company") or registro.company
@@ -2043,7 +2041,6 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
 
     try:
         customer_id = request.form.get("customer_id") or None
-        customer = database.session.get(Party, customer_id) if customer_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
         source_type, source_id, source = _sales_order_source(from_quotation_id, from_request_id)
         if isinstance(source, SalesQuotation):
@@ -2053,6 +2050,7 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
             request.form.get("company") or None,
             request.form.get("currency") or request.form.get("transaction_currency") or None,
         )
+        customer = _validated_customer(customer_id, company)
         exige_acceso_compania("sales", company, "crear")
         orden = SalesOrder(
             customer_id=customer_id,
@@ -2100,7 +2098,12 @@ def _handle_sales_quotation_edit_post(registro):
     revert_relations_for_target("sales_quotation", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("sales_quotation", registro.id)
     customer_id = request.form.get("customer_id") or None
-    customer = database.session.get(Party, customer_id) if customer_id else None
+    try:
+        customer = _validated_customer(customer_id, registro.company)
+    except ValueError as error:
+        database.session.rollback()
+        flash_error(error)
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
     requested_company = request.form.get("company") or registro.company
