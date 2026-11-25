@@ -158,7 +158,8 @@
                     initial_value=draft.get("bank_account_id", ""),
                     initial_label=draft.get("bank_account_label", draft.get("bank_account_id", "")),
                     x_model="header.bank_account_id",
-                    on_select="function(opt) { $dispatch('bank-account-selected', opt) }"
+                    on_select="function(opt) { $dispatch('bank-account-selected', opt) }",
+                    on_clear="function(){ header.currency = ''; header.exchange_rate = 1; }"
                 ) }}
             </div>
             <div class="row g-3">
@@ -190,7 +191,8 @@
                     initial_value=draft.get("target_bank_account_id", ""),
                     initial_label=draft.get("target_bank_account_label", draft.get("target_bank_account_id", "")),
                     x_model="header.target_bank_account_id",
-                    on_select="function(opt) { $dispatch('target-bank-account-selected', opt) }"
+                    on_select="function(opt) { $dispatch('target-bank-account-selected', opt) }",
+                    on_clear="function(){ header.target_currency = ''; header.exchange_rate = 1; }"
                 ) }}
             </div>
             <div class="row g-3">

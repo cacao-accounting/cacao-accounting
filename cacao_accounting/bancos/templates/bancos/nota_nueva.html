@@ -132,9 +132,10 @@
             name: "bank_account_id",
             filters: { company: { selector: "#company_val" }, is_active: function() { return "True" } },
             filterSources: ["#company_val"],
-            onSelect: function(opt) { $dispatch("bank-account-selected", opt) }
+            onSelect: function(opt) { $dispatch("bank-account-selected", opt) },
+            onClear: function() { header.bank_account_id = ''; header.currency = ''; }
           })'>
-          <input type="hidden" x-model="selectedValue">
+          <input type="hidden" x-model="selectedValue" x-effect="header.bank_account_id = selectedValue">
           <input class="form-control" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar cuenta...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">

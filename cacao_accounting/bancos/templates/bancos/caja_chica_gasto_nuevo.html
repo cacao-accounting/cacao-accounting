@@ -68,7 +68,8 @@
           filter_sources=["#company"],
           required_filters=["company"],
           required=True,
-          on_select="function(opt){ var el = document.getElementById('pc_currency'); if (el) el.value = opt.currency || ''; document.dispatchEvent(new CustomEvent('fund-selected', {detail: opt})); }"
+          on_select="function(opt){ var el = document.getElementById('pc_currency'); if (el) el.value = opt.currency || ''; document.dispatchEvent(new CustomEvent('fund-selected', {detail: opt})); }",
+          on_clear="function(){ var el = document.getElementById('pc_currency'); if (el) el.value = ''; var amount = document.getElementById('amount'); if (amount) amount.step = '0.01'; }"
       ) }}
     </div>
     <div class="col-md-4">
