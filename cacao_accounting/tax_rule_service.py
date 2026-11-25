@@ -13,6 +13,7 @@ from sqlalchemy import or_, select
 
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
 from cacao_accounting.accounting_engine.common.fiscal import SUPPORTED_TAX_CALCULATION_METHODS
+from cacao_accounting.accounting_engine.landed_cost.engine import VALID_ALLOCATION_METHODS
 from cacao_accounting.database import Accounts, Currency, Entity, Item, ItemCategory, TaxRule, database
 
 
@@ -146,6 +147,7 @@ TAX_RULE_ENUMS: dict[str, tuple[Set[str], str]] = {
     "base_mode": ({"goods", "accumulated"}, "goods"),
     "accounting_treatment": ({"separate_tax_account", "capitalizable_inventory_cost"}, "separate_tax_account"),
     "recognition_event": (RECOGNITION_EVENTS, "invoice"),
+    "allocation_method": (VALID_ALLOCATION_METHODS, ""),
 }
 
 
@@ -233,7 +235,7 @@ def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> N
     rule.affects_document_total = values.get("affects_document_total") is not None
     rule.affects_settlement = values.get("affects_settlement") is not None
     rule.participates_in_next_base = values.get("participates_in_next_base") is not None
-    rule.allocation_method = _clean_text(values.get("allocation_method"))
+    rule.allocation_method = _validated_enum(values, "allocation_method")
     rule.currency = _clean_text(values.get("currency"))
     rule.country = _clean_text(values.get("country"))
     rule.valid_from = _date_value(values.get("valid_from"))
