@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
+from cacao_accounting import document_flow
 from cacao_accounting.document_flow import lock_document_flow_document
 from cacao_accounting.approval_engine import ApprovalEngine
 from cacao_accounting.compras import routes as compras_routes
@@ -492,10 +493,23 @@ def test_motor_aprobaciones_revalida_sc_cerrada(request_order_scene, monkeypatch
         user = database.session.get(User, "admin")
         assert order is not None and user is not None
         monkeypatch.setattr(ApprovalEngine, "_validate_final_submission", classmethod(lambda cls, doctype, document: None))
+        eventos: list[tuple[str, str]] = []
+        original_lock = document_flow.lock_document_flow_document
+
+        def tracking_lock(document_type: str, document_id: str) -> None:
+            eventos.append((document_type, document_id))
+            original_lock(document_type, document_id)
+
+        monkeypatch.setattr(document_flow, "lock_document_flow_document", tracking_lock)
         with pytest.raises(ValueError, match="solicitud de compra cerrada"):
             ApprovalEngine._execute_submit("purchase_order", order, user)
+        assert eventos[0][0] == "purchase_order"
+        solicitudes = [document_id for document_type, document_id in eventos if document_type == "purchase_request"]
+        assert solicitudes == sorted(solicitudes)
+        eventos.clear()
         with pytest.raises(ValueError, match="solicitud de compra cerrada"):
             ApprovalEngine._validate_final_cancellation("purchase_order", order)
+        assert eventos[0][0] == "purchase_order"
 
 
 def test_guard_relee_sc_cerrada_tras_lock(tmp_path):
