@@ -578,6 +578,7 @@ class ApprovalEngine:
             )
             from cacao_accounting.document_flow import lock_document_flow_document
 
+            lock_document_flow_document("purchase_order", str(document.id))
             for request_id in purchase_order_source_request_ids(str(document.id)):
                 lock_document_flow_document("purchase_request", request_id)
             if purchase_order_has_closed_source_request(str(document.id)):
@@ -1068,6 +1069,7 @@ class ApprovalEngine:
             )
             from cacao_accounting.document_flow import lock_document_flow_document
 
+            lock_document_flow_document("purchase_order", str(document.id))
             for request_id in purchase_order_source_request_ids(str(document.id)):
                 lock_document_flow_document("purchase_request", request_id)
             if purchase_order_has_closed_source_request(str(document.id)):

@@ -2462,6 +2462,7 @@ def compras_orden_compra_submit(order_id: str):
     exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
+    lock_document_flow_document("purchase_order", order_id)
     source_request_ids = purchase_order_source_request_ids(order_id)
     for source_request_id in source_request_ids:
         lock_document_flow_document("purchase_request", source_request_id)
@@ -2516,6 +2517,7 @@ def compras_orden_compra_cancel(order_id: str):
     exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    lock_document_flow_document("purchase_order", order_id)
     source_request_ids = purchase_order_source_request_ids(order_id)
     for source_request_id in source_request_ids:
         lock_document_flow_document("purchase_request", source_request_id)
