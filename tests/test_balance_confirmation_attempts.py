@@ -15,6 +15,7 @@ import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
@@ -43,7 +44,7 @@ def confirmation_attempt_scenario(tmp_path):
         {
             **configuracion,
             "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'confirmation-attempts.sqlite'}",
-            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 8, "max_overflow": 0},
+            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 12, "max_overflow": 0},
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
@@ -362,13 +363,18 @@ def test_sixth_wrong_verification_is_rejected_after_five_attempts(confirmation_a
 
 
 def test_concurrent_attempts_claim_at_most_five_slots(confirmation_attempt_scenario):
-    """Diez reclamos paralelos solo obtienen cinco incrementos."""
+    """Diez reclamos paralelos solo obtienen cinco incrementos tras leer el mismo estado."""
     app, ids = confirmation_attempt_scenario
+    barrier = Barrier(10, timeout=30)
 
     def claim() -> bool:
         with app.app_context():
             try:
                 invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+                # Fuerza una lectura obsoleta antes de competir: un contador
+                # read-modify-write vulnerable no puede usar el valor actual.
+                invitation.failed_attempts
+                barrier.wait()
                 return _claim_verification_attempt(invitation, invitation.token_hash)
             finally:
                 database.session.remove()

@@ -121,8 +121,9 @@ def test_reclamo_otp_postgresql_con_intercalado_determinista() -> None:
         def claim() -> bool:
             with application.app_context():
                 try:
-                    barrera.wait()
                     invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+                    invitation.failed_attempts
+                    barrera.wait()
                     return _claim_verification_attempt(invitation, invitation.token_hash)
                 finally:
                     database.session.remove()
@@ -164,3 +165,56 @@ def test_reclamo_otp_postgresql_con_intercalado_determinista() -> None:
         with bootstrap_engine.begin() as connection:
             connection.execute(text(f'DROP SCHEMA "{schema_name}" CASCADE'))
         bootstrap_engine.dispose()
+
+
+def test_reclamo_otp_mysql_con_intercalado_determinista() -> None:
+    """En MySQL solo cinco de diez lecturas obsoletas obtienen un cupo."""
+    uri = str(configuracion.get("SQLALCHEMY_DATABASE_URI", ""))
+    if not uri.startswith(("mysql", "mariadb")):
+        pytest.skip("Este caso valida el bloqueo transaccional de MySQL/MariaDB.")
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
+
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": uri,
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+            "SECRET_KEY": "isolated-otp-attempts-mysql-test",
+        }
+    )
+    sufijo = uuid4().hex[:6]
+    token = f"token-mysql-{sufijo}"
+    barrera = Barrier(INTENTOS, timeout=30)
+    try:
+        with application.app_context():
+            ids = _sembrar_confirmacion(sufijo, token, "123456")
+
+        def claim() -> bool:
+            with application.app_context():
+                try:
+                    invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+                    invitation.failed_attempts
+                    barrera.wait()
+                    return _claim_verification_attempt(invitation, invitation.token_hash)
+                finally:
+                    database.session.remove()
+
+        with ThreadPoolExecutor(max_workers=INTENTOS) as executor:
+            resultados = list(executor.map(lambda _: claim(), range(INTENTOS)))
+
+        assert sum(resultados) == LIMITE
+        with application.app_context():
+            contador = database.session.execute(
+                database.select(BalanceConfirmationInvitation.failed_attempts).where(
+                    BalanceConfirmationInvitation.id == ids["invitation"]
+                )
+            ).scalar_one()
+            assert contador == LIMITE
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
