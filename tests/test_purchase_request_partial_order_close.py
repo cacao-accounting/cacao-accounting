@@ -261,10 +261,8 @@ def test_ruta_cancelar_rechaza_oc_de_solicitud_cerrada(request_order_scene):
         )
 
 
-def test_orden_con_dos_solicitudes_bloquea_si_una_esta_cerrada(request_order_scene):
-    """El guard considera todas las SC origen, no solo la primera relación."""
-    application, ids = request_order_scene
-    order_id = _agregar_orden(application, ids, "10")
+def _agregar_segunda_sc_cerrada(application, order_id: str) -> None:
+    """Vincula una segunda SC cerrada a la misma orden."""
     with application.app_context():
         otra = PurchaseRequest(
             company="cacao",
@@ -306,12 +304,32 @@ def test_orden_con_dos_solicitudes_bloquea_si_una_esta_cerrada(request_order_sce
         )
         database.session.commit()
 
+
+def test_orden_con_dos_solicitudes_bloquea_si_una_esta_cerrada(request_order_scene):
+    """El guard considera todas las SC origen, no solo la primera relación."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10")
+    _agregar_segunda_sc_cerrada(application, order_id)
+
     with application.app_context():
         assert purchase_order_has_closed_source_request(order_id) is True
     respuesta = _cliente_admin(application).post(f"/buying/purchase-order/{order_id}/cancel", data={"reason": "Prueba"})
     assert respuesta.status_code == 302
     with application.app_context():
         assert database.session.get(PurchaseOrder, order_id).docstatus == 1
+
+
+def test_submit_orden_con_dos_solicitudes_bloquea_si_una_esta_cerrada(request_order_scene):
+    """El submit considera todas las SC origen, no solo la primera relación."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10", docstatus=0)
+    _agregar_segunda_sc_cerrada(application, order_id)
+
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-order/{order_id}/submit")
+
+    assert respuesta.status_code == 302
+    with application.app_context():
+        assert database.session.get(PurchaseOrder, order_id).docstatus == 0
 
 
 def test_ruta_aprobar_rechaza_oc_borrador_de_solicitud_cerrada(request_order_scene):
