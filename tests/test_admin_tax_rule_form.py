@@ -105,6 +105,7 @@ def test_invalid_tax_rule_reference_rerenders_submitted_business_values(
         ("base_mode", "other"),
         ("accounting_treatment", "unknown"),
         ("recognition_event", "whenever"),
+        ("allocation_method", "by_amount"),
     ],
 )
 def test_invalid_fiscal_domain_is_rejected_before_it_can_change_a_report(
@@ -149,6 +150,7 @@ def test_invalid_fiscal_domain_is_rejected_before_it_can_change_a_report(
             "base_mode": "goods",
             "accounting_treatment": "separate_tax_account",
             "recognition_event": "invoice",
+            "allocation_method": "by_value",
         }[field],
         "is_active": "on",
         "affects_document_total": "on",
