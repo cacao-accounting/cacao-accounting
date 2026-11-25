@@ -28,6 +28,7 @@
   </div>
   {% endfor %}
 {% endwith %}
+{# Cada casilla envía un valor explícito: así una omisión del POST se distingue de False. #}
 
 <div class="row g-3">
 
@@ -122,6 +123,12 @@
                 {{ _("Al pagar una factura con anticipos previos, netea la cuenta de anticipo contra la cuenta por pagar/cobrar.") }}
               </div>
             </div>
+            {# Después de las casillas: si están marcadas, su "on" es el primer valor. #}
+            <input type="hidden" name="require_purchase_order" value="_no">
+            <input type="hidden" name="bridge_account_required" value="_no">
+            <input type="hidden" name="auto_reconcile" value="_no">
+            <input type="hidden" name="allow_price_difference" value="_no">
+            <input type="hidden" name="apply_advances_automatically" value="_no">
           </div>
 
           <button type="submit" class="btn btn-primary mt-2">

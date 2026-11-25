@@ -1168,9 +1168,31 @@ def actualizar_precio_item(item_price_id: str):
     return redirect(url_for("admin.precios_item"))
 
 
-def _matching_config_form_is_complete() -> bool:
-    """Un POST incompleto no puede restablecer la configuración a valores de alta."""
-    return request.form.get("config_form") == "complete"
+def _matching_config_form_is_complete(model: str) -> bool:
+    """Valida en servidor todos los campos obligatorios del formulario de matching."""
+    if request.form.get("config_form") != "complete":
+        return False
+    obligatorios = {
+        "matching_type",
+        "price_tolerance_type",
+        "price_tolerance_value",
+    }
+    if model == "purchase":
+        obligatorios.update({"qty_tolerance_type", "qty_tolerance_value"})
+        booleanos = {
+            "require_purchase_order",
+            "bridge_account_required",
+            "auto_reconcile",
+            "allow_price_difference",
+            "apply_advances_automatically",
+        }
+    else:
+        booleanos = {"require_sales_order", "allow_price_difference"}
+    if any(not str(request.form.get(campo) or "").strip() for campo in obligatorios | booleanos):
+        return False
+    # La casilla omitida se representa con ``_no``; así un False intencional
+    # es indistinguible de un campo no enviado y el POST se rechaza.
+    return all(request.form.get(campo) in {"on", "_no"} for campo in booleanos)
 
 
 def _save_purchase_matching_config(company: str):
@@ -1191,10 +1213,10 @@ def _save_purchase_matching_config(company: str):
             "price_tolerance_value": _decimal_form("price_tolerance_value"),
             "qty_tolerance_type": request.form.get("qty_tolerance_type") or "percentage",
             "qty_tolerance_value": _decimal_form("qty_tolerance_value"),
-            "require_purchase_order": bool(request.form.get("require_purchase_order")),
-            "bridge_account_required": bool(request.form.get("bridge_account_required")),
-            "auto_reconcile": bool(request.form.get("auto_reconcile")),
-            "allow_price_difference": bool(request.form.get("allow_price_difference")),
+            "require_purchase_order": request.form.get("require_purchase_order") == "on",
+            "bridge_account_required": request.form.get("bridge_account_required") == "on",
+            "auto_reconcile": request.form.get("auto_reconcile") == "on",
+            "allow_price_difference": request.form.get("allow_price_difference") == "on",
         },
     )
 
@@ -1223,7 +1245,7 @@ def config_conciliacion_compras():
         if not company:
             flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for("admin.config_conciliacion_compras"))
-        if not _matching_config_form_is_complete():
+        if not _matching_config_form_is_complete("purchase"):
             flash(_("El formulario de configuración de matching está incompleto; no se guardaron cambios."), "danger")
             return redirect(url_for("admin.config_conciliacion_compras", company=company))
 
@@ -1237,7 +1259,7 @@ def config_conciliacion_compras():
         if default_accounts is None:
             default_accounts = CompanyDefaultAccount(company=company)
             database.session.add(default_accounts)
-        default_accounts.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
+        default_accounts.apply_advances_automatically = request.form.get("apply_advances_automatically") == "on"
         database.session.commit()
         if isinstance(pending, ApprovalRequest):
             flash(
@@ -1319,7 +1341,7 @@ def config_conciliacion_ventas():
         if not company:
             flash(_(DEBE_SELECCIONAR_COMPANIA_MSG), "danger")
             return redirect(url_for("admin.config_conciliacion_ventas"))
-        if not _matching_config_form_is_complete():
+        if not _matching_config_form_is_complete("sales"):
             flash(_("El formulario de configuración de matching está incompleto; no se guardaron cambios."), "danger")
             return redirect(url_for("admin.config_conciliacion_ventas", company=company))
 
@@ -1339,8 +1361,8 @@ def config_conciliacion_ventas():
                     "matching_type": request.form.get("matching_type") or "3-way",
                     "price_tolerance_type": request.form.get("price_tolerance_type") or "percentage",
                     "price_tolerance_value": _decimal_form("price_tolerance_value"),
-                    "require_sales_order": bool(request.form.get("require_sales_order")),
-                    "allow_price_difference": bool(request.form.get("allow_price_difference")),
+                    "require_sales_order": request.form.get("require_sales_order") == "on",
+                    "allow_price_difference": request.form.get("allow_price_difference") == "on",
                 },
             )
         except ValueError as exc:

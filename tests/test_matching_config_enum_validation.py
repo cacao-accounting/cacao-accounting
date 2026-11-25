@@ -62,7 +62,10 @@ def _matching_config_admin_client(app, user_id: str):
 def _matching_config_post_values(model: str, company: str, field: str, value: str) -> dict[str, object]:
     """Build a complete valid admin payload with one overridden value."""
     values = _config_values(model)
-    values.update(company=company)
+    values.update(company=company, config_form="complete")
+    for key, actual in tuple(values.items()):
+        if isinstance(actual, bool):
+            values[key] = "on" if actual else "_no"
     values[field] = value
     return values
 

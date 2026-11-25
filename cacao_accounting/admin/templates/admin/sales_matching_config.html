@@ -89,6 +89,9 @@
               <input class="form-check-input" type="checkbox" name="allow_price_difference" id="allow_price" {% if selected_config and selected_config.allow_price_difference %}checked{% endif %}>
               <label class="form-check-label" for="allow_price">{{ _("Permitir diferencias de precio (solo advertencia)") }}</label>
             </div>
+            {# Después de las casillas: si están marcadas, su "on" es el primer valor. #}
+            <input type="hidden" name="require_sales_order" value="_no">
+            <input type="hidden" name="allow_price_difference" value="_no">
           </div>
 
           <button type="submit" class="btn btn-primary mt-2">
