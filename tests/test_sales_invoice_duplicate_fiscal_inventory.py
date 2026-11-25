@@ -644,6 +644,111 @@ def test_duplicado_2way_con_orden_valida_se_permite(entorno_contable_aislado, re
         )
 
 
+@pytest.mark.parametrize("relacion_faltante", [False, True])
+def test_duplicado_2way_exige_relacion_por_cada_linea(entorno_contable_aislado, relacion_faltante):
+    """2-way rechaza una copia cuando alguna línea no tiene relación con la orden."""
+    app = entorno_contable_aislado.app
+    sufijo = uuid4().hex[:6]
+    with app.app_context():
+        cliente = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one()
+        database.session.add(SalesMatchingConfig(company="cacao", matching_type="2-way", require_sales_order=True))
+        orden = SalesOrder(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            status="open",
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"OV-ML-{sufijo}",
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(orden)
+        database.session.flush()
+        orden_lineas = [
+            SalesOrderItem(
+                sales_order_id=orden.id,
+                item_code="ART01",
+                item_name="Artículo de prueba",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+            )
+            for _ in range(2)
+        ]
+        database.session.add_all(orden_lineas)
+        database.session.flush()
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            document_type="sales_invoice",
+            docstatus=1,
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"FV-ML-{sufijo}",
+            sales_order_id=orden.id,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            total=Decimal("200"),
+            grand_total=Decimal("200"),
+        )
+        database.session.add(factura)
+        database.session.flush()
+        factura_lineas = [
+            SalesInvoiceItem(
+                sales_invoice_id=factura.id,
+                item_code="ART01",
+                item_name="Artículo de prueba",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+            )
+            for _ in range(2)
+        ]
+        database.session.add_all(factura_lineas)
+        database.session.flush()
+        for indice, (orden_linea, factura_linea) in enumerate(zip(orden_lineas, factura_lineas)):
+            if relacion_faltante and indice == 1:
+                continue
+            database.session.add(
+                DocumentRelation(
+                    source_type="sales_order",
+                    source_id=orden.id,
+                    source_item_id=orden_linea.id,
+                    target_type="sales_invoice",
+                    target_id=factura.id,
+                    target_item_id=factura_linea.id,
+                    company="cacao",
+                    qty=Decimal("1"),
+                    qty_in_base_uom=Decimal("1"),
+                    uom="UND",
+                    rate=Decimal("100"),
+                    amount=Decimal("100"),
+                    relation_type="billing",
+                    status="active",
+                )
+            )
+        database.session.commit()
+        factura_id = factura.id
+
+    respuesta = _cliente(entorno_contable_aislado).post(f"/sales/sales-invoice/{factura_id}/duplicate")
+    assert respuesta.status_code == 302
+    with app.app_context():
+        copias = (
+            database.session.execute(
+                database.select(SalesInvoice).where(SalesInvoice.id != factura_id, SalesInvoice.docstatus == 0)
+            )
+            .scalars()
+            .all()
+        )
+        assert (len(copias) == 0) is relacion_faltante
+
+
 @pytest.mark.parametrize(
     ("matching_type", "require_order"),
     [("3-way", True), ("3-way", False), ("2-way", True)],
