@@ -2579,6 +2579,7 @@ def ventas_factura_venta_duplicar(invoice_id: str):
                 database.select(DocumentRelation.id)
                 .where(
                     DocumentRelation.source_type == "sales_order",
+                    DocumentRelation.source_id == origen.sales_order_id,
                     DocumentRelation.target_type == "sales_invoice",
                     DocumentRelation.target_id == origen.id,
                     DocumentRelation.status == "active",

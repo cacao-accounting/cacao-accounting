@@ -500,6 +500,106 @@ def test_duplicado_documento_no_positivo_3way_no_se_bloquea(entorno_contable_ais
         assert copia.document_type == document_type
 
 
+def test_duplicado_2way_con_orden_valida_se_permite(entorno_contable_aislado):
+    """2-way con orden y relación activa conserva el vínculo al duplicar."""
+    app = entorno_contable_aislado.app
+    sufijo = uuid4().hex[:6]
+    with app.app_context():
+        cliente = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one()
+        database.session.add(SalesMatchingConfig(company="cacao", matching_type="2-way", require_sales_order=True))
+        orden = SalesOrder(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            status="open",
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"OV-2W-{sufijo}",
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(orden)
+        database.session.flush()
+        orden_linea = SalesOrderItem(
+            sales_order_id=orden.id,
+            item_code="ART01",
+            item_name="Artículo de prueba",
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom="UND",
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+        )
+        database.session.add(orden_linea)
+        database.session.flush()
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            document_type="sales_invoice",
+            docstatus=1,
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"FV-2W-{sufijo}",
+            sales_order_id=orden.id,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            total=Decimal("100"),
+            grand_total=Decimal("100"),
+        )
+        database.session.add(factura)
+        database.session.flush()
+        factura_linea = SalesInvoiceItem(
+            sales_invoice_id=factura.id,
+            item_code="ART01",
+            item_name="Artículo de prueba",
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom="UND",
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+        )
+        database.session.add(factura_linea)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="sales_order",
+                source_id=orden.id,
+                source_item_id=orden_linea.id,
+                target_type="sales_invoice",
+                target_id=factura.id,
+                target_item_id=factura_linea.id,
+                company="cacao",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+                relation_type="billing",
+                status="active",
+            )
+        )
+        database.session.commit()
+        factura_id = factura.id
+        orden_id = orden.id
+
+    respuesta = _cliente(entorno_contable_aislado).post(f"/sales/sales-invoice/{factura_id}/duplicate")
+    assert respuesta.status_code == 302
+    with app.app_context():
+        copia = database.session.execute(
+            database.select(SalesInvoice).where(SalesInvoice.id != factura_id, SalesInvoice.docstatus == 0)
+        ).scalar_one()
+        assert copia.sales_order_id == orden_id
+        assert (
+            database.session.execute(
+                database.select(DocumentRelation.id).filter_by(
+                    source_type="sales_order", target_type="sales_invoice", target_id=copia.id, status="active"
+                )
+            ).scalar_one_or_none()
+            is not None
+        )
+
+
 @pytest.mark.parametrize(
     ("matching_type", "require_order"),
     [("3-way", True), ("3-way", False), ("2-way", True)],
