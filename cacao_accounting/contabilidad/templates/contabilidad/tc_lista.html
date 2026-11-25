@@ -50,10 +50,7 @@
       <caption style="display: none;">{{ _('Listado de Tipos de Cambio') }}</caption>
       <thead>
         <tr>
-          <th scope="col">{{ _('Base') }}</th>
-          <th scope="col"></th>
-          <th scope="col">{{ _('Destino') }}</th>
-          <th scope="col" class="text-end">{{ _('Tasa') }}</th>
+          <th scope="col">{{ _('Equivalencia') }}</th>
           <th scope="col">{{ _('Fecha') }}</th>
           <th scope="col">{{ _('Acciones') }}</th>
         </tr>
@@ -61,10 +58,11 @@
       <tbody>
         {% for item in consulta.items -%}
         <tr>
-          <td><a class="fw-bold" href="{{ url_for('contabilidad.tipo_cambio', rate_id=item.id) }}">{{ item.origin }}</a></td>
-          <td style="color:#94a3b8;" class="text-center">→</td>
-          <td><span class="fw-bold">{{ item.destination }}</span></td>
-          <td class="text-end">{{ item.rate }}</td>
+          <td>
+            <a class="fw-bold text-decoration-none" href="{{ url_for('contabilidad.tipo_cambio', rate_id=item.id) }}">
+              1 {{ item.origin }} = {{ item.rate }} {{ item.destination }}
+            </a>
+          </td>
           <td>{{ item.date }}</td>
           <td>
             <a href="{{ url_for('contabilidad.tipo_cambio', rate_id=item.id) }}" class="btn btn-sm btn-outline-secondary">{{ _('Ver') }}</a>
@@ -72,7 +70,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="text-center text-muted py-4">{{ _('No se encontraron tasas de cambio.') }}</td></tr>
+        <tr><td colspan="3" class="text-center text-muted py-4">{{ _('No se encontraron tasas de cambio.') }}</td></tr>
         {%- endfor %}
       </tbody>
     </table>

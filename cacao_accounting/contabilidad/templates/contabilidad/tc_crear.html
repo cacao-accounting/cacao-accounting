@@ -31,16 +31,20 @@
     <form method="post" id="form-tc" class="row g-3">
       {{ form.csrf_token }}
       <div class="col-12 col-md-6">
-        <label class="form-label" for="origin">{{ _('Moneda Origen') }} <span class="text-danger">*</span></label>
+        <label class="form-label" for="origin">{{ _('Moneda de origen') }} <span class="text-danger">*</span></label>
         <input class="form-control form-control-sm" id="origin" name="origin" list="monedas" value="{{ request.form.get('origin', form.origin.data or '') }}" required autocomplete="off">
+        <div class="form-text">{{ _('Moneda cuya unidad se está convirtiendo.') }}</div>
       </div>
       <div class="col-12 col-md-6">
-        <label class="form-label" for="destination">{{ _('Moneda Destino') }} <span class="text-danger">*</span></label>
+        <label class="form-label" for="destination">{{ _('Moneda de destino') }} <span class="text-danger">*</span></label>
         <input class="form-control form-control-sm" id="destination" name="destination" list="monedas" value="{{ request.form.get('destination', form.destination.data or '') }}" required autocomplete="off">
+        <div class="form-text">{{ _('Moneda en la cual se expresa la equivalencia.') }}</div>
       </div>
       <div class="col-12 col-md-6">
-        <label class="form-label" for="rate">{{ _('Tasa de Cambio') }} <span class="text-danger">*</span></label>
+        <label class="form-label" for="rate">{{ _('Tasa de cambio') }} <span class="text-danger">*</span></label>
         {{ form.rate(class="form-control form-control-sm" + (" is-invalid" if form.rate.errors else ""), id="rate", type="number", step="0.000000001", required=True) }}
+        <div class="form-text">{{ _('Cantidad de unidades de la moneda destino por cada unidad de la moneda origen.') }}</div>
+        <div class="form-text">{{ _('Indique cuántas unidades de la moneda destino equivalen a 1 unidad de la moneda origen.') }}</div>
         {% if form.rate.errors %}
         <div class="invalid-feedback d-block" role="alert">
           {% for error in form.rate.errors %}
@@ -53,8 +57,83 @@
         <label class="form-label" for="date">{{ _('Fecha') }} <span class="text-danger">*</span></label>
         {{ form.date(class="form-control form-control-sm", id="date", type="date", required=True) }}
       </div>
+      <div class="col-12">
+        <div id="tc-preview" class="ca-card p-3 bg-light border" role="status" aria-live="polite">
+          <div class="small text-muted mb-1">{{ _('Equivalencia de la tasa') }}</div>
+          <div id="tc-preview-main" class="fw-semibold fs-5 text-dark">{{ _('Complete los campos para ver la equivalencia.') }}</div>
+          <div id="tc-preview-detail" class="small text-muted mt-1"></div>
+        </div>
+      </div>
     </form>
   </div>
 </div>
+
+<script>
+(function () {
+  var origin = document.getElementById('origin');
+  var destination = document.getElementById('destination');
+  var rate = document.getElementById('rate');
+  var previewMain = document.getElementById('tc-preview-main');
+  var previewDetail = document.getElementById('tc-preview-detail');
+  if (!origin || !destination || !rate || !previewMain || !previewDetail) return;
+
+  var MSG_COMPLETE = {{ _('Complete los campos para ver la equivalencia.')|tojson }};
+  var MSG_INVALID = {{ _('Ingrese una tasa válida mayor que cero y monedas diferentes.')|tojson }};
+  var MSG_TEMPLATE = {{ _('Cada %(origin)s equivale a %(rate)s %(destination)s.', origin='%(origin)s', rate='%(rate)s', destination='%(destination)s')|tojson }};
+
+  function normalizeCode(value) {
+    return (value || '').trim().toUpperCase();
+  }
+
+  function formatRate(rawValue) {
+    var raw = (rawValue || '').trim().replace(',', '.');
+    if (!raw) return '';
+    var normalized = raw.replace(/[^0-9.]/g, '');
+    var parts = normalized.split('.');
+    var integerPart = parts[0] || '0';
+    var decimalPart = (parts[1] || '').slice(0, 9).replace(/0+$/, '');
+    return decimalPart ? integerPart + '.' + decimalPart : integerPart;
+  }
+
+  function setPreview(mainText, detailText) {
+    previewMain.textContent = mainText;
+    previewDetail.textContent = detailText || '';
+  }
+
+  function update() {
+    var o = normalizeCode(origin.value);
+    var d = normalizeCode(destination.value);
+    var rawRate = (rate.value || '').trim();
+    var numericRate = Number(rawRate.replace(',', '.'));
+
+    if (!o || !d || !rawRate) {
+      setPreview(MSG_COMPLETE, '');
+      return;
+    }
+    if (o === d || !Number.isFinite(numericRate) || numericRate <= 0) {
+      setPreview(MSG_INVALID, '');
+      return;
+    }
+
+    var rateText = formatRate(rawRate);
+    if (!rateText) {
+      setPreview(MSG_INVALID, '');
+      return;
+    }
+
+    setPreview(
+      '1 ' + o + ' = ' + rateText + ' ' + d,
+      MSG_TEMPLATE.replace('%(origin)s', o).replace('%(rate)s', rateText).replace('%(destination)s', d)
+    );
+  }
+
+  ['input', 'change'].forEach(function (evt) {
+    origin.addEventListener(evt, update);
+    destination.addEventListener(evt, update);
+    rate.addEventListener(evt, update);
+  });
+  update();
+})();
+</script>
 
 {% endblock %}

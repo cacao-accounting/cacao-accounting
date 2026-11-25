@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+﻿# SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 # English translations for Cacao Accounting.
 # Copyright (C) 2026 William José Moreno Reyes
@@ -25106,3 +25106,41 @@ msgstr "The price list %(name)s has no currency configured."
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py
 msgid "fecha no registrada"
 msgstr "date not recorded"
+
+msgid "Complete los campos para ver la equivalencia."
+msgstr "Complete the fields to see the equivalence."
+
+msgid "Cantidad de unidades de la moneda destino por cada unidad de la moneda origen."
+msgstr "Amount of target currency units for each source currency unit."
+
+msgid "Ingrese una tasa válida mayor que cero y monedas diferentes."
+msgstr "Enter a valid rate greater than zero and different currencies."
+
+msgid "Tasa de cambio"
+msgstr "Exchange rate"
+
+msgid "Moneda de destino"
+msgstr "Target currency"
+
+msgid "Moneda cuya unidad se está convirtiendo."
+msgstr "Currency whose unit is being converted."
+
+msgid "Cada %(origin)s equivale a %(rate)s %(destination)s."
+msgstr "Each %(origin)s equals %(rate)s %(destination)s."
+
+msgid "Equivalencia de la tasa"
+msgstr "Rate equivalence"
+
+msgid "Moneda en la cual se expresa la equivalencia."
+msgstr "Currency in which the equivalence is expressed."
+
+msgid "Moneda de origen"
+msgstr "Source currency"
+
+msgid "Equivalencia"
+msgstr "Equivalence"
+
+msgid "Indique cuántas unidades de la moneda destino equivalen a 1 unidad de la moneda origen."
+msgstr "Enter how many units of the target currency equal 1 unit of the source currency."
+
+
