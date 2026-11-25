@@ -236,12 +236,13 @@ def _require_flow_target_access(payload: dict[str, Any], action: str = "crear") 
     target_type = normalize_doctype(str(payload.get("target_document_type") or payload.get("target_type") or ""))
     company = str(payload.get("company") or payload.get("company_id") or "")
     module = _module_for_document_type(target_type)
-    if not module:
-        return
     if not company:
         # #2056: sin compañía destino no se puede autorizar ni consultar la
-        # fuente; rechazar antes evita distinguir una fuente existente de otra.
+        # fuente; rechazar antes evita distinguir una fuente existente de otra,
+        # incluso si el tipo de destino no está registrado.
         abort(400)
+    if not module:
+        return
     exige_acceso_compania(module, company, action)
 
 

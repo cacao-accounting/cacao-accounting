@@ -670,8 +670,9 @@ def test_create_target_rejects_invalid_customer_before_persisting(document_flow_
         assert len(database.session.execute(database.select(DocumentRelation.id)).scalars().all()) == relaciones
 
 
+@pytest.mark.parametrize("target_type", ["sales_order", "tipo-inventado", ""])
 @pytest.mark.parametrize("source_id_key", ["missing", "foreign_order"])
-def test_create_target_without_company_rejects_before_source_lookup(document_flow_app, source_id_key):
+def test_create_target_without_company_rejects_before_source_lookup(document_flow_app, source_id_key, target_type):
     """#2056: omitir la compañía destino no revela si una fuente existe."""
     app, client, ids = document_flow_app
     _login(client, "vendedor")
@@ -684,7 +685,7 @@ def test_create_target_without_company_rejects_before_source_lookup(document_flo
         json={
             "source_document_type": "sales_order",
             "source_document_id": source_id,
-            "target_document_type": "sales_order",
+            "target_document_type": target_type,
             "posting_date": "2026-10-16",
             "lines": [],
         },
