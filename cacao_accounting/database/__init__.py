@@ -3194,7 +3194,7 @@ class PettyCashAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     custodian_id = database.Column(
         database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True, index=True
     )
-    float_amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    float_amount = database.Column(database.Numeric(20, 8), nullable=False, default=0)
     is_default = database.Column(database.Boolean(), default=False, nullable=False)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
     notes = database.Column(database.Text(), nullable=True)
@@ -3226,7 +3226,7 @@ class PettyCashVoucher(database.Model, DocBase):  # type: ignore[name-defined]
     voucher_status = database.Column(database.String(20), nullable=False, default="borrador", index=True)
     delivered_to = database.Column(database.String(150), nullable=True)
     concept = database.Column(database.String(255), nullable=False)
-    amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    amount = database.Column(database.Numeric(20, 8), nullable=False, default=0)
     cost_center_code = database.Column(database.String(10), nullable=True)
     unit_code = database.Column(
         database.String(10), database.ForeignKey(_UNIT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
@@ -3279,7 +3279,7 @@ class PettyCashExpense(database.Model, DocBase):  # type: ignore[name-defined]
     beneficiary = database.Column(database.String(150), nullable=True)
     concept = database.Column(database.String(255), nullable=False)
     expense_account_code = database.Column(database.String(50), nullable=False)
-    amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    amount = database.Column(database.Numeric(20, 8), nullable=False, default=0)
     cost_center_code = database.Column(database.String(10), nullable=True)
     unit_code = database.Column(
         database.String(10), database.ForeignKey(_UNIT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
@@ -3317,12 +3317,12 @@ class PettyCashReconciliation(database.Model, DocBase):  # type: ignore[name-def
         index=True,
     )
     reconciliation_date = database.Column(database.Date(), nullable=False, index=True)
-    ledger_balance = database.Column(database.Numeric(20, 4), nullable=False, default=0)
-    open_vouchers = database.Column(database.Numeric(20, 4), nullable=False, default=0)
-    expected_cash = database.Column(database.Numeric(20, 4), nullable=False, default=0)
-    counted_cash = database.Column(database.Numeric(20, 4), nullable=False, default=0)
-    explained_amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
-    difference = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    ledger_balance = database.Column(database.Numeric(20, 8), nullable=False, default=0)
+    open_vouchers = database.Column(database.Numeric(20, 8), nullable=False, default=0)
+    expected_cash = database.Column(database.Numeric(20, 8), nullable=False, default=0)
+    counted_cash = database.Column(database.Numeric(20, 8), nullable=False, default=0)
+    explained_amount = database.Column(database.Numeric(20, 8), nullable=False, default=0)
+    difference = database.Column(database.Numeric(20, 8), nullable=False, default=0)
     explanation = database.Column(database.Text(), nullable=True)
     adjustment_account_id = database.Column(
         database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
@@ -3347,7 +3347,7 @@ class PettyCashReplenishment(database.Model, DocBase):  # type: ignore[name-defi
         index=True,
     )
     request_date = database.Column(database.Date(), nullable=False, index=True)
-    amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    amount = database.Column(database.Numeric(20, 8), nullable=False, default=0)
     bank_account_id = database.Column(
         database.String(26), database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
@@ -4152,10 +4152,10 @@ class GLBase:
     transaction = database.Column(database.String(50))
     transaction_id = database.Column(database.String(75))
     order = database.Column(database.Integer(), nullable=True)
-    value = database.Column(database.Numeric(precision=20, scale=4))
+    value = database.Column(database.Numeric(precision=20, scale=8))
     currency_id = database.Column(database.String(10))
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9))
-    value_default = database.Column(database.Numeric(precision=20, scale=4))
+    value_default = database.Column(database.Numeric(precision=20, scale=8))
     memo = database.Column(database.String(500), nullable=True)
     reference = database.Column(database.String(50))
     line_memo = database.Column(database.String(50), nullable=True)
@@ -4309,8 +4309,8 @@ class RecurringJournalItem(database.Model, BaseTabla):  # type: ignore[name-defi
         index=True,
     )
     account_code = database.Column(database.String(50), nullable=False)
-    debit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
-    credit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    debit = database.Column(database.Numeric(precision=20, scale=8), nullable=False, default=0)
+    credit = database.Column(database.Numeric(precision=20, scale=8), nullable=False, default=0)
     description = database.Column(database.String(200), nullable=True)
     cost_center = database.Column(database.String(10), nullable=True)
     unit = database.Column(database.String(10), nullable=True)
@@ -4444,11 +4444,11 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     )
     account_code = database.Column(database.String(50), nullable=True, index=True)
     # Debito y credito en moneda base de la compania
-    debit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
-    credit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    debit = database.Column(database.Numeric(precision=20, scale=8), nullable=False, default=0)
+    credit = database.Column(database.Numeric(precision=20, scale=8), nullable=False, default=0)
     # Debito y credito en moneda original de la transaccion
-    debit_in_account_currency = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
-    credit_in_account_currency = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    debit_in_account_currency = database.Column(database.Numeric(precision=20, scale=8), nullable=True)
+    credit_in_account_currency = database.Column(database.Numeric(precision=20, scale=8), nullable=True)
     account_currency = database.Column(
         database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )

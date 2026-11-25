@@ -10,6 +10,25 @@ from typing import Any
 
 from cacao_accounting.i18n import _
 
+#: Precisión monetaria máxima configurable por moneda.
+MAX_CURRENCY_DECIMALS = 8
+
+#: Precisión mínima histórica de las columnas monetarias del sistema.
+MIN_MONEY_DECIMALS = 4
+
+
+def money_quantum(amount: Decimal) -> Decimal:
+    """Devuelve el quantum que conserva la precisión monetaria del importe.
+
+    Las operaciones que antes cuantizaban a ``0.0001`` no deben redondear un
+    importe con más decimales cuando la moneda configurada los admite. La
+    escala se mantiene en 4 para valores tradicionales y crece hasta 8 solo
+    cuando el importe lo requiere. La tasa de cambio no influye: su precisión
+    es distinta de la escala monetaria del resultado.
+    """
+    scale = min(MAX_CURRENCY_DECIMALS, max(MIN_MONEY_DECIMALS, _fractional_digits(amount)))
+    return Decimal(1).scaleb(-scale)
+
 
 def coerce_decimal(
     value: Any,

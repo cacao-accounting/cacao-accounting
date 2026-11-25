@@ -106,7 +106,7 @@ from cacao_accounting.bancos.services import (
     _paginate_list,
     _bank_reconciliation_allocated_amount,
     _post_bank_difference_adjustment,
-    PETTY_CASH_MAX_DECIMALS,
+    currency_decimals,
     _save_numbering_configs,
     _build_numbering_config_response,
     _form_decimal,
@@ -1486,16 +1486,7 @@ def caja_chica_gasto_lista():
 
 def _currency_input_step(currency_code: str | None) -> str:
     """Devuelve el paso HTML del importe según los decimales de la moneda."""
-    from cacao_accounting.database import Currency
-
-    codigo = str(currency_code or "")
-    currency = (
-        database.session.execute(database.select(Currency).filter_by(code=codigo)).scalar_one_or_none() if codigo else None
-    )
-    configured_decimals = int(currency.decimals) if currency is not None and currency.decimals is not None else 2
-    # #2090: el formulario no debe ofrecer una precisión que la columna
-    # monetaria (escala 4) no puede conservar sin redondear.
-    decimals = min(configured_decimals, PETTY_CASH_MAX_DECIMALS)
+    decimals = currency_decimals(currency_code)
     if decimals <= 0:
         return "1"
     return "0." + ("0" * (decimals - 1)) + "1"

@@ -25,6 +25,7 @@ from cacao_accounting.database import (
     GLEntry,
     PettyCashAccount,
     PettyCashExpense,
+    PettyCashVoucher,
     database,
 )
 
@@ -151,12 +152,12 @@ def test_el_paso_del_importe_se_deriva_de_la_moneda_del_fondo(app, entorno_conta
 
 @pytest.mark.parametrize(
     ("decimals", "step"),
-    [(0, "1"), (2, "0.01"), (4, "0.0001"), (5, "0.0001"), (8, "0.0001")],
+    [(0, "1"), (2, "0.01"), (4, "0.0001"), (5, "0.00001"), (8, "0.00000001")],
 )
-def test_el_formulario_limita_el_paso_a_la_escala_soportada(
+def test_el_paso_del_importe_respeta_los_decimales_configurados(
     app, entorno_contable, fondo_precision, authenticated_client, decimals, step
 ):
-    """La UI no ofrece más de cuatro decimales aunque Currency.decimals sea mayor."""
+    """La UI ofrece el paso completo hasta los ocho decimales configurables."""
     del entorno_contable
     fondo_id, _code, _cost_center = fondo_precision(decimals)
 
@@ -173,30 +174,30 @@ def test_el_formulario_limita_el_paso_a_la_escala_soportada(
         (0, "1", "1.1"),
         (2, "1.01", "1.001"),
         (4, "1.0001", "1.00001"),
-        (5, "1.0001", "1.00001"),
-        (8, "1.0001", "1.00001"),
+        (5, "1.00001", "1.000001"),
+        (8, "1.00000001", "1.000000001"),
     ],
 )
-def test_la_precision_efectiva_se_limita_a_cuatro(app, entorno_contable, fondo_precision, decimals, accepted, rejected):
-    """Una moneda de 5–8 decimales conserva hasta la escala monetaria de 4."""
+def test_la_precision_efectiva_es_la_de_la_moneda(app, entorno_contable, fondo_precision, decimals, accepted, rejected):
+    """Una moneda con hasta 8 decimales conserva toda su escala configurada."""
     del entorno_contable
     fondo_id, _code, _cost_center = fondo_precision(decimals)
     with app.app_context():
         fondo = database.session.get(PettyCashAccount, fondo_id)
         assert fondo is not None
         _validate_petty_cash_expense_precision(Decimal(accepted), fondo)
-        with pytest.raises(ValueError, match=f"{min(decimals, 4)} decimales"):
+        with pytest.raises(ValueError, match=f"{decimals} decimales"):
             _validate_petty_cash_expense_precision(Decimal(rejected), fondo)
 
 
 @pytest.mark.parametrize(
     ("decimals", "amount"),
-    [(0, "1.1"), (2, "1.001"), (4, "1.00001"), (5, "1.00001"), (8, "1.00001")],
+    [(0, "1.1"), (2, "1.001"), (4, "1.00001"), (5, "1.000001"), (8, "1.000000001")],
 )
 def test_post_rechaza_exceso_de_escala_sin_persistir(
     app, entorno_contable, fondo_precision, authenticated_client, decimals, amount
 ):
-    """El POST rechaza la escala no soportada sin crear el gasto."""
+    """El POST rechaza la escala no configurada sin crear el gasto."""
     del entorno_contable
     fondo_id, _code, cost_center_code = fondo_precision(decimals)
     antes = _conteo_gastos(app)
@@ -214,7 +215,7 @@ def test_post_rechaza_exceso_de_escala_sin_persistir(
     )
 
     assert response.status_code == 200
-    assert f"{min(decimals, 4)} decimales" in response.get_data(as_text=True)
+    assert f"{decimals} decimales" in response.get_data(as_text=True)
     assert _conteo_gastos(app) == antes
 
 
@@ -251,6 +252,28 @@ def test_el_servicio_conserva_tres_decimales_y_rechaza_exceso_en_dos(
     assert response.status_code == 200
     assert "2 decimales" in response.get_data(as_text=True)
     assert _conteo_gastos(app) == antes
+
+
+@pytest.mark.database
+def test_el_esquema_monetary_conserva_escala_ocho(app, entorno_contable):
+    """Las columnas del flujo de caja chica y GL no redondean a cuatro decimales."""
+    del entorno_contable
+    with app.app_context():
+        inspector = inspect(database.engine)
+        esperado = {
+            PettyCashExpense.__tablename__: {"amount"},
+            PettyCashVoucher.__tablename__: {"amount"},
+            GLEntry.__tablename__: {
+                "debit",
+                "credit",
+                "debit_in_account_currency",
+                "credit_in_account_currency",
+            },
+        }
+        for tabla, nombres in esperado.items():
+            columnas = {columna["name"]: columna["type"] for columna in inspector.get_columns(tabla)}
+            for nombre in nombres:
+                assert getattr(columnas[nombre], "scale", None) == 8
 
 
 def _conteo_gastos(app) -> int:
@@ -308,9 +331,9 @@ def test_el_servicio_persiste_tres_decimales_sin_redondear(app, entorno_contable
 
 @pytest.mark.parametrize(
     ("decimals", "amount"),
-    [(0, "1"), (2, "1.01"), (4, "1.0001"), (5, "1.0001"), (8, "1.0001")],
+    [(0, "1"), (2, "1.01"), (4, "1.0001"), (5, "1.00001"), (8, "1.00000001")],
 )
-def test_persistencia_y_gl_respetan_la_escala_soportada(
+def test_persistencia_y_gl_respetan_la_escala_configurada(
     app, entorno_contable, reference_users, fondo_precision, decimals, amount
 ):
     """El importe aceptado se conserva al recargar y cuadra en el GL."""
@@ -346,3 +369,6 @@ def test_persistencia_y_gl_respetan_la_escala_soportada(
         assert all(debit == Decimal(amount) and credit == Decimal(amount) for debit, credit in balances.values())
         assert {entry.account_currency for entry in entries} == {code}
         assert {entry.company_currency for entry in entries} == {"NIO"}
+        assert all(
+            (entry.debit_in_account_currency or entry.credit_in_account_currency) == Decimal(amount) for entry in entries
+        )

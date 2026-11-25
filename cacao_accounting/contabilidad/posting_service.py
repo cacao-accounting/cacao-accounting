@@ -17,6 +17,8 @@ from sqlalchemy import func, or_, select
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from cacao_accounting.numbers import money_quantum
+
 from cacao_accounting.database import (
     Accounts,
     BankTransaction,
@@ -748,11 +750,13 @@ def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
     La conversion por linea es simetrica: si linea A tiene +V y linea B
     tiene -V, ambas se redondean con la misma tasa, por lo que la suma
     de debitos siempre iguala la suma de creditos. No se requiere
-    tolerancia adicional en la validacion de balance.
+    tolerancia adicional en la validacion de balance. La escala crece
+    hasta 8 decimales cuando el importe lo requiere, sin redondeo
+    silencioso en monedas configuradas con mayor precisión.
     """
     if exchange_rate == 0:
         raise PostingError(_("El tipo de cambio no puede ser cero."))
-    return (amount * exchange_rate).quantize(Decimal("0.0001"))
+    return (amount * exchange_rate).quantize(money_quantum(amount))
 
 
 def _inventory_currency(document: Any) -> str | None:

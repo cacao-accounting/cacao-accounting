@@ -18,7 +18,7 @@ from flask import Blueprint, flash, redirect, request, url_for
 from flask_login import current_user
 
 from cacao_accounting.exceptions import flash_error
-from cacao_accounting.numbers import coerce_decimal
+from cacao_accounting.numbers import MAX_CURRENCY_DECIMALS, coerce_decimal, money_quantum
 from cacao_accounting.default_scope import lock_default_scope
 
 from cacao_accounting.bancos.reconciliation_service import (
@@ -124,8 +124,14 @@ LABEL_FACTURA_VENTA = "Factura de Venta"
 
 PAYMENT_TYPES = ("pay", "receive", "internal_transfer", "debit_note", "credit_note")
 
-#: Escala monetaria máxima soportada por las columnas ``Numeric(..., 4)``.
-PETTY_CASH_MAX_DECIMALS = 4
+
+def currency_decimals(currency_code: str | None) -> int:
+    """Devuelve los decimales configurados para una moneda, limitados a 8."""
+    code = str(currency_code or "")
+    currency = database.session.execute(database.select(Currency).filter_by(code=code)).scalar_one_or_none() if code else None
+    if currency is None or currency.decimals is None:
+        return 2
+    return max(0, min(int(currency.decimals), MAX_CURRENCY_DECIMALS))
 
 
 def _safe_bank_reconciliation_candidates(transaction: BankTransaction) -> list[Any]:
@@ -988,15 +994,8 @@ def post_petty_cash_expense_journal(
 def _validate_petty_cash_expense_precision(amount: Decimal, fund: PettyCashAccount) -> None:
     """Rechaza importes con más decimales que los configurados para la moneda (#2090)."""
     currency_code = fund.currency or _company_currency(str(fund.company))
-    currency = (
-        database.session.execute(database.select(Currency).filter_by(code=currency_code)).scalar_one_or_none()
-        if currency_code
-        else None
-    )
-    configured_decimals = int(currency.decimals) if currency is not None and currency.decimals is not None else 2
-    # #2090: el contrato de precisión fija escala 4 para importes monetarios;
-    # una moneda con más decimales no puede persistirse sin redondeo.
-    decimals = min(configured_decimals, PETTY_CASH_MAX_DECIMALS)
+    decimals = currency_decimals(currency_code)
+    coerce_decimal(amount, "amount")
     exponent = amount.normalize().as_tuple().exponent
     scale = abs(exponent) if isinstance(exponent, int) and exponent < 0 else 0
     if scale > decimals:
@@ -1308,7 +1307,7 @@ def _petty_cash_ledger_balance_in_fund_currency(
     if not ledger_currency or not fund_currency or ledger_currency == fund_currency:
         return ledger_balance
     rate = _lookup_exchange_rate(ledger_currency, fund_currency, as_of_date or date.today())
-    return (ledger_balance * rate).quantize(Decimal("0.0001"))
+    return (ledger_balance * rate).quantize(money_quantum(ledger_balance))
 
 
 def petty_cash_ledger_balance_in_fund_currency(petty_cash: PettyCashAccount, as_of_date: date | None = None) -> Decimal | None:
@@ -1835,7 +1834,7 @@ def replenish_petty_cash(
         base_currency=base_currency,
         exchange_rate=exchange_rate,
         paid_amount=replenishment.amount,
-        base_paid_amount=(replenishment.amount * exchange_rate).quantize(Decimal("0.0001")),
+        base_paid_amount=(replenishment.amount * exchange_rate).quantize(money_quantum(replenishment.amount)),
         unallocated_amount=replenishment.amount,
         paid_to_account_id=fund.account_id,
         posting_date=replenishment.request_date,
