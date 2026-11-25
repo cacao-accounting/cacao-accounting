@@ -9,13 +9,21 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
-from cacao_accounting.database import DocumentRelation, Party, SalesInvoice, SalesOrder, database
+import pytest
+
+from cacao_accounting.database import DeliveryNote, DocumentRelation, Party, SalesInvoice, SalesOrder, database
 from cacao_accounting.ventas.services import _approved_customer_order_exposure
 
 FECHA = date(2026, 5, 15)
 
 
-def _documentos(app) -> tuple[str, str, str]:
+def _documentos(
+    app,
+    *,
+    document_type: str = "sales_invoice",
+    por_cabecera: bool = False,
+    por_entrega: bool = False,
+) -> tuple[str, str, str]:
     """Crea una orden y una factura del mismo cliente con importes conocidos."""
     suffix = uuid4().hex[:8]
     with app.app_context():
@@ -56,7 +64,25 @@ def _documentos(app) -> tuple[str, str, str]:
             grand_total=Decimal("100"),
             base_total=Decimal("100"),
         )
-        database.session.add_all([order, invoice])
+        database.session.add(order)
+        database.session.flush()
+        entrega_id = None
+        if por_entrega:
+            entrega = DeliveryNote(
+                company="cacao",
+                posting_date=FECHA,
+                docstatus=1,
+                customer_id=cliente.id,
+                customer_name=cliente.name,
+                sales_order_id=order.id,
+            )
+            database.session.add(entrega)
+            database.session.flush()
+            entrega_id = entrega.id
+        invoice.sales_order_id = order.id if por_cabecera else None
+        invoice.delivery_note_id = entrega_id
+        invoice.document_type = document_type
+        database.session.add(invoice)
         database.session.commit()
         return str(cliente.id), str(order.id), str(invoice.id)
 
@@ -103,3 +129,29 @@ def test_la_relacion_parcial_descuenta_solo_su_importe(app, entorno_contable):
 
     with app.app_context():
         assert _approved_customer_order_exposure("cacao", cliente_id) == Decimal("260")
+
+
+def test_factura_vinculada_por_cabecera_descuenta_la_exposicion(app, entorno_contable):
+    """El vínculo directo de cabecera descuenta el total de la factura."""
+    cliente_id, _order_id, _invoice_id = _documentos(app, por_cabecera=True)
+
+    with app.app_context():
+        assert _approved_customer_order_exposure("cacao", cliente_id) == Decimal("200")
+
+
+def test_factura_vinculada_por_entrega_descuenta_la_exposicion(app, entorno_contable):
+    """La factura de una entrega de la orden también descuenta su total."""
+    cliente_id, _order_id, _invoice_id = _documentos(app, por_entrega=True)
+
+    with app.app_context():
+        assert _approved_customer_order_exposure("cacao", cliente_id) == Decimal("200")
+
+
+@pytest.mark.parametrize("document_type", ["sales_credit_note", "sales_return", "sales_debit_note"])
+def test_documento_no_positivo_no_descuenta_la_exposicion(app, entorno_contable, document_type):
+    """Notas y devoluciones vinculadas por línea no liberan crédito de la orden."""
+    cliente_id, order_id, invoice_id = _documentos(app, document_type=document_type)
+    _relacion(app, order_id, invoice_id, "100")
+
+    with app.app_context():
+        assert _approved_customer_order_exposure("cacao", cliente_id) == Decimal("300")
