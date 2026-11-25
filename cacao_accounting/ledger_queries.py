@@ -10,7 +10,7 @@ par, mientras que las reconstrucciones deben sumar ambos para obtener el neto.
 
 from typing import Any
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, select
 from sqlalchemy.orm import aliased
 
 from cacao_accounting.database import Book, GLEntry, StockLedgerEntry, database
@@ -46,17 +46,17 @@ def exclude_cancelled_gl_entries(query: Any) -> Any:
     return query.where(GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
 
 
-def exclude_cancelled_stock_entries(query: Any, *, include_interperiod_reversals: bool = False) -> Any:
+def exclude_cancelled_stock_entries(query: Any) -> Any:
     """Excluye todos los movimientos de un voucher de inventario anulado.
 
     ``StockLedgerEntry`` marca el movimiento original como cancelado y conserva
     el contramovimiento como una fila nueva. La existencia de un movimiento
     cancelado en el mismo voucher mantiene compatibilidad con datos históricos.
 
-    Con ``include_interperiod_reversals`` se conservan ambas piernas cuando la
-    reversa se contabilizó en otra fecha: el movimiento original pertenece a su
-    corte histórico y la reversa al período en que se registró (#2263). Las
-    anulaciones del mismo día siguen excluyéndose por tener efecto cero.
+    La política de anulación exige la misma fecha y el mismo período contable
+    que el documento original, por lo que el sistema no genera reversas de
+    inventario interperíodo (#2263). Las correcciones posteriores se registran
+    como operaciones independientes, nunca reescribiendo el corte histórico.
     """
     cancelled = aliased(StockLedgerEntry)
     cancelled_sibling = exists(
@@ -67,27 +67,8 @@ def exclude_cancelled_stock_entries(query: Any, *, include_interperiod_reversals
             cancelled.is_cancelled.is_(True),
         )
     )
-    if not include_interperiod_reversals:
-        return query.where(
-            StockLedgerEntry.is_cancelled.is_(False),
-            StockLedgerEntry.is_reversal.is_(False),
-            ~cancelled_sibling,
-        )
-
-    original = aliased(StockLedgerEntry)
-    reversal = aliased(StockLedgerEntry)
-    interperiod_reversal = exists(
-        select(reversal.id)
-        .join(original, original.id == reversal.reversal_of)
-        .where(
-            original.company == StockLedgerEntry.company,
-            original.voucher_type == StockLedgerEntry.voucher_type,
-            original.voucher_id == StockLedgerEntry.voucher_id,
-            reversal.posting_date != original.posting_date,
-        )
-    )
     return query.where(
-        or_(StockLedgerEntry.is_cancelled.is_(False), interperiod_reversal),
-        or_(StockLedgerEntry.is_reversal.is_(False), interperiod_reversal),
-        or_(~cancelled_sibling, interperiod_reversal),
+        StockLedgerEntry.is_cancelled.is_(False),
+        StockLedgerEntry.is_reversal.is_(False),
+        ~cancelled_sibling,
     )

@@ -13,7 +13,7 @@ import pytest
 from flask_login import login_user
 
 from cacao_accounting.approval_engine import approved_execution
-from cacao_accounting.contabilidad.posting_service import cancel_document, post_stock_entry
+from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document, post_stock_entry
 from cacao_accounting.database import (
     Accounts,
     Book,
@@ -275,3 +275,94 @@ def test_ajuste_negativo_consume_stock_y_genera_gl(entorno_contable_aislado):
         for asiento in asientos:
             por_libro[asiento.ledger_id] = por_libro.get(asiento.ledger_id, Decimal("0")) + asiento.debit
         assert set(por_libro.values()) == {Decimal("20")}
+
+
+def test_cancelacion_con_fecha_distinta_no_crea_reversa_de_inventario(entorno_contable_aislado):
+    """Una cancelación en otra fecha se rechaza sin reversar el Stock Ledger."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        artefacto = f"ADJ-{uuid4().hex[:6].upper()}"
+        bodega = f"ADJW-{uuid4().hex[:6].upper()}"
+        database.session.add(
+            Item(code=artefacto, name="Artículo anulable", item_type="goods", is_stock_item=True, default_uom="UND")
+        )
+        database.session.add(Warehouse(code=bodega, name="Bodega anulable", company="cacao"))
+        database.session.flush()
+        inventory_account_id = database.session.execute(
+            database.select(Accounts.id).filter_by(entity="cacao", code="1109")
+        ).scalar_one()
+        adjustment_account_id = database.session.execute(
+            database.select(Accounts.id).filter_by(entity="cacao", code="5201")
+        ).scalar_one()
+        defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+        for account_id in (inventory_account_id, adjustment_account_id):
+            account = database.session.get(Accounts, account_id)
+            account.active = True
+            account.enabled = True
+            account.group = False
+        database.session.add(
+            WarehouseCompanyAccount(
+                warehouse_code=bodega,
+                company="cacao",
+                inventory_account_id=inventory_account_id,
+            )
+        )
+        defaults.inventory_adjustment_account_id = adjustment_account_id
+        database.session.commit()
+
+        entry = StockEntry(
+            purpose="adjustment_positive",
+            company="cacao",
+            posting_date=date(2026, 5, 20),
+            to_warehouse=bodega,
+            from_warehouse=bodega,
+            document_no=f"ADJP-{uuid4().hex[:8]}",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            docstatus=1,
+        )
+        database.session.add(entry)
+        database.session.flush()
+        database.session.add(
+            StockEntryItem(
+                stock_entry_id=entry.id,
+                item_code=artefacto,
+                source_warehouse=bodega,
+                target_warehouse=bodega,
+                qty=Decimal("5"),
+                uom="UND",
+                qty_in_base_uom=Decimal("5"),
+                basic_rate=Decimal("10"),
+                amount=Decimal("50"),
+            )
+        )
+        database.session.commit()
+        with app.test_request_context(f"/inventory/stock-entry/{entry.id}"):
+            login_user(database.session.execute(database.select(User).filter_by(user="admin")).scalar_one())
+            post_stock_entry(entry)
+        database.session.commit()
+
+        movimientos_iniciales = (
+            database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=entry.id)).scalars().all()
+        )
+        assert movimientos_iniciales
+        assert not any(movimiento.is_reversal for movimiento in movimientos_iniciales)
+        ids_iniciales = {movimiento.id for movimiento in movimientos_iniciales}
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+
+        with pytest.raises(PostingError, match="fecha de anulación debe coincidir"):
+            with audit_actor(actor.id, actor.name), approved_execution(entry, actor.id):
+                cancel_document(
+                    entry,
+                    reason="Corrección en periodo distinto",
+                    actor_user_id=actor.id,
+                    cancellation_date=date(2026, 6, 20),
+                )
+        database.session.rollback()
+
+        movimientos_finales = (
+            database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=entry.id)).scalars().all()
+        )
+        assert {movimiento.id for movimiento in movimientos_finales} == ids_iniciales
+        assert not any(movimiento.is_reversal for movimiento in movimientos_finales)
+        assert database.session.get(StockEntry, entry.id).docstatus == 1
