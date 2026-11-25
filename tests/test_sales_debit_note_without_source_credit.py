@@ -75,12 +75,13 @@ def _factura(
     *,
     document_type: str = "sales_invoice",
     reversal_of: str | None = None,
+    posting_date: date | None = None,
 ) -> SalesInvoice:
     factura = SalesInvoice(
         company=company,
         customer_id=customer_id,
         customer_name="Cliente 1616",
-        posting_date=date(2026, 5, 15),
+        posting_date=posting_date or date(2026, 5, 15),
         document_type=document_type,
         docstatus=1,
         status="open",
@@ -149,4 +150,42 @@ def test_nota_debito_vinculada_no_se_cuenta_dos_veces(credit_scene):
             database.update(CompanyParty).where(CompanyParty.party_id == ids["party"]).values(credit_limit=Decimal("250"))
         )
         database.session.commit()
+        _validate_credit_limit_and_overdue("cacao", ids["party"], Decimal("10"))
+
+
+def _activar_bloqueo_por_vencimiento(party_id: str) -> None:
+    """Aísla el bloqueo por vencimiento del límite de crédito del escenario."""
+    database.session.execute(
+        database.update(CompanyParty).where(CompanyParty.party_id == party_id).values(block_overdue=True, credit_limit=None)
+    )
+    database.session.commit()
+
+
+def test_nota_debito_sin_origen_vencida_bloquea_la_venta(credit_scene):
+    """Una nota sin factura origen vencida activa el bloqueo de ventas."""
+    application, ids = credit_scene
+    with application.app_context():
+        _activar_bloqueo_por_vencimiento(ids["party"])
+        _factura("cacao", ids["party"], f"ND-{ids['sufijo']}", "100", document_type="sales_debit_note")
+        database.session.commit()
+
+        with pytest.raises(ValueError, match="facturas vencidas"):
+            _validate_credit_limit_and_overdue("cacao", ids["party"], Decimal("10"))
+
+
+def test_nota_debito_sin_origen_al_dia_no_bloquea_la_venta(credit_scene):
+    """La misma nota con fecha corriente no bloquea cuando no está vencida."""
+    application, ids = credit_scene
+    with application.app_context():
+        _activar_bloqueo_por_vencimiento(ids["party"])
+        _factura(
+            "cacao",
+            ids["party"],
+            f"ND-{ids['sufijo']}",
+            "100",
+            document_type="sales_debit_note",
+            posting_date=date.today(),
+        )
+        database.session.commit()
+
         _validate_credit_limit_and_overdue("cacao", ids["party"], Decimal("10"))
