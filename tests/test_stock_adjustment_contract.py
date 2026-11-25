@@ -57,8 +57,9 @@ def test_las_rutas_de_creacion_generica_ya_no_existen(app, entorno_contable, aut
     assert client.get("/inventory/stock-entry/adjustment/list").status_code == 404
 
 
-def test_ajuste_positivo_genera_stock_y_gl_balanceado(app, entorno_contable):
+def test_ajuste_positivo_genera_stock_y_gl_balanceado(entorno_contable_aislado):
     """Un ajuste positivo crea capa de inventario y asiento balanceado."""
+    app = entorno_contable_aislado.app
     with app.app_context():
         primary_book_id = database.session.execute(database.select(Book.id).filter_by(code="DEFAULT_BOOK")).scalar_one()
         secondary_book_id = database.session.execute(database.select(Book.id).filter_by(code="NIIF")).scalar_one()
@@ -193,8 +194,9 @@ def test_ajuste_positivo_genera_stock_y_gl_balanceado(app, entorno_contable):
             database.session.flush()
 
 
-def test_ajuste_negativo_consume_stock_y_genera_gl(app, entorno_contable):
+def test_ajuste_negativo_consume_stock_y_genera_gl(entorno_contable_aislado):
     """Un ajuste negativo descuenta existencias y registra contrapartida."""
+    app = entorno_contable_aislado.app
     with app.app_context():
         artefacto = f"ADJ-{uuid4().hex[:6].upper()}"
         bodega = f"ADJW-{uuid4().hex[:6].upper()}"

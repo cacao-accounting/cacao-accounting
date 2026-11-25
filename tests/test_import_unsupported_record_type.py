@@ -19,10 +19,21 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 def _modulo_imports(app):
     with app.app_context():
         registro = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+        estado_anterior = None if registro is None else bool(registro.enabled)
         if registro is None:
             database.session.add(Modules(module="imports", default=False, enabled=True))
         else:
             registro.enabled = True
+        database.session.commit()
+    yield
+    with app.app_context():
+        database.session.rollback()
+        registro = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+        if estado_anterior is None:
+            if registro is not None:
+                database.session.delete(registro)
+        elif registro is not None:
+            registro.enabled = estado_anterior
         database.session.commit()
 
 
