@@ -263,6 +263,60 @@ class ApprovalEngine:
         return database.session.execute(query).scalar_one_or_none()
 
     @classmethod
+    def _request_for_action(cls, document: Any, submitted: ApprovalRequest) -> ApprovalRequest:
+        """Bajo lock, confirma que la solicitud enviada es la que rige el documento."""
+        doctype = cls._resolve_doctype(document)
+        query = (
+            select(ApprovalRequest)
+            .where(
+                ApprovalRequest.id == submitted.id,
+                ApprovalRequest.document_id == document.id,
+                ApprovalRequest.document_type == submitted.document_type,
+                ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        req = database.session.execute(query).scalar_one_or_none()
+        if req is None:
+            raise ValueError(_("La solicitud de aprobación no está pendiente."))
+        if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
+            raise ValueError(_("La solicitud de aprobación no está pendiente."))
+        return req
+
+    @staticmethod
+    def _document_has_request(document: Any, doctype: str, status: str) -> bool:
+        """Indica si el documento tiene una solicitud previa en el estado indicado."""
+        return (
+            database.session.execute(
+                select(ApprovalRequest.id).where(
+                    ApprovalRequest.document_id == document.id,
+                    ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
+                    ApprovalRequest.status == status,
+                )
+            ).first()
+            is not None
+        )
+
+    @classmethod
+    def _request_for_approve(
+        cls, document: Any, user: Any, doctype: str, submitted: ApprovalRequest | None
+    ) -> ApprovalRequest | None:
+        """Resuelve la solicitud a decidir; ``None`` indica una aprobación histórica."""
+        # Los caminos internos sin solicitud conservan la creación implícita.
+        if submitted is not None:
+            return cls._request_for_action(document, submitted)
+
+        req = cls._pending_request(document, lock=True)
+        if req is not None:
+            return req
+        if cls._document_has_request(document, doctype, "Approved"):
+            return None
+        if cls._document_has_request(document, doctype, "Rejected"):
+            raise ValueError(_("La solicitud fue rechazada; debe solicitarse una nueva aprobación."))
+        return cls.request_approval(document, actor=user)
+
+    @classmethod
     def _independent_policy(cls, document: Any, req: ApprovalRequest | None = None) -> dict[str, Any] | None:
         """Prefer the persisted policy so configuration cannot weaken pending reviews."""
         if req is not None and req.policy_snapshot is not None:
@@ -417,14 +471,15 @@ class ApprovalEngine:
         return rules
 
     @classmethod
-    def can_approve(cls, document: Any, user: Any) -> bool:
+    def can_approve(cls, document: Any, user: Any, req: ApprovalRequest | None = None) -> bool:
         """Verifica si el usuario tiene autorización para aprobar el documento."""
         company_id = (
             getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
         )
         if not company_id:
             return True
-        req = cls._pending_request(document)
+        if req is None:
+            req = cls._pending_request(document)
         if not cls.is_enabled(company_id) and req is None:
             return True
 
@@ -925,8 +980,8 @@ class ApprovalEngine:
             _APPROVAL_EXECUTION.reset(token)
 
     @classmethod
-    def approve(cls, document: Any, user: Any, comments: str | None = None) -> bool:
-        """Aprueba el documento para el nivel actual."""
+    def approve(cls, document: Any, user: Any, comments: str | None = None, *, request: ApprovalRequest | None = None) -> bool:
+        """Aprueba el documento para el nivel actual o la solicitud indicada."""
         company_id = (
             getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
         )
@@ -939,48 +994,20 @@ class ApprovalEngine:
             _validated_purchase_supplier(getattr(document, "supplier_id", None), company_id)
         if not company_id or is_desktop_mode():
             return True
-        if not cls.is_enabled(company_id) and cls._pending_request(document) is None:
+        if request is None and not cls.is_enabled(company_id) and cls._pending_request(document) is None:
             return True
 
         amount = cls.get_document_amount(document)
 
-        req = cls._pending_request(document, lock=True)
-        if not req:
-            finished = database.session.execute(
-                select(ApprovalRequest.id).where(
-                    ApprovalRequest.document_id == document.id,
-                    ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                    ApprovalRequest.status == "Approved",
-                )
-            ).first()
-            if finished:
-                return True
-            # Un rechazo ya confirmado es terminal para esta solicitud: aprobar
-            # no puede recrearla implícitamente y publicar el documento (#2076).
-            # El reenvío legítimo sigue siendo una llamada explícita a
-            # request_approval(), que sí crea una solicitud nueva.
-            rejected = database.session.execute(
-                select(ApprovalRequest.id)
-                .where(
-                    ApprovalRequest.document_id == document.id,
-                    ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
-                    ApprovalRequest.status == "Rejected",
-                )
-                .order_by(ApprovalRequest.created_at.desc())
-                .limit(1)
-            ).first()
-            if rejected:
-                raise ValueError(_("La solicitud fue rechazada; debe solicitarse una nueva aprobación."))
-            req = cls.request_approval(document, actor=user)
-            if not req:
-                return True
-
+        req = cls._request_for_approve(document, user, doctype, request)
+        if req is None:
+            return True
         if req.status == "Approved":
             return True
         if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             raise ValueError(_("La solicitud de aprobación no está en estado pendiente."))
 
-        if not cls.can_approve(document, user):
+        if not cls.can_approve(document, user, req):
             raise ValueError(_("El usuario no cumple los permisos, límites o independencia requeridos para aprobar."))
 
         cls._assert_approval_snapshot(req, document)
@@ -1140,25 +1167,25 @@ class ApprovalEngine:
             )
 
     @classmethod
-    def reject(cls, document: Any, user: Any, comments: str | None = None) -> None:
-        """Rechaza la solicitud de aprobación del documento."""
+    def reject(cls, document: Any, user: Any, comments: str | None = None, *, request: ApprovalRequest | None = None) -> None:
+        """Rechaza la solicitud de aprobación indicada o la pendiente del documento."""
         company_id = (
             getattr(document, "company", None) or getattr(document, "company_id", None) or getattr(document, "entity", None)
         )
         if not company_id:
             return
-        if not cls.is_enabled(company_id) and cls._pending_request(document) is None:
+        if request is None and not cls.is_enabled(company_id) and cls._pending_request(document) is None:
             return
 
         doctype = cls._resolve_doctype(document)
-        req = cls._pending_request(document, lock=True)
+        req = cls._request_for_action(document, request) if request is not None else cls._pending_request(document, lock=True)
         if not req:
             raise ValueError(_("No existe ninguna solicitud de aprobación para este documento."))
 
         if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
             raise ValueError(_("La solicitud de aprobación no está pendiente."))
 
-        if not cls.can_approve(document, user):
+        if not cls.can_approve(document, user, req):
             raise ValueError(_("El usuario no cumple los permisos, límites o independencia requeridos para aprobar."))
 
         rules = cls._get_user_rules(user.id, company_id, doctype)

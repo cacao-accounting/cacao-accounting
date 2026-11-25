@@ -642,13 +642,13 @@ def _approval_rule_from_form(company: str) -> ApprovalMatrix:
     )
 
 
-def _process_approval_action(action, document, comments):
-    """Procesar acción de aprobación o rechazo de un documento."""
+def _process_approval_action(action, document, comments, approval_request=None):
+    """Procesar acción de aprobación o rechazo de una solicitud concreta."""
     from cacao_accounting.approval_engine import ApprovalEngine
 
     if action == "approve":
         try:
-            ApprovalEngine.approve(document, current_user, comments)
+            ApprovalEngine.approve(document, current_user, comments, request=approval_request)
             database.session.commit()
             flash(_("Documento aprobado con éxito."), "success")
         except (SQLAlchemyError, ValueError) as exc:
@@ -656,7 +656,7 @@ def _process_approval_action(action, document, comments):
             flash_error(exc)
     elif action == "reject":
         try:
-            ApprovalEngine.reject(document, current_user, comments)
+            ApprovalEngine.reject(document, current_user, comments, request=approval_request)
             database.session.commit()
             flash(_("Documento rechazado con éxito."), "warning")
         except (SQLAlchemyError, ValueError) as exc:
@@ -666,8 +666,9 @@ def _process_approval_action(action, document, comments):
 
 def _process_pending_approval_post(approval_request, get_model_class) -> None:
     """Procesa la acción enviada desde el listado de aprobaciones."""
-    req = database.session.get(approval_request, request.form.get("request_id"))
+    req = database.session.get(approval_request, request.form.get("request_id"), with_for_update=True, populate_existing=True)
     if not req:
+        flash_error(_("La solicitud de aprobación no está pendiente."))
         return
     from cacao_accounting.control_review_service import REVIEW_TYPES, approve_review, reject_review
 
@@ -687,7 +688,7 @@ def _process_pending_approval_post(approval_request, get_model_class) -> None:
         return
     document = database.session.get(get_model_class(req.document_type), req.document_id)
     if document:
-        _process_approval_action(request.form.get("action"), document, request.form.get("comments") or None)
+        _process_approval_action(request.form.get("action"), document, request.form.get("comments") or None, req)
 
 
 def _pending_approval_info(req, get_model_class, approval_engine, user_model, document_types):
