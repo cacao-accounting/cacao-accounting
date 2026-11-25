@@ -199,6 +199,7 @@ describe('bank selector clear synchronization', function () {
   });
 
   it('clears both transfer selectors when the company changes', function () {
+    const source = readTemplate('transferencia_nueva.html');
     const dom = new JSDOM('<!doctype html><html><body><input id="company" value="OLD"></body></html>');
     const factory = loadSmartSelect(dom);
     const header = {
@@ -206,26 +207,26 @@ describe('bank selector clear synchronization', function () {
       currency: 'NIO',
       target_bank_account_id: 'TARGET-OLD',
       target_currency: 'USD',
+      exchange_rate: 36,
     };
+    globalThis.header = header;
+    // eslint-disable-next-line no-eval
+    const originClear = (0, eval)(`(${extractFunction(source, 'on_clear', 'header.currency')})`);
+    // eslint-disable-next-line no-eval
+    const targetClear = (0, eval)(`(${extractFunction(source, 'on_clear', 'header.target_currency')})`);
     const origin = factory({
       doctype: 'bank_account',
       name: 'bank_account_id',
       filters: { company: { selector: '#company' } },
       filterSources: ['#company'],
-      onClear: () => {
-        header.currency = '';
-        header.exchange_rate = 1;
-      },
+      onClear: originClear,
     });
     const target = factory({
       doctype: 'bank_account',
       name: 'target_bank_account_id',
       filters: { company: { selector: '#company' } },
       filterSources: ['#company'],
-      onClear: () => {
-        header.target_currency = '';
-        header.exchange_rate = 1;
-      },
+      onClear: targetClear,
     });
     for (const component of [origin, target]) {
       component.selectedValue = 'SEL-OLD';
@@ -242,5 +243,81 @@ describe('bank selector clear synchronization', function () {
     assert.strictEqual(header.currency, '');
     assert.strictEqual(header.target_currency, '');
     assert.strictEqual(header.exchange_rate, 1);
+  });
+
+  it('clears the transfer header when either bank account text is edited', function () {
+    const source = readTemplate('transferencia_nueva.html');
+    const dom = new JSDOM('<!doctype html><html><body><input id="company" value="OLD"></body></html>');
+    const factory = loadSmartSelect(dom);
+    const header = { currency: 'NIO', target_currency: 'USD', exchange_rate: 36 };
+    globalThis.header = header;
+    // eslint-disable-next-line no-eval
+    const originClear = (0, eval)(`(${extractFunction(source, 'on_clear', 'header.currency')})`);
+    // eslint-disable-next-line no-eval
+    const targetClear = (0, eval)(`(${extractFunction(source, 'on_clear', 'header.target_currency')})`);
+    const origin = factory({
+      doctype: 'bank_account',
+      name: 'bank_account_id',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      onClear: originClear,
+    });
+    const target = factory({
+      doctype: 'bank_account',
+      name: 'target_bank_account_id',
+      filters: { company: { selector: '#company' } },
+      filterSources: ['#company'],
+      onClear: targetClear,
+    });
+    for (const component of [origin, target]) {
+      component.selectedValue = 'SEL-OLD';
+      component.selectedLabel = 'Cuenta anterior';
+      component.search = 'Cuenta anterior';
+      component.options = [{ value: 'SEL-OLD', display_name: 'Cuenta anterior' }];
+      component.init();
+    }
+
+    origin.onInput({ target: { value: 'Otra cuenta' } });
+    assert.strictEqual(header.currency, '');
+    assert.strictEqual(header.exchange_rate, 1);
+
+    header.currency = 'NIO';
+    header.exchange_rate = 36;
+    target.onInput({ target: { value: 'Otra cuenta destino' } });
+    assert.strictEqual(header.target_currency, '');
+    assert.strictEqual(header.exchange_rate, 1);
+  });
+
+  it('blocks the transfer submit after clearing either bank account', function () {
+    const source = readTemplate('transferencia_nueva.html');
+    const dom = new JSDOM('<!doctype html><html><body></body></html>');
+    globalThis.document = dom.window.document;
+    globalThis.cacaoLocalIsoDate = () => '2026-01-01';
+    globalThis.alert = () => {};
+    // eslint-disable-next-line no-eval
+    (0, eval)(extractScript(source, 'bankTransferForm'));
+
+    const component = globalThis.bankTransferForm({ paymentType: 'internal_transfer' });
+    component.header.company = 'COMP';
+    component.header.paid_amount = 10;
+    component.header.bank_account_id = 'ORIGIN';
+    const blocked = { prevented: false, preventDefault() { this.prevented = true; } };
+    component.prepareSubmit(blocked);
+    assert.strictEqual(blocked.prevented, true);
+
+    component.header.target_bank_account_id = 'TARGET';
+    component.header.exchange_rate = 2;
+    const accepted = { prevented: false, preventDefault() { this.prevented = true; } };
+    component.prepareSubmit(accepted);
+    assert.strictEqual(accepted.prevented, false);
+    const payload = JSON.parse(component.payload);
+    assert.strictEqual(payload.bank_account_id, 'ORIGIN');
+    assert.strictEqual(payload.target_bank_account_id, 'TARGET');
+    assert.strictEqual(payload.exchange_rate, 2);
+
+    component.header.bank_account_id = '';
+    const cleared = { prevented: false, preventDefault() { this.prevented = true; } };
+    component.prepareSubmit(cleared);
+    assert.strictEqual(cleared.prevented, true);
   });
 });

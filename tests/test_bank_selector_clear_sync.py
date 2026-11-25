@@ -94,3 +94,23 @@ def test_transferencia_limpia_moneda_y_tipo_de_cambio(app, entorno_contable, aut
     assert "onClear: function(){ header.currency = ''; header.exchange_rate = 1; }" in html
     assert "onClear: function(){ header.target_currency = ''; header.exchange_rate = 1; }" in html
     assert "!this.header.bank_account_id || !this.header.target_bank_account_id" in html
+
+
+def test_transferencia_parsea_ambos_x_data_renderizados(app, entorno_contable, authenticated_client):
+    """#2280: origen y destino conservan un x-data completo y filtran por #company."""
+    del entorno_contable
+    html = authenticated_client("admin").get("/cash_management/payment/transfer/new").get_data(as_text=True)
+    parser = _SmartSelectCollector()
+    parser.feed(html)
+    configs = {
+        "origin": [attrs["x-data"] for attrs in parser.attributes if 'name: "bank_account_id"' in (attrs["x-data"] or "")],
+        "target": [
+            attrs["x-data"] for attrs in parser.attributes if 'name: "target_bank_account_id"' in (attrs["x-data"] or "")
+        ],
+    }
+    for role, values in configs.items():
+        assert len(values) == 1, role
+        config = values[0]
+        assert 'filterSources: ["#company"]' in config
+        assert "onSelect" in config
+        assert "onClear" in config
