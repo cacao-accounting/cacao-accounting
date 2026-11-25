@@ -219,7 +219,25 @@ def test_validacion_previa_descuenta_factura_actual_en_varias_ordenes(app, entor
         )
         database.session.add(factura)
         database.session.flush()
-        database.session.add(CompanyParty(company="cacao", party_id=cliente.id, is_active=True, credit_limit=Decimal("620")))
+        database.session.add(
+            SalesInvoice(
+                company="cacao",
+                posting_date=FECHA,
+                docstatus=1,
+                document_no=f"SI-PREVIA-{suffix}",
+                customer_id=cliente.id,
+                customer_name=cliente.name,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+                document_type="sales_invoice",
+                is_return=False,
+                grand_total=Decimal("250"),
+                base_total=Decimal("250"),
+                sales_order_id=ordenes[0].id,
+            )
+        )
+        database.session.add(CompanyParty(company="cacao", party_id=cliente.id, is_active=True, credit_limit=Decimal("375")))
         database.session.commit()
         ids = {
             "cliente": cliente.id,
@@ -232,8 +250,26 @@ def test_validacion_previa_descuenta_factura_actual_en_varias_ordenes(app, entor
     _relacion(app, ids["orden_2"], ids["factura"], "50")
     with app.app_context():
         factura = database.session.get(SalesInvoice, ids["factura"])
-        assert _approved_customer_order_exposure("cacao", ids["cliente"], factura) == Decimal("450")
-        _validate_credit_limit_and_overdue("cacao", ids["cliente"], Decimal("150"), factura)
+        assert _approved_customer_order_exposure("cacao", ids["cliente"], factura) == Decimal("250")
+        with pytest.raises(ValueError, match="límite de crédito"):
+            _validate_credit_limit_and_overdue("cacao", ids["cliente"], Decimal("150"), factura)
+
+
+@pytest.mark.parametrize("por_entrega", [False, True])
+def test_validacion_previa_cabecera_o_entrega_no_duplica(app, entorno_contable, por_entrega):
+    """La factura actual por cabecera o entrega descuenta una sola vez."""
+    cliente_id, _order_id, invoice_id = _documentos(
+        app,
+        docstatus=0,
+        por_cabecera=not por_entrega,
+        por_entrega=por_entrega,
+    )
+    with app.app_context():
+        database.session.add(CompanyParty(company="cacao", party_id=cliente_id, is_active=True, credit_limit=Decimal("350")))
+        database.session.commit()
+        factura = database.session.get(SalesInvoice, invoice_id)
+        assert _approved_customer_order_exposure("cacao", cliente_id, factura) == Decimal("200")
+        _validate_credit_limit_and_overdue("cacao", cliente_id, Decimal("100"), factura)
 
 
 def test_validacion_previa_suma_nota_de_debito_actual(app, entorno_contable):
