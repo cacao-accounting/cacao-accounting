@@ -2077,9 +2077,15 @@ def ventas_entrega_editar(note_id: str):
 
 
 def _copy_active_sales_document_relations(
-    source_id: str, target_id: str, target_company: str | None, item_ids: dict[str, str]
+    source_id: str,
+    target_id: str,
+    target_company: str | None,
+    item_ids: dict[str, str],
+    *,
+    exclude_source_types: set[str] | None = None,
 ) -> None:
     """Copia relaciones activas de línea al borrador duplicado de ventas."""
+    excluded = exclude_source_types or set()
     relations = (
         database.session.execute(
             database.select(DocumentRelation)
@@ -2090,6 +2096,8 @@ def _copy_active_sales_document_relations(
         .all()
     )
     for relation in relations:
+        if relation.source_type in excluded:
+            continue
         target_item_id = item_ids.get(relation.target_item_id) if relation.target_item_id else None
         if relation.target_item_id and target_item_id is None:
             continue
@@ -2572,7 +2580,7 @@ def ventas_factura_venta_duplicar(invoice_id: str):
         tax_template_id=origen.tax_template_id,
         update_inventory=origen.update_inventory,
         sales_order_id=origen.sales_order_id,
-        delivery_note_id=origen.delivery_note_id,
+        delivery_note_id=None,
         reversal_of=origen.reversal_of,
     )
     database.session.add(duplicado)
@@ -2606,7 +2614,13 @@ def ventas_factura_venta_duplicar(invoice_id: str):
         database.session.flush()
         item_ids[item.id] = linea.id
         total += item.amount or Decimal("0")
-    _copy_active_sales_document_relations(origen.id, duplicado.id, duplicado.company, item_ids)
+    _copy_active_sales_document_relations(
+        origen.id,
+        duplicado.id,
+        duplicado.company,
+        item_ids,
+        exclude_source_types={"delivery_note"},
+    )
     from cacao_accounting.fiscal_persistence_service import copy_document_fiscal_snapshot
 
     copy_document_fiscal_snapshot(

@@ -11,8 +11,6 @@ from uuid import uuid4
 
 from sqlalchemy import inspect
 
-import pytest
-
 from cacao_accounting.database import (
     Accounts,
     DeliveryNote,
@@ -31,7 +29,6 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.repository import consumed_qty_for_source
-from cacao_accounting.ventas.services import _validate_sales_invoice_relation
 from cacao_accounting.fiscal_persistence_service import (
     build_tax_rule_contexts_from_snapshot,
     load_document_fiscal_lines,
@@ -150,8 +147,8 @@ def test_duplicado_conserva_snapshot_fiscal_y_actualizacion_inventario(entorno_c
         assert [regla.amount for regla in restauradas] == [Decimal("15.0000")]
 
 
-def test_duplicado_no_infla_disponibilidad_y_detecta_sobre_facturacion(entorno_contable_aislado):
-    """El borrador duplicado no consume stock del origen, pero al confirmar se detecta el exceso."""
+def test_duplicado_no_infla_disponibilidad_ni_hereda_entrega(entorno_contable_aislado):
+    """El duplicado no consume stock ni reutiliza la relación de entrega del origen."""
     app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:6]
     with app.app_context():
@@ -238,16 +235,19 @@ def test_duplicado_no_infla_disponibilidad_y_detecta_sobre_facturacion(entorno_c
         copia = database.session.execute(
             database.select(SalesInvoice).where(SalesInvoice.id != factura_id, SalesInvoice.docstatus == 0)
         ).scalar_one()
-        relacion = database.session.execute(
-            database.select(DocumentRelation).filter_by(target_type="sales_invoice", target_id=copia.id, status="active")
-        ).scalar_one()
+        assert copia.delivery_note_id is None
+        assert (
+            database.session.execute(
+                database.select(DocumentRelation.id).filter_by(
+                    target_type="sales_invoice", target_id=copia.id, source_type="delivery_note", status="active"
+                )
+            ).scalar_one_or_none()
+            is None
+        )
         consumido = consumed_qty_for_source(
             "delivery_note", entrega_id, entrega_linea_id, "sales_invoice", exclude_draft_targets=True
         )
         assert consumido == Decimal("1")
-
-        with pytest.raises(ValueError, match="Sobre-facturación"):
-            _validate_sales_invoice_relation(relacion, invoice_id=copia.id)
 
 
 def test_duplicado_de_orden_agotada_no_contabiliza_ni_mueve_inventario(entorno_contable_aislado):
@@ -372,13 +372,93 @@ def test_duplicado_de_orden_agotada_no_contabiliza_ni_mueve_inventario(entorno_c
             .all()
             == []
         )
+        copia = database.session.get(SalesInvoice, copia_id)
+        assert copia is not None and copia.delivery_note_id is None
+        assert database.session.execute(database.select(DeliveryNote.id)).scalars().all() == []
+
+
+def test_duplicado_de_factura_con_entrega_no_comparte_nota(entorno_contable_aislado):
+    """La copia independiente no reutiliza la nota de entrega del original."""
+    app = entorno_contable_aislado.app
+    sufijo = uuid4().hex[:6]
+    with app.app_context():
+        cliente = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one()
+        entrega = DeliveryNote(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"NE-DUP-{sufijo}",
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(entrega)
+        database.session.flush()
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            document_type="sales_invoice",
+            docstatus=1,
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"FV-DUP-{sufijo}",
+            delivery_note_id=entrega.id,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            total=Decimal("100"),
+            grand_total=Decimal("100"),
+        )
+        database.session.add(factura)
+        database.session.flush()
+        linea = SalesInvoiceItem(
+            sales_invoice_id=factura.id,
+            item_code="ART01",
+            item_name="Artículo de prueba",
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom="UND",
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+        )
+        database.session.add(linea)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="delivery_note",
+                source_id=entrega.id,
+                target_type="sales_invoice",
+                target_id=factura.id,
+                target_item_id=linea.id,
+                company="cacao",
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom="UND",
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+                relation_type="billing",
+                status="active",
+            )
+        )
+        database.session.commit()
+        factura_id = factura.id
+
+    respuesta = _cliente(entorno_contable_aislado).post(f"/sales/sales-invoice/{factura_id}/duplicate")
+    assert respuesta.status_code == 302
+
+    with app.app_context():
+        copia = database.session.execute(
+            database.select(SalesInvoice).where(SalesInvoice.id != factura_id, SalesInvoice.docstatus == 0)
+        ).scalar_one()
+        assert copia.delivery_note_id is None
         assert (
             database.session.execute(
-                database.select(StockLedgerEntry.id).filter_by(voucher_type="delivery_note", voucher_id=copia_id)
-            )
-            .scalars()
-            .all()
-            == []
+                database.select(DocumentRelation.id).filter_by(
+                    target_type="sales_invoice", target_id=copia.id, source_type="delivery_note", status="active"
+                )
+            ).scalar_one_or_none()
+            is None
         )
 
 
