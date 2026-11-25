@@ -62,7 +62,7 @@
 </div>
 {% endif %}
 
-{% if award and award.status == 'finalized' %}
+{% if award and award.status == 'finalized' and can_create %}
 <div class="mt-3 d-flex justify-content-end">
   <form method="post" action="{{ url_for('compras.compras_comparativo_colocar_ordenes', rfq_id=registro.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

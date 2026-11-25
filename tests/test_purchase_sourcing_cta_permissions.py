@@ -12,6 +12,7 @@ from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.database import (
     Modules,
     PurchaseQuotation,
+    PurchaseQuotationAward,
     Roles,
     RolesAccess,
     RolesUser,
@@ -37,6 +38,19 @@ def _rfq(app) -> str:
         database.session.add(rfq)
         database.session.commit()
         return rfq.id
+
+
+def _award(app, rfq_id: str) -> None:
+    """Finaliza el comparativo para que aparezca el CTA de órdenes."""
+    with app.app_context():
+        database.session.add(
+            PurchaseQuotationAward(
+                purchase_quotation_id=rfq_id,
+                company="cacao",
+                status="finalized",
+            )
+        )
+        database.session.commit()
 
 
 def _viewer(app) -> str:
@@ -99,3 +113,33 @@ def test_comparativo_muestra_ctas_al_administrador(app, entorno_contable, authen
     html = response.get_data(as_text=True)
     assert CTA_ADJUDICAR in html
     assert CTA_RONDA in html
+
+
+def test_viewer_con_award_finalizado_no_ve_cta_ni_puede_postear(app, entorno_contable):
+    """Un lector no ve el CTA finalizado ni puede ejecutar su POST."""
+    rfq_id = _rfq(app)
+    _award(app, rfq_id)
+    user_id, auth_version = _viewer(app)
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_auth_version"] = auth_version
+        session["_fresh"] = True
+
+    response = client.get(f"/buying/request-for-quotation/{rfq_id}/offers")
+    post = client.post(f"/buying/request-for-quotation/{rfq_id}/place-purchase-orders")
+
+    assert response.status_code == 200
+    assert "Colocar Órdenes de Compra" not in response.get_data(as_text=True)
+    assert post.status_code == 403
+
+
+def test_admin_con_award_finalizado_conserva_cta(app, entorno_contable, authenticated_client):
+    """El administrador ve el CTA cuando el comparativo ya está finalizado."""
+    rfq_id = _rfq(app)
+    _award(app, rfq_id)
+
+    response = authenticated_client("admin").get(f"/buying/request-for-quotation/{rfq_id}/offers")
+
+    assert response.status_code == 200
+    assert "Colocar Órdenes de Compra" in response.get_data(as_text=True)
