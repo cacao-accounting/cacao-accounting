@@ -670,6 +670,32 @@ def test_create_target_rejects_invalid_customer_before_persisting(document_flow_
         assert len(database.session.execute(database.select(DocumentRelation.id)).scalars().all()) == relaciones
 
 
+@pytest.mark.parametrize("source_id_key", ["missing", "foreign_order"])
+def test_create_target_without_company_rejects_before_source_lookup(document_flow_app, source_id_key):
+    """#2056: omitir la compañía destino no revela si una fuente existe."""
+    app, client, ids = document_flow_app
+    _login(client, "vendedor")
+    source_id = "no-existe" if source_id_key == "missing" else ids["foreign_order"]
+    with app.app_context():
+        ordenes = len(database.session.execute(database.select(SalesOrder.id)).scalars().all())
+
+    response = client.post(
+        "/api/document-flow/create-target",
+        json={
+            "source_document_type": "sales_order",
+            "source_document_id": source_id,
+            "target_document_type": "sales_order",
+            "posting_date": "2026-10-16",
+            "lines": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert b"SO-CONFIDENCIAL" not in response.data
+    with app.app_context():
+        assert len(database.session.execute(database.select(SalesOrder.id)).scalars().all()) == ordenes
+
+
 def test_create_target_authorizes_company_before_resolving_source_or_item(document_flow_app):
     """#2056: una compania no autorizada responde 403 sin revelar fuentes ni items."""
     app, client, ids = document_flow_app
