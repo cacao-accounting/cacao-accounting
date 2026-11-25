@@ -22,6 +22,7 @@ from cacao_accounting.bancos.reconciliation_service import (
 )
 from cacao_accounting.bancos.statement_service import _accumulate_exact_candidate, auto_reconcile_bank_transaction
 from cacao_accounting.database import (
+    AuditTrail,
     Bank,
     BankAccount,
     BankMatchingRule,
@@ -100,15 +101,29 @@ def test_reglas_reales_obtienen_mismo_importe_y_concilian(entorno_contable_aisla
             assert result[0].status == "exact"
             assert result[0].amount == Decimal("100")
 
+        regla_prioritaria = database.session.execute(
+            select(BankMatchingRule).where(BankMatchingRule.priority == 1)
+        ).scalar_one()
+
         result = auto_reconcile_bank_transaction(transaction.id)
         assert result.reconciled is True
         assert result.allocated_amount == Decimal("100")
+        assert result.candidate_reference_id == payment.id
+        assert result.rule_id == regla_prioritaria.id
         rows = (
             database.session.execute(database.select(ReconciliationItem).filter_by(source_id=transaction.id)).scalars().all()
         )
         assert len(rows) == 1
         assert rows[0].target_id == payment.id
         assert rows[0].allocated_amount == Decimal("100")
+        evento = database.session.execute(
+            select(AuditTrail).where(
+                AuditTrail.document_id == transaction.id,
+                AuditTrail.action == "reconciled",
+            )
+        ).scalar_one()
+        assert regla_prioritaria.name in evento.comment
+        assert payment.id in evento.comment
 
 
 def test_importes_distintos_para_mismo_destino_son_ambiguos(entorno_contable_aislado):
@@ -316,6 +331,53 @@ def test_reglas_reales_con_exactos_disjuntos_quedan_ambiguos(entorno_contable_ai
             == []
         )
         assert database.session.execute(database.select(Reconciliation).filter_by(company="cacao")).scalars().all() == []
+
+
+def test_asignacion_real_no_crea_segundo_exacto_para_mismo_destino(entorno_contable_aislado):
+    """Una conciliación real consume saldo y deja el candidato como parcial.
+
+    Esto documenta por qué un cambio de saldo append-only no puede producir un
+    segundo candidato ``exact`` con distinto importe para el mismo destino: el
+    importe pendiente deja de coincidir con el importe del documento y el motor
+    clasifica el candidato como ``partial``.
+    """
+    app = entorno_contable_aislado.app
+    actor_id = str(inspect(entorno_contable_aislado.admin_user).identity[0])
+    with app.test_request_context("/"):
+        login_user(database.session.get(User, actor_id))
+        account, transaction, payment = _escenario()
+
+        primeros = find_bank_reconciliation_candidates(transaction.id, days_tolerance=0, amount_tolerance=Decimal("5"))
+        assert len(primeros) == 1
+        assert primeros[0].status == "exact"
+        assert primeros[0].amount == Decimal("100")
+
+        otra_transaccion = BankTransaction(
+            bank_account_id=account.id,
+            posting_date=date(2026, 5, 15),
+            deposit=Decimal("40"),
+            withdrawal=Decimal("0"),
+        )
+        database.session.add(otra_transaccion)
+        database.session.flush()
+        reconcile_bank_items(
+            BankReconciliationRequest(
+                company="cacao",
+                reconciliation_date=date(2026, 5, 15),
+                matches=[BankReconciliationMatch(otra_transaccion.id, "payment_entry", payment.id, Decimal("40"))],
+            )
+        )
+        database.session.commit()
+
+        segundos = find_bank_reconciliation_candidates(transaction.id, days_tolerance=0, amount_tolerance=Decimal("5"))
+        assert len(segundos) == 1
+        assert segundos[0].reference_id == payment.id
+        assert segundos[0].status == "partial"
+        assert segundos[0].amount == Decimal("62")
+        assert (
+            database.session.execute(database.select(ReconciliationItem).filter_by(source_id=transaction.id)).scalars().all()
+            == []
+        )
 
 
 def test_cambio_persistido_de_importe_para_mismo_destino_es_ambiguo(entorno_contable_aislado):
