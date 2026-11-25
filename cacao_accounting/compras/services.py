@@ -403,10 +403,7 @@ def purchase_order_has_closed_source_request(order_id: str) -> bool:
     if not request_ids:
         return False
     statuses = database.session.execute(
-        database.select(PurchaseRequest.status)
-        .where(PurchaseRequest.id.in_(request_ids))
-        .with_for_update()
-        .execution_options(populate_existing=True)
+        database.select(PurchaseRequest.status).where(PurchaseRequest.id.in_(request_ids))
     ).scalars()
     return any(status == "closed" for status in statuses)
 
