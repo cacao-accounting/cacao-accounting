@@ -34,6 +34,11 @@ def effective_gl_scope() -> tuple[Any, ...]:
     línea origen pertenece a **otro** período: son el efecto efectivo de una
     reversión interperíodo (#1970). Las contrapartidas del mismo período se
     anulan con su original y quedan fuera.
+
+    Un original cancelado con reversa en otro período vuelve a entrar: su
+    movimiento estuvo vigente en el corte original y la contrapartida ya se
+    contabilizó en el período posterior (#2265). La anulación del mismo período
+    sigue teniendo efecto cero y no se muestra en ninguno de los dos lados.
     """
     from sqlalchemy import exists, or_
     from sqlalchemy.orm import aliased
@@ -41,11 +46,17 @@ def effective_gl_scope() -> tuple[Any, ...]:
     from cacao_accounting.database import GLEntry
 
     origen = aliased(GLEntry)
+    reversa = aliased(GLEntry)
     mismo_periodo = exists().where(
         origen.id == GLEntry.reversal_of,
         origen.accounting_period_id == GLEntry.accounting_period_id,
     )
+    reversa_interperiodo = exists().where(
+        reversa.reversal_of == GLEntry.id,
+        reversa.is_reversal.is_(True),
+        reversa.accounting_period_id != GLEntry.accounting_period_id,
+    )
     return (
-        GLEntry.is_cancelled.is_(False),
+        or_(GLEntry.is_cancelled.is_(False), reversa_interperiodo),
         or_(GLEntry.is_reversal.is_(False), ~mismo_periodo),
     )

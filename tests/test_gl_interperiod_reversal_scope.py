@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#1970: los reportes incluyen la reversión interperíodo vigente."""
+"""#1970 y #2265: los reportes conservan el corte original y su reversa vigente."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from cacao_accounting.reportes.services import (
     FinancialReportFilters,
     get_account_movement_detail,
     get_income_statement_report,
+    get_trial_balance_report,
 )
 
 
@@ -51,7 +52,7 @@ def _entrada(period: str, fecha: date, **extra) -> GLEntry:
 
 
 def test_incluye_reversion_interperiodo_y_excluye_la_del_mismo_periodo(app, entorno_contable):
-    """El corte efectivo conserva la contrapartida vigente del período nuevo."""
+    """El corte efectivo conserva el original y la contrapartida del período nuevo."""
     with app.app_context():
         database.session.add(_periodo("P2026-11", date(2026, 11, 1), date(2026, 11, 30)))
         database.session.flush()
@@ -74,7 +75,8 @@ def test_incluye_reversion_interperiodo_y_excluye_la_del_mismo_periodo(app, ento
 
         assert vigente.id in seleccionados
         assert contra_nov.id in seleccionados
-        assert original_oct.id not in seleccionados
+        # #2265: la reversa de noviembre no reescribe el corte de mayo.
+        assert original_oct.id in seleccionados
         assert anulada.id not in seleccionados
         assert mismo_periodo.id not in seleccionados
 
@@ -85,7 +87,7 @@ def test_incluye_reversion_interperiodo_y_excluye_la_del_mismo_periodo(app, ento
 
 
 def test_reporte_gl_incluye_reversion_interperiodo_en_su_periodo(entorno_contable_aislado):
-    """El detalle GL y el estado de resultados reflejan la reversa en junio."""
+    """El detalle GL, la balanza y el resultado conservan ambos cortes (#2265)."""
     app = entorno_contable_aislado.app
     with app.app_context():
         database.session.add(_periodo("P2026-06", date(2026, 6, 1), date(2026, 6, 30)))
@@ -153,7 +155,34 @@ def test_reporte_gl_incluye_reversion_interperiodo_en_su_periodo(entorno_contabl
                 export_all=True,
             )
         )
+        estado_mayo = get_income_statement_report(
+            FinancialReportFilters(
+                company="cacao",
+                ledger="DEFAULT_BOOK",
+                accounting_period="P2026-05",
+                page_size=100,
+                export_all=True,
+            )
+        )
         estado_junio = get_income_statement_report(
+            FinancialReportFilters(
+                company="cacao",
+                ledger="DEFAULT_BOOK",
+                accounting_period="P2026-06",
+                page_size=100,
+                export_all=True,
+            )
+        )
+        balanza_mayo = get_trial_balance_report(
+            FinancialReportFilters(
+                company="cacao",
+                ledger="DEFAULT_BOOK",
+                accounting_period="P2026-05",
+                page_size=100,
+                export_all=True,
+            )
+        )
+        balanza_junio = get_trial_balance_report(
             FinancialReportFilters(
                 company="cacao",
                 ledger="DEFAULT_BOOK",
@@ -165,11 +194,22 @@ def test_reporte_gl_incluye_reversion_interperiodo_en_su_periodo(entorno_contabl
 
         debito_mayo = sum((row.values.get("debit", Decimal("0")) for row in mayo.rows), Decimal("0"))
         credito_mayo = sum((row.values.get("credit", Decimal("0")) for row in mayo.rows), Decimal("0"))
-        assert debito_mayo == Decimal("5")
+        assert debito_mayo == Decimal("15")
         assert credito_mayo == Decimal("0")
 
         debito_junio = sum((row.values.get("debit", Decimal("0")) for row in junio.rows), Decimal("0"))
         credito_junio = sum((row.values.get("credit", Decimal("0")) for row in junio.rows), Decimal("0"))
         assert debito_junio == Decimal("0")
         assert credito_junio == Decimal("10")
+        # La reversa posterior no modifica el gasto ya reconocido en mayo.
+        assert estado_mayo.totals["expense"] == Decimal("15")
         assert estado_junio.totals["expense"] == Decimal("-10")
+
+        fila_mayo = next(row for row in balanza_mayo.rows if row.values["account_code"] == "5299")
+        fila_junio = next(row for row in balanza_junio.rows if row.values["account_code"] == "5299")
+        assert fila_mayo.values["debit"] == Decimal("15")
+        assert fila_mayo.values["credit"] == Decimal("0")
+        assert fila_junio.values["opening_balance"] == Decimal("15")
+        assert fila_junio.values["credit"] == Decimal("10")
+        assert balanza_mayo.totals["difference"] == Decimal("15")
+        assert balanza_junio.totals["difference"] == Decimal("-10")

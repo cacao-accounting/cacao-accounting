@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     Bank,
     BankAccount,
     Book,
+    CashFlowAccountMapping,
     CompanyDefaultAccount,
     Currency,
     Entity,
@@ -39,6 +40,8 @@ from cacao_accounting.database import (
     User,
     database,
 )
+from cacao_accounting.reportes.cash_flow import get_cash_flow_statement
+from cacao_accounting.reportes.services import FinancialReportFilters
 
 pytestmark = pytest.mark.database
 
@@ -783,3 +786,93 @@ def test_rerunning_the_same_period_leaves_one_active_adjustment(business_app):
         )
         active_originals = [entry for entry in entries if not entry.is_cancelled and not entry.is_reversal]
         assert {entry.voucher_id for entry in active_originals} == {second_id}
+
+
+def test_efe_conserva_apertura_tras_reversion_interperiodo(business_app):
+    """#2265: una reversa real en el periodo siguiente no reescribe el corte previo."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, _year, _month, _opening_period_id, period_id, following_period_id, following_start = _seed_bank_exposure(
+            company
+        )
+        actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        ledger_code = database.session.execute(database.select(Book.code).filter_by(entity=company)).scalar_one()
+        bank_gl = database.session.execute(
+            database.select(Accounts).filter_by(entity=company, code="1.01.02.001")
+        ).scalar_one()
+        for code, classification in (("4.01.01.001", "income"), ("5.01.02.001", "expense")):
+            account = database.session.execute(database.select(Accounts).filter_by(entity=company, code=code)).scalar_one()
+            account.classification = classification
+        database.session.add(CashFlowAccountMapping(company=company, account_id=bank_gl.id, flow_section="cash"))
+        database.session.commit()
+
+        run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
+        run_id = str(run.id)
+        original_entries = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=run_id,
+                    is_reversal=False,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert original_entries and all(not entry.is_cancelled for entry in original_entries)
+        bank_delta = sum(
+            (entry.debit - entry.credit for entry in original_entries if entry.account_id == bank_gl.id),
+            Decimal("0"),
+        )
+        assert bank_delta != Decimal("0")
+        opening_entry = database.session.execute(
+            database.select(GLEntry).filter_by(company=company, voucher_id=f"OPEN-{company}")
+        ).scalar_one()
+        opening_amount = Decimal(str(opening_entry.debit - opening_entry.credit))
+        cut_before_reversal = opening_amount + bank_delta
+
+        original_filters = FinancialReportFilters(
+            company=company,
+            ledger=ledger_code,
+            accounting_period=period_id,
+        )
+        following_filters = FinancialReportFilters(
+            company=company,
+            ledger=ledger_code,
+            accounting_period=following_period_id,
+        )
+        original_before = get_cash_flow_statement(original_filters).totals
+        following_before = get_cash_flow_statement(following_filters).totals
+        assert original_before["cash_closing"] == cut_before_reversal
+        assert following_before["cash_opening"] == cut_before_reversal
+        assert following_before["cash_closing"] == cut_before_reversal
+        assert following_before["net_change_cash"] == Decimal("0")
+
+        service = ExchangeRevaluationService()
+        service.void(run_id=run_id, user_id=actor_id, reason="Reversa interperiodo del EFE", reversal_date=following_start)
+
+        reversed_entries = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=run_id,
+                    is_reversal=True,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(reversed_entries) == len(original_entries)
+        assert all(entry.is_cancelled for entry in original_entries)
+        assert all(entry.accounting_period_id == following_period_id for entry in reversed_entries)
+
+        original_after = get_cash_flow_statement(original_filters).totals
+        following_after = get_cash_flow_statement(following_filters).totals
+        # El corte histórico y la apertura del periodo siguiente son inmutables.
+        assert original_after["cash_closing"] == cut_before_reversal
+        assert following_after["cash_opening"] == cut_before_reversal
+        assert following_after["net_change_cash"] == -bank_delta
+        assert following_after["cash_closing"] == opening_amount
+        assert following_after["difference"] == Decimal("0")
