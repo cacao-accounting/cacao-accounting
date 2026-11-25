@@ -18,17 +18,43 @@ from sqlalchemy import select
 from cacao_accounting.database import Modules, Party, PartyGroup, User, database
 
 
+@pytest.fixture
+def admin_module_snapshot(app):
+    """Verifica al final de la prueba que el módulo admin conserva su estado."""
+    with app.app_context():
+        previous = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one()
+        previous_enabled = previous.enabled
+    yield
+    with app.app_context():
+        current = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one()
+        assert current.enabled == previous_enabled
+
+
 @pytest.fixture(name="party_group_admin")
-def party_group_admin_fixture(app):
-    """Habilita administración y devuelve el id del administrador del sistema."""
+def party_group_admin_fixture(app, admin_module_snapshot):
+    """Habilita administración y restaura su estado previo al terminar la prueba."""
+    del admin_module_snapshot
     with app.app_context():
         admin_module = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one_or_none()
-        if admin_module is None:
+        module_created = admin_module is None
+        previous_enabled = None if module_created else admin_module.enabled
+        if module_created:
             database.session.add(Modules(module="admin", default=False, enabled=True))
         else:
             admin_module.enabled = True
         database.session.commit()
-        return database.session.execute(select(User.id).filter_by(user="admin")).scalar_one()
+        admin_id = database.session.execute(select(User.id).filter_by(user="admin")).scalar_one()
+    try:
+        yield admin_id
+    finally:
+        with app.app_context():
+            current = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one_or_none()
+            if module_created:
+                if current is not None:
+                    database.session.delete(current)
+            elif current is not None:
+                current.enabled = previous_enabled
+            database.session.commit()
 
 
 def _admin_client(app, user_id: str):

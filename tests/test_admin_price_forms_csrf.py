@@ -15,15 +15,31 @@ from cacao_accounting.database import Item, ItemPrice, Modules, PriceList, datab
 
 
 @pytest.fixture
-def csrf_price_forms(app, entorno_contable, authenticated_client):
+def csrf_state_snapshot(app):
+    """Verifica al final de la prueba que CSRF y el módulo admin vuelven al estado previo."""
+    previous_csrf = app.config["WTF_CSRF_ENABLED"]
+    with app.app_context():
+        previous_enabled = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one().enabled
+    yield
+    assert app.config["WTF_CSRF_ENABLED"] == previous_csrf
+    with app.app_context():
+        current = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one()
+        assert current.enabled == previous_enabled
+
+
+@pytest.fixture
+def csrf_price_forms(app, entorno_contable, authenticated_client, csrf_state_snapshot):
     """Habilita CSRF real y prepara artículos, lista y tarifa de prueba."""
+    del csrf_state_snapshot
     previous_csrf = app.config["WTF_CSRF_ENABLED"]
     app.config["WTF_CSRF_ENABLED"] = True
     suffix = uuid4().hex[:8]
     item_code = f"CSR-1743-{suffix}"
     with app.app_context():
         admin_module = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
-        if admin_module is None:
+        module_created = admin_module is None
+        previous_enabled = None if module_created else admin_module.enabled
+        if module_created:
             admin_module = Modules(module="admin", default=False, enabled=True)
             database.session.add(admin_module)
         admin_module.enabled = True
@@ -56,13 +72,23 @@ def csrf_price_forms(app, entorno_contable, authenticated_client):
         database.session.commit()
         ids = (item_code, price_list.id, item_price.id)
     client = authenticated_client("admin")
-    yield app, client, ids
-    with app.app_context():
-        database.session.execute(database.delete(ItemPrice).where(ItemPrice.id == ids[2]))
-        database.session.execute(database.delete(PriceList).where(PriceList.id == ids[1]))
-        database.session.execute(database.delete(Item).where(Item.code == ids[0]))
-        database.session.commit()
-    app.config["WTF_CSRF_ENABLED"] = previous_csrf
+    try:
+        yield app, client, ids
+    finally:
+        try:
+            with app.app_context():
+                database.session.execute(database.delete(ItemPrice).where(ItemPrice.id == ids[2]))
+                database.session.execute(database.delete(PriceList).where(PriceList.id == ids[1]))
+                database.session.execute(database.delete(Item).where(Item.code == ids[0]))
+                current = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
+                if module_created:
+                    if current is not None:
+                        database.session.delete(current)
+                elif current is not None:
+                    current.enabled = previous_enabled
+                database.session.commit()
+        finally:
+            app.config["WTF_CSRF_ENABLED"] = previous_csrf
 
 
 def _form_token(html: str, action: str | None = None, marker: str | None = None) -> str:
