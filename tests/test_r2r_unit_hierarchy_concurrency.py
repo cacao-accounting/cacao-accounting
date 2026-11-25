@@ -273,8 +273,8 @@ def test_las_anclas_se_bloquean_antes_que_los_nodos(monkeypatch):
         bootstrap_engine.dispose()
 
 
-def test_actualizacion_ve_hija_confirmada_despues_del_snapshot_mysql():
-    """MySQL REPEATABLE READ: el hijo confirmado tras el snapshot recibe nivel/path."""
+def test_actualizacion_refresca_descendientes_tras_snapshot_mysql():
+    """MySQL REPEATABLE READ: el nombre confirmado por otra sesión refresca level/path."""
     uri = str(configuracion.get("SQLALCHEMY_DATABASE_URI", ""))
     if not uri.startswith(("mysql", "mariadb")):
         pytest.skip("Este caso valida el snapshot REPEATABLE READ de MySQL/MariaDB.")
@@ -295,12 +295,15 @@ def test_actualizacion_ve_hija_confirmada_despues_del_snapshot_mysql():
     currency_code = f"M{sufijo}"
     root_code = f"R{sufijo}"
     child_code = f"H{sufijo}"
+    grandchild_code = f"N{sufijo}"
     snapshot_ready = Event()
     child_committed = Event()
     ids: dict[str, str] = {}
     try:
         with app.app_context():
             database.create_all()
+            isolation = str(database.session.execute(text("SELECT @@transaction_isolation")).scalar_one())
+            assert isolation.lower().replace("_", "-") == "repeatable-read"
             database.session.add(Currency(code=currency_code, name="Moneda snapshot", decimals=2, active=True, default=False))
             database.session.add(
                 Entity(
@@ -316,14 +319,30 @@ def test_actualizacion_ve_hija_confirmada_despues_del_snapshot_mysql():
             database.session.flush()
             root = Unit(entity=company_code, code=root_code, name="Raíz", enabled=True)
             database.session.add(root)
+            database.session.flush()
+            child = Unit(entity=company_code, code=child_code, name="Hija", enabled=True, parent_id=root.id)
+            database.session.add(child)
+            database.session.flush()
+            grandchild = Unit(
+                entity=company_code,
+                code=grandchild_code,
+                name="Nieta",
+                enabled=True,
+                parent_id=child.id,
+            )
+            database.session.add(grandchild)
+            update_hierarchy_attributes(root)
             database.session.commit()
-            ids["root"] = str(root.id)
+            ids = {"root": str(root.id), "child": str(child.id), "grandchild": str(grandchild.id)}
 
         def parent_update() -> None:
             with app.app_context():
                 try:
                     root = database.session.get(Unit, ids["root"])
-                    assert root is not None
+                    child = database.session.get(Unit, ids["child"])
+                    grandchild = database.session.get(Unit, ids["grandchild"])
+                    assert root is not None and child is not None and grandchild is not None
+                    assert child.name == "Hija"
                     snapshot_ready.set()
                     assert child_committed.wait(timeout=20)
                     update_hierarchy_attributes(root)
@@ -331,13 +350,13 @@ def test_actualizacion_ve_hija_confirmada_despues_del_snapshot_mysql():
                 finally:
                     database.session.remove()
 
-        def child_insert() -> None:
+        def child_rename() -> None:
             assert snapshot_ready.wait(timeout=20)
             with app.app_context():
                 try:
-                    database.session.add(
-                        Unit(entity=company_code, code=child_code, name="Hija", enabled=True, parent_id=ids["root"])
-                    )
+                    child = database.session.get(Unit, ids["child"])
+                    assert child is not None
+                    child.name = "Hija Nueva"
                     database.session.commit()
                     child_committed.set()
                 finally:
@@ -345,18 +364,22 @@ def test_actualizacion_ve_hija_confirmada_despues_del_snapshot_mysql():
 
         with ThreadPoolExecutor(max_workers=2) as workers:
             update_future = workers.submit(parent_update)
-            child_future = workers.submit(child_insert)
+            rename_future = workers.submit(child_rename)
             update_future.result(timeout=30)
-            child_future.result(timeout=30)
+            rename_future.result(timeout=30)
 
         with app.app_context():
             child = database.session.execute(database.select(Unit).filter_by(code=child_code)).scalar_one()
+            grandchild = database.session.execute(database.select(Unit).filter_by(code=grandchild_code)).scalar_one()
             assert child.level == 1
-            assert child.path == "Raíz / Hija"
+            assert child.path == "Raíz / Hija Nueva"
+            assert grandchild.level == 2
+            assert grandchild.path == "Raíz / Hija Nueva / Nieta"
     finally:
         child_committed.set()
         with app.app_context():
             database.session.rollback()
+            database.session.execute(database.delete(Unit).filter_by(code=grandchild_code))
             database.session.execute(database.delete(Unit).filter_by(code=child_code))
             database.session.execute(database.delete(Unit).filter_by(code=root_code))
             database.session.execute(database.delete(Entity).filter_by(code=company_code))
