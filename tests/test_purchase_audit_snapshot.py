@@ -20,6 +20,7 @@ import pytest
 from cacao_accounting.database import (
     AuditTrail,
     CompanyParty,
+    DocumentRelation,
     DocumentTaxLine,
     DocumentTaxSummary,
     Party,
@@ -27,11 +28,15 @@ from cacao_accounting.database import (
     PurchaseInvoiceItem,
     PurchaseMatchingConfig,
     PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseRequest,
+    PurchaseRequestItem,
     SupplierQuotation,
     SupplierQuotationItem,
     TaxTemplate,
     database,
 )
+from cacao_accounting.document_flow import create_document_relation
 
 
 @pytest.fixture
@@ -514,3 +519,284 @@ def test_edicion_registra_recuperacion_de_base_currency(app, authenticated_clien
     assert cambios["base_currency"]["after"] == "NIO"
     assert antes["base_currency"] is None
     assert despues["base_currency"] == "NIO"
+
+
+@pytest.fixture
+def solicitud_con_solicitante(app, entorno_contable):
+    """Solicitud en borrador con solicitante inicial para auditar su cambio (#2137)."""
+    sufijo = uuid4().hex[:10]
+    with app.app_context():
+        solicitud = PurchaseRequest(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=0,
+            document_no=f"PR-SOL-{sufijo}",
+            remarks=f"PR-SOL-{sufijo}",
+            requested_by="solicitante-original",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(solicitud)
+        database.session.flush()
+        database.session.add(
+            PurchaseRequestItem(
+                purchase_request_id=solicitud.id,
+                item_code="ART01",
+                item_name="Articulo Comercial",
+                qty=Decimal("2"),
+                qty_in_base_uom=Decimal("2"),
+                uom="UND",
+                rate=Decimal("0"),
+                amount=Decimal("0"),
+            )
+        )
+        database.session.commit()
+        ids = {"solicitud": solicitud.id, "sufijo": sufijo}
+    yield ids
+    with app.app_context():
+        database.session.execute(
+            database.delete(PurchaseRequestItem).where(PurchaseRequestItem.purchase_request_id == ids["solicitud"])
+        )
+        solicitud = database.session.get(PurchaseRequest, ids["solicitud"])
+        if solicitud is not None:
+            database.session.delete(solicitud)
+        database.session.commit()
+
+
+def test_edicion_solicitud_registra_cambio_de_solicitante(app, authenticated_client, solicitud_con_solicitante):
+    """HTTP: requested_by queda con antes/después en la bitácora de la solicitud (#2137)."""
+    ids = solicitud_con_solicitante
+    datos = {
+        "requested_by": "solicitante-nuevo",
+        "company": "cacao",
+        "posting_date": "2026-05-15",
+        "remarks": ids["sufijo"],
+        "item_code_0": "ART01",
+        "item_name_0": "Articulo Comercial",
+        "qty_0": "2",
+        "uom_0": "UND",
+    }
+    respuesta = authenticated_client("admin").post(
+        f"/buying/purchase-request/{ids['solicitud']}/edit",
+        data=datos,
+        follow_redirects=True,
+    )
+
+    assert respuesta.status_code == 200
+    with app.app_context():
+        entrada = database.session.execute(
+            database.select(AuditTrail)
+            .filter_by(document_type="purchase_request", document_id=ids["solicitud"], action="updated")
+            .order_by(AuditTrail.timestamp.desc(), AuditTrail.id.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        assert entrada is not None
+        cambios = json.loads(entrada.changes_json)
+        antes = json.loads(entrada.before_json)
+        despues = json.loads(entrada.after_json)
+
+    assert cambios["requested_by"] == {"before": "solicitante-original", "after": "solicitante-nuevo"}
+    assert antes["requested_by"] == "solicitante-original"
+    assert despues["requested_by"] == "solicitante-nuevo"
+
+
+@pytest.fixture
+def factura_con_dos_origenes(app, entorno_contable):
+    """Factura borrador vinculada a una orden A, con otra orden B disponible (#2137)."""
+    sufijo = uuid4().hex[:10]
+    with app.app_context():
+        proveedor = Party(
+            code=f"PRV-ORI-{sufijo}",
+            name=f"Proveedor origenes {sufijo}",
+            is_supplier=True,
+        )
+        database.session.add(proveedor)
+        database.session.flush()
+        database.session.add(
+            CompanyParty(
+                company="cacao",
+                party_id=proveedor.id,
+                is_active=True,
+                allow_purchase_invoice_without_order=True,
+                allow_purchase_invoice_without_receipt=True,
+            )
+        )
+        ordenes = {}
+        lineas_origen = {}
+        for letra in ("a", "b"):
+            orden = PurchaseOrder(
+                company="cacao",
+                posting_date=date(2026, 5, 15),
+                docstatus=1,
+                document_no=f"PO-ORI-{letra}-{sufijo}",
+                supplier_id=proveedor.id,
+                supplier_name=proveedor.name,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+            )
+            database.session.add(orden)
+            database.session.flush()
+            linea_origen = PurchaseOrderItem(
+                purchase_order_id=orden.id,
+                item_code="ART01",
+                item_name="Articulo Comercial",
+                qty=Decimal("2"),
+                qty_in_base_uom=Decimal("2"),
+                uom="UND",
+                rate=Decimal("10"),
+                amount=Decimal("20"),
+                base_rate=Decimal("10"),
+                base_amount=Decimal("20"),
+            )
+            database.session.add(linea_origen)
+            database.session.flush()
+            ordenes[letra] = orden.id
+            lineas_origen[letra] = linea_origen.id
+
+        factura = PurchaseInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=0,
+            document_no=f"FI-ORI-{sufijo}",
+            supplier_id=proveedor.id,
+            supplier_name=proveedor.name,
+            supplier_invoice_no=f"FAC-ORIGEN-{sufijo}",
+            document_type="purchase_invoice",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(factura)
+        database.session.flush()
+        linea_factura = PurchaseInvoiceItem(
+            purchase_invoice_id=factura.id,
+            item_code="ART01",
+            item_name="Articulo Comercial",
+            qty=Decimal("2"),
+            qty_in_base_uom=Decimal("2"),
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("20"),
+        )
+        database.session.add(linea_factura)
+        database.session.flush()
+        create_document_relation(
+            source_type="purchase_order",
+            source_id=ordenes["a"],
+            source_item_id=lineas_origen["a"],
+            target_type="purchase_invoice",
+            target_id=factura.id,
+            target_item_id=linea_factura.id,
+            qty=Decimal("2"),
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("20"),
+        )
+        database.session.commit()
+        ids = {
+            "factura": factura.id,
+            "linea_factura": linea_factura.id,
+            "orden_a": ordenes["a"],
+            "orden_b": ordenes["b"],
+            "linea_a": lineas_origen["a"],
+            "linea_b": lineas_origen["b"],
+            "proveedor": proveedor.id,
+            "sufijo": sufijo,
+        }
+    yield ids
+    with app.app_context():
+        database.session.execute(
+            database.delete(DocumentRelation).where(
+                DocumentRelation.target_type == "purchase_invoice", DocumentRelation.target_id == ids["factura"]
+            )
+        )
+        database.session.execute(
+            database.delete(PurchaseInvoiceItem).where(PurchaseInvoiceItem.purchase_invoice_id == ids["factura"])
+        )
+        factura = database.session.get(PurchaseInvoice, ids["factura"])
+        if factura is not None:
+            database.session.delete(factura)
+        for orden_id in (ids["orden_a"], ids["orden_b"]):
+            database.session.execute(database.delete(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == orden_id))
+            orden = database.session.get(PurchaseOrder, orden_id)
+            if orden is not None:
+                database.session.delete(orden)
+        database.session.execute(
+            database.delete(CompanyParty).where(CompanyParty.party_id == ids["proveedor"], CompanyParty.company == "cacao")
+        )
+        proveedor = database.session.get(Party, ids["proveedor"])
+        if proveedor is not None:
+            database.session.delete(proveedor)
+        database.session.commit()
+
+
+def test_edicion_factura_registra_cambio_de_origen_por_linea(app, authenticated_client, factura_con_dos_origenes):
+    """HTTP: el snapshot conserva el origen anterior y el nuevo de cada línea (#2137)."""
+    ids = factura_con_dos_origenes
+    datos = {
+        "supplier_id": ids["proveedor"],
+        "company": "cacao",
+        "posting_date": "2026-05-15",
+        "supplier_invoice_no": ids["sufijo"],
+        "from_order": ids["orden_b"],
+        "tax_template_id": "",
+        "item_code_0": "ART01",
+        "item_name_0": "Articulo Comercial",
+        "qty_0": "2",
+        "uom_0": "UND",
+        "rate_0": "10",
+        "amount_0": "20",
+        "source_type_0": "purchase_order",
+        "source_id_0": ids["orden_b"],
+        "source_item_id_0": ids["linea_b"],
+    }
+    respuesta = authenticated_client("admin").post(
+        f"/buying/purchase-invoice/{ids['factura']}/edit",
+        data=datos,
+        follow_redirects=True,
+    )
+
+    assert respuesta.status_code == 200
+    assert "Factura de compra actualizada correctamente." in respuesta.get_data(as_text=True)
+    cambios, antes, despues = _ultimo_cambio_de_factura(app, ids["factura"])
+
+    assert len(antes["source_relations"]) == 1
+    assert len(despues["source_relations"]) == 1
+    relacion_antes = antes["source_relations"][0]
+    relacion_despues = despues["source_relations"][0]
+    for campo in ("qty", "uom", "rate", "amount"):
+        assert campo in relacion_antes
+        assert campo in relacion_despues
+    assert relacion_antes["source_type"] == "purchase_order"
+    assert relacion_antes["source_id"] == ids["orden_a"]
+    assert relacion_antes["source_item_id"] == ids["linea_a"]
+    assert relacion_antes["target_item_id"] == ids["linea_factura"]
+    assert relacion_despues["source_id"] == ids["orden_b"]
+    assert relacion_despues["source_item_id"] == ids["linea_b"]
+    assert cambios["source_relations"]["before"] == antes["source_relations"]
+    assert cambios["source_relations"]["after"] == despues["source_relations"]
+
+    with app.app_context():
+        activas = database.session.execute(
+            database.select(DocumentRelation.source_id, DocumentRelation.source_item_id).filter_by(
+                target_type="purchase_invoice",
+                target_id=ids["factura"],
+                status="active",
+            )
+        ).all()
+        assert activas == [(ids["orden_b"], ids["linea_b"])]
+        revertidas = (
+            database.session.execute(
+                database.select(DocumentRelation.source_item_id).filter_by(
+                    target_type="purchase_invoice",
+                    source_type="purchase_order",
+                    source_id=ids["orden_a"],
+                    status="reverted",
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert ids["linea_a"] in revertidas

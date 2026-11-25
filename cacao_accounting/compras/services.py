@@ -2628,6 +2628,7 @@ def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_
 
 
 PURCHASE_AUDIT_FIELDS = (
+    "requested_by",
     "supplier_id",
     "supplier_name",
     "company",
@@ -2671,6 +2672,33 @@ def _purchase_snapshot_value(value: Any) -> Any:
     return value
 
 
+def _capture_purchase_source_relations(registro: Any, target_type: str) -> list[dict[str, Any]]:
+    """Captura las relaciones activas de origen de un documento de compras (#2137)."""
+    relations = database.session.execute(
+        database.select(DocumentRelation)
+        .filter_by(target_type=target_type, target_id=registro.id, status="active")
+        .order_by(
+            DocumentRelation.source_type,
+            DocumentRelation.source_id,
+            DocumentRelation.source_item_id,
+            DocumentRelation.target_item_id,
+        )
+    ).scalars()
+    return [
+        {
+            "source_type": relation.source_type,
+            "source_id": relation.source_id,
+            "source_item_id": relation.source_item_id or "",
+            "target_item_id": relation.target_item_id or "",
+            "qty": _purchase_snapshot_value(relation.qty),
+            "uom": relation.uom,
+            "rate": _purchase_snapshot_value(relation.rate),
+            "amount": _purchase_snapshot_value(relation.amount),
+        }
+        for relation in relations
+    ]
+
+
 def _capture_purchase_state(registro: Any) -> dict[str, Any]:
     """CROSS-01: Captura estado de documento de compras para auditoría."""
     state = {
@@ -2696,6 +2724,14 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
         DocumentTaxSummary,
     )
 
+    document_types = {
+        PurchaseRequest: "purchase_request",
+        PurchaseQuotation: "purchase_quotation",
+        SupplierQuotation: "supplier_quotation",
+        PurchaseOrder: "purchase_order",
+        PurchaseReceipt: "purchase_receipt",
+        PurchaseInvoice: "purchase_invoice",
+    }
     mapping = {
         PurchaseRequest: (PurchaseRequestItem, "purchase_request_id"),
         PurchaseQuotation: (PurchaseQuotationItem, "purchase_quotation_id"),
@@ -2711,6 +2747,7 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
         from cacao_accounting.audit_trail_service import capture_lines_snapshot
 
         state["items"] = capture_lines_snapshot(registro, item_cls, fk_name)
+        state["source_relations"] = _capture_purchase_source_relations(registro, document_types[cls])
 
     if cls is PurchaseInvoice:
         document_type = str(getattr(registro, "document_type", None) or "purchase_invoice")
