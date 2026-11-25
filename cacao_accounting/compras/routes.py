@@ -462,13 +462,21 @@ def compras_solicitud_compra(request_id: str):
 @verifica_permiso("purchases", "autorizar")
 def compras_solicitud_compra_close(request_id: str):
     """Close a purchase request only when every line has zero pending quantity."""
-    registro = database.session.get(PurchaseRequest, request_id, with_for_update=True)
+    registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
     exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 1 or registro.status == "closed":
         abort(400)
     lock_document_flow_document("purchase_request", registro.id)
+    registro = database.session.execute(
+        database.select(PurchaseRequest)
+        .where(PurchaseRequest.id == request_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one()
+    if registro.docstatus != 1 or registro.status == "closed":
+        abort(400)
     if not purchase_request_is_ready_to_close(registro):
         flash(
             _("La Solicitud de Compra requiere cantidad pendiente cero en todas sus líneas."),
