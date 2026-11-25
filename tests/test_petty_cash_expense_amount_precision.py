@@ -219,6 +219,93 @@ def test_post_rechaza_exceso_de_escala_sin_persistir(
     assert _conteo_gastos(app) == antes
 
 
+def test_la_validacion_cuenta_la_cola_mas_alla_de_la_precision_decimal_del_contexto(app, entorno_contable, fondo_precision):
+    """normalize() redondearía la cola y dejaría pasar un exceso de escala."""
+    del entorno_contable
+    fondo_id, _code, _cost_center = fondo_precision(8)
+    # Más de 28 dígitos significativos: Decimal los conserva, normalize() no.
+    amount = Decimal("1.00000000000000000000000000000000001")
+    assert amount != Decimal("1")
+
+    with app.app_context():
+        fondo = database.session.get(PettyCashAccount, fondo_id)
+        assert fondo is not None
+        with pytest.raises(ValueError, match="8 decimales"):
+            _validate_petty_cash_expense_precision(amount, fondo)
+
+
+def test_post_rechaza_exceso_mas_alla_de_la_precision_decimal_sin_persistir(
+    app, entorno_contable, fondo_precision, authenticated_client
+):
+    """El POST bloquea la cola que normalize() descartaría sin crear evidencia."""
+    del entorno_contable
+    fondo_id, _code, cost_center_code = fondo_precision(8)
+    antes = _conteo_evidencia(app)
+
+    response = authenticated_client("admin").post(
+        "/cash_management/petty-cash-expense/new",
+        data={
+            "company": "cacao",
+            "petty_cash_id": fondo_id,
+            "posting_date": FECHA,
+            "concept": "Compra con cola excesiva",
+            "amount": "1.00000000000000000000000000000000001",
+            "cost_center_code": cost_center_code,
+        },
+    )
+
+    assert response.status_code == 200
+    assert "8 decimales" in response.get_data(as_text=True)
+    assert _conteo_evidencia(app) == antes
+
+
+def test_post_http_conserva_ocho_decimales_con_tasa_no_unitaria(app, entorno_contable, fondo_precision, authenticated_client):
+    """El gasto enviado por HTTP conserva su escala y cuadra en el GL con tasa real."""
+    del entorno_contable
+    fondo_id, code, cost_center_code = fondo_precision(8)
+    tasa = Decimal("36.5")
+    with app.app_context():
+        exchange = database.session.execute(
+            database.select(ExchangeRate).filter_by(origin=code, destination="NIO", date=date(2026, 5, 15))
+        ).scalar_one()
+        exchange.rate = tasa
+        database.session.commit()
+
+    response = authenticated_client("admin").post(
+        "/cash_management/petty-cash-expense/new",
+        data={
+            "company": "cacao",
+            "petty_cash_id": fondo_id,
+            "expense_account_code": "5201",
+            "posting_date": FECHA,
+            "concept": "Compra con tasa no unitaria",
+            "amount": "1.00000001",
+            "cost_center_code": cost_center_code,
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        gasto = database.session.execute(database.select(PettyCashExpense).filter_by(petty_cash_id=fondo_id)).scalar_one()
+        gasto_id = gasto.id
+        journal_id = gasto.journal_id
+        database.session.remove()
+        recargado = database.session.get(PettyCashExpense, gasto_id)
+        assert recargado is not None
+        assert Decimal(recargado.amount) == Decimal("1.00000001")
+
+        entries = database.session.execute(database.select(GLEntry).where(GLEntry.voucher_id == journal_id)).scalars()
+        esperado_compania = (Decimal("1.00000001") * tasa).quantize(Decimal("0.00000001"))
+        vistas = list(entries)
+        assert len(vistas) >= 2
+        assert all(entry.debit == esperado_compania or entry.credit == esperado_compania for entry in vistas)
+        assert all(
+            (entry.debit_in_account_currency or entry.credit_in_account_currency) == Decimal("1.00000001") for entry in vistas
+        )
+        assert {entry.account_currency for entry in vistas} == {code}
+        assert {entry.company_currency for entry in vistas} == {"NIO"}
+
+
 def test_el_servicio_conserva_tres_decimales_y_rechaza_exceso_en_dos(
     app, entorno_contable, fondos_monetarios, authenticated_client
 ):
@@ -279,6 +366,18 @@ def test_el_esquema_monetary_conserva_escala_ocho(app, entorno_contable):
 def _conteo_gastos(app) -> int:
     with app.app_context():
         return len(database.session.execute(database.select(PettyCashExpense)).scalars().all())
+
+
+def _conteo_evidencia(app) -> tuple[int, int, int, int]:
+    """Cuenta gastos, vales, detalles y entradas del GL antes y después del POST."""
+    with app.app_context():
+        consultas = (
+            database.select(PettyCashExpense),
+            database.select(PettyCashVoucher),
+            database.select(ComprobanteContableDetalle),
+            database.select(GLEntry),
+        )
+        return tuple(len(database.session.execute(consulta).scalars().all()) for consulta in consultas)
 
 
 def test_el_servicio_persiste_tres_decimales_sin_redondear(app, entorno_contable, reference_users, fondos_monetarios):

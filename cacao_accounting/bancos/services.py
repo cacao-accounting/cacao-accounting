@@ -995,14 +995,10 @@ def _validate_petty_cash_expense_precision(amount: Decimal, fund: PettyCashAccou
     """Rechaza importes con más decimales que los configurados para la moneda (#2090)."""
     currency_code = fund.currency or _company_currency(str(fund.company))
     decimals = currency_decimals(currency_code)
-    coerce_decimal(amount, "amount")
-    exponent = amount.normalize().as_tuple().exponent
-    scale = abs(exponent) if isinstance(exponent, int) and exponent < 0 else 0
-    if scale > decimals:
-        raise ValueError(
-            _("El importe no puede tener más de %(decimals)s decimales para la moneda %(currency)s.")
-            % {"decimals": decimals, "currency": currency_code}
-        )
+    # normalize() respeta la precisión del contexto Decimal (28 dígitos por
+    # defecto) y puede redondear la cola antes de contarla. coerce_decimal()
+    # cuenta los dígitos fraccionarios reales sin alterar el importe.
+    coerce_decimal(amount, "amount", max_fractional_digits=decimals)
 
 
 def create_petty_cash_expense(
