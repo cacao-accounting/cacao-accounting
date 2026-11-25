@@ -2475,7 +2475,10 @@ def compras_orden_compra_submit(order_id: str):
     for source_request_id in source_request_ids:
         lock_document_flow_document("purchase_request", source_request_id)
     registro = database.session.execute(
-        database.select(PurchaseOrder).where(PurchaseOrder.id == order_id).execution_options(populate_existing=True)
+        database.select(PurchaseOrder)
+        .where(PurchaseOrder.id == order_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalar_one()
     if registro.docstatus != 0:
         abort(400)
@@ -2535,7 +2538,10 @@ def compras_orden_compra_cancel(order_id: str):
     for source_request_id in source_request_ids:
         lock_document_flow_document("purchase_request", source_request_id)
     registro = database.session.execute(
-        database.select(PurchaseOrder).where(PurchaseOrder.id == order_id).execution_options(populate_existing=True)
+        database.select(PurchaseOrder)
+        .where(PurchaseOrder.id == order_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalar_one()
     if registro.docstatus != 1:
         abort(400)

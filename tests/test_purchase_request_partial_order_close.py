@@ -488,6 +488,34 @@ def test_guard_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch, a
     assert eventos[3] == "for_update"
 
 
+@pytest.mark.parametrize(
+    ("accion", "docstatus_inicial", "docstatus_rival"),
+    [("submit", 0, 1), ("cancel", 1, 2)],
+)
+def test_guard_revalida_docstatus_tras_lock(request_order_scene, monkeypatch, accion, docstatus_inicial, docstatus_rival):
+    """Un cambio de docstatus entre lectura y lock aborta con 400."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10", docstatus=docstatus_inicial)
+    original_lock = compras_routes.lock_document_flow_document
+
+    def change_after_lock(document_type: str, document_id: str) -> None:
+        original_lock(document_type, document_id)
+        if document_type == "purchase_order":
+            order = database.session.get(PurchaseOrder, document_id)
+            order.docstatus = docstatus_rival
+            database.session.commit()
+
+    monkeypatch.setattr(compras_routes, "lock_document_flow_document", change_after_lock)
+    respuesta = _cliente_admin(application).post(
+        f"/buying/purchase-order/{order_id}/{accion}",
+        data={"reason": "Prueba"} if accion == "cancel" else {},
+    )
+
+    assert respuesta.status_code == 400
+    with application.app_context():
+        assert database.session.get(PurchaseOrder, order_id).docstatus == docstatus_rival
+
+
 def test_ruta_aprobar_rechaza_oc_borrador_de_solicitud_cerrada(request_order_scene):
     """El POST de aprobación no activa una OC borrador de una SC cerrada."""
     application, ids = request_order_scene
