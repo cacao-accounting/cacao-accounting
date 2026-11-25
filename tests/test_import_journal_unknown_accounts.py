@@ -5,9 +5,12 @@
 
 from __future__ import annotations
 
-from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
-from cacao_accounting.database import Accounts, database
+from uuid import uuid4
+
 import pytest
+
+from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
+from cacao_accounting.database import Accounts, Entity, database
 
 ERROR_CUENTA = "La cuenta 9999 no existe en la compania cacao."
 
@@ -80,3 +83,44 @@ def test_cuenta_desactivada_se_rechaza(app, entorno_contable, campo):
         finally:
             setattr(cuenta, campo, anterior)
             database.session.rollback()
+
+
+def _cuenta_ajena() -> Accounts:
+    """Crea una cuenta válida de otra compañía para el prechequeo."""
+    sufijo = uuid4().hex[:6]
+    entidad = Entity(
+        code=f"ot{sufijo}",
+        name=f"Otra {sufijo}",
+        company_name=f"Otra {sufijo} SA",
+        tax_id=f"OT-{sufijo}",
+        currency="NIO",
+        enabled=True,
+    )
+    database.session.add(entidad)
+    database.session.flush()
+    cuenta = Accounts(
+        entity=entidad.code,
+        code=f"98{sufijo[:4]}",
+        name=f"Cuenta ajena {sufijo}",
+        classification="asset",
+        account_type="cash",
+        group=False,
+        active=True,
+        enabled=True,
+    )
+    database.session.add(cuenta)
+    database.session.flush()
+    return cuenta
+
+
+@pytest.mark.parametrize("forma", ["codigo", "id"])
+def test_cuenta_ajena_se_rechaza_en_la_importacion(entorno_contable_aislado, forma):
+    """El adaptador no acepta cuentas de otra compañía, ni por código ni por ID."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        ajena = _cuenta_ajena()
+        valor = ajena.code if forma == "codigo" else ajena.id
+        errores = JournalEntryAdapter().validate_document(_filas(valor, "4101"), {"company_id": "cacao"})
+
+    assert len(errores) == 1
+    assert "no existe en la compania cacao" in errores[0]
