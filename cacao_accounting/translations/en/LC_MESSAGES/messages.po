@@ -284,6 +284,10 @@ msgstr "There is no approval request for this document."
 msgid "La solicitud de aprobación no está pendiente."
 msgstr "The approval request is not pending."
 
+#: cacao_accounting/approval_engine.py:973
+msgid "La solicitud fue rechazada; debe solicitarse una nueva aprobación."
+msgstr "The request was rejected; a new approval must be requested."
+
 #: cacao_accounting/approval_engine.py:1242
 msgid "El documento generado no corresponde a la operación aprobada."
 msgstr "The generated document does not correspond to the approved operation."

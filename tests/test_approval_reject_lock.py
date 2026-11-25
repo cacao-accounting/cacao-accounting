@@ -58,3 +58,45 @@ def test_un_segundo_rechazo_observa_la_solicitud_ya_rechazada(app, entorno_conta
         )
         assert len(acciones) == 1
         assert acciones[0].comments == "Primer rechazo"
+
+
+def test_un_rechazo_no_revive_al_aprobar(app, entorno_contable, monkeypatch):
+    """Aprobar tras un rechazo no crea solicitud ni publica el documento."""
+    del entorno_contable
+    documento, solicitud_id, admin_user = _solicitud(app)
+    regla = SimpleNamespace(id=None, role_id=None, max_amount=None, approval_level=1)
+    monkeypatch.setattr(ApprovalEngine, "is_enabled", classmethod(lambda *_args, **_kwargs: True))
+    monkeypatch.setattr(ApprovalEngine, "can_approve", staticmethod(lambda *_args, **_kwargs: True))
+    monkeypatch.setattr(ApprovalEngine, "_get_user_rules", classmethod(lambda *_args, **_kwargs: [regla]))
+    monkeypatch.setattr(ApprovalEngine, "_find_applicable_rule", staticmethod(lambda *_args, **_kwargs: regla))
+    monkeypatch.setattr(ApprovalEngine, "_lock_document", classmethod(lambda *_args, **_kwargs: None))
+    publicado: list[str] = []
+
+    def no_publicar(cls, req, document, user):
+        publicado.append(req.document_id)
+        return True
+
+    monkeypatch.setattr(ApprovalEngine, "_finalize_approval", classmethod(no_publicar))
+
+    with app.app_context():
+        ApprovalEngine.reject(documento, admin_user, "Rechazo confirmado")
+        database.session.commit()
+
+        with pytest.raises(ValueError, match="fue rechazada"):
+            ApprovalEngine.approve(documento, admin_user, "Aprobación tardía")
+
+        solicitudes = (
+            database.session.execute(database.select(ApprovalRequest).where(ApprovalRequest.document_id == documento.id))
+            .scalars()
+            .all()
+        )
+        assert [item.id for item in solicitudes] == [solicitud_id]
+        assert solicitudes[0].status == "Rejected"
+        acciones = (
+            database.session.execute(database.select(ApprovalAction).filter_by(approval_request_id=solicitud_id))
+            .scalars()
+            .all()
+        )
+        assert len(acciones) == 1
+        assert acciones[0].action == "reject"
+        assert publicado == []

@@ -955,6 +955,22 @@ class ApprovalEngine:
             ).first()
             if finished:
                 return True
+            # Un rechazo ya confirmado es terminal para esta solicitud: aprobar
+            # no puede recrearla implícitamente y publicar el documento (#2076).
+            # El reenvío legítimo sigue siendo una llamada explícita a
+            # request_approval(), que sí crea una solicitud nueva.
+            rejected = database.session.execute(
+                select(ApprovalRequest.id)
+                .where(
+                    ApprovalRequest.document_id == document.id,
+                    ApprovalRequest.document_type.in_({doctype, f"cancel_{doctype}"}),
+                    ApprovalRequest.status == "Rejected",
+                )
+                .order_by(ApprovalRequest.created_at.desc())
+                .limit(1)
+            ).first()
+            if rejected:
+                raise ValueError(_("La solicitud fue rechazada; debe solicitarse una nueva aprobación."))
             req = cls.request_approval(document, actor=user)
             if not req:
                 return True
