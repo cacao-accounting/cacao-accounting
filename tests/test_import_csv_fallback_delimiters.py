@@ -97,3 +97,45 @@ def test_ventana_multibyte_es_la_misma_en_carga_y_lector(tmp_path):
     tabla = CSVReader().read(str(archivo))
     assert tabla.columns == ["é" * 1100, "debito", "credito"]
     assert tabla.rows == [["1101", "100", "0"]]
+
+
+def test_ventana_multibyte_cruza_el_limite_de_bytes(tmp_path):
+    """La muestra corta en 8192 bytes sin romper un carácter y conserva 2048."""
+    contenido = "😀" * 2047 + ";" + "😀" * 3 + "\na;b\n"
+    muestra = csv_sample_from_bytes(contenido.encode("utf-8"))
+
+    with pytest.raises(UnicodeDecodeError):
+        contenido.encode("utf-8")[:8192].decode("utf-8")
+    assert muestra == contenido[:CSV_SAMPLE_CHARS]
+    assert sniff_csv_dialect(muestra).delimiter == ";"
+    assert _valid_csv_fallback(contenido.encode("utf-8")) is True
+
+    archivo = tmp_path / "multibyte_limite.csv"
+    archivo.write_text(contenido, encoding="utf-8")
+    tabla = CSVReader().read(str(archivo))
+    assert tabla.columns == ["😀" * 2047, "😀" * 3]
+    assert tabla.rows == [["a", "b"]]
+
+
+def test_campos_citados_consecutivos_conservan_tabulacion_citada(tmp_path):
+    """Cerrar un campo citado no impide abrir el siguiente campo citado."""
+    contenido = 'h1;"h2";"h3"\n"a\tb";"c";"d\te"\n'
+    assert _valid_csv_fallback(contenido.encode("utf-8")) is True
+
+    archivo = tmp_path / "citados_consecutivos.csv"
+    archivo.write_text(contenido, encoding="utf-8")
+    tabla = CSVReader().read(str(archivo))
+    assert tabla.columns == ["h1", "h2", "h3"]
+    assert tabla.rows == [["a\tb", "c", "d\te"]]
+
+
+def test_salto_tras_campo_citado_habilita_cita_en_la_siguiente_fila(tmp_path):
+    """El salto que cierra una fila citada deja el inicio de campo listo."""
+    contenido = 'h1;"h2"\n"a\tb";"c\td"\n'
+    assert _valid_csv_fallback(contenido.encode("utf-8")) is True
+
+    archivo = tmp_path / "cita_tras_salto.csv"
+    archivo.write_text(contenido, encoding="utf-8")
+    tabla = CSVReader().read(str(archivo))
+    assert tabla.columns == ["h1", "h2"]
+    assert tabla.rows == [["a\tb", "c\td"]]

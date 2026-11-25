@@ -117,7 +117,9 @@ class _QuoteScanner:
             else:
                 self.in_quotes = False
                 self.quote_pending = False
-                self.at_field_start = False
+                # El delimitador o salto que cierra el campo citado también
+                # inicia el siguiente campo, aunque se consuma en esta rama.
+                self.at_field_start = character in ("\n", "\r") or character == self.delimiter
         elif character == self.quotechar:
             self.quote_pending = True
 
