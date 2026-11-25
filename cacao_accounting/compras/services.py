@@ -2339,9 +2339,54 @@ def _lock_receipt_purchase_orders(receipt_id: str, purchase_order_id: str | None
         lock_document_flow_document("purchase_order", po_id)
 
 
+def _validate_return_receipt_against_original(receipt: PurchaseReceipt) -> None:
+    """Valida una devolución física contra su recepción original (#2283).
+
+    Las devoluciones conservan ``purchase_order_id`` pero no crean relaciones
+    de línea con la OC: su origen es la recepción original y el consumo se
+    registra con ``PurchaseReceiptReturnAllocation``. Por eso se revalida la
+    cabecera contra esa recepción, sin exigir relaciones directas, y se
+    comprueba que la cantidad devuelta no exceda lo recibido. La cabecera se
+    bloquea para serializar devoluciones concurrentes sobre la misma origen.
+    """
+    if not receipt.reversal_of:
+        raise ValueError(_("La devolución requiere una recepción original."))
+    original = database.session.get(PurchaseReceipt, receipt.reversal_of, with_for_update=True)
+    if original is None or original.docstatus != 1:
+        raise ValueError(_("La recepción original debe estar aprobada."))
+    _validate_purchase_source_link(receipt, "purchase_receipt", original.id)
+
+    by_code: dict[str, list[PurchaseReceiptItem]] = {}
+    for item in _active_receipt_items(original.id):
+        by_code.setdefault(item.item_code or "", []).append(item)
+    return_item_ids = {str(item.id) for item in _active_receipt_items(receipt.id)}
+    for item in _active_receipt_items(receipt.id):
+        candidates = by_code.get(item.item_code or "", [])
+        if len(candidates) != 1:
+            raise ValueError(_("La línea de devolución no corresponde de forma unívoca a la recepción original."))
+        original_item = candidates[0]
+        already_returned = sum(
+            (relation.qty_in_base_uom or Decimal("0"))
+            for relation in database.session.execute(
+                database.select(PurchaseReceiptReturnAllocation).where(
+                    PurchaseReceiptReturnAllocation.original_receipt_item_id == original_item.id,
+                    PurchaseReceiptReturnAllocation.status == "active",
+                )
+            ).scalars()
+            if str(relation.return_receipt_item_id) not in return_item_ids
+        )
+        returned_qty = item.qty_in_base_uom or Decimal("0")
+        received_qty = original_item.qty_in_base_uom or Decimal("0")
+        if returned_qty + already_returned > received_qty:
+            raise ValueError(_("La devolución excede la cantidad recibida original."))
+
+
 def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
     """Valida que las cantidades recibidas no excedan las ordenadas en la OC."""
     receipt = database.session.get(PurchaseReceipt, receipt_id)
+    if receipt and receipt.is_return:
+        _validate_return_receipt_against_original(receipt)
+        return
     if receipt and receipt.purchase_order_id:
         receipt_items = _active_receipt_items(receipt_id)
         _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
