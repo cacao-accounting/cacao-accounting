@@ -14,6 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
 from cacao_accounting.approval_engine import ApprovalEngine
+from cacao_accounting.compras import routes as compras_routes
 from cacao_accounting.compras.services import purchase_order_has_closed_source_request
 from cacao_accounting.compras.purchase_request_comparison_service import (
     purchase_request_comparison_covered_item_ids,
@@ -248,6 +249,45 @@ def test_ruta_cierre_solicitud_revalida_pendiente(request_order_scene, cantidad,
     assert respuesta.status_code == 302
     with application.app_context():
         assert database.session.get(PurchaseRequest, ids["request"]).status == estado_esperado
+
+
+def test_cierre_toma_flow_antes_de_releer_la_fila(request_order_scene, monkeypatch):
+    """El flujo de la SC se bloquea antes de la recarga FOR UPDATE."""
+    application, ids = request_order_scene
+    _agregar_orden(application, ids, "10")
+    eventos: list[str] = []
+    original_lock = compras_routes.lock_document_flow_document
+    original_execute = database.session.execute
+
+    def tracking_lock(document_type: str, document_id: str) -> None:
+        eventos.append("lock")
+        original_lock(document_type, document_id)
+
+    def tracking_execute(statement, *args, **kwargs):
+        if getattr(statement, "_for_update_arg", None) is not None and "purchase_request" in str(statement):
+            eventos.append("for_update")
+        return original_execute(statement, *args, **kwargs)
+
+    monkeypatch.setattr(compras_routes, "lock_document_flow_document", tracking_lock)
+    monkeypatch.setattr(database.session, "execute", tracking_execute)
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-request/{ids['request']}/close")
+
+    assert respuesta.status_code == 302
+    assert "lock" in eventos and "for_update" in eventos
+    assert eventos.index("lock") < eventos.index("for_update")
+
+
+def test_doble_cierre_de_solicitud_no_muta(request_order_scene):
+    """El segundo POST de cierre responde 400 y conserva el estado."""
+    application, ids = request_order_scene
+    _agregar_orden(application, ids, "10")
+    client = _cliente_admin(application)
+    assert client.post(f"/buying/purchase-request/{ids['request']}/close").status_code == 302
+    segundo = client.post(f"/buying/purchase-request/{ids['request']}/close")
+
+    assert segundo.status_code == 400
+    with application.app_context():
+        assert database.session.get(PurchaseRequest, ids["request"]).status == "closed"
 
 
 def test_ruta_cierre_solicitud_rechaza_comparativo_sin_orden(request_order_scene):
