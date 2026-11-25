@@ -44,6 +44,14 @@
         this.$watch('header.company', () => {
             this.header.bank_account_id = '';
             this.header.currency = '';
+            const notifyFilters = () => {
+                const source = typeof document.querySelector === 'function' ? document.querySelector('#company_val') : null;
+                if (!source) return;
+                source.dispatchEvent(new Event('input', { bubbles: true }));
+                source.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            if (typeof this.$nextTick === 'function') this.$nextTick(notifyFilters);
+            else notifyFilters();
         });
       },
 
