@@ -2572,11 +2572,22 @@ def ventas_factura_venta_duplicar(invoice_id: str):
     non_positive = origen.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or origen.is_return
     if config and not non_positive:
         if config.matching_type == "3-way":
-            flash_error(_("La modalidad 3-way no permite duplicar facturas con su nota de entrega desacoplada."))
+            flash_error(_("La modalidad 3-way no permite duplicar facturas positivas."))
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
-        if config.require_sales_order and not origen.sales_order_id:
-            flash_error(_("La factura no tiene una Orden de Venta vinculada y no puede duplicarse en esta modalidad."))
-            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
+        if config.require_sales_order:
+            linked_order = database.session.execute(
+                database.select(DocumentRelation.id)
+                .where(
+                    DocumentRelation.source_type == "sales_order",
+                    DocumentRelation.target_type == "sales_invoice",
+                    DocumentRelation.target_id == origen.id,
+                    DocumentRelation.status == "active",
+                )
+                .limit(1)
+            ).scalar_one_or_none()
+            if not origen.sales_order_id or linked_order is None:
+                flash_error(_("La factura no tiene una Orden de Venta vinculada y no puede duplicarse en esta modalidad."))
+                return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
     duplicado = SalesInvoice(
         customer_id=origen.customer_id,

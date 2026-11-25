@@ -465,7 +465,45 @@ def test_duplicado_de_factura_con_entrega_no_comparte_nota(entorno_contable_aisl
         )
 
 
-@pytest.mark.parametrize(("matching_type", "require_order"), [("3-way", True), ("2-way", True)])
+@pytest.mark.parametrize("document_type", ["sales_credit_note", "sales_debit_note", "sales_return"])
+def test_duplicado_documento_no_positivo_3way_no_se_bloquea(entorno_contable_aislado, document_type):
+    """Las notas y devoluciones conservan la duplicación aunque la compañía sea 3-way."""
+    app = entorno_contable_aislado.app
+    sufijo = uuid4().hex[:6]
+    with app.app_context():
+        cliente = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one()
+        database.session.add(SalesMatchingConfig(company="cacao", matching_type="3-way", require_sales_order=True))
+        nota = SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            document_type=document_type,
+            docstatus=1,
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"NC-3W-{sufijo}",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            total=Decimal("100"),
+            grand_total=Decimal("100"),
+        )
+        database.session.add(nota)
+        database.session.commit()
+        nota_id = nota.id
+
+    respuesta = _cliente(entorno_contable_aislado).post(f"/sales/sales-invoice/{nota_id}/duplicate")
+    assert respuesta.status_code == 302
+    with app.app_context():
+        copia = database.session.execute(
+            database.select(SalesInvoice).where(SalesInvoice.id != nota_id, SalesInvoice.docstatus == 0)
+        ).scalar_one()
+        assert copia.document_type == document_type
+
+
+@pytest.mark.parametrize(
+    ("matching_type", "require_order"),
+    [("3-way", True), ("3-way", False), ("2-way", True)],
+)
 def test_duplicado_con_entrega_sin_orden_se_rechaza(entorno_contable_aislado, matching_type, require_order):
     """Una copia que perdería su origen no se crea en modalidades que lo exigen."""
     app = entorno_contable_aislado.app

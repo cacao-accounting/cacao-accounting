@@ -25176,3 +25176,6 @@ msgstr "3-way matching does not allow duplicating invoices with their delivery n
 
 msgid "La factura no tiene una Orden de Venta vinculada y no puede duplicarse en esta modalidad."
 msgstr "The invoice has no linked Sales Order and cannot be duplicated in this matching mode."
+
+msgid "La modalidad 3-way no permite duplicar facturas positivas."
+msgstr "3-way matching does not allow duplicating positive invoices."
