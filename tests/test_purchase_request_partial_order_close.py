@@ -497,21 +497,33 @@ def test_guard_revalida_docstatus_tras_lock(request_order_scene, monkeypatch, ac
     application, ids = request_order_scene
     order_id = _agregar_orden(application, ids, "10", docstatus=docstatus_inicial)
     original_lock = compras_routes.lock_document_flow_document
+    original_execute = database.session.execute
+    eventos: list[str] = []
 
     def change_after_lock(document_type: str, document_id: str) -> None:
         original_lock(document_type, document_id)
+        eventos.append(f"lock:{document_type}")
         if document_type == "purchase_order":
             order = database.session.get(PurchaseOrder, document_id)
             order.docstatus = docstatus_rival
             database.session.commit()
 
+    def tracking_execute(statement, *args, **kwargs):
+        if getattr(statement, "_for_update_arg", None) is not None and "purchase_order" in str(statement):
+            eventos.append("for_update_purchase_order")
+        return original_execute(statement, *args, **kwargs)
+
     monkeypatch.setattr(compras_routes, "lock_document_flow_document", change_after_lock)
+    monkeypatch.setattr(database.session, "execute", tracking_execute)
     respuesta = _cliente_admin(application).post(
         f"/buying/purchase-order/{order_id}/{accion}",
         data={"reason": "Prueba"} if accion == "cancel" else {},
     )
 
     assert respuesta.status_code == 400
+    assert "lock:purchase_order" in eventos
+    assert "for_update_purchase_order" in eventos
+    assert eventos.index("lock:purchase_order") < eventos.index("for_update_purchase_order")
     with application.app_context():
         assert database.session.get(PurchaseOrder, order_id).docstatus == docstatus_rival
 
