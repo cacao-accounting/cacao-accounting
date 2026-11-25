@@ -30,65 +30,98 @@ def csrf_state_snapshot(app):
 @pytest.fixture
 def csrf_price_forms(app, entorno_contable, authenticated_client, csrf_state_snapshot):
     """Habilita CSRF real y prepara artículos, lista y tarifa de prueba."""
-    del csrf_state_snapshot
+    del entorno_contable, csrf_state_snapshot
     previous_csrf = app.config["WTF_CSRF_ENABLED"]
-    app.config["WTF_CSRF_ENABLED"] = True
-    suffix = uuid4().hex[:8]
-    item_code = f"CSR-1743-{suffix}"
-    with app.app_context():
-        admin_module = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
-        module_created = admin_module is None
-        previous_enabled = None if module_created else admin_module.enabled
-        if module_created:
-            admin_module = Modules(module="admin", default=False, enabled=True)
-            database.session.add(admin_module)
-        admin_module.enabled = True
-        item = Item(
-            code=item_code,
-            name=f"Artículo CSRF {suffix}",
-            item_type="service",
-            is_stock_item=False,
-            is_sale_item=True,
-            is_purchase_item=False,
-            default_uom="UND",
-            standard_rate=Decimal("10"),
-        )
-        price_list = PriceList(
-            name=f"Lista CSRF {suffix}",
-            company="cacao",
-            currency="NIO",
-            is_selling=True,
-            is_active=True,
-        )
-        database.session.add_all([item, price_list])
-        database.session.flush()
-        item_price = ItemPrice(
-            item_code=item_code,
-            price_list_id=price_list.id,
-            price=Decimal("10"),
-            min_qty=Decimal("0"),
-        )
-        database.session.add(item_price)
-        database.session.commit()
-        ids = (item_code, price_list.id, item_price.id)
-    client = authenticated_client("admin")
+    module_created = False
+    previous_enabled = None
+    ids: tuple[str, str, str] | None = None
     try:
+        app.config["WTF_CSRF_ENABLED"] = True
+        suffix = uuid4().hex[:8]
+        item_code = f"CSR-1743-{suffix}"
+        with app.app_context():
+            admin_module = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
+            module_created = admin_module is None
+            previous_enabled = None if module_created else admin_module.enabled
+            if module_created:
+                admin_module = Modules(module="admin", default=False, enabled=True)
+                database.session.add(admin_module)
+            admin_module.enabled = True
+            item = Item(
+                code=item_code,
+                name=f"Artículo CSRF {suffix}",
+                item_type="service",
+                is_stock_item=False,
+                is_sale_item=True,
+                is_purchase_item=False,
+                default_uom="UND",
+                standard_rate=Decimal("10"),
+            )
+            price_list = PriceList(
+                name=f"Lista CSRF {suffix}",
+                company="cacao",
+                currency="NIO",
+                is_selling=True,
+                is_active=True,
+            )
+            database.session.add_all([item, price_list])
+            database.session.flush()
+            item_price = ItemPrice(
+                item_code=item_code,
+                price_list_id=price_list.id,
+                price=Decimal("10"),
+                min_qty=Decimal("0"),
+            )
+            database.session.add(item_price)
+            database.session.commit()
+            ids = (item_code, price_list.id, item_price.id)
+        client = authenticated_client("admin")
         yield app, client, ids
     finally:
-        try:
-            with app.app_context():
+        app.config["WTF_CSRF_ENABLED"] = previous_csrf
+        with app.app_context():
+            database.session.rollback()
+            if ids is not None:
                 database.session.execute(database.delete(ItemPrice).where(ItemPrice.id == ids[2]))
                 database.session.execute(database.delete(PriceList).where(PriceList.id == ids[1]))
                 database.session.execute(database.delete(Item).where(Item.code == ids[0]))
-                current = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
-                if module_created:
-                    if current is not None:
-                        database.session.delete(current)
-                elif current is not None:
-                    current.enabled = previous_enabled
-                database.session.commit()
-        finally:
-            app.config["WTF_CSRF_ENABLED"] = previous_csrf
+            current = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
+            if module_created:
+                if current is not None:
+                    database.session.delete(current)
+            elif current is not None:
+                current.enabled = previous_enabled
+            database.session.commit()
+
+
+def test_fixture_restaura_estado_si_falla_el_cliente_autenticado(app, entorno_contable):
+    """#2284: un fallo de setup no deja CSRF, módulo ni filas de prueba."""
+    previous_csrf = app.config["WTF_CSRF_ENABLED"]
+    with app.app_context():
+        previous_enabled = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one().enabled
+        counts = tuple(
+            database.session.execute(database.select(database.func.count()).select_from(model)).scalar_one()
+            for model in (Item, PriceList, ItemPrice)
+        )
+
+    def failing_client(_role):
+        raise RuntimeError("fallo de setup")
+
+    generator = csrf_price_forms.__wrapped__(app, entorno_contable, failing_client, object())
+    with pytest.raises(RuntimeError, match="fallo de setup"):
+        next(generator)
+
+    assert app.config["WTF_CSRF_ENABLED"] == previous_csrf
+    with app.app_context():
+        assert (
+            database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one().enabled
+            == previous_enabled
+        )
+        after = tuple(
+            database.session.execute(database.select(database.func.count()).select_from(model)).scalar_one()
+            for model in (Item, PriceList, ItemPrice)
+        )
+    assert after == counts
 
 
 def _form_token(html: str, action: str | None = None, marker: str | None = None) -> str:

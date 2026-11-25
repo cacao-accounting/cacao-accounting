@@ -10,6 +10,7 @@ tipo del grupo.
 
 from __future__ import annotations
 
+import sys
 from uuid import uuid4
 
 import pytest
@@ -34,20 +35,23 @@ def admin_module_snapshot(app):
 def party_group_admin_fixture(app, admin_module_snapshot):
     """Habilita administración y restaura su estado previo al terminar la prueba."""
     del admin_module_snapshot
-    with app.app_context():
-        admin_module = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one_or_none()
-        module_created = admin_module is None
-        previous_enabled = None if module_created else admin_module.enabled
-        if module_created:
-            database.session.add(Modules(module="admin", default=False, enabled=True))
-        else:
-            admin_module.enabled = True
-        database.session.commit()
-        admin_id = database.session.execute(select(User.id).filter_by(user="admin")).scalar_one()
+    module_created = False
+    previous_enabled = None
     try:
+        with app.app_context():
+            admin_module = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one_or_none()
+            module_created = admin_module is None
+            previous_enabled = None if module_created else admin_module.enabled
+            if module_created:
+                database.session.add(Modules(module="admin", default=False, enabled=True))
+            else:
+                admin_module.enabled = True
+            database.session.commit()
+            admin_id = database.session.execute(select(User.id).filter_by(user="admin")).scalar_one()
         yield admin_id
     finally:
         with app.app_context():
+            database.session.rollback()
             current = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one_or_none()
             if module_created:
                 if current is not None:
@@ -55,6 +59,30 @@ def party_group_admin_fixture(app, admin_module_snapshot):
             elif current is not None:
                 current.enabled = previous_enabled
             database.session.commit()
+
+
+def test_fixture_restaura_modulo_admin_si_falla_la_carga_del_usuario(app, admin_module_snapshot, monkeypatch):
+    """#2284: el módulo admin vuelve a su estado si falla el setup posterior."""
+    with app.app_context():
+        previous_enabled = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one().enabled
+    real_select = select
+    calls = {"count": 0}
+
+    def failing_select(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] >= 2:
+            raise RuntimeError("fallo de setup")
+        return real_select(*args, **kwargs)
+
+    monkeypatch.setattr(sys.modules[__name__], "select", failing_select)
+    generator = party_group_admin_fixture.__wrapped__(app, admin_module_snapshot)
+    with pytest.raises(RuntimeError, match="fallo de setup"):
+        next(generator)
+
+    with app.app_context():
+        assert (
+            database.session.execute(real_select(Modules).filter_by(module="admin")).scalar_one().enabled == previous_enabled
+        )
 
 
 def _admin_client(app, user_id: str):
