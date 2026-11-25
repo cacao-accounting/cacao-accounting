@@ -20,6 +20,7 @@ from cacao_accounting.database import (
     Party,
     SalesInvoice,
     SalesInvoiceItem,
+    SalesMatchingConfig,
     SalesOrder,
     SalesOrderItem,
     StockBin,
@@ -459,6 +460,59 @@ def test_duplicado_de_factura_con_entrega_no_comparte_nota(entorno_contable_aisl
                 )
             ).scalar_one_or_none()
             is None
+        )
+
+
+def test_duplicado_3way_con_entrega_se_rechaza(entorno_contable_aislado):
+    """3-way no permite una copia que perdería su nota de entrega."""
+    app = entorno_contable_aislado.app
+    sufijo = uuid4().hex[:6]
+    with app.app_context():
+        cliente = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one()
+        database.session.add(
+            SalesMatchingConfig(
+                company="cacao",
+                matching_type="3-way",
+                require_sales_order=True,
+            )
+        )
+        entrega = DeliveryNote(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"NE-3W-{sufijo}",
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(entrega)
+        database.session.flush()
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            document_type="sales_invoice",
+            docstatus=1,
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"FV-3W-{sufijo}",
+            delivery_note_id=entrega.id,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            total=Decimal("100"),
+            grand_total=Decimal("100"),
+        )
+        database.session.add(factura)
+        database.session.commit()
+        factura_id = factura.id
+
+    respuesta = _cliente(entorno_contable_aislado).post(f"/sales/sales-invoice/{factura_id}/duplicate")
+
+    assert respuesta.status_code == 302
+    with app.app_context():
+        assert (
+            database.session.execute(database.select(SalesInvoice).where(SalesInvoice.id != factura_id)).scalars().all() == []
         )
 
 
