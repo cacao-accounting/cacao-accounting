@@ -293,6 +293,27 @@ def test_doble_cierre_de_solicitud_no_muta(request_order_scene):
         assert database.session.get(PurchaseRequest, ids["request"]).status == "closed"
 
 
+def test_cierre_revalida_estado_cambiado_tras_lock(request_order_scene, monkeypatch):
+    """Si la SC se cierra entre la lectura y el lock, el POST responde 400."""
+    application, ids = request_order_scene
+    _agregar_orden(application, ids, "10")
+    original_lock = compras_routes.lock_document_flow_document
+
+    def close_after_lock(document_type: str, document_id: str) -> None:
+        original_lock(document_type, document_id)
+        if document_type == "purchase_request":
+            request = database.session.get(PurchaseRequest, document_id)
+            request.status = "closed"
+            database.session.commit()
+
+    monkeypatch.setattr(compras_routes, "lock_document_flow_document", close_after_lock)
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-request/{ids['request']}/close")
+
+    assert respuesta.status_code == 400
+    with application.app_context():
+        assert database.session.get(PurchaseRequest, ids["request"]).status == "closed"
+
+
 def test_ruta_cierre_solicitud_rechaza_comparativo_sin_orden(request_order_scene):
     """Un comparativo finalizado sin orden no permite cerrar por POST."""
     application, ids = request_order_scene
@@ -329,8 +350,8 @@ def test_ruta_cancelar_rechaza_oc_de_solicitud_cerrada(request_order_scene):
         )
 
 
-def _agregar_segunda_sc_cerrada(application, order_id: str) -> None:
-    """Vincula una segunda SC cerrada a la misma orden."""
+def _agregar_segunda_sc_cerrada(application, order_id: str) -> str:
+    """Vincula una segunda SC cerrada a la misma orden y devuelve su id."""
     with application.app_context():
         otra = PurchaseRequest(
             company="cacao",
@@ -383,6 +404,7 @@ def _agregar_segunda_sc_cerrada(application, order_id: str) -> None:
             )
         )
         database.session.commit()
+        return str(otra.id)
 
 
 def test_orden_con_dos_solicitudes_bloquea_si_una_esta_cerrada(request_order_scene):
@@ -433,7 +455,7 @@ def test_guard_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch, a
     """Submit y cancelación bloquean PO y SC antes de leer el estado."""
     application, ids = request_order_scene
     order_id = _agregar_orden(application, ids, "10", docstatus=docstatus)
-    _agregar_segunda_sc_cerrada(application, order_id)
+    segunda_id = _agregar_segunda_sc_cerrada(application, order_id)
     with application.app_context():
         solicitud = database.session.get(PurchaseRequest, ids["request"])
         solicitud.status = "closed"
@@ -443,7 +465,7 @@ def test_guard_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch, a
     original_execute = database.session.execute
 
     def tracking_lock(document_type: str, document_id: str) -> None:
-        eventos.append(f"lock:{document_type}")
+        eventos.append(f"lock:{document_type}:{document_id}")
         original_lock(document_type, document_id)
 
     def tracking_execute(statement, *args, **kwargs):
@@ -459,8 +481,9 @@ def test_guard_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch, a
     )
 
     assert respuesta.status_code == 302
-    assert eventos[0] == "lock:purchase_order"
-    assert eventos[1:3] == ["lock:purchase_request", "lock:purchase_request"]
+    assert eventos[0].startswith("lock:purchase_order:")
+    esperadas = [f"lock:purchase_request:{request_id}" for request_id in sorted([ids["request"], segunda_id])]
+    assert eventos[1:3] == esperadas
     assert eventos[3] == "for_update"
 
 
@@ -484,7 +507,7 @@ def test_motor_aprobaciones_revalida_sc_cerrada(request_order_scene, monkeypatch
     """El submit y la cancelación del motor rechazan una SC cerrada."""
     application, ids = request_order_scene
     order_id = _agregar_orden(application, ids, "10", docstatus=0)
-    _agregar_segunda_sc_cerrada(application, order_id)
+    segunda_id = _agregar_segunda_sc_cerrada(application, order_id)
     with application.app_context():
         solicitud = database.session.get(PurchaseRequest, ids["request"])
         solicitud.status = "closed"
@@ -505,11 +528,13 @@ def test_motor_aprobaciones_revalida_sc_cerrada(request_order_scene, monkeypatch
             ApprovalEngine._execute_submit("purchase_order", order, user)
         assert eventos[0][0] == "purchase_order"
         solicitudes = [document_id for document_type, document_id in eventos if document_type == "purchase_request"]
-        assert solicitudes == sorted(solicitudes)
+        assert solicitudes == sorted([ids["request"], segunda_id])
         eventos.clear()
         with pytest.raises(ValueError, match="solicitud de compra cerrada"):
             ApprovalEngine._validate_final_cancellation("purchase_order", order)
         assert eventos[0][0] == "purchase_order"
+        solicitudes = [document_id for document_type, document_id in eventos if document_type == "purchase_request"]
+        assert solicitudes == sorted([ids["request"], segunda_id])
 
 
 def test_guard_relee_sc_cerrada_tras_lock(tmp_path):
