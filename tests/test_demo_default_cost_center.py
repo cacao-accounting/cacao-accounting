@@ -193,7 +193,9 @@ def test_resolver_legacy_es_determinista_por_codigo(app) -> None:
                 database.select(CostCenter).filter_by(entity=company, default=True)
             ).scalars():
                 centro.default = False
-            for code in ("Z99999", "M99999"):
+            # El menor código se inserta al final: sin ORDER BY el motor lo
+            # devolvería en último lugar y la prueba no discriminaría el orden.
+            for code in ("Z99999", "M99999", "A99999"):
                 database.session.add(
                     CostCenter(
                         entity=company,
@@ -205,15 +207,11 @@ def test_resolver_legacy_es_determinista_por_codigo(app) -> None:
                         enabled=True,
                     )
                 )
-            heredado = database.session.execute(
-                database.select(CostCenter).filter_by(entity=company, code="A00000")
-            ).scalar_one()
-            heredado.default = True
             database.session.commit()
         with app.app_context():
             resultado = BudgetService().resolve_cost_center("", company)
             assert resultado is not None
-            assert resultado.code == "A00000"
+            assert resultado.code == "A99999"
     finally:
         _limpiar(app, company)
 
