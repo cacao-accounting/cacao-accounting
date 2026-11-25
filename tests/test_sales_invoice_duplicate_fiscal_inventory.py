@@ -11,6 +11,8 @@ from uuid import uuid4
 
 from sqlalchemy import inspect
 
+import pytest
+
 from cacao_accounting.database import (
     Accounts,
     DeliveryNote,
@@ -463,8 +465,9 @@ def test_duplicado_de_factura_con_entrega_no_comparte_nota(entorno_contable_aisl
         )
 
 
-def test_duplicado_3way_con_entrega_se_rechaza(entorno_contable_aislado):
-    """3-way no permite una copia que perdería su nota de entrega."""
+@pytest.mark.parametrize(("matching_type", "require_order"), [("3-way", True), ("2-way", True)])
+def test_duplicado_con_entrega_sin_orden_se_rechaza(entorno_contable_aislado, matching_type, require_order):
+    """Una copia que perdería su origen no se crea en modalidades que lo exigen."""
     app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:6]
     with app.app_context():
@@ -472,8 +475,8 @@ def test_duplicado_3way_con_entrega_se_rechaza(entorno_contable_aislado):
         database.session.add(
             SalesMatchingConfig(
                 company="cacao",
-                matching_type="3-way",
-                require_sales_order=True,
+                matching_type=matching_type,
+                require_sales_order=require_order,
             )
         )
         entrega = DeliveryNote(

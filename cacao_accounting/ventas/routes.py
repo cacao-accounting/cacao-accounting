@@ -2569,16 +2569,14 @@ def ventas_factura_venta_duplicar(invoice_id: str):
     config = database.session.execute(
         database.select(SalesMatchingConfig).filter_by(company=origen.company)
     ).scalar_one_or_none()
-    sales_order_id = origen.sales_order_id
-    if origen.delivery_note_id:
-        delivery = database.session.get(DeliveryNote, origen.delivery_note_id)
-        sales_order_id = sales_order_id or (delivery.sales_order_id if delivery else None)
-    if config and config.matching_type == "3-way":
-        flash_error(_("La modalidad 3-way no permite duplicar facturas con su nota de entrega desacoplada."))
-        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
-    if config and config.require_sales_order and not sales_order_id:
-        flash_error(_("La factura no tiene una Orden de Venta vinculada y no puede duplicarse en esta modalidad."))
-        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
+    non_positive = origen.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or origen.is_return
+    if config and not non_positive:
+        if config.matching_type == "3-way":
+            flash_error(_("La modalidad 3-way no permite duplicar facturas con su nota de entrega desacoplada."))
+            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
+        if config.require_sales_order and not origen.sales_order_id:
+            flash_error(_("La factura no tiene una Orden de Venta vinculada y no puede duplicarse en esta modalidad."))
+            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
     duplicado = SalesInvoice(
         customer_id=origen.customer_id,
@@ -2594,7 +2592,7 @@ def ventas_factura_venta_duplicar(invoice_id: str):
         exchange_rate=origen.exchange_rate,
         tax_template_id=origen.tax_template_id,
         update_inventory=origen.update_inventory,
-        sales_order_id=sales_order_id,
+        sales_order_id=origen.sales_order_id,
         delivery_note_id=None,
         reversal_of=origen.reversal_of,
     )
