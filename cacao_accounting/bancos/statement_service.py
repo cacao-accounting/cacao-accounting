@@ -67,12 +67,16 @@ class BankAutoReconciliationResult:
     reconciliation_id: str | None = None
 
 
-def _find_auto_reconcile_rules(bank_account_id: str, company: str) -> list[BankMatchingRule]:
+def _find_auto_reconcile_rules(
+    bank_account_id: str, company: str, reference_number: str | None = None
+) -> list[BankMatchingRule]:
     """Devuelve las reglas activas de matching con auto-reconciliacion para una cuenta.
 
     Una regla aplica cuando su alcance es la cuenta específica (``bank_account_id``)
     o toda la compañía (``bank_account_id IS NULL``).  Se priorizan las
-    específicas sobre las globales ordenando por ``priority``.
+    específicas sobre las globales ordenando por ``priority``.  Si la regla
+    configura ``reference_contains``, solo participa cuando la referencia de la
+    transacción contiene ese texto (#1509), igual que en el matching manual.
     """
     query = select(BankMatchingRule).where(
         BankMatchingRule.company == company,
@@ -84,7 +88,10 @@ def _find_auto_reconcile_rules(bank_account_id: str, company: str) -> list[BankM
         ),
     )
     rules = database.session.execute(query.order_by(BankMatchingRule.priority)).scalars().all()
-    return list(rules)
+    if reference_number is None:
+        return list(rules)
+    referencia = str(reference_number).casefold()
+    return [rule for rule in rules if not rule.reference_contains or str(rule.reference_contains).casefold() in referencia]
 
 
 def _accumulate_exact_candidate(
@@ -115,9 +122,11 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
     """Intenta conciliar automaticamente una transaccion contra un unico candidato exacto.
 
     Busca las reglas de matching activas con ``auto_reconcile`` habilitado para la
-    cuenta y compañía de la transacción.  Si una regla produce un único candidato
-    con estado ``exact`` (importe dentro de la tolerancia y saldo total pendiente
-    del destino), aplica la conciliación y devuelve el resultado auditable.
+    cuenta y compañía de la transacción.  Si la regla define ``reference_contains``,
+    también exige que la referencia de la transacción contenga ese texto (#1509).
+    Si una regla produce un único candidato con estado ``exact`` (importe dentro
+    de la tolerancia y saldo total pendiente del destino), aplica la conciliación
+    y devuelve el resultado auditable.
 
     No se concilia cuando hay más de un candidato exacto (ambigüedad) o cuando
     ninguna regla produce candidatos; en esos casos la conciliación queda a cargo
@@ -141,7 +150,7 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
         raise BankStatementError(_("La cuenta bancaria no existe."))
     company = str(bank_account.company)
 
-    rules = _find_auto_reconcile_rules(transaction.bank_account_id, company)
+    rules = _find_auto_reconcile_rules(transaction.bank_account_id, company, transaction.reference_number)
     if not rules:
         return BankAutoReconciliationResult(
             bank_transaction_id=bank_transaction_id,
