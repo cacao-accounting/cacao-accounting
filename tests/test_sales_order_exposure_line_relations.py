@@ -176,6 +176,83 @@ def test_validacion_previa_descuenta_factura_actual_por_linea(app, entorno_conta
         _validate_credit_limit_and_overdue("cacao", cliente_id, Decimal("100"), factura)
 
 
+def test_validacion_previa_descuenta_factura_actual_en_varias_ordenes(app, entorno_contable):
+    """Una factura consolidada resta de cada orden solo su importe atribuible."""
+    suffix = uuid4().hex[:8]
+    with app.app_context():
+        cliente = Party(code=f"MULTI-{suffix}", name="Cliente multiorden", is_customer=True, is_active=True)
+        database.session.add(cliente)
+        database.session.flush()
+        ordenes = [
+            SalesOrder(
+                company="cacao",
+                posting_date=FECHA,
+                docstatus=1,
+                document_no=f"SO-MULTI-{suffix}-{indice}",
+                customer_id=cliente.id,
+                customer_name=cliente.name,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+                grand_total=Decimal("300"),
+                base_total=Decimal("300"),
+                status="open",
+            )
+            for indice in (1, 2)
+        ]
+        database.session.add_all(ordenes)
+        database.session.flush()
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=0,
+            document_no=f"SI-MULTI-{suffix}",
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            document_type="sales_invoice",
+            is_return=False,
+            grand_total=Decimal("150"),
+            base_total=Decimal("150"),
+        )
+        database.session.add(factura)
+        database.session.flush()
+        database.session.add(CompanyParty(company="cacao", party_id=cliente.id, is_active=True, credit_limit=Decimal("620")))
+        database.session.commit()
+        ids = {
+            "cliente": cliente.id,
+            "orden_1": ordenes[0].id,
+            "orden_2": ordenes[1].id,
+            "factura": factura.id,
+        }
+
+    _relacion(app, ids["orden_1"], ids["factura"], "100")
+    _relacion(app, ids["orden_2"], ids["factura"], "50")
+    with app.app_context():
+        factura = database.session.get(SalesInvoice, ids["factura"])
+        assert _approved_customer_order_exposure("cacao", ids["cliente"], factura) == Decimal("450")
+        _validate_credit_limit_and_overdue("cacao", ids["cliente"], Decimal("150"), factura)
+
+
+def test_validacion_previa_suma_nota_de_debito_actual(app, entorno_contable):
+    """Una nota de débito actual no descuenta la orden y sí consume crédito."""
+    cliente_id, _order_id, invoice_id = _documentos(
+        app,
+        document_type="sales_debit_note",
+        por_cabecera=True,
+        docstatus=0,
+    )
+    with app.app_context():
+        database.session.add(CompanyParty(company="cacao", party_id=cliente_id, is_active=True, credit_limit=Decimal("350")))
+        database.session.commit()
+        factura = database.session.get(SalesInvoice, invoice_id)
+        assert _approved_customer_order_exposure("cacao", cliente_id, factura) == Decimal("300")
+        with pytest.raises(ValueError, match="límite de crédito"):
+            _validate_credit_limit_and_overdue("cacao", cliente_id, Decimal("100"), factura)
+
+
 @pytest.mark.parametrize("document_type", ["sales_credit_note", "sales_return", "sales_debit_note"])
 def test_documento_no_positivo_no_descuenta_la_exposicion(app, entorno_contable, document_type):
     """Notas y devoluciones vinculadas por línea no liberan crédito de la orden."""
