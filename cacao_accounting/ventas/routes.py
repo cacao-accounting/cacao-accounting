@@ -2575,18 +2575,22 @@ def ventas_factura_venta_duplicar(invoice_id: str):
             flash_error(_("La modalidad 3-way no permite duplicar facturas positivas."))
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
         if config.require_sales_order:
-            linked_order = database.session.execute(
-                database.select(DocumentRelation.id)
-                .where(
-                    DocumentRelation.source_type == "sales_order",
-                    DocumentRelation.source_id == origen.sales_order_id,
-                    DocumentRelation.target_type == "sales_invoice",
-                    DocumentRelation.target_id == origen.id,
-                    DocumentRelation.status == "active",
-                )
-                .limit(1)
-            ).scalar_one_or_none()
-            if not origen.sales_order_id or linked_order is None:
+            invoice_lines = set(
+                database.session.execute(database.select(SalesInvoiceItem.id).filter_by(sales_invoice_id=origen.id)).scalars()
+            )
+            linked_lines = set(
+                database.session.execute(
+                    database.select(DocumentRelation.target_item_id).where(
+                        DocumentRelation.source_type == "sales_order",
+                        DocumentRelation.source_id == origen.sales_order_id,
+                        DocumentRelation.target_type == "sales_invoice",
+                        DocumentRelation.target_id == origen.id,
+                        DocumentRelation.target_item_id.is_not(None),
+                        DocumentRelation.status == "active",
+                    )
+                ).scalars()
+            )
+            if not origen.sales_order_id or not invoice_lines or not invoice_lines.issubset(linked_lines):
                 flash_error(_("La factura no tiene una Orden de Venta vinculada y no puede duplicarse en esta modalidad."))
                 return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 

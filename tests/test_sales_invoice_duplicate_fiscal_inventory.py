@@ -465,8 +465,16 @@ def test_duplicado_de_factura_con_entrega_no_comparte_nota(entorno_contable_aisl
         )
 
 
-@pytest.mark.parametrize("document_type", ["sales_credit_note", "sales_debit_note", "sales_return"])
-def test_duplicado_documento_no_positivo_3way_no_se_bloquea(entorno_contable_aislado, document_type):
+@pytest.mark.parametrize(
+    ("document_type", "is_return"),
+    [
+        ("sales_credit_note", False),
+        ("sales_debit_note", False),
+        ("sales_return", False),
+        ("sales_invoice", True),
+    ],
+)
+def test_duplicado_documento_no_positivo_3way_no_se_bloquea(entorno_contable_aislado, document_type, is_return):
     """Las notas y devoluciones conservan la duplicación aunque la compañía sea 3-way."""
     app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:6]
@@ -477,6 +485,7 @@ def test_duplicado_documento_no_positivo_3way_no_se_bloquea(entorno_contable_ais
             company="cacao",
             posting_date=date(2026, 5, 15),
             document_type=document_type,
+            is_return=is_return,
             docstatus=1,
             customer_id=cliente.id,
             customer_name=cliente.name,
@@ -498,10 +507,12 @@ def test_duplicado_documento_no_positivo_3way_no_se_bloquea(entorno_contable_ais
             database.select(SalesInvoice).where(SalesInvoice.id != nota_id, SalesInvoice.docstatus == 0)
         ).scalar_one()
         assert copia.document_type == document_type
+        assert copia.is_return is is_return
 
 
-def test_duplicado_2way_con_orden_valida_se_permite(entorno_contable_aislado):
-    """2-way con orden y relación activa conserva el vínculo al duplicar."""
+@pytest.mark.parametrize("relacion_ajena", [False, True])
+def test_duplicado_2way_con_orden_valida_se_permite(entorno_contable_aislado, relacion_ajena):
+    """2-way exige relación con la orden de la cabecera y conserva el vínculo."""
     app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:6]
     with app.app_context():
@@ -531,6 +542,31 @@ def test_duplicado_2way_con_orden_valida_se_permite(entorno_contable_aislado):
             amount=Decimal("100"),
         )
         database.session.add(orden_linea)
+        database.session.flush()
+        otra = SalesOrder(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            status="open",
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            document_no=f"OV-2W-B-{sufijo}",
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(otra)
+        database.session.flush()
+        otra_linea = SalesOrderItem(
+            sales_order_id=otra.id,
+            item_code="ART01",
+            item_name="Artículo de prueba",
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom="UND",
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+        )
+        database.session.add(otra_linea)
         database.session.flush()
         factura = SalesInvoice(
             company="cacao",
@@ -564,8 +600,8 @@ def test_duplicado_2way_con_orden_valida_se_permite(entorno_contable_aislado):
         database.session.add(
             DocumentRelation(
                 source_type="sales_order",
-                source_id=orden.id,
-                source_item_id=orden_linea.id,
+                source_id=otra.id if relacion_ajena else orden.id,
+                source_item_id=otra_linea.id if relacion_ajena else orden_linea.id,
                 target_type="sales_invoice",
                 target_id=factura.id,
                 target_item_id=factura_linea.id,
@@ -586,9 +622,17 @@ def test_duplicado_2way_con_orden_valida_se_permite(entorno_contable_aislado):
     respuesta = _cliente(entorno_contable_aislado).post(f"/sales/sales-invoice/{factura_id}/duplicate")
     assert respuesta.status_code == 302
     with app.app_context():
-        copia = database.session.execute(
-            database.select(SalesInvoice).where(SalesInvoice.id != factura_id, SalesInvoice.docstatus == 0)
-        ).scalar_one()
+        copias = (
+            database.session.execute(
+                database.select(SalesInvoice).where(SalesInvoice.id != factura_id, SalesInvoice.docstatus == 0)
+            )
+            .scalars()
+            .all()
+        )
+        if relacion_ajena:
+            assert copias == []
+            return
+        copia = copias[0]
         assert copia.sales_order_id == orden_id
         assert (
             database.session.execute(
