@@ -405,13 +405,26 @@ def _require_account(account_id: str | None, message: str) -> str:
     return account_id
 
 
-def _require_company_account(account_id: str | None, company: str, message: str) -> str:
-    """Require an account that belongs to the document's company."""
+def _require_company_account(
+    account_id: str | None,
+    company: str,
+    message: str,
+    *,
+    allow_inactive: bool = False,
+) -> str:
+    """Require an account that belongs to the document's company.
+
+    ``allow_inactive`` solo se usa al postear una reversión: la cuenta histórica
+    puede estar desactivada, pero debe seguir existiendo, pertenecer a la
+    compañía y ser hoja. La coincidencia con la línea GL de origen se valida
+    después en ``_manual_reversal_matches_source``.
+    """
     account_id = _require_account(account_id, message)
     account = database.session.get(Accounts, account_id)
     if account is None or account.entity != company:
         raise PostingError(_("La cuenta contable debe pertenecer a la compañía del documento."))
-    if not account.active or not account.enabled or account.group:
+    inactive = not account.active or not account.enabled
+    if account.group or (inactive and not allow_inactive):
         raise PostingError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
     return account_id
 
@@ -477,12 +490,14 @@ def _warehouse_inventory_account_id(document: Any, line: Any, company: str) -> s
     return inventory_account_id_for_document_line(document, line, company)
 
 
-def _account_id_for_comprobante_line(line: Any, company: str) -> str:
+def _account_id_for_comprobante_line(line: Any, company: str, *, allow_inactive: bool = False) -> str:
     """Resuelve la cuenta de una línea y revalida su vigencia al contabilizar.
 
     El importador hace un prechequeo, pero entre la validación del lote y el
     posteo la cuenta puede desactivarse. La operación final vuelve a exigir
-    existencia, compañía, estado activo/habilitado y que sea cuenta hoja.
+    existencia, compañía, estado activo/habilitado y que sea cuenta hoja. Las
+    reversiones históricas pueden conservar una cuenta desactivada; el llamador
+    debe pasar ``allow_inactive=True`` y validar la coincidencia con el origen.
     """
     explicit_account_id = getattr(line, "account_id", None)
     if explicit_account_id:
@@ -490,6 +505,7 @@ def _account_id_for_comprobante_line(line: Any, company: str) -> str:
             str(explicit_account_id),
             company,
             "No existe cuenta contable configurada para la línea del comprobante contable.",
+            allow_inactive=allow_inactive,
         )
 
     account_code = getattr(line, "account", None)
@@ -505,6 +521,7 @@ def _account_id_for_comprobante_line(line: Any, company: str) -> str:
         account.id,
         company,
         "No existe cuenta contable configurada para la línea del comprobante contable.",
+        allow_inactive=allow_inactive,
     )
 
 
@@ -4662,7 +4679,7 @@ def _post_comprobante_line(
     original_value = _decimal_value(getattr(line, "value", None))
     if original_value == 0:
         raise PostingError(_("Las lineas del comprobante contable deben tener un valor distinto de cero."))
-    account_id = _account_id_for_comprobante_line(line, company)
+    account_id = _account_id_for_comprobante_line(line, company, allow_inactive=bool(document.reversal_of))
     line_currency = getattr(line, "currency_id", None) or context.transaction_currency
     line_context = _ledger_context_with_currency(context, line_currency, getattr(line, "exchange_rate", None))
     line_context, company_value = _comprobante_line_value(line_context, original_value, document_context=context)

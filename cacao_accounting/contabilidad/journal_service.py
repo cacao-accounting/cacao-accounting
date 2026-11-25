@@ -166,7 +166,14 @@ def create_journal_draft(
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "crear"),
     )
-    _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
+    _validate_balanced_lines(
+        data.company,
+        data.lines,
+        data.transaction_currency,
+        data.exchange_rate,
+        data.books,
+        allow_inactive_accounts=source_economic_line_ids is not None,
+    )
     _validate_line_books(data.company, data.books, data.lines)
     _validate_ar_ap_lines(data.company, data.lines, validate_references=source_economic_line_ids is None)
     primary_book = data.books[0] if data.books else None
@@ -713,7 +720,14 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "editar"),
     )
-    _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
+    _validate_balanced_lines(
+        data.company,
+        data.lines,
+        data.transaction_currency,
+        data.exchange_rate,
+        data.books,
+        allow_inactive_accounts=bool(journal.reversal_of),
+    )
     _validate_line_books(data.company, data.books, data.lines)
     _validate_ar_ap_lines(data.company, data.lines, validate_references=not bool(journal.reversal_of))
     primary_book = data.books[0] if data.books else None
@@ -954,8 +968,20 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
     )
 
 
-def _validate_journal_line(company: str, line: JournalLineInput, account_cache: dict[str, Accounts | None]) -> None:
-    """Valida una linea individual del comprobante."""
+def _validate_journal_line(
+    company: str,
+    line: JournalLineInput,
+    account_cache: dict[str, Accounts | None],
+    *,
+    allow_inactive_account: bool = False,
+) -> None:
+    """Valida una linea individual del comprobante.
+
+    ``allow_inactive_account`` solo lo usa la creación de reversiones: la cuenta
+    histórica puede estar desactivada, pero debe existir, pertenecer a la
+    compañía y seguir siendo una cuenta hoja. El posteo revalida además que la
+    cuenta coincida con la línea GL de origen.
+    """
     if not line.account:
         raise JournalValidationError(_("Cada linea debe tener una cuenta contable."))
     if line.debit < 0 or line.credit < 0:
@@ -974,8 +1000,9 @@ def _validate_journal_line(company: str, line: JournalLineInput, account_cache: 
         account = _account_record(company, line.account)
         account_cache[line.account] = account
     if account is None:
-        raise JournalValidationError(_("La cuenta contable indicada no existe para la compañia."))
-    if not account.active or not account.enabled or account.group:
+        raise JournalValidationError(_("La cuenta contable indicada no existe para la compania."))
+    inactive = not account.active or not account.enabled
+    if account.group or (inactive and not allow_inactive_account):
         raise JournalValidationError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
     if account.account_type == "expense" and not line.cost_center:
         raise JournalValidationError(_("Las cuentas de gasto requieren centro de costo."))
@@ -1003,6 +1030,8 @@ def _validate_balanced_lines(
     transaction_currency: str | None = None,
     header_exchange_rate: Decimal | None = None,
     books: list[str] | None = None,
+    *,
+    allow_inactive_accounts: bool = False,
 ) -> None:
     account_cache: dict[str, Accounts | None] = {}
     totals: dict[str | None, tuple[Decimal, Decimal]] = {}
@@ -1011,7 +1040,7 @@ def _validate_balanced_lines(
         raise JournalValidationError(_("Todas las líneas deben indicar libro cuando alguna línea está asignada a un libro."))
     company_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
     for line in lines:
-        _validate_journal_line(company, line, account_cache)
+        _validate_journal_line(company, line, account_cache, allow_inactive_account=allow_inactive_accounts)
         line_currency = line.currency or transaction_currency or company_currency
         rate = line.exchange_rate
         if rate is None and line_currency != company_currency:
