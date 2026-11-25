@@ -39,7 +39,7 @@ def _sembrar_confirmacion(sufijo: str, token: str, code: str) -> dict[str, str]:
     """Siembra la confirmación y la invitación que compiten por los cupos."""
     database.create_all()
     company_code = f"a{sufijo}"
-    if database.session.get(Currency, "NIO") is None:
+    if database.session.execute(database.select(Currency.id).filter_by(code="NIO")).scalar_one_or_none() is None:
         database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
     if database.session.execute(database.select(Modules.id).filter_by(module="accounting")).scalar_one_or_none() is None:
         database.session.add(Modules(module="accounting", default=True, enabled=True))
