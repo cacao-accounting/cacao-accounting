@@ -84,6 +84,54 @@ def _viewer(app) -> str:
         return user_id, user.auth_version
 
 
+def _operator(app, *, create: bool, approve: bool) -> tuple[str, int]:
+    """Crea un usuario de Compras con creación y/o autorización explícitas."""
+    suffix = uuid4().hex[:6]
+    user_id = f"purchase-operator-{suffix}"
+    with app.app_context():
+        module_id = database.session.execute(database.select(Modules.id).filter_by(module="purchases")).scalar_one()
+        role = Roles(name=f"purchase-operator-{suffix}", note="Operador de Compras")
+        database.session.add(role)
+        database.session.flush()
+        user = User(
+            id=user_id,
+            user=user_id,
+            name="Operador de Compras",
+            password=proteger_passwd("PurchaseOperator-2026!"),
+            classification="user",
+            active=True,
+            company="cacao",
+        )
+        database.session.add(user)
+        database.session.flush()
+        database.session.add_all(
+            [
+                RolesAccess(
+                    rol_id=role.id,
+                    module_id=module_id,
+                    access=True,
+                    view=True,
+                    create=create,
+                    approve=approve,
+                ),
+                RolesUser(user_id=user_id, role_id=role.id, active=True),
+                UserCompanyAccess(user_id=user_id, company_code="cacao"),
+            ]
+        )
+        database.session.commit()
+        return user_id, user.auth_version
+
+
+def _client_for(app, user_id: str, auth_version: int):
+    """Cliente autenticado con el usuario indicado."""
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_auth_version"] = auth_version
+        session["_fresh"] = True
+    return client
+
+
 def test_comparativo_oculta_ctas_sin_permisos(app, entorno_contable):
     """Un lector no ve acciones que el POST rechazaría con 403."""
     rfq_id = _rfq(app)
@@ -130,7 +178,43 @@ def test_viewer_con_award_finalizado_no_ve_cta_ni_puede_postear(app, entorno_con
     post = client.post(f"/buying/request-for-quotation/{rfq_id}/place-purchase-orders")
 
     assert response.status_code == 200
-    assert "Colocar Órdenes de Compra" not in response.get_data(as_text=True)
+    html = response.get_data(as_text=True)
+    assert "Colocar Órdenes de Compra" not in html
+    assert "Finalizado" in html
+    assert post.status_code == 403
+
+
+def test_creador_sin_autorizacion_ve_cta_de_ordenes(app, entorno_contable):
+    """El CTA depende de crear, no de autorizar."""
+    rfq_id = _rfq(app)
+    _award(app, rfq_id)
+    user_id, auth_version = _operator(app, create=True, approve=False)
+    client = _client_for(app, user_id, auth_version)
+
+    response = client.get(f"/buying/request-for-quotation/{rfq_id}/offers")
+    post = client.post(f"/buying/request-for-quotation/{rfq_id}/place-purchase-orders")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Colocar Órdenes de Compra" in html
+    assert CTA_RONDA not in html
+    assert post.status_code != 403
+
+
+def test_autorizador_sin_creacion_no_ve_cta_de_ordenes(app, entorno_contable):
+    """Un autorizador sin crear no ve la CTA que el POST rechazaría."""
+    rfq_id = _rfq(app)
+    _award(app, rfq_id)
+    user_id, auth_version = _operator(app, create=False, approve=True)
+    client = _client_for(app, user_id, auth_version)
+
+    response = client.get(f"/buying/request-for-quotation/{rfq_id}/offers")
+    post = client.post(f"/buying/request-for-quotation/{rfq_id}/place-purchase-orders")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Colocar Órdenes de Compra" not in html
+    assert CTA_RONDA not in html
     assert post.status_code == 403
 
 
