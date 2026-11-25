@@ -559,9 +559,9 @@ def _bank_balances(
 
     Las partidas con ``GLEntry.bank_account_id`` se atribuyen por identidad,
     por lo que dos cuentas que comparten cuenta GL y moneda no duplican el
-    saldo. Las partidas legacy sin esa referencia solo se asignan cuando la
-    pareja (cuenta GL, moneda) pertenece a una única cuenta bancaria; si es
-    compartida, el importe queda sin atribuir y solo suma en el total.
+    saldo. Las partidas legacy sin esa referencia se suman a la identidad
+    cuando la pareja (cuenta GL, moneda) pertenece a una única cuenta bancaria;
+    si es compartida, el importe queda sin atribuir y solo suma en el total.
     """
     gl_account_ids = [account.gl_account_id for account in accounts if account.gl_account_id]
     if not gl_account_ids:
@@ -643,17 +643,17 @@ def _resolve_bank_balance(
     if not account.gl_account_id:
         return Decimal("0")
     currency = account.currency or default_currency
-    for key in ((account.id, currency), (account.id, None)):
-        value = direct.get(key)
-        if value is not None:
-            return value
+    direct_value = direct.get((account.id, currency))
+    if direct_value is None:
+        direct_value = direct.get((account.id, None))
     if pair_usage.get((account.gl_account_id, currency), 0) != 1:
+        return direct_value if direct_value is not None else Decimal("0")
+    legacy_value = legacy.get((account.gl_account_id, currency))
+    if legacy_value is None:
+        legacy_value = legacy.get((account.gl_account_id, None))
+    if direct_value is None and legacy_value is None:
         return Decimal("0")
-    for key in ((account.gl_account_id, currency), (account.gl_account_id, None)):
-        value = legacy.get(key)
-        if value is not None:
-            return value
-    return Decimal("0")
+    return (direct_value or Decimal("0")) + (legacy_value or Decimal("0"))
 
 
 def _bank_account_balance(account: BankAccount, balances: dict[str, Decimal]) -> Decimal:
