@@ -2086,8 +2086,8 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
             request.form.get("company") or None,
             request.form.get("currency") or request.form.get("transaction_currency") or None,
         )
-        customer = _validated_customer(customer_id, company)
         exige_acceso_compania("sales", company, "crear")
+        customer = _validated_customer(customer_id, company)
         orden = SalesOrder(
             customer_id=customer_id,
             customer_name=customer.name if customer else None,
@@ -2312,6 +2312,7 @@ def _prepare_sales_invoice_creation() -> dict[str, Any]:
     source_document = database.session.get(source_model, source_id) if source_id else None
     source_company = getattr(source_document, "company", None) or source_company
     exige_acceso_compania("sales", source_company, "crear")
+    _validated_customer(request.form.get("customer_id") or None, request.form.get("company") or source_company)
     if reversal_of:
         _validate_reversal_of(reversal_of, request.form.get("customer_id"), request.form.get("company"))
     return {
@@ -2474,6 +2475,7 @@ def _handle_sales_invoice_edit_post(registro):
     inmutables despues de la creacion; se preservan del registro existente.
     """
     try:
+        _validated_customer(request.form.get("customer_id") or None, registro.company)
         requested_company = request.form.get("company") or registro.company
         if requested_company != registro.company:
             flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")

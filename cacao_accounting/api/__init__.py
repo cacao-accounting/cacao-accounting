@@ -1813,8 +1813,10 @@ def api_document_flow_create_target():
     """Crea un documento destino desde lineas fuente seleccionadas."""
     try:
         payload = request.get_json(silent=True) or {}
-        _require_flow_company_access(payload, "crear")
+        # #2056: la compañía destino se autoriza antes de resolver fuentes o
+        # líneas, para no revelar su existencia a un usuario sin acceso.
         _require_flow_target_access(payload, "crear")
+        _require_flow_company_access(payload, "crear")
         _require_flow_source_lines_access(payload, "crear")
         result = create_target_document(payload)
     except DocumentFlowError as exc:

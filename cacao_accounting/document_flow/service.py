@@ -1082,6 +1082,31 @@ def get_pending_lines(
     return lines
 
 
+O2C_CUSTOMER_TARGETS = {
+    "sales_request",
+    "sales_quotation",
+    "sales_order",
+    "delivery_note",
+    "sales_invoice",
+    "sales_credit_note",
+    "sales_debit_note",
+    "sales_return",
+}
+
+
+def _validate_target_customer(target_type: str, company: str, payload: dict[str, Any]) -> None:
+    """Rechaza un cliente sin rol, inactivo o ajeno antes de persistir el destino."""
+    customer_id = payload.get("customer_id")
+    if target_type not in O2C_CUSTOMER_TARGETS or not customer_id:
+        return
+    from cacao_accounting.ventas.services import _validated_customer
+
+    try:
+        _validated_customer(str(customer_id), company)
+    except ValueError as exc:
+        raise DocumentFlowError(str(exc), 400) from exc
+
+
 def _create_target_header(
     target_spec: Any,
     target_type: str,
@@ -1090,6 +1115,7 @@ def _create_target_header(
     payload: dict[str, Any],
 ) -> Any:
     """Crea y persiste el header del documento destino."""
+    _validate_target_customer(target_type, company, payload)
     header_values = {
         "company": company,
         "posting_date": posting_date,

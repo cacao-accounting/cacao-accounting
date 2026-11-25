@@ -15,7 +15,11 @@ import pytest
 
 from cacao_accounting.database import (
     CompanyParty,
+    DeliveryNote,
+    DeliveryNoteItem,
     Party,
+    SalesInvoice,
+    SalesInvoiceItem,
     SalesOrder,
     SalesOrderItem,
     SalesQuotation,
@@ -43,6 +47,8 @@ class EspecificacionWriter:
     ruta_edicion: str
     ruta_duplicacion: str
     con_bodega: bool = False
+    estado_alta_rechazada: int = 200
+    mensaje_alta_en_flash: bool = False
 
 
 ESPECIFICACIONES = [
@@ -82,6 +88,33 @@ ESPECIFICACIONES = [
             con_bodega=True,
         ),
         id="sales_order",
+    ),
+    pytest.param(
+        EspecificacionWriter(
+            documento="factura de venta",
+            modelo=SalesInvoice,
+            lineas=SalesInvoiceItem,
+            clave_linea="sales_invoice_id",
+            ruta_alta="/sales/sales-invoice/new",
+            ruta_edicion="/sales/sales-invoice/{id}/edit",
+            ruta_duplicacion="/sales/sales-invoice/{id}/duplicate",
+            estado_alta_rechazada=302,
+            mensaje_alta_en_flash=True,
+        ),
+        id="sales_invoice",
+    ),
+    pytest.param(
+        EspecificacionWriter(
+            documento="nota de entrega",
+            modelo=DeliveryNote,
+            lineas=DeliveryNoteItem,
+            clave_linea="delivery_note_id",
+            ruta_alta="/sales/delivery-note/new",
+            ruta_edicion="/sales/delivery-note/{id}/edit",
+            ruta_duplicacion="/sales/delivery-note/{id}/duplicate",
+            con_bodega=True,
+        ),
+        id="delivery_note",
     ),
 ]
 
@@ -194,8 +227,9 @@ def test_alta_rechaza_proveedor(entorno_contable_aislado, terceros, especificaci
 
     respuesta = cliente.post(especificacion.ruta_alta, data=datos)
 
-    assert respuesta.status_code == 200
-    assert MENSAJE_ROL in respuesta.get_data(as_text=True)
+    assert respuesta.status_code == especificacion.estado_alta_rechazada
+    cuerpo = _mensajes(cliente) if especificacion.mensaje_alta_en_flash else respuesta.get_data(as_text=True)
+    assert MENSAJE_ROL in cuerpo
     with entorno_contable_aislado.app.app_context():
         assert (
             database.session.execute(

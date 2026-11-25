@@ -18,12 +18,14 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 from cacao_accounting.database import (
     AccountingPeriod,
+    CompanyParty,
     Currency,
     DocumentLineFlowState,
     DocumentRelation,
     Entity,
     Item,
     Modules,
+    Party,
     SalesOrder,
     SalesOrderItem,
     SalesInvoice,
@@ -608,3 +610,117 @@ def test_create_target_accepts_own_source_line_and_persists_relation(document_fl
         assert target is not None
         assert target.company == "cacao"
         assert relation is not None
+
+
+def test_create_target_rejects_invalid_customer_before_persisting(document_flow_app):
+    """#2056: la creacion generica valida el cliente antes de persistir la cabecera."""
+    app, client, ids = document_flow_app
+    _login(client, "vendedor")
+    with app.app_context():
+        proveedor = Party(
+            code="PRV-2056",
+            name="Proveedor sin rol cliente",
+            is_supplier=True,
+            is_customer=False,
+            is_active=True,
+        )
+        database.session.add(proveedor)
+        database.session.flush()
+        database.session.add(CompanyParty(company="cacao", party_id=proveedor.id, is_active=True))
+        ensure_default_naming_series_for_company("cacao", ["sales_order"])
+        database.session.add(
+            AccountingPeriod(
+                entity="cacao",
+                name="2026-2056",
+                status="Open",
+                enabled=True,
+                start=date(2026, 1, 1),
+                end=date(2026, 12, 31),
+            )
+        )
+        database.session.commit()
+        proveedor_id = proveedor.id
+        ordenes = len(database.session.execute(database.select(SalesOrder.id)).scalars().all())
+        relaciones = len(database.session.execute(database.select(DocumentRelation.id)).scalars().all())
+
+    respuesta = client.post(
+        "/api/document-flow/create-target",
+        json={
+            "source_document_type": "sales_request",
+            "source_document_id": ids["request"],
+            "target_document_type": "sales_order",
+            "company": "cacao",
+            "posting_date": "2026-10-16",
+            "customer_id": proveedor_id,
+            "customer_name": proveedor.name,
+            "lines": [
+                {
+                    "source_document_type": "sales_request",
+                    "source_document_id": ids["request"],
+                    "source_row_id": ids["request_line"],
+                    "qty": "1",
+                }
+            ],
+        },
+    )
+
+    assert respuesta.status_code == 400
+    with app.app_context():
+        assert len(database.session.execute(database.select(SalesOrder.id)).scalars().all()) == ordenes
+        assert len(database.session.execute(database.select(DocumentRelation.id)).scalars().all()) == relaciones
+
+
+def test_create_target_authorizes_company_before_resolving_source_or_item(document_flow_app):
+    """#2056: una compania no autorizada responde 403 sin revelar fuentes ni items."""
+    app, client, ids = document_flow_app
+    _login(client, "vendedor")
+
+    base = {
+        "source_document_type": "sales_request",
+        "target_document_type": "sales_order",
+        "company": "cafe",
+        "posting_date": "2026-10-16",
+    }
+    sin_fuente = client.post("/api/document-flow/create-target", json={**base, "source_document_id": "no-existe", "lines": []})
+    sin_item = client.post(
+        "/api/document-flow/create-target",
+        json={
+            **base,
+            "source_document_id": ids["request"],
+            "lines": [
+                {
+                    "source_document_type": "sales_request",
+                    "source_document_id": ids["request"],
+                    "source_row_id": "no-existe",
+                    "qty": "1",
+                }
+            ],
+        },
+    )
+
+    assert sin_fuente.status_code == 403
+    assert sin_item.status_code == 403
+    with app.app_context():
+        assert len(database.session.execute(database.select(SalesOrder.id)).scalars().all()) == 2
+
+
+@pytest.mark.parametrize(
+    "ruta",
+    ("/sales/sales-request/new", "/sales/quotation/new", "/sales/sales-order/new"),
+)
+def test_sales_writers_authorize_company_before_customer(document_flow_app, ruta):
+    """#2056: el ACL de compania precede a la resolucion del tercero en el alta."""
+    _, client, _ids = document_flow_app
+    _login(client, "vendedor")
+
+    respuesta = client.post(
+        ruta,
+        data={
+            "company": "cafe",
+            "currency": "NIO",
+            "posting_date": "2026-10-16",
+            "customer_id": "no-existe",
+        },
+    )
+
+    assert respuesta.status_code == 403

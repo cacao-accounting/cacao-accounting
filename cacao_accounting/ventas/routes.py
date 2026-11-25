@@ -521,8 +521,8 @@ def ventas_pedido_venta_nuevo():
                 request.form.get("company") or None,
                 request.form.get("currency") or request.form.get("transaction_currency") or None,
             )
-            customer = _validated_customer(customer_id, company)
             exige_acceso_compania("sales", company, "crear")
+            customer = _validated_customer(customer_id, company)
             pedido = SalesRequest(
                 customer_id=customer_id,
                 customer_name=customer.name if customer else None,
@@ -1450,8 +1450,8 @@ def _create_sales_quotation_from_request(from_request_id: str | None, source: An
             request.form.get("company") or None,
             request.form.get("currency") or request.form.get("transaction_currency") or None,
         )
-        customer = _validated_customer(customer_id, company)
         exige_acceso_compania("sales", company, "crear")
+        customer = _validated_customer(customer_id, company)
         quotation = SalesQuotation(
             customer_id=customer_id,
             customer_name=customer.name if customer else None,
@@ -2128,6 +2128,12 @@ def ventas_entrega_duplicar(note_id: str):
     if origen.docstatus == 2:
         abort(400)
 
+    try:
+        _validated_delivery_customer(origen.customer_id, origen.company)
+    except ValueError as exc:
+        flash_error(exc)
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
+
     duplicado = DeliveryNote(
         customer_id=origen.customer_id,
         customer_name=origen.customer_name,
@@ -2544,6 +2550,12 @@ def ventas_factura_venta_duplicar(invoice_id: str):
     _require_sales_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
+
+    try:
+        _validated_customer(origen.customer_id, origen.company)
+    except ValueError as exc:
+        flash_error(exc)
+        return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
     duplicado = SalesInvoice(
         customer_id=origen.customer_id,
