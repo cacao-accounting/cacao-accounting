@@ -11,6 +11,7 @@ configuración no se persiste.
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import date
 from decimal import Decimal
@@ -452,6 +453,111 @@ def test_conflicto_de_configuracion_devuelve_409(monkeypatch, numeracion_csrf):
             .all()
             == []
         )
+
+
+@pytest.mark.database
+def test_la_restriccion_unica_de_configuracion_se_aplica_en_el_motor():
+    """La colisión real de numeración la rechaza la base, no solo un mock."""
+    configured_uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        if not configured_uri.startswith("sqlite"):
+            pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
+
+    application = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": configured_uri,
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    suffix = uuid4().hex[:8].upper()
+    company_code = f"NB{suffix}"
+    currency_code = f"NB{suffix}"
+    bank_id = None
+    account_id = None
+    try:
+        with application.app_context():
+            database.create_all()
+            database.session.add(Currency(code=currency_code, name=f"Moneda {suffix}", decimals=2, active=True, default=False))
+            database.session.add(
+                Entity(
+                    code=company_code,
+                    name=f"Empresa {suffix}",
+                    company_name=f"Empresa {suffix} SA",
+                    tax_id=f"NB{suffix}",
+                    currency=currency_code,
+                    enabled=True,
+                    status="activo",
+                )
+            )
+            database.session.flush()
+            banco = Bank(name=f"Banco {suffix}", swift_code=f"NB{suffix}", is_active=True)
+            database.session.add(banco)
+            database.session.flush()
+            bank_id = banco.id
+            cuenta = BankAccount(
+                company=company_code,
+                bank_id=bank_id,
+                account_name=f"Cuenta {suffix}",
+                account_no=f"NB-{suffix}",
+                currency=currency_code,
+                is_active=True,
+            )
+            database.session.add(cuenta)
+            database.session.commit()
+            account_id = cuenta.id
+
+            database.session.add(
+                BankAccountNumberingConfig(bank_account_id=account_id, payment_type="pay", use_external_counter=False)
+            )
+            database.session.commit()
+            database.session.add(
+                BankAccountNumberingConfig(bank_account_id=account_id, payment_type="pay", use_external_counter=False)
+            )
+            with pytest.raises(IntegrityError) as error:
+                database.session.flush()
+            mensaje = str(error.value).lower()
+            assert "uq_bank_numbering_config" in mensaje or (
+                "bank_account_numbering_config.bank_account_id" in mensaje
+                and "bank_account_numbering_config.payment_type" in mensaje
+            )
+            database.session.rollback()
+            assert (
+                database.session.execute(
+                    database.select(database.func.count())
+                    .select_from(BankAccountNumberingConfig)
+                    .where(BankAccountNumberingConfig.bank_account_id == account_id)
+                ).scalar_one()
+                == 1
+            )
+    finally:
+        with application.app_context():
+            database.session.rollback()
+            if account_id:
+                configuraciones = database.session.scalars(
+                    database.select(BankAccountNumberingConfig).filter_by(bank_account_id=account_id)
+                ).all()
+                for config in configuraciones:
+                    database.session.delete(config)
+                cuenta = database.session.get(BankAccount, account_id)
+                if cuenta:
+                    database.session.delete(cuenta)
+            if bank_id:
+                banco = database.session.get(Bank, bank_id)
+                if banco:
+                    database.session.delete(banco)
+            entidad = database.session.get(Entity, company_code)
+            if entidad:
+                database.session.delete(entidad)
+            moneda = database.session.get(Currency, currency_code)
+            if moneda:
+                database.session.delete(moneda)
+            database.session.commit()
+            database.session.remove()
+            database.engine.dispose()
 
 
 def test_usuario_solo_consulta_no_ve_edicion_y_no_guarda(numeracion_csrf):
