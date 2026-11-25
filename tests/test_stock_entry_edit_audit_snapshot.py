@@ -19,6 +19,7 @@ from flask import get_flashed_messages
 from cacao_accounting.database import (
     Accounts,
     AuditTrail,
+    Batch,
     CostCenter,
     Project,
     StockEntry,
@@ -78,6 +79,8 @@ def _seed_movimiento(app, purpose: str) -> str:
             StockEntryItem(
                 stock_entry_id=entry.id,
                 item_code="ART01",
+                source_warehouse="BOD01",
+                target_warehouse="BOD01",
                 qty=Decimal("2"),
                 uom="UND",
                 qty_in_base_uom=Decimal("2"),
@@ -175,3 +178,51 @@ def test_edicion_conciliacion_registra_cuenta_dimensiones_y_total(app, catalogo_
     assert Decimal(cambios["total_amount"]["after"]) > Decimal("20")
     assert antes["adjustment_account_id"] != despues["adjustment_account_id"]
     assert antes["cost_center_code"] != despues["cost_center_code"]
+
+
+def test_edicion_registra_cantidad_tasa_importe_bodega_y_lote(app, catalogo_edicion, monkeypatch):
+    """#2278: el snapshot conserva los valores concretos de cada línea editada."""
+    entry_id = _seed_movimiento(app, "material_receipt")
+    bodega = catalogo_edicion["bodega"]
+    with app.app_context():
+        lote = Batch(item_code="ART01", batch_no=f"LOTE-{uuid4().hex[:6]}", is_active=True)
+        database.session.add(lote)
+        database.session.commit()
+        lote_id = lote.id
+
+    cambios, antes, despues = _editar(
+        app,
+        monkeypatch,
+        entry_id,
+        _formulario_base(
+            "material_receipt",
+            from_warehouse=bodega,
+            to_warehouse=bodega,
+            qty_0="4",
+            rate_0="12",
+            amount_0="48",
+            batch_id_0=lote_id,
+        ),
+    )
+
+    assert len(antes["items"]) == len(despues["items"]) == 1
+    linea_antes = antes["items"][0]
+    linea_despues = despues["items"][0]
+    assert Decimal(str(linea_antes["qty"])) == Decimal("2")
+    assert Decimal(str(linea_antes["basic_rate"])) == Decimal("10")
+    assert Decimal(str(linea_antes["amount"])) == Decimal("20")
+    assert linea_antes["source_warehouse"] == "BOD01"
+    assert linea_antes["target_warehouse"] == "BOD01"
+    assert linea_antes["batch_id"] is None
+
+    assert Decimal(str(linea_despues["qty"])) == Decimal("4")
+    assert Decimal(str(linea_despues["qty_in_base_uom"])) == Decimal("4")
+    assert Decimal(str(linea_despues["basic_rate"])) == Decimal("12")
+    assert Decimal(str(linea_despues["amount"])) == Decimal("48")
+    assert linea_despues["source_warehouse"] == bodega
+    assert linea_despues["target_warehouse"] == bodega
+    assert linea_despues["batch_id"] == lote_id
+
+    item_cambios = cambios["items"]
+    assert item_cambios["before"] == [linea_antes]
+    assert item_cambios["after"] == [linea_despues]
