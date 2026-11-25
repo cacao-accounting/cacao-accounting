@@ -82,14 +82,14 @@ macros %}
         </span>
         {% else %} · {{ _("Sin ronda abierta") }} {% endif %}
       </span>
-      {% if context.round and context.round.status == 'open' %}
+      {% if context.round and context.round.status == 'open' and can_create %}
       <a
         class="btn btn-sm btn-outline-primary"
         href="{{ url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=context.rfq.id) }}"
       >
         <i class="bi bi-plus-circle me-1"></i>{{ _("Agregar oferta a esta ronda") }}
       </a>
-      {% elif can_authorize %}
+      {% elif can_authorize and can_create %}
       <form
         method="post"
         action="{{ url_for('compras.compras_comparativo_solicitud_abrir_ronda', comparison_id=comparison.id) }}"
