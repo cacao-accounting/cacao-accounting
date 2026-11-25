@@ -27,12 +27,15 @@ from cacao_accounting.database import (
     Item,
     PurchaseOrder,
     PurchaseOrderItem,
+    Modules,
     PurchaseRequest,
     PurchaseRequestComparison,
     PurchaseRequestComparisonLine,
     PurchaseRequestItem,
     SupplierQuotation,
     UOM,
+    User,
+    UserCompanyAccess,
     database,
 )
 
@@ -45,6 +48,7 @@ def request_order_scene():
             "SQLALCHEMY_DATABASE_URI": "sqlite://",
             "SQLALCHEMY_ENGINE_OPTIONS": {"poolclass": StaticPool},
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
             "TESTING": True,
             "MODO_ESCRITORIO": True,
         }
@@ -65,9 +69,12 @@ def request_order_scene():
                     status="default",
                 ),
                 UOM(code="UND", name="Unidad"),
+                Modules(module="purchases", default=True, enabled=True),
+                User(id="admin", user="admin", name="Admin", password=b"unused", classification="admin", active=True),
             ]
         )
         database.session.flush()
+        database.session.add(UserCompanyAccess(user_id="admin", company_code="cacao"))
         database.session.add(
             Item(
                 code="ART01",
@@ -138,6 +145,18 @@ def _agregar_orden(application, ids, cantidad: str, *, docstatus: int = 1) -> st
         )
         database.session.commit()
         return str(orden.id)
+
+
+def _cliente_admin(application):
+    """Cliente autenticado como el administrador del escenario."""
+    with application.app_context():
+        version = database.session.get(User, "admin").auth_version
+    client = application.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = "admin"
+        session["_auth_version"] = version
+        session["_fresh"] = True
+    return client
 
 
 def _agregar_comparativo_finalizado(application, ids) -> None:
@@ -215,6 +234,46 @@ def test_orden_parcial_no_cierra_la_solicitud(request_order_scene):
     with application.app_context():
         solicitud = database.session.get(PurchaseRequest, ids["request"])
         assert purchase_request_is_ready_to_close(solicitud) is False
+
+
+def test_ruta_cancelar_rechaza_oc_de_solicitud_cerrada(request_order_scene):
+    """El POST de cancelación no revierte una OC que cubre una SC cerrada."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10")
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        solicitud.status = "closed"
+        database.session.commit()
+
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-order/{order_id}/cancel", data={"reason": "Prueba"})
+
+    assert respuesta.status_code == 302
+    with application.app_context():
+        assert database.session.get(PurchaseOrder, order_id).docstatus == 1
+        assert (
+            database.session.execute(
+                database.select(DocumentRelation.id).filter_by(
+                    target_type="purchase_order", target_id=order_id, status="active"
+                )
+            ).scalar_one_or_none()
+            is not None
+        )
+
+
+def test_ruta_aprobar_rechaza_oc_borrador_de_solicitud_cerrada(request_order_scene):
+    """El POST de aprobación no activa una OC borrador de una SC cerrada."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10", docstatus=0)
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        solicitud.status = "closed"
+        database.session.commit()
+
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-order/{order_id}/submit")
+
+    assert respuesta.status_code == 302
+    with application.app_context():
+        assert database.session.get(PurchaseOrder, order_id).docstatus == 0
 
 
 def test_ordenes_que_cubren_la_cantidad_cierran_la_solicitud(request_order_scene):
