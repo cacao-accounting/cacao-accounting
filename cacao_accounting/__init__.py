@@ -226,6 +226,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(entidades_creadas=entidades_creadas)
             app.jinja_env.globals.update(document_currency_code=document_currency_code)
             app.jinja_env.globals.update(format_money_with_currency=format_money_with_currency)
+            app.jinja_env.globals.update(format_amount_for_currency=format_amount_for_currency)
             app.jinja_env.globals.update(currency_decimals_map=currency_decimals_map)
             from cacao_accounting.contabilidad.recurring_journal_service import recurring_frequency_label
 
@@ -348,10 +349,15 @@ def currency_decimals_map() -> dict[str, int]:
     return _currency_decimals_map()
 
 
+def format_amount_for_currency(value: object | None, currency_code: str | None = "") -> str:
+    """Format an amount with thousands separators and the currency's precision."""
+    decimals = _currency_decimals_map().get(str(currency_code or ""), 2)
+    return f"{_decimal_for_display(value):,.{decimals}f}"
+
+
 def format_money_with_currency(value: object | None, currency_code: str | None = "") -> str:
     """Format money with thousands separators and the currency's precision."""
-    decimals = _currency_decimals_map().get(str(currency_code or ""), 2)
-    amount = f"{_decimal_for_display(value):,.{decimals}f}"
+    amount = format_amount_for_currency(value, currency_code)
     return f"{currency_code} {amount}" if currency_code else amount
 
 

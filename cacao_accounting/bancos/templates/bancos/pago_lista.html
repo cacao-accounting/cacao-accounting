@@ -48,10 +48,13 @@
         <td>{{ macros.document_status_for("payment_entry", item) }}</td>
         <td>{{ item.party_name or "" }}</td>
         {% if item.payment_type == 'internal_transfer' %}
-        <td>{{ item.paid_amount or "" }} {{ item.transaction_currency or item.currency or "" }} → {{ item.received_amount or "" }} {{ target_currencies.get(item.target_bank_account_id, "") }}</td>
+        {% set origen = item.transaction_currency or item.currency or '' %}
+        {% set destino = target_currencies.get(item.target_bank_account_id, '') %}
+        <td>{{ format_amount_for_currency(item.paid_amount, origen) ~ ' ' ~ origen if item.paid_amount else '' }} → {{ format_amount_for_currency(item.received_amount, destino) ~ ' ' ~ destino if item.received_amount else '' }}</td>
         {% else %}
         {% set monto = item.received_amount if item.payment_type in ['receive', 'credit_note'] else item.paid_amount %}
-        <td>{{ monto or "" }}{% if monto and (item.transaction_currency or item.currency) %} {{ item.transaction_currency or item.currency }}{% endif %}</td>
+        {% set moneda = item.transaction_currency or item.currency or '' %}
+        <td>{{ format_amount_for_currency(monto, moneda) ~ ' ' ~ moneda if monto else '' }}</td>
         {% endif %}
       </tr>
       {% else %}

@@ -154,7 +154,7 @@ def _assert_payment_listings(client) -> None:
         "/cash_management/payment/list": ("321.00", "654.00", "NIO"),
         "/cash_management/payment/credit-note/list": ("87.50", "Nota de crédito", "NIO"),
         "/cash_management/payment/debit-note/list": ("98.75", "Nota de débito", "NIO"),
-        "/cash_management/transfer/list": ("100.0000 NIO → 110.0000 USD", "Transferencia interna"),
+        "/cash_management/transfer/list": ("100.00 NIO → 110.00 USD", "Transferencia interna"),
     }
     for path, expected_values in expectations.items():
         response = client.get(path)
