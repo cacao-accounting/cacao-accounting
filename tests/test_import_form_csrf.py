@@ -12,7 +12,15 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import Entity, Modules, NamingSeries, Party, database
+from cacao_accounting.database import (
+    CompanyParty,
+    Entity,
+    GeneratedIdentifierLog,
+    Modules,
+    NamingSeries,
+    Party,
+    database,
+)
 from cacao_accounting.imports.models import ImportBatch
 
 
@@ -24,10 +32,17 @@ def import_csrf_pages(app, entorno_contable, authenticated_client, tmp_path):
     app.config.update(WTF_CSRF_ENABLED=True, MODO_ESCRITORIO=False)
     with app.app_context():
         imports_module = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
-        if imports_module is None:
+        module_created = imports_module is None
+        previous_module_enabled = imports_module.enabled if imports_module else None
+        if module_created:
             imports_module = Modules(module="imports", default=False, enabled=True)
             database.session.add(imports_module)
         imports_module.enabled = True
+        initial_batches = set(database.session.execute(database.select(ImportBatch.id)).scalars().all())
+        initial_parties = set(database.session.execute(database.select(Party.id)).scalars().all())
+        initial_series = set(database.session.execute(database.select(NamingSeries.id)).scalars().all())
+        initial_entities = set(database.session.execute(database.select(Entity.id)).scalars().all())
+        initial_identifiers = set(database.session.execute(database.select(GeneratedIdentifierLog.id)).scalars().all())
         sufijo = uuid4().hex[:8]
         nombre_cliente = f"Cliente QA {sufijo}"
         source_path = tmp_path / "customer.csv"
@@ -50,12 +65,44 @@ def import_csrf_pages(app, entorno_contable, authenticated_client, tmp_path):
             batches[status] = batch.id
         database.session.commit()
     client = authenticated_client("admin")
-    yield app, client, batches
-    with app.app_context():
-        database.session.execute(database.delete(ImportBatch).where(ImportBatch.id.in_(batches.values())))
-        database.session.commit()
-    app.config["WTF_CSRF_ENABLED"] = previous_csrf
-    app.config["MODO_ESCRITORIO"] = previous_desktop
+    try:
+        yield app, client, batches
+    finally:
+        # La configuración se restaura primero: un error en la limpieza de la
+        # base no debe dejar CSRF o el modo escritorio alterados.
+        app.config["WTF_CSRF_ENABLED"] = previous_csrf
+        app.config["MODO_ESCRITORIO"] = previous_desktop
+        with app.app_context():
+            created_batches = set(database.session.execute(database.select(ImportBatch.id)).scalars().all()) - initial_batches
+            created_parties = set(database.session.execute(database.select(Party.id)).scalars().all()) - initial_parties
+            created_series = set(database.session.execute(database.select(NamingSeries.id)).scalars().all()) - initial_series
+            created_entities = set(database.session.execute(database.select(Entity.id)).scalars().all()) - initial_entities
+            created_identifiers = (
+                set(database.session.execute(database.select(GeneratedIdentifierLog.id)).scalars().all()) - initial_identifiers
+            )
+            if created_parties:
+                database.session.execute(database.delete(CompanyParty).where(CompanyParty.party_id.in_(created_parties)))
+            if created_batches:
+                database.session.execute(database.delete(ImportBatch).where(ImportBatch.id.in_(created_batches)))
+            if created_series:
+                database.session.execute(database.delete(NamingSeries).where(NamingSeries.id.in_(created_series)))
+            if created_parties:
+                database.session.execute(database.delete(Party).where(Party.id.in_(created_parties)))
+            if created_entities:
+                database.session.execute(database.delete(Entity).where(Entity.id.in_(created_entities)))
+            if created_identifiers:
+                database.session.execute(
+                    database.delete(GeneratedIdentifierLog).where(GeneratedIdentifierLog.id.in_(created_identifiers))
+                )
+            current_module = database.session.execute(
+                database.select(Modules).filter_by(module="imports")
+            ).scalar_one_or_none()
+            if current_module is not None:
+                if module_created:
+                    database.session.delete(current_module)
+                else:
+                    current_module.enabled = previous_module_enabled
+            database.session.commit()
 
 
 def _form_token(html: str, action: str | None = None, marker: str | None = None) -> str:
