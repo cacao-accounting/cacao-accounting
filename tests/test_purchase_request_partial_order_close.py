@@ -425,6 +425,35 @@ def test_cancelar_oc_reabre_pendiente_tras_comparativo_finalizado(request_order_
         assert purchase_request_line_closure_reasons(solicitud) == {}
 
 
+def test_submit_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch):
+    """El submit bloquea PO y SC antes de la lectura FOR UPDATE del estado."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10", docstatus=0)
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        solicitud.status = "closed"
+        database.session.commit()
+    eventos: list[str] = []
+    original_lock = compras_routes.lock_document_flow_document
+    original_execute = database.session.execute
+
+    def tracking_lock(document_type: str, document_id: str) -> None:
+        eventos.append(f"lock:{document_type}")
+        original_lock(document_type, document_id)
+
+    def tracking_execute(statement, *args, **kwargs):
+        if getattr(statement, "_for_update_arg", None) is not None and "purchase_request" in str(statement):
+            eventos.append("for_update")
+        return original_execute(statement, *args, **kwargs)
+
+    monkeypatch.setattr(compras_routes, "lock_document_flow_document", tracking_lock)
+    monkeypatch.setattr(database.session, "execute", tracking_execute)
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-order/{order_id}/submit")
+
+    assert respuesta.status_code == 302
+    assert eventos[:3] == ["lock:purchase_order", "lock:purchase_request", "for_update"]
+
+
 def test_ruta_aprobar_rechaza_oc_borrador_de_solicitud_cerrada(request_order_scene):
     """El POST de aprobación no activa una OC borrador de una SC cerrada."""
     application, ids = request_order_scene
