@@ -13,6 +13,8 @@ import pytest
 
 from cacao_accounting.database import Item, ItemPrice, Modules, PriceList, database
 
+_UNSET = object()
+
 
 @pytest.fixture
 def csrf_state_snapshot(app):
@@ -33,7 +35,7 @@ def csrf_price_forms(app, entorno_contable, authenticated_client, csrf_state_sna
     del entorno_contable, csrf_state_snapshot
     previous_csrf = app.config["WTF_CSRF_ENABLED"]
     module_created = False
-    previous_enabled = None
+    previous_enabled: object = _UNSET
     ids: tuple[str, str, str] | None = None
     try:
         app.config["WTF_CSRF_ENABLED"] = True
@@ -89,7 +91,7 @@ def csrf_price_forms(app, entorno_contable, authenticated_client, csrf_state_sna
             if module_created:
                 if current is not None:
                     database.session.delete(current)
-            elif current is not None:
+            elif current is not None and previous_enabled is not _UNSET:
                 current.enabled = previous_enabled
             database.session.commit()
 

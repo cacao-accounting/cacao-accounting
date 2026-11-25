@@ -18,6 +18,8 @@ from sqlalchemy import select
 
 from cacao_accounting.database import Modules, Party, PartyGroup, User, database
 
+_UNSET = object()
+
 
 @pytest.fixture
 def admin_module_snapshot(app):
@@ -36,7 +38,7 @@ def party_group_admin_fixture(app, admin_module_snapshot):
     """Habilita administración y restaura su estado previo al terminar la prueba."""
     del admin_module_snapshot
     module_created = False
-    previous_enabled = None
+    previous_enabled: object = _UNSET
     try:
         with app.app_context():
             admin_module = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one_or_none()
@@ -56,33 +58,40 @@ def party_group_admin_fixture(app, admin_module_snapshot):
             if module_created:
                 if current is not None:
                     database.session.delete(current)
-            elif current is not None:
+            elif current is not None and previous_enabled is not _UNSET:
                 current.enabled = previous_enabled
             database.session.commit()
 
 
-def test_fixture_restaura_modulo_admin_si_falla_la_carga_del_usuario(app, admin_module_snapshot, monkeypatch):
-    """#2284: el módulo admin vuelve a su estado si falla el setup posterior."""
-    with app.app_context():
-        previous_enabled = database.session.execute(select(Modules).filter_by(module="admin")).scalar_one().enabled
+def test_fixture_restaura_modulo_admin_si_falla_la_carga_del_usuario(app, monkeypatch):
+    """#2284: el módulo admin recupera un estado previo distinto si falla el setup."""
     real_select = select
+    with app.app_context():
+        module = database.session.execute(real_select(Modules).filter_by(module="admin")).scalar_one()
+        original_enabled = module.enabled
+        module.enabled = False
+        database.session.commit()
     calls = {"count": 0}
 
     def failing_select(*args, **kwargs):
         calls["count"] += 1
-        if calls["count"] >= 2:
+        if calls["count"] == 2:
             raise RuntimeError("fallo de setup")
         return real_select(*args, **kwargs)
 
     monkeypatch.setattr(sys.modules[__name__], "select", failing_select)
-    generator = party_group_admin_fixture.__wrapped__(app, admin_module_snapshot)
-    with pytest.raises(RuntimeError, match="fallo de setup"):
-        next(generator)
+    try:
+        generator = party_group_admin_fixture.__wrapped__(app, None)
+        with pytest.raises(RuntimeError, match="fallo de setup"):
+            next(generator)
 
-    with app.app_context():
-        assert (
-            database.session.execute(real_select(Modules).filter_by(module="admin")).scalar_one().enabled == previous_enabled
-        )
+        with app.app_context():
+            assert database.session.execute(real_select(Modules).filter_by(module="admin")).scalar_one().enabled is False
+    finally:
+        with app.app_context():
+            module = database.session.execute(real_select(Modules).filter_by(module="admin")).scalar_one()
+            module.enabled = original_enabled
+            database.session.commit()
 
 
 def _admin_client(app, user_id: str):
