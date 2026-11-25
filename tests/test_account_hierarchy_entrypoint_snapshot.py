@@ -21,7 +21,17 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import routes as contabilidad_routes
-from cacao_accounting.database import Accounts, Currency, Entity, Modules, User, database
+from cacao_accounting.database import (
+    Accounts,
+    Currency,
+    Entity,
+    Modules,
+    Roles,
+    RolesUser,
+    User,
+    UserCompanyAccess,
+    database,
+)
 from cacao_accounting.default_scope import lock_default_scope
 from cacao_accounting.imports.adapters import chart_of_accounts
 
@@ -44,7 +54,11 @@ def _preparar_app(uri: str):
         {
             **configuracion,
             "SQLALCHEMY_DATABASE_URI": uri,
-            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 4, "max_overflow": 0},
+            "SQLALCHEMY_ENGINE_OPTIONS": {
+                **dict(configuracion.get("SQLALCHEMY_ENGINE_OPTIONS") or {}),
+                "pool_size": 4,
+                "max_overflow": 0,
+            },
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
@@ -53,8 +67,8 @@ def _preparar_app(uri: str):
     )
 
 
-def _sembrar(app, company: str, parent_code: str) -> tuple[str, str]:
-    """Siembra compañía, usuario administrador y cuenta padre de grupo."""
+def _sembrar(app, company: str, parent_code: str, *, group: bool = True) -> tuple[str, str]:
+    """Siembra compañía, usuario administrador y cuenta padre."""
     sufijo = uuid4().hex[:6]
     user_id = f"admin-{sufijo}"
     with app.app_context():
@@ -63,7 +77,14 @@ def _sembrar(app, company: str, parent_code: str) -> tuple[str, str]:
             database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True))
             database.session.flush()
         database.session.add(
-            Entity(code=company, name="Cacao", company_name="Cacao SA", tax_id=f"J-{sufijo}", currency="NIO", enabled=True)
+            Entity(
+                code=company,
+                name=f"Cacao {sufijo}",
+                company_name=f"Cacao SA {sufijo}",
+                tax_id=f"J-{sufijo}",
+                currency="NIO",
+                enabled=True,
+            )
         )
         if database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one_or_none() is None:
             database.session.add(Modules(module="accounting", default=False, enabled=True))
@@ -75,10 +96,18 @@ def _sembrar(app, company: str, parent_code: str) -> tuple[str, str]:
                 password=b"x",
                 active=True,
                 classification="admin",
+                company=company,
             )
         )
+        rol = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
+        if rol is None:
+            rol = Roles(name="admin", note="Administrador de la prueba")
+            database.session.add(rol)
+            database.session.flush()
+        database.session.add(RolesUser(user_id=user_id, role_id=rol.id, active=True))
+        database.session.add(UserCompanyAccess(user_id=user_id, company_code=company))
         database.session.flush()
-        database.session.add(Accounts(entity=company, code=parent_code, name="Grupo", group=True, active=True, enabled=True))
+        database.session.add(Accounts(entity=company, code=parent_code, name="Grupo", group=group, active=True, enabled=True))
         database.session.commit()
         parent_id = database.session.execute(
             database.select(Accounts.id).filter_by(entity=company, code=parent_code)
@@ -89,8 +118,11 @@ def _sembrar(app, company: str, parent_code: str) -> tuple[str, str]:
 def _cliente(app, user_id: str):
     """Devuelve un cliente autenticado como administrador de la prueba."""
     client = app.test_client()
+    with app.app_context():
+        auth_version = database.session.get(User, user_id).auth_version
     with client.session_transaction() as session:
         session["_user_id"] = user_id
+        session["_auth_version"] = auth_version
         session["_fresh"] = True
     return client
 
@@ -141,6 +173,35 @@ def _confirmar_democion(app, company: str, parent_code: str, snapshot: Event, co
             database.session.remove()
 
 
+def _confirmar_promocion_y_hija(
+    app, company: str, parent_code: str, child_code: str, snapshot: Event, confirmado: Event
+) -> None:
+    """Promueve el padre a grupo y confirma una hija bajo el lock compartido."""
+    with app.app_context():
+        try:
+            assert snapshot.wait(timeout=15)
+            lock_default_scope("account_hierarchy", company)
+            padre = database.session.execute(
+                database.select(Accounts).filter_by(entity=company, code=parent_code)
+            ).scalar_one()
+            padre.group = True
+            database.session.add(
+                Accounts(
+                    entity=company,
+                    code=child_code,
+                    name="Hija Concurrente",
+                    parent=parent_code,
+                    group=False,
+                    active=True,
+                    enabled=True,
+                )
+            )
+            database.session.commit()
+            confirmado.set()
+        finally:
+            database.session.remove()
+
+
 def _cuenta(app, company: str, code: str):
     """Devuelve la cuenta indicada en una sesión independiente."""
     with app.app_context():
@@ -182,6 +243,8 @@ def test_edicion_ve_hija_confirmada_durante_su_snapshot(monkeypatch):
                     "code": parent_code,
                     "name": "Demovida",
                     "entidad": company,
+                    "padre": "",
+                    "clasificacion": "asset",
                     "activo": "y",
                 },
             )
@@ -275,6 +338,53 @@ def test_importacion_ve_democion_confirmada_durante_su_snapshot(monkeypatch):
         assert _cuenta(app, company, child_code) is None
         padre = _cuenta(app, company, parent_code)
         assert padre.group is False
+    finally:
+        snapshot.set()
+        confirmado.set()
+        _cerrar(app)
+
+
+def test_edicion_recarga_padre_promovido_con_hija_durante_su_snapshot(monkeypatch):
+    """La recarga bajo lock impide desmarcar un padre promovido con hija."""
+    app = _preparar_app(_motor_externo())
+    sufijo = uuid4().hex[:6].upper()
+    company = f"AC-{sufijo}"
+    parent_code = f"PARENT-{sufijo}"
+    child_code = f"CHILD-{sufijo}"
+    user_id, parent_id = _sembrar(app, company, parent_code, group=False)
+    snapshot = Event()
+    confirmado = Event()
+    validar = contabilidad_routes._validate_active_entity_submission
+
+    def con_snapshot(entity):
+        """Fija el snapshot con el padre aún no grupo antes del lock."""
+        validar(entity)
+        database.session.execute(database.select(Accounts).filter_by(entity=company, code=parent_code)).scalar_one()
+        snapshot.set()
+        assert confirmado.wait(timeout=15)
+
+    monkeypatch.setattr(contabilidad_routes, "_validate_active_entity_submission", con_snapshot)
+    try:
+        cliente = _cliente(app, user_id)
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            rival = workers.submit(_confirmar_promocion_y_hija, app, company, parent_code, child_code, snapshot, confirmado)
+            respuesta = cliente.post(
+                f"/accounting/account/{parent_id}/edit",
+                data={
+                    "code": parent_code,
+                    "name": "Demovida",
+                    "entidad": company,
+                    "padre": "",
+                    "clasificacion": "asset",
+                    "activo": "y",
+                },
+            )
+            rival.result(timeout=30)
+        assert respuesta.status_code == 200
+        padre = _cuenta(app, company, parent_code)
+        assert padre.group is True
+        assert padre.name == "Grupo"
+        assert _cuenta(app, company, child_code) is not None
     finally:
         snapshot.set()
         confirmado.set()
