@@ -438,7 +438,13 @@ def _write_event(mapper: Any, connection: Any, target: Any, action: str) -> None
         return
     before = _snapshot(target, previous=True) if action != "created" else None
     after = _snapshot(target) if action != "deleted" else None
-    if before == after:
+    try:
+        unchanged = before == after
+    except TypeError:
+        unchanged = json.dumps(before, default=_json_default, sort_keys=True, ensure_ascii=False) == json.dumps(
+            after, default=_json_default, sort_keys=True, ensure_ascii=False
+        )
+    if unchanged:
         return
     actor_id, actor_name = current_audit_actor()
     company = getattr(target, "company", None) or getattr(target, "entity", None) or getattr(target, "company_code", None)
