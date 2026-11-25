@@ -1000,7 +1000,7 @@ def _validate_journal_line(
         account = _account_record(company, line.account)
         account_cache[line.account] = account
     if account is None:
-        raise JournalValidationError(_("La cuenta contable indicada no existe para la compania."))
+        raise JournalValidationError(_("La cuenta contable indicada no existe para la compañia."))
     inactive = not account.active or not account.enabled
     if account.group or (inactive and not allow_inactive_account):
         raise JournalValidationError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
