@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import io
 import re
+from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import Entity, Modules, NamingSeries, database
+from cacao_accounting.database import Entity, Modules, NamingSeries, Party, database
 from cacao_accounting.imports.models import ImportBatch
 
 
@@ -26,8 +28,13 @@ def import_csrf_pages(app, entorno_contable, authenticated_client, tmp_path):
             imports_module = Modules(module="imports", default=False, enabled=True)
             database.session.add(imports_module)
         imports_module.enabled = True
+        sufijo = uuid4().hex[:8]
+        nombre_cliente = f"Cliente QA {sufijo}"
         source_path = tmp_path / "customer.csv"
-        source_path.write_text("name,email\nCliente,cliente@example.test\n", encoding="utf-8")
+        source_path.write_text(
+            "nombre,nombre_comercial,identificacion_fiscal,clasificacion,grupo\n" f"{nombre_cliente},{nombre_cliente},,,\n",
+            encoding="utf-8",
+        )
         batches = {}
         for status in (0, 1, 3, 4):
             batch = ImportBatch(
@@ -77,6 +84,8 @@ def test_new_import_form_rejects_missing_token_and_accepts_valid_token(import_cs
     page = client.get("/imports/new")
     assert page.status_code == 200
     token = _form_token(page.get_data(as_text=True), marker='name="record_type"')
+    with _app.app_context():
+        total_antes = database.session.query(ImportBatch).count()
 
     rejected = client.post("/imports/new", data={"company_id": "cacao", "record_type": "customer"})
     assert rejected.status_code == 400
@@ -90,7 +99,7 @@ def test_new_import_form_rejects_missing_token_and_accepts_valid_token(import_cs
         created_batches = (
             database.session.execute(database.select(ImportBatch).filter_by(record_type="customer")).scalars().all()
         )
-        assert len(created_batches) >= 5
+        assert len(created_batches) == total_antes + 1
 
 
 @pytest.mark.parametrize(
@@ -205,7 +214,8 @@ def test_import_detail_forms_carry_csrf_and_reach_their_route(import_csrf_pages,
     def payload() -> dict:
         data: dict = {"csrf_token": token}
         if action == "upload":
-            data["file"] = (io.BytesIO(b"name,email\nCliente,cliente@example.test\n"), "customer.csv", "text/csv")
+            csv = b"nombre,nombre_comercial,identificacion_fiscal,clasificacion,grupo\n" b"Cliente CSRF,Cliente CSRF,,,\n"
+            data["file"] = (io.BytesIO(csv), "customer.csv", "text/csv")
         return data
 
     data_without_token = payload()
@@ -228,6 +238,12 @@ def test_import_detail_forms_carry_csrf_and_reach_their_route(import_csrf_pages,
             assert batch.import_status in (2, 3, 7)
             assert batch.started_at is None
         elif action == "execute":
-            assert batch.import_status != 3
+            assert batch.import_status == 5
+            assert batch.success_rows == 1
+            assert batch.error_rows == 0
+            assert batch.completed_at is not None
+            lineas = Path(batch.source_path).read_text(encoding="utf-8").splitlines()
+            nombre = lineas[1].split(",")[0]
+            assert database.session.execute(database.select(Party.id).filter_by(name=nombre)).scalar_one_or_none()
         else:
             assert batch.cancel_requested is True
