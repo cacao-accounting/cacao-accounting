@@ -458,8 +458,8 @@ def compras_solicitud_compra(request_id: str):
 @login_required
 @verifica_permiso("purchases", "autorizar")
 def compras_solicitud_compra_close(request_id: str):
-    """Close a purchase request whose lines are compared or directly ordered."""
-    registro = database.session.get(PurchaseRequest, request_id)
+    """Close a purchase request only when every line has zero pending quantity."""
+    registro = database.session.get(PurchaseRequest, request_id, with_for_update=True)
     if not registro:
         abort(404)
     exige_acceso_compania("purchases", registro.company, "autorizar")
@@ -467,7 +467,7 @@ def compras_solicitud_compra_close(request_id: str):
         abort(400)
     if not purchase_request_is_ready_to_close(registro):
         flash(
-            _("La Solicitud de Compra requiere comparativos cerrados u órdenes de compra activas para todas sus líneas."),
+            _("La Solicitud de Compra requiere cantidad pendiente cero en todas sus líneas."),
             "danger",
         )
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))

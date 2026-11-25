@@ -25148,3 +25148,12 @@ msgid "Indique cuántas unidades de la moneda destino equivalen a 1 unidad de la
 msgstr "Enter how many units of the target currency equal 1 unit of the source currency."
 
 
+
+msgid "La Solicitud de Compra requiere cantidad pendiente cero en todas sus líneas."
+msgstr "The Purchase Request requires zero pending quantity on every line."
+
+msgid "Comparativo %(document)s finalizado con oferta seleccionada."
+msgstr "Comparison %(document)s finalized with a selected offer."
+
+msgid "Orden de Compra directa %(document)s sin comparativo."
+msgstr "Direct Purchase Order %(document)s without a comparison."

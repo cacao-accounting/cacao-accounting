@@ -13,7 +13,11 @@ import pytest
 from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
-from cacao_accounting.compras.purchase_request_comparison_service import purchase_request_is_ready_to_close
+from cacao_accounting.compras.purchase_request_comparison_service import (
+    purchase_request_comparison_covered_item_ids,
+    purchase_request_is_ready_to_close,
+    purchase_request_line_closure_reasons,
+)
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
@@ -23,7 +27,10 @@ from cacao_accounting.database import (
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseRequest,
+    PurchaseRequestComparison,
+    PurchaseRequestComparisonLine,
     PurchaseRequestItem,
+    SupplierQuotation,
     UOM,
     database,
 )
@@ -129,6 +136,61 @@ def _agregar_orden(application, ids, cantidad: str) -> None:
             )
         )
         database.session.commit()
+
+
+def _agregar_comparativo_finalizado(application, ids) -> None:
+    """Finaliza un comparativo sin generar la orden de compra de la línea."""
+    suffix = uuid4().hex[:6]
+    with application.app_context():
+        quotation = SupplierQuotation(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=1,
+            document_no=f"SC-{suffix}",
+            supplier_name=f"Proveedor {suffix}",
+            transaction_currency="NIO",
+        )
+        comparison = PurchaseRequestComparison(
+            company="cacao",
+            purchase_request_id=ids["request"],
+            document_no=f"CMP-{suffix}",
+            posting_date=date(2026, 5, 15),
+            status="finalized",
+        )
+        database.session.add_all([quotation, comparison])
+        database.session.flush()
+        database.session.add(
+            PurchaseRequestComparisonLine(
+                comparison_id=comparison.id,
+                purchase_request_item_id=ids["request_item"],
+                selected_supplier_quotation_id=quotation.id,
+            )
+        )
+        database.session.commit()
+
+
+def test_comparativo_finalizado_sin_orden_no_cierra_la_solicitud(request_order_scene):
+    """Finalizar el comparativo no sustituye la orden que cubre la cantidad."""
+    application, ids = request_order_scene
+    _agregar_comparativo_finalizado(application, ids)
+
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        assert purchase_request_is_ready_to_close(solicitud) is False
+        assert purchase_request_line_closure_reasons(solicitud) == {}
+
+
+def test_comparativo_finalizado_cierra_cuando_la_orden_cubre_la_linea(request_order_scene):
+    """El comparativo acredita cobertura solo después de cubrir la cantidad."""
+    application, ids = request_order_scene
+    _agregar_comparativo_finalizado(application, ids)
+    _agregar_orden(application, ids, "10")
+
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        assert purchase_request_comparison_covered_item_ids(solicitud) == {ids["request_item"]}
+        assert purchase_request_is_ready_to_close(solicitud) is True
+        assert ids["request_item"] in purchase_request_line_closure_reasons(solicitud)
 
 
 def test_orden_parcial_no_cierra_la_solicitud(request_order_scene):

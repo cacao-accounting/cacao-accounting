@@ -417,8 +417,13 @@ def finalize_purchase_request_comparison(
 
 
 def purchase_request_comparison_covered_item_ids(purchase_request: PurchaseRequest) -> set[str]:
-    """Return request line ids covered by a closed comparison with selected offer."""
-    return set(
+    """Return request line ids closed by a finalized comparison and pending zero.
+
+    Un comparativo finalizado solo acredita la cobertura cuando la línea ya no
+    tiene cantidad pendiente de ordenar; finalizar el comparativo no sustituye
+    la orden de compra real.
+    """
+    candidate_ids = set(
         database.session.execute(
             database.select(PurchaseRequestComparisonLine.purchase_request_item_id)
             .join(
@@ -434,6 +439,11 @@ def purchase_request_comparison_covered_item_ids(purchase_request: PurchaseReque
         .scalars()
         .all()
     )
+    return {
+        item_id
+        for item_id in candidate_ids
+        if pending_qty("purchase_request", purchase_request.id, item_id, "purchase_order") <= 0
+    }
 
 
 def purchase_request_direct_order_item_ids(purchase_request: PurchaseRequest) -> set[str]:
@@ -481,8 +491,13 @@ def purchase_request_line_closure_reasons(purchase_request: PurchaseRequest) -> 
         )
     ).all()
     for item_id, comparison in comparison_rows:
+        if pending_qty("purchase_request", purchase_request.id, item_id, "purchase_order") > 0:
+            continue
         label = comparison.document_no or comparison.id
-        reasons.setdefault(item_id, f"Comparativo {label} finalizado con oferta seleccionada.")
+        reasons.setdefault(
+            item_id,
+            _("Comparativo %(document)s finalizado con oferta seleccionada.") % {"document": label},
+        )
     direct_rows = database.session.execute(
         database.select(DocumentRelation.source_item_id, PurchaseOrder)
         .join(PurchaseOrder, PurchaseOrder.id == DocumentRelation.target_id)
@@ -495,17 +510,19 @@ def purchase_request_line_closure_reasons(purchase_request: PurchaseRequest) -> 
         )
     ).all()
     for item_id, order in direct_rows:
+        if pending_qty("purchase_request", purchase_request.id, item_id, "purchase_order") > 0:
+            continue
         label = order.document_no or order.id
-        reasons.setdefault(item_id, f"Orden de Compra directa {label} sin comparativo.")
+        reasons.setdefault(item_id, _("Orden de Compra directa %(document)s sin comparativo.") % {"document": label})
     return reasons
 
 
 def purchase_request_is_ready_to_close(purchase_request: PurchaseRequest) -> bool:
-    """Return whether every request line is closed by comparison or direct order.
+    """Return whether every request line has zero pending quantity.
 
-    A line counts as closed when a finalized comparison selected an offer for
-    it or when it has an active relation to an approved purchase order, even
-    if no comparison round ever existed for that line.
+    A finalized comparison or a direct purchase order only closes a line when
+    the line no longer has quantity pending to order. Partial orders and
+    finalized comparisons without their generated order keep the request open.
     """
     request_item_ids = set(
         database.session.execute(
