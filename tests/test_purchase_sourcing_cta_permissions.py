@@ -265,7 +265,7 @@ def test_creador_sin_autorizacion_ve_cta_de_ordenes(app, entorno_contable):
     html = response.get_data(as_text=True)
     assert "Colocar Órdenes de Compra" in html
     assert CTA_RONDA not in html
-    assert post.status_code != 403
+    assert post.status_code == 302
 
 
 def test_autorizador_sin_creacion_no_ve_cta_de_ordenes(app, entorno_contable):
