@@ -442,7 +442,14 @@ def purchase_request_comparison_covered_item_ids(purchase_request: PurchaseReque
     return {
         item_id
         for item_id in candidate_ids
-        if pending_qty("purchase_request", purchase_request.id, item_id, "purchase_order") <= 0
+        if pending_qty(
+            "purchase_request",
+            purchase_request.id,
+            item_id,
+            "purchase_order",
+            exclude_draft_targets=True,
+        )
+        <= 0
     }
 
 
@@ -491,7 +498,16 @@ def purchase_request_line_closure_reasons(purchase_request: PurchaseRequest) -> 
         )
     ).all()
     for item_id, comparison in comparison_rows:
-        if pending_qty("purchase_request", purchase_request.id, item_id, "purchase_order") > 0:
+        if (
+            pending_qty(
+                "purchase_request",
+                purchase_request.id,
+                item_id,
+                "purchase_order",
+                exclude_draft_targets=True,
+            )
+            > 0
+        ):
             continue
         label = comparison.document_no or comparison.id
         reasons.setdefault(
@@ -510,7 +526,16 @@ def purchase_request_line_closure_reasons(purchase_request: PurchaseRequest) -> 
         )
     ).all()
     for item_id, order in direct_rows:
-        if pending_qty("purchase_request", purchase_request.id, item_id, "purchase_order") > 0:
+        if (
+            pending_qty(
+                "purchase_request",
+                purchase_request.id,
+                item_id,
+                "purchase_order",
+                exclude_draft_targets=True,
+            )
+            > 0
+        ):
             continue
         label = order.document_no or order.id
         reasons.setdefault(item_id, _("Orden de Compra directa %(document)s sin comparativo.") % {"document": label})
@@ -536,7 +561,14 @@ def purchase_request_is_ready_to_close(purchase_request: PurchaseRequest) -> boo
     covered = purchase_request_comparison_covered_item_ids(purchase_request) | {
         item_id
         for item_id in purchase_request_direct_order_item_ids(purchase_request)
-        if pending_qty("purchase_request", purchase_request.id, item_id, "purchase_order") <= 0
+        if pending_qty(
+            "purchase_request",
+            purchase_request.id,
+            item_id,
+            "purchase_order",
+            exclude_draft_targets=True,
+        )
+        <= 0
     }
     return request_item_ids.issubset(covered)
 

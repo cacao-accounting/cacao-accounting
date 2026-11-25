@@ -115,6 +115,7 @@ from cacao_accounting.document_flow import (
     assert_relation_same_party,
     get_target_line_source,
     get_create_actions,
+    lock_document_flow_document,
     refresh_source_caches_for_target,
     revert_relations_for_target,
     validate_submit_prerequisites,
@@ -465,6 +466,7 @@ def compras_solicitud_compra_close(request_id: str):
     exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 1 or registro.status == "closed":
         abort(400)
+    lock_document_flow_document("purchase_request", registro.id)
     if not purchase_request_is_ready_to_close(registro):
         flash(
             _("La Solicitud de Compra requiere cantidad pendiente cero en todas sus líneas."),

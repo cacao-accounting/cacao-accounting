@@ -100,9 +100,9 @@ def request_order_scene():
         database.engine.dispose()
 
 
-def _agregar_orden(application, ids, cantidad: str) -> None:
+def _agregar_orden(application, ids, cantidad: str, *, docstatus: int = 1) -> None:
     with application.app_context():
-        orden = PurchaseOrder(company="cacao", posting_date=date(2026, 5, 15), docstatus=1, status="open")
+        orden = PurchaseOrder(company="cacao", posting_date=date(2026, 5, 15), docstatus=docstatus, status="open")
         database.session.add(orden)
         database.session.flush()
         linea = PurchaseOrderItem(
@@ -178,6 +178,18 @@ def test_comparativo_finalizado_sin_orden_no_cierra_la_solicitud(request_order_s
         solicitud = database.session.get(PurchaseRequest, ids["request"])
         assert purchase_request_is_ready_to_close(solicitud) is False
         assert purchase_request_line_closure_reasons(solicitud) == {}
+
+
+def test_orden_en_borrador_no_cubre_la_solicitud(request_order_scene):
+    """Una OC en borrador no consume la cantidad pendiente de la solicitud."""
+    application, ids = request_order_scene
+    _agregar_comparativo_finalizado(application, ids)
+    _agregar_orden(application, ids, "10", docstatus=0)
+
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        assert purchase_request_comparison_covered_item_ids(solicitud) == set()
+        assert purchase_request_is_ready_to_close(solicitud) is False
 
 
 def test_comparativo_finalizado_cierra_cuando_la_orden_cubre_la_linea(request_order_scene):
