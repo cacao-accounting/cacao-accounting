@@ -354,6 +354,7 @@ def _agregar_segunda_sc_cerrada(application, order_id: str) -> str:
     """Vincula una segunda SC cerrada a la misma orden y devuelve su id."""
     with application.app_context():
         otra = PurchaseRequest(
+            id="00000000000000000000000001",
             company="cacao",
             posting_date=date(2026, 5, 15),
             docstatus=1,
@@ -518,21 +519,38 @@ def test_motor_aprobaciones_revalida_sc_cerrada(request_order_scene, monkeypatch
         monkeypatch.setattr(ApprovalEngine, "_validate_final_submission", classmethod(lambda cls, doctype, document: None))
         eventos: list[tuple[str, str]] = []
         original_lock = document_flow.lock_document_flow_document
+        original_execute = database.session.execute
 
         def tracking_lock(document_type: str, document_id: str) -> None:
             eventos.append((document_type, document_id))
             original_lock(document_type, document_id)
 
+        def tracking_execute(statement, *args, **kwargs):
+            if getattr(statement, "_for_update_arg", None) is not None and "purchase_request" in str(statement):
+                eventos.append(("for_update", ""))
+            return original_execute(statement, *args, **kwargs)
+
         monkeypatch.setattr(document_flow, "lock_document_flow_document", tracking_lock)
+        monkeypatch.setattr(database.session, "execute", tracking_execute)
         with pytest.raises(ValueError, match="solicitud de compra cerrada"):
             ApprovalEngine._execute_submit("purchase_order", order, user)
-        assert eventos[0][0] == "purchase_order"
+        assert [tipo for tipo, _ in eventos] == [
+            "purchase_order",
+            "purchase_request",
+            "purchase_request",
+            "for_update",
+        ]
         solicitudes = [document_id for document_type, document_id in eventos if document_type == "purchase_request"]
         assert solicitudes == sorted([ids["request"], segunda_id])
         eventos.clear()
         with pytest.raises(ValueError, match="solicitud de compra cerrada"):
             ApprovalEngine._validate_final_cancellation("purchase_order", order)
-        assert eventos[0][0] == "purchase_order"
+        assert [tipo for tipo, _ in eventos] == [
+            "purchase_order",
+            "purchase_request",
+            "purchase_request",
+            "for_update",
+        ]
         solicitudes = [document_id for document_type, document_id in eventos if document_type == "purchase_request"]
         assert solicitudes == sorted([ids["request"], segunda_id])
 
