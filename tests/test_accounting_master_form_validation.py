@@ -10,13 +10,13 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import Project, Unit, database
+from cacao_accounting.database import Entity, Project, Unit, database
 
 
 @pytest.fixture
 def accounting_catalog_cleanup(app):
     """Registra códigos creados por las pruebas y elimina sus filas al finalizar."""
-    created = {"unit": [], "project": []}
+    created = {"unit": [], "project": [], "entity": []}
     yield created
     with app.app_context():
         for model, codes in ((Project, created["project"]), (Unit, created["unit"])):
@@ -25,6 +25,40 @@ def accounting_catalog_cleanup(app):
                 if record is not None:
                     database.session.delete(record)
         database.session.commit()
+        for code in created["entity"]:
+            record = database.session.execute(database.select(Entity).filter_by(code=code)).scalar_one_or_none()
+            if record is not None:
+                database.session.delete(record)
+        database.session.commit()
+
+
+@pytest.fixture
+def padres_otra_compania(app, accounting_catalog_cleanup):
+    """Crea padres de otra compañía para comprobar el aislamiento jerárquico."""
+    sufijo = uuid4().hex[:8].upper()
+    codigo_entidad = f"OTR{sufijo}"
+    codigo_unidad = f"U{sufijo}"
+    codigo_proyecto = f"P{sufijo}"
+    accounting_catalog_cleanup["unit"].append(codigo_unidad)
+    accounting_catalog_cleanup["project"].append(codigo_proyecto)
+    accounting_catalog_cleanup["entity"].append(codigo_entidad)
+    with app.app_context():
+        entidad = Entity(
+            code=codigo_entidad,
+            name=f"Otra compañía {sufijo}",
+            company_name=f"Otra compañía {sufijo}",
+            tax_id=f"J{sufijo}",
+            currency="NIO",
+            enabled=True,
+        )
+        database.session.add(entidad)
+        database.session.flush()
+        unidad = Unit(code=codigo_unidad, name="Unidad ajena", entity=codigo_entidad, enabled=True)
+        proyecto = Project(code=codigo_proyecto, name="Proyecto ajeno", entity=codigo_entidad, enabled=True)
+        database.session.add_all([unidad, proyecto])
+        database.session.commit()
+        ids = {"unit": unidad.id, "project": proyecto.id}
+    yield ids
 
 
 def test_unit_create_rejects_missing_required_fields(app, authenticated_client):
@@ -124,6 +158,84 @@ def test_project_create_rejects_missing_parent(app, authenticated_client, accoun
     )
 
     assert response.status_code == 200
+    with app.app_context():
+        assert database.session.execute(database.select(Project).filter_by(code=code)).scalar_one_or_none() is None
+
+
+def test_unit_create_rejects_parent_from_another_company(
+    app, authenticated_client, accounting_catalog_cleanup, padres_otra_compania
+):
+    """Una unidad de cacao no puede usar como padre una unidad ajena."""
+    code = f"U{uuid4().hex[:6].upper()}"
+    accounting_catalog_cleanup["unit"].append(code)
+
+    response = authenticated_client().post(
+        "/accounting/unit/new",
+        data={
+            "id": code,
+            "nombre": "Unidad con padre ajeno",
+            "entidad": "cacao",
+            "parent_id": padres_otra_compania["unit"],
+            "habilitado": "on",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "compañía" in response.get_data(as_text=True).lower()
+    with app.app_context():
+        assert database.session.execute(database.select(Unit).filter_by(code=code)).scalar_one_or_none() is None
+
+
+def test_unit_edit_rejects_parent_from_another_company(
+    app, authenticated_client, accounting_catalog_cleanup, padres_otra_compania
+):
+    """Editar una unidad no permite adoptar un padre de otra compañía."""
+    code = f"U{uuid4().hex[:6].upper()}"
+    accounting_catalog_cleanup["unit"].append(code)
+    with app.app_context():
+        database.session.add(Unit(code=code, name="Unidad local", entity="cacao", enabled=True))
+        database.session.commit()
+        unit_id = database.session.execute(database.select(Unit.id).filter_by(code=code)).scalar_one()
+
+    response = authenticated_client().post(
+        f"/accounting/unit/{unit_id}/edit",
+        data={
+            "id": code,
+            "nombre": "Unidad local",
+            "entidad": "cacao",
+            "parent_id": padres_otra_compania["unit"],
+            "habilitado": "on",
+        },
+    )
+
+    assert response.status_code == 200
+    with app.app_context():
+        unidad = database.session.execute(database.select(Unit).filter_by(code=code)).scalar_one()
+        assert unidad.parent_id is None
+
+
+def test_project_create_rejects_parent_from_another_company(
+    app, authenticated_client, accounting_catalog_cleanup, padres_otra_compania
+):
+    """Un proyecto de cacao no puede usar como padre un proyecto ajeno."""
+    code = f"P{uuid4().hex[:6].upper()}"
+    accounting_catalog_cleanup["project"].append(code)
+
+    response = authenticated_client().post(
+        "/accounting/project/new",
+        data={
+            "id": code,
+            "nombre": "Proyecto con padre ajeno",
+            "entidad": "cacao",
+            "parent_id": padres_otra_compania["project"],
+            "presupuesto": "10",
+            "status": "open",
+            "habilitado": "on",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "compañía" in response.get_data(as_text=True).lower()
     with app.app_context():
         assert database.session.execute(database.select(Project).filter_by(code=code)).scalar_one_or_none() is None
 
