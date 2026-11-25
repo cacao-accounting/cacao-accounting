@@ -53,16 +53,25 @@ def price_list_role_scenario():
         database.session.add_all(
             [
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Currency(code="USD", name="Dólar inactivo", decimals=2, active=False, default=False),
                 Modules(module="admin", default=True, enabled=True),
                 Modules(module="sales", default=True, enabled=True),
                 Entity(
                     code="alpha",
                     name="Alpha",
                     company_name=f"Alpha {suffix}",
-                    tax_id=f"TAX-{suffix}",
+                    tax_id=f"TAX-A-{suffix}",
                     currency="NIO",
                     enabled=True,
                     status="default",
+                ),
+                Entity(
+                    code="beta",
+                    name="Beta",
+                    company_name=f"Beta {suffix}",
+                    tax_id=f"TAX-B-{suffix}",
+                    currency="NIO",
+                    enabled=True,
                 ),
             ]
         )
@@ -192,6 +201,53 @@ def test_active_sales_manager_can_create_price_list(price_list_role_scenario):
         assert (
             database.session.execute(database.select(PriceList).filter_by(name=ids["name"])).scalar_one_or_none() is not None
         )
+
+
+@pytest.mark.parametrize("company", ["beta", ""])
+def test_active_sales_manager_cannot_create_outside_alpha(price_list_role_scenario, company):
+    """El POST hacia otra compañía o una lista global se rechaza antes de guardar."""
+    app, ids = price_list_role_scenario
+    client = _authenticated_client(app, ids["active"])
+    nombre = f"Fuera de alcance {uuid4().hex[:8]}"
+
+    response = client.post(
+        PATH,
+        data={
+            "name": nombre,
+            "company": company,
+            "currency": "NIO",
+            "is_selling": "y",
+            "is_active": "y",
+        },
+    )
+
+    assert response.status_code == 403
+    with app.app_context():
+        assert database.session.execute(database.select(PriceList).filter_by(name=nombre)).scalar_one_or_none() is None
+
+
+def test_price_list_rejects_inactive_currency(price_list_role_scenario):
+    """Una moneda inactiva no se persiste como lista de precios."""
+    app, ids = price_list_role_scenario
+    client = _authenticated_client(app, ids["active"])
+    nombre = f"Moneda inactiva {uuid4().hex[:8]}"
+
+    response = client.post(
+        PATH,
+        data={
+            "name": nombre,
+            "company": "alpha",
+            "currency": "USD",
+            "is_selling": "y",
+            "is_active": "y",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "La moneda seleccionada no existe o no está activa." in response.get_data(as_text=True)
+    with app.app_context():
+        assert database.session.execute(database.select(PriceList).filter_by(name=nombre)).scalar_one_or_none() is None
 
 
 def test_company_membership_alone_is_not_enough_for_price_list_scope(price_list_role_scenario):
