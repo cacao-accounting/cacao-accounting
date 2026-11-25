@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import select
 
 from cacao_accounting.contabilidad.journal_service import (
+    JOURNAL_STATUS_DRAFT,
     JournalValidationError,
     create_journal_draft,
     submit_journal,
@@ -166,6 +167,14 @@ def test_posteo_legacy_rechaza_cuenta_ajena_o_no_vigente(entorno_contable_aislad
         actor_id = _actor_id()
         journal = create_journal_draft(_payload(), user_id=actor_id, assign_identifier=False)
         journal_id = journal.id
+        detalles_antes = [
+            (detalle.id, detalle.order, detalle.account, detalle.value, detalle.currency_id, detalle.exchange_rate)
+            for detalle in database.session.execute(
+                select(ComprobanteContableDetalle)
+                .where(ComprobanteContableDetalle.transaction_id == journal_id)
+                .order_by(ComprobanteContableDetalle.order)
+            ).scalars()
+        ]
         linea = (
             database.session.execute(
                 select(ComprobanteContableDetalle).where(ComprobanteContableDetalle.transaction_id == journal_id)
@@ -185,8 +194,20 @@ def test_posteo_legacy_rechaza_cuenta_ajena_o_no_vigente(entorno_contable_aislad
         try:
             with pytest.raises((JournalValidationError, PostingError), match="no existe para la compa|activa, habilitada"):
                 submit_journal(journal_id, user_id=actor_id)
+            database.session.rollback()
+            journal = database.session.get(ComprobanteContable, journal_id)
+            assert journal is not None
+            assert journal.status == JOURNAL_STATUS_DRAFT
+            detalles_despues = [
+                (detalle.id, detalle.order, detalle.account, detalle.value, detalle.currency_id, detalle.exchange_rate)
+                for detalle in database.session.execute(
+                    select(ComprobanteContableDetalle)
+                    .where(ComprobanteContableDetalle.transaction_id == journal_id)
+                    .order_by(ComprobanteContableDetalle.order)
+                ).scalars()
+            ]
+            assert detalles_despues == detalles_antes
             assert database.session.execute(select(GLEntry).where(GLEntry.voucher_id == journal_id)).scalars().all() == []
-            assert database.session.get(ComprobanteContable, journal_id) is not None
         finally:
             database.session.rollback()
 
