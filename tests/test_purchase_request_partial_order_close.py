@@ -432,6 +432,7 @@ def test_guard_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch, a
     """Submit y cancelación bloquean PO y SC antes de leer el estado."""
     application, ids = request_order_scene
     order_id = _agregar_orden(application, ids, "10", docstatus=docstatus)
+    _agregar_segunda_sc_cerrada(application, order_id)
     with application.app_context():
         solicitud = database.session.get(PurchaseRequest, ids["request"])
         solicitud.status = "closed"
@@ -457,7 +458,9 @@ def test_guard_toma_flows_antes_de_releer_sc(request_order_scene, monkeypatch, a
     )
 
     assert respuesta.status_code == 302
-    assert eventos[:3] == ["lock:purchase_order", "lock:purchase_request", "for_update"]
+    assert eventos[0] == "lock:purchase_order"
+    assert eventos[1:3] == ["lock:purchase_request", "lock:purchase_request"]
+    assert eventos[3] == "for_update"
 
 
 def test_ruta_aprobar_rechaza_oc_borrador_de_solicitud_cerrada(request_order_scene):
@@ -550,30 +553,38 @@ def test_guard_relee_sc_cerrada_tras_lock(tmp_path):
 
     order_read = Event()
     request_closed = Event()
+    errors: list[BaseException] = []
+    result: list[bool] = []
 
     def close_request() -> None:
-        assert order_read.wait(timeout=20)
-        with app.app_context():
-            try:
-                request = database.session.get(PurchaseRequest, request_id)
-                request.status = "closed"
-                database.session.commit()
-                request_closed.set()
-            finally:
-                database.session.remove()
+        try:
+            assert order_read.wait(timeout=20)
+            with app.app_context():
+                try:
+                    request = database.session.get(PurchaseRequest, request_id)
+                    request.status = "closed"
+                    database.session.commit()
+                    request_closed.set()
+                finally:
+                    database.session.remove()
+        except BaseException as exc:  # pragma: no cover - falla del escenario
+            errors.append(exc)
 
     def read_after_lock() -> None:
-        with app.app_context():
-            try:
-                order = database.session.get(PurchaseOrder, order_id)
-                assert order is not None
-                order_read.set()
-                assert request_closed.wait(timeout=20)
-                lock_document_flow_document("purchase_order", order_id)
-                lock_document_flow_document("purchase_request", request_id)
-                assert purchase_order_has_closed_source_request(order_id) is True
-            finally:
-                database.session.remove()
+        try:
+            with app.app_context():
+                try:
+                    order = database.session.get(PurchaseOrder, order_id)
+                    assert order is not None
+                    order_read.set()
+                    assert request_closed.wait(timeout=20)
+                    lock_document_flow_document("purchase_order", order_id)
+                    lock_document_flow_document("purchase_request", request_id)
+                    result.append(purchase_order_has_closed_source_request(order_id))
+                finally:
+                    database.session.remove()
+        except BaseException as exc:  # pragma: no cover - falla del escenario
+            errors.append(exc)
 
     try:
         closer = Thread(target=close_request)
@@ -583,6 +594,8 @@ def test_guard_relee_sc_cerrada_tras_lock(tmp_path):
         closer.join(timeout=30)
         reader.join(timeout=30)
         assert not closer.is_alive() and not reader.is_alive()
+        assert errors == []
+        assert result == [True]
     finally:
         with app.app_context():
             database.session.remove()
