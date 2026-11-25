@@ -37,6 +37,8 @@ class JournalEntryAdapter(BaseImportAdapter):
         "descripcion",
         "debito",
         "credito",
+        "moneda",
+        "tipo_cambio",
         "referencia",
         "is_advance",
     ]
