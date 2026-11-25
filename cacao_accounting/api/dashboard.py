@@ -18,6 +18,7 @@ from cacao_accounting.database import (
     AccountingPeriod,
     BankAccount,
     BankTransaction,
+    Book,
     CompanyParty,
     Entity,
     GLEntry,
@@ -292,7 +293,7 @@ def get_banks_data(
 ) -> dict[str, Any]:
     """Obtiene saldos bancarios, conciliaciones y pagos pendientes."""
     accounts = database.session.query(BankAccount).filter_by(company=company, is_active=True).all()
-    base_balances, account_balances = _bank_balances(company, accounts)
+    base_balances, bank_balances, base_currency = _bank_balances(company, accounts, currency)
     account_ids = [account.id for account in accounts]
     unreconciled = _bank_transactions_query(account_ids, start_date, end_date).filter_by(is_reconciled=False).count()
     pending_payments = _document_query(PaymentEntry, company, start_date, end_date).filter_by(docstatus=0).count()
@@ -300,7 +301,7 @@ def get_banks_data(
 
     return {
         "kpis": {
-            "balance": _money_kpi(_("Saldo bancario"), total_balance, currency),
+            "balance": _money_kpi(_("Saldo bancario"), total_balance, base_currency),
             "accounts": _count_kpi(_("Cuentas activas"), len(accounts)),
             "unreconciled": _count_kpi(_("Sin conciliar"), unreconciled),
             "pending_payments": _count_kpi(_("Pagos pendientes"), pending_payments),
@@ -311,7 +312,7 @@ def get_banks_data(
                 {
                     "name": account.account_name,
                     "account_no": account.account_no,
-                    "balance": _bank_account_balance(account, account_balances, currency),
+                    "balance": _bank_account_balance(account, bank_balances),
                     "currency": account.currency or currency,
                 }
                 for account in accounts
@@ -552,63 +553,117 @@ def _accounting_monthly_result(
 
 
 def _bank_balances(
-    company: str, accounts: list[BankAccount]
-) -> tuple[dict[str | None, Decimal], dict[tuple[str | None, str | None], Decimal]]:
-    """Obtiene saldos de GL en moneda base y por cuenta GL y moneda.
+    company: str, accounts: list[BankAccount], default_currency: str
+) -> tuple[dict[str | None, Decimal], dict[str, Decimal], str]:
+    """Obtiene el saldo de GL y el saldo atribuido a cada cuenta bancaria.
 
-    Varias cuentas bancarias pueden compartir la misma cuenta contable con
-    monedas distintas (#2262); agrupar solo por ``account_id`` mezclaría sus
-    saldos y asignaría el mismo importe a todas las cuentas.
+    Las partidas con ``GLEntry.bank_account_id`` se atribuyen por identidad,
+    por lo que dos cuentas que comparten cuenta GL y moneda no duplican el
+    saldo. Las partidas legacy sin esa referencia solo se asignan cuando la
+    pareja (cuenta GL, moneda) pertenece a una única cuenta bancaria; si es
+    compartida, el importe queda sin atribuir y solo suma en el total.
     """
     gl_account_ids = [account.gl_account_id for account in accounts if account.gl_account_id]
     if not gl_account_ids:
-        return {}, {}
+        return {}, {}, default_currency
+    bank_account_ids = [account.id for account in accounts if account.gl_account_id]
+    pair_usage: dict[tuple[str, str], int] = {}
+    for account in accounts:
+        if account.gl_account_id:
+            pair = (account.gl_account_id, account.currency or default_currency)
+            pair_usage[pair] = pair_usage.get(pair, 0) + 1
+
+    ledger_id = primary_ledger_id(company)
+    base_currency = default_currency
+    if ledger_id:
+        book = database.session.get(Book, ledger_id)
+        if book is not None and book.currency:
+            base_currency = book.currency
+
     base_query = (
         database.session.query(GLEntry.account_id, func.sum(GLEntry.debit - GLEntry.credit))
         .filter(GLEntry.account_id.in_(gl_account_ids), GLEntry.company == company)
         .group_by(GLEntry.account_id)
     )
-    base_query = _scope_bank_balance_query(company, base_query)
+    base_query = _scope_bank_balance_query(base_query, ledger_id)
     entry_currency = func.coalesce(GLEntry.account_currency, GLEntry.company_currency)
-    account_query = (
+    amount = func.sum(
+        func.coalesce(GLEntry.debit_in_account_currency, GLEntry.debit)
+        - func.coalesce(GLEntry.credit_in_account_currency, GLEntry.credit)
+    )
+    direct_query = (
+        database.session.query(
+            GLEntry.bank_account_id,
+            entry_currency.label("balance_currency"),
+            amount,
+        )
+        .filter(
+            GLEntry.bank_account_id.in_(bank_account_ids),
+            GLEntry.account_id.in_(gl_account_ids),
+            GLEntry.company == company,
+        )
+        .group_by(GLEntry.bank_account_id, entry_currency)
+    )
+    direct_query = _scope_bank_balance_query(direct_query, ledger_id)
+    legacy_query = (
         database.session.query(
             GLEntry.account_id,
             entry_currency.label("balance_currency"),
-            func.sum(
-                func.coalesce(GLEntry.debit_in_account_currency, GLEntry.debit)
-                - func.coalesce(GLEntry.credit_in_account_currency, GLEntry.credit)
-            ),
+            amount,
         )
-        .filter(GLEntry.account_id.in_(gl_account_ids), GLEntry.company == company)
+        .filter(
+            GLEntry.bank_account_id.is_(None),
+            GLEntry.account_id.in_(gl_account_ids),
+            GLEntry.company == company,
+        )
         .group_by(GLEntry.account_id, entry_currency)
     )
-    account_query = _scope_bank_balance_query(company, account_query)
+    legacy_query = _scope_bank_balance_query(legacy_query, ledger_id)
+
+    direct = {(row[0], row[1]): Decimal(str(row[2] or 0)) for row in direct_query.all()}
+    legacy = {(row[0], row[1]): Decimal(str(row[2] or 0)) for row in legacy_query.all()}
+    bank_balances = {
+        account.id: _resolve_bank_balance(account, direct, legacy, pair_usage, default_currency) for account in accounts
+    }
     return (
         {row[0]: Decimal(str(row[1] or 0)) for row in base_query.all()},
-        {(row[0], row[1]): Decimal(str(row[2] or 0)) for row in account_query.all()},
+        bank_balances,
+        base_currency,
     )
 
 
-def _bank_account_balance(
+def _resolve_bank_balance(
     account: BankAccount,
-    account_balances: dict[tuple[str | None, str | None], Decimal],
+    direct: dict[tuple[str | None, str | None], Decimal],
+    legacy: dict[tuple[str | None, str | None], Decimal],
+    pair_usage: dict[tuple[str, str], int],
     default_currency: str,
 ) -> Decimal:
-    """Devuelve el saldo de la cuenta en su propia moneda, nunca el de otra pierna."""
+    """Resuelve el saldo de una cuenta sin atribuir partidas ambiguas."""
     if not account.gl_account_id:
         return Decimal("0")
     currency = account.currency or default_currency
-    balance = account_balances.get((account.gl_account_id, currency))
-    if balance is not None:
-        return balance
-    # Asientos heredados sin moneda conservan su saldo original en moneda base.
-    return account_balances.get((account.gl_account_id, None), Decimal("0"))
+    for key in ((account.id, currency), (account.id, None)):
+        value = direct.get(key)
+        if value is not None:
+            return value
+    if pair_usage.get((account.gl_account_id, currency), 0) != 1:
+        return Decimal("0")
+    for key in ((account.gl_account_id, currency), (account.gl_account_id, None)):
+        value = legacy.get(key)
+        if value is not None:
+            return value
+    return Decimal("0")
 
 
-def _scope_bank_balance_query(company: str, query):
+def _bank_account_balance(account: BankAccount, balances: dict[str, Decimal]) -> Decimal:
+    """Devuelve el saldo atribuido a la cuenta, nunca el de otra pierna."""
+    return balances.get(account.id, Decimal("0"))
+
+
+def _scope_bank_balance_query(query, ledger_id: str | None):
     """Aplica cancelación y libro primario a una consulta de saldos bancarios."""
     query = exclude_cancelled_gl_entries(query)
-    ledger_id = primary_ledger_id(company)
     if ledger_id:
         query = query.filter(GLEntry.ledger_id == ledger_id)
     return query

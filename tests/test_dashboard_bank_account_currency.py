@@ -186,22 +186,23 @@ def test_cuentas_comparten_gl_con_moneda_distinta(bank_balance_scene):
         banco = Bank(name="Banco compartido", is_active=True)
         database.session.add(banco)
         database.session.flush()
-        database.session.add(
-            BankAccount(
-                company="cacao",
-                bank_id=banco.id,
-                account_name="Cuenta EUR compartida",
-                account_no="EUR-2262",
-                currency="EUR",
-                gl_account_id=cuenta.id,
-                is_active=True,
-            )
+        cuenta_eur = BankAccount(
+            company="cacao",
+            bank_id=banco.id,
+            account_name="Cuenta EUR compartida",
+            account_no="EUR-2262",
+            currency="EUR",
+            gl_account_id=cuenta.id,
+            is_active=True,
         )
+        database.session.add(cuenta_eur)
+        database.session.flush()
         database.session.add(
             GLEntry(
                 posting_date=date(2026, 5, 17),
                 company="cacao",
                 account_id=cuenta.id,
+                bank_account_id=cuenta_eur.id,
                 ledger_id=libro.id,
                 debit=Decimal("1700"),
                 credit=Decimal("0"),
@@ -225,3 +226,200 @@ def test_cuentas_comparten_gl_con_moneda_distinta(bank_balance_scene):
     assert Decimal(str(filas["EUR-2262"]["balance"])) == Decimal("50")
     assert filas["EUR-2262"]["currency"] == "EUR"
     assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("5300")
+
+
+def test_cuentas_comparten_gl_y_moneda_sin_duplicar_saldo(bank_balance_scene):
+    """#2262: dos cuentas de la misma moneda y GL muestran su saldo identificado."""
+    with bank_balance_scene.app_context():
+        libro = database.session.query(Book).filter_by(entity="cacao").first()
+        compartida = Accounts(
+            entity="cacao",
+            code="1104",
+            name="Banco compartido",
+            classification="activo",
+            group=False,
+        )
+        database.session.add(compartida)
+        database.session.flush()
+        banco_a = Bank(name="Banco USD A", is_active=True)
+        banco_b = Bank(name="Banco USD B", is_active=True)
+        database.session.add_all([banco_a, banco_b])
+        database.session.flush()
+        cuenta_a = BankAccount(
+            company="cacao",
+            bank_id=banco_a.id,
+            account_name="Cuenta USD A",
+            account_no="USD-A-2262",
+            currency="USD",
+            gl_account_id=compartida.id,
+            is_active=True,
+        )
+        cuenta_b = BankAccount(
+            company="cacao",
+            bank_id=banco_b.id,
+            account_name="Cuenta USD B",
+            account_no="USD-B-2262",
+            currency="USD",
+            gl_account_id=compartida.id,
+            is_active=True,
+        )
+        database.session.add_all([cuenta_a, cuenta_b])
+        database.session.flush()
+        for cuenta_bancaria, importe, monto_base, voucher in (
+            (cuenta_a, "100", "3600", "JE-2262-A"),
+            (cuenta_b, "50", "1800", "JE-2262-B"),
+        ):
+            database.session.add(
+                GLEntry(
+                    posting_date=date(2026, 5, 18),
+                    company="cacao",
+                    account_id=compartida.id,
+                    bank_account_id=cuenta_bancaria.id,
+                    ledger_id=libro.id,
+                    debit=Decimal(monto_base),
+                    credit=Decimal("0"),
+                    debit_in_account_currency=Decimal(importe),
+                    credit_in_account_currency=Decimal("0"),
+                    account_currency="USD",
+                    company_currency="NIO",
+                    exchange_rate=Decimal("36"),
+                    voucher_type="journal_entry",
+                    voucher_id=voucher,
+                    is_cancelled=False,
+                )
+            )
+        database.session.commit()
+
+        payload = get_banks_data("cacao", "NIO", None, None)
+
+    filas = {fila["account_no"]: fila for fila in payload["tables"]["account_balances"]}
+    assert Decimal(str(filas["USD-A-2262"]["balance"])) == Decimal("100")
+    assert Decimal(str(filas["USD-B-2262"]["balance"])) == Decimal("50")
+    assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("9000")
+
+
+def test_movimientos_legacy_ambiguos_no_se_atribuyen(bank_balance_scene):
+    """#2262: sin identidad bancaria, un GL compartido no asigna el saldo a ambos."""
+    with bank_balance_scene.app_context():
+        cuenta = database.session.query(Accounts).filter_by(entity="cacao", code="1102").first()
+        libro = database.session.query(Book).filter_by(entity="cacao").first()
+        banco = Bank(name="Banco USD dos", is_active=True)
+        database.session.add(banco)
+        database.session.flush()
+        database.session.add(
+            BankAccount(
+                company="cacao",
+                bank_id=banco.id,
+                account_name="Cuenta USD dos",
+                account_no="USD2-2262",
+                currency="USD",
+                gl_account_id=cuenta.id,
+                is_active=True,
+            )
+        )
+        database.session.add(
+            GLEntry(
+                posting_date=date(2026, 5, 18),
+                company="cacao",
+                account_id=cuenta.id,
+                ledger_id=libro.id,
+                debit=Decimal("1800"),
+                credit=Decimal("0"),
+                debit_in_account_currency=Decimal("50"),
+                credit_in_account_currency=Decimal("0"),
+                account_currency="USD",
+                company_currency="NIO",
+                exchange_rate=Decimal("36"),
+                voucher_type="journal_entry",
+                voucher_id="JE-2262-C",
+                is_cancelled=False,
+            )
+        )
+        database.session.commit()
+
+        payload = get_banks_data("cacao", "NIO", None, None)
+
+    filas = {fila["account_no"]: fila for fila in payload["tables"]["account_balances"]}
+    assert Decimal(str(filas["USD-1607"]["balance"])) == Decimal("0")
+    assert Decimal(str(filas["USD2-2262"]["balance"])) == Decimal("0")
+    assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("5400")
+
+
+def test_total_kpi_usa_la_moneda_del_libro_primario(bank_balance_scene):
+    """#2262: el total se etiqueta con la moneda del libro que suma, no con la solicitada."""
+    with bank_balance_scene.app_context():
+        database.session.add(
+            Entity(
+                code="cacaousd",
+                name="Cacao USD",
+                company_name="Cacao USD SA",
+                tax_id="J-2262-USD",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
+        libro = Book(
+            entity="cacaousd",
+            code="USD_BOOK",
+            name="Libro USD",
+            status="activo",
+            is_primary=True,
+            default=True,
+            currency="USD",
+        )
+        database.session.add(libro)
+        database.session.flush()
+        banco = Bank(name="Banco USD contable", is_active=True)
+        database.session.add(banco)
+        database.session.flush()
+        cuenta = Accounts(
+            entity="cacaousd",
+            code="1102",
+            name="Banco contable USD",
+            classification="activo",
+            group=False,
+        )
+        database.session.add(cuenta)
+        database.session.flush()
+        cuenta_bancaria = BankAccount(
+            company="cacaousd",
+            bank_id=banco.id,
+            account_name="Cuenta contable USD",
+            account_no="USD-2262-KPI",
+            currency="USD",
+            gl_account_id=cuenta.id,
+            is_active=True,
+        )
+        database.session.add(cuenta_bancaria)
+        database.session.flush()
+        database.session.add(
+            GLEntry(
+                posting_date=date(2026, 5, 19),
+                company="cacaousd",
+                account_id=cuenta.id,
+                bank_account_id=cuenta_bancaria.id,
+                ledger_id=libro.id,
+                debit=Decimal("100"),
+                credit=Decimal("0"),
+                debit_in_account_currency=Decimal("100"),
+                credit_in_account_currency=Decimal("0"),
+                account_currency="USD",
+                company_currency="USD",
+                exchange_rate=Decimal("1"),
+                voucher_type="journal_entry",
+                voucher_id="JE-2262-KPI",
+                is_cancelled=False,
+            )
+        )
+        database.session.commit()
+
+        payload = get_banks_data("cacaousd", "NIO", None, None)
+
+    fila = payload["tables"]["account_balances"][0]
+    assert Decimal(str(fila["balance"])) == Decimal("100")
+    assert fila["currency"] == "USD"
+    kpi = payload["kpis"]["balance"]
+    assert Decimal(str(kpi["value"])) == Decimal("100")
+    assert kpi["currency"] == "USD"
