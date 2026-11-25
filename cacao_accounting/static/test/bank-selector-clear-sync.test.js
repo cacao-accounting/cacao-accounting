@@ -30,6 +30,14 @@ function extractScript(source, marker) {
   return script.replace(/<script>|<\/script>/g, '');
 }
 
+function extractSmartSelectConfig(source, marker) {
+  const matches = [...source.matchAll(/x-data='smartSelect\((\{[\s\S]*?\})\)'/g)];
+  const match = matches.find((candidate) => candidate[1].includes(marker));
+  assert.ok(match, `No se encontró smartSelect con ${marker}`);
+  // eslint-disable-next-line no-eval
+  return (0, eval)(`(${match[1]})`);
+}
+
 function loadSmartSelect(dom) {
   let factory = null;
   globalThis.document = dom.window.document;
@@ -104,16 +112,9 @@ describe('bank selector clear synchronization', function () {
     const dom = new JSDOM('<!doctype html><html><body><input id="company" value="OLD"></body></html>');
     const factory = loadSmartSelect(dom);
     const header = { bank_account_id: 'BANK-OLD', currency: 'NIO' };
-    const component = factory({
-      doctype: 'bank_account',
-      name: 'bank_account_id',
-      filters: { company: { selector: '#company' }, is_active: () => 'True' },
-      filterSources: ['#company'],
-      onClear: () => {
-        header.bank_account_id = '';
-        header.currency = '';
-      },
-    });
+    globalThis.header = header;
+    const config = extractSmartSelectConfig(readTemplate('nota_nueva.html'), 'name: "bank_account_id"');
+    const component = factory(config);
     component.selectedValue = 'BANK-OLD';
     component.selectedLabel = 'Cuenta anterior';
     component.search = 'Cuenta anterior';
@@ -133,16 +134,9 @@ describe('bank selector clear synchronization', function () {
     const dom = new JSDOM('<!doctype html><html><body><input id="company" value="OLD"></body></html>');
     const factory = loadSmartSelect(dom);
     const header = { bank_account_id: 'BANK-OLD', currency: 'NIO' };
-    const component = factory({
-      doctype: 'bank_account',
-      name: 'bank_account_id',
-      filters: { company: { selector: '#company' } },
-      filterSources: ['#company'],
-      onClear: () => {
-        header.bank_account_id = '';
-        header.currency = '';
-      },
-    });
+    globalThis.header = header;
+    const config = extractSmartSelectConfig(readTemplate('nota_nueva.html'), 'name: "bank_account_id"');
+    const component = factory(config);
     component.selectedValue = 'BANK-OLD';
     component.selectedLabel = 'Cuenta anterior';
     component.search = 'Cuenta anterior';

@@ -7,7 +7,21 @@ from __future__ import annotations
 
 import cacao_accounting
 from html import unescape
+from html.parser import HTMLParser
 from pathlib import Path
+
+
+class _SmartSelectCollector(HTMLParser):
+    """Recoge los atributos x-data de los Smart Select renderizados."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.attributes: list[dict[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        data = dict(attrs)
+        if "x-data" in data:
+            self.attributes.append(data)
 
 
 def _html(cliente, ruta: str) -> str:
@@ -52,8 +66,23 @@ def test_nota_bancaria_limpia_cuenta_y_moneda(app, entorno_contable, authenticat
     del entorno_contable
     html = _html(authenticated_client("admin"), "/cash_management/payment/debit-note/new")
     assert 'x-effect="header.bank_account_id = selectedValue"' in html
-    assert "onClear: function() { header.bank_account_id = ''; header.currency = ''; }" in html
+    assert 'onClear: function() { header.bank_account_id = ""; header.currency = ""; }' in html
     assert "if (!this.header.company || !this.header.bank_account_id" in html
+    assert 'id="company"' in html and 'name="company"' in html
+    assert "#company_val" not in html
+
+
+def test_nota_bancaria_parsea_el_x_data_del_selector_bancario(app, entorno_contable, authenticated_client):
+    """#2280: el x-data completo del selector bancario es HTML válido."""
+    del entorno_contable
+    html = _html(authenticated_client("admin"), "/cash_management/payment/debit-note/new")
+    parser = _SmartSelectCollector()
+    parser.feed(html)
+    configs = [attrs["x-data"] for attrs in parser.attributes if 'name: "bank_account_id"' in (attrs["x-data"] or "")]
+    assert len(configs) == 1
+    config = configs[0]
+    assert 'filterSources: ["#company"]' in config
+    assert 'onClear: function() { header.bank_account_id = ""; header.currency = ""; }' in config
 
 
 def test_transferencia_limpia_moneda_y_tipo_de_cambio(app, entorno_contable, authenticated_client):
