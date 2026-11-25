@@ -630,25 +630,21 @@ def _fetch_hierarchy_node_locked(node_class, node_id):
     ).scalar_one_or_none()
 
 
-def _hierarchy_company_codes(node_class, node_id, entity: str) -> set[str]:
-    """Resuelve las compañías cuyo ancla debe bloquearse antes de validar."""
-    company_codes = {entity} if entity else set()
-    if node_id:
-        current_node = _fetch_hierarchy_node_locked(node_class, node_id)
-        current_company = getattr(current_node, "entity", None) if current_node is not None else None
-        if current_company:
-            company_codes.add(str(current_company))
-    return company_codes
+def _hierarchy_company_codes(entity: str, current_entity: str | None) -> set[str]:
+    """Resuelve sin consultar la BD las compañías que deben bloquearse."""
+    return {code for code in (entity, current_entity) if code}
 
 
-def check_hierarchy_cycle(node_class, node_id, proposed_parent_id, *, entity: str) -> None:
+def check_hierarchy_cycle(node_class, node_id, proposed_parent_id, *, entity: str, current_entity: str | None = None) -> None:
     """Valida que el padre exista, pertenezca a la compañía y no cree ciclos.
 
-    La validación y la escritura posterior se serializan por compañía. En un
-    traslado entre compañías se bloquean ambas filas de ``Entity`` en orden
-    estable para no crear ciclos ni interbloqueos (#2188).
+    Las filas de ``Entity`` se bloquean antes que cualquier nodo, en orden
+    determinista. Así ninguna transacción retiene un nodo mientras espera un
+    ancla ajena; en traslados cruzados se toman las dos anclas en el mismo
+    orden. La validación y la escritura quedan serializadas por compañía
+    (#2188).
     """
-    _lock_hierarchy_companies(_hierarchy_company_codes(node_class, node_id, entity))
+    _lock_hierarchy_companies(_hierarchy_company_codes(entity, current_entity))
 
     if node_id:
         for descendant_id in get_descendant_ids(node_class, node_id, for_update=True):

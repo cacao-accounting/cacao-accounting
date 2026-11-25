@@ -593,7 +593,7 @@ def _validate_project_edit_form(formulario: Any, proyecto: Any) -> tuple[str | N
     entity = request.form.get("entidad", proyecto.entity)
     _validate_active_entity_submission(entity)
     parent_id = request.form.get("parent_id") or None
-    check_hierarchy_cycle(Project, proyecto.id, parent_id, entity=entity)
+    check_hierarchy_cycle(Project, proyecto.id, parent_id, entity=entity, current_entity=proyecto.entity)
 
     capitalizable = bool(formulario.capitalizable.data)
     capitalization_account_id = request.form.get("capitalization_account_id") or None

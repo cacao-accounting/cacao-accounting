@@ -1174,7 +1174,13 @@ def editar_unidad(id_unidad):
             exige_acceso_compania("accounting", formulario.entidad.data or "")
             _validate_active_entity_submission(formulario.entidad.data)
             parent_id = formulario.parent_id.data or None
-            check_hierarchy_cycle(Unit, registro.id, parent_id, entity=formulario.entidad.data or "")
+            check_hierarchy_cycle(
+                Unit,
+                registro.id,
+                parent_id,
+                entity=formulario.entidad.data or "",
+                current_entity=registro.entity,
+            )
         except ValueError as error:
             flash_error(error)
             return render_template(
