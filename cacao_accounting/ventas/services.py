@@ -3,6 +3,7 @@
 
 """Modulo de Ventas."""
 
+from dataclasses import dataclass
 from datetime import date
 
 from decimal import Decimal
@@ -128,6 +129,17 @@ from cacao_accounting.i18n import LazyText, _, _l
 
 from cacao_accounting.numbers import coerce_decimal
 from cacao_accounting.form_lines import form_line_items
+
+
+@dataclass(frozen=True)
+class SalesCatalogPrice:
+    """Precio de catálogo convertido a la moneda transaccional del documento."""
+
+    price: Decimal
+    price_list: PriceList
+    price_list_currency: str
+    transaction_currency: str
+    exchange_rate: Decimal
 
 
 def _raise_posting_error(message: str) -> NoReturn:
@@ -1638,21 +1650,38 @@ def resolve_sales_catalog_price(
     qty: Decimal,
     uom: str | None,
     pricing_date: date | None,
-) -> tuple[Decimal, PriceList] | None:
-    """Resolve the current selling price for a customer and item.
+    transaction_currency: str | None,
+) -> SalesCatalogPrice | None:
+    """Resuelve el precio de venta vigente en la moneda del documento.
 
-    A customer's company-specific list takes precedence over the active
-    default selling list.  Quantity breaks and validity dates are evaluated
-    on the document date, so the value returned by the UI is the same value
-    enforced while the document is saved.
+    La moneda de la lista es el importe origen. Cuando difiere de la moneda
+    transaccional se convierte con la última tasa válida en la fecha del
+    documento; sin tasa o sin moneda configurada en la lista se bloquea.
     """
+    if not transaction_currency:
+        raise ValueError(_("La moneda transaccional es obligatoria para resolver precios de catálogo."))
     price_list = _resolve_sales_price_list(company, customer_id)
     if not price_list or not pricing_date:
         return None
+    list_currency = str(price_list.currency or "").strip()
+    if not list_currency:
+        raise ValueError(_("La lista de precios %(name)s no tiene moneda configurada.") % {"name": price_list.name})
     item_price = resolve_item_price_record(item_code, price_list.id, qty, uom, pricing_date)
     if item_price is None:
         return None
-    return Decimal(str(item_price.price)), price_list
+    source_price = Decimal(str(item_price.price))
+    if list_currency == transaction_currency:
+        rate = Decimal("1")
+        price = source_price.quantize(Decimal("0.0001"))
+    else:
+        from cacao_accounting.contabilidad.posting_service import _lookup_exchange_rate
+
+        try:
+            rate = _lookup_exchange_rate(list_currency, transaction_currency, pricing_date)
+        except PostingError as error:
+            raise ValueError(str(error)) from error
+        price = (source_price * rate).quantize(Decimal("0.0001"))
+    return SalesCatalogPrice(price, price_list, list_currency, transaction_currency, rate)
 
 
 def is_sales_price_editor(user_id: str | None) -> bool:
@@ -1695,23 +1724,30 @@ def _validate_sales_catalog_rate(
         qty,
         uom,
         getattr(document, "posting_date", None),
+        getattr(document, "transaction_currency", None),
     )
     if resolved is None:
         raise ValueError(
             _("No existe un precio vigente para el item %(item_code)s en la lista de precios aplicable.")
             % {"item_code": item_code}
         )
-    expected_rate, _price_list = resolved
+    expected_rate = resolved.price
     if rate != expected_rate:
         raise ValueError(_("Solo el Administrador del Sistema o el Gerente de Ventas puede modificar un precio de venta."))
 
 
 def _resolve_catalog_sales_rate(invoice: SalesInvoice, item: SalesInvoiceItem) -> Decimal | None:
-    """Resuelve el precio vigente del catálogo para una línea sin documento fuente."""
+    """Resuelve el precio vigente del catálogo en la moneda de la factura."""
     resolved = resolve_sales_catalog_price(
-        invoice.company, invoice.customer_id, item.item_code, Decimal(str(item.qty)), item.uom, invoice.posting_date
+        invoice.company,
+        invoice.customer_id,
+        item.item_code,
+        Decimal(str(item.qty)),
+        item.uom,
+        invoice.posting_date,
+        invoice.transaction_currency,
     )
-    return resolved[0] if resolved else None
+    return resolved.price if resolved else None
 
 
 def _resolve_source_item_rate(si_item: SalesInvoiceItem, invoice_id: str) -> Decimal | None:

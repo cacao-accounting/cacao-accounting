@@ -402,19 +402,40 @@ def api_sales_catalog_price():
     customer_id = request.args.get("customer_id") or None
     item_code = request.args.get("item_code") or ""
     uom = request.args.get("uom") or None
+    transaction_currency = request.args.get("currency") or request.args.get("transaction_currency") or None
     try:
         qty = Decimal(str(request.args.get("qty") or "1"))
         pricing_date = date.fromisoformat(request.args.get("posting_date") or date.today().isoformat())
     except (ValueError, InvalidOperation):
         abort(400)
-    if not company or not item_code or not qty.is_finite() or qty <= 0:
+    if not company or not item_code or not transaction_currency or not qty.is_finite() or qty <= 0:
         abort(400)
     exige_acceso_compania("sales", company, "consultar")
-    resolved = resolve_sales_catalog_price(company, customer_id, item_code, qty, uom, pricing_date)
+    try:
+        resolved = resolve_sales_catalog_price(company, customer_id, item_code, qty, uom, pricing_date, transaction_currency)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
     if resolved is None:
-        return jsonify({"price": None, "price_list_id": None, "price_list_name": None})
-    price, price_list = resolved
-    return jsonify({"price": str(price), "price_list_id": price_list.id, "price_list_name": price_list.name})
+        return jsonify(
+            {
+                "price": None,
+                "price_list_id": None,
+                "price_list_name": None,
+                "price_list_currency": None,
+                "transaction_currency": transaction_currency,
+                "exchange_rate": None,
+            }
+        )
+    return jsonify(
+        {
+            "price": str(resolved.price),
+            "price_list_id": resolved.price_list.id,
+            "price_list_name": resolved.price_list.name,
+            "price_list_currency": resolved.price_list_currency,
+            "transaction_currency": resolved.transaction_currency,
+            "exchange_rate": str(resolved.exchange_rate),
+        }
+    )
 
 
 def _require_document_read_access(document_type: str, document_id: str) -> Any:

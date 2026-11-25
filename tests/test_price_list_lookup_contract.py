@@ -68,10 +68,10 @@ def test_vigencia_y_lista_de_venta(entorno_contable_aislado):
         assert resolve_item_price_record(item.code, venta.id, Decimal("1"), "UND", ANTES) is None
         assert resolve_item_price_record(item.code, venta.id, Decimal("1"), "UND", DESPUES) is None
 
-        resuelto = resolve_sales_catalog_price("cacao", cliente.id, item.code, Decimal("1"), "UND", DENTRO)
+        resuelto = resolve_sales_catalog_price("cacao", cliente.id, item.code, Decimal("1"), "UND", DENTRO, "NIO")
         assert resuelto is not None
-        assert resuelto[0] == Decimal("10.0000")
-        assert resuelto[1].id == venta.id
+        assert resuelto.price == Decimal("10.0000")
+        assert resuelto.price_list.id == venta.id
 
         company_party = database.session.execute(
             database.select(CompanyParty).filter_by(company="cacao", party_id=cliente.id)
@@ -79,9 +79,9 @@ def test_vigencia_y_lista_de_venta(entorno_contable_aislado):
         company_party.default_price_list_id = compra.id
         database.session.commit()
 
-        resuelto = resolve_sales_catalog_price("cacao", cliente.id, item.code, Decimal("1"), "UND", DENTRO)
+        resuelto = resolve_sales_catalog_price("cacao", cliente.id, item.code, Decimal("1"), "UND", DENTRO, "NIO")
         assert resuelto is not None
-        assert resuelto[1].id == venta.id
+        assert resuelto.price_list.id == venta.id
 
 
 def test_listas_inactivas_configurada_y_predeterminada_no_se_resuelven(entorno_contable_aislado):
@@ -128,7 +128,7 @@ def test_listas_inactivas_configurada_y_predeterminada_no_se_resuelven(entorno_c
         company_party.default_price_list_id = inactiva.id
         database.session.commit()
 
-        resuelto = resolve_sales_catalog_price("cacao", cliente.id, item.code, Decimal("1"), "UND", DENTRO)
+        resuelto = resolve_sales_catalog_price("cacao", cliente.id, item.code, Decimal("1"), "UND", DENTRO, "NIO")
         assert resuelto is not None
-        assert resuelto[0] == Decimal("10.0000")
-        assert resuelto[1].id == activa.id
+        assert resuelto.price == Decimal("10.0000")
+        assert resuelto.price_list.id == activa.id

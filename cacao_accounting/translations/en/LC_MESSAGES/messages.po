@@ -25068,3 +25068,11 @@ msgstr "This request was already answered on %(responded)s by %(name)s %(last_na
 #: cacao_accounting/admin/routes.py
 msgid "El formulario de configuración de matching está incompleto; no se guardaron cambios."
 msgstr "The matching configuration form is incomplete; no changes were saved."
+
+#: cacao_accounting/ventas/services.py
+msgid "La moneda transaccional es obligatoria para resolver precios de catálogo."
+msgstr "The transaction currency is required to resolve catalog prices."
+
+#: cacao_accounting/ventas/services.py
+msgid "La lista de precios %(name)s no tiene moneda configurada."
+msgstr "The price list %(name)s has no currency configured."

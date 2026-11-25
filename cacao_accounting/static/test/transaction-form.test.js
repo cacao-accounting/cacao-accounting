@@ -803,20 +803,61 @@ describe('transaction-form', function () {
     const oldPrice = component.refreshCatalogPrice(line);
     component.header.party = 'CUSTOMER-B';
     const newPrice = component.refreshCatalogPrice(line);
-    newRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '80', price_list_name: 'B' }) });
+    newRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '80', price_list_name: 'B', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }) });
     await newPrice;
-    oldRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'A' }) });
+    oldRequest.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'A', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }) });
     await oldPrice;
 
     assert.strictEqual(line.rate, 80);
     assert.strictEqual(line.price_list_name, 'B');
   });
 
+  it('includes the document currency and ignores a catalog price for a previous currency', async function () {
+    const oldRequest = deferred();
+    const newRequest = deferred();
+    const requests = [oldRequest, newRequest];
+    const urls = [];
+    globalThis.fetch = (url) => {
+      urls.push(url);
+      return requests.shift().promise;
+    };
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'sales.sales_invoice',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+      initialHeader: { company: 'COMP', party: 'CUSTOMER-A', currency: 'USD', posting_date: '2026-10-28' },
+    });
+    const line = component.newLine();
+    line.item_code = 'ITEM-001';
+    line.uom = 'EA';
+    component.lines = [line];
+
+    const oldPrice = component.refreshCatalogPrice(line);
+    component.header.currency = 'EUR';
+    const newPrice = component.refreshCatalogPrice(line);
+    newRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '90', price_list_name: 'EUR', price_list_currency: 'USD', transaction_currency: 'EUR', exchange_rate: '0.9' }),
+    });
+    await newPrice;
+    oldRequest.resolve({
+      ok: true,
+      json: () => Promise.resolve({ price: '100', price_list_name: 'USD', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }),
+    });
+    await oldPrice;
+
+    assert.strictEqual(line.rate, 90);
+    assert.strictEqual(new URL(urls[0], 'http://localhost').searchParams.get('currency'), 'USD');
+    assert.strictEqual(new URL(urls[1], 'http://localhost').searchParams.get('currency'), 'EUR');
+  });
+
   it('refreshes the sales catalog price when the line UOM changes', async function () {
     let requestUrl = '';
     globalThis.fetch = async (url) => {
       requestUrl = url;
-      return { ok: true, json: async () => ({ price: '24', price_list_name: 'Box prices' }) };
+      return { ok: true, json: async () => ({ price: '24', price_list_name: 'Box prices', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }) };
     };
     const create = loadTransactionForm();
     const component = create({
@@ -839,8 +880,8 @@ describe('transaction-form', function () {
 
   it('clears the previous catalog price when the selected item has no price', async function () {
     const responses = [
-      { price: '12', price_list_name: 'List' },
-      { price: null, price_list_name: null },
+      { price: '12', price_list_name: 'List', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' },
+      { price: null, price_list_name: null, price_list_currency: null, transaction_currency: 'USD', exchange_rate: null },
     ];
     globalThis.fetch = async () => ({ ok: true, json: async () => responses.shift() });
     const create = loadTransactionForm();
@@ -882,7 +923,7 @@ describe('transaction-form', function () {
     const lookup = component.refreshCatalogPrice(line);
     line.rate = 75;
     component.onRateInput(line);
-    request.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'List' }) });
+    request.resolve({ ok: true, json: () => Promise.resolve({ price: '100', price_list_name: 'List', price_list_currency: 'USD', transaction_currency: 'USD', exchange_rate: '1' }) });
     await lookup;
 
     assert.strictEqual(line.rate, 75);

@@ -726,6 +726,7 @@
           const getPricingContext = () => ({
             company: this.header.company,
             customer_id: this.header.party || '',
+            currency: this.header.currency || this.header.transaction_currency || '',
             item_code: line.item_code,
             qty: toCurrencyString(line.qty || 1),
             uom: line.uom || '',
@@ -740,7 +741,8 @@
               requestId !== catalogPriceRequestIds.get(line) ||
               JSON.stringify(getPricingContext()) !== JSON.stringify(requestedContext) ||
               line.source_item_id ||
-              !response.ok
+              !response.ok ||
+              (payload.transaction_currency && payload.transaction_currency !== requestedContext.currency)
             ) return;
             if (payload.price === null) {
               line.rate = 0;
