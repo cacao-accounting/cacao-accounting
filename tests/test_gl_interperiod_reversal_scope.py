@@ -86,6 +86,43 @@ def test_incluye_reversion_interperiodo_y_excluye_la_del_mismo_periodo(app, ento
         assert contra_nov.id not in anteriores
 
 
+def test_excluye_reversa_adelantada_en_ambos_lados(entorno_contable_aislado):
+    """#2265: una contrapartida anterior al origen no revive el corte ni adelanta el gasto."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        database.session.add(_periodo("P2026-04", date(2026, 4, 1), date(2026, 4, 30)))
+        database.session.flush()
+        original = _entrada("P2026-05", date(2026, 5, 10), is_cancelled=True)
+        database.session.add(original)
+        database.session.flush()
+        adelantada = _entrada(
+            "P2026-04",
+            date(2026, 4, 1),
+            debit=Decimal("0"),
+            credit=Decimal("10"),
+            is_reversal=True,
+            reversal_of=original.id,
+        )
+        database.session.add(adelantada)
+        database.session.commit()
+
+        seleccionados = set(database.session.execute(database.select(GLEntry.id).where(*effective_gl_scope())).scalars().all())
+        assert original.id not in seleccionados
+        assert adelantada.id not in seleccionados
+
+        abril = get_account_movement_detail(
+            FinancialReportFilters(
+                company="cacao",
+                ledger="DEFAULT_BOOK",
+                accounting_period="P2026-04",
+                account_code="5201",
+                page_size=100,
+                export_all=True,
+            )
+        )
+        assert sum((row.values.get("credit", Decimal("0")) for row in abril.rows), Decimal("0")) == Decimal("0")
+
+
 def test_reporte_gl_incluye_reversion_interperiodo_en_su_periodo(entorno_contable_aislado):
     """El detalle GL, la balanza y el resultado conservan ambos cortes (#2265)."""
     app = entorno_contable_aislado.app

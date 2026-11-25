@@ -35,10 +35,12 @@ def effective_gl_scope() -> tuple[Any, ...]:
     reversión interperíodo (#1970). Las contrapartidas del mismo período se
     anulan con su original y quedan fuera.
 
-    Un original cancelado con reversa en otro período vuelve a entrar: su
-    movimiento estuvo vigente en el corte original y la contrapartida ya se
-    contabilizó en el período posterior (#2265). La anulación del mismo período
-    sigue teniendo efecto cero y no se muestra en ninguno de los dos lados.
+    Un original cancelado con reversa **posterior** en otro período vuelve a
+    entrar: su movimiento estuvo vigente en el corte original y la contrapartida
+    ya se contabilizó en el período posterior (#2265). Una reversa fechada antes
+    del origen no es válida: se excluyen la contrapartida y el original que
+    pretendía revivir. La anulación del mismo período sigue teniendo efecto cero
+    y no se muestra en ninguno de los dos lados.
     """
     from sqlalchemy import exists, or_
     from sqlalchemy.orm import aliased
@@ -47,16 +49,23 @@ def effective_gl_scope() -> tuple[Any, ...]:
 
     origen = aliased(GLEntry)
     reversa = aliased(GLEntry)
-    mismo_periodo = exists().where(
-        origen.id == GLEntry.reversal_of,
-        origen.accounting_period_id == GLEntry.accounting_period_id,
-    )
-    reversa_interperiodo = exists().where(
+    reversa_posterior = exists().where(
         reversa.reversal_of == GLEntry.id,
         reversa.is_reversal.is_(True),
-        reversa.accounting_period_id != GLEntry.accounting_period_id,
+        reversa.posting_date > GLEntry.posting_date,
+        or_(
+            reversa.accounting_period_id != GLEntry.accounting_period_id,
+            GLEntry.accounting_period_id.is_(None),
+        ),
+    )
+    reversa_ineficaz = exists().where(
+        origen.id == GLEntry.reversal_of,
+        or_(
+            origen.accounting_period_id == GLEntry.accounting_period_id,
+            GLEntry.posting_date <= origen.posting_date,
+        ),
     )
     return (
-        or_(GLEntry.is_cancelled.is_(False), reversa_interperiodo),
-        or_(GLEntry.is_reversal.is_(False), ~mismo_periodo),
+        or_(GLEntry.is_cancelled.is_(False), reversa_posterior),
+        or_(GLEntry.is_reversal.is_(False), ~reversa_ineficaz),
     )

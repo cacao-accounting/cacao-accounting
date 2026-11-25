@@ -8,7 +8,7 @@ from __future__ import annotations
 import calendar
 import os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from threading import Barrier, Event
 from uuid import uuid4
@@ -876,3 +876,67 @@ def test_efe_conserva_apertura_tras_reversion_interperiodo(business_app):
         assert following_after["net_change_cash"] == -bank_delta
         assert following_after["cash_closing"] == opening_amount
         assert following_after["difference"] == Decimal("0")
+
+
+def test_void_rechaza_reversa_en_fecha_anterior(business_app):
+    """#2265: una reversa no puede adelantar el efecto de la revaluación."""
+    company = f"R{uuid4().hex[:9]}"
+    with business_app.app_context():
+        company, _year, _month, _opening_period_id, period_id, _following_period_id, following_start = _seed_bank_exposure(
+            company
+        )
+        actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        bank_gl = database.session.execute(
+            database.select(Accounts).filter_by(entity=company, code="1.01.02.001")
+        ).scalar_one()
+        for code, classification in (("4.01.01.001", "income"), ("5.01.02.001", "expense")):
+            account = database.session.execute(database.select(Accounts).filter_by(entity=company, code=code)).scalar_one()
+            account.classification = classification
+        database.session.add(CashFlowAccountMapping(company=company, account_id=bank_gl.id, flow_section="cash"))
+        database.session.commit()
+
+        run = ExchangeRevaluationService().run(company=company, period_id=period_id, user_id=actor_id)
+        originales = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=str(run.id),
+                    is_reversal=False,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert originales
+        ids_originales = {entry.id for entry in originales}
+        ledger_code = database.session.execute(database.select(Book.code).filter_by(entity=company)).scalar_one()
+        filtros = FinancialReportFilters(company=company, ledger=ledger_code, accounting_period=period_id)
+        cierre_antes = get_cash_flow_statement(filtros).totals["cash_closing"]
+
+        fecha_adelantada = following_start - timedelta(days=5)
+        with pytest.raises(ExchangeRevaluationError, match="fecha de reversión debe ser igual o posterior"):
+            ExchangeRevaluationService().void(run_id=str(run.id), user_id=actor_id, reversal_date=fecha_adelantada)
+
+        reversas = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(company=company, voucher_type="exchange_revaluation", is_reversal=True)
+            )
+            .scalars()
+            .all()
+        )
+        assert not reversas
+        corrida = database.session.get(ExchangeRevaluation, run.id)
+        assert corrida.status == "posted"
+        assert corrida.docstatus == 1
+        activos = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company, voucher_type="exchange_revaluation", voucher_id=str(run.id), is_cancelled=False
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert {entry.id for entry in activos} == ids_originales
+        assert get_cash_flow_statement(filtros).totals["cash_closing"] == cierre_antes

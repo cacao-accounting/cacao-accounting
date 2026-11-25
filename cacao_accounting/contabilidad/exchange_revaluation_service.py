@@ -371,6 +371,7 @@ class ExchangeRevaluationService:
         if run is None:
             raise ExchangeRevaluationError(_("La revalorizacion indicada no existe."))
         effective_reversal_date = reversal_date or self._date_for(run)
+        self._validate_reversal_date(run, effective_reversal_date)
         if not _period_locked:
             if database.engine.dialect.name == "sqlite":
                 self._reserve_sqlite_writer(_("Otra anulación de revalorización está en curso. Intente nuevamente."))
@@ -1212,6 +1213,14 @@ class ExchangeRevaluationService:
         if not posting_date:
             raise ExchangeRevaluationError(_("La revalorizacion no tiene fecha contable."))
         return posting_date
+
+    def _validate_reversal_date(self, run: ExchangeRevaluation, reversal_date: date) -> None:
+        """Impide adelantar el efecto de una revalorización a una fecha anterior (#2265)."""
+        if reversal_date >= self._date_for(run):
+            return
+        raise ExchangeRevaluationError(
+            _("La fecha de reversión debe ser igual o posterior a la fecha contable de la revalorización.")
+        )
 
     def _decimal(self, value: Any) -> Decimal:
         if value is None:

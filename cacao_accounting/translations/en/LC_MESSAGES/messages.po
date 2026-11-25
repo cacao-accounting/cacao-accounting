@@ -13318,6 +13318,10 @@ msgstr "The revaluation has no accounting date."
 msgid "Valor numerico inválido en revalorizacion."
 msgstr "Invalid numeric value in revaluation."
 
+#: cacao_accounting/contabilidad/exchange_revaluation_service.py:1216
+msgid "La fecha de reversión debe ser igual o posterior a la fecha contable de la revalorización."
+msgstr "The reversal date must be equal to or later than the revaluation posting date."
+
 #: cacao_accounting/contabilidad/fiscal_year_closing.py:151
 #, python-format
 msgid "Cierre año fiscal %(year)s"
