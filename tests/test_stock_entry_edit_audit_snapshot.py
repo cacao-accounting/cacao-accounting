@@ -209,6 +209,7 @@ def test_edicion_registra_cantidad_tasa_importe_bodega_y_lote(app, catalogo_edic
     linea_antes = antes["items"][0]
     linea_despues = despues["items"][0]
     assert Decimal(str(linea_antes["qty"])) == Decimal("2")
+    assert Decimal(str(linea_antes["qty_in_base_uom"])) == Decimal("2")
     assert Decimal(str(linea_antes["basic_rate"])) == Decimal("10")
     assert Decimal(str(linea_antes["amount"])) == Decimal("20")
     assert linea_antes["source_warehouse"] == "BOD01"
