@@ -3271,6 +3271,10 @@ def _consume_outflow_stock_valuation(
             batch_id=getattr(line, "batch_id", None),
         )
         cost_amount = cost_rate * qty
+        # Sin capas ni tasa de respaldo, descontar unidades a costo cero dejaría
+        # Stock Ledger sin contrapartida en GL (#2259).
+        if cost_amount <= 0:
+            raise PostingError(_("La salida de inventario requiere un valor funcional mayor que cero."))
         source_layer_id = None
         consumed_layers = []
     line._inventory_cost_amount = cost_amount

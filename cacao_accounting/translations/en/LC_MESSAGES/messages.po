@@ -24953,6 +24953,10 @@ msgstr "The target document type is required."
 msgid "La entrada de inventario requiere un valor funcional mayor que cero."
 msgstr "The inventory receipt requires a functional value greater than zero."
 
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "La salida de inventario requiere un valor funcional mayor que cero."
+msgstr "The inventory issue requires a functional value greater than zero."
+
 #: cacao_accounting/compras/routes.py
 msgid "Editar Costo de Importación"
 msgstr "Edit Import Landed Cost"
