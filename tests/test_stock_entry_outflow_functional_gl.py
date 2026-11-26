@@ -19,6 +19,7 @@ from cacao_accounting.contabilidad.posting_service import (
 )
 from cacao_accounting.database import (
     Accounts,
+    Book,
     CompanyDefaultAccount,
     GLEntry,
     Item,
@@ -77,7 +78,12 @@ def _assert_refreshed_amount_only_line(entry_id: str, entry: StockEntry) -> None
     assert _get_stock_entry_line_amount(entry, line, "adjustment_negative") == Decimal("350")
 
 
-def _assert_book_stock_matches_gl(entry_id: str, inventory_account_id: int, movement_ids: list[str]) -> None:
+def _assert_book_stock_matches_gl(
+    entry_id: str,
+    inventory_account_id: int,
+    movement_ids: list[str],
+    expected_book_ids: set[str],
+) -> None:
     """Reconcile adjustment stock and GL values and prove each book balances."""
     book_values = database.session.execute(
         database.select(StockLedgerBookEntry).where(StockLedgerBookEntry.stock_ledger_entry_id.in_(movement_ids))
@@ -99,6 +105,9 @@ def _assert_book_stock_matches_gl(entry_id: str, inventory_account_id: int, move
             )
 
     assert gl_inventory_by_ledger == stock_by_ledger
+    assert set(stock_by_ledger) == expected_book_ids
+    assert set(gl_inventory_by_ledger) == expected_book_ids
+    assert set(gl_balance_by_ledger) == expected_book_ids
     assert gl_balance_by_ledger
     assert all(debit == credit for debit, credit in gl_balance_by_ledger.values())
 
@@ -120,9 +129,9 @@ def _stock_entry(purpose: str, suffix: str, warehouse_code: str, posting_date: d
     )
 
 
-def test_ajuste_negativo_de_solo_valor_usa_el_costo_funcional(app, entorno_contable):
+def test_ajuste_negativo_de_solo_valor_usa_el_costo_funcional(entorno_contable_aislado):
     """10 USD con tasa 35 registran -350 NIO en SLE y en GL, no -10 NIO."""
-    del entorno_contable
+    app = entorno_contable_aislado.app
     sufijo = uuid4().hex[:6]
     with app.app_context():
         uom = UOM(code=f"U{sufijo}", name="Unidad", is_active=True)
@@ -186,6 +195,7 @@ def test_posting_mixto_no_reutiliza_el_costo_fisico_en_la_linea_de_solo_valor(en
     posting_date = date(2026, 5, 20)
 
     with app.app_context():
+        database.session.execute(database.select(Book).filter_by(code="NIIF")).scalar_one().currency = "USD"
         database.session.add_all(
             [
                 Item(code=item_code, name="Artículo multimoneda", item_type="goods", is_stock_item=True, default_uom="UND"),
@@ -193,6 +203,11 @@ def test_posting_mixto_no_reutiliza_el_costo_fisico_en_la_linea_de_solo_valor(en
             ]
         )
         database.session.flush()
+        active_books = (
+            database.session.execute(database.select(Book).filter_by(entity="cacao", status="activo")).scalars().all()
+        )
+        expected_book_ids = {book.id for book in active_books}
+        assert {book.currency for book in active_books} == {"NIO", "USD"}
         inventory_account_id = _configure_stock_accounts(warehouse_code)
 
         opening = _stock_entry("adjustment_positive", suffix, warehouse_code, posting_date)
@@ -255,4 +270,9 @@ def test_posting_mixto_no_reutiliza_el_costo_fisico_en_la_linea_de_solo_valor(en
             (Decimal("0E-9"), Decimal("-350.0000")),
         ]
         _assert_refreshed_amount_only_line(adjustment.id, adjustment)
-        _assert_book_stock_matches_gl(adjustment.id, inventory_account_id, [movement.id for movement in movements])
+        _assert_book_stock_matches_gl(
+            adjustment.id,
+            inventory_account_id,
+            [movement.id for movement in movements],
+            expected_book_ids,
+        )
