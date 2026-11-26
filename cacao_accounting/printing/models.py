@@ -127,6 +127,10 @@ class PublicDocumentValidation(database.Model):  # type: ignore[name-defined]
 
     __tablename__ = "public_document_validations"
 
+    # #2131: un documento tiene una sola fila de validación. Sin constraint, dos
+    # posteos concurrentes duplicaban la fila y el QR resolvía con .first().
+    __table_args__ = (database.UniqueConstraint("document_type", "document_id", name="uq_public_validation_document"),)
+
     id = database.Column(database.Integer, primary_key=True)
 
     public_token = database.Column(

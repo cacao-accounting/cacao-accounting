@@ -15,6 +15,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.database import Entity, database
 from cacao_accounting.printing.models import PublicDocumentValidation
@@ -128,37 +129,64 @@ class ValidationService:
         if status in {"draft", "borrador"}:
             return None
 
-        existing = (
+        existing = self._find_validation(document_type, str(document_id))
+        validation_hash = calculate_validation_hash(get_canonical_payload(document_data))
+        if existing is not None:
+            self._apply_document_state(existing, document_data, status, validation_hash)
+            return existing
+
+        try:
+            with database.session.begin_nested():
+                record = PublicDocumentValidation(
+                    public_token=generate_validation_token(),
+                    company_code=str(document_data.get("company_code") or ""),
+                    document_type=document_type,
+                    document_id=str(document_id),
+                    document_number=str(document_data.get("document_number") or ""),
+                    document_date=document_data.get("document_date"),
+                    document_status=status,
+                    validation_hash=validation_hash,
+                    is_enabled=True,
+                )
+                database.session.add(record)
+                database.session.flush()
+        except IntegrityError:
+            # #2131: otra transacción publicó la fila entre la lectura y el insert. La savepoint
+            # del intento deja la transacción externa usable y se actualiza la fila confirmada,
+            # conservando el token del QR ya impreso.
+            merged = self._find_validation(document_type, str(document_id))
+            if merged is None:
+                raise
+            self._apply_document_state(merged, document_data, status, validation_hash)
+            return merged
+        return record
+
+    @staticmethod
+    def _apply_document_state(
+        record: PublicDocumentValidation,
+        document_data: dict[str, Any],
+        status: str,
+        validation_hash: str,
+    ) -> None:
+        """Actualiza la fila existente con el estado actual del documento."""
+        record.validation_hash = validation_hash
+        record.document_status = status
+        record.document_date = document_data.get("document_date") or record.document_date
+        record.document_number = str(document_data.get("document_number") or record.document_number)
+
+    @staticmethod
+    def _find_validation(document_type: str, document_id: str) -> PublicDocumentValidation | None:
+        """Busca la validación ya publicada de un documento, si existe."""
+        return (
             database.session.execute(
                 select(PublicDocumentValidation).filter_by(
                     document_type=document_type,
-                    document_id=str(document_id),
+                    document_id=document_id,
                 )
             )
             .scalars()
             .first()
         )
-        validation_hash = calculate_validation_hash(get_canonical_payload(document_data))
-        if existing is not None:
-            existing.validation_hash = validation_hash
-            existing.document_status = status
-            existing.document_date = document_data.get("document_date")
-            existing.document_number = str(document_data.get("document_number") or existing.document_number)
-            return existing
-
-        record = PublicDocumentValidation(
-            public_token=generate_validation_token(),
-            company_code=str(document_data.get("company_code") or ""),
-            document_type=document_type,
-            document_id=str(document_id),
-            document_number=str(document_data.get("document_number") or ""),
-            document_date=document_data.get("document_date"),
-            document_status=status,
-            validation_hash=validation_hash,
-            is_enabled=True,
-        )
-        database.session.add(record)
-        return record
 
     def validate_token(self, token: str) -> dict[str, Any]:
         """Validate a public token against the current document state."""

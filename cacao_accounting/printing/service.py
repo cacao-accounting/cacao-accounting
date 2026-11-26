@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from html import escape
 from pathlib import Path
@@ -714,6 +715,12 @@ class PrintService:
         from cacao_accounting import format_money_with_currency, format_quantity
         from flask_babel import format_date, format_datetime
 
+        def instant(value: Any, formatter: Any) -> Any:
+            """Formatea instantes reales; el sello de auditoría ya llega como texto (#2131)."""
+            if isinstance(value, (datetime, date)):
+                return formatter(value)
+            return value
+
         def percent_filter(value: Any) -> str:
             try:
                 return f"{Decimal(str(value or 0)).quantize(Decimal('0.01'))}%"
@@ -743,8 +750,8 @@ class PrintService:
             {
                 "money": format_money_with_currency,
                 "number": format_quantity,
-                "date": format_date,
-                "datetime": format_datetime,
+                "date": lambda value: instant(value, format_date),
+                "datetime": lambda value: instant(value, format_datetime),
                 "percent": percent_filter,
                 "default_text": default_text_filter,
                 "status_label": status_label,
