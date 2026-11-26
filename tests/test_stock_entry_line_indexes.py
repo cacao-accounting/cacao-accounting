@@ -131,9 +131,7 @@ def test_alta_http_conciliacion_persiste_lineas_tras_hueco(app, entorno_contable
     marcador = f"RECON-GAP-{uuid4().hex[:8]}"
     with app.app_context():
         ensure_default_naming_series_for_company("cacao", ["stock_entry"])
-        existing = database.session.execute(
-            database.select(Warehouse).filter_by(code="BOD02")
-        ).scalar_one_or_none()
+        existing = database.session.execute(database.select(Warehouse).filter_by(code="BOD02")).scalar_one_or_none()
         if existing is None:
             database.session.add(Warehouse(code="BOD02", name="Bodega dos", company="cacao", is_active=True))
         database.session.commit()
