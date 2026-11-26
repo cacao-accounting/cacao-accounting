@@ -44,26 +44,26 @@ def verifica_coneccion_db(app):
     """Verifica si es posible conectarse a la base de datos.
 
     Un ``SELECT`` simple demuestra conectividad sin asumir que tablas de
-    aplicaci?n ya existan (#1898).
+    aplicación ya existan (#1898).
     """
     import time
 
-    # Con ``CACAO_TEST`` la espera es cero, as? que la condici?n del ``while``
-    # nunca se cumplir?a y ``DB_CONN`` quedar?a sin definir. Se fuerza al menos
-    # un intento para que la verificaci?n sea real en pruebas.
+    # Con ``CACAO_TEST`` la espera es cero, así que la condición del ``while``
+    # nunca se cumpliría y ``DB_CONN`` quedaría sin definir. Se fuerza al menos
+    # un intento para que la verificación sea real en pruebas.
     intentos_restantes = 1 if TIEMPO_ESPERA <= 0 else None
 
     with app.app_context():
         __inicio = time.time()
         DB_CONN = False
         while (time.time() - __inicio) < TIEMPO_ESPERA or intentos_restantes:
-            log.info("Verificando conexi?n a la base de datos.")
+            log.info("Verificando conexión a la base de datos.")
             try:
                 from sqlalchemy import text
 
                 database.session.execute(text("SELECT 1"))
                 DB_CONN = True
-                log.info("Conexi?n a la base de datos exitosa.")
+                log.info("Conexión a la base de datos exitosa.")
                 break
             except (OperationalError, TypeError, InterfaceError, ProgrammingError, InternalError):
                 DB_CONN = False
@@ -77,7 +77,7 @@ def verifica_coneccion_db(app):
                 intentos_restantes = 0
 
         if not DB_CONN:
-            log.warning("No fue imposible establecer una conexi?n con la base de datos.")
+            log.warning("No fue imposible establecer una conexión con la base de datos.")
         return DB_CONN
 
 
@@ -135,7 +135,7 @@ def _cabecera_alembic() -> tuple[str, ...]:
     from cacao_accounting import alembic
 
     heads = alembic.heads()
-    # Flask-Alembic puede devolver scripts o ids seg?n versi?n.
+    # Flask-Alembic puede devolver scripts o ids según versión.
     result = []
     for item in heads:
         result.append(str(getattr(item, "revision", item)))
@@ -233,7 +233,7 @@ def verificar_esquema_base_datos(*, permitir_migrar: bool = False) -> dict[str, 
             raise RuntimeError(
                 _(
                     "La base de datos no tiene historial Alembic; "
-                    "ejecute 'cacaoctl db migrate' para registrar la revisi?n compatible."
+                    "ejecute 'cacaoctl db migrate' para registrar la revisión compatible."
                 )
             )
         alembic.stamp("head")
@@ -298,7 +298,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
 
         if status not in {"empty", "bootstrap_incomplete"}:
             if status == "partial":
-                log.error("Base de datos con esquema parcial; no se puede completar autom?ticamente.")
+                log.error("Base de datos con esquema parcial; no se puede completar automáticamente.")
                 return False
             try:
                 verificar_esquema_base_datos(permitir_migrar=True)
@@ -308,7 +308,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             return bool(status in {"current", "outdated", "unversioned"})
 
         if status == "bootstrap_incomplete":
-            log.info("Esquema detectado sin bootstrap completo; completando inicializaci?n.")
+            log.info("Esquema detectado sin bootstrap completo; completando inicialización.")
             try:
                 if with_examples:
                     base_data(user, passwd, carga_rapida=False)

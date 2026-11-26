@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 - 2026 William Jos? Moreno Reyes
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""Agrega ``audit_trail.hash_version`` para la cadena de auditor?a v2.
+"""Agrega ``audit_trail.hash_version`` para la cadena de auditoría v2.
 
 Las filas heredadas quedan con ``NULL`` y se verifican con formato v1.
 El downgrade se rechaza si existen filas v2 para no invalidar evidencia
-hist?rica verificable (#1849).
+histórica verificable (#1849).
 """
 
 from collections.abc import Sequence
@@ -41,6 +41,6 @@ def downgrade() -> None:
     rows_with_v2 = bind.execute(sa.text("SELECT COUNT(*) FROM audit_trail WHERE hash_version = 2")).scalar() or 0
     if int(rows_with_v2) > 0:
         raise RuntimeError(
-            f"{int(rows_with_v2)} fila(s) audit_trail usan hash v2; downgrade rechazado para preservar verificaci?n."
+            f"{int(rows_with_v2)} fila(s) audit_trail usan hash v2; downgrade rechazado para preservar verificación."
         )
     op.drop_column("audit_trail", "hash_version")

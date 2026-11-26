@@ -209,13 +209,13 @@ linea_comandos.add_command(db)
 
 @db.command(name="init", help=_("Crea o verifica la base de datos (idempotente)."))
 @click.option("--force", is_flag=True, help=_("Elimina una base existente antes de crear la nueva."))
-@click.option("--seed", is_flag=True, help=_("Inserta datos de ejemplo despu?s de crear la base."))
+@click.option("--seed", is_flag=True, help=_("Inserta datos de ejemplo después de crear la base."))
 def db_init(force: bool, seed: bool) -> None:
     """Crea el esquema de base de datos e inserta los datos base.
 
-    Contrato #1898/#2234: `init` solo inicializa una base vac?a. Si la base
-    ya est? inicializada o parcialmente inicializada, falla de forma cerrada
-    salvo `--force` expl?cito.
+    Contrato #1898/#2234: `init` solo inicializa una base vacía. Si la base
+    ya está inicializada o parcialmente inicializada, falla de forma cerrada
+    salvo `--force` explícito.
     """
     from cacao_accounting.database import database
     from cacao_accounting.database.helpers import (
@@ -235,7 +235,7 @@ def db_init(force: bool, seed: bool) -> None:
             _mensaje_error(
                 _(
                     "La base de datos tiene un esquema parcial o incompatible; "
-                    "use --force solo con autorizaci?n expl?cita o restaure un respaldo."
+                    "use --force solo con autorización explícita o restaure un respaldo."
                 )
             )
             raise click.exceptions.Exit(1)
@@ -247,7 +247,7 @@ def db_init(force: bool, seed: bool) -> None:
             raise click.exceptions.Exit(1)
 
         if force and status != "empty":
-            _mensaje_advertencia(_("La base de datos existente ser? reemplazada."))
+            _mensaje_advertencia(_("La base de datos existente será reemplazada."))
             database.drop_all()
             try:
                 from cacao_accounting import alembic
@@ -257,7 +257,7 @@ def db_init(force: bool, seed: bool) -> None:
                 database.session.rollback()
 
         if usuario == "cacao" and contrasena == "cacao":
-            _mensaje_advertencia(_("Se est?n usando usuario y contrase?a predeterminados para el setup inicial."))
+            _mensaje_advertencia(_("Se están usando usuario y contraseña predeterminados para el setup inicial."))
 
         if inicia_base_de_datos(app=app, user=usuario, passwd=contrasena, with_examples=seed):
             _mensaje_exito(_("Base de datos creada."))
@@ -267,12 +267,12 @@ def db_init(force: bool, seed: bool) -> None:
 
 
 @db.command(name="migrate", help=_("Aplica migraciones pendientes de Alembic (idempotente)."))
-@click.option("--head", default="head", help=_("Revisi?n destino (por defecto: head)."))
-@click.option("--revision", default=None, help=_("Revisi?n espec?fica a aplicar."))
+@click.option("--head", default="head", help=_("Revisión destino (por defecto: head)."))
+@click.option("--revision", default=None, help=_("Revisión específica a aplicar."))
 def db_migrate(head: str, revision: str | None) -> None:
     """Aplica migraciones pendientes de Alembic de forma idempotente.
 
-    Contrato #1898/#2234: `migrate` es la ?nica ruta de evoluci?n de esquema
+    Contrato #1898/#2234: `migrate` es la única ruta de evolución de esquema
     para bases existentes. No repara datos ni completa bootstrap parcial.
     """
     from cacao_accounting import alembic
@@ -284,7 +284,7 @@ def db_migrate(head: str, revision: str | None) -> None:
             estado = estado_esquema_base_datos()
             status = str(estado["status"])
             if status == "empty":
-                raise RuntimeError(_("La base de datos no est? inicializada; ejecute primero 'cacaoctl db init'."))
+                raise RuntimeError(_("La base de datos no está inicializada; ejecute primero 'cacaoctl db init'."))
             if status == "partial":
                 raise RuntimeError(
                     _(

@@ -44,6 +44,6 @@ def server() -> None:
         serve(app, port=int(PORT), threads=int(THREADS))
     except OSError as exc:
         # Un puerto ocupado no es un arranque exitoso: el servicio no debe
-        # reportar ?xito con el servidor ca?do (#1905).
+        # reportar éxito con el servidor caído (#1905).
         log.error("Puerto {PORT} actualmente en uso.")
         raise SystemExit(1) from exc

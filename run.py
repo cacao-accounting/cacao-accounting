@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 - 2026 William Jos? Moreno Reyes
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 """Cacao Accounting simple init script."""
 

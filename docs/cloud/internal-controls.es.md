@@ -182,15 +182,28 @@ excepción oculta como `rank == 3` que debilitaría la segregación de funciones
 
 ## Verificación de release
 
-Cacao crea su esquema con `create_all` (`cacaoctl db init`); no se aplica una
-migración incremental. Las columnas `roles_access.approval_rank` y
-`approval_request.policy_snapshot` / `review_payload` se crean con el esquema.
-Las bases construidas con un esquema anterior deben recrearse, o agregarse las
-columnas y clasificarse manualmente los roles estándar de módulo antes de
-habilitar cuatro ojos. Los preparadores históricos no se infieren. Clasifique
-explícitamente los roles personalizados. Las solicitudes de aprobación
-existentes sin procedencia son evidencia histórica, no prueba de revisión
-independiente.
+Cacao crea su esquema con `create_all` (`cacaoctl db init`) y lo mantiene
+versionado con Alembic (`cacaoctl db migrate`). Servir solo verifica: el arranque
+invoca `verificar_esquema_base_datos(permitir_migrar=False)`
+(`cacao_accounting/database/helpers.py`), que no aplica migraciones incrementales
+ni repara nada. La máquina de estados es:
+
+| Estado del esquema | Arranque (`serve`) | `cacaoctl db migrate` explícito |
+| --- | --- | --- |
+| `empty` | aborta y remite a `cacaoctl db init` | aborta |
+| `partial`, `bootstrap_incomplete` | aborta: restaurar un respaldo o inicializar una base nueva | aborta |
+| `unversioned` | aborta y exige migrar | registra `head` (`stamp`) |
+| `outdated` | aborta y exige migrar | actualiza a `head` |
+| `current` | sirve sin aviso | sin cambios |
+
+El arranque del entrypoint (`python -m cacao_accounting`) es la única vía que crea
+la base inicial y solo desde `empty` / `bootstrap_incomplete`. Las columnas
+`roles_access.approval_rank` y `approval_request.policy_snapshot` /
+`review_payload` se crean con el esquema. Las bases construidas con un esquema
+anterior deben migrarse con `cacaoctl db migrate` o recrearse. Los preparadores
+históricos no se infieren. Clasifique explícitamente los roles personalizados.
+Las solicitudes de aprobación existentes sin procedencia son evidencia histórica,
+no prueba de revisión independiente.
 
 Valide en PostgreSQL con credenciales runtime reales, además de las pruebas en
 SQLite. Registre versión/commit, revisor, resultado del esquema y comprobaciones

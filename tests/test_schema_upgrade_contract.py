@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2026 William Jos? Moreno Reyes
+# SPDX-FileCopyrightText: 2026 William José Moreno Reyes
 
 """Contrato de upgrades de esquema #1898/#2234/#1849."""
 
@@ -81,7 +81,7 @@ def test_verify_rejects_outdated_schema_without_migrating(tmp_path):
         alembic.stamp("20260809_0001")
         with pytest.raises(RuntimeError, match="migrate|migraciones"):
             verificar_esquema_base_datos(permitir_migrar=False)
-        # No debe migrar impl?citamente.
+        # No debe migrar implícitamente.
         assert tuple(s.revision for s in alembic.current()) == ("20260809_0001",)
         database.session.remove()
         database.engine.dispose()
