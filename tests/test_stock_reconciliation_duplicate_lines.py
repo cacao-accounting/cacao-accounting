@@ -79,7 +79,10 @@ def test_creacion_rechaza_dos_conteos_del_mismo_articulo_y_bodega(app, entorno_c
 def test_creacion_permite_el_mismo_articulo_en_bodegas_distintas(app, entorno_contable, authenticated_client):
     """Cada bodega es un saldo independiente aunque comparta artículo."""
     with app.app_context():
-        database.session.add(Warehouse(code="BOD02", name="Bodega dos", company="cacao", is_active=True))
+        # `BOD02` vive en la base compartida del worker y `uq_warehouse_code_global`
+        # es único por código, así que se reutiliza si otra prueba ya la sembró (#1871).
+        if database.session.execute(database.select(Warehouse).filter_by(code="BOD02")).scalar_one_or_none() is None:
+            database.session.add(Warehouse(code="BOD02", name="Bodega dos", company="cacao", is_active=True))
         database.session.commit()
     marker = f"SPLIT-COUNT-{uuid4().hex}"
     response = _post_reconciliation(authenticated_client(), _series_id(app), marker, [_line(0, "BOD01"), _line(1, "BOD02")])
