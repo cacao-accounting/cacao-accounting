@@ -8,6 +8,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
+from flask_babel import force_locale
 
 from cacao_accounting.database import Modules, Tax, TaxTemplate, TaxTemplateItem, database
 
@@ -40,9 +41,8 @@ def admin_modulo(app):
         FONDOS.clear()
 
 
-def _datos_fiscales(admin_modulo) -> tuple[Tax, TaxTemplate]:
+def _datos_fiscales() -> tuple[Tax, TaxTemplate]:
     """Crea un impuesto porcentual y una plantilla de compra con una fila."""
-    del admin_modulo
     sufijo = uuid4().hex[:8]
     with database.session.begin():
         impuesto = Tax(
@@ -75,7 +75,7 @@ def _datos_fiscales(admin_modulo) -> tuple[Tax, TaxTemplate]:
 
 def test_lista_de_impuestos_traduce_tipo_y_aplicacion(app, authenticated_client, admin_modulo):
     """La tabla no imprime los códigos ``percentage``/``both``."""
-    impuesto, _ = _datos_fiscales(admin_modulo)
+    impuesto, _ = _datos_fiscales()
     client = authenticated_client("admin")
 
     response = client.get("/settings/taxes")
@@ -86,9 +86,25 @@ def test_lista_de_impuestos_traduce_tipo_y_aplicacion(app, authenticated_client,
     assert "<td>Compra y venta</td>" in body
 
 
+@pytest.mark.usefixtures("admin_modulo")
+def test_lista_de_impuestos_traduce_monto_fijo_al_ingles(app, authenticated_client):
+    """La etiqueta de tipo de impuesto aparece correctamente traducida en inglés."""
+    impuesto, _ = _datos_fiscales()
+    with database.session.begin():
+        database.session.get(Tax, impuesto.id).tax_type = "fixed"
+
+    with app.app_context(), force_locale("en"):
+        response = authenticated_client("admin").get("/settings/taxes")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert f"{impuesto.name}</td><td>Fixed amount" in body
+    assert "Amount fijo" not in body
+
+
 def test_plantilla_y_filas_traducen_tipo_base_y_comportamiento(app, authenticated_client, admin_modulo):
     """Plantilla e ítems muestran Compra, Documento neto y Aditivo."""
-    _, plantilla = _datos_fiscales(admin_modulo)
+    _, plantilla = _datos_fiscales()
     client = authenticated_client("admin")
 
     listado = client.get("/settings/tax-templates")
@@ -102,7 +118,7 @@ def test_plantilla_y_filas_traducen_tipo_base_y_comportamiento(app, authenticate
 
 def test_fila_con_impuesto_inactivo_muestra_su_nombre(app, authenticated_client, admin_modulo):
     """Una fila histórica con impuesto desactivado no imprime el ULID técnico."""
-    impuesto, plantilla = _datos_fiscales(admin_modulo)
+    impuesto, plantilla = _datos_fiscales()
     with database.session.begin():
         database.session.get(Tax, impuesto.id).is_active = False
 

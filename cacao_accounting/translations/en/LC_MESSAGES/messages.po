@@ -5254,7 +5254,7 @@ msgstr "Percentage"
 #: cacao_accounting/admin/templates/admin/tax_rules.html:48 cacao_accounting/admin/templates/admin/taxes.html:14
 #: cacao_accounting/admin/templates/admin/taxes.html:35
 msgid "Monto fijo"
-msgstr "Amount fijo"
+msgstr "Fixed amount"
 
 #: cacao_accounting/admin/templates/admin/tax_rules.html:49
 msgid "Monto manual"
