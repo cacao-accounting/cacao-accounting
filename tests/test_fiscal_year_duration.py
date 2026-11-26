@@ -11,18 +11,37 @@ from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import Entity, FiscalYear, database
-from cacao_accounting.setup.repository import _generate_fiscal_period_ranges, create_default_fiscal_year
+from cacao_accounting.database import AccountingPeriod, Entity, FiscalYear, database
+from cacao_accounting.setup.repository import (
+    _generate_fiscal_period_ranges,
+    create_default_accounting_period,
+    create_default_fiscal_year,
+)
 
 
-def test_generates_six_complete_months_for_short_fiscal_year():
-    """A shorter company fiscal year produces only its six full periods."""
+def _cleanup_fiscal_year(app, name: str) -> None:
+    """Delete a test fiscal year and its periods, including rows left by a failing assertion."""
+    with app.app_context():
+        fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(name=name)).scalar_one_or_none()
+        if fiscal_year is None:
+            return
+        database.session.execute(database.delete(AccountingPeriod).where(AccountingPeriod.fiscal_year_id == fiscal_year.id))
+        database.session.delete(fiscal_year)
+        database.session.commit()
+
+
+@pytest.mark.parametrize("end_month", (3, 6))
+def test_generates_complete_months_for_short_fiscal_year(end_month):
+    """Three- and six-month fiscal years produce only their complete periods."""
     start = date(2026, 1, 1)
-    end = date(2026, 6, 30)
+    end = date(2026, end_month, calendar.monthrange(2026, end_month)[1])
 
     ranges = _generate_fiscal_period_ranges(start, end)
 
-    assert ranges == [(date(2026, month, 1), date(2026, month, calendar.monthrange(2026, month)[1])) for month in range(1, 7)]
+    expected_ranges = [
+        (date(2026, month, 1), date(2026, month, calendar.monthrange(2026, month)[1])) for month in range(1, end_month + 1)
+    ]
+    assert ranges == expected_ranges
 
 
 def test_accepts_twelve_periods_without_extending_the_final_period():
@@ -70,44 +89,74 @@ def test_fiscal_year_form_rejects_overlong_range_without_persistence(app, authen
     del entorno_contable
     name = f"FY-OVERLONG-{uuid4().hex[:8]}"
 
-    response = authenticated_client("admin").post(
-        "/accounting/fiscal_year/new",
-        data={
-            "id": name,
-            "entidad": "cacao",
-            "inicio": "2025-01-01",
-            "fin": "2026-06-30",
-        },
-    )
+    try:
+        response = authenticated_client("admin").post(
+            "/accounting/fiscal_year/new",
+            data={
+                "id": name,
+                "entidad": "cacao",
+                "inicio": "2025-01-01",
+                "fin": "2026-06-30",
+            },
+        )
 
-    assert response.status_code == 200
-    assert "12 meses" in response.get_data(as_text=True)
-    with app.app_context():
-        assert database.session.execute(database.select(FiscalYear).filter_by(name=name)).scalars().all() == []
+        assert response.status_code == 200
+        assert "12 meses" in response.get_data(as_text=True)
+        with app.app_context():
+            assert database.session.execute(database.select(FiscalYear).filter_by(name=name)).scalars().all() == []
+    finally:
+        _cleanup_fiscal_year(app, name)
 
 
-def test_fiscal_year_form_allows_a_six_month_year(app, authenticated_client, entorno_contable):
-    """The CRUD preserves the approved option to use a shorter fiscal year."""
+@pytest.mark.parametrize("end_month", (3, 6))
+def test_fiscal_year_form_allows_short_years(app, authenticated_client, entorno_contable, end_month):
+    """The CRUD accepts the approved three- and six-month fiscal years."""
     del entorno_contable
     name = f"FY-SHORT-{uuid4().hex[:8]}"
-
-    response = authenticated_client("admin").post(
-        "/accounting/fiscal_year/new",
-        data={
-            "id": name,
-            "entidad": "cacao",
-            "inicio": "2026-01-01",
-            "fin": "2026-06-30",
-        },
-    )
+    end = date(2026, end_month, calendar.monthrange(2026, end_month)[1])
 
     try:
+        response = authenticated_client("admin").post(
+            "/accounting/fiscal_year/new",
+            data={
+                "id": name,
+                "entidad": "cacao",
+                "inicio": "2026-01-01",
+                "fin": end.isoformat(),
+            },
+        )
         assert response.status_code == 302
         with app.app_context():
             fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(name=name)).scalar_one()
             assert fiscal_year.year_start_date == date(2026, 1, 1)
-            assert fiscal_year.year_end_date == date(2026, 6, 30)
+            assert fiscal_year.year_end_date == end
     finally:
+        _cleanup_fiscal_year(app, name)
+
+
+def test_setup_persists_three_complete_accounting_periods(app, entorno_contable):
+    """Company setup creates three monthly periods for an approved short fiscal year."""
+    del entorno_contable
+    fiscal_year_name = "2098"
+    try:
         with app.app_context():
-            database.session.execute(database.delete(FiscalYear).where(FiscalYear.name == name))
+            entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
+            fiscal_year = create_default_fiscal_year(
+                entity,
+                year_start_date=date(2098, 1, 1),
+                year_end_date=date(2098, 3, 31),
+            )
+            create_default_accounting_period(entity, fiscal_year)
+            periods = database.session.execute(
+                database.select(AccountingPeriod.start, AccountingPeriod.end)
+                .filter_by(fiscal_year_id=fiscal_year.id)
+                .order_by(AccountingPeriod.start)
+            ).all()
+            assert periods == [
+                (date(2098, 1, 1), date(2098, 1, 31)),
+                (date(2098, 2, 1), date(2098, 2, 28)),
+                (date(2098, 3, 1), date(2098, 3, 31)),
+            ]
             database.session.commit()
+    finally:
+        _cleanup_fiscal_year(app, fiscal_year_name)
