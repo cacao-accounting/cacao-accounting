@@ -1252,6 +1252,14 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         .scalars()
         .all()
     )
+    request_has_lines = (
+        database.session.execute(
+            database.select(PurchaseRequestItem.id)
+            .where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
+            .limit(1)
+        ).first()
+        is not None
+    )
     recommendations_error = None
     try:
         recommendations = comparison_recommendations(request_comparison)
@@ -1266,6 +1274,7 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         recommendations=recommendations,
         comparison_lines=comparison_lines,
         negotiation_rfqs=negotiation_rfqs,
+        request_has_lines=request_has_lines,
         recommendations_error=recommendations_error,
         **_purchase_action_permissions(),
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),

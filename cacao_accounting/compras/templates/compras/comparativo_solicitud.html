@@ -221,6 +221,7 @@ macros %}
             </td>
           </tr>
           {% else %}
+          {% if not request_has_lines %}
           <tr>
             <td
               colspan="{{ offers|length + 3 }}"
@@ -229,6 +230,7 @@ macros %}
               {{ _("La Solicitud de Compra no tiene líneas.") }}
             </td>
           </tr>
+          {% endif %}
           {% endfor %}
         </tbody>
       </table>
