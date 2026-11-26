@@ -479,6 +479,7 @@ class ImportService:
             thread.start()
         else:
             self._execute_task(current_app._get_current_object(), batch_id)  # type: ignore[attr-defined]
+            database.session.expire_all()
         return True
 
     def cancel(self, batch_id: str) -> bool:

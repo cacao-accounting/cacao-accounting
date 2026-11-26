@@ -46,7 +46,7 @@ def _claim_expired_batch(batch_id: str, timeout_limit: datetime) -> bool:
                 ImportBatch.import_status == 4,
                 (ImportBatch.started_at.is_(None)) | (ImportBatch.started_at < timeout_limit),
             )
-            .values(import_status=7)
+            .values(import_status=7, started_at=None)
             .execution_options(synchronize_session=False)
         ),
     ).rowcount
