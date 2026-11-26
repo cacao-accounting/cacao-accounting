@@ -57,6 +57,19 @@ def test_lector_conserva_tabulacion_dentro_de_comillas(tmp_path):
     assert tabla.rows == [["1101", "cuenta\tcon tab", "0"]]
 
 
+def test_fallback_rechaza_tabulacion_tras_cierre_de_comilla():
+    """La tabulación posterior a la comilla de cierre queda fuera del campo citado."""
+    assert _valid_csv_fallback(b'a;"b"\tc\n') is False
+
+
+def test_lector_rechaza_tabulacion_tras_cierre_de_comilla(tmp_path):
+    """La carga y el lector coinciden al rechazar la tabulación tras el cierre."""
+    archivo = tmp_path / "tab_tras_cierre.csv"
+    archivo.write_text('a;"b"\tc\n', encoding="utf-8")
+    with pytest.raises(ImportCSVFormatError):
+        CSVReader().read(str(archivo))
+
+
 def test_lector_y_fallback_olen_la_misma_muestra(tmp_path):
     """Un delimitador ausente en los primeros 1024 caracteres ya se detecta."""
     contenido = f'"{"h" * 1100}";debito;credito\n1101;100;0\n'

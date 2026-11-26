@@ -89,9 +89,12 @@ class _QuoteScanner:
         if self.escapechar and character == self.escapechar:
             self.escaped = True
             return False
-        if self.in_quotes:
-            self._consume_quoted(character)
+        if self.in_quotes and self._consume_quoted(character):
             return False
+        return self._consume_unquoted(character)
+
+    def _consume_unquoted(self, character: str) -> bool:
+        """Evalúa un carácter fuera de comillas y reporta tabulaciones."""
         if character == "\t":
             self.at_field_start = False
             return True
@@ -109,19 +112,17 @@ class _QuoteScanner:
         self.at_field_start = False
         return False
 
-    def _consume_quoted(self, character: str) -> None:
-        """Resuelve cierres y comillas duplicadas dentro del campo citado."""
+    def _consume_quoted(self, character: str) -> bool:
+        """Procesa el carácter citado e indica si el campo sigue entrecomillado."""
         if self.quote_pending:
             if self.doublequote and character == self.quotechar:
                 self.quote_pending = False
-            else:
-                self.in_quotes = False
-                self.quote_pending = False
-                # El delimitador o salto que cierra el campo citado también
-                # inicia el siguiente campo, aunque se consuma en esta rama.
-                self.at_field_start = character in ("\n", "\r") or character == self.delimiter
+                return True
+            self.in_quotes = False
+            self.quote_pending = False
         elif character == self.quotechar:
             self.quote_pending = True
+        return self.in_quotes
 
 
 def contains_unquoted_tab(sample: str, dialect: Any) -> bool:
