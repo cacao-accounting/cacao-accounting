@@ -6,11 +6,13 @@
 Sustituye al inventario eliminado en ``0970476b``: cada símbolo retirado en
 esta limpieza no debe reaparecer sin una decisión y pruebas propias.
 
-Superficie dinámica excluida del retiro (#1841), porque su consumidor no
-aparece en el grafo de imports:
+Superficie excluida del retiro (#1841), porque su consumidor no aparece en el
+grafo de imports estático:
 
-- ``cacao_accounting/query_tools``: API pública para plugins externos y
-  entry point declarado en ``pyproject``.
+- ``cacao_accounting/query_tools``: el dueño decidió conservarlo como paquete
+  publicado para consumidores externos; en HEAD no tiene entry point declarado
+  en ``pyproject`` ni importa desde producto, por lo que su exclusión descansa
+  en esa decisión y no en un mecanismo de carga automática.
 - ``cacao_accounting/cli.py`` y ``__main__.py``: invocado por consola.
 - Filtros y globales registrados en ``printing``: los consume Jinja desde
   plantillas guardadas en base de datos.
@@ -133,7 +135,16 @@ RETIRADOS_1841 = [
     ("cacao_accounting.database", "CommentMention"),
     ("cacao_accounting.database", "Assignment"),
     ("cacao_accounting.database", "BaseTercero"),
+    ("cacao_accounting.database", "Comment"),
     ("cacao_accounting.database.helpers", "obtener_id_usuario_por_nombre"),
+    # Retiros del padre 40453d45 que quedaban sin guarda en este contrato.
+    ("cacao_accounting.contabilidad.journal_repository", "list_journals"),
+    ("cacao_accounting.contabilidad.recurring_journal_service", "get_applicable_templates"),
+    ("cacao_accounting.contabilidad.arap_gl_reconciliation", "reconcile_companies_arap_to_gl"),
+    ("cacao_accounting.compras.purchase_request_comparison_service", "purchase_request_comparison_is_closed"),
+    ("cacao_accounting.compras.purchase_request_comparison_service", "supplier_quotation_comparison_rows"),
+    ("cacao_accounting.document_flow.repository", "recompute_states_for_source"),
+    ("cacao_accounting.inventario.service", "rebuild_stock_bins"),
     ("cacao_accounting.document_identifiers", "suggest_next_external_number"),
     ("cacao_accounting.audit_trail_service", "log_reverse"),
     ("cacao_accounting.audit_trail_service", "log_delete_attempt"),
@@ -164,6 +175,7 @@ def test_inventario_1841_permanece_retirado(modulo: str, simbolo: str):
         "cacao_accounting/reportes/semantic.py",
         "cacao_accounting/accounting_engine/fiscal/resolver.py",
         "cacao_accounting/compras/purchase_invoice_draft_service.py",
+        "cacao_accounting/compras/purchase_order_comparison_service.py",
     ],
 )
 def test_modulos_sin_consumidor_no_reaparecen(ruta: str):
@@ -171,8 +183,15 @@ def test_modulos_sin_consumidor_no_reaparecen(ruta: str):
     assert not (RAIZ / ruta).exists(), f"{ruta} reapareció sin consumidores"
 
 
+def test_rounding_no_reexpone_distribucion_de_residual():
+    """#1841: absorber el residual en la parte mayor no tiene consumidor ni política aprobada."""
+    from cacao_accounting.accounting_engine.common.rounding import RoundingManager
+
+    assert not hasattr(RoundingManager, "distribute_residual")
+
+
 def test_query_tools_conserva_su_contrato_publico():
-    """#1841: ``query_tools`` queda fuera de la limpieza por ser API para plugins."""
+    """#1841: ``query_tools`` se conserva por decisión del dueño sobre el paquete publicado."""
     from cacao_accounting.query_tools import QueryContext, Registry, load_query_tools, query_tool
 
     assert callable(query_tool) and callable(load_query_tools)
