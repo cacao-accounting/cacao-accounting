@@ -19,10 +19,12 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import database
 from cacao_accounting.contabilidad.arap_allocation import (
     AllocationIdempotencyError,
+    AllocationLine,
     AllocationPlanner,
     AllocationRequest,
     ARAPOpenItem,
     OpenItemResolver,
+    allocation_fingerprint,
 )
 
 
@@ -89,16 +91,64 @@ def test_distinct_keys_plan_the_full_amount(allocation_scenario):
 
 
 def test_repeated_key_already_applied_is_an_idempotent_replay(allocation_scenario):
-    """Keys already applied are skipped, not counted twice nor rejected."""
+    """Only a byte-for-byte content match is an idempotent replay (#1144, #1836)."""
     app, planner = allocation_scenario
 
+    persisted = AllocationLine(
+        document_id="INV-1",
+        document_type="sales_invoice",
+        document_currency="NIO",
+        source_currency="NIO",
+        document_amount=Decimal("50"),
+        source_amount=Decimal("50"),
+        rate=Decimal("1"),
+        idempotency_key="PAY-1",
+    )
     with app.app_context():
         plan = planner.plan(
             Decimal("100"),
             "NIO",
-            [_request("50", "PAY-1"), _request("50", "PAY-1")],
-            existing_keys={"PAY-1"},
+            [_request("50", "PAY-1")],
+            existing_keys={"PAY-1": allocation_fingerprint(persisted)},
         )
 
     assert plan.lines == ()
     assert plan.allocated_source_amount == Decimal("0")
+
+
+def test_existing_key_without_content_is_rejected(allocation_scenario):
+    """A bare key cannot prove replay; the planner fails closed (#1836)."""
+    app, planner = allocation_scenario
+
+    with app.app_context():
+        with pytest.raises(AllocationIdempotencyError, match="contenido persistido"):
+            planner.plan(
+                Decimal("100"),
+                "NIO",
+                [_request("50", "PAY-1")],
+                existing_keys={"PAY-1"},
+            )
+
+
+def test_existing_key_with_different_amount_is_a_conflict(allocation_scenario):
+    """A key reused with another amount must raise a controlled conflict (#1836)."""
+    app, planner = allocation_scenario
+
+    persisted = AllocationLine(
+        document_id="INV-1",
+        document_type="sales_invoice",
+        document_currency="NIO",
+        source_currency="NIO",
+        document_amount=Decimal("80"),
+        source_amount=Decimal("80"),
+        rate=Decimal("1"),
+        idempotency_key="PAY-1",
+    )
+    with app.app_context():
+        with pytest.raises(AllocationIdempotencyError, match="otro contenido"):
+            planner.plan(
+                Decimal("100"),
+                "NIO",
+                [_request("100", "PAY-1")],
+                existing_keys={"PAY-1": allocation_fingerprint(persisted)},
+            )

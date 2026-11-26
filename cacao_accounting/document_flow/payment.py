@@ -1076,6 +1076,7 @@ def _apply_standard_reconciliation_allocation(
         AllocationRequest,
         OpenItemResolver,
         apply_allocation,
+        load_existing_allocation_fingerprints,
         plan_allocation,
     )
 
@@ -1115,6 +1116,7 @@ def _apply_standard_reconciliation_allocation(
             )
         ],
         resolver=resolver,
+        existing_keys=load_existing_allocation_fingerprints(payment.id),
     )
     apply_allocation(
         plan,
@@ -1214,6 +1216,7 @@ def _plan_reconciliation_allocation(
         AllocationOverpaymentError,
         AllocationRequest,
         OpenItemResolver,
+        load_existing_allocation_fingerprints,
         plan_allocation,
     )
 
@@ -1256,6 +1259,7 @@ def _plan_reconciliation_allocation(
                 )
             ],
             resolver=resolver,
+            existing_keys=load_existing_allocation_fingerprints(payment.id),
         )
     except AllocationError as exc:
         message = str(exc)
@@ -1295,6 +1299,7 @@ def _persist_reconciliation_allocation(
         model_type,
         document_id,
         allocation_ctx,
+        allocation_line,
     )
     if getattr(payment, "docstatus", 0) == 1:
         from cacao_accounting.contabilidad.arap_ledger_service import post_payment_application_ar_ap
@@ -1380,7 +1385,11 @@ def _create_payment_reference_and_relation(
     model_type: str,
     document_id: str,
     allocation_ctx: PaymentAllocationContext,
+    allocation_line: AllocationLine,
 ) -> None:
+    """Persist the reference together with its idempotency key and fingerprint (#1836)."""
+    from cacao_accounting.contabilidad.arap_allocation import allocation_fingerprint
+
     physical_type = _payment_candidate_physical_type(flow_source_type)
     outstanding_after = allocation_ctx.outstanding - allocation_ctx.allocated
     reference = PaymentReference(
@@ -1409,6 +1418,8 @@ def _create_payment_reference_and_relation(
         discount_amount=allocation_ctx.discount,
         gain_loss_amount=allocation_ctx.gain_loss,
         notes=raw_line.get("notes"),
+        idempotency_key=allocation_line.idempotency_key,
+        allocation_fingerprint=(allocation_fingerprint(allocation_line) if allocation_line.idempotency_key else None),
     )
     database.session.add(reference)
     database.session.flush()

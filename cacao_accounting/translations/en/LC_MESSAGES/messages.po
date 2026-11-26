@@ -12599,6 +12599,16 @@ msgstr "A positive rate is required between different currencies."
 msgid "La clave %(key)s ya fue usada con otro importe."
 msgstr "Key %(key)s has already been used with another amount."
 
+#: cacao_accounting/contabilidad/arap_allocation.py
+#, python-format
+msgid "La clave %(key)s no tiene contenido persistido para verificar."
+msgstr "Key %(key)s has no persisted content to verify."
+
+#: cacao_accounting/contabilidad/arap_allocation.py
+#, python-format
+msgid "La clave %(key)s ya fue usada con otro contenido."
+msgstr "Key %(key)s has already been used with different content."
+
 #: cacao_accounting/contabilidad/arap_gl_reconciliation.py:120 cacao_accounting/imports/adapters/purchase_order.py:24
 #: cacao_accounting/imports/adapters/transaction_documents.py:121
 #, python-format

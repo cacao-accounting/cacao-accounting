@@ -3528,6 +3528,11 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
     discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     gain_loss_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     notes = database.Column(database.Text(), nullable=True)
+    # #1836: la clave y su huella permiten verificar el contenido persistido
+    # antes de tratar una asignación como repetición. create_all() las crea en
+    # pre-alpha; no se agrega una migración incremental.
+    idempotency_key = database.Column(database.String(255), nullable=True, index=True)
+    allocation_fingerprint = database.Column(database.String(64), nullable=True)
 
 
 class ArApReconciliationPolicy(database.Model, BaseTabla):  # type: ignore[name-defined]
