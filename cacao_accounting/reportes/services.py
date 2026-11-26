@@ -2836,9 +2836,10 @@ def _collect_movement_detail_rows(
     selected_ledger: Book,
     filters: FinancialReportFilters,
     display_from_index: int,
+    opening_balances: dict[str, Decimal],
 ) -> tuple[list[ReportRow], Decimal, Decimal]:
     """Convierte las entradas del mayor en filas y totales para el reporte."""
-    running_per_account: dict[str, Decimal] = defaultdict(Decimal)
+    running_per_account: dict[str, Decimal] = defaultdict(Decimal, opening_balances)
     rows: list[ReportRow] = []
     total_debit = Decimal("0")
     total_credit = Decimal("0")
@@ -2892,6 +2893,38 @@ def _movement_detail_query(
     return _sorted_gl_query(query, filters.sort_by, filters.sort_dir)
 
 
+def _movement_detail_opening_balances(
+    filters: FinancialReportFilters,
+    period_start: date | None,
+    selected_ledger: Book,
+) -> dict[str, Decimal]:
+    """Obtiene el saldo por cuenta anterior al primer día del detalle visible."""
+    if not filters.include_running_balance or period_start is None:
+        return {}
+
+    opening_filters = replace(filters, accounting_period=None, period_from=None, period_to=None)
+    query = select(
+        GLEntry.account_code,
+        Accounts.code,
+        func.sum(GLEntry.debit - GLEntry.credit),
+    ).join(
+        Accounts,
+        Accounts.id == GLEntry.account_id,
+        isouter=True,
+    )
+    query = _apply_gl_filters(query, opening_filters, None, None, []).where(
+        GLEntry.ledger_id == selected_ledger.id,
+        GLEntry.posting_date < period_start,
+    )
+    opening_balances: dict[str, Decimal] = {}
+    for entry_code, account_code, balance in database.session.execute(
+        query.group_by(GLEntry.account_code, Accounts.code)
+    ).all():
+        code = str(entry_code or account_code or "")
+        opening_balances[code] = opening_balances.get(code, Decimal("0")) + _decimal_value(balance)
+    return opening_balances
+
+
 def _movement_group_expression(group_by: str) -> Any | None:
     """Resuelve únicamente dimensiones del detalle disponibles en el selector."""
     expressions = {
@@ -2939,7 +2972,13 @@ def _grouped_movement_query(query: Any, filters: FinancialReportFilters, group_e
     ).subquery()
 
 
-def _collect_grouped_movement_rows(query: Any, grouped: Any, filters: FinancialReportFilters, ledger: Book) -> list[ReportRow]:
+def _collect_grouped_movement_rows(
+    query: Any,
+    grouped: Any,
+    filters: FinancialReportFilters,
+    ledger: Book,
+    opening_balances: dict[str, Decimal],
+) -> list[ReportRow]:
     """Recupera solo la página solicitada y sus metadatos de grupo."""
     page = max(filters.page, 1)
     size = max(filters.page_size, 1)
@@ -2959,13 +2998,14 @@ def _collect_grouped_movement_rows(query: Any, grouped: Any, filters: FinancialR
     )
     rows: list[ReportRow] = []
     for entry, account, period, party, position, count, debit, credit, running_balance in database.session.execute(page_query):
+        account_code = entry.account_code or (account.code if account else None) or ""
         values = _movement_detail_row_values(
             entry,
             account,
             period,
             party,
             ledger,
-            _decimal_value(running_balance),
+            _decimal_value(running_balance) + opening_balances.get(account_code, Decimal("0")),
             filters.include_running_balance,
             filters.include_cancellations or filters.status == "cancelled",
         )
@@ -2983,6 +3023,7 @@ def get_account_movement_detail(filters: FinancialReportFilters, *, group_by: st
         return PaginatedReport(rows=[], totals={"debit": Decimal("0"), "credit": Decimal("0")}, columns=[])
 
     query = _movement_detail_query(filters, period_start, period_end, period_ids, selected_ledger)
+    opening_balances = _movement_detail_opening_balances(filters, period_start, selected_ledger)
 
     count_query = query.order_by(None).with_only_columns(func.count())
     total_rows = database.session.execute(count_query).scalar_one()
@@ -2991,7 +3032,7 @@ def get_account_movement_detail(filters: FinancialReportFilters, *, group_by: st
     group_expression = _movement_group_expression(group_by or "")
     if group_expression is not None and not filters.export_all:
         grouped = _grouped_movement_query(query, filters, group_expression)
-        rows = _collect_grouped_movement_rows(query, grouped, filters, selected_ledger)
+        rows = _collect_grouped_movement_rows(query, grouped, filters, selected_ledger, opening_balances)
         total_debit = sum((_decimal_value(row.values["debit"]) for row in rows), Decimal("0"))
         total_credit = sum((_decimal_value(row.values["credit"]) for row in rows), Decimal("0"))
         return PaginatedReport(
@@ -3016,7 +3057,9 @@ def get_account_movement_detail(filters: FinancialReportFilters, *, group_by: st
         Sequence[tuple[GLEntry, Accounts | None, AccountingPeriod | None, Party | None]],
         database.session.execute(query).all(),
     )
-    rows, total_debit, total_credit = _collect_movement_detail_rows(entries, selected_ledger, filters, display_from_index)
+    rows, total_debit, total_credit = _collect_movement_detail_rows(
+        entries, selected_ledger, filters, display_from_index, opening_balances
+    )
 
     columns = [key for key in rows[0].values if not key.startswith("__")] if rows else []
     return PaginatedReport(

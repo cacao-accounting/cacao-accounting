@@ -352,7 +352,106 @@ def test_grupo_grande_limita_las_filas_y_conserva_saldo_acumulado(opening_balanc
             assert len(report.rows) == 100
             assert report.rows[0].values["__group_position"] == 101
             assert report.rows[-1].values["__group_position"] == 200
-            assert report.rows[0].values["running_balance"] == Decimal("150")
+            assert report.rows[0].values["running_balance"] == Decimal("250")
             assert report.rows[0].values["__group_debit"] == Decimal("5050")
+        finally:
+            savepoint.rollback()
+
+
+def test_detalle_de_movimientos_suma_apertura_del_libro_y_cuenta(opening_balance_scenario, app):
+    """El saldo de mayo parte de abril y excluye la apertura de otro libro."""
+    with app.app_context():
+        selected_book = database.session.execute(select(Book).where(Book.code == "TB2190")).scalar_one()
+        account = database.session.execute(
+            select(Accounts).where(Accounts.entity == "cacao", Accounts.code == "5101")
+        ).scalar_one()
+        zero_opening_account = database.session.execute(
+            select(Accounts).where(Accounts.entity == "cacao", Accounts.code == "5201")
+        ).scalar_one()
+        fiscal_year_id = database.session.execute(select(FiscalYear.id).where(FiscalYear.id == "FY2026")).scalar_one()
+        other_book = Book(
+            entity="cacao",
+            code="TB2190-OTHER",
+            name="Libro ajeno al saldo del detalle",
+            status="activo",
+            is_primary=False,
+            currency="NIO",
+        )
+        savepoint = database.session.begin_nested()
+        try:
+            database.session.add(other_book)
+            database.session.flush()
+
+            def entry(suffix: str, ledger_id: str, posting_date: date, debit: str, credit: str) -> GLEntry:
+                """Build one movement for the selected account in the open test savepoint."""
+                period_id = "P2026-04-TB" if posting_date.month == 4 else "P2026-05"
+                return GLEntry(
+                    company="cacao",
+                    ledger_id=ledger_id,
+                    account_id=account.id,
+                    account_code=account.code,
+                    account_currency="NIO",
+                    company_currency="NIO",
+                    exchange_rate=Decimal("1"),
+                    posting_date=posting_date,
+                    debit=Decimal(debit),
+                    credit=Decimal(credit),
+                    voucher_type="journal_entry",
+                    voucher_id=f"{VOUCHER_PREFIX}-#1132-{suffix}",
+                    fiscal_year_id=fiscal_year_id,
+                    accounting_period_id=period_id,
+                )
+
+            database.session.add_all(
+                [
+                    entry("opening", selected_book.id, date(2026, 4, 12), "200", "0"),
+                    entry("debit", selected_book.id, date(2026, 5, 12), "100", "0"),
+                    entry("credit", selected_book.id, date(2026, 5, 13), "0", "30"),
+                    entry("other-book", other_book.id, date(2026, 4, 12), "900", "0"),
+                    GLEntry(
+                        company="cacao",
+                        ledger_id=selected_book.id,
+                        account_id=zero_opening_account.id,
+                        account_code=zero_opening_account.code,
+                        account_currency="NIO",
+                        company_currency="NIO",
+                        exchange_rate=Decimal("1"),
+                        posting_date=date(2026, 5, 14),
+                        debit=Decimal("45"),
+                        credit=Decimal("0"),
+                        voucher_type="journal_entry",
+                        voucher_id=f"{VOUCHER_PREFIX}-#1132-zero-opening",
+                        fiscal_year_id=fiscal_year_id,
+                        accounting_period_id="P2026-05",
+                    ),
+                ]
+            )
+            database.session.flush()
+            filters = FinancialReportFilters(
+                company="cacao",
+                ledger="TB2190",
+                accounting_period="P2026-05",
+                account_code=account.code,
+                page_size=100,
+                include_running_balance=True,
+            )
+            detail = get_account_movement_detail(filters)
+            grouped_detail = get_account_movement_detail(filters, group_by="account_code")
+            expected_balances = [Decimal("300"), Decimal("270")]
+            assert [row.values["running_balance"] for row in detail.rows] == expected_balances
+            assert [row.values["running_balance"] for row in grouped_detail.rows] == expected_balances
+
+            no_opening = get_account_movement_detail(
+                FinancialReportFilters(
+                    company="cacao",
+                    ledger="TB2190",
+                    accounting_period="P2026-05",
+                    account_code=zero_opening_account.code,
+                    page_size=100,
+                    include_running_balance=True,
+                )
+            )
+            assert len(no_opening.rows) == 1
+            assert no_opening.rows[0].values["running_balance"] == Decimal("45")
         finally:
             savepoint.rollback()
