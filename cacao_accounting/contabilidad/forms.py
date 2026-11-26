@@ -21,6 +21,7 @@ from wtforms.validators import DataRequired, InputRequired, Length, NumberRange,
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import Entity
+from cacao_accounting.fiscal_calendar import validate_fiscal_year_range
 from cacao_accounting.setup.forms import CATALOG_CHOICES, COUNTRY_CHOICES, LANGUAGE_CHOICES
 
 PADDING_DIGITOS = _l("Padding (digitos)")
@@ -322,12 +323,15 @@ class FormularioFiscalYear(FlaskForm):
     cerrado = BooleanField(_l("Cerrado"), default=False)
 
     def validate(self, extra_validators=None):
-        """Rechaza un rango fiscal invertido antes de persistir."""
+        """Rechaza rangos fiscales invertidos o de más de doce meses."""
         if not super().validate(extra_validators=extra_validators):
             return False
-        if self.inicio.data and self.fin.data and self.inicio.data > self.fin.data:
-            self.fin.errors.append(_l("La fecha final no puede ser anterior a la fecha de inicio."))
-            return False
+        if self.inicio.data and self.fin.data:
+            try:
+                validate_fiscal_year_range(self.inicio.data, self.fin.data)
+            except ValueError as error:
+                self.fin.errors.append(str(error))
+                return False
         return True
 
 

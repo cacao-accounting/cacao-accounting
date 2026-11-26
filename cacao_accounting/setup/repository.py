@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from typing import Any
-import calendar
 
 from cacao_accounting.database import (
     AccountingPeriod,
@@ -25,6 +24,7 @@ from cacao_accounting.database import (
 )
 
 from cacao_accounting.i18n import _
+from cacao_accounting.fiscal_calendar import MAX_FISCAL_YEAR_PERIODS, add_months, validate_fiscal_year_range
 
 
 def get_setup_value(key: str, default: Any = None) -> Any:
@@ -278,30 +278,18 @@ def _default_price_list_catalog(language: str | None) -> list[dict[str, object]]
     ]
 
 
-def _add_months(original_date: date, months: int) -> date:
-    year = original_date.year + (original_date.month - 1 + months) // 12
-    month = (original_date.month - 1 + months) % 12 + 1
-    day = original_date.day
-    last_day = calendar.monthrange(year, month)[1]
-    return date(year, month, min(day, last_day))
-
-
 def _generate_fiscal_period_ranges(start: date, end: date) -> list[tuple[date, date]]:
-    if start > end:
-        raise ValueError(_("La fecha de inicio del año fiscal debe ser anterior a la fecha de fin."))
+    validate_fiscal_year_range(start, end)
 
     ranges: list[tuple[date, date]] = []
     current_start = start
-    for _month_idx in range(12):
-        next_start = _add_months(current_start, 1)
+    for month_idx in range(MAX_FISCAL_YEAR_PERIODS):
+        next_start = add_months(start, month_idx + 1)
         period_end = min(next_start - timedelta(days=1), end)
         ranges.append((current_start, period_end))
         if period_end == end:
             break
         current_start = next_start
-
-    if ranges and ranges[-1][1] != end:
-        ranges[-1] = (ranges[-1][0], end)
 
     return ranges
 
@@ -324,6 +312,7 @@ def create_default_fiscal_year(
         start = _date(today.year, 1, 1)
         end = _date(today.year, 12, 31)
 
+    validate_fiscal_year_range(start, end)
     existing_year = database.session.execute(
         database.select(FiscalYear).filter_by(entity=entity.code, year_start_date=start, year_end_date=end)
     ).scalar_one_or_none()

@@ -21561,6 +21561,10 @@ msgstr "An entity with code '%(code)s' already exists."
 msgid "La fecha de inicio del año fiscal debe ser anterior a la fecha de fin."
 msgstr "The fiscal year start date must be before the end date."
 
+#: cacao_accounting/fiscal_calendar.py
+msgid "El año fiscal no puede superar 12 meses."
+msgstr "The fiscal year cannot exceed 12 months."
+
 #: cacao_accounting/setup/repository.py:374
 msgid "No se pudo crear el período contable inicial."
 msgstr "The initial accounting period could not be created."

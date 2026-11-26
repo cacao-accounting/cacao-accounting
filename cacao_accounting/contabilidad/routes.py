@@ -2276,10 +2276,6 @@ def fiscal_year_new():
     TITULO = _("Contabilidad | Nuevo Año Fiscal") + " - " + APPNAME
 
     if formulario.validate_on_submit():
-        if formulario.inicio.data and formulario.fin.data and formulario.inicio.data > formulario.fin.data:
-            # El formulario valida formato, no el orden de las fechas (#1974).
-            flash_error(ValueError(_("La fecha final no puede ser anterior a la fecha de inicio.")))
-            return render_template(CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE, titulo=TITULO, form=formulario)
         DATA = FiscalYear(
             entity=request.form.get("entidad", None),
             name=request.form.get("id", None),
