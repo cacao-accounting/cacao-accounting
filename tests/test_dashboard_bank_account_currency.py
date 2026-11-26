@@ -538,6 +538,54 @@ def test_transferencia_entre_cuentas_con_gl_compartido_conserva_saldos(bank_bala
     assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("9000")
 
 
+def test_cuenta_inactiva_hace_ambiguas_las_partidas_legacy(bank_balance_scene):
+    """Un GL/moneda compartido con una cuenta inactiva no recibe legacy por descarte."""
+    with bank_balance_scene.app_context():
+        gl_account = database.session.query(Accounts).filter_by(entity="cacao", code="1102").first()
+        ledger = database.session.query(Book).filter_by(entity="cacao").first()
+        inactive_bank = Bank(name="Banco inactivo", is_active=True)
+        database.session.add(inactive_bank)
+        database.session.flush()
+        database.session.add(
+            BankAccount(
+                company="cacao",
+                bank_id=inactive_bank.id,
+                account_name="Cuenta USD inactiva",
+                account_no="USD-INACTIVE-2262",
+                currency="USD",
+                gl_account_id=gl_account.id,
+                is_active=False,
+            )
+        )
+        database.session.add(
+            GLEntry(
+                posting_date=date(2026, 5, 23),
+                company="cacao",
+                account_id=gl_account.id,
+                ledger_id=ledger.id,
+                debit=Decimal("1800"),
+                credit=Decimal("0"),
+                debit_in_account_currency=Decimal("50"),
+                credit_in_account_currency=Decimal("0"),
+                account_currency="USD",
+                company_currency="NIO",
+                exchange_rate=Decimal("36"),
+                voucher_type="journal_entry",
+                voucher_id="JE-2262-INACTIVE-LEGACY",
+                is_cancelled=False,
+            )
+        )
+        database.session.commit()
+
+        payload = get_banks_data("cacao", "NIO", None, None)
+
+    rows = payload["tables"]["account_balances"]
+    assert len(rows) == 1
+    assert rows[0]["account_no"] == "USD-1607"
+    assert Decimal(str(rows[0]["balance"])) == Decimal("0")
+    assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("5400")
+
+
 def test_saldo_ignora_cancelados_y_libro_secundario(bank_balance_scene):
     """#2262: el saldo excluye asientos cancelados y libros no primarios."""
     with bank_balance_scene.app_context():

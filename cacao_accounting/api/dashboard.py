@@ -567,11 +567,7 @@ def _bank_balances(
     if not gl_account_ids:
         return {}, {}, default_currency
     bank_account_ids = [account.id for account in accounts if account.gl_account_id]
-    pair_usage: dict[tuple[str, str], int] = {}
-    for account in accounts:
-        if account.gl_account_id:
-            pair = (account.gl_account_id, account.currency or default_currency)
-            pair_usage[pair] = pair_usage.get(pair, 0) + 1
+    pair_usage = _bank_account_pair_usage(company, default_currency)
 
     ledger_id = primary_ledger_id(company)
     base_currency = default_currency
@@ -630,6 +626,17 @@ def _bank_balances(
         bank_balances,
         base_currency,
     )
+
+
+def _bank_account_pair_usage(company: str, default_currency: str) -> dict[tuple[str, str], int]:
+    """Count every company bank account when deciding whether legacy GL is ambiguous."""
+    pair_usage: dict[tuple[str, str], int] = {}
+    company_accounts = database.session.query(BankAccount.gl_account_id, BankAccount.currency).filter_by(company=company).all()
+    for gl_account_id, account_currency in company_accounts:
+        if gl_account_id:
+            pair = (gl_account_id, account_currency or default_currency)
+            pair_usage[pair] = pair_usage.get(pair, 0) + 1
+    return pair_usage
 
 
 def _resolve_bank_balance(
