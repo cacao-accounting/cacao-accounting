@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from sqlalchemy import select
 from cacao_accounting.audit_trail_service import log_create, log_submit
 from cacao_accounting.database import (
+    AccountingPeriod,
     Accounts,
     Book,
     database,
@@ -206,6 +207,28 @@ def cancel_recurring_template(template_id: str, reason: str, user_id: str):
     database.session.commit()
 
 
+def _resuelve_periodo_aplicacion(company: str, fiscal_year: str, period_name: str) -> AccountingPeriod:
+    """Resuelve sin ambigüedad el período de una aplicación recurrente (#1815)."""
+    periodos = (
+        database.session.execute(
+            select(AccountingPeriod).where(
+                AccountingPeriod.entity == company,
+                AccountingPeriod.fiscal_year_id == fiscal_year,
+                AccountingPeriod.name == period_name,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not periodos:
+        raise RecurringJournalError(_("Periodo no encontrado."))
+    if len(periodos) > 1:
+        raise RecurringJournalError(
+            _("Varios periodos comparten el nombre indicado; resuelva la ambigüedad antes de aplicar la plantilla.")
+        )
+    return periodos[0]
+
+
 def apply_recurring_template(
     template_id: str,
     fiscal_year: str,
@@ -227,7 +250,9 @@ def apply_recurring_template(
     if not template.start_date <= application_date <= template.end_date:
         raise RecurringJournalError(_("La fecha de aplicación está fuera de la vigencia de la plantilla."))
 
-    # Verificar si ya fue aplicada
+    periodo = _resuelve_periodo_aplicacion(template.company, fiscal_year, period_name)
+
+    # La identidad de la aplicación es el id del período, no su nombre editable (#1815).
     existing = (
         database.session.query(RecurringJournalApplication)
         .filter_by(
@@ -235,7 +260,7 @@ def apply_recurring_template(
             ledger_id=template.ledger_id,
             template_id=template.id,
             fiscal_year=fiscal_year,
-            accounting_period=period_name,
+            accounting_period_id=periodo.id,
         )
         .first()
     )
@@ -305,7 +330,8 @@ def apply_recurring_template(
         ledger_id=template.ledger_id,
         template_id=template.id,
         fiscal_year=fiscal_year,
-        accounting_period=period_name,
+        accounting_period_id=periodo.id,
+        accounting_period=periodo.name,
         application_date=application_date,
         status="pending",
         journal_id=journal.id,

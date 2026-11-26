@@ -14829,6 +14829,10 @@ msgstr "Select a company to apply the period filter."
 msgid "Periodo no encontrado."
 msgstr "Period not found."
 
+#: cacao_accounting/contabilidad/recurring_journal_service.py
+msgid "Varios periodos comparten el nombre indicado; resuelva la ambigüedad antes de aplicar la plantilla."
+msgstr "Several periods share the given name; resolve the ambiguity before applying the template."
+
 #: cacao_accounting/contabilidad/routes.py:401 cacao_accounting/contabilidad/services.py:126
 #: cacao_accounting/contabilidad/services.py:943
 msgid "Cierre mensual no encontrado."

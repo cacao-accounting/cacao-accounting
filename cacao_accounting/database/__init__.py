@@ -4352,7 +4352,7 @@ class RecurringJournalApplication(database.Model, BaseTabla):  # type: ignore[na
     __tablename__ = "recurring_journal_application"
     __table_args__ = (
         UniqueConstraint(
-            "company", "ledger_id", "template_id", "fiscal_year", "accounting_period", name="uq_recurring_application"
+            "company", "ledger_id", "template_id", "fiscal_year", "accounting_period_id", name="uq_recurring_application"
         ),
     )
     company = database.Column(
@@ -4371,6 +4371,13 @@ class RecurringJournalApplication(database.Model, BaseTabla):  # type: ignore[na
         index=True,
     )
     fiscal_year = database.Column(database.String(50), nullable=False)
+    accounting_period_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    # El nombre se conserva solo para presentación; la identidad es `accounting_period_id` (#1815).
     accounting_period = database.Column(database.String(50), nullable=False)
     application_date = database.Column(database.Date(), nullable=False)
     # applied, failed, reversed, skipped

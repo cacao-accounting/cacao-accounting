@@ -18,6 +18,7 @@ import pytest
 
 from cacao_accounting.contabilidad.recurring_journal_service import create_recurring_template
 from cacao_accounting.database import (
+    AccountingPeriod,
     Accounts,
     RecurringJournalApplication,
     RecurringJournalItem,
@@ -130,16 +131,32 @@ def test_historial_recurrente_usa_el_color_de_cada_estado(app, authenticated_cli
         plantilla = database.session.execute(
             database.select(RecurringJournalTemplate).filter_by(code=plantilla_qa)
         ).scalar_one()
+        sufijo = uuid4().hex[:6].upper()
+        periodos = [
+            AccountingPeriod(
+                id=f"REC-{status}-{sufijo}",
+                entity="cacao",
+                fiscal_year_id="FY2026",
+                name=f"Periodo {status} {sufijo}",
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+                enabled=True,
+                is_closed=False,
+            )
+            for status in ("pending", "failed", "reversed", "applied")
+        ]
+        database.session.add_all(periodos)
         applications = [
             RecurringJournalApplication(
                 company="cacao",
                 template_id=plantilla.id,
-                fiscal_year="2026",
-                accounting_period=f"P-{status}",
+                fiscal_year="FY2026",
+                accounting_period_id=periodo.id,
+                accounting_period=periodo.name,
                 application_date=date(2026, 5, 1),
                 status=status,
             )
-            for status in ("pending", "failed", "reversed", "applied")
+            for periodo, status in zip(periodos, ("pending", "failed", "reversed", "applied"))
         ]
         database.session.add_all(applications)
         database.session.commit()

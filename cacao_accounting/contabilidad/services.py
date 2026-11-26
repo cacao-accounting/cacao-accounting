@@ -685,7 +685,7 @@ def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequenc
         .filter_by(
             company=close_run.company,
             fiscal_year=str(period.fiscal_year_id),
-            accounting_period=period.name,
+            accounting_period_id=period.id,
             status="applied",
         )
         .all()
