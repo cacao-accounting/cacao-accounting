@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#1418/#1542: editar un artículo no borra cuentas de otras compañías.
+"""#1418/#1542/#1826: editar un artículo no borra cuentas de otras compañías.
 
 El reemplazo completo de ``ItemAccount`` debe limitarse a las compañías que
 el usuario puede editar. Un POST que omite la fila de otra compañía no puede
@@ -98,7 +98,7 @@ def item_edit_scope_scenario():
         database.session.flush()
         database.session.add_all(
             [
-                RolesAccess(rol_id=role.id, module_id=module_id, access=True, view=True, edit=True),
+                RolesAccess(rol_id=role.id, module_id=module_id, access=True, view=True, edit=True, create=True),
                 RolesUser(user_id=editor_id, role_id=role.id, active=True),
             ]
         )
@@ -116,6 +116,13 @@ def item_edit_scope_scenario():
             name="Gasto local alterno",
             classification="expense",
             account_type="expense",
+        )
+        cogs_account = Accounts(
+            entity=local_company,
+            code=f"COGS-L-{suffix}",
+            name="Costo de ventas canónico",
+            classification="expense",
+            account_type="cost_of_goods_sold",
         )
         adjustment_account = Accounts(
             entity=local_company,
@@ -136,6 +143,7 @@ def item_edit_scope_scenario():
                 UserCompanyAccess(user_id=editor_id, company_code=local_company),
                 local_account,
                 local_alternate,
+                cogs_account,
                 adjustment_account,
                 secret_account,
                 Item(code=item_code, name="Artículo compartido", item_type="goods", is_stock_item=True, default_uom="EA"),
@@ -155,6 +163,7 @@ def item_edit_scope_scenario():
             "secret_company": secret_company,
             "local_account": local_account.id,
             "local_alternate": local_alternate.id,
+            "cogs_account": cogs_account.id,
             "adjustment_account": adjustment_account.id,
             "secret_account": secret_account.id,
             "editor_id": editor_id,
@@ -363,6 +372,129 @@ def test_stock_adjustment_account_type_is_selectable_and_valid(item_edit_scope_s
     assert (
         _persisted_rows(app, ids["item_code"])[ids["local_company"]].stock_adjustment_account_id == ids["adjustment_account"]
     )
+
+
+def _set_canonical_catalog_accounts(app, ids: dict[str, object]) -> None:
+    """Seed canonical COGS and adjustment accounts on the editable company row."""
+    with app.app_context():
+        row = database.session.execute(
+            database.select(ItemAccount).filter_by(item_code=ids["item_code"], company=ids["local_company"])
+        ).scalar_one()
+        row.cogs_account_id = ids["cogs_account"]
+        row.stock_adjustment_account_id = ids["adjustment_account"]
+        database.session.commit()
+
+
+def test_item_create_persists_canonical_catalog_account_types(item_edit_scope_scenario):
+    """El alta HTTP acepta y guarda COGS canónico y ajuste de inventario (#1826)."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+    name = "Artículo con catálogo canónico"
+
+    response = client.post(
+        "/inventory/item/new",
+        data=_valid_item_form(
+            name=name,
+            account_company=ids["local_company"],
+            expense_account_id=ids["local_account"],
+            cogs_account_id=ids["cogs_account"],
+            stock_adjustment_account_id=ids["adjustment_account"],
+        ),
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        item = database.session.execute(database.select(Item).filter_by(name=name)).scalar_one()
+        row = database.session.execute(
+            database.select(ItemAccount).filter_by(item_code=item.code, company=ids["local_company"])
+        ).scalar_one()
+        assert row.cogs_account_id == ids["cogs_account"]
+        assert row.stock_adjustment_account_id == ids["adjustment_account"]
+
+
+def test_item_edit_persists_canonical_catalog_account_types(item_edit_scope_scenario):
+    """La edición HTTP conserva ambos tipos canónicos en la fila de cuentas (#1826)."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+
+    response = client.post(
+        f"/inventory/item/{ids['item_code']}/edit",
+        data=_valid_item_form(
+            account_company=ids["local_company"],
+            expense_account_id=ids["local_account"],
+            cogs_account_id=ids["cogs_account"],
+            stock_adjustment_account_id=ids["adjustment_account"],
+        ),
+    )
+
+    assert response.status_code == 302
+    row = _persisted_rows(app, ids["item_code"])[ids["local_company"]]
+    assert row.cogs_account_id == ids["cogs_account"]
+    assert row.stock_adjustment_account_id == ids["adjustment_account"]
+
+
+@pytest.mark.parametrize(
+    ("field_name", "account_key"),
+    [("cogs_account_id", "adjustment_account"), ("stock_adjustment_account_id", "cogs_account")],
+)
+def test_item_create_rejects_incompatible_catalog_account_without_mutation(item_edit_scope_scenario, field_name, account_key):
+    """Un catálogo incompatible no crea artículo ni filas contables (#1826)."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+    with app.app_context():
+        original_items = database.session.execute(database.select(Item.id)).scalars().all()
+        original_rows = database.session.execute(database.select(ItemAccount.id)).scalars().all()
+
+    response = client.post(
+        "/inventory/item/new",
+        data=_valid_item_form(
+            name="Artículo con catálogo incompatible",
+            account_company=ids["local_company"],
+            expense_account_id=ids["local_account"],
+            **{field_name: ids[account_key]},
+        ),
+    )
+
+    assert response.status_code == 200
+    with app.app_context():
+        assert database.session.execute(database.select(Item.id)).scalars().all() == original_items
+        assert database.session.execute(database.select(ItemAccount.id)).scalars().all() == original_rows
+        assert (
+            database.session.execute(
+                database.select(Item).filter_by(name="Artículo con catálogo incompatible")
+            ).scalar_one_or_none()
+            is None
+        )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "account_key"),
+    [("cogs_account_id", "adjustment_account"), ("stock_adjustment_account_id", "cogs_account")],
+)
+def test_item_edit_rejects_incompatible_catalog_account_without_mutation(item_edit_scope_scenario, field_name, account_key):
+    """Un catálogo incompatible revierte nombre y cuentas del artículo (#1826)."""
+    app, ids = item_edit_scope_scenario
+    client = _authenticated_client(app, ids["editor_id"])
+    _set_canonical_catalog_accounts(app, ids)
+
+    response = client.post(
+        f"/inventory/item/{ids['item_code']}/edit",
+        data=_valid_item_form(
+            name="Nombre que no debe persistir",
+            account_company=ids["local_company"],
+            expense_account_id=ids["local_alternate"],
+            **{field_name: ids[account_key]},
+        ),
+    )
+
+    assert response.status_code == 200
+    row = _persisted_rows(app, ids["item_code"])[ids["local_company"]]
+    assert row.expense_account_id == ids["local_account"]
+    assert row.cogs_account_id == ids["cogs_account"]
+    assert row.stock_adjustment_account_id == ids["adjustment_account"]
+    with app.app_context():
+        item = database.session.execute(database.select(Item).filter_by(code=ids["item_code"])).scalar_one()
+        assert item.name == "Artículo compartido"
 
 
 @pytest.mark.parametrize("factor", ["NaN", "Infinity", "0.0000000001"])
