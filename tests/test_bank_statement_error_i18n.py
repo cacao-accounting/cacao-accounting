@@ -16,6 +16,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Bank, BankAccount, Currency, Entity, database
 from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
+from cacao_accounting.imports.readers.base import NumericCellValue
 
 
 @pytest.fixture(name="extracto_2267")
@@ -115,6 +116,24 @@ def test_error_de_monto_negativo_se_traduce(extracto_2267, locale, expected):
         errores = BankStatementAdapter().validate_row(_fila(identifiers, "-5"))
 
     assert expected in errores
+
+
+@pytest.mark.parametrize(
+    ("locale", "expected"),
+    [
+        ("es", "El campo monto admite como máximo 4 decimales."),
+        ("en", "The amount field supports at most 4 decimal places."),
+    ],
+)
+def test_detalle_de_precision_traduce_el_nombre_del_campo(extracto_2267, locale, expected):
+    """Las rutas textual y numérica muestran el detalle en el idioma activo."""
+    app, identifiers = extracto_2267
+    valores = ("1.00001", NumericCellValue.from_number("1.00001"))
+    with app.app_context(), force_locale(locale):
+        for valor in valores:
+            errores = BankStatementAdapter().validate_row(_fila(identifiers, valor))
+            assert any(expected in error for error in errores)
+            assert any("deposit" in error for error in errores)
 
 
 @pytest.mark.parametrize(

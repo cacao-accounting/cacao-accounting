@@ -83,7 +83,7 @@ class BankStatementAdapter(BaseImportAdapter):
     @staticmethod
     def _numeric_cell_amount(value: NumericCellValue) -> Decimal | None:
         """Convierte una celda numérica sin interpretar separadores de texto."""
-        amount = coerce_decimal(str(value), "monto", max_fractional_digits=4)
+        amount = coerce_decimal(str(value), _("monto"), max_fractional_digits=4)
         return BankStatementAdapter._normalize_amount(amount)
 
     @staticmethod
@@ -121,7 +121,7 @@ class BankStatementAdapter(BaseImportAdapter):
             decimal_part = normalized.rsplit(".", 1)[1]
             if len(decimal_part) == 3:
                 raise InvalidOperation(_("Separador de miles ambiguo"))
-        amount = coerce_decimal(normalized, "monto", max_fractional_digits=4)
+        amount = coerce_decimal(normalized, _("monto"), max_fractional_digits=4)
         return BankStatementAdapter._normalize_amount(amount)
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:

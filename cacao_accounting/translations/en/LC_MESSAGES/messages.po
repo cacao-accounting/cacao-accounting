@@ -18548,6 +18548,10 @@ msgid "Monto bancario inválido en columna '%(field)s': %(value)s (%(detail)s)."
 msgstr "Invalid bank amount in column '%(field)s': %(value)s (%(detail)s)."
 
 #: cacao_accounting/imports/adapters/bank_statement.py
+msgid "monto"
+msgstr "amount"
+
+#: cacao_accounting/imports/adapters/bank_statement.py
 #, python-format
 msgid "El monto bancario en columna '%(field)s' no puede ser negativo."
 msgstr "The bank amount in column '%(field)s' cannot be negative."
