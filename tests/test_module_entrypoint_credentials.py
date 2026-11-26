@@ -22,10 +22,13 @@ from cacao_accounting.database.helpers import usuarios_creados
 @pytest.fixture
 def entrypoint_scenario():
     """Create an app with an empty database for the entrypoint."""
+    from sqlalchemy.pool import StaticPool
+
     app = create_app(
         {
             **configuracion,
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_ENGINE_OPTIONS": {"poolclass": StaticPool, "connect_args": {"check_same_thread": False}},
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,

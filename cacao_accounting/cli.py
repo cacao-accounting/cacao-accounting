@@ -209,27 +209,36 @@ linea_comandos.add_command(db)
 
 @db.command(name="init", help=_("Crea o verifica la base de datos (idempotente)."))
 @click.option("--force", is_flag=True, help=_("Elimina una base existente antes de crear la nueva."))
-@click.option("--seed", is_flag=True, help=_("Inserta datos de ejemplo después de crear la base."))
+@click.option("--seed", is_flag=True, help=_("Inserta datos de ejemplo despu?s de crear la base."))
 def db_init(force: bool, seed: bool) -> None:
     """Crea el esquema de base de datos e inserta los datos base.
 
-    Este comando es idempotente: si la base de datos ya existe, imprime un
-    mensaje informativo y termina con éxito (código 0). Esto permite
-    ejecutarlo de forma segura en el inicio de un contenedor Docker.
+    Contrato #1898/#2234: `init` solo inicializa una base vac?a. Si la base
+    ya est? inicializada o parcialmente inicializada, falla de forma cerrada
+    salvo `--force` expl?cito.
     """
     from cacao_accounting.database import database
     from cacao_accounting.database.helpers import (
+        estado_esquema_base_datos,
         inicia_base_de_datos,
-        usuarios_creados,
         resolver_credenciales_iniciales,
     )
 
     app = _obtener_aplicacion()
     with app.app_context():
-        base_lista = usuarios_creados()
-        if base_lista and not force:
-            _mensaje_info(_("La base de datos ya existe, nada que hacer."))
-            raise click.exceptions.Exit(0)
+        estado = estado_esquema_base_datos()
+        status = str(estado["status"])
+        if status != "empty" and not force:
+            if status in {"current", "outdated", "unversioned"}:
+                _mensaje_info(_("La base de datos ya existe, nada que hacer."))
+                raise click.exceptions.Exit(0)
+            _mensaje_error(
+                _(
+                    "La base de datos tiene un esquema parcial o incompatible; "
+                    "use --force solo con autorizaci?n expl?cita o restaure un respaldo."
+                )
+            )
+            raise click.exceptions.Exit(1)
 
         try:
             usuario, contrasena = resolver_credenciales_iniciales()
@@ -237,12 +246,18 @@ def db_init(force: bool, seed: bool) -> None:
             _mensaje_error(str(exc))
             raise click.exceptions.Exit(1)
 
-        if force and base_lista:
-            _mensaje_advertencia(_("La base de datos existente será reemplazada."))
+        if force and status != "empty":
+            _mensaje_advertencia(_("La base de datos existente ser? reemplazada."))
             database.drop_all()
+            try:
+                from cacao_accounting import alembic
+
+                alembic.stamp("base")
+            except Exception:
+                database.session.rollback()
 
         if usuario == "cacao" and contrasena == "cacao":
-            _mensaje_advertencia(_("Se están usando usuario y contraseña predeterminados para el setup inicial."))
+            _mensaje_advertencia(_("Se est?n usando usuario y contrase?a predeterminados para el setup inicial."))
 
         if inicia_base_de_datos(app=app, user=usuario, passwd=contrasena, with_examples=seed):
             _mensaje_exito(_("Base de datos creada."))
@@ -252,28 +267,44 @@ def db_init(force: bool, seed: bool) -> None:
 
 
 @db.command(name="migrate", help=_("Aplica migraciones pendientes de Alembic (idempotente)."))
-@click.option("--head", default="head", help=_("Revisión destino (por defecto: head)."))
-@click.option("--revision", default=None, help=_("Revisión específica a aplicar."))
+@click.option("--head", default="head", help=_("Revisi?n destino (por defecto: head)."))
+@click.option("--revision", default=None, help=_("Revisi?n espec?fica a aplicar."))
 def db_migrate(head: str, revision: str | None) -> None:
     """Aplica migraciones pendientes de Alembic de forma idempotente.
 
-    Si no hay migraciones pendientes, imprime un mensaje informativo y
-    termina con éxito (código 0). Esto permite ejecutarlo de forma segura
-    en el inicio de un contenedor Docker.
+    Contrato #1898/#2234: `migrate` es la ?nica ruta de evoluci?n de esquema
+    para bases existentes. No repara datos ni completa bootstrap parcial.
     """
-    from sqlalchemy import inspect
-
     from cacao_accounting import alembic
-    from cacao_accounting.database import database
+    from cacao_accounting.database.helpers import estado_esquema_base_datos
 
     app = _obtener_aplicacion()
     with app.app_context():
         try:
-            if not inspect(database.engine).has_table("user"):
-                raise RuntimeError(_("La base de datos no está inicializada; ejecute primero 'cacaoctl db init'."))
+            estado = estado_esquema_base_datos()
+            status = str(estado["status"])
+            if status == "empty":
+                raise RuntimeError(_("La base de datos no est? inicializada; ejecute primero 'cacaoctl db init'."))
+            if status == "partial":
+                raise RuntimeError(
+                    _(
+                        "La base de datos tiene un esquema parcial o inconsistente; "
+                        "restaure un respaldo o inicialice una base nueva."
+                    )
+                )
+            if status == "unversioned":
+                alembic.stamp("head")
+                _mensaje_exito(_("Esquema registrado en Alembic; no se aplicaron cambios de datos."))
+                return
             target = revision or head
+            before_revisions = tuple(str(r) for r in (estado.get("revisions") or []))
+            heads_set = set(str(h) for h in (estado.get("heads") or []))
             alembic.upgrade(target=target)
-            _mensaje_exito(_("Migraciones aplicadas correctamente."))
+            after_revisions = tuple(str(rev) for rev in alembic.current())
+            if before_revisions == after_revisions and set(after_revisions) == heads_set:
+                _mensaje_info(_("No hay migraciones pendientes."))
+            else:
+                _mensaje_exito(_("Migraciones aplicadas correctamente."))
         except Exception as exc:
             _mensaje_error(_("No fue posible aplicar las migraciones: %(error)s") % {"error": exc})
             raise click.exceptions.Exit(1)

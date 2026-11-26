@@ -7,7 +7,7 @@
 # --------------------------------------------------------------------------------------
 from datetime import date
 from os import environ
-from typing import Optional
+from typing import Any, Optional, cast
 from uuid import NAMESPACE_URL, uuid5
 
 # ---------------------------------------------------------------------------------------
@@ -43,31 +43,29 @@ else:
 def verifica_coneccion_db(app):
     """Verifica si es posible conectarse a la base de datos.
 
-    Un ``SELECT`` vacío demuestra que la conexión funciona aunque no haya filas,
-    por eso se consulta con ``.first()`` y no se evalúa el objeto ``Result`` como
-    booleano (#2061).
+    Un ``SELECT`` simple demuestra conectividad sin asumir que tablas de
+    aplicaci?n ya existan (#1898).
     """
     import time
 
-    # Con ``CACAO_TEST`` la espera es cero, así que la condición del ``while``
-    # nunca se cumpliría y ``DB_CONN`` quedaría sin definir. Se fuerza al menos
-    # un intento para que la verificación sea real en pruebas.
+    # Con ``CACAO_TEST`` la espera es cero, as? que la condici?n del ``while``
+    # nunca se cumplir?a y ``DB_CONN`` quedar?a sin definir. Se fuerza al menos
+    # un intento para que la verificaci?n sea real en pruebas.
     intentos_restantes = 1 if TIEMPO_ESPERA <= 0 else None
 
     with app.app_context():
         __inicio = time.time()
         DB_CONN = False
         while (time.time() - __inicio) < TIEMPO_ESPERA or intentos_restantes:
-            log.info("Verificando conexión a la base de datos.")
+            log.info("Verificando conexi?n a la base de datos.")
             try:
-                from cacao_accounting.database import User
+                from sqlalchemy import text
 
-                database.session.execute(database.select(User)).first()
-
+                database.session.execute(text("SELECT 1"))
                 DB_CONN = True
-                log.info("Conexión a la base de datos exitosa.")
+                log.info("Conexi?n a la base de datos exitosa.")
                 break
-            except (OperationalError, InterfaceError, ProgrammingError):
+            except (OperationalError, TypeError, InterfaceError, ProgrammingError, InternalError):
                 DB_CONN = False
                 database.session.rollback()
                 log.warning(DB_CONNECTION_FAILED)
@@ -79,7 +77,7 @@ def verifica_coneccion_db(app):
                 intentos_restantes = 0
 
         if not DB_CONN:
-            log.warning("No fue imposible establecer una conexión con la base de datos.")
+            log.warning("No fue imposible establecer una conexi?n con la base de datos.")
         return DB_CONN
 
 
@@ -100,6 +98,158 @@ def entidades_creadas():
         return False
 
 
+def _tabla_existe(nombre_tabla: str) -> bool:
+    """Indica si una tabla existe en el esquema actual."""
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        return sa_inspect(database.engine).has_table(nombre_tabla)
+    except (OperationalError, ProgrammingError, InterfaceError):
+        database.session.rollback()
+        return False
+
+
+def _columnas_tabla(nombre_tabla: str) -> set[str]:
+    """Devuelve los nombres de columna de una tabla existente."""
+    from sqlalchemy import inspect as sa_inspect
+
+    inspector = sa_inspect(database.engine)
+    if not inspector.has_table(nombre_tabla):
+        return set()
+    return {column["name"] for column in inspector.get_columns(nombre_tabla)}
+
+
+def _revision_actual_alembic() -> tuple[str, ...]:
+    """Devuelve las revisiones Alembic aplicadas en la base actual."""
+    from cacao_accounting import alembic
+
+    try:
+        return tuple(str(getattr(rev, "revision", rev)) for rev in alembic.current())
+    except Exception:
+        database.session.rollback()
+        return ()
+
+
+def _cabecera_alembic() -> tuple[str, ...]:
+    """Devuelve las revisiones head conocidas por Alembic."""
+    from cacao_accounting import alembic
+
+    heads = alembic.heads()
+    # Flask-Alembic puede devolver scripts o ids seg?n versi?n.
+    result = []
+    for item in heads:
+        result.append(str(getattr(item, "revision", item)))
+    return tuple(result)
+
+
+def estado_esquema_base_datos() -> dict[str, object]:
+    """Clasifica el estado del esquema para comandos de base de datos.
+
+    El contrato de upgrades (#1898) distingue base vacía, inicializada,
+    parcialmente inicializada e incompatible. La existencia de ``User`` no es
+    prueba suficiente de bootstrap completo.
+    """
+    from cacao_accounting.database import CacaoConfig, User
+
+    tablas_core = {"user", "cacao_config", "modules"}
+    tablas_presentes = {tabla for tabla in tablas_core if _tabla_existe(tabla)}
+    tabla_alembic = _tabla_existe("alembic_version")
+    revisiones = _revision_actual_alembic() if tabla_alembic else ()
+    heads = _cabecera_alembic()
+    usuarios = False
+    config_count = 0
+    if "user" in tablas_presentes:
+        try:
+            usuarios = database.session.execute(database.select(User.id)).first() is not None
+        except (OperationalError, ProgrammingError, InterfaceError):
+            database.session.rollback()
+    if "cacao_config" in tablas_presentes:
+        try:
+            config_count = int(
+                database.session.execute(database.select(database.func.count()).select_from(CacaoConfig)).scalar() or 0
+            )
+        except (OperationalError, ProgrammingError, InterfaceError):
+            database.session.rollback()
+
+    from sqlalchemy import inspect as sa_inspect
+
+    inspector = sa_inspect(database.engine)
+    tablas_existentes = set(inspector.get_table_names())
+    tablas_modelo = set(cast(Any, database.Model).metadata.tables.keys())
+    esquema_completo = bool(tablas_modelo) and tablas_modelo.issubset(tablas_existentes)
+    bootstrap_incompleto = bool(tablas_presentes == tablas_core and not usuarios and config_count == 0)
+    revisiones_set = set(str(r) for r in revisiones)
+    heads_set = set(str(h) for h in heads)
+    if not tablas_presentes and not tabla_alembic:
+        estado = "empty"
+    elif tablas_presentes and not tablas_core.issubset(tablas_existentes):
+        estado = "partial"
+    elif tablas_presentes == tablas_core and not esquema_completo and not tabla_alembic:
+        estado = "partial"
+    elif esquema_completo and not tabla_alembic:
+        estado = "bootstrap_incomplete" if bootstrap_incompleto else "unversioned"
+    elif tabla_alembic and not revisiones:
+        estado = "partial"
+    elif tabla_alembic and not esquema_completo:
+        estado = "partial"
+    elif tabla_alembic and revisiones_set != heads_set:
+        estado = "outdated"
+    elif tabla_alembic:
+        estado = "current" if not bootstrap_incompleto else "bootstrap_incomplete"
+    else:
+        estado = "partial"
+
+    return {
+        "status": estado,
+        "tables": sorted(tablas_presentes),
+        "alembic_table": tabla_alembic,
+        "revisions": list(revisiones),
+        "heads": list(heads),
+        "users": usuarios,
+        "config_count": config_count,
+    }
+
+
+def verificar_esquema_base_datos(*, permitir_migrar: bool = False) -> dict[str, object]:
+    """Verifica compatibilidad del esquema sin mutar datos por defecto.
+
+    ``serve`` usa este contrato en modo verificación: no migra ni repara.
+    ``db migrate`` puede solicitar migración explícita con
+    ``permitir_migrar=True``.
+    """
+    from cacao_accounting import alembic
+
+    estado = estado_esquema_base_datos()
+    status = str(estado["status"])
+
+    if status == "empty":
+        raise RuntimeError(_("La base de datos no está inicializada; ejecute primero 'cacaoctl db init'."))
+    if status in {"partial", "bootstrap_incomplete"}:
+        raise RuntimeError(
+            _("La base de datos tiene un esquema parcial o inconsistente; restaure un respaldo o inicialice una base nueva.")
+        )
+    if status == "unversioned":
+        if not permitir_migrar:
+            raise RuntimeError(
+                _(
+                    "La base de datos no tiene historial Alembic; "
+                    "ejecute 'cacaoctl db migrate' para registrar la revisi?n compatible."
+                )
+            )
+        alembic.stamp("head")
+        estado = estado_esquema_base_datos()
+        status = str(estado["status"])
+    if status == "outdated":
+        if not permitir_migrar:
+            raise RuntimeError(_("La base de datos requiere migraciones; ejecute 'cacaoctl db migrate' antes de servir."))
+        alembic.upgrade(target="head")
+        estado = estado_esquema_base_datos()
+        status = str(estado["status"])
+    if status not in {"current"}:
+        raise RuntimeError(_("El estado del esquema de base de datos no es compatible: %(status)s") % {"status": status})
+    return estado
+
+
 def usuarios_creados():
     """Verifica si al menos un usuario ha sido creado en el sistema."""
     from cacao_accounting.database import User
@@ -117,61 +267,89 @@ def usuarios_creados():
         return False
 
 
+def _asegurar_tabla_alembic() -> None:
+    """Marca el esquema actual en Alembic cuando la base ya existe."""
+    if _tabla_existe("alembic_version"):
+        return
+    from sqlalchemy import text
+
+    heads = _cabecera_alembic()
+    head = heads[-1] if heads else "head"
+    # Usar SQL directo para evitar efectos secundarios de Flask-Alembic stamp
+    # sobre conexiones SQLite en memoria/StaticPool durante bootstrap.
+    database.session.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
+    database.session.execute(text("DELETE FROM alembic_version"))
+    database.session.execute(text("INSERT INTO alembic_version (version_num) VALUES (:rev)"), {"rev": head})
+    database.session.commit()
+
+
 def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool) -> bool:  # pragma: no cover
-    """Inicia esquema de base datos."""
+    """Inicia esquema de base datos.
+
+    Contrato #1898/#2234: para bases nuevas crea esquema y lo marca en Alembic.
+    Para bases existentes verifica compatibilidad y solo aplica migraciones
+    Alembic; no completa bootstrap parcial usando existencia de `User`.
+    """
     from cacao_accounting.datos import base_data, dev_data
 
-    entidad_creada = entidades_creadas()
-    if usuarios_creados():
-        return True
-
-    log.info("Intentando inicializar base de datos.")
-
     with app.app_context():
+        estado = estado_esquema_base_datos()
+        status = str(estado["status"])
+
+        if status not in {"empty", "bootstrap_incomplete"}:
+            if status == "partial":
+                log.error("Base de datos con esquema parcial; no se puede completar autom?ticamente.")
+                return False
+            try:
+                verificar_esquema_base_datos(permitir_migrar=True)
+            except Exception:
+                log.exception("No se pudo verificar/migrar el esquema existente.")
+                return False
+            return bool(status in {"current", "outdated", "unversioned"})
+
+        if status == "bootstrap_incomplete":
+            log.info("Esquema detectado sin bootstrap completo; completando inicializaci?n.")
+            try:
+                if with_examples:
+                    base_data(user, passwd, carga_rapida=False)
+                    dev_data()
+                else:
+                    base_data(user, passwd, carga_rapida=True)
+                    from cacao_accounting.database import CacaoConfig as Config
+
+                    existe_setup = database.session.execute(database.select(Config.id).filter_by(key="SETUP_COMPLETE")).first()
+                    if not existe_setup:
+                        database.session.add(Config(key="SETUP_COMPLETE", value="False"))
+                        database.session.commit()
+                _asegurar_tabla_alembic()
+                return True
+            except SQLAlchemyError:
+                database.session.rollback()
+                log.exception("No se pudo completar el bootstrap de la base de datos.")
+                return False
+
+        log.info("Intentando inicializar base de datos.")
         try:
             database.create_all()
             log.info("Esquema de base de datos creado correctamente.")
-            _ensure_user_email_identity_column()
-            _ensure_stock_valuation_layer_batch_column()
-            _ensure_purchase_line_version_columns()
-            _ensure_audit_trail_hash_version_column()
-            _ensure_file_sha256_column()
-            _ensure_bank_transaction_import_reference_column()
-            _ensure_monthly_close_run_unique_constraint()
-            _ensure_bank_transaction_identity_unique()
-            _ensure_cacao_config_key_unique()
-            _ensure_document_flow_lock_table()
-            _ensure_roles_user_unique()
-            _ensure_party_tax_id_key_column()
-            _ensure_purchase_invoice_supplier_key()
-            _ensure_user_auth_version_column()
-            _ensure_user_api_token_hash_column()
-            # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
                 log.trace("Creando datos de prueba.")
                 base_data(user, passwd, carga_rapida=False)
-                if not entidad_creada:
-                    dev_data()
+                dev_data()
             else:
                 base_data(user, passwd, carga_rapida=True)
-            DB_ESQUEMA = True
+            if not with_examples:
+                from cacao_accounting.database import CacaoConfig as Config
+
+                database.session.add(Config(key="SETUP_COMPLETE", value="False"))
+                database.session.commit()
+            _asegurar_tabla_alembic()
+            return True
         except SQLAlchemyError:
+            database.session.rollback()
             log.exception("No se pudo inicializar esquema de base de datos.")
-            DB_ESQUEMA = False
-
-        if DB_ESQUEMA and not with_examples:
-            from cacao_accounting.database import CacaoConfig as Config
-
-            config = Config(
-                key="SETUP_COMPLETE",
-                value="False",
-            )
-
-            database.session.add(config)
-            database.session.commit()
-
-    return DB_ESQUEMA
+            return False
 
 
 def obtener_id_modulo_por_nombre(modulo: str | None) -> str | None:

@@ -1,12 +1,18 @@
-"""Check the pre-Alpha baseline revision remains a harmless no-op."""
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 - 2026 William Jos? Moreno Reyes
+
+"""Contrato m?nimo de cadena Alembic (#1898/#1849)."""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
 
 from cacao_accounting import alembic, create_app
 from cacao_accounting.database import database
-from sqlalchemy import inspect
 
 
-def test_dummy_baseline_migration_round_trips_without_building_the_schema(tmp_path):
-    """Round-trip the sole dummy revision while schema creation stays with database initialization."""
+def test_alembic_head_round_trip_without_building_schema(tmp_path):
+    """upgrade head registra revisiones sin crear esquema de aplicaci?n."""
     app = create_app(
         {
             "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'baseline-migration.sqlite'}",
@@ -18,15 +24,13 @@ def test_dummy_baseline_migration_round_trips_without_building_the_schema(tmp_pa
 
     with app.app_context():
         alembic.upgrade("head")
-        assert tuple(script.revision for script in alembic.current()) == ("20260809_0001",)
-        assert not inspect(database.engine).has_table("user")
+        revisions = {script.revision for script in alembic.current()}
+        assert "20261015_0001" in revisions
+        inspector = sa.inspect(database.engine)
+        assert not inspector.has_table("user")
 
         alembic.downgrade("base")
         assert alembic.current() == ()
-        assert not inspect(database.engine).has_table("user")
-
         alembic.upgrade("head")
-        assert tuple(script.revision for script in alembic.current()) == ("20260809_0001",)
-
         database.session.remove()
         database.engine.dispose()

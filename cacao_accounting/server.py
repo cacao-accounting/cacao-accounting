@@ -25,53 +25,25 @@ app = create_app(configuracion)
 
 def server() -> None:
     """Ejecuta la aplicacion con Waitress como servidor WSGI."""
-    from cacao_accounting.database.helpers import (
-        inicia_base_de_datos,
-        resolver_credenciales_iniciales,
-        usuarios_creados,
-        verifica_coneccion_db,
-    )
+    from cacao_accounting.database.helpers import verifica_coneccion_db, verificar_esquema_base_datos
 
     log.info("Iniciando Cacao Accounting.")
-    if verifica_coneccion_db(app):
-        DATABASE = True
-    else:
-        from sqlalchemy.exc import OperationalError
+    if not verifica_coneccion_db(app):
+        log.error("No se logro conectar a la base de datos.")
+        raise SystemExit(1)
 
-        log.warning("No se logro conectar a la base de datos.")
-        log.info("Intentando inicializar base de datos.")
-        try:
-            user, passwd = resolver_credenciales_iniciales()
-            if user == "cacao" and passwd == "cacao":
-                log.warning("Se están usando usuario y contraseña predeterminados para el setup inicial.")
-            with app.app_context():
-                inicia_base_de_datos(app, user=user, passwd=passwd, with_examples=False)
-            DATABASE = True
-        except ValueError as exc:
-            log.critical(str(exc))
-            raise SystemExit(1) from exc
-        except OperationalError:
-            log.error("No se pudo inicilizar la base de datos.")
-            DATABASE = False
+    try:
+        with app.app_context():
+            verificar_esquema_base_datos(permitir_migrar=False)
+    except Exception as exc:
+        log.critical(str(exc))
+        raise SystemExit(1) from exc
 
-    # Una base conectada pero sin administrador no debe arrancar Waitress con
-    # credenciales públicas: se aplica la misma validación que el flujo de
-    # inicialización antes de exponer el servicio (#2061).
-    if DATABASE and not usuarios_creados():
-        try:
-            resolver_credenciales_iniciales()
-        except ValueError as exc:
-            log.critical(str(exc))
-            raise SystemExit(1) from exc
-
-    if DATABASE:
-        try:
-            log.info("Iniciando servidor WSGI en puerto {puerto}.", puerto=PORT)
-            serve(app, port=int(PORT), threads=int(THREADS))
-        except OSError as exc:
-            # Un puerto ocupado no es un arranque exitoso: el servicio no debe
-            # reportar éxito con el servidor caído (#1905).
-            log.error("Puerto {PORT} actualmente en uso.")
-            raise SystemExit(1) from exc
-    else:
-        log.error("No se logro establecer con la base de datos.")
+    try:
+        log.info("Iniciando servidor WSGI en puerto {puerto}.", puerto=PORT)
+        serve(app, port=int(PORT), threads=int(THREADS))
+    except OSError as exc:
+        # Un puerto ocupado no es un arranque exitoso: el servicio no debe
+        # reportar ?xito con el servidor ca?do (#1905).
+        log.error("Puerto {PORT} actualmente en uso.")
+        raise SystemExit(1) from exc
