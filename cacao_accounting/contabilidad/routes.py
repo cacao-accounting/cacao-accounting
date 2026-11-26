@@ -779,10 +779,12 @@ def _entity_identity_error(entity: object, tax_id: str, company_name: str) -> st
     if not tax_id or not company_name:
         return _("La identificación fiscal y la razón social son obligatorias.")
     conflict = database.session.execute(
-        database.select(Entity.code).where(
+        database.select(Entity.code)
+        .where(
             database.or_(Entity.tax_id == tax_id, Entity.company_name == company_name),
             Entity.code != getattr(entity, "code"),
         )
+        .limit(1)
     ).scalar_one_or_none()
     if conflict is not None:
         return _("Ya existe otra entidad con esa identificación fiscal o razón social.")
