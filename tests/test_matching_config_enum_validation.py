@@ -63,6 +63,8 @@ def _matching_config_post_values(model: str, company: str, field: str, value: st
     """Build a complete valid admin payload with one overridden value."""
     values = _config_values(model)
     values.update(company=company, config_form="complete")
+    if model == "purchase":
+        values["apply_advances_automatically"] = False
     for key, actual in tuple(values.items()):
         if isinstance(actual, bool):
             values[key] = "on" if actual else "_no"
@@ -70,8 +72,8 @@ def _matching_config_post_values(model: str, company: str, field: str, value: st
     return values
 
 
-def _assert_invalid_matching_admin_post(app, path: str, case: tuple[str, type, str, str]) -> None:
-    """Check an invalid admin payload redirects and leaves its config unchanged."""
+def _assert_invalid_matching_admin_post(app, path: str, case: tuple[str, type, str, str], messages: tuple[str, ...]) -> None:
+    """Check an invalid admin payload reports its error and leaves the config unchanged."""
     model, config_model, field, invalid_value = case
     previous_desktop = app.config.get("MODO_ESCRITORIO")
     app.config["MODO_ESCRITORIO"] = True
@@ -82,18 +84,26 @@ def _assert_invalid_matching_admin_post(app, path: str, case: tuple[str, type, s
                 database.session.add(Modules(module="admin", default=False, enabled=True))
                 database.session.commit()
             config = database.session.execute(select(config_model).filter_by(company=company)).scalar_one_or_none()
-            original_value = getattr(config, field) if config is not None else None
+            before = (
+                None
+                if config is None
+                else {column.key: getattr(config, column.key) for column in config_model.__table__.columns}
+            )
             admin_id = database.session.execute(select(User.id).filter_by(user="admin")).scalar_one()
-        response = _matching_config_admin_client(app, admin_id).post(
-            path, data=_matching_config_post_values(model, company, field, invalid_value)
-        )
+        client = _matching_config_admin_client(app, admin_id)
+        response = client.post(path, data=_matching_config_post_values(model, company, field, invalid_value))
         assert response.status_code == 302
+        page = client.get(response.headers["Location"])
+        assert page.status_code == 200
+        html = page.get_data(as_text=True)
+        assert any(message in html for message in messages)
         with app.app_context():
+            database.session.expire_all()
             config = database.session.execute(select(config_model).filter_by(company=company)).scalar_one_or_none()
-            if original_value is None:
+            if before is None:
                 assert config is None
             else:
-                assert getattr(config, field) == original_value
+                assert {column.key: getattr(config, column.key) for column in config_model.__table__.columns} == before
     finally:
         app.config["MODO_ESCRITORIO"] = previous_desktop
 
@@ -249,14 +259,59 @@ def test_matching_config_approval_rejects_invalid_numeric_tolerance(app, case):
 
 
 @pytest.mark.parametrize(
-    ("path", "case"),
+    ("path", "case", "messages"),
     [
-        ("/settings/purchase-reconciliation", ("purchase", PurchaseMatchingConfig, "price_tolerance_value", "-1")),
-        ("/settings/purchase-reconciliation", ("purchase", PurchaseMatchingConfig, "qty_tolerance_value", "Infinity")),
-        ("/settings/sales-matching", ("sales", SalesMatchingConfig, "price_tolerance_value", "NaN")),
+        (
+            "/settings/purchase-reconciliation",
+            ("purchase", PurchaseMatchingConfig, "price_tolerance_value", "-1"),
+            (
+                "El campo price_tolerance_value no puede ser negativo.",
+                "The price_tolerance_value field cannot be negative.",
+            ),
+        ),
+        (
+            "/settings/purchase-reconciliation",
+            ("purchase", PurchaseMatchingConfig, "qty_tolerance_value", "Infinity"),
+            (
+                "El campo qty_tolerance_value debe ser un número finito.",
+                "The qty_tolerance_value field must be a finite number.",
+            ),
+        ),
+        (
+            "/settings/sales-matching",
+            ("sales", SalesMatchingConfig, "price_tolerance_value", "NaN"),
+            (
+                "El campo price_tolerance_value debe ser un número finito.",
+                "The price_tolerance_value field must be a finite number.",
+            ),
+        ),
+        (
+            "/settings/purchase-reconciliation",
+            ("purchase", PurchaseMatchingConfig, "price_tolerance_value", "no-es-numero"),
+            (
+                "El campo price_tolerance_value debe ser un número válido.",
+                "The price_tolerance_value field must be a valid number.",
+            ),
+        ),
+        (
+            "/settings/purchase-reconciliation",
+            ("purchase", PurchaseMatchingConfig, "qty_tolerance_value", "no-es-numero"),
+            (
+                "El campo qty_tolerance_value debe ser un número válido.",
+                "The qty_tolerance_value field must be a valid number.",
+            ),
+        ),
+        (
+            "/settings/sales-matching",
+            ("sales", SalesMatchingConfig, "price_tolerance_value", "no-es-numero"),
+            (
+                "El campo price_tolerance_value debe ser un número válido.",
+                "The price_tolerance_value field must be a valid number.",
+            ),
+        ),
     ],
 )
 @pytest.mark.usefixtures("entorno_contable")
-def test_matching_config_admin_post_rejects_invalid_numeric_value(app, path, case):
+def test_matching_config_admin_post_rejects_invalid_numeric_value(app, path, case, messages):
     """The real admin POST translates numeric failures to a redirect, not HTTP 500."""
-    _assert_invalid_matching_admin_post(app, path, case)
+    _assert_invalid_matching_admin_post(app, path, case, messages)

@@ -15,6 +15,39 @@ from cacao_accounting.database import Item, ItemPrice, Modules, PriceList, datab
 
 _UNSET = object()
 
+_INVALID_ITEM_PRICE_VALUES = (
+    (
+        "price",
+        "no-es-numero",
+        ("El campo price debe ser un número válido.", "The price field must be a valid number."),
+    ),
+    (
+        "price",
+        "NaN",
+        ("El campo price debe ser un número finito.", "The price field must be a finite number."),
+    ),
+    (
+        "min_qty",
+        "no-es-numero",
+        ("El campo min_qty debe ser un número válido.", "The min_qty field must be a valid number."),
+    ),
+    (
+        "min_qty",
+        "-Infinity",
+        ("El campo min_qty debe ser un número finito.", "The min_qty field must be a finite number."),
+    ),
+    (
+        "valid_from",
+        "no-es-fecha",
+        ("El campo valid_from debe ser una fecha válida.", "The valid_from field must be a valid date."),
+    ),
+    (
+        "valid_upto",
+        "2026-02-30",
+        ("El campo valid_upto debe ser una fecha válida.", "The valid_upto field must be a valid date."),
+    ),
+)
+
 
 @pytest.fixture
 def csrf_state_snapshot(app):
@@ -226,3 +259,81 @@ def test_item_price_update_form_sends_its_own_csrf_token(csrf_price_forms):
         item_price = database.session.get(ItemPrice, item_price_id)
         assert item_price is not None
         assert item_price.price == Decimal("18.75")
+
+
+def _item_price_snapshot(app, item_price_id: str) -> dict[str, object]:
+    """Lee una tarifa fresca para detectar mutaciones parciales tras un POST inválido."""
+    with app.app_context():
+        database.session.expire_all()
+        item_price = database.session.get(ItemPrice, item_price_id)
+        assert item_price is not None
+        return {column.key: getattr(item_price, column.key) for column in ItemPrice.__table__.columns}
+
+
+@pytest.mark.parametrize(("field", "value", "messages"), _INVALID_ITEM_PRICE_VALUES)
+def test_item_price_creation_rejects_invalid_decimal_or_date_without_persisting(csrf_price_forms, field, value, messages):
+    """La alta HTTP real informa el campo inválido y no agrega tarifas."""
+    app, client, (item_code, price_list_id, _item_price_id) = csrf_price_forms
+    page = client.get("/settings/item-prices")
+    assert page.status_code == 200
+    token = _form_token(page.get_data(as_text=True), marker='name="item_code"')
+    data = {
+        "price_list_id": price_list_id,
+        "item_code": item_code,
+        "uom": "UND",
+        "price": "12.50",
+        "min_qty": "0",
+        "valid_from": "2026-05-01",
+        "valid_upto": "2026-05-31",
+    }
+    data[field] = value
+    with app.app_context():
+        antes = database.session.execute(
+            database.select(database.func.count()).select_from(ItemPrice).filter_by(price_list_id=price_list_id)
+        ).scalar_one()
+
+    respuesta = client.post(
+        "/settings/item-prices",
+        data={**data, "csrf_token": token},
+        follow_redirects=True,
+    )
+
+    assert respuesta.status_code == 200
+    assert respuesta.history[0].status_code == 302
+    html = respuesta.get_data(as_text=True)
+    assert any(mensaje in html for mensaje in messages)
+    with app.app_context():
+        despues = database.session.execute(
+            database.select(database.func.count()).select_from(ItemPrice).filter_by(price_list_id=price_list_id)
+        ).scalar_one()
+    assert despues == antes
+
+
+@pytest.mark.parametrize(("field", "value", "messages"), _INVALID_ITEM_PRICE_VALUES)
+def test_item_price_update_rejects_invalid_decimal_or_date_without_mutating(csrf_price_forms, field, value, messages):
+    """La edición HTTP real no aplica cambios parciales cuando un campo es inválido."""
+    app, client, (_item_code, _price_list_id, item_price_id) = csrf_price_forms
+    url = f"/settings/item-prices/{item_price_id}"
+    page = client.get("/settings/item-prices")
+    assert page.status_code == 200
+    token = _form_token(page.get_data(as_text=True), url)
+    data = {
+        "price": "18.75",
+        "min_qty": "2",
+        "valid_from": "2026-05-01",
+        "valid_upto": "2026-05-31",
+    }
+    data[field] = value
+    antes = _item_price_snapshot(app, item_price_id)
+
+    respuesta = client.post(
+        url,
+        data={**data, "csrf_token": token},
+        follow_redirects=True,
+    )
+
+    assert respuesta.status_code == 200
+    assert respuesta.history[0].status_code == 302
+    html = respuesta.get_data(as_text=True)
+    assert any(mensaje in html for mensaje in messages)
+    assert _item_price_snapshot(app, item_price_id) == antes

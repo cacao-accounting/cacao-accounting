@@ -4,9 +4,11 @@
 """Contrato compartido de coerción decimal en fronteras de entrada."""
 
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 
+from cacao_accounting.database import Tax, database
 from cacao_accounting.numbers import coerce_decimal
 
 
@@ -73,3 +75,46 @@ def test_coerce_decimal_rejects_conflicting_or_invalid_constraints():
         coerce_decimal("1", "importe", positive=True, non_negative=True)
     with pytest.raises(ValueError, match="must be non-negative"):
         coerce_decimal("1", "importe", max_fractional_digits=-1)
+
+
+@pytest.mark.parametrize(
+    ("rate", "messages"),
+    [
+        (
+            "no-es-numero",
+            ("El campo rate debe ser un número válido.", "The rate field must be a valid number."),
+        ),
+        (
+            "NaN",
+            ("El campo rate debe ser un número finito.", "The rate field must be a finite number."),
+        ),
+        (
+            "Infinity",
+            ("El campo rate debe ser un número finito.", "The rate field must be a finite number."),
+        ),
+    ],
+)
+def test_tax_rate_http_rejects_invalid_decimal_without_persisting(app, authenticated_client, entorno_contable, rate, messages):
+    """El alta HTTP de impuestos informa el error decimal y no crea evidencia."""
+    del entorno_contable
+    nombre = f"Impuesto decimal inválido {uuid4().hex[:8]}"
+    cliente = authenticated_client()
+
+    respuesta = cliente.post(
+        "/settings/taxes",
+        data={
+            "name": nombre,
+            "rate": rate,
+            "tax_type": "percentage",
+            "applies_to": "both",
+            "is_active": "on",
+        },
+        follow_redirects=True,
+    )
+
+    assert respuesta.status_code == 200
+    assert respuesta.history[0].status_code == 302
+    html = respuesta.get_data(as_text=True)
+    assert any(mensaje in html for mensaje in messages)
+    with app.app_context():
+        assert database.session.execute(database.select(Tax).filter_by(name=nombre)).scalar_one_or_none() is None
