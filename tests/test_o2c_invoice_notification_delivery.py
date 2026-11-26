@@ -170,3 +170,65 @@ def test_invoice_request_succeeds_when_retry_delivers_first(invoice_email_app, m
         assert queued_email is not None and queued_email.status == "sent"
         assert queued_email.attempts == 2
         assert len(audit_events) == 1
+
+
+def test_commit_fallido_de_auditoria_conserva_la_entrega_confirmada(invoice_email_app, monkeypatch):
+    """#1958: la evidencia de la cola no depende del commit de auditoría de la ruta."""
+    application, invoice_id, user_id = invoice_email_app
+    api_module = import_module("cacao_accounting.api")
+    email_module = import_module("cacao_accounting.messaging.email")
+
+    monkeypatch.setattr(email_module, "can_send_transaction_emails", lambda: True)
+    monkeypatch.setattr(
+        api_module,
+        "_require_document_send_access",
+        lambda _document_type, document_id: database.session.get(SalesInvoice, document_id),
+    )
+    monkeypatch.setattr(email_module, "send_email", lambda **_mensaje: None)
+    # En producción el fallo de un commit no se propaga al cliente como traceback.
+    monkeypatch.setitem(application.config, "PROPAGATE_EXCEPTIONS", False)
+
+    commit_real = database.session.commit
+    llamadas = {"n": 0}
+
+    def _falla_el_commit_de_auditoria() -> None:
+        """Rompe solo el commit final de la ruta: cola durable y estado enviado ya confirmados."""
+        llamadas["n"] += 1
+        if llamadas["n"] == 3:
+            raise RuntimeError("fallo de commit de auditoría")
+        commit_real()
+
+    monkeypatch.setattr(database.session, "commit", _falla_el_commit_de_auditoria)
+    try:
+        with application.test_client() as client:
+            with client.session_transaction() as session:
+                session["_user_id"] = user_id
+                session["_auth_version"] = 0
+                session["_fresh"] = True
+            status_code = client.post(
+                f"/api/documents/sales_invoice/{invoice_id}/email",
+                json={"recipient": "auditoria@example.com", "subject": "Factura auditada"},
+            ).status_code
+    finally:
+        monkeypatch.setattr(database.session, "commit", commit_real)
+
+    assert llamadas["n"] >= 3, "la ruta nunca llegó al commit de auditoría: la prueba no discrimina"
+    assert status_code == 500
+
+    database.session.remove()
+    with application.app_context():
+        fila = database.session.execute(database.select(EmailQueue).filter_by(document_id=invoice_id)).scalar_one()
+        auditoria = (
+            database.session.execute(
+                database.select(AuditTrail).where(
+                    AuditTrail.action == "email_sent",
+                    AuditTrail.document_id == invoice_id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert fila.status == "sent", "la entrega confirmada no puede perderse por un fallo posterior"
+    assert fila.sent_at is not None
+    assert auditoria == [], "no debe quedar auditoría de un evento cuyo commit falló"
