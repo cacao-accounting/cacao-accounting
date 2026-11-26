@@ -245,7 +245,7 @@
 </div>
 {% endmacro %}
 
-{% macro transaction_grid(source_api_url=None, title=None) %}
+{% macro transaction_grid(source_api_url=None, title=None, include_line_account=true, include_line_unit=true, include_taxes=true) %}
 {% set title = title if title is not none else _('Líneas de detalle') %}
 <section class="border rounded-2 p-3 mt-3"
          {% if source_api_url %}x-init='loadSourceFromUrl({{ source_api_url | tojson }}).then((loaded) => { if (loaded) applySource(); })'{% endif %}>
@@ -472,9 +472,9 @@
               <input type="hidden" :name="'batch_id_' + index" :value="line.batch_id || ''">
               <input type="hidden" :name="'description_' + index" :value="line.description || ''">
               <input type="hidden" :name="'serial_no_' + index" :value="line.serial_no || ''">
-              <input type="hidden" :name="'account_' + index" :value="line.account || ''">
+              {% if include_line_account %}<input type="hidden" :name="'account_' + index" :value="line.account || ''">{% endif %}
               <input type="hidden" :name="'cost_center_' + index" :value="line.cost_center || ''">
-              <input type="hidden" :name="'unit_' + index" :value="line.unit || ''">
+              {% if include_line_unit %}<input type="hidden" :name="'unit_' + index" :value="line.unit || ''">{% endif %}
               <input type="hidden" :name="'project_' + index" :value="line.project || ''">
               <input type="hidden" :name="'remarks_' + index" :value="line.remarks || ''">
               <input type="hidden" :name="'source_type_' + index" :value="line.source_type || ''">
@@ -488,6 +488,7 @@
   </div>
 </section>
 
+{% if include_taxes %}
 <section class="border rounded-2 p-3 mt-3" x-show="showPricing">
   <div class="ca-transaction-summary">
     <strong>{{ _('Subtotal') }}:</strong>
@@ -557,6 +558,7 @@
     </table>
   </div>
 </section>
+{% endif %}
 
 <div class="modal fade" id="modalAutofill" tabindex="-1" aria-hidden="true" x-show="availableSourceTypes.length > 0">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -696,6 +698,7 @@
         <template x-if="activeIndex !== null && modalLine !== null">
           <div>
             <div class="ca-transaction-detail-grid">
+          {% if include_line_account %}
           <div>
             <label class="form-label">{{ _('Cuenta') }}</label>
             {{ smart_select(
@@ -710,6 +713,7 @@
                 initial_label_expr="modalLine.account_label || modalLine.account"
             ) }}
           </div>
+          {% endif %}
           <div>
             <label class="form-label">{{ _('Centro de costos') }}</label>
             {{ smart_select(
@@ -724,6 +728,7 @@
                 initial_label_expr="modalLine.cost_center_label || modalLine.cost_center"
             ) }}
           </div>
+          {% if include_line_unit %}
           <div>
             <label class="form-label">{{ _('Unidad de negocio') }}</label>
             {{ smart_select(
@@ -738,6 +743,7 @@
                 initial_label_expr="modalLine.unit"
             ) }}
           </div>
+          {% endif %}
           <div>
             <label class="form-label">{{ _('Proyecto') }}</label>
             {{ smart_select(

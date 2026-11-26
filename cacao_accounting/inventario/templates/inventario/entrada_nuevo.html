@@ -52,6 +52,11 @@
       </div>
     </div>
   </div>
-  {{ tf_macros.transaction_grid(source_api_url=source_api_url) }}
+  {{ tf_macros.transaction_grid(
+      source_api_url=source_api_url,
+      include_line_account=false,
+      include_line_unit=false,
+      include_taxes=false
+  ) }}
 </form>
 {% endblock %}

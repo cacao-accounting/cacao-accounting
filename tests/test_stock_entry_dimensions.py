@@ -678,3 +678,43 @@ def test_gl_lleva_las_dimensiones_de_cada_linea(entorno_contable_aislado):
         assert ("CC-L1", "PR-L1") in dimensiones_gl
         assert ("CC-L2", "PR-CAB") in dimensiones_gl
         assert all(centro != "CC-CAB" for centro, _proyecto in dimensiones_gl)
+
+
+def _cliente_admin(application):
+    """Cliente autenticado como administrador sin depender de CSRF."""
+    client = application.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = "admin"
+        session["_fresh"] = True
+    return client
+
+
+def test_la_entrada_no_renderiza_controles_no_admitidos(inventario_dimensiones):
+    """#1888: la cuadrícula de inventario omite cuenta, unidad y cargos fiscales."""
+    application, _dimensiones = inventario_dimensiones
+    html = _cliente_admin(application).get("/inventory/stock-entry/adjustment-positive/new").get_data(as_text=True)
+    for retirado in (
+        "'account_' + index",
+        "'unit_' + index",
+        "tax_lines_payload",
+        "tax_summary_payload",
+        'name="modal_account"',
+        'name="modal_unit"',
+    ):
+        assert retirado not in html
+    for admitido in ("'cost_center_' + index", "'project_' + index", "'remarks_' + index"):
+        assert admitido in html
+
+
+def test_la_macro_compartida_conserva_el_contrato_de_compras(app):
+    """El default de la macro mantiene cuenta, unidad e impuestos."""
+    from flask import get_template_attribute
+
+    with app.test_request_context("/buying/purchase-invoice/new"):
+        default = get_template_attribute("transaction_form_macros.html", "transaction_grid")()
+        inventario = get_template_attribute("transaction_form_macros.html", "transaction_grid")(
+            include_line_account=False, include_line_unit=False, include_taxes=False
+        )
+    for obligatorio in ("'account_' + index", "'unit_' + index", "tax_lines_payload", 'name="modal_account"'):
+        assert obligatorio in default
+        assert obligatorio not in inventario
