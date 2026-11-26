@@ -907,7 +907,7 @@ def inventario_entrada_nuevo():
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
     items_disponibles = _stock_entry_item_choices()
-    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    uoms_disponibles = [{"code": code, "name": name} for code, name in _uom_choices()]
     purpose = request.args.get("purpose") or _infer_stock_entry_purpose(request.path)
     if purpose and purpose not in STOCK_ENTRY_PURPOSES:
         abort(404)
@@ -1063,7 +1063,14 @@ def inventario_entrada_editar(entry_id: str):
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
     items_disponibles = _stock_entry_item_choices()
-    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    historical_uoms = {
+        line_uom
+        for line_uom in database.session.execute(database.select(StockEntryItem.uom).filter_by(stock_entry_id=entry_id))
+        .scalars()
+        .all()
+        if line_uom
+    }
+    uoms_disponibles = [{"code": code, "name": name} for code, name in _uom_choices(historical_uoms)]
 
     if request.method == "POST":
         response = _submit_stock_entry_edit(registro, formulario)

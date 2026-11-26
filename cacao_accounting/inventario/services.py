@@ -1320,14 +1320,23 @@ def _render_stock_entry_edit_form(
 
     formulario = formulario or FormularioEntradaAlmacen(obj=registro)
 
-    lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
+    lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars().all()
+    item_codes = {item.item_code for item in lineas if item.item_code}
+    item_names: dict[str, str] = {}
+    if item_codes:
+        item_names = {
+            code: name
+            for code, name in database.session.execute(
+                database.select(Item.code, Item.name).where(Item.code.in_(item_codes))
+            ).all()
+        }
     initial_lines = (
         _submitted_stock_entry_lines()
         if request.method == "POST"
         else [
             {
                 "item_code": item.item_code,
-                "item_name": item.item_name,
+                "item_name": item_names.get(item.item_code or "", ""),
                 "qty": str(item.qty),
                 "uom": item.uom or "",
                 "rate": str(item.basic_rate or 0),
