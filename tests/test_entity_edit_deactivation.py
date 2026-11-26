@@ -107,6 +107,55 @@ def test_new_entity_route_blocked_in_desktop_when_entity_exists(desktop_entity_a
     assert "/accounting/entity/list" in (response.headers.get("Location") or "")
 
 
+def _id_de_entidad(app) -> str:
+    """``inactivar``/``eliminar`` reciben la PK, a diferencia de ``edit`` que usa el código."""
+    with app.app_context():
+        return database.session.execute(database.select(Entity.id).filter_by(code="C001")).scalar_one()
+
+
+def _mensajes(client) -> list[str]:
+    with client.session_transaction() as sesion:
+        return [str(message) for _, message in sesion.get("_flashes", [])]
+
+
+def test_set_inactive_rejects_disabling_only_entity_in_desktop(desktop_entity_app):
+    """#1771: la ruta dedicada de inactivar no puede dejar cero compañías activas en Desktop."""
+    app, username, password, _ = desktop_entity_app
+    entity_id = _id_de_entidad(app)
+    with app.test_client() as client:
+        client.post("/login", data={"usuario": username, "acceso": password}, follow_redirects=True)
+        response = client.get(f"/accounting/entity/set_inactive/{entity_id}", follow_redirects=False)
+        avisos = _mensajes(client)
+
+    assert response.status_code == 302
+    assert "/accounting/entity/C001" in (response.headers.get("Location") or "")
+    assert any("modo escritorio" in aviso.lower() for aviso in avisos), avisos
+
+    with app.app_context():
+        entity = database.session.execute(database.select(Entity).filter_by(code="C001")).scalar_one()
+        assert entity.enabled is True
+        assert entity.status == "default"
+
+
+def test_delete_rejects_removing_only_entity_in_desktop(desktop_entity_app):
+    """#1771: la baja rechaza en Desktop antes de tocar filas de evidencia, no por dependencias."""
+    app, username, password, original_tax_id = desktop_entity_app
+    entity_id = _id_de_entidad(app)
+    with app.test_client() as client:
+        client.post("/login", data={"usuario": username, "acceso": password}, follow_redirects=True)
+        response = client.post(f"/accounting/entity/delete/{entity_id}", follow_redirects=False)
+        avisos = _mensajes(client)
+
+    assert response.status_code == 302
+    assert "/accounting/entity/C001" in (response.headers.get("Location") or "")
+    assert any("no se puede eliminar la única entidad" in aviso for aviso in avisos), avisos
+
+    with app.app_context():
+        entity = database.session.execute(database.select(Entity).filter_by(code="C001")).scalar_one()
+        assert entity.enabled is True
+        assert entity.tax_id == original_tax_id
+
+
 def test_catalogo_ingles_traduce_los_rechazos_de_entidad() -> None:
     """#1771: los dos msgid de Desktop no pueden quedar sin traducción al inglés."""
     import gettext
