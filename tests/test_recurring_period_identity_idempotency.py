@@ -78,58 +78,52 @@ def _nuevo_periodo() -> AccountingPeriod:
 
 def _aplicaciones_de(codigo: str) -> list[RecurringJournalApplication]:
     """Lista las aplicaciones persistidas de una plantilla."""
-    plantilla = database.session.execute(
-        database.select(RecurringJournalTemplate).filter_by(code=codigo)
-    ).scalar_one()
+    plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one()
     return list(
-        database.session.execute(
-            database.select(RecurringJournalApplication).filter_by(template_id=plantilla.id)
-        ).scalars()
+        database.session.execute(database.select(RecurringJournalApplication).filter_by(template_id=plantilla.id)).scalars()
     )
 
 
-def _limpia(codigo: str) -> None:
-    """Elimina los artefactos creados por la prueba."""
-    plantilla = database.session.execute(
-        database.select(RecurringJournalTemplate).filter_by(code=codigo)
-    ).scalar_one_or_none()
-    if plantilla is None:
-        return
-    lineas = list(
-        database.session.execute(database.select(RecurringJournalItem).filter_by(template_id=plantilla.id)).scalars()
-    )
-    for aplicacion in _aplicaciones_de(codigo):
-        if aplicacion.journal_id:
-            comprobante = database.session.get(ComprobanteContable, aplicacion.journal_id)
-            if comprobante is not None:
-                database.session.delete(comprobante)
-        database.session.delete(aplicacion)
-    for linea in lineas:
-        database.session.delete(linea)
-    database.session.delete(plantilla)
+def _limpia(codigo: str, periodo_id: str | None = None) -> None:
+    """Elimina los artefactos creados por la prueba, incluido su período."""
+    plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one_or_none()
+    if plantilla is not None:
+        lineas = list(
+            database.session.execute(database.select(RecurringJournalItem).filter_by(template_id=plantilla.id)).scalars()
+        )
+        for aplicacion in _aplicaciones_de(codigo):
+            if aplicacion.journal_id:
+                comprobante = database.session.get(ComprobanteContable, aplicacion.journal_id)
+                if comprobante is not None:
+                    database.session.delete(comprobante)
+            database.session.delete(aplicacion)
+        for linea in lineas:
+            database.session.delete(linea)
+        database.session.delete(plantilla)
+    if periodo_id is not None:
+        periodo = database.session.get(AccountingPeriod, periodo_id)
+        if periodo is not None:
+            database.session.delete(periodo)
     database.session.commit()
 
 
 def test_renombrar_periodo_no_duplica_la_aplicacion(app, entorno_contable):
     """Un período renombrado sigue siendo el mismo para la idempotencia."""
+    del entorno_contable
     codigo, admin = _nueva_plantilla()
+    periodo_id = None
     try:
         with app.app_context():
-            plantilla = database.session.execute(
-                database.select(RecurringJournalTemplate).filter_by(code=codigo)
-            ).scalar_one()
+            plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one()
             periodo = _nuevo_periodo()
+            periodo_id = periodo.id
             nombre_original = periodo.name
-            apply_recurring_template(
-                plantilla.id, "FY2026", nombre_original, date(2026, 5, 31), admin, company="cacao"
-            )
+            apply_recurring_template(plantilla.id, "FY2026", nombre_original, date(2026, 5, 31), admin, company="cacao")
             periodo.name = "Mayo renombrado"
             database.session.commit()
 
             with pytest.raises(RecurringJournalError, match="ya fue aplicada"):
-                apply_recurring_template(
-                    plantilla.id, "FY2026", "Mayo renombrado", date(2026, 5, 31), admin, company="cacao"
-                )
+                apply_recurring_template(plantilla.id, "FY2026", "Mayo renombrado", date(2026, 5, 31), admin, company="cacao")
 
             aplicaciones = _aplicaciones_de(codigo)
             assert len(aplicaciones) == 1
@@ -138,47 +132,43 @@ def test_renombrar_periodo_no_duplica_la_aplicacion(app, entorno_contable):
             assert aplicaciones[0].journal_id is not None
     finally:
         with app.app_context():
-            _limpia(codigo)
+            _limpia(codigo, periodo_id)
 
 
 def test_reintento_identico_no_crea_segundo_comprobante(app, entorno_contable):
     """El reintento exacto se rechaza sin dejar una segunda aplicación."""
+    del entorno_contable
     codigo, admin = _nueva_plantilla()
+    periodo_id = None
     try:
         with app.app_context():
-            plantilla = database.session.execute(
-                database.select(RecurringJournalTemplate).filter_by(code=codigo)
-            ).scalar_one()
+            plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one()
             periodo = _nuevo_periodo()
-            apply_recurring_template(
-                plantilla.id, "FY2026", periodo.name, date(2026, 5, 31), admin, company="cacao"
-            )
+            periodo_id = periodo.id
+            apply_recurring_template(plantilla.id, "FY2026", periodo.name, date(2026, 5, 31), admin, company="cacao")
             journal_id = _aplicaciones_de(codigo)[0].journal_id
             with pytest.raises(RecurringJournalError, match="ya fue aplicada"):
-                apply_recurring_template(
-                    plantilla.id, "FY2026", periodo.name, date(2026, 5, 31), admin, company="cacao"
-                )
+                apply_recurring_template(plantilla.id, "FY2026", periodo.name, date(2026, 5, 31), admin, company="cacao")
             aplicaciones = _aplicaciones_de(codigo)
             assert len(aplicaciones) == 1
             assert aplicaciones[0].journal_id == journal_id
     finally:
         with app.app_context():
-            _limpia(codigo)
+            _limpia(codigo, periodo_id)
 
 
 def test_nombre_inequivoco_es_requerido(app, entorno_contable):
     """La resolución ausente falla cerrado sin aplicar la plantilla."""
+    del entorno_contable
     codigo, admin = _nueva_plantilla()
     try:
         with app.app_context():
-            plantilla = database.session.execute(
-                database.select(RecurringJournalTemplate).filter_by(code=codigo)
-            ).scalar_one()
+            plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one()
             with pytest.raises(RecurringJournalError, match="Periodo no encontrado"):
                 apply_recurring_template(
                     plantilla.id, "FY2026", "Periodo inexistente", date(2026, 5, 31), admin, company="cacao"
                 )
-            assert _aplicaciones_de(codigo) == []
+            assert not _aplicaciones_de(codigo)
     finally:
         with app.app_context():
             _limpia(codigo)

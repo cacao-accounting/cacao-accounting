@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 import io
+from typing import Any
 from uuid import uuid4
 
 import pytest
 
-from cacao_accounting.database import Modules, User, database
+from cacao_accounting.database import Modules, RolesAccess, User, database
 from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.runtime_mode import is_desktop_mode
 
@@ -23,26 +24,65 @@ def _estado_imports():
     return (registro.enabled, registro.default)
 
 
-def _restaurar_imports(estado):
-    """Restaura ausencia, NULL, False o True sin confundir los casos."""
+def _permisos_del_modulo(modulo_id: str) -> list[dict[str, Any]]:
+    """Captura los permisos que referencian al módulo antes de eliminarlo."""
+    columnas = [columna.name for columna in RolesAccess.__table__.columns]
+    filas = database.session.execute(database.select(RolesAccess).filter_by(module_id=modulo_id)).scalars().all()
+    return [{columna: getattr(fila, columna) for columna in columnas} for fila in filas]
+
+
+def _restaurar_permisos_del_modulo(filas: list[dict[str, Any]]) -> None:
+    """Reinserta los permisos capturados apuntando al módulo restaurado."""
+    modulo = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+    if modulo is None or not filas:
+        return
+    existentes = {
+        (fila.rol_id, fila.module_id)
+        for fila in database.session.execute(database.select(RolesAccess).filter_by(module_id=modulo.id)).scalars()
+    }
+    pendientes: list[RolesAccess] = []
+    for fila in filas:
+        valores = dict(fila)
+        valores["module_id"] = modulo.id
+        if (valores["rol_id"], valores["module_id"]) not in existentes:
+            pendientes.append(RolesAccess(**valores))
+    database.session.add_all(pendientes)
+
+
+def _restaurar_imports(estado, permisos: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """Restaura ausencia, NULL, False o True sin confundir los casos.
+
+    ``permisos=None`` captura los permisos vigentes al eliminar el módulo;
+    una lista explícita, incluso vacía, indica que ya fueron capturados.
+    """
     registro = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+    capturados: list[dict[str, Any]] = []
+    if permisos is not None:
+        capturados = permisos
+    elif estado is None and registro is not None:
+        capturados = _permisos_del_modulo(registro.id)
     if estado is None:
         if registro is not None:
+            if capturados:
+                database.session.execute(database.delete(RolesAccess).where(RolesAccess.module_id == registro.id))
             database.session.delete(registro)
-        return
+        return capturados
     enabled, default = estado
     if registro is None:
         database.session.add(Modules(module="imports", default=default, enabled=enabled))
-        return
+        return capturados
     registro.enabled = enabled
     registro.default = default
+    return capturados
 
 
 @pytest.fixture(autouse=True)
 def _modulo_imports(app):
     with app.app_context():
         estado_anterior = _estado_imports()
-        _restaurar_imports((True, False))
+        registro_anterior = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+        permisos_iniciales = _permisos_del_modulo(registro_anterior.id) if registro_anterior is not None else []
+        _restaurar_imports((True, False), permisos_iniciales)
         database.session.commit()
     try:
         yield
@@ -50,6 +90,7 @@ def _modulo_imports(app):
         with app.app_context():
             database.session.rollback()
             _restaurar_imports(estado_anterior)
+            _restaurar_permisos_del_modulo(permisos_iniciales)
             database.session.commit()
 
 
