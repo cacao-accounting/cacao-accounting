@@ -111,26 +111,87 @@ def test_verify_stamps_unversioned_but_initialized_schema(tmp_path):
         database.engine.dispose()
 
 
-def test_downgrade_rejects_when_v2_audit_rows_exist(tmp_path):
+def test_downgrade_rejects_rows_sealed_by_the_product(tmp_path):
+    """#1849: la fila v2 la produce el sellado real, no un literal del test."""
     app = _app(tmp_path, "audit.sqlite")
+    with app.app_context():
+        from cacao_accounting.audit_chain import CHAIN_HASH_VERSION, verify_audit_trail_chain
+
+        database.create_all()
+        alembic.stamp("head")
+        database.session.add(AuditTrail(document_type="test", document_id="doc-1", action="created"))
+        database.session.commit()
+
+        fila = database.session.execute(database.select(AuditTrail)).scalar_one()
+        # Sin esta premisa el guard quedaría verde sobre una fila que nada tiene que
+        # ver con lo que el producto escribe (hallazgo 1 de QA2).
+        assert fila.hash_version == CHAIN_HASH_VERSION, "el sellado debe fijar la versión vigente"
+        assert fila.payload_hash, "el sellado debe producir el hash de payload"
+        assert verify_audit_trail_chain() == [], "la primera fila de la cadena debe verificar limpia"
+
+        with pytest.raises(RuntimeError, match="hash versionado|downgrade rechazado"):
+            alembic.downgrade("20260809_0001")
+        cols = {c["name"] for c in inspect(database.engine).get_columns("audit_trail")}
+        assert "hash_version" in cols
+        # La evidencia sobrevive al intento: sigue siendo verificable.
+        assert verify_audit_trail_chain() == []
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_downgrade_rejects_any_versioned_hash_not_only_the_current_number(tmp_path):
+    """#1849: si la cadena sube a v3, el guard no puede quedar ciego."""
+    app = _app(tmp_path, "audit_v3.sqlite")
+    with app.app_context():
+        from cacao_accounting.audit_chain import CHAIN_HASH_VERSION
+
+        database.create_all()
+        alembic.stamp("head")
+        assert CHAIN_HASH_VERSION == 2, "el caso simula una versión futura de la cadena"
+        database.session.execute(
+            AuditTrail.__table__.insert().values(
+                id="01TESTAUDIT00000000000003",
+                document_type="test",
+                document_id="doc-3",
+                action="created",
+                hash_version=3,
+                payload_hash="hash-futuro",
+                prev_hash="",
+            )
+        )
+        database.session.commit()
+
+        with pytest.raises(RuntimeError, match="hash versionado|downgrade rechazado"):
+            alembic.downgrade("20260809_0001")
+        cols = {c["name"] for c in inspect(database.engine).get_columns("audit_trail")}
+        assert "hash_version" in cols
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_downgrade_drops_the_column_when_only_legacy_rows_exist(tmp_path):
+    """#1849: sin hash versionado la reversión sí ejecuta el ``drop_column``."""
+    app = _app(tmp_path, "audit_legacy.sqlite")
     with app.app_context():
         database.create_all()
         alembic.stamp("head")
         database.session.execute(
             AuditTrail.__table__.insert().values(
-                id="01TESTAUDIT00000000000000",
+                id="01TESTAUDIT00000000000001",
                 document_type="test",
-                document_id="doc-1",
+                document_id="doc-legacy",
                 action="created",
-                hash_version=2,
-                payload_hash="x",
+                payload_hash="hash-heredado",
                 prev_hash="",
             )
         )
         database.session.commit()
-        with pytest.raises(RuntimeError, match="hash v2|downgrade rechazado"):
-            alembic.downgrade("20260809_0001")
+
+        alembic.downgrade("20260809_0001")
+
         cols = {c["name"] for c in inspect(database.engine).get_columns("audit_trail")}
-        assert "hash_version" in cols
+        assert "hash_version" not in cols
+        # La fila heredada no se pierde: el append-only de evidencia sigue intacto.
+        assert database.session.execute(text("SELECT COUNT(*) FROM audit_trail")).scalar() == 1
         database.session.remove()
         database.engine.dispose()
