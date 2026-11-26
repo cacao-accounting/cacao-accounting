@@ -11,6 +11,7 @@ from odf.text import P as odf_paragraph
 from cacao_accounting.exceptions import flash_error
 from flask import (
     Blueprint,
+    after_this_request,
     render_template,
     request,
     redirect,
@@ -421,10 +422,17 @@ def download_template(record_type):
     fmt = request.args.get("format", "csv").lower()
     service = ImportService()
     try:
+        import shutil
+        import tempfile
+
         adapter = service._get_adapter(record_type)
-        template_dir = os.path.join(current_app.instance_path, "templates")
-        os.makedirs(template_dir, exist_ok=True)
+        template_dir = tempfile.mkdtemp(prefix="import-template-", dir=current_app.instance_path)
         output_name = secure_filename(f"template_{record_type}.{fmt if fmt in {'xlsx', 'ods'} else 'csv'}")
+
+        @after_this_request
+        def _cleanup_template_dir(response):
+            shutil.rmtree(template_dir, ignore_errors=True)
+            return response
 
         if fmt == "xlsx":
             wb = openpyxl.Workbook()
@@ -434,7 +442,7 @@ def download_template(record_type):
             wb.save(template_path)
             return send_file(template_path, as_attachment=True, download_name=output_name)
 
-        elif fmt == "ods":
+        if fmt == "ods":
             doc = opendocument.OpenDocumentSpreadsheet()
             spreadsheet = odf_table.Table(name="Template")
             doc.spreadsheet.addElement(spreadsheet)
@@ -448,13 +456,11 @@ def download_template(record_type):
             doc.save(template_path)
             return send_file(template_path, as_attachment=True, download_name=output_name)
 
-        else:
-            # Default to CSV
-            content = ",".join(adapter.localized_columns(str(get_locale())))
-            template_path = os.path.join(template_dir, output_name)
-            with open(template_path, "w", encoding="utf-8") as f:
-                f.write(content)
-            return send_file(template_path, as_attachment=True, download_name=output_name)
+        content = ",".join(adapter.localized_columns(str(get_locale())))
+        template_path = os.path.join(template_dir, output_name)
+        with open(template_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return send_file(template_path, as_attachment=True, download_name=output_name)
 
     except (ValueError, OSError) as e:
         flash_error(e)
