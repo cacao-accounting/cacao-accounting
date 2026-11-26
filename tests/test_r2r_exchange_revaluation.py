@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import calendar
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -14,6 +16,8 @@ from threading import Barrier, Event
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 
 from cacao_accounting import create_app
@@ -70,6 +74,68 @@ def business_app(tmp_path):
     with application.app_context():
         database.session.remove()
         database.engine.dispose()
+
+
+def _pg_isolated_url() -> Any:
+    """Crea URL de base PostgreSQL aislada preservando credenciales (Refs: #1910)."""
+    raw = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    url = make_url(raw)
+    if not url.drivername.startswith("postgresql"):
+        pytest.skip("Este escenario requiere PostgreSQL.")
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true y una base dedicada.")
+    nombre = f"cnc_{uuid4().hex[:10]}"
+    admin_engine = create_engine(url.set(database="postgres"))
+    try:
+        with admin_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.execute(text(f'CREATE DATABASE "{nombre}"'))
+    finally:
+        admin_engine.dispose()
+    return url.set(database=nombre)
+
+
+def _drop_pg_isolated_url(url_aislada: Any) -> None:
+    nombre = url_aislada.database
+    admin_engine = create_engine(url_aislada.set(database="postgres"))
+    try:
+        with admin_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.execute(
+                text(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    f"WHERE datname = '{nombre}' AND pid <> pg_backend_pid()"
+                )
+            )
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{nombre}"'))
+    finally:
+        admin_engine.dispose()
+
+
+@pytest.fixture
+def pg_business_app():
+    """App PostgreSQL aislada con credenciales preservadas (Refs: #1910)."""
+    url_aislada = _pg_isolated_url()
+    application = None
+    try:
+        application = create_app(
+            {
+                **configuracion,
+                # Regresi?n #1910: str(URL) redacta password; render_as_string lo conserva.
+                "SQLALCHEMY_DATABASE_URI": url_aislada.render_as_string(hide_password=False),
+                "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+                "TESTING": True,
+                "WTF_CSRF_ENABLED": False,
+                "MODO_ESCRITORIO": True,
+            }
+        )
+        with application.app_context():
+            database.create_all()
+        yield application
+    finally:
+        if application is not None:
+            with application.app_context():
+                database.session.remove()
+                database.engine.dispose()
+        _drop_pg_isolated_url(url_aislada)
 
 
 def _seed_bank_exposure(company: str) -> tuple[str, int, int, str, str, str, date]:
@@ -940,3 +1006,68 @@ def test_void_rechaza_reversa_en_fecha_anterior(business_app):
         )
         assert {entry.id for entry in activos} == ids_originales
         assert get_cash_flow_statement(filtros).totals["cash_closing"] == cierre_antes
+
+
+def test_pg_isolated_url_preserves_credentials():
+    """Regresi?n #1910: str(URL) redacta password; render_as_string(hide_password=False) la conserva."""
+    raw = "postgresql+pg8000://cacao:super-secret@127.0.0.1:5432/cacao"
+    url = make_url(raw)
+    assert "super-secret" not in str(url)
+    assert "super-secret" in url.render_as_string(hide_password=False)
+
+
+@pytest.mark.database
+def test_concurrent_revaluation_void_pg_isolated_url(pg_business_app):
+    """#1910/#1653: anulaci?n concurrente en PostgreSQL deja un solo reverso."""
+    company = f"R{uuid4().hex[:9]}"
+    with pg_business_app.app_context():
+        company, year, month, _prior_id, period_id, _following_id, _following_start = _seed_bank_exposure(company)
+        actor_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        run = ExchangeRevaluationService().run(company=company, year=year, month=month, period_id=period_id, user_id=actor_id)
+        run_id = str(run.id)
+
+    start_together = Barrier(2)
+
+    def void_run() -> str:
+        with pg_business_app.app_context():
+            start_together.wait(timeout=10)
+            try:
+                ExchangeRevaluationService().void(run_id=run_id, user_id=actor_id, reason="anulacion concurrente")
+                return "ok"
+            except ExchangeRevaluationError as exc:
+                return f"err:{exc}"
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        results = list(workers.map(lambda _i: void_run(), range(2)))
+
+    assert results.count("ok") == 1, results
+    assert any(r.startswith("err:") for r in results), results
+
+    with pg_business_app.app_context():
+        corrida = database.session.get(ExchangeRevaluation, run_id)
+        assert corrida is not None and corrida.status == "voided"
+        originals = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company, voucher_type="exchange_revaluation", voucher_id=run_id, is_reversal=False
+                )
+            )
+            .scalars()
+            .all()
+        )
+        reversals = list(
+            database.session.execute(
+                database.select(GLEntry).filter_by(
+                    company=company,
+                    voucher_type="exchange_revaluation",
+                    voucher_id=run_id,
+                    is_reversal=True,
+                    is_cancelled=False,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(originals) == 2
+        assert all(line.is_cancelled for line in originals)
+        assert len(reversals) == 2
