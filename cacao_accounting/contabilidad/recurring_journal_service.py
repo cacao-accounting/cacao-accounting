@@ -266,9 +266,8 @@ def apply_recurring_template(
     )
 
     if existing and existing.status in {"pending", "applied"}:
-        raise RecurringJournalError(
-            _("La plantilla ya fue aplicada al periodo %(period_name)s.") % {"period_name": period_name}
-        )
+        # #1776: reintento idempotente tras fallo parcial; no crear duplicado.
+        return existing
 
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
     if not items:

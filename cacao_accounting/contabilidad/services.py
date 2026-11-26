@@ -686,8 +686,8 @@ def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequenc
             company=close_run.company,
             fiscal_year=str(period.fiscal_year_id),
             accounting_period_id=period.id,
-            status="applied",
         )
+        .filter(RecurringJournalApplication.status.in_(["pending", "applied"]))
         .all()
     )
     applied_ids = [app.template_id for app in applied_apps]
