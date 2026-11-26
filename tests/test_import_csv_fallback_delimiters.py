@@ -71,7 +71,7 @@ def test_lector_rechaza_tabulacion_tras_cierre_de_comilla(tmp_path):
 
 
 def test_lector_y_fallback_olen_la_misma_muestra(tmp_path):
-    """Un delimitador ausente en los primeros 1024 caracteres ya se detecta."""
+    """Un delimitador ausente en los primeros 2048 caracteres ya se detecta."""
     contenido = f'"{"h" * 1100}";debito;credito\n1101;100;0\n'
     assert sniff_csv_dialect(contenido[:CSV_SAMPLE_CHARS]).delimiter == ";"
     assert _valid_csv_fallback(contenido.encode("utf-8")) is True
@@ -152,3 +152,27 @@ def test_salto_tras_campo_citado_habilita_cita_en_la_siguiente_fila(tmp_path):
     tabla = CSVReader().read(str(archivo))
     assert tabla.columns == ["h1", "h2"]
     assert tabla.rows == [["a\tb", "c\td"]]
+
+
+def test_bom_no_cambia_el_veredicto_entre_carga_y_lector(tmp_path):
+    """Ambas etapas descartan el BOM antes de oler el delimitador y citar campos."""
+    contenido = '\ufeffcuenta;"detalle\tcitado";credito\r\n1101;"cuenta\tcon tab";0\r\n'
+    assert _valid_csv_fallback(contenido.encode("utf-8")) is True
+
+    archivo = tmp_path / "bom_crlf.csv"
+    archivo.write_bytes(contenido.encode("utf-8"))
+    tabla = CSVReader().read(str(archivo))
+    assert tabla.columns == ["cuenta", "detalle\tcitado", "credito"]
+    assert tabla.rows == [["1101", "cuenta\tcon tab", "0"]]
+
+
+def test_saltos_de_carro_se_igualan_entre_carga_y_lector(tmp_path):
+    r"""La muestra compartida traduce \r y \r\n antes de validar, como el modo texto del lector."""
+    contenido = 'a;"b"\rd;"c\td"\r'
+    assert _valid_csv_fallback(contenido.encode("utf-8")) is True
+
+    archivo = tmp_path / "solo_retorno.csv"
+    archivo.write_bytes(contenido.encode("utf-8"))
+    tabla = CSVReader().read(str(archivo))
+    assert tabla.columns == ["a", "b"]
+    assert tabla.rows == [["d", "c\td"]]

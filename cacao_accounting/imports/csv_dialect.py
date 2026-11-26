@@ -31,6 +31,11 @@ class ImportCSVFormatError(ValueError):
         super().__init__(_("El archivo CSV usa tabulaciones fuera de un campo entrecomillado."))
 
 
+def _as_universal_newlines(text: str) -> str:
+    """Traduce los saltos como lo hace el lector al abrir el archivo en modo texto."""
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def csv_sample_from_bytes(chunk: bytes) -> str:
     """Decodifica la ventana de bytes y devuelve la muestra textual acordada."""
     window = chunk[:CSV_SAMPLE_BYTES]
@@ -39,10 +44,10 @@ def csv_sample_from_bytes(chunk: bytes) -> str:
     for trim in range(4):
         candidate = window if trim == 0 else window[:-trim]
         try:
-            return candidate.decode("utf-8-sig")[:CSV_SAMPLE_CHARS]
+            return _as_universal_newlines(candidate.decode("utf-8-sig")[:CSV_SAMPLE_CHARS])
         except UnicodeDecodeError:
             continue
-    return window.decode("utf-8-sig")[:CSV_SAMPLE_CHARS]
+    return _as_universal_newlines(window.decode("utf-8-sig")[:CSV_SAMPLE_CHARS])
 
 
 def sniff_csv_dialect(sample: str) -> Any:
@@ -120,6 +125,9 @@ class _QuoteScanner:
                 return True
             self.in_quotes = False
             self.quote_pending = False
+            # Un espacio posterior no reinicia el campo: skipinitialspace solo
+            # aplica después de un delimitador, no después de una comilla.
+            self.at_field_start = False
         elif character == self.quotechar:
             self.quote_pending = True
         return self.in_quotes
