@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+﻿# SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 """Adaptador para importación de clientes."""
@@ -8,7 +8,7 @@ from ulid import ULID
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import Party, database, CompanyParty
 from cacao_accounting.party_identity import find_party_by_tax_id, normalize_tax_id
-from cacao_accounting.party_management import find_party_group_by_name, normalize_person_type
+from cacao_accounting.party_management import find_party_group_by_name
 
 
 class CustomerAdapter(BaseImportAdapter):
@@ -26,8 +26,8 @@ class CustomerAdapter(BaseImportAdapter):
         group_name = str(row_data.get("grupo") or "").strip()
         if group_name and find_party_group_by_name(group_name, "customer") is None:
             errors.append(f"El grupo '{group_name}' no existe, no está activo o no corresponde al tercero.")
-        person_type = normalize_person_type(row_data.get("clasificacion"))
-        if person_type and person_type not in ("natural", "juridical"):
+        clasificacion = str(row_data.get("clasificacion") or "").strip()
+        if clasificacion and clasificacion not in ("natural", "juridical"):
             errors.append(f"La clasificación '{row_data.get('clasificacion')}' debe ser natural o juridical.")
         return errors
 
@@ -38,8 +38,8 @@ class CustomerAdapter(BaseImportAdapter):
         group = find_party_group_by_name(group_name, "customer") if group_name else None
         if group_name and group is None:
             raise ValueError(f"El grupo '{group_name}' no existe, no está activo o no corresponde al tercero.")
-        person_type = normalize_person_type(row.get("clasificacion"))
-        if person_type and person_type not in ("natural", "juridical"):
+        clasificacion = str(row.get("clasificacion") or "").strip()
+        if clasificacion and clasificacion not in ("natural", "juridical"):
             raise ValueError(f"La clasificación '{row.get('clasificacion')}' debe ser natural o juridical.")
         cliente = Party(
             code=str(ULID()),
@@ -48,7 +48,7 @@ class CustomerAdapter(BaseImportAdapter):
             comercial_name=row.get("nombre_comercial"),
             tax_id=row.get("identificacion_fiscal"),
             party_group_id=group.id if group else None,
-            person_type=person_type,
+            person_type=clasificacion or None,
             is_active=True,
         )
         return {"party": cliente, "company_id": context.get("company_id")}

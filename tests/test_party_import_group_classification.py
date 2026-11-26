@@ -68,7 +68,7 @@ def test_customer_import_maps_group_and_person_type(party_import_scenario):
     adapter = CustomerAdapter()
 
     with app.app_context():
-        row = _row("Cliente A", grupo="Minoristas", clasificacion="Natural")
+        row = _row("Cliente A", grupo="Minoristas", clasificacion="natural")
         assert adapter.validate_row(row) == []
         document = adapter.build_document([row], {"company_id": None})
         party = document["party"]
@@ -111,14 +111,38 @@ def test_group_name_is_exact_and_must_be_active_and_compatible(party_import_scen
                 customer.build_document([_row("Cliente", grupo=group_name)], {"company_id": None})
 
 
-@pytest.mark.parametrize("value", ["empresa", "fisica", "JURIDICA"])
-def test_invalid_classification_is_rejected(party_import_scenario, value):
-    """Only the canonical natural/juridical values are accepted."""
+@pytest.mark.parametrize("adapter_cls", [CustomerAdapter, VendorAdapter])
+@pytest.mark.parametrize("value", ["empresa", "fisica", "JURIDICA", "Natural", "juridica "])
+def test_invalid_or_noncanonical_classification_is_rejected(party_import_scenario, adapter_cls, value):
+    """Only canonical natural/juridical values are accepted for both adapters."""
     app, _ids = party_import_scenario
-    adapter = CustomerAdapter()
+    adapter = adapter_cls()
 
     with app.app_context():
-        errors = adapter.validate_row(_row("Cliente", clasificacion=value))
-        assert any("clasificación" in error for error in errors)
+        errors = adapter.validate_row(_row("Tercero", clasificacion=value))
+        assert any("clasificaci" in error.lower() for error in errors)
         with pytest.raises(ValueError):
-            adapter.build_document([_row("Cliente", clasificacion=value)], {"company_id": None})
+            adapter.build_document([_row("Tercero", clasificacion=value)], {"company_id": None})
+
+
+@pytest.mark.parametrize(
+    ("adapter_cls", "group_name"),
+    [
+        (CustomerAdapter, "NoExiste"),
+        (CustomerAdapter, "Clientes inactivos"),
+        (CustomerAdapter, "Mayoristas"),
+        (VendorAdapter, "NoExiste"),
+        (VendorAdapter, "Clientes inactivos"),
+        (VendorAdapter, "Minoristas"),
+    ],
+)
+def test_invalid_group_is_rejected_for_both_adapters(party_import_scenario, adapter_cls, group_name):
+    """Missing, inactive, or role-incompatible groups are rejected before persist."""
+    app, _ids = party_import_scenario
+    adapter = adapter_cls()
+
+    with app.app_context():
+        errors = adapter.validate_row(_row("Tercero", grupo=group_name))
+        assert any("grupo" in error.lower() for error in errors), group_name
+        with pytest.raises(ValueError):
+            adapter.build_document([_row("Tercero", grupo=group_name)], {"company_id": None})
