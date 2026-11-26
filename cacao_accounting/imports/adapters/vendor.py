@@ -23,9 +23,7 @@ class VendorAdapter(BaseImportAdapter):
         errors = super().validate_row(row_data)
         tax_id = row_data.get("identificacion_fiscal")
         if normalize_tax_id(tax_id) and find_party_by_tax_id(tax_id) is not None:
-            errors.append(
-                _("La identificación fiscal %(tax_id)s ya está registrada para otro tercero.") % {"tax_id": tax_id}
-            )
+            errors.append(_("La identificación fiscal %(tax_id)s ya está registrada para otro tercero.") % {"tax_id": tax_id})
         group_name = str(row_data.get("grupo") or "").strip()
         if group_name and find_party_group_by_name(group_name, "supplier") is None:
             errors.append(
@@ -72,8 +70,7 @@ class VendorAdapter(BaseImportAdapter):
         company_id = document["company_id"]
         if find_party_by_tax_id(proveedor.tax_id) is not None:
             raise ValueError(
-                _("La identificación fiscal %(tax_id)s ya está registrada para otro tercero.")
-                % {"tax_id": proveedor.tax_id}
+                _("La identificación fiscal %(tax_id)s ya está registrada para otro tercero.") % {"tax_id": proveedor.tax_id}
             )
         database.session.add(proveedor)
         database.session.flush()
