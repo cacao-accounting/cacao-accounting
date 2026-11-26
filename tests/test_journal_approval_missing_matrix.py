@@ -37,7 +37,7 @@ class ApprovalConfigSnapshot(NamedTuple):
     old_mode: bool
     old_config: str | None
     created_config: bool
-    rule_states: list[tuple[ApprovalMatrix, bool]]
+    rule_states: list[tuple[str, bool]]
     role_id: str
 
 
@@ -80,8 +80,8 @@ def _configure_missing_matrix(app, writer: User) -> ApprovalConfigSnapshot:
         .scalars()
         .all()
     )
-    rule_states = [(rule, rule.enabled) for rule in rules]
-    for rule, _enabled in rule_states:
+    rule_states = [(rule.id, rule.enabled) for rule in rules]
+    for rule in rules:
         rule.enabled = False
 
     module = database.session.execute(select(Modules).filter_by(module="accounting")).scalar_one()
@@ -135,8 +135,10 @@ def _restore_approval_engine_config(snapshot: ApprovalConfigSnapshot) -> None:
 def _restore_missing_matrix(app, snapshot: ApprovalConfigSnapshot, writer: User) -> None:
     """Restore company approval configuration and the writer's temporary role."""
     _remove_temporary_writer_role(snapshot.role_id, writer.id)
-    for rule, enabled in snapshot.rule_states:
-        rule.enabled = enabled
+    for rule_id, enabled in snapshot.rule_states:
+        rule = database.session.get(ApprovalMatrix, rule_id)
+        if rule is not None:
+            rule.enabled = enabled
 
     _restore_approval_engine_config(snapshot)
     if snapshot.old_mode_present:
@@ -156,6 +158,28 @@ def _remove_test_journal(journal_id: str) -> None:
     )
     database.session.execute(database.delete(ComprobanteContable).where(ComprobanteContable.id == journal_id))
     database.session.commit()
+
+
+def _assert_test_state_restored(snapshot: ApprovalConfigSnapshot, journal_id: str | None) -> None:
+    """Assert the shared worker database no longer contains this test's changes."""
+    for rule_id, enabled in snapshot.rule_states:
+        rule = database.session.get(ApprovalMatrix, rule_id)
+        assert rule is not None
+        assert rule.enabled is enabled
+    assert database.session.get(Roles, snapshot.role_id) is None
+    if journal_id is not None:
+        assert database.session.get(ComprobanteContable, journal_id) is None
+        assert (
+            database.session.execute(
+                select(ComprobanteContableDetalle).where(
+                    ComprobanteContableDetalle.transaction == "journal_entry",
+                    ComprobanteContableDetalle.transaction_id == journal_id,
+                )
+            )
+            .scalars()
+            .all()
+            == []
+        )
 
 
 def _assert_submission_stays_draft(app, authenticated_client, username: str, journal_id: str) -> None:
@@ -218,3 +242,4 @@ def test_post_sin_regla_deja_diario_borrador_y_no_anuncia_aprobacion(
                 writer = database.session.get(User, str(reference_users["writer"].id))
                 assert writer is not None
                 _restore_missing_matrix(app, snapshot, writer)
+                _assert_test_state_restored(snapshot, journal_id)
