@@ -15,26 +15,73 @@ from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 
+def _estado_imports():
+    """Captura presencia y valores exactos del módulo imports."""
+    registro = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+    if registro is None:
+        return None
+    return (registro.enabled, registro.default)
+
+
+def _restaurar_imports(estado):
+    """Restaura ausencia, NULL, False o True sin confundir los casos."""
+    registro = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+    if estado is None:
+        if registro is not None:
+            database.session.delete(registro)
+        return
+    enabled, default = estado
+    if registro is None:
+        database.session.add(Modules(module="imports", default=default, enabled=enabled))
+        return
+    registro.enabled = enabled
+    registro.default = default
+
+
 @pytest.fixture(autouse=True)
 def _modulo_imports(app):
     with app.app_context():
-        registro = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
-        estado_anterior = None if registro is None else bool(registro.enabled)
-        if registro is None:
-            database.session.add(Modules(module="imports", default=False, enabled=True))
-        else:
-            registro.enabled = True
+        estado_anterior = _estado_imports()
+        _restaurar_imports((True, False))
         database.session.commit()
-    yield
+    try:
+        yield
+    finally:
+        with app.app_context():
+            database.session.rollback()
+            _restaurar_imports(estado_anterior)
+            database.session.commit()
+
+
+@pytest.mark.parametrize(
+    "sembrado",
+    [
+        None,
+        (None, False),
+        (False, False),
+        (True, True),
+    ],
+    ids=["ausente", "null", "false", "true"],
+)
+def test_restauracion_conserva_estado_exacto(app, sembrado):
+    """Capturar y restaurar distingue fila ausente de módulo con enabled NULL."""
     with app.app_context():
-        database.session.rollback()
-        registro = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
-        if estado_anterior is None:
-            if registro is not None:
-                database.session.delete(registro)
-        elif registro is not None:
-            registro.enabled = estado_anterior
+        _restaurar_imports(sembrado)
         database.session.commit()
+
+        capturado = _estado_imports()
+        _restaurar_imports((True, False))
+        database.session.commit()
+        _restaurar_imports(capturado)
+        database.session.commit()
+
+        registro = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+        if sembrado is None:
+            assert registro is None
+        else:
+            assert registro is not None
+            assert registro.enabled == sembrado[0]
+            assert registro.default == sembrado[1]
 
 
 def _lote(record_type: str, estado: int) -> str:
