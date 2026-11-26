@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from threading import Barrier
@@ -509,3 +510,154 @@ def test_invitacion_terminal_no_muta_al_verificar(confirmation_attempt_scenario,
         invitacion = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
         assert invitacion.status == status
         assert (invitacion.verified_at, invitacion.last_access_at, invitacion.failed_attempts) == before
+
+
+def _database_uri_for_1839(tmp_path) -> str:
+    """Usa el motor real en CI (-m database) y SQLite local como respaldo."""
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() in {"1", "true", "yes"}:
+        return str(configuracion.get("SQLALCHEMY_DATABASE_URI", ""))
+    return f"sqlite:///{tmp_path / 'confirmation-1839.sqlite'}"
+
+
+@pytest.fixture
+def confirmation_1839_scenario(tmp_path):
+    """Escenario aislado para carreras de #1839 sobre SQLite local o motor real CI."""
+    app = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": _database_uri_for_1839(tmp_path),
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "TESTING": True,
+            "MODO_ESCRITORIO": False,
+        }
+    )
+    suffix = uuid4().hex[:6]
+    token = f"token-1839-{suffix}"
+    code = "123456"
+
+    with app.app_context():
+        database.create_all()
+        currency = database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none()
+        if currency is None:
+            database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
+        module = database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one_or_none()
+        if module is None:
+            database.session.add(Modules(module="accounting", default=True, enabled=True))
+        company_code = f"a1839{suffix[:4]}"
+        database.session.add(
+            Entity(
+                code=company_code,
+                name=f"Alfa {suffix}",
+                company_name=f"Compañía Alfa {suffix}",
+                tax_id=f"TAX-1839-{suffix}",
+                currency="NIO",
+                enabled=True,
+                status="default",
+            )
+        )
+        database.session.flush()
+        party = Party(code=f"CLI-1839-{suffix}", name="Cliente", is_customer=True, is_active=True)
+        database.session.add(party)
+        database.session.flush()
+        confirmation = BalanceConfirmation(
+            company=company_code,
+            document_no=f"BC-1839-{suffix}",
+            party_type="customer",
+            party_id=party.id,
+            cutoff_date=date(2026, 5, 31),
+            status="sent",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+        )
+        database.session.add(confirmation)
+        database.session.flush()
+        invitation = BalanceConfirmationInvitation(
+            balance_confirmation_id=confirmation.id,
+            email="cliente@example.test",
+            token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+            verification_code_hash=hashlib.sha256(code.encode("utf-8")).hexdigest(),
+            status="pending",
+            failed_attempts=0,
+        )
+        database.session.add(invitation)
+        database.session.commit()
+        ids = {"invitation": invitation.id, "confirmation": confirmation.id, "token": token}
+
+    yield app, ids
+
+    with app.app_context():
+        database.session.remove()
+        database.engine.dispose()
+
+
+def _aplicar_estado_terminal(app, invitation_id: str, terminal_status: str) -> None:
+    """Aplica cancelación o respuesta terminal desde otra transacción."""
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, invitation_id)
+        confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+        if terminal_status == "cancelled":
+            confirmation.status = "cancelled"
+            invitation.status = "cancelled"
+        elif terminal_status == "responded":
+            confirmation.status = "confirmed"
+            confirmation.response_type = "confirmed"
+            confirmation.responded_at = datetime.now(timezone.utc)
+            invitation.status = "responded"
+        else:
+            raise AssertionError(f"Estado terminal no soportado: {terminal_status}")
+        database.session.commit()
+
+
+@pytest.mark.database
+@pytest.mark.parametrize("terminal_status", ["cancelled", "responded"])
+@pytest.mark.parametrize("order", ["terminal_first", "terminal_after_claim"])
+def test_verificacion_concurrente_con_estado_terminal_no_otorga_acceso(
+    confirmation_1839_scenario, monkeypatch, terminal_status, order
+):
+    """#1839: verificación pública no reabre invitación terminal en ambos órdenes."""
+    app, ids = confirmation_1839_scenario
+    if order == "terminal_first":
+        _aplicar_estado_terminal(app, ids["invitation"], terminal_status)
+        response = _post_verification(app, ids["token"], "123456")
+    else:
+        original_claim = balance_confirmation_bp._claim_verification_attempt
+        barrier = Barrier(2, timeout=30)
+        errors: list[BaseException] = []
+
+        def claim_then_race(invitation, token_hash):
+            claimed = original_claim(invitation, token_hash)
+            if claimed:
+                try:
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+
+                        def apply_and_sync():
+                            barrier.wait()
+                            _aplicar_estado_terminal(app, ids["invitation"], terminal_status)
+
+                        future = executor.submit(apply_and_sync)
+                        barrier.wait()
+                        future.result(timeout=30)
+                except BaseException as exc:  # pragma: no cover - diagnóstico de carrera
+                    errors.append(exc)
+                    raise
+            return claimed
+
+        monkeypatch.setattr(balance_confirmation_bp, "_claim_verification_attempt", claim_then_race)
+        response = _post_verification(app, ids["token"], "123456")
+        assert not errors
+
+    assert response.status_code == 302
+    with app.app_context():
+        invitation = database.session.get(BalanceConfirmationInvitation, ids["invitation"])
+        confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
+        assert invitation.status == terminal_status
+        assert invitation.verified_at is None
+        if terminal_status == "cancelled":
+            assert confirmation.status == "cancelled"
+        else:
+            assert confirmation.status == "confirmed"
+            assert confirmation.response_type == "confirmed"
+        confirmation_id = confirmation.id
+
+    with app.test_client().session_transaction() as session:
+        assert f"verified_confirmation_{confirmation_id}" not in session
