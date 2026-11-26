@@ -58,7 +58,8 @@ El sistema es:
 
 # Soporte de bases de datos:
 
-- Tier 1: SQLite (Desktop) y PostgreSQL (Cloud). El soporte completo es obligatorio; los errores son bloqueantes.
+- Tier 1: SQLite (Desktop) y PostgreSQL (Cloud). El soporte completo es obligatorio; los errores son bloqueantes, si no esta disponible
+  PostgreSQL en el entorno se detalla la limitación de entorno para pruebas futuras cuando este disponible sin bloquear el avance.
 - Tier 2: MySQL. Se prueba en CI, pero no bloquea el lanzamiento.
 - Tier 3: MariaDB y MS SQL Server. No se prueban en CI.
 
@@ -93,13 +94,14 @@ Las siguientes etiquetas son útiles para coordinar el trabajo con issues:
   un criterio o política antes de continuar.
 - needs-work: issue verificado sin solución aplicada o con solución parcial o incompleta. Puede haber trabajo
   avanzado, pero no se considera finalizado y requiere iteraciones adicionales.
-- fix-proposed: existe uno o más commits relacionados con la tarea indicada; puede avanzar a:
+- fix-proposed: el implementador entregó uno o más commits con la solución y los controles requeridos satisfactorios;
+  está disponible para revisión independiente. No significa que QA haya aprobado. Puede avanzar a:
   - fix-confirmed: el fix se considera apropiado y completo; es una solución robusta y bien implementada.
   - needs-work: el fix se considera incompleto y requiere trabajo adicional.
 - fixed: issue con una solución aceptada implementada.
 
 Toda tarea asociada a un issue debe usar el formato 'Refs: ###' para facilitar el triaje. No se deben cerrar issues
-al hacer push. Todo trabajo asociado a un issue debe ser validado por al menos dos agentes que coincidan en que el fix
+al hacer push. Para aceptar una solución, el trabajo asociado a un issue debe ser validado por QA1 y QA2, que deben coincidir en que el fix
 aplicado es correcto, robusto, está correctamente cubierto por pruebas unitarias, es técnicamente válido y contempla
 posibles edge cases asociados al flujo de negocio de la tarea.
 
@@ -111,43 +113,98 @@ Si no hay un issue asociado a la tarea, se puede usar un archivo SESSIONS.md com
 SESSIONS.md como fuente de contexto y de las decisiones de diseño que se han tomado. Úsalo para dar continuidad al
 desarrollo por etapas, evitar planear todo desde cero y mantener el contexto completo de la evolución del proyecto.
 
-**Flujo de trabajo obligatorio de agentes:**
+### Pipeline de entrega y revisión independiente
+
+Este proceso es un pipeline con etapas separadas: Implementador → QA1 → QA2 → QA3 o administrador.
+Cada agente ejecuta únicamente el rol asignado por la persona responsable y termina su intervención al entregar
+la salida de su etapa. Completar la implementación no equivale a aceptar definitivamente el issue.
+
+**Reglas operativas obligatorias, incluso cuando la tarea solo diga "implementa el fix":**
+
+- Si la tarea pide implementar o corregir código, el rol es Implementador. Los roles QA requieren asignación expresa.
+- Las responsabilidades de los otros roles describen etapas posteriores; no son tareas que el agente actual deba
+  ejecutar, delegar ni esperar para terminar su propia etapa.
+- El implementador sigue este orden: implementar y probar → ejecutar los controles requeridos → crear el commit
+  autorizado → comentar la entrega en GitHub → retirar `needs-work` y agregar `fix-proposed` → responder y terminar.
+- Si las pruebas del caso y los linters requeridos pasan y la solución está completa, debe completar esa entrega.
+  No puede dejar el issue en `needs-work` por falta de revisión QA. El commit local y `fix-proposed` preceden a QA1.
+- Está prohibido invocar QA1, QA2 o QA3 como subagentes, incluso con contexto nuevo. La independencia requiere
+  sesiones separadas asignadas por la persona responsable, no revisores creados por el implementador.
+- Si falta autorización para crear el commit, acceso a GitHub o permisos para comentar o cambiar etiquetas,
+  entrega el trabajo disponible e identifica exactamente el paso bloqueado. No declara una transición que no realizó
+  ni sustituye ese paso por revisiones QA. Las restricciones reales de herramientas o permisos siguen aplicando.
+
+| Etapa asignada | Entrada | Salida obligatoria si aprueba o completa su trabajo |
+| --- | --- | --- |
+| Implementador | Issue en `needs-work` y tarea de implementación | Commit validado, comentario de entrega y cambio a `fix-proposed`; termina. |
+| QA1 | `fix-proposed` y commits entregados | Comentario de aprobación de esos commits; mantiene `fix-proposed` y termina. |
+| QA2 | `fix-proposed` y aprobación de QA1 de la misma versión | Revisión registrada y cambio a `fix-confirmed`; termina. |
+| QA3 o administrador | `fix-confirmed` y revisiones satisfactorias | Aceptación registrada y cambio a `fixed`; termina. |
+
+- El implementador produce la entrada de QA1: commits con la solución y sus pruebas, resultados satisfactorios de
+  los controles requeridos, comentario de entrega en el issue y transición de `needs-work` a `fix-proposed`.
+  Cuando se cumplen estas condiciones, debe entregar sin esperar aprobaciones QA ni pedir confirmación adicional
+  para esa transición. Retener la entrega deja sin entrada a los agentes de revisión y bloquea el pipeline.
+- QA1, QA2 y QA3 trabajan en sesiones separadas, con contexto independiente de la conversación y del razonamiento
+  interno del implementador. Ningún agente debe crear subagentes para ejecutar otra etapa del pipeline ni asumir
+  otro rol por iniciativa propia. El implementador no convoca, coordina ni espera revisores antes de entregar.
+  La persona responsable coordina la asignación de las etapas siguientes.
+- Cada revisión identifica el issue y los commits evaluados y se fundamenta en los requisitos, el código, el diff,
+  las pruebas y la evidencia de verificaciones. QA2 debe comprobar que la aprobación de QA1 corresponde a la
+  versión evaluada. Una corrección posterior requiere nuevas revisiones QA1 y QA2 sobre la nueva versión.
+- Un rechazo entrega hallazgos concretos y devuelve el issue a `needs-work`; el revisor termina su intervención.
+  La persona responsable asigna la corrección. El implementador corrige y entrega nuevamente a `fix-proposed`,
+  sin iniciar un ciclo automático de subagentes ni prolongar su sesión hasta obtener aceptación.
+- `feedback.md` y `review.md` deben identificar el issue, los commits revisados y los hallazgos pendientes o
+  resueltos. Solo las observaciones vigentes y aplicables a la tarea constituyen trabajo pendiente.
+
+**Responsabilidades de cada etapa:**
   1. **Agente implementador:** Debe comprender íntegramente la tarea, realizar las consultas necesarias y recopilar
      el contexto relevante antes de intervenir. Su responsabilidad es implementar la solución mínima, robusta, correcta
      y coherente con la lógica de negocio, evitando cambios innecesarios y resolviendo la causa raíz del problema. Debe
      crear, modificar o ampliar las pruebas unitarias necesarias. Si existen `feedback.md` y/o `review.md`, debe atender
-     sus observaciones como parte de la tarea. Antes de realizar un commit, debe ejecutar las pruebas relevantes y los
+     sus observaciones vigentes y aplicables al issue. Antes de realizar un commit, debe ejecutar las pruebas relevantes y los
      linters exigidos por el proyecto. Normalmente los issues que este agente debe atender estan etiquetados con el tag
      `needs-work`, el tag `needs-review` indica que el trabajo aun requiere análisis adicional antes de implementar la
      solución requerida. Los issues asociados, debe referenciarlos en el commit utilizando `Refs: ###`.
-  3. **Primer agente de QA (QA1):** Realiza una revisión estática, rigurosa e independiente del código y de la solución
+     Tras crear los commits autorizados y completar satisfactoriamente los controles requeridos, debe comentar en el
+     issue la solución, los commits, las verificaciones y las limitaciones, retirar `needs-work` y agregar `fix-proposed`.
+     Esta transición es responsabilidad del implementador y está autorizada por este flujo; no requiere aprobación
+     previa de QA ni confirmación adicional. Después entrega el resultado y termina su intervención.
+     Si un control requerido falla o no puede ejecutarse, documenta el bloqueo, mantiene `needs-work` y entrega el
+     estado pendiente sin presentarlo como una solución lista para QA. No hace push sin autorización expresa.
+  2. **Primer agente de QA (QA1):** Recibe una solución en `fix-proposed` y realiza una revisión estática, rigurosa e independiente del código y de la solución
      implementada. No modifica código, no ejecuta pruebas ni linters, pues estos controles corresponden al implementador.
      Debe verificar la corrección funcional, lógica de negocio en marco de los flujos de negocio O2C, S2P, R2R, I2F y CTM
      estandares, robustez, mantenibilidad, consistencia arquitectónica, casos límite, posibles regresiones y suficiencia de
      las pruebas implementadas. **Criterio de aprobación:** solo puede aprobar si la solución satisface los requisitos,
-     preserva los invariantes del sistema y no presenta defectos relevantes ni riesgos sin resolver. Si aprueba, mueve el
-     issue a `fix-proposed`. Si rechaza, lo mueve a `needs-work`, comenta los hallazgos en GitHub y documenta los asuntos
-     pendientes en `feedback.md`, con evidencia y recomendaciones concretas.
-  4. **Segundo agente de QA (QA2):** Ejecuta una segunda revisión estática, rigurosa e independiente, sin modificar código
-     ni repetir pruebas o linters. No debe limitarse a aceptar las conclusiones de QA1: debe evaluar por cuenta propia la
+     preserva los invariantes del sistema y no presenta defectos relevantes ni riesgos sin resolver. Si aprueba, mantiene el
+     issue en `fix-proposed` y comenta su aprobación con los commits evaluados, dejando la entrega disponible para QA2.
+     Si rechaza, retira `fix-proposed`, lo mueve a `needs-work`, comenta los hallazgos en GitHub y documenta los asuntos
+     pendientes en `feedback.md`, con evidencia y recomendaciones concretas, utilizando un formato oneliner en el archivo
+     `feedback.md`.
+  3. **Segundo agente de QA (QA2):** Recibe una solución en `fix-proposed` aprobada por QA1 y ejecuta una segunda revisión estática, rigurosa e independiente,
+     sin modificar código ni repetir pruebas o linters. No debe limitarse a aceptar las conclusiones de QA1: debe evaluar por cuenta propia la
      implementación, los requisitos, la lógica de negocio en marco de los flujos negocios O2C, S2P, R2R, I2F y CTM estandares,
      los casos límite, la cobertura funcional y los riesgos de regresión. Criterio de aprobación: únicamente puede mover el issue
      a `fix-confirmed` si confirma que la solución es correcta, completa, robusta y coherente con las reglas del proyecto, sin
-     defectos bloqueantes ni observaciones pendientes. En caso contrario, debe devolverlo a `needs-work`. En ambos casos debe
-     comentar su decisión y justificación en GitHub y registrar su revisión local en `review.md`.
-  5. **Regla de aceptación y retroalimentación:** QA1 y QA2 deben emitir evaluaciones independientes, fundamentadas en evidencia
+     defectos bloqueantes ni observaciones pendientes; retira `fix-proposed` al agregar `fix-confirmed`.
+     En caso contrario, debe retirar `fix-proposed` y devolverlo a `needs-work`. En ambos casos debe
+     comentar su decisión y justificación en GitHub y registrar su revisión local en `review.md` utilizando un formato oneliner.
+  4. **Regla de aceptación y retroalimentación:** QA1 y QA2 deben emitir evaluaciones independientes, fundamentadas en evidencia
      y criterios técnicos verificables. Ninguna aprobación puede basarse únicamente en que las pruebas pasaron o en la conformidad
      del agente anterior. Todo rechazo debe identificar el problema, su impacto y el comportamiento esperado. Cualquier retorno
-     a `needs-work` obliga al implementador a corregir los hallazgos y reiniciar el ciclo de revisión QA1 → QA2. Ningún agente debe
+     a `needs-work` requiere una nueva asignación de corrección y posteriores revisiones QA1 → QA2, coordinadas por la
+     persona responsable. No obliga al implementador a convocar revisores ni a esperar su aprobación. Ningún agente debe
      cerrar issues ni realizar push sin autorización expresa, el objetivo de los agentes es asegurar que el sistema ofrezca completa,
      robusta, predecible, auditable de los flujos de negocio O2C, S2P, R2R, I2F y CTM estandares manejados por la industria.
-  8. **Cierre definitivo y cuarta revisión:** El estado `fix-confirmed` no constituye una aceptación definitiva. Un issue en este
+  5. **Cierre definitivo y cuarta revisión:** El estado `fix-confirmed` no constituye una aceptación definitiva. Un issue en este
      estado puede regresar a `needs-work` si se identifican defectos, regresiones, inconsistencias o incumplimientos de los requisitos,
      siempre que la decisión esté técnicamente fundamentada y documentada mediante un comentario en GitHub. Únicamente un cuarto agente
      expresamente autorizado (QA3) o el administrador del repositorio puede mover un issue a `fixed`, después de verificar que la
      solución cumple los criterios de aceptación y que las revisiones anteriores fueron satisfactorias. Los agentes Implementador,
      QA1 y QA2 no están autorizados a establecer el estado `fixed`. Ningún cambio de estado o cambio de etiqueta debe realizarse sin
-     justificación y trazabilidad.
+     justificación y trazabilidad. Al mover a `fixed` o devolver a `needs-work`, se retira `fix-confirmed`.
 
 ## Contexto
 
@@ -184,7 +241,7 @@ Los commits deben tener calidad y seguir el siguiente formato:
   como documentación del cambio.
 - Cerrar siempre el commit con el sign-off apropiado.
 
- Los commits deben ser pequeños y acotados. No hacer commits gigantes, incomprensibles e inauditables. 
+ Los commits deben ser pequeños y acotados. No hacer commits gigantes, incomprensibles e inauditables.
 
 Usa siempre .venv o venv para ejecutar las pruebas de calidad.
 
