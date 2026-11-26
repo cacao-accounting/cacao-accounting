@@ -146,18 +146,6 @@ def _restore_missing_matrix(app, snapshot: ApprovalConfigSnapshot, writer: User)
     database.session.commit()
 
 
-def _create_draft_without_matrix(app, reference_users) -> tuple[ApprovalConfigSnapshot, str]:
-    """Create a persisted balanced journal while the approval matrix is empty."""
-    snapshot = _configure_missing_matrix(app, reference_users["writer"])
-    with patch("cacao_accounting.contabilidad.journal_service.log_create"):
-        journal = create_journal_draft(
-            _journal_payload(f"NO-MATRIX-{uuid4().hex[:8]}"),
-            user_id=str(reference_users["admin"].id),
-            assign_identifier=False,
-        )
-    return snapshot, journal.id
-
-
 def _remove_test_journal(journal_id: str) -> None:
     """Remove the temporary draft after the HTTP regression has inspected it."""
     database.session.execute(
@@ -199,13 +187,34 @@ def test_post_sin_regla_deja_diario_borrador_y_no_anuncia_aprobacion(
 ):
     """Neither a privileged nor a submitting user receives fake approval state."""
     del entorno_contable
-    with app.app_context():
-        snapshot, journal_id = _create_draft_without_matrix(app, reference_users)
-
+    old_mode_present = "MODO_ESCRITORIO" in app.config
+    old_mode = app.config.get("MODO_ESCRITORIO", False)
+    snapshot: ApprovalConfigSnapshot | None = None
+    journal_id: str | None = None
     try:
-        _assert_submission_stays_draft(app, authenticated_client, username, journal_id)
+        with app.app_context():
+            snapshot = _configure_missing_matrix(app, reference_users["writer"])
+            with patch("cacao_accounting.contabilidad.journal_service.log_create"):
+                journal = create_journal_draft(
+                    _journal_payload(f"NO-MATRIX-{uuid4().hex[:8]}"),
+                    user_id=str(reference_users["admin"].id),
+                    assign_identifier=False,
+                )
+            created_journal_id = journal.id
+            journal_id = created_journal_id
+
+        _assert_submission_stays_draft(app, authenticated_client, username, created_journal_id)
     finally:
         with app.app_context():
-            _remove_test_journal(journal_id)
-            writer = database.session.get(User, str(reference_users["writer"].id))
-            _restore_missing_matrix(app, snapshot, writer)
+            if journal_id is not None:
+                _remove_test_journal(journal_id)
+            if snapshot is None:
+                database.session.rollback()
+                if old_mode_present:
+                    app.config["MODO_ESCRITORIO"] = old_mode
+                else:
+                    app.config.pop("MODO_ESCRITORIO", None)
+            else:
+                writer = database.session.get(User, str(reference_users["writer"].id))
+                assert writer is not None
+                _restore_missing_matrix(app, snapshot, writer)
