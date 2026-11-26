@@ -223,6 +223,7 @@ def _crear_landed_cost_capitalizado(
     books: list[tuple[str, str]],
     *,
     split_allocations: bool = False,
+    second_bin: tuple[str, str] | None = None,
 ) -> str:
     """Crea una capitalización USD/NIO con GL balanceado en cada libro activo."""
     with app.app_context():
@@ -249,23 +250,27 @@ def _crear_landed_cost_capitalizado(
         )
         database.session.add(document)
         database.session.flush()
-        line_count = 2 if split_allocations else 1
-        line_qty = Decimal("100") / line_count
-        allocated_amount = Decimal("100") / line_count
-        functional_amount = Decimal("3600") / line_count
-        unit_inventory_cost = Decimal("100") + functional_amount / line_qty
-        for _ in range(line_count):
+        if second_bin is not None:
+            allocation_specs = [(item_code, warehouse, Decimal("100")), (*second_bin, Decimal("100"))]
+        elif split_allocations:
+            allocation_specs = [(item_code, warehouse, Decimal("50"))] * 2
+        else:
+            allocation_specs = [(item_code, warehouse, Decimal("100"))]
+        for target_item, target_warehouse, allocated_amount in allocation_specs:
+            functional_amount = allocated_amount * Decimal("36")
+            line_qty = Decimal("100")
+            unit_inventory_cost = Decimal("100") + functional_amount / line_qty
             line = ImportLandedCostItem(
                 import_landed_cost_id=document.id,
-                item_code=item_code,
+                item_code=target_item,
                 item_name="Artículo con costo capitalizado",
                 qty=line_qty,
                 uom="UND",
-                rate=Decimal("1"),
-                amount=Decimal("100") / line_count,
+                rate=allocated_amount / line_qty,
+                amount=allocated_amount,
                 base_rate=Decimal("36"),
                 base_amount=functional_amount,
-                warehouse=warehouse,
+                warehouse=target_warehouse,
             )
             database.session.add(line)
             database.session.flush()
@@ -283,36 +288,40 @@ def _crear_landed_cost_capitalizado(
                 create_valuation_adjustment=True,
             )
         database.session.flush()
-
-        inventory = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1109")).scalar_one()
-        offset = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="5201")).scalar_one()
-        for ledger_id, currency in books:
-            book_amount = Decimal("3600") if currency == "NIO" else Decimal("100")
-            for account, debit, credit in (
-                (inventory, book_amount, Decimal("0")),
-                (offset, Decimal("0"), book_amount),
-            ):
-                database.session.add(
-                    GLEntry(
-                        posting_date=FECHA,
-                        company="cacao",
-                        ledger_id=ledger_id,
-                        account_id=account.id,
-                        account_code=account.code,
-                        debit=debit,
-                        credit=credit,
-                        debit_in_account_currency=debit,
-                        credit_in_account_currency=credit,
-                        account_currency=currency,
-                        company_currency=currency,
-                        exchange_rate=Decimal("1"),
-                        voucher_type="import_landed_cost",
-                        voucher_id=document.id,
-                        is_cancelled=False,
-                    )
-                )
+        _sembrar_gl_landed_cost(document, books, sum((spec[2] for spec in allocation_specs), Decimal("0")))
         database.session.commit()
         return str(document.id)
+
+
+def _sembrar_gl_landed_cost(document: ImportLandedCost, books: list[tuple[str, str]], transaction_amount: Decimal) -> None:
+    """Seed balanced original ledger entries for the landed-cost fixture."""
+    inventory = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1109")).scalar_one()
+    offset = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="5201")).scalar_one()
+    for ledger_id, currency in books:
+        book_amount = transaction_amount * Decimal("36") if currency == "NIO" else transaction_amount
+        for account, debit, credit in (
+            (inventory, book_amount, Decimal("0")),
+            (offset, Decimal("0"), book_amount),
+        ):
+            database.session.add(
+                GLEntry(
+                    posting_date=FECHA,
+                    company="cacao",
+                    ledger_id=ledger_id,
+                    account_id=account.id,
+                    account_code=account.code,
+                    debit=debit,
+                    credit=credit,
+                    debit_in_account_currency=debit,
+                    credit_in_account_currency=credit,
+                    account_currency=currency,
+                    company_currency=currency,
+                    exchange_rate=Decimal("1"),
+                    voucher_type="import_landed_cost",
+                    voucher_id=document.id,
+                    is_cancelled=False,
+                )
+            )
 
 
 def test_ajuste_de_solo_valor_sin_stock_se_rechaza(entorno_contable_aislado):
@@ -465,16 +474,22 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
         entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
         entity.valuation_method = valuation_method
         database.session.commit()
-    item_code, warehouse = _escenario(app, qty="100", stock_value="10000", layer_value="10000")
-    _registrar_stock_ledger_inicial(app, item_code, warehouse, books)
-    landed_cost_id = _crear_landed_cost_capitalizado(app, item_code, warehouse, books, split_allocations=True)
+    candidate_bins = [
+        _escenario(app, qty="100", stock_value="10000", layer_value="10000"),
+        _escenario(app, qty="100", stock_value="10000", layer_value="10000"),
+    ]
+    clean_bin, consumed_bin = sorted(candidate_bins, key=lambda stock_key: stock_key[0])
+    for stock_key in (clean_bin, consumed_bin):
+        _registrar_stock_ledger_inicial(app, *stock_key, books)
+    landed_cost_id = _crear_landed_cost_capitalizado(app, *clean_bin, books, second_bin=consumed_bin)
+    item_codes = [clean_bin[0], consumed_bin[0]]
 
     with app.app_context():
         landed_cost = database.session.get(ImportLandedCost, landed_cost_id)
         assert landed_cost is not None
         entry = _entrada(
-            item_code,
-            warehouse,
+            consumed_bin[0],
+            consumed_bin[1],
             "adjustment_negative",
             consumed_qty,
             str(Decimal(consumed_qty) * Decimal("136")),
@@ -482,21 +497,27 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
         _postear(app, entry)
         database.session.commit()
         item_bin = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+            database.select(StockBin).filter_by(company="cacao", item_code=consumed_bin[0], warehouse=consumed_bin[1])
         ).scalar_one()
         assert item_bin.actual_qty == expected_qty
         assert item_bin.stock_value == expected_value
 
         layer_ids_before = set(
             database.session.execute(
-                database.select(StockValuationLayer.id).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+                database.select(StockValuationLayer.id).filter(
+                    StockValuationLayer.company == "cacao",
+                    StockValuationLayer.item_code.in_(item_codes),
+                )
             )
             .scalars()
             .all()
         )
         movement_ids_before = set(
             database.session.execute(
-                database.select(StockLedgerEntry.id).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+                database.select(StockLedgerEntry.id).filter(
+                    StockLedgerEntry.company == "cacao",
+                    StockLedgerEntry.item_code.in_(item_codes),
+                )
             )
             .scalars()
             .all()
@@ -505,7 +526,10 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
             database.session.execute(
                 database.select(StockLedgerBookEntry.id)
                 .join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
-                .filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+                .filter(
+                    StockLedgerEntry.company == "cacao",
+                    StockLedgerEntry.item_code.in_(item_codes),
+                )
             )
             .scalars()
             .all()
@@ -527,20 +551,25 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
                     actor_user_id=actor.id,
                     cancellation_date=FECHA,
                 )
-        database.session.rollback()
+        database.session.expire_all()
 
         cancelled_document = database.session.get(ImportLandedCost, landed_cost_id)
         assert cancelled_document is not None
         assert cancelled_document.docstatus == 1
-        bin_after = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+        clean_bin_after = database.session.execute(
+            database.select(StockBin).filter_by(company="cacao", item_code=clean_bin[0], warehouse=clean_bin[1])
         ).scalar_one()
-        assert (bin_after.actual_qty, bin_after.stock_value) == (expected_qty, expected_value)
+        assert (clean_bin_after.actual_qty, clean_bin_after.stock_value) == (Decimal("100"), Decimal("13600"))
+        consumed_bin_after = database.session.execute(
+            database.select(StockBin).filter_by(company="cacao", item_code=consumed_bin[0], warehouse=consumed_bin[1])
+        ).scalar_one()
+        assert (consumed_bin_after.actual_qty, consumed_bin_after.stock_value) == (expected_qty, expected_value)
         assert (
             set(
                 database.session.execute(
-                    database.select(StockValuationLayer.id).filter_by(
-                        company="cacao", item_code=item_code, warehouse=warehouse
+                    database.select(StockValuationLayer.id).filter(
+                        StockValuationLayer.company == "cacao",
+                        StockValuationLayer.item_code.in_(item_codes),
                     )
                 )
                 .scalars()
@@ -551,7 +580,10 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
         assert (
             set(
                 database.session.execute(
-                    database.select(StockLedgerEntry.id).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+                    database.select(StockLedgerEntry.id).filter(
+                        StockLedgerEntry.company == "cacao",
+                        StockLedgerEntry.item_code.in_(item_codes),
+                    )
                 )
                 .scalars()
                 .all()
@@ -563,7 +595,10 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
                 database.session.execute(
                     database.select(StockLedgerBookEntry.id)
                     .join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
-                    .filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+                    .filter(
+                        StockLedgerEntry.company == "cacao",
+                        StockLedgerEntry.item_code.in_(item_codes),
+                    )
                 )
                 .scalars()
                 .all()
@@ -580,6 +615,7 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
         assert {entry.id for entry in landed_cost_gl if not entry.is_reversal} == original_gl_ids
         assert all(not entry.is_cancelled for entry in landed_cost_gl)
         assert all(not entry.is_reversal for entry in landed_cost_gl)
+        database.session.rollback()
 
 
 def test_cancelar_landed_cost_sin_consumo_reversa_por_libro_y_moneda(entorno_contable_aislado):
