@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import NamedTuple
 from uuid import uuid4
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import select
@@ -18,6 +19,7 @@ from cacao_accounting.database import (
     ApprovalRequest,
     CacaoConfig,
     ComprobanteContable,
+    ComprobanteContableDetalle,
     GLEntry,
     Modules,
     Roles,
@@ -147,12 +149,25 @@ def _restore_missing_matrix(app, snapshot: ApprovalConfigSnapshot, writer: User)
 def _create_draft_without_matrix(app, reference_users) -> tuple[ApprovalConfigSnapshot, str]:
     """Create a persisted balanced journal while the approval matrix is empty."""
     snapshot = _configure_missing_matrix(app, reference_users["writer"])
-    journal = create_journal_draft(
-        _journal_payload(f"NO-MATRIX-{uuid4().hex[:8]}"),
-        user_id=str(reference_users["admin"].id),
-        assign_identifier=False,
-    )
+    with patch("cacao_accounting.contabilidad.journal_service.log_create"):
+        journal = create_journal_draft(
+            _journal_payload(f"NO-MATRIX-{uuid4().hex[:8]}"),
+            user_id=str(reference_users["admin"].id),
+            assign_identifier=False,
+        )
     return snapshot, journal.id
+
+
+def _remove_test_journal(journal_id: str) -> None:
+    """Remove the temporary draft after the HTTP regression has inspected it."""
+    database.session.execute(
+        database.delete(ComprobanteContableDetalle).where(
+            ComprobanteContableDetalle.transaction == "journal_entry",
+            ComprobanteContableDetalle.transaction_id == journal_id,
+        )
+    )
+    database.session.execute(database.delete(ComprobanteContable).where(ComprobanteContable.id == journal_id))
+    database.session.commit()
 
 
 def _assert_submission_stays_draft(app, authenticated_client, username: str, journal_id: str) -> None:
@@ -191,5 +206,6 @@ def test_post_sin_regla_deja_diario_borrador_y_no_anuncia_aprobacion(
         _assert_submission_stays_draft(app, authenticated_client, username, journal_id)
     finally:
         with app.app_context():
+            _remove_test_journal(journal_id)
             writer = database.session.get(User, str(reference_users["writer"].id))
             _restore_missing_matrix(app, snapshot, writer)
