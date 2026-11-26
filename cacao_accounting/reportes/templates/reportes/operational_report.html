@@ -53,16 +53,7 @@
             {{ _("Mes fiscal") }}
             <input class="form-control" type="month" name="month" value="{{ filter_state.month or '' }}" required>
           </label>
-        {% elif filter_mode in ("bank_movement", "kardex") %}
-          <label class="form-label mb-0">
-            {{ _("Fecha desde") }}
-            <input class="form-control" type="date" name="date_from" value="{{ filter_state.date_from or '' }}">
-          </label>
-          <label class="form-label mb-0">
-            {{ _("Fecha hasta") }}
-            <input class="form-control" type="date" name="date_to" value="{{ filter_state.date_to or '' }}">
-          </label>
-        {% else %}
+        {% elif filter_mode not in ("bank_movement", "kardex") %}
           <label class="form-label mb-0">
             {{ _("Fecha clave") }}
             <input class="form-control" type="date" name="as_of_date" value="{{ filter_state.as_of_date or '' }}">
