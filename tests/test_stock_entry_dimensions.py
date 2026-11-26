@@ -21,7 +21,9 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 from cacao_accounting.database import (
     AccountingPeriod,
+    Accounts,
     Book,
+    CompanyDefaultAccount,
     CostCenter,
     Currency,
     Entity,
@@ -38,6 +40,7 @@ from cacao_accounting.database import (
     User,
     UserCompanyAccess,
     Warehouse,
+    WarehouseCompanyAccount,
     database,
 )
 from cacao_accounting.contabilidad.posting_service import PostingError, post_stock_entry
@@ -461,9 +464,7 @@ def _post_entrada_con_detalle(application, lineas, payload_fiscal: str = ""):
 def _detalle_por_linea(application):
     """Devuelve (centro, proyecto, observaciones) de cada línea persistida."""
     entrada = database.session.execute(database.select(StockEntry)).scalars().one()
-    lineas = database.session.execute(
-        database.select(StockEntryItem).filter_by(stock_entry_id=entrada.id)
-    ).scalars().all()
+    lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entrada.id)).scalars().all()
     return {(linea.cost_center_code, linea.project_code, linea.remarks) for linea in lineas}
 
 
@@ -542,3 +543,138 @@ def test_entrada_rechaza_cargos_fiscales_del_modal(inventario_dimensiones):
         assert response.status_code == 200
         assert database.session.execute(database.select(StockEntry)).scalars().all() == []
 
+
+def test_posting_rechaza_dimension_ajena_en_el_detalle(inventario_dimensiones):
+    """Una dimensión de alpha en la línea bloquea el asiento sin dejar GL ni stock."""
+    application, dimensiones = inventario_dimensiones
+    propias = dimensiones["cacao"]
+    ajenas = dimensiones["alpha"]
+
+    with application.app_context():
+        entrada = StockEntry(
+            purpose="material_receipt",
+            company="cacao",
+            posting_date=FECHA,
+            to_warehouse="WH-CACAO",
+            cost_center_code=propias["centro"],
+            unit_code=propias["unidad"],
+            project_code=propias["proyecto"],
+            transaction_currency="NIO",
+            base_currency="NIO",
+            docstatus=1,
+        )
+        database.session.add(entrada)
+        database.session.flush()
+        database.session.add(
+            StockEntryItem(
+                stock_entry_id=entrada.id,
+                item_code="ART-1",
+                target_warehouse="WH-CACAO",
+                qty=Decimal("1"),
+                uom="UND",
+                qty_in_base_uom=Decimal("1"),
+                basic_rate=Decimal("10"),
+                amount=Decimal("10"),
+                cost_center_code=ajenas["centro"],
+            )
+        )
+        database.session.commit()
+
+        with application.test_request_context(f"/inventory/stock-entry/{entrada.id}"):
+            from flask_login import login_user
+
+            usuario = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+            login_user(usuario)
+            with pytest.raises(PostingError, match="centro de costo"):
+                post_stock_entry(entrada)
+            database.session.rollback()
+
+        assert database.session.execute(database.select(GLEntry)).scalars().all() == []
+        assert database.session.execute(database.select(StockLedgerEntry)).scalars().all() == []
+
+
+def test_gl_lleva_las_dimensiones_de_cada_linea(entorno_contable_aislado):
+    """El detalle manda sobre la cabecera y ninguna línea hereda dimensiones ajenas."""
+    application = entorno_contable_aislado.app
+    with application.app_context():
+        cuenta_inventario = database.session.execute(
+            database.select(Accounts.id).filter_by(entity="cacao", code="1109")
+        ).scalar_one()
+        cuenta_ajuste = database.session.execute(
+            database.select(Accounts.id).filter_by(entity="cacao", code="5201")
+        ).scalar_one()
+        for account_id in (cuenta_inventario, cuenta_ajuste):
+            cuenta = database.session.get(Accounts, account_id)
+            assert cuenta is not None
+            cuenta.active = True
+            cuenta.enabled = True
+            cuenta.group = False
+        defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+        defaults.inventory_adjustment_account_id = cuenta_ajuste
+
+        bodega = "DIM-W"
+        database.session.add(Warehouse(code=bodega, name="Bodega dimensiones", company="cacao", is_active=True))
+        database.session.flush()
+        database.session.add(
+            WarehouseCompanyAccount(warehouse_code=bodega, company="cacao", inventory_account_id=cuenta_inventario)
+        )
+        for code in ("CC-L1", "CC-L2", "CC-CAB"):
+            database.session.add(
+                CostCenter(entity="cacao", code=code, name=f"Centro {code}", active=True, enabled=True, group=False)
+            )
+        for code in ("PR-L1", "PR-CAB"):
+            database.session.add(Project(entity="cacao", code=code, name=f"Proyecto {code}", enabled=True))
+        database.session.add(
+            Item(
+                code="DIM-ART",
+                name="Artículo dimensional",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="UND",
+            )
+        )
+        entrada = StockEntry(
+            purpose="adjustment_positive",
+            company="cacao",
+            posting_date=date(2026, 5, 20),
+            to_warehouse=bodega,
+            from_warehouse=bodega,
+            cost_center_code="CC-CAB",
+            project_code="PR-CAB",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            docstatus=1,
+        )
+        database.session.add(entrada)
+        database.session.flush()
+        for index, (centro, proyecto) in enumerate((("CC-L1", "PR-L1"), ("CC-L2", None))):
+            database.session.add(
+                StockEntryItem(
+                    stock_entry_id=entrada.id,
+                    item_code="DIM-ART",
+                    source_warehouse=bodega,
+                    target_warehouse=bodega,
+                    qty=Decimal("1"),
+                    uom="UND",
+                    qty_in_base_uom=Decimal("1"),
+                    basic_rate=Decimal("10"),
+                    amount=Decimal("10"),
+                    cost_center_code=centro,
+                    project_code=proyecto,
+                )
+            )
+        database.session.commit()
+
+        with application.test_request_context(f"/inventory/stock-entry/{entrada.id}"):
+            from flask_login import login_user
+
+            usuario = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+            login_user(usuario)
+            post_stock_entry(entrada)
+
+        asientos = database.session.execute(database.select(GLEntry).filter_by(voucher_id=entrada.id)).scalars().all()
+        assert asientos
+        dimensiones_gl = {(asiento.cost_center_code, asiento.project_code) for asiento in asientos}
+        assert ("CC-L1", "PR-L1") in dimensiones_gl
+        assert ("CC-L2", "PR-CAB") in dimensiones_gl
+        assert all(centro != "CC-CAB" for centro, _proyecto in dimensiones_gl)

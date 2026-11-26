@@ -4893,7 +4893,8 @@ def _add_stock_entry_line_gl_entries(
     if amount <= 0 and residual == 0:
         return
 
-    dimension_kwargs = _get_dimension_kwargs(document)
+    _validate_stock_line_dimensions(line, company)
+    dimension_kwargs = _get_dimension_kwargs(document, line)
 
     if purpose == "material_transfer":
         source_acc = warehouse_inventory_account_id(line.source_warehouse or document.from_warehouse, company)
@@ -5036,12 +5037,30 @@ def _validate_stock_reconciliation_dimensions(document: StockEntry, company: str
             raise PostingError(_("El %(label)s del documento no pertenece a la compañía.") % {"label": label})
 
 
-def _get_dimension_kwargs(document: StockEntry) -> dict[str, Any]:
-    """Get dimension kwargs from document."""
+def _validate_stock_line_dimensions(line: StockEntryItem, company: str) -> None:
+    """Exige que las dimensiones del detalle pertenezcan a la compañía (#1888)."""
+    checks = (
+        (CostCenter, getattr(line, "cost_center_code", None), _("centro de costo")),
+        (Project, getattr(line, "project_code", None), _("proyecto")),
+    )
+    for model, code, label in checks:
+        if not code:
+            continue
+        exists = database.session.execute(
+            select(model.id).where(model.entity == company, model.code == code)
+        ).scalar_one_or_none()
+        if exists is None:
+            raise PostingError(_("La dimensión %(label)s no pertenece a la compañía del documento.") % {"label": label})
+
+
+def _get_dimension_kwargs(document: StockEntry, line: StockEntryItem | None = None) -> dict[str, Any]:
+    """Get dimension kwargs, donde el detalle de línea precede a la cabecera."""
+    line_cost_center = getattr(line, "cost_center_code", None)
+    line_project = getattr(line, "project_code", None)
     return {
-        "cost_center_code": getattr(document, "cost_center_code", None),
+        "cost_center_code": line_cost_center or getattr(document, "cost_center_code", None),
         "unit_code": getattr(document, "unit_code", None),
-        "project_code": getattr(document, "project_code", None),
+        "project_code": line_project or getattr(document, "project_code", None),
     }
 
 
