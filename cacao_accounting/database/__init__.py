@@ -1623,6 +1623,13 @@ class StockEntryItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
     expiry_date = database.Column(database.Date(), nullable=True)
     serial_no = database.Column(database.String(100), nullable=True)
+    # Decision #1888: solo centro de costo, proyecto y observaciones forman parte
+    # del detalle; la cuenta contable se resuelve por reglas de contabilización.
+    cost_center_code = database.Column(database.String(10), nullable=True)
+    project_code = database.Column(
+        database.String(10), database.ForeignKey(_PROJECT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    remarks = database.Column(database.Text(), nullable=True)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     current_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     counted_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)

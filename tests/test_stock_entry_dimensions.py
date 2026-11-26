@@ -420,3 +420,125 @@ def test_edicion_rechaza_dimension_ajena_en_conciliacion(inventario_dimensiones,
         )
         assert database.session.execute(database.select(StockLedgerEntry)).scalars().all() == []
         assert database.session.execute(database.select(GLEntry)).scalars().all() == []
+
+
+def _post_entrada_con_detalle(application, lineas, payload_fiscal: str = ""):
+    """Postea una entrada cuyo detalle lleva dimensiones y observaciones por línea."""
+    with application.app_context():
+        naming_series_id = database.session.execute(
+            database.select(NamingSeries.id).filter_by(entity_type="stock_entry", company="cacao")
+        ).scalar_one()
+    data = {
+        "purpose": "material_receipt",
+        "company": "cacao",
+        "naming_series": naming_series_id,
+        "posting_date": FECHA.isoformat(),
+        "transaction_currency": "NIO",
+        "to_warehouse": "WH-CACAO",
+        "tax_lines_payload": payload_fiscal,
+    }
+    for index, linea in enumerate(lineas):
+        data.update(
+            {
+                f"item_code_{index}": "ART-1",
+                f"qty_{index}": "1",
+                f"rate_{index}": "10",
+                f"uom_{index}": "UND",
+                f"cost_center_{index}": linea.get("centro", ""),
+                f"project_{index}": linea.get("proyecto", ""),
+                f"remarks_{index}": linea.get("observaciones", ""),
+                f"account_{index}": linea.get("cuenta", ""),
+                f"unit_{index}": linea.get("unidad", ""),
+            }
+        )
+    client = application.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = "admin"
+        session["_fresh"] = True
+    return client.post("/inventory/stock-entry/material-receipt/new", data=data)
+
+
+def _detalle_por_linea(application):
+    """Devuelve (centro, proyecto, observaciones) de cada línea persistida."""
+    entrada = database.session.execute(database.select(StockEntry)).scalars().one()
+    lineas = database.session.execute(
+        database.select(StockEntryItem).filter_by(stock_entry_id=entrada.id)
+    ).scalars().all()
+    return {(linea.cost_center_code, linea.project_code, linea.remarks) for linea in lineas}
+
+
+def test_linea_persiste_dimensiones_y_observaciones_propias(inventario_dimensiones):
+    """Cada línea conserva su centro, proyecto y observaciones de la compañía."""
+    application, dimensiones = inventario_dimensiones
+    propias = dimensiones["cacao"]
+
+    with application.app_context():
+        database.session.add(
+            CostCenter(
+                entity="cacao",
+                code="CC-ALTERNO",
+                name="Centro alterno",
+                active=True,
+                enabled=True,
+                group=False,
+            )
+        )
+        database.session.commit()
+        response = _post_entrada_con_detalle(
+            application,
+            [
+                {"centro": propias["centro"], "proyecto": propias["proyecto"], "observaciones": "lote de apertura"},
+                {"centro": "CC-ALTERNO", "observaciones": "sin proyecto"},
+            ],
+        )
+        assert response.status_code == 302
+        assert _detalle_por_linea(application) == {
+            (propias["centro"], propias["proyecto"], "lote de apertura"),
+            ("CC-ALTERNO", None, "sin proyecto"),
+        }
+
+
+@pytest.mark.parametrize(("campo", "dimension"), [("centro", "centro"), ("proyecto", "proyecto")])
+def test_linea_rechaza_dimension_de_otra_compania(inventario_dimensiones, campo, dimension):
+    """Una dimensión de alpha en la línea impide guardar la entrada completa."""
+    application, dimensiones = inventario_dimensiones
+    propias = dimensiones["cacao"]
+    ajenas = dimensiones["alpha"]
+    linea = {"centro": propias["centro"], "proyecto": propias["proyecto"]}
+    linea[campo] = ajenas[dimension]
+
+    with application.app_context():
+        response = _post_entrada_con_detalle(application, [linea])
+        assert response.status_code == 200
+        assert database.session.execute(database.select(StockEntry)).scalars().all() == []
+
+
+@pytest.mark.parametrize("campo", ["cuenta", "unidad"])
+def test_linea_rechaza_controles_no_admitidos(inventario_dimensiones, campo):
+    """La cuenta contable y la unidad de negocio no forman parte del detalle de línea."""
+    application, dimensiones = inventario_dimensiones
+    propias = dimensiones["cacao"]
+
+    with application.app_context():
+        response = _post_entrada_con_detalle(
+            application,
+            [{"centro": propias["centro"], "proyecto": propias["proyecto"], campo: "VALOR-NO-ADMITIDO"}],
+        )
+        assert response.status_code == 200
+        assert database.session.execute(database.select(StockEntry)).scalars().all() == []
+
+
+def test_entrada_rechaza_cargos_fiscales_del_modal(inventario_dimensiones):
+    """El payload fiscal que serializa la plantilla se rechaza, no se ignora."""
+    application, dimensiones = inventario_dimensiones
+    propias = dimensiones["cacao"]
+
+    with application.app_context():
+        response = _post_entrada_con_detalle(
+            application,
+            [{"centro": propias["centro"], "proyecto": propias["proyecto"]}],
+            payload_fiscal='[{"account": "ACC-1", "amount": 19}]',
+        )
+        assert response.status_code == 200
+        assert database.session.execute(database.select(StockEntry)).scalars().all() == []
+

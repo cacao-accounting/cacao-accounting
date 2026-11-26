@@ -7795,6 +7795,14 @@ msgstr "project"
 msgid "La dimensión %(label)s no pertenece a la compañía del documento."
 msgstr "The %(label)s dimension does not belong to the document company."
 
+#: cacao_accounting/inventario/services.py
+msgid "La línea de inventario no admite cuenta contable ni unidad de negocio."
+msgstr "The inventory line does not allow an accounting account or a business unit."
+
+#: cacao_accounting/inventario/services.py
+msgid "Las entradas de inventario no admiten cargos fiscales."
+msgstr "Stock entries do not allow tax charges."
+
 #: cacao_accounting/bancos/services.py:733
 msgid "El concepto del vale es obligatorio."
 msgstr "The voucher concept is required."

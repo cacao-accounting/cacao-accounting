@@ -617,9 +617,24 @@ def _create_line_relation(
     )
 
 
+def _stock_entry_line_detail(entry: StockEntry, index: int) -> tuple[str | None, str | None, str | None]:
+    """Devuelve centro de costo, proyecto y observaciones admitidos por la línea.
+
+    El modal genérico también envía cuenta contable y unidad de negocio; se
+    rechazan para no descartar en silencio valores editados (#1888).
+    """
+    if request.form.get(f"account_{index}", "").strip() or request.form.get(f"unit_{index}", "").strip():
+        raise ValueError(_("La línea de inventario no admite cuenta contable ni unidad de negocio."))
+    cost_center = request.form.get(f"cost_center_{index}", "").strip() or None
+    project = request.form.get(f"project_{index}", "").strip() or None
+    _validate_stock_entry_dimensions(entry.company, cost_center, None, project)
+    return cost_center, project, request.form.get(f"remarks_{index}", "").strip() or None
+
+
 def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Decimal:
     """Create one stock movement line and its source relation."""
     _validate_stock_entry_warehouses(entry)
+    line_cost_center, line_project, line_remarks = _stock_entry_line_detail(entry, index)
     qty = _form_decimal(f"qty_{index}", "1")
     rate = _form_decimal(f"rate_{index}", "0")
     amount = _line_amount(index)
@@ -651,6 +666,9 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
         amount=amount,
         batch_id=request.form.get(f"batch_id_{index}") or None,
         serial_no=request.form.get(f"serial_no_{index}") or None,
+        cost_center_code=line_cost_center,
+        project_code=line_project,
+        remarks=line_remarks,
     )
     database.session.add(line)
     database.session.flush()
@@ -673,8 +691,17 @@ def _submitted_item_code_indexes() -> list[int]:
     return sorted(indexes)
 
 
+def _reject_stock_entry_fiscal_charges() -> None:
+    """Rechaza cargos fiscales: StockEntry no tiene contrato contable aprobado (#1888)."""
+    for field in ("tax_lines_payload", "tax_summary_payload"):
+        payload = (request.form.get(field) or "").strip()
+        if payload and payload not in {"[]", "{}"}:
+            raise ValueError(_("Las entradas de inventario no admiten cargos fiscales."))
+
+
 def _save_stock_entry_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de un movimiento de inventario."""
+    _reject_stock_entry_fiscal_charges()
     total = Decimal("0")
     line_count = 0
     for i in _submitted_item_code_indexes():
