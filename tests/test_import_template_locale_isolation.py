@@ -1,43 +1,144 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 - 2026 William Jos? Moreno Reyes
+# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""Template downloads must be isolated per request/locale."""
+"""#1678: la descarga de plantillas no depende de un archivo compartido."""
 
 from __future__ import annotations
 
+import io
+import threading
+
+import openpyxl
+import pytest
+
 from cacao_accounting.database import Modules, database
 
+# Rutas que dejaron las implementaciones rechazadas: el directorio temporal por
+# petición y el archivo compartido del código anterior a esa corrección.
+PREFIJO_TEMPORAL = "import-template-"
+CAMINO_COMPARTIDO = ("templates", "template_customer.csv")
 
-def _ensure_imports_module(app) -> None:
+
+def _activa_modulo_imports(app) -> None:
+    """Habilita el módulo de importaciones para la ruta bajo prueba."""
     with app.app_context():
-        module = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
-        if module is None:
-            module = Modules(module="imports", default=False, enabled=True)
-            database.session.add(module)
+        modulo = database.session.execute(database.select(Modules).filter_by(module="imports")).scalar_one_or_none()
+        if modulo is None:
+            modulo = Modules(module="imports", default=False, enabled=True)
+            database.session.add(modulo)
         else:
-            module.enabled = True
+            modulo.enabled = True
         database.session.commit()
 
 
-def test_download_template_uses_request_locale_and_isolated_path(app, entorno_contable, authenticated_client, monkeypatch):
-    _ensure_imports_module(app)
-    client = authenticated_client("admin")
+@pytest.fixture
+def instancia_aislada(app, tmp_path, monkeypatch):
+    """Dirige ``instance_path`` a un directorio vacío y exclusivo de la prueba."""
+    instancia = tmp_path / "instance"
+    instancia.mkdir()
+    monkeypatch.setattr(app, "instance_path", str(instancia))
+    return instancia
 
-    import importlib
 
-    routes = importlib.import_module("cacao_accounting.imports.routes")
+def _residuo_temporal(instancia) -> list[str]:
+    """Nombres ``import-template-*`` sobrevivientes bajo el directorio de instancia."""
+    return [p.name for p in instancia.iterdir() if p.name.startswith(PREFIJO_TEMPORAL)]
 
-    monkeypatch.setattr(routes, "get_locale", lambda: "es")
-    es = client.get("/imports/template/customer?format=csv")
-    monkeypatch.setattr(routes, "get_locale", lambda: "en")
-    en = client.get("/imports/template/customer?format=csv")
 
-    assert es.status_code == 200
-    assert en.status_code == 200
+def test_cada_descarga_usa_el_idioma_de_su_peticion_sin_dejar_archivos(
+    app, entorno_contable, authenticated_client, monkeypatch, instancia_aislada
+):
+    """Dos locales seguidos no comparten contenido ni escriben en ``instance_path``."""
+    _activa_modulo_imports(app)
+    from cacao_accounting.imports import routes as modulo_rutas
 
-    es_body = es.data.decode("utf-8-sig").strip()
-    en_body = en.data.decode("utf-8-sig").strip()
+    cliente = authenticated_client("admin")
+    cuerpos = {}
+    for idioma, encabezado in (("es", "nombre,"), ("en", "name,")):
+        monkeypatch.setattr(modulo_rutas, "get_locale", lambda: idioma)
+        respuesta = cliente.get("/imports/template/customer?format=csv")
+        assert respuesta.status_code == 200, respuesta.status_code
+        cuerpos[idioma] = respuesta.data.decode("utf-8-sig").strip()
+        assert cuerpos[idioma].startswith(encabezado), cuerpos[idioma][:40]
 
-    assert es_body.startswith("nombre,")
-    assert en_body.startswith("name,")
-    assert es_body != en_body
+    # El defecto original era un archivo compartido entre peticiones: si algo vuelve
+    # a materializarse en disco, el contenido dependerá del orden de escritura.
+    assert cuerpos["es"] != cuerpos["en"]
+    assert not _residuo_temporal(instancia_aislada)
+    assert not (instancia_aislada / CAMINO_COMPARTIDO[0] / CAMINO_COMPARTIDO[1]).exists()
+
+
+def test_descarga_no_depende_de_que_exista_instance_path(app, entorno_contable, authenticated_client, tmp_path, monkeypatch):
+    """Una instalación limpia responde 200 aunque falte el directorio de instancia."""
+    _activa_modulo_imports(app)
+    monkeypatch.setattr(app, "instance_path", str(tmp_path / "instance" / "ausente"))
+    assert not (tmp_path / "instance" / "ausente").exists()
+
+    respuesta = authenticated_client("admin").get("/imports/template/customer?format=csv")
+
+    assert respuesta.status_code == 200
+    assert respuesta.data.decode("utf-8-sig").strip().startswith("nombre,")
+    assert respuesta.mimetype == "text/csv"
+
+
+@pytest.mark.parametrize("formato", ["xlsx", "ods"])
+def test_plantillas_binarias_se_entregan_completas(app, entorno_contable, authenticated_client, formato, instancia_aislada):
+    """El buffer en memoria debe rebobinarse: entregado desde el final sale vacío."""
+    _activa_modulo_imports(app)
+
+    respuesta = authenticated_client("admin").get(f"/imports/template/customer?format={formato}")
+
+    assert respuesta.status_code == 200
+    esperado = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        if formato == "xlsx"
+        else "application/vnd.oasis.opendocument.spreadsheet"
+    )
+    assert respuesta.mimetype == esperado
+    assert "attachment" in respuesta.headers["Content-Disposition"]
+    assert respuesta.data[:2] == b"PK", "el cuerpo debe ser un ZIP válido"
+    assert not _residuo_temporal(instancia_aislada)
+    if formato == "xlsx":
+        hoja = openpyxl.load_workbook(io.BytesIO(respuesta.data)).active
+        assert str(hoja["A1"].value).startswith("nombre"), "la fila de encabezados debe existir"
+
+
+def test_construccion_concurrente_no_comparte_buffer(monkeypatch):
+    """Dos hebras simultáneas obtienen payloads independientes, sin recurso compartido."""
+    from cacao_accounting.imports import routes as modulo_rutas
+    from cacao_accounting.imports.adapters.customer import CustomerAdapter
+
+    idioma_hilo = threading.local()
+    monkeypatch.setattr(modulo_rutas, "get_locale", lambda: getattr(idioma_hilo, "codigo", "es"))
+    adapter = CustomerAdapter()
+    barrera = threading.Barrier(2)
+    resultados: dict[str, str] = {}
+    errores: list[str] = []
+
+    def construir(codigo: str, encabezado: str) -> None:
+        """Genera la plantilla al mismo tiempo que la otra hebra."""
+        try:
+            idioma_hilo.codigo = codigo
+            barrera.wait(timeout=30)
+            cuerpo, _ = modulo_rutas._plantilla_en_memoria(adapter, "csv")
+            texto = cuerpo.read().decode("utf-8")
+            if not texto.startswith(encabezado):
+                errores.append(f"{codigo}: {texto[:40]!r}")
+                return
+            resultados[codigo] = texto
+        except Exception as exc:  # noqa: BLE001 - el fallo de la hebra debe verse en la prueba
+            errores.append(f"{codigo}: {exc!r}")
+
+    hebras = [
+        threading.Thread(target=construir, args=("es", "nombre,")),
+        threading.Thread(target=construir, args=("en", "name,")),
+    ]
+    for hebra in hebras:
+        hebra.start()
+    for hebra in hebras:
+        hebra.join(timeout=60)
+        assert not hebra.is_alive(), "la construcción concurrente quedó bloqueada"
+
+    assert not errores, errores
+    assert set(resultados) == {"es", "en"}
+    assert resultados["es"] != resultados["en"], "ambas hebras leyeron el mismo contenido"

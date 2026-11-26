@@ -5,13 +5,13 @@
 
 import os
 import csv
+import io
 import openpyxl
 from odf import opendocument, table as odf_table
 from odf.text import P as odf_paragraph
 from cacao_accounting.exceptions import flash_error
 from flask import (
     Blueprint,
-    after_this_request,
     render_template,
     request,
     redirect,
@@ -413,6 +413,42 @@ def cancel(batch_id):
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 
+def _plantilla_en_memoria(adapter, extension: str) -> tuple[io.BytesIO, str]:
+    """Construye la plantilla de importación sobre un buffer en memoria.
+
+    ``send_file`` mantiene el descriptor abierto hasta que el cuerpo se consume,
+    por lo que un archivo temporal bajo ``instance_path`` no podía borrarse al
+    terminar la petición y quedaba filtrado en el árbol de la aplicación
+    (#1678). Generar en memoria elimina el disco del camino de descarga.
+    """
+    columnas = adapter.localized_columns(str(get_locale()))
+    cuerpo = io.BytesIO()
+    match extension:
+        case "xlsx":
+            libro = openpyxl.Workbook()
+            libro.active.append(columnas)
+            libro.save(cuerpo)
+            mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case "ods":
+            doc = opendocument.OpenDocumentSpreadsheet()
+            tabla = odf_table.Table(name="Template")
+            doc.spreadsheet.addElement(tabla)
+            fila = odf_table.TableRow()
+            tabla.addElement(fila)
+            for columna in columnas:
+                celda = odf_table.TableCell(valuetype="string")
+                celda.addElement(odf_paragraph(text=columna))
+                fila.addElement(celda)
+            doc.save(cuerpo)
+            mimetype = "application/vnd.oasis.opendocument.spreadsheet"
+        case _:
+            cuerpo.write(",".join(columnas).encode("utf-8"))
+            mimetype = "text/csv"
+    # Sin esto el buffer se entrega desde el final de la escritura y el cuerpo sale vacío.
+    cuerpo.seek(0)
+    return cuerpo, mimetype
+
+
 @imports.route("/template/<record_type>")
 @modulo_activo("imports")
 @login_required
@@ -422,45 +458,11 @@ def download_template(record_type):
     fmt = request.args.get("format", "csv").lower()
     service = ImportService()
     try:
-        import shutil
-        import tempfile
-
         adapter = service._get_adapter(record_type)
-        template_dir = tempfile.mkdtemp(prefix="import-template-", dir=current_app.instance_path)
-        output_name = secure_filename(f"template_{record_type}.{fmt if fmt in {'xlsx', 'ods'} else 'csv'}")
-
-        @after_this_request
-        def _cleanup_template_dir(response):
-            shutil.rmtree(template_dir, ignore_errors=True)
-            return response
-
-        if fmt == "xlsx":
-            wb = openpyxl.Workbook()
-            ws = wb.active
-            ws.append(adapter.localized_columns(str(get_locale())))
-            template_path = os.path.join(template_dir, output_name)
-            wb.save(template_path)
-            return send_file(template_path, as_attachment=True, download_name=output_name)
-
-        if fmt == "ods":
-            doc = opendocument.OpenDocumentSpreadsheet()
-            spreadsheet = odf_table.Table(name="Template")
-            doc.spreadsheet.addElement(spreadsheet)
-            tr = odf_table.TableRow()
-            spreadsheet.addElement(tr)
-            for col in adapter.localized_columns(str(get_locale())):
-                tc = odf_table.TableCell(valuetype="string")
-                tc.addElement(odf_paragraph(text=col))
-                tr.addElement(tc)
-            template_path = os.path.join(template_dir, output_name)
-            doc.save(template_path)
-            return send_file(template_path, as_attachment=True, download_name=output_name)
-
-        content = ",".join(adapter.localized_columns(str(get_locale())))
-        template_path = os.path.join(template_dir, output_name)
-        with open(template_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        return send_file(template_path, as_attachment=True, download_name=output_name)
+        extension = fmt if fmt in {"xlsx", "ods"} else "csv"
+        output_name = secure_filename(f"template_{record_type}.{extension}")
+        cuerpo, mimetype = _plantilla_en_memoria(adapter, extension)
+        return send_file(cuerpo, as_attachment=True, download_name=output_name, mimetype=mimetype)
 
     except (ValueError, OSError) as e:
         flash_error(e)
