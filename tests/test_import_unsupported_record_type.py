@@ -109,12 +109,24 @@ def test_nuevo_rechaza_tipo_sin_adaptador(app, authenticated_client, entorno_con
     with app.app_context():
         antes = database.session.execute(database.select(database.func.count(ImportBatch.id))).scalar_one()
 
+    record_type = f"not_a_real_adapter_{uuid4().hex[:6]}"
     response = client.post(
         "/imports/new",
-        data={"company_id": "cacao", "record_type": f"not_a_real_adapter_{uuid4().hex[:6]}"},
+        data={"company_id": "cacao", "record_type": record_type},
+        follow_redirects=True,
     )
 
-    assert response.status_code == 302
+    assert response.status_code == 200
+    assert response.history[0].status_code == 302
+    html = response.get_data(as_text=True)
+    assert record_type in html
+    assert any(
+        message in html
+        for message in (
+            f"Tipo de registro no soportado: {record_type}",
+            f"Unsupported record type: {record_type}",
+        )
+    )
     with app.app_context():
         despues = database.session.execute(database.select(database.func.count(ImportBatch.id))).scalar_one()
     assert despues == antes
