@@ -16,6 +16,10 @@ grafo de imports estático:
 - ``cacao_accounting/cli.py`` y ``__main__.py``: invocado por consola.
 - Filtros y globales registrados en ``printing``: los consume Jinja desde
   plantillas guardadas en base de datos.
+- La previsualización de ``rebuild_stock_valuation_layers`` y su cadena privada
+  en ``inventario/service.py``: su rama destructiva está probada en
+  ``test_stock_valuation_layer_append_only.py`` y el rediseño pertenece a #651;
+  retirar la rama ``dry_run`` queda pendiente del fallo del dueño (#1841).
 """
 
 from __future__ import annotations
