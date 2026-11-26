@@ -96,7 +96,6 @@ Cada entrega de implementación sigue este flujo: leer issue y todos sus comenta
 - **Lote #1710 — [ROOT CAUSE][AUTH] Ciclo de vida de credenciales y mensajería: revocación, fail-safe e idempotencia:** #1732, #1958.
 - **Lote #2209 — Consolidación causa-raíz: Sanitización/validación de salidas y recursos (XSS, SSRF, redirect):** #2131.
 - **Lote #2231 — Consolidación causa-raíz: Invariante de operabilidad mínima (último admin/única entidad activa):** #1767, #1771.
-- **Lote #2238 — Consolidación causa-raíz: Redacción de secretos en logs y evidencia:** (hijos cerrados en GitHub).
 
 ### Fase 2 — Persistencia y garantías transversales
 
@@ -111,7 +110,6 @@ Cada entrega de implementación sigue este flujo: leer issue y todos sus comenta
 - **Lote #2210 — Consolidación causa-raíz: Integridad referencial: FK desactivada y guards de uso/eliminación no replicados:** no se cambia la etiqueta.
 - **Lote #2219 — Consolidación causa-raíz: Contrato de driver/base Tier-1 (portabilidad SQLite↔PostgreSQL y deploy):** #1851.
 - **Lote #2220 — Consolidación causa-raíz: Idempotencia y guards de entorno en seed/bootstrap:** #1848.
-- **Lote #2229 — Consolidación causa-raíz: Invalidación de caché al mutar datos maestros:** (hijos cerrados en GitHub).
 - **Lote #2232 — Consolidación causa-raíz: Verificación de idempotencia por clave (mutable o sin comparar contenido):** #1815, #1836.
 - **Lote #2234 — Consolidación causa-raíz: Contrato de migraciones de esquema sobre bases con datos:** #1849, #1898.
 
@@ -128,11 +126,9 @@ Cada entrega de implementación sigue este flujo: leer issue y todos sus comenta
   - **Salida:** rechazo consistente en ruta y servicio; pruebas con referencias inexistentes/ajenas, enums, estados y valores límite. No inferir reglas que el issue no define.
 - **Lote #1718 — [ROOT CAUSE][IMPORTS] Paridad de validación y ciclo de vida de lotes de importación:** #1476, #1528, #1537.
 - **Lote #2205 — Consolidación causa-raíz: Canonización de sentinelas de entrada (booleanos, 0/NULL, texto vacío):** #1483, #1555.
-- **Lote #2207 — Consolidación causa-raíz: Traducción de errores de dominio/registros inexistentes a 400/404:** (hijos cerrados en GitHub).
 - **Lote #2211 — Consolidación causa-raíz: Edición con reconstrucción de payload que descarta campos:** #1818, #1822.
 - **Lote #2213 — Consolidación causa-raíz: Contratos de unicidad de negocio (scope, dimensiones, defaults):** #1340, #1681, #1687.
 - **Lote #2214 — Consolidación causa-raíz: Parseo de líneas por índices contiguos descarta filas posteriores:** #1871.
-- **Lote #2216 — Consolidación causa-raíz: Fallback silencioso ante entradas inválidas en lecturas/reportes:** (hijos cerrados en GitHub).
 - **Lote #2217 — Consolidación causa-raíz: Resolución canónica de fechas/hora en UTC:** #1390, #1514.
 - **Lote #2221 — Consolidación causa-raíz: Validación de dominio en parámetros de lectura:** #1969.
 - **Lote #2226 — Consolidación causa-raíz: Mutación de configuración sin validar estados in-flight:** #1498.
@@ -175,11 +171,7 @@ Cada entrega de implementación sigue este flujo: leer issue y todos sus comenta
   - formularios y flujos: #1567, #1775, #1791, #1795, #1808, #1842, #1855, #1870, #1875, #1883, #1976.
   - Separar commits por componente/flujo si no comparten plantilla o contrato. Corregir el backend antes de UI salvo que la pantalla bloquee el flujo o exponga datos.
 - **Lote #1712 — [ROOT CAUSE][FRONTEND] Invalidación de respuestas async: request-id/snapshot en todos los flujos:** #1862.
-- **Lote #2212 — Consolidación causa-raíz: Contrato de filtros de listado (persistencia al paginar y por doctype):** (hijos cerrados en GitHub).
-- **Lote #2222 — Consolidación causa-raíz: Precisión/formato numérico derivado de Currency.decimals en frontend:** (hijos cerrados en GitHub).
 - **Lote #2228 — Consolidación causa-raíz: Grano/clave de agregación en reportes y KPI:** #1619.
-- **Lote #2237 — Consolidación causa-raíz: Plantillas compartidas con contexto por registro:** (hijos cerrados en GitHub).
-- **Lote #2239 — Consolidación causa-raíz: Render del árbol jerárquico preserva el DOM del template:** (hijos cerrados en GitHub).
 
 ## Issues standalone: añadirlos al flujo consumidor
 
