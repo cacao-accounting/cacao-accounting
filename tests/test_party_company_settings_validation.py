@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy.pool import StaticPool
+from werkzeug.datastructures import MultiDict
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -27,7 +28,11 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.party_management import filtrar_parties_por_companias, tercero_tiene_vinculo_autorizado
-from cacao_accounting.party_settings import PartyCompanySettingsParams, upsert_party_company_settings
+from cacao_accounting.party_settings import (
+    PartyCompanySettingsParams,
+    upsert_party_company_settings,
+    upsert_party_company_settings_rows,
+)
 
 
 def _params(**overrides) -> PartyCompanySettingsParams:
@@ -314,6 +319,101 @@ def test_solo_el_vinculo_activo_autoriza(activo, autorizado):
                 database.session.execute(filtrar_parties_por_companias(database.select(Party), ["cacao"])).scalars().all()
             )
             assert (ids["party"] in {party.id for party in visibles}) is autorizado
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def _post_configuracion(plantilla: str | None = None, regla: str | None = None) -> MultiDict:
+    """Construye el POST de la tabla de configuración por compañía de un tercero."""
+    campos = [("company", "cacao"), ("company_is_active", "1")]
+    if plantilla is not None:
+        campos.append(("tax_template_id", plantilla))
+    if regla is not None:
+        campos.append(("default_tax_rule_id", regla))
+    return MultiDict(campos)
+
+
+def test_vaciar_el_selector_limpia_la_configuracion_fiscal():
+    """#1725: enviar el campo vacío es una decisión y debe borrar la fila compartida."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            plantilla = _tax_template("cacao", "selling")
+            regla = _tax_rule("cacao", applies_to="sales", tax_type="tax", recognition_event="invoice")
+            upsert_party_company_settings_rows(ids["party"], "customer", _post_configuracion(plantilla, regla))
+            database.session.commit()
+            database.session.expire_all()
+
+            guardado = database.session.execute(database.select(CompanyParty)).scalar_one()
+            assert (guardado.tax_template_id, guardado.default_tax_rule_id) == (plantilla, regla)
+
+            upsert_party_company_settings_rows(ids["party"], "customer", _post_configuracion("", ""))
+            database.session.commit()
+            database.session.expire_all()
+
+            limpiado = database.session.execute(database.select(CompanyParty)).scalar_one()
+            assert limpiado.tax_template_id is None
+            assert limpiado.default_tax_rule_id is None
+            assert limpiado.is_active is True
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_omitir_el_campo_conserva_la_configuracion_del_otro_rol():
+    """#1725: un formulario que no renderiza el campo no puede borrar la fila compartida."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            plantilla = _tax_template("cacao", "selling")
+            regla = _tax_rule("cacao", applies_to="sales", tax_type="tax", recognition_event="invoice")
+            upsert_party_company_settings_rows(ids["party"], "customer", _post_configuracion(plantilla, regla))
+            database.session.commit()
+
+            upsert_party_company_settings_rows(ids["party"], "supplier", _post_configuracion())
+            database.session.commit()
+            database.session.expire_all()
+
+            conservado = database.session.execute(database.select(CompanyParty)).scalar_one()
+            assert conservado.tax_template_id == plantilla
+            assert conservado.default_tax_rule_id == regla
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_el_servicio_distingue_no_enviar_de_enviar_vacio():
+    """#1725: ``None`` conserva la fila compartida y ``""`` la limpia."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            plantilla = _tax_template("cacao", "selling")
+            regla = _tax_rule("cacao", applies_to="sales", tax_type="tax", recognition_event="invoice")
+            upsert_party_company_settings(
+                ids["party"], "customer", "cacao", _params(tax_template_id=plantilla, default_tax_rule_id=regla)
+            )
+            database.session.commit()
+
+            upsert_party_company_settings(ids["party"], "customer", "cacao", _params())
+            database.session.commit()
+            database.session.expire_all()
+
+            conservado = database.session.execute(database.select(CompanyParty)).scalar_one()
+            assert (conservado.tax_template_id, conservado.default_tax_rule_id) == (plantilla, regla)
+
+            upsert_party_company_settings(
+                ids["party"], "customer", "cacao", _params(tax_template_id="", default_tax_rule_id="")
+            )
+            database.session.commit()
+            database.session.expire_all()
+
+            limpiado = database.session.execute(database.select(CompanyParty)).scalar_one()
+            assert limpiado.tax_template_id is None
+            assert limpiado.default_tax_rule_id is None
     finally:
         with application.app_context():
             database.session.remove()

@@ -372,6 +372,18 @@ def _row_value(values: list[str], index: int) -> str:
     return values[index].strip() if index < len(values) else ""
 
 
+def _submitted_row_value(form: Mapping[str, Any], field: str, index: int) -> str | None:
+    """Valor fiscal de la fila: ``None`` si el formulario no envía el campo.
+
+    La diferencia entre no enviar y enviar vacío es lo que permite borrar una
+    configuración compartida decidida por la persona usuaria (#1725).
+    """
+    valores = _request_values(form, field)
+    if index >= len(valores):
+        return None
+    return valores[index].strip()
+
+
 def _truthy_row_value(values: list[str], index: int, *, default: bool = False) -> bool:
     if index >= len(values):
         return default
@@ -385,8 +397,6 @@ def upsert_party_company_settings_rows(party_id: str, role: str, values: Mapping
         "company_is_active": _request_values(values, "company_is_active"),
         "receivable_account_id": _request_values(values, "receivable_account_id"),
         "payable_account_id": _request_values(values, "payable_account_id"),
-        "tax_template_id": _request_values(values, "tax_template_id"),
-        "default_tax_rule_id": _request_values(values, "default_tax_rule_id"),
         "default_price_list_id": _request_values(values, "default_price_list_id"),
         "allow_purchase_invoice_without_order": _request_values(values, "allow_purchase_invoice_without_order"),
         "allow_purchase_invoice_without_receipt": _request_values(values, "allow_purchase_invoice_without_receipt"),
@@ -413,8 +423,8 @@ def upsert_party_company_settings_rows(party_id: str, role: str, values: Mapping
             is_active=_truthy_row_value(fields["company_is_active"], index, default=True),
             receivable_account_id=_row_value(fields["receivable_account_id"], index) or None,
             payable_account_id=_row_value(fields["payable_account_id"], index) or None,
-            tax_template_id=_row_value(fields["tax_template_id"], index) or None,
-            default_tax_rule_id=_row_value(fields["default_tax_rule_id"], index) or None,
+            tax_template_id=_submitted_row_value(values, "tax_template_id", index),
+            default_tax_rule_id=_submitted_row_value(values, "default_tax_rule_id", index),
             default_price_list_id=_row_value(fields["default_price_list_id"], index) or None,
             allow_purchase_invoice_without_order=allow_without_order,
             allow_purchase_invoice_without_receipt=allow_without_receipt,
@@ -562,12 +572,13 @@ def upsert_party_company_settings(
         is_new = False
 
     company_party.is_active = params.is_active
-    # #1725: la fila es única por tercero+compañía. Un formulario de proveedor
-    # no debe borrar la plantilla/regla del cliente cuando el campo llega vacío.
-    if params.tax_template_id or is_new:
-        company_party.tax_template_id = params.tax_template_id
-    if params.default_tax_rule_id or is_new:
-        company_party.default_tax_rule_id = params.default_tax_rule_id
+    # #1725: ``CompanyParty`` es una fila compartida por ambos roles. Un formulario
+    # que no envía el campo fiscal no puede borrar la configuración del otro rol,
+    # pero uno que lo envía vacío sí expresa la decisión de limpiarla.
+    if params.tax_template_id is not None or is_new:
+        company_party.tax_template_id = params.tax_template_id or None
+    if params.default_tax_rule_id is not None or is_new:
+        company_party.default_tax_rule_id = params.default_tax_rule_id or None
     # #1725: el formulario de proveedor no edita la lista de ventas del rol
     # cliente; en un tercero dual la configuración de proveedor debe conservarla.
     if role == "customer":
