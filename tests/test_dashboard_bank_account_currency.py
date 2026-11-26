@@ -649,3 +649,52 @@ def test_saldo_ignora_cancelados_y_libro_secundario(bank_balance_scene):
     fila = next(fila for fila in payload["tables"]["account_balances"] if fila["account_no"] == "USD-SCOPE-2262")
     assert Decimal(str(fila["balance"])) == Decimal("100")
     assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("7200")
+
+
+def test_legacy_sin_moneda_no_se_asigna_a_cuentas_multimoneda(bank_balance_scene):
+    """Una partida sin moneda no se duplica entre cuentas USD y EUR del mismo GL."""
+    with bank_balance_scene.app_context():
+        cuenta = database.session.query(Accounts).filter_by(entity="cacao", code="1102").first()
+        libro = database.session.query(Book).filter_by(entity="cacao").first()
+        database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
+        banco = Bank(name="Banco EUR sin moneda", is_active=True)
+        database.session.add(banco)
+        database.session.flush()
+        database.session.add(
+            BankAccount(
+                company="cacao",
+                bank_id=banco.id,
+                account_name="Cuenta EUR sin moneda",
+                account_no="EUR-UNKNOWN-2262",
+                currency="EUR",
+                gl_account_id=cuenta.id,
+                is_active=True,
+            )
+        )
+        database.session.add(
+            GLEntry(
+                posting_date=date(2026, 5, 24),
+                company="cacao",
+                account_id=cuenta.id,
+                ledger_id=libro.id,
+                debit=Decimal("3600"),
+                credit=Decimal("0"),
+                debit_in_account_currency=None,
+                credit_in_account_currency=None,
+                account_currency=None,
+                company_currency=None,
+                exchange_rate=None,
+                voucher_type="journal_entry",
+                voucher_id="JE-2262-UNKNOWN-CURRENCY",
+                is_cancelled=False,
+            )
+        )
+        database.session.commit()
+
+        payload = get_banks_data("cacao", "NIO", None, None)
+
+    rows = {row["account_no"]: row for row in payload["tables"]["account_balances"]}
+    assert Decimal(str(rows["USD-1607"]["balance"])) == Decimal("100")
+    assert Decimal(str(rows["EUR-UNKNOWN-2262"]["balance"])) == Decimal("0")
+    assert rows["EUR-UNKNOWN-2262"]["currency"] == "EUR"
+    assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("7200")

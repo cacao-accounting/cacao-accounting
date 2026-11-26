@@ -655,9 +655,9 @@ def _resolve_bank_balance(
         direct_value = direct.get((account.id, None))
     if pair_usage.get((account.gl_account_id, currency), 0) != 1:
         return direct_value if direct_value is not None else Decimal("0")
+    # A legacy row with no currency remains in the GL total, but cannot be
+    # assigned safely to a currency-specific bank row.
     legacy_value = legacy.get((account.gl_account_id, currency))
-    if legacy_value is None:
-        legacy_value = legacy.get((account.gl_account_id, None))
     if direct_value is None and legacy_value is None:
         return Decimal("0")
     return (direct_value or Decimal("0")) + (legacy_value or Decimal("0"))
