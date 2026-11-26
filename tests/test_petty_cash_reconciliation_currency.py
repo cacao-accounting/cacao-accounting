@@ -33,6 +33,9 @@ def _limpia_fondos(app):
     yield
     with app.app_context():
         for fondo_id, account_id in _FONDOS_CREADOS:
+            database.session.execute(
+                database.delete(PettyCashReconciliation).where(PettyCashReconciliation.petty_cash_id == fondo_id)
+            )
             database.session.execute(database.delete(PettyCashVoucher).where(PettyCashVoucher.petty_cash_id == fondo_id))
             database.session.execute(database.delete(GLEntry).where(GLEntry.account_id == account_id))
             fondo = database.session.get(PettyCashAccount, fondo_id)
