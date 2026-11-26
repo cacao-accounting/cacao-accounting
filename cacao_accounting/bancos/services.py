@@ -569,16 +569,16 @@ def _is_petty_cash_name_conflict(error: IntegrityError) -> bool:
     )
 
 
-def _apply_petty_cash_name(petty_cash: PettyCashAccount, name: str | None) -> None:
-    """Valida y aplica el nombre editable de una caja chica."""
+def _validate_petty_cash_name(petty_cash: PettyCashAccount, name: str | None) -> str | None:
+    """Valida el nombre editable y lo devuelve normalizado sin mutar el fondo."""
     if name is None:
-        return
+        return None
     normalized_name = name.strip()
     if not normalized_name:
         raise ValueError(_("El nombre de la caja chica es obligatorio."))
     if _petty_cash_name_exists(petty_cash.company, normalized_name, petty_cash.id):
         raise ValueError(_("Ya existe una caja chica con ese nombre en la compañía."))
-    petty_cash.name = normalized_name
+    return normalized_name
 
 
 def update_petty_cash_account(
@@ -592,27 +592,45 @@ def update_petty_cash_account(
     notes: str | None = None,
 ) -> PettyCashAccount:
     """Actualiza los campos editables de una caja chica."""
-    account = database.session.get(Accounts, petty_cash.account_id)
-    _apply_petty_cash_name(petty_cash, name)
+    account = (
+        _validate_petty_cash_account(petty_cash.company, account_id)
+        if account_id
+        else database.session.get(Accounts, petty_cash.account_id)
+    )
     if account_id:
-        account = _validate_petty_cash_account(petty_cash.company, account_id)
         assert account is not None
-        if currency is None:
-            _validate_petty_cash_currency(petty_cash.company, petty_cash.currency or None, account)
-        petty_cash.account_id = account_id
-    if float_amount is not None:
-        if float_amount < 0:
-            raise ValueError(_("El fondo autorizado debe ser un importe no negativo."))
-        petty_cash.float_amount = float_amount
-    if currency is not None:
-        if account is None:
-            raise ValueError(_("La caja chica no tiene una cuenta contable valida."))
-        petty_cash.currency = _validate_petty_cash_currency(petty_cash.company, currency, account)
+
+    normalized_name = _validate_petty_cash_name(petty_cash, name)
+    if float_amount is not None and float_amount < 0:
+        raise ValueError(_("El fondo autorizado debe ser un importe no negativo."))
+
+    validated_currency = None
+    if account is not None:
+        validated_currency = _validate_petty_cash_currency(
+            petty_cash.company,
+            currency or petty_cash.currency,
+            account,
+        )
+    elif currency is not None:
+        raise ValueError(_("La caja chica no tiene una cuenta contable valida."))
+
     if custodian_id is not None:
         _validate_petty_cash_custodian(custodian_id)
+
+    if normalized_name is not None:
+        petty_cash.name = normalized_name
+    if account_id:
+        petty_cash.account_id = account_id
+    if float_amount is not None:
+        petty_cash.float_amount = float_amount
+    if currency is not None:
+        assert validated_currency is not None
+        petty_cash.currency = validated_currency
+    if custodian_id is not None:
         petty_cash.custodian_id = custodian_id or None
     if notes is not None:
         petty_cash.notes = notes
+
     try:
         database.session.commit()
     except IntegrityError as exc:

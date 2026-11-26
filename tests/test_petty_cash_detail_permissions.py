@@ -56,6 +56,7 @@ def caja_detalle():
             [
                 Modules(module="cash", default=False, enabled=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Currency(code="USD", name="Dólar", decimals=2, active=True, default=False),
                 Entity(
                     code="cacao",
                     name="Cacao",
@@ -110,8 +111,29 @@ def caja_detalle():
             active=True,
             enabled=True,
             account_type="petty_cash",
+            currency="NIO",
         )
-        database.session.add(cuenta)
+        cuenta_nio_alternativa = Accounts(
+            code="1.01.05.002",
+            name="Caja Chica NIO Alternativa",
+            entity="cacao",
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="petty_cash",
+            currency="NIO",
+        )
+        cuenta_usd = Accounts(
+            code="1.01.05.003",
+            name="Caja Chica USD",
+            entity="cacao",
+            group=False,
+            active=True,
+            enabled=True,
+            account_type="petty_cash",
+            currency="USD",
+        )
+        database.session.add_all([cuenta, cuenta_nio_alternativa, cuenta_usd])
         database.session.flush()
         fondo = PettyCashAccount(
             company="cacao",
@@ -140,7 +162,12 @@ def caja_detalle():
         )
         database.session.add(RolesUser(user_id="consulta-detalle", role_id=rol_consulta.id, active=True))
         database.session.commit()
-        ids = {"fondo": fondo.id}
+        ids = {
+            "fondo": fondo.id,
+            "nio": cuenta.id,
+            "nio_alternativa": cuenta_nio_alternativa.id,
+            "usd": cuenta_usd.id,
+        }
     yield application, ids
     with application.app_context():
         database.session.remove()
@@ -220,6 +247,68 @@ def test_editar_caja_chica_persiste_nombre(caja_detalle):
     with application.app_context():
         fondo = database.session.get(PettyCashAccount, ids["fondo"])
         assert fondo is not None and fondo.name == "Fondo Operativo Renombrado"
+
+
+@pytest.mark.parametrize("currency", [None, "NIO"], ids=["sin-moneda", "moneda-explicita"])
+def test_editar_caja_chica_rechaza_cuenta_usd_sin_aplicar_cambios(caja_detalle, currency):
+    """#1088: el HTTP muestra el mismatch y conserva todos los campos del fondo."""
+    application, ids = caja_detalle
+    client = application.test_client()
+    _iniciar(client, "administrador-caja")
+    datos = {
+        "name": "Fondo que no debe cambiar",
+        "account_id": ids["usd"],
+        "float_amount": "900",
+        "notes": "Nota que no debe cambiar",
+    }
+    if currency is not None:
+        datos["currency"] = currency
+
+    response = client.post(
+        f"/cash_management/petty-cash/{ids['fondo']}/edit",
+        data=datos,
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "La moneda de la caja chica debe coincidir con la moneda de su cuenta contable." in response.get_data(as_text=True)
+    with application.app_context():
+        fondo = database.session.get(PettyCashAccount, ids["fondo"])
+        assert fondo is not None
+        assert fondo.name == "Fondo Detalle Permisos"
+        assert fondo.account_id == ids["nio"]
+        assert fondo.currency == "NIO"
+        assert fondo.float_amount == Decimal("500")
+        assert fondo.notes is None
+
+
+def test_editar_caja_chica_guarda_cuenta_compatible(caja_detalle):
+    """#1088: el HTTP permite cambiar a otra cuenta GL de la misma moneda."""
+    application, ids = caja_detalle
+    client = application.test_client()
+    _iniciar(client, "administrador-caja")
+
+    response = client.post(
+        f"/cash_management/petty-cash/{ids['fondo']}/edit",
+        data={
+            "name": "Fondo Operativo NIO",
+            "account_id": ids["nio_alternativa"],
+            "currency": "NIO",
+            "float_amount": "750",
+            "notes": "Cuenta compatible",
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    with application.app_context():
+        fondo = database.session.get(PettyCashAccount, ids["fondo"])
+        assert fondo is not None
+        assert fondo.name == "Fondo Operativo NIO"
+        assert fondo.account_id == ids["nio_alternativa"]
+        assert fondo.currency == "NIO"
+        assert fondo.float_amount == Decimal("750")
+        assert fondo.notes == "Cuenta compatible"
 
 
 @pytest.mark.parametrize("new_name", ["", "Fondo Duplicado"])
