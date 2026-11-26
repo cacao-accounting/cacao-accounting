@@ -14,6 +14,7 @@ cantidad devuelta no exceda lo recibido.
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
@@ -21,6 +22,11 @@ from uuid import uuid4
 import pytest
 
 from cacao_accounting.approval_engine import ApprovalEngine, approved_execution
+from cacao_accounting.compras.purchase_reconciliation_service import (
+    PurchaseReconciliationError,
+    create_purchase_receipt_return_allocations,
+)
+from cacao_accounting.compras.services import _validate_return_receipt_against_original
 from cacao_accounting.contabilidad.posting_service import post_purchase_receipt
 from cacao_accounting.database import (
     Accounts,
@@ -85,7 +91,7 @@ def _sembrar_cuentas(escenario) -> None:
     database.session.commit()
 
 
-def _sembrar_cadena(devolucion_qty: Decimal) -> dict[str, object]:
+def _sembrar_cadena(devolucion_qty: Decimal, qty_recibida: Decimal = Decimal("4")) -> dict[str, object]:
     """Crea OC, recepción posteada y devolución borrador sin relaciones de línea."""
     sufijo = uuid4().hex[:8]
     supplier = database.session.execute(database.select(Party).limit(1)).scalar_one()
@@ -136,12 +142,12 @@ def _sembrar_cadena(devolucion_qty: Decimal) -> dict[str, object]:
         purchase_receipt_id=original.id,
         item_code=item.code,
         item_name=item.name,
-        qty=Decimal("4"),
-        qty_in_base_uom=Decimal("4"),
+        qty=qty_recibida,
+        qty_in_base_uom=qty_recibida,
         uom=uom.code,
         rate=Decimal("10"),
-        amount=Decimal("40"),
-        base_amount=Decimal("40"),
+        amount=qty_recibida * Decimal("10"),
+        base_amount=qty_recibida * Decimal("10"),
         warehouse=almacen.code,
     )
     database.session.add(original_item)
@@ -155,8 +161,8 @@ def _sembrar_cadena(devolucion_qty: Decimal) -> dict[str, object]:
             target_type="purchase_receipt",
             target_id=original.id,
             target_item_id=original_item.id,
-            qty=Decimal("4"),
-            qty_in_base_uom=Decimal("4"),
+            qty=qty_recibida,
+            qty_in_base_uom=qty_recibida,
             uom=uom.code,
             relation_type="consume",
             status="active",
@@ -425,3 +431,89 @@ def test_devolucion_rechaza_origen_de_otra_compania_o_proveedor(entorno_contable
         database.session.rollback()
         database.session.refresh(devolucion)
         assert devolucion.docstatus == 0
+
+
+def _mutar_en_otra_sesion(app, *, original_id: str | None = None, allocation_id: str | None = None) -> None:
+    """Cambia el estado persistido desde otra sesión sin refrescar la del llamador."""
+
+    def mutar() -> None:
+        with app.app_context():
+            if original_id is not None:
+                original = database.session.get(PurchaseReceipt, original_id)
+                original.docstatus = 2
+            else:
+                allocation = database.session.get(PurchaseReceiptReturnAllocation, allocation_id)
+                allocation.status = "cancelled"
+            database.session.commit()
+            database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        workers.submit(mutar).result(timeout=10)
+
+
+def test_aprobacion_relee_origen_cancelado_en_otra_sesion(entorno_contable_aislado) -> None:
+    """La aprobación no acepta una recepción cancelada tras esperar el lock (#2283)."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        _sembrar_cuentas(entorno_contable_aislado)
+        datos = _sembrar_cadena(Decimal("2"))
+        devolucion = datos["devolucion"]
+        original = datos["original"]
+        admin = datos["admin"]
+        _habilitar_aprobacion(admin)
+        solicitud = ApprovalEngine.request_approval(devolucion, actor=admin)
+        assert solicitud is not None
+        assert original.docstatus == 1
+
+        _mutar_en_otra_sesion(app, original_id=original.id)
+        assert original.docstatus == 1
+
+        with pytest.raises(ValueError, match="recepción original debe estar aprobada"):
+            ApprovalEngine.approve(devolucion, admin, "Revisión de origen cancelado")
+        database.session.rollback()
+        database.session.refresh(devolucion)
+        assert devolucion.docstatus == 0
+        assert _asignaciones(devolucion) == []
+
+
+def test_conciliacion_relee_origen_cancelado_en_otra_sesion(entorno_contable_aislado) -> None:
+    """La creación de allocations no reutiliza una recepción cancelada en caché (#2283)."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        _sembrar_cuentas(entorno_contable_aislado)
+        datos = _sembrar_cadena(Decimal("2"))
+        original = datos["original"]
+        devolucion = datos["devolucion"]
+        assert original.docstatus == 1
+
+        _mutar_en_otra_sesion(app, original_id=original.id)
+        assert original.docstatus == 1
+
+        with pytest.raises(PurchaseReconciliationError, match="recepción original debe estar aprobada"):
+            create_purchase_receipt_return_allocations(devolucion.id)
+        database.session.rollback()
+        assert _asignaciones(devolucion) == []
+
+
+def test_aprobacion_relee_allocations_canceladas_en_otra_sesion(entorno_contable_aislado) -> None:
+    """El consumo se suma desde la fila vigente, no desde la entidad en caché (#2283)."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        _sembrar_cuentas(entorno_contable_aislado)
+        datos = _sembrar_cadena(Decimal("3"), qty_recibida=Decimal("5"))
+        admin = datos["admin"]
+        _habilitar_aprobacion(admin)
+        primera = datos["devolucion"]
+        _aprobar(primera, admin)
+        allocation = _asignaciones(primera)[0]
+        assert allocation.qty_in_base_uom == Decimal("3")
+
+        segunda = _nueva_devolucion(datos, Decimal("3"))
+        with pytest.raises(ValueError, match="devolución excede la cantidad recibida original"):
+            _validate_return_receipt_against_original(segunda)
+
+        _mutar_en_otra_sesion(app, allocation_id=allocation.id)
+        assert allocation.status == "active"
+
+        _validate_return_receipt_against_original(segunda)
+        assert _asignaciones(primera) == []

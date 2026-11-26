@@ -292,6 +292,31 @@ def _allocated_sum_for_receipt_item(receipt_item_id: str, column: Any, as_of_dat
     )
 
 
+def get_purchase_receipt_for_update(receipt_id: str) -> PurchaseReceipt | None:
+    """Relee una recepción bajo lock, refrescando entidades ya cargadas (#2283)."""
+    return database.session.execute(
+        select(PurchaseReceipt)
+        .where(PurchaseReceipt.id == receipt_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+
+
+def get_active_return_allocations_for_update(original_receipt_item_id: str) -> list[PurchaseReceiptReturnAllocation]:
+    """Devuelve bajo lock las devoluciones activas de una línea receptora (#2283)."""
+    return list(
+        database.session.execute(
+            select(PurchaseReceiptReturnAllocation)
+            .where(
+                PurchaseReceiptReturnAllocation.original_receipt_item_id == original_receipt_item_id,
+                PurchaseReceiptReturnAllocation.status == "active",
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalars()
+    )
+
+
 def _returned_sum_for_receipt_item(receipt_item_id: str, column: Any, as_of_date: date | None) -> Decimal:
     """Suma devoluciones fisicas efectivas hasta la fecha de corte."""
     query = (
@@ -500,7 +525,7 @@ def create_purchase_receipt_return_allocations(receipt_id: str) -> list[Purchase
         return []
     if not returned_receipt.reversal_of:
         raise PurchaseReconciliationError(_("La devolución requiere una recepción original."))
-    original = database.session.get(PurchaseReceipt, returned_receipt.reversal_of, with_for_update=True)
+    original = get_purchase_receipt_for_update(returned_receipt.reversal_of)
     if original is None or original.docstatus != 1:
         raise PurchaseReconciliationError(_("La recepción original debe estar aprobada."))
     if original.company != returned_receipt.company or original.supplier_id != returned_receipt.supplier_id:
@@ -518,12 +543,13 @@ def create_purchase_receipt_return_allocations(receipt_id: str) -> list[Purchase
         original_item = original_candidates[0]
         qty = _decimal_value(return_item.qty)
         qty_in_base_uom = _item_qty_in_base_uom(return_item)
-        already_returned = database.session.execute(
-            select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.qty_in_base_uom), 0)).where(
-                PurchaseReceiptReturnAllocation.original_receipt_item_id == original_item.id,
-                PurchaseReceiptReturnAllocation.status == "active",
-            )
-        ).scalar_one()
+        already_returned = sum(
+            (
+                allocation.qty_in_base_uom or Decimal("0")
+                for allocation in get_active_return_allocations_for_update(original_item.id)
+            ),
+            Decimal("0"),
+        )
         if qty_in_base_uom + _decimal_value(already_returned) > _item_qty_in_base_uom(original_item):
             raise PurchaseReconciliationError(_("La devolución excede la cantidad recibida original."))
         receipt_fx = _decimal_value(returned_receipt.exchange_rate) or Decimal("1")

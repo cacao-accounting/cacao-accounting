@@ -2418,9 +2418,14 @@ def _validate_return_receipt_against_original(receipt: PurchaseReceipt) -> None:
     comprueba que la cantidad devuelta no exceda lo recibido. La cabecera se
     bloquea para serializar devoluciones concurrentes sobre la misma origen.
     """
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        get_active_return_allocations_for_update,
+        get_purchase_receipt_for_update,
+    )
+
     if not receipt.reversal_of:
         raise ValueError(_("La devolución requiere una recepción original."))
-    original = database.session.get(PurchaseReceipt, receipt.reversal_of, with_for_update=True)
+    original = get_purchase_receipt_for_update(receipt.reversal_of)
     if original is None or original.docstatus != 1:
         raise ValueError(_("La recepción original debe estar aprobada."))
     _validate_purchase_source_link(receipt, "purchase_receipt", original.id)
@@ -2436,12 +2441,7 @@ def _validate_return_receipt_against_original(receipt: PurchaseReceipt) -> None:
         original_item = candidates[0]
         already_returned = sum(
             (relation.qty_in_base_uom or Decimal("0"))
-            for relation in database.session.execute(
-                database.select(PurchaseReceiptReturnAllocation).where(
-                    PurchaseReceiptReturnAllocation.original_receipt_item_id == original_item.id,
-                    PurchaseReceiptReturnAllocation.status == "active",
-                )
-            ).scalars()
+            for relation in get_active_return_allocations_for_update(original_item.id)
             if str(relation.return_receipt_item_id) not in return_item_ids
         )
         returned_qty = item.qty_in_base_uom or Decimal("0")
