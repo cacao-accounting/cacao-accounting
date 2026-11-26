@@ -15,6 +15,7 @@ from typing import Any, Sequence, cast
 
 from sqlalchemy import and_, or_, update
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm.exc import StaleDataError
 
 from cacao_accounting.exceptions import flash_error
 from cacao_accounting.numbers import coerce_decimal
@@ -2063,7 +2064,12 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     registro.base_total = (total * registro.exchange_rate).quantize(Decimal("0.0001"))
     after_state = _capture_purchase_state(registro)
     log_update(registro, before=before_state, after=after_state)
-    database.session.commit()
+    try:
+        database.session.commit()
+    except StaleDataError:
+        database.session.rollback()
+        flash(_("El documento fue modificado por otro usuario. Recargue la p?gina e intente nuevamente."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
     flash(_("Orden de compra actualizada correctamente."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
 

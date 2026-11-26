@@ -286,6 +286,8 @@ class DocBase(BaseTabla):
     cancelled_by = database.Column(database.String(26), nullable=True)
     cancel_reason = database.Column(database.Text(), nullable=True)
 
+    __mapper_args__ = {"version_id_col": version}
+
 
 # <---------------------------------------------------------------------------------------------> #
 # Administración de monedas, localización, tasas de cambio.
