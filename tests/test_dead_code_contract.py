@@ -5,10 +5,20 @@
 
 Sustituye al inventario eliminado en ``0970476b``: cada símbolo retirado en
 esta limpieza no debe reaparecer sin una decisión y pruebas propias.
+
+Superficie dinámica excluida del retiro (#1841), porque su consumidor no
+aparece en el grafo de imports:
+
+- ``cacao_accounting/query_tools``: API pública para plugins externos y
+  entry point declarado en ``pyproject``.
+- ``cacao_accounting/cli.py`` y ``__main__.py``: invocado por consola.
+- Filtros y globales registrados en ``printing``: los consume Jinja desde
+  plantillas guardadas en base de datos.
 """
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 import pytest
@@ -93,3 +103,77 @@ def test_excepciones_sin_consumidores_no_reaparecen():
 
     for simbolo in ("DataError", "OperationalError", "AccessDenied"):
         assert not hasattr(cacao_exceptions, simbolo), f"{simbolo} reapareció sin consumidores"
+
+
+# Inventario de #1841 verificado contra HEAD: cada símbolo fue retirado por no
+# tener consumidor en producto, plantilla, CLI ni API documentada.
+RETIRADOS_1841 = [
+    ("cacao_accounting.cancellation_scope", "audit_gl_scope"),
+    ("cacao_accounting.cancellation_scope", "append_only_gl_scope"),
+    ("cacao_accounting.reportes.helpers", "_report_form_key"),
+    ("cacao_accounting.reportes.helpers", "_extract_filter_payload"),
+    ("cacao_accounting.reportes.helpers", "_restore_filters_from_view"),
+    ("cacao_accounting.reportes.helpers", "_safe_page_size"),
+    ("cacao_accounting.reportes.helpers", "_str_or_none"),
+    ("cacao_accounting.bancos.services", "petty_cash_account_choices"),
+    ("cacao_accounting.bancos.services", "update_petty_cash_voucher"),
+    ("cacao_accounting.bancos.statement_service", "suggest_bank_matches"),
+    ("cacao_accounting.bancos.forms", "FormularioPago"),
+    ("cacao_accounting.contabilidad.recurring_journal_service", "_canonical_book_reference"),
+    ("cacao_accounting.contabilidad.recurring_journal_service", "_normalize_ledger_id_for_validation"),
+    ("cacao_accounting.contabilidad.posting_service", "_normalize_ledger_codes"),
+    ("cacao_accounting.contabilidad.posting_service", "_delivery_outgoing_totals"),
+    ("cacao_accounting.contabilidad.posting_service", "_receipt_total"),
+    ("cacao_accounting.contabilidad.posting_service", "_validate_cancel_accounting_period"),
+    ("cacao_accounting.contabilidad.forms", "FormularioSecuencia"),
+    ("cacao_accounting.contabilidad.arap_allocation", "resolve_open_item"),
+    ("cacao_accounting.contabilidad.default_accounts", "accounts_for_company"),
+    ("cacao_accounting.database", "obtiene_texto_unico_cuid2"),
+    ("cacao_accounting.database", "GLEntryDimension"),
+    ("cacao_accounting.database", "CommentMention"),
+    ("cacao_accounting.database", "Assignment"),
+    ("cacao_accounting.database", "BaseTercero"),
+    ("cacao_accounting.database.helpers", "obtener_id_usuario_por_nombre"),
+    ("cacao_accounting.document_identifiers", "suggest_next_external_number"),
+    ("cacao_accounting.audit_trail_service", "log_reverse"),
+    ("cacao_accounting.audit_trail_service", "log_delete_attempt"),
+    ("cacao_accounting.printing.service", "TemplateValidationResult"),
+    ("cacao_accounting.auth.roles", "RegistroRol"),
+    ("cacao_accounting.auth.roles", "RegistroRolUsuario"),
+    ("cacao_accounting.auth.permisos", "RegistroPermisosRol"),
+    ("cacao_accounting.auth.device_verification", "listar_dispositivos"),
+    ("cacao_accounting.admin.session_security_service", "listar_dispositivos_usuario"),
+    ("cacao_accounting.setup.forms", "SetupConfirmationForm"),
+    ("cacao_accounting.setup.repository", "get_default_entity"),
+    ("cacao_accounting.modulos", "lista_tipos_documentos"),
+    ("cacao_accounting.config", "probar_modo_escritorio"),
+    ("cacao_accounting.datos.dev", "series_predeterminadas"),
+    ("cacao_accounting.exceptions", "TransactionError"),
+]
+
+
+@pytest.mark.parametrize(("modulo", "simbolo"), RETIRADOS_1841)
+def test_inventario_1841_permanece_retirado(modulo: str, simbolo: str):
+    """#1841: ningún candidato del inventario vuelve sin decisión y pruebas."""
+    assert not hasattr(importlib.import_module(modulo), simbolo), f"{simbolo} reapareció en {modulo}"
+
+
+@pytest.mark.parametrize(
+    "ruta",
+    [
+        "cacao_accounting/reportes/semantic.py",
+        "cacao_accounting/accounting_engine/fiscal/resolver.py",
+        "cacao_accounting/compras/purchase_invoice_draft_service.py",
+    ],
+)
+def test_modulos_sin_consumidor_no_reaparecen(ruta: str):
+    """#1841: los módulos retirados por completo no se reintroducen."""
+    assert not (RAIZ / ruta).exists(), f"{ruta} reapareció sin consumidores"
+
+
+def test_query_tools_conserva_su_contrato_publico():
+    """#1841: ``query_tools`` queda fuera de la limpieza por ser API para plugins."""
+    from cacao_accounting.query_tools import QueryContext, Registry, load_query_tools, query_tool
+
+    assert callable(query_tool) and callable(load_query_tools)
+    assert hasattr(Registry, "register") and hasattr(QueryContext, "__init__")
