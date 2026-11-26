@@ -4969,9 +4969,12 @@ def _get_stock_entry_line_amount(document: StockEntry, line: StockEntryItem, pur
 
     cost_amount = getattr(line, "_inventory_cost_amount", None)
     if cost_amount is None:
-        # AUDIT-004: resolver desde el mayor persistido cuando la sesion de
-        # posting no sembro el atributo transitorio de costo de salida.
-        cost_amount = _persisted_outbound_cost(document, line)
+        if purpose == "adjustment_negative" and _line_qty(line) == 0:
+            cost_amount = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
+        else:
+            # AUDIT-004: resolver desde el mayor persistido cuando la sesion de
+            # posting no sembro el atributo transitorio de costo de salida.
+            cost_amount = _persisted_outbound_cost(document, line)
     if cost_amount is not None:
         return _decimal_value(cost_amount)
 
