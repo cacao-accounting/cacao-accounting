@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+﻿# SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 """#1871: una fila vacía en StockEntry no descarta las líneas posteriores."""
@@ -12,7 +12,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
-from cacao_accounting.database import NamingSeries, StockEntry, StockEntryItem, database
+from cacao_accounting.database import NamingSeries, StockEntry, StockEntryItem, Warehouse, database
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 from cacao_accounting.inventario import services as inventario
 
@@ -124,3 +124,54 @@ def test_alta_http_persiste_lineas_posteriores_al_hueco(app, entorno_contable, a
         finally:
             database.session.delete(entrada)
             database.session.commit()
+
+
+def test_alta_http_conciliacion_persiste_lineas_tras_hueco(app, entorno_contable, authenticated_client):
+    """POST real de conciliación con hueco persiste líneas posteriores."""
+    marcador = f"RECON-GAP-{uuid4().hex[:8]}"
+    with app.app_context():
+        ensure_default_naming_series_for_company("cacao", ["stock_entry"])
+        database.session.add(Warehouse(code="BOD02", name="Bodega dos", company="cacao", is_active=True))
+        database.session.commit()
+        series_id = database.session.execute(
+            database.select(NamingSeries.id).filter_by(entity_type="stock_entry", company="cacao")
+        ).scalar_one()
+
+    form_data = {
+        "purpose": "stock_reconciliation",
+        "company": "cacao",
+        "naming_series": series_id,
+        "posting_date": "2026-05-15",
+        "transaction_currency": "NIO",
+        "to_warehouse": "BOD01",
+        "warehouse_0": "BOD01",
+        "item_code_0": "ART01",
+        "uom_0": "UND",
+        "counted_qty_0": "1",
+        "target_valuation_rate_0": "10",
+        "target_stock_value_0": "10",
+        "item_code_1": "",
+        "warehouse_2": "BOD02",
+        "item_code_2": "ART01",
+        "uom_2": "UND",
+        "counted_qty_2": "2",
+        "target_valuation_rate_2": "5",
+        "target_stock_value_2": "10",
+        "remarks": marcador,
+    }
+
+    response = authenticated_client().post("/inventory/stock-entry/reconciliation/new", data=form_data)
+
+    assert response.status_code == 302, response.get_data(as_text=True)
+    with app.app_context():
+        entrada = database.session.execute(database.select(StockEntry).filter_by(remarks=marcador)).scalar_one()
+        lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entrada.id)).scalars().all()
+        try:
+            assert len(lineas) == 2
+            assert sorted(abs(line.amount or Decimal("0")) for line in lineas) == [Decimal("10"), Decimal("10")]
+            assert entrada.total_amount == Decimal("20")
+        finally:
+            database.session.delete(entrada)
+            database.session.commit()
+
+
