@@ -105,3 +105,23 @@ def test_new_entity_route_blocked_in_desktop_when_entity_exists(desktop_entity_a
 
     assert response.status_code == 302
     assert "/accounting/entity/list" in (response.headers.get("Location") or "")
+
+
+def test_catalogo_ingles_traduce_los_rechazos_de_entidad() -> None:
+    """#1771: los dos msgid de Desktop no pueden quedar sin traducción al inglés."""
+    import gettext
+    from pathlib import Path
+
+    binario = Path(__file__).resolve().parents[1] / "cacao_accounting" / "translations" / "en" / "LC_MESSAGES" / "messages.mo"
+    catalogo = gettext.GNUTranslations(binario.open("rb"))
+    esperados = {
+        "En modo escritorio solo se permite una compañía por base de datos.": (
+            "In desktop mode only one company per database is allowed."
+        ),
+        "En modo escritorio no se puede eliminar la única entidad activa.": (
+            "In desktop mode the only active entity cannot be deleted."
+        ),
+    }
+
+    for msgid, traduccion in esperados.items():
+        assert catalogo.gettext(msgid) == traduccion, f"{msgid} quedó sin traducir en messages.mo"

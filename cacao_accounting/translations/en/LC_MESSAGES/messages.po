@@ -14903,6 +14903,10 @@ msgstr "Accounting | Entity"
 msgid "Contabilidad | Nueva Entidad"
 msgstr "Accounting | New Entity"
 
+#: cacao_accounting/contabilidad/routes.py:690
+msgid "En modo escritorio solo se permite una compañía por base de datos."
+msgstr "In desktop mode only one company per database is allowed."
+
 #: cacao_accounting/contabilidad/routes.py:726
 msgid "Complete los campos correctamente."
 msgstr "Complete the fields correctly."
@@ -14923,6 +14927,10 @@ msgstr "Accounting | Edit Entity"
 #: cacao_accounting/contabilidad/routes.py:882
 msgid "La eliminación de entidades no está disponible en modo Cloud; utilice Inactivar."
 msgstr "Entity deletion is not available in Cloud mode; use Deactivate instead."
+
+#: cacao_accounting/contabilidad/routes.py:906
+msgid "En modo escritorio no se puede eliminar la única entidad activa."
+msgstr "In desktop mode the only active entity cannot be deleted."
 
 #: cacao_accounting/contabilidad/routes.py:983
 msgid "Contabilidad | Unidades de Negocio"
