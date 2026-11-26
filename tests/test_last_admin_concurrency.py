@@ -100,3 +100,62 @@ def test_dos_desactivaciones_concurrentes_conservan_un_admin(admin_app):
         consulta = database.select(User).filter_by(active=True, classification="admin")
         activos = database.session.execute(consulta).scalars().all()
         assert len([u for u in activos if u.id in ids]) == 1
+
+
+class _MotorFalso:
+    """Motor que se reporta como PostgreSQL para observar la cláusula sin servidor externo."""
+
+    def __init__(self, nombre: str) -> None:
+        self.dialect = type("_Dialecto", (), {"name": nombre})()
+
+
+def _declaracion_bloqueante(admin_app, monkeypatch, dialecto: str) -> list[str]:
+    """Devuelve las sentencias de decisión compiladas contra PostgreSQL."""
+    from sqlalchemy.dialects import postgresql
+
+    app = admin_app[0]
+    captured: list = []
+    with app.app_context():
+        execute_real = database.session.execute
+
+        def _capturar(consulta, *args, **kwargs):
+            captured.append(consulta)
+            return execute_real(consulta, *args, **kwargs)
+
+        # La sesión se resuelve por contexto de aplicación: parchear fuera no intercepta nada.
+        monkeypatch.setattr(database.session, "execute", _capturar)
+        monkeypatch.setattr(type(database), "engine", property(lambda _self: _MotorFalso(dialecto)))
+        referencia = (
+            database.session.execute(
+                database.select(User.id).where(User.active.is_(True), admin_services._active_admin_filter())
+            )
+            .scalars()
+            .all()
+        )
+        captured.clear()
+        total = admin_services._active_admin_count()
+        otros = admin_services._active_admin_count(exclude_user_id=referencia[0])
+
+    assert total == len(referencia), "la lectura bloqueante no puede alterar el conjunto decidido"
+    assert otros == total - 1, "la exclusión debe seguir aplicándose bajo el mismo bloqueo"
+    # Las dos lecturas de decisión son las que leen la tabla user; la consulta de
+    # roles que arma el filtro no entra en la comparación.
+    cuentas = [
+        sentencia
+        for sentencia in captured
+        if any(getattr(origen, "name", "") == "user" for origen in sentencia.get_final_froms())
+    ]
+    assert len(cuentas) == 2, "las dos cuentas de la decisión deben capturarse"
+    return [str(sentencia.compile(dialect=postgresql.dialect())) for sentencia in cuentas]
+
+
+def test_la_cuenta_de_admins_es_lectura_actual_en_motores_cloud(admin_app, monkeypatch):
+    """#1767: en Cloud la decisión no puede tomarse sobre un snapshot previo al lock."""
+    sentencias = _declaracion_bloqueante(admin_app, monkeypatch, "postgresql")
+    assert all("FOR UPDATE" in sentencia for sentencia in sentencias), sentencias
+
+
+def test_la_cuenta_de_admins_no_bloquea_en_sqlite(admin_app, monkeypatch):
+    """#1767: en Desktop la serialización la da BEGIN IMMEDIATE, no una cláusula inválida."""
+    sentencias = _declaracion_bloqueante(admin_app, monkeypatch, "sqlite")
+    assert all("FOR UPDATE" not in sentencia for sentencia in sentencias), sentencias
