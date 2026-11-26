@@ -530,6 +530,31 @@ def _validate_draft_serial(line: Any, item_code: str, item: Any) -> None:
         raise ValueError(_("Cada linea de un item serializado debe mover exactamente una unidad."))
 
 
+def _is_serial_number_unique_violation(error: IntegrityError) -> bool:
+    """Identifica la colisión global de serial_number.serial_no sin ocultar otras violaciones."""
+    original = error.orig
+    diagnostic = getattr(original, "diag", None)
+    constraint_name = getattr(diagnostic, "constraint_name", None)
+    if constraint_name in {"serial_number_serial_no_key", "uq_serial_number_serial_no"}:
+        return True
+
+    message = str(original).lower()
+    duplicate_marker = any(marker in message for marker in ("unique constraint failed", "duplicate key", "duplicate entry"))
+    if duplicate_marker and "serial_number.serial_no" in message:
+        return True
+
+    error_args = getattr(original, "args", ())
+    mariadb_key = any(marker in message for marker in ("for key 'serial_no'", 'for key "serial_no"', "for key `serial_no`"))
+    statement = str(error.statement or "").lower()
+    return bool(
+        error_args
+        and error_args[0] == 1062
+        and "duplicate entry" in message
+        and mariadb_key
+        and "insert into serial_number" in statement
+    )
+
+
 def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None, cancel_entry: bool = False) -> None:
     """Actualiza estado y bodega del serial despues del movimiento.
 
@@ -546,13 +571,20 @@ def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None, can
     if serial is not None and serial.item_code != item_code:
         raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo."))
     if not serial:
-        serial = SerialNumber(
-            item_code=item_code,
-            serial_no=serial_no,
-            serial_status="available",
-            warehouse=warehouse,
-        )
-        database.session.add(serial)
+        try:
+            with database.session.begin_nested():
+                serial = SerialNumber(
+                    item_code=item_code,
+                    serial_no=serial_no,
+                    serial_status="available",
+                    warehouse=warehouse,
+                )
+                database.session.add(serial)
+                database.session.flush()
+        except IntegrityError as exc:
+            if not _is_serial_number_unique_violation(exc):
+                raise
+            raise InventoryServiceError(_("El número de serie ya está registrado para otro artículo.")) from exc
     if cancel_entry:
         serial.serial_status = "cancelled"
         serial.warehouse = None
