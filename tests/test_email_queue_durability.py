@@ -150,7 +150,7 @@ def test_fallo_del_commit_posterior_conserva_evidencia_no_confirmada(cola_app, m
     assert fila.status != "sent", "no puede afirmarse un envío cuyo commit falló"
     assert fila.sent_at is None
     assert fila.document_id == "INV-COMMIT"
-    assert fila.status in {"pending", "failed"}, "debe quedar visible para conciliar"
+    assert fila.status == "failed", "debe quedar visible para conciliar y reintentar"
 
 
 def test_entrega_parcial_registra_cada_destinatario(cola_app, monkeypatch):
