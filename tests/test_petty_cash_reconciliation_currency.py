@@ -18,6 +18,7 @@ from cacao_accounting.database import (
     Book,
     GLEntry,
     PettyCashAccount,
+    PettyCashReconciliation,
     PettyCashVoucher,
     database,
 )
@@ -191,8 +192,6 @@ def test_lista_muestra_guion_si_falta_la_tasa(app, entorno_contable, authenticat
 
 def test_post_de_conciliacion_sin_tasa_avisa_y_no_persiste(app, entorno_contable, authenticated_client):
     """La ruta HTTP bloquea la conciliación sin tasa y no crea filas."""
-    from cacao_accounting.database import PettyCashReconciliation
-
     del entorno_contable
     with app.app_context():
         fondo = _fondo_usd(currency="EUR")
@@ -216,3 +215,49 @@ def test_post_de_conciliacion_sin_tasa_avisa_y_no_persiste(app, entorno_contable
     with app.app_context():
         despues = len(database.session.execute(select(PettyCashReconciliation)).scalars().all())
         assert despues == antes
+
+
+def test_post_de_conciliacion_sin_moneda_de_libro_avisa_y_no_persiste(app, entorno_contable, authenticated_client):
+    """La ruta no etiqueta como moneda del fondo un saldo GL sin moneda conocida."""
+    del entorno_contable
+    with app.app_context():
+        fondo = _fondo_usd()
+        _asiento_en_libro(fondo, Decimal("365"))
+        libro = database.session.execute(select(Book).filter_by(code="DEFAULT_BOOK")).scalar_one()
+        libro_id, moneda_original = libro.id, libro.currency
+        libro.currency = None
+        database.session.commit()
+        fondo_id = fondo.id
+        antes = (
+            database.session.execute(select(PettyCashReconciliation).where(PettyCashReconciliation.petty_cash_id == fondo_id))
+            .scalars()
+            .all()
+        )
+
+    try:
+        response = authenticated_client("admin").post(
+            "/cash_management/petty-cash-reconciliation/new",
+            data={
+                "company": "cacao",
+                "petty_cash_id": fondo_id,
+                "reconciliation_date": FECHA.isoformat(),
+                "counted_cash": "10",
+            },
+        )
+
+        assert response.status_code == 200
+        assert "requiere una moneda funcional configurada" in response.get_data(as_text=True).lower()
+        with app.app_context():
+            despues = (
+                database.session.execute(
+                    select(PettyCashReconciliation).where(PettyCashReconciliation.petty_cash_id == fondo_id)
+                )
+                .scalars()
+                .all()
+            )
+            assert despues == antes
+    finally:
+        with app.app_context():
+            libro = database.session.get(Book, libro_id)
+            libro.currency = moneda_original
+            database.session.commit()

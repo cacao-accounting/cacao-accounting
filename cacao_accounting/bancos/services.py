@@ -1317,8 +1317,14 @@ def _petty_cash_ledger_balance_in_fund_currency(
     fund_currency = str(fund.currency or _company_currency(str(fund.company)))
     ledger_id = primary_ledger_id(str(fund.company))
     ledger = database.session.get(Book, ledger_id) if ledger_id else None
-    ledger_currency = str(ledger.currency or "") if ledger is not None else ""
-    if not ledger_currency or not fund_currency or ledger_currency == fund_currency:
+    if ledger is None:
+        raise PostingError(_("No existe un libro contable activo para la compañía %(company)s.") % {"company": fund.company})
+    if not ledger.currency:
+        raise PostingError(
+            _("El libro contable %(ledger_code)s requiere una moneda funcional configurada.") % {"ledger_code": ledger.code}
+        )
+    ledger_currency = str(ledger.currency)
+    if ledger_currency == fund_currency:
         return ledger_balance
     rate = _lookup_exchange_rate(ledger_currency, fund_currency, as_of_date or date.today())
     return (ledger_balance * rate).quantize(money_quantum(ledger_balance))
