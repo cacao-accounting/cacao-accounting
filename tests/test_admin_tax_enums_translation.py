@@ -73,7 +73,8 @@ def _datos_fiscales() -> tuple[Tax, TaxTemplate]:
     return impuesto, plantilla
 
 
-def test_lista_de_impuestos_traduce_tipo_y_aplicacion(app, authenticated_client, admin_modulo):
+@pytest.mark.usefixtures("admin_modulo")
+def test_lista_de_impuestos_traduce_tipo_y_aplicacion(authenticated_client):
     """La tabla no imprime los códigos ``percentage``/``both``."""
     impuesto, _ = _datos_fiscales()
     client = authenticated_client("admin")
@@ -102,7 +103,8 @@ def test_lista_de_impuestos_traduce_monto_fijo_al_ingles(app, authenticated_clie
     assert "Amount fijo" not in body
 
 
-def test_plantilla_y_filas_traducen_tipo_base_y_comportamiento(app, authenticated_client, admin_modulo):
+@pytest.mark.usefixtures("admin_modulo")
+def test_plantilla_y_filas_traducen_tipo_base_y_comportamiento(authenticated_client):
     """Plantilla e ítems muestran Compra, Documento neto y Aditivo."""
     _, plantilla = _datos_fiscales()
     client = authenticated_client("admin")
@@ -116,7 +118,8 @@ def test_plantilla_y_filas_traducen_tipo_base_y_comportamiento(app, authenticate
     assert "<td>Documento neto</td><td>Aditivo</td>" in items.get_data(as_text=True)
 
 
-def test_fila_con_impuesto_inactivo_muestra_su_nombre(app, authenticated_client, admin_modulo):
+@pytest.mark.usefixtures("admin_modulo")
+def test_fila_con_impuesto_inactivo_muestra_su_nombre(authenticated_client):
     """Una fila histórica con impuesto desactivado no imprime el ULID técnico."""
     impuesto, plantilla = _datos_fiscales()
     with database.session.begin():
