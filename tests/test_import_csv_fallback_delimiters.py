@@ -70,6 +70,29 @@ def test_lector_rechaza_tabulacion_tras_cierre_de_comilla(tmp_path):
         CSVReader().read(str(archivo))
 
 
+def test_skipinitialspace_no_reabre_comillas_tras_cierre(tmp_path):
+    """Un espacio tras cerrar comillas no habilita una cita que oculte la tabulación."""
+    contenido = 'h1; h2\n"a" "b\tc"; 0\n'
+    assert _valid_csv_fallback(contenido.encode("utf-8")) is False
+
+    archivo = tmp_path / "espacio_tras_cierre.csv"
+    archivo.write_text(contenido, encoding="utf-8")
+    with pytest.raises(ImportCSVFormatError):
+        CSVReader().read(str(archivo))
+
+
+def test_skipinitialspace_conserva_la_cita_tras_delimitador(tmp_path):
+    """El espacio posterior al delimitador sí permite abrir el siguiente campo citado."""
+    contenido = 'h1; h2\n"a"; "b\tc"; 0\n'
+    assert _valid_csv_fallback(contenido.encode("utf-8")) is True
+
+    archivo = tmp_path / "cita_tras_delimitador.csv"
+    archivo.write_text(contenido, encoding="utf-8")
+    tabla = CSVReader().read(str(archivo))
+    assert tabla.columns == ["h1", "h2"]
+    assert tabla.rows == [["a", "b\tc", "0"]]
+
+
 def test_lector_y_fallback_olen_la_misma_muestra(tmp_path):
     """Un delimitador ausente en los primeros 2048 caracteres ya se detecta."""
     contenido = f'"{"h" * 1100}";debito;credito\n1101;100;0\n'
