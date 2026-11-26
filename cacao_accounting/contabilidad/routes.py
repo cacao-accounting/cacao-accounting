@@ -3780,13 +3780,25 @@ def contabilizar_comprobante(identifier: str):
 
     try:
         if ApprovalEngine.is_enabled(journal.entity):
+            approval_request = ApprovalEngine.request_approval(journal, actor=current_user)
+            if approval_request is None:
+                flash(
+                    _("No existe una regla de aprobación que cubra este monto. El documento permanece en borrador."),
+                    "warning",
+                )
+                database.session.commit()
+                return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
+
             if ApprovalEngine.can_approve(journal, current_user):
-                ApprovalEngine.request_approval(journal)
-                ApprovalEngine.approve(journal, current_user, "Aprobado por el remitente")
+                ApprovalEngine.approve(
+                    journal,
+                    current_user,
+                    "Aprobado por el remitente",
+                    request=approval_request,
+                )
                 database.session.commit()
                 flash(_("Comprobante contable aprobado."), "success")
             else:
-                ApprovalEngine.request_approval(journal)
                 journal.status = "Pending Approval"
                 database.session.commit()
                 flash(_("Comprobante contable enviado para aprobación (Pendiente de Aprobación)."), "info")
