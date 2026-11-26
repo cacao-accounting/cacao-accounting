@@ -146,3 +146,23 @@ def test_invalid_group_is_rejected_for_both_adapters(party_import_scenario, adap
         assert any("grupo" in error.lower() for error in errors), group_name
         with pytest.raises(ValueError):
             adapter.build_document([_row("Tercero", grupo=group_name)], {"company_id": None})
+
+
+@pytest.mark.parametrize("adapter_cls", [CustomerAdapter, VendorAdapter])
+def test_empty_optional_group_and_classification_are_accepted(party_import_scenario, adapter_cls):
+    """Empty/omitted group and classification remain optional."""
+    app, _ids = party_import_scenario
+    adapter = adapter_cls()
+
+    with app.app_context():
+        row = _row("Tercero opcional", grupo="", clasificacion="")
+        assert adapter.validate_row(row) == []
+        document = adapter.build_document([row], {"company_id": None})
+        party = document["party"]
+        assert party.party_group_id is None
+        assert party.person_type is None
+        adapter.persist_document(document)
+        database.session.commit()
+        persisted = database.session.get(Party, party.id)
+        assert persisted.party_group_id is None
+        assert persisted.person_type is None

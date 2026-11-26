@@ -1,4 +1,4 @@
-﻿# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 # English translations for Cacao Accounting.
 # Copyright (C) 2026 William José Moreno Reyes
@@ -25248,3 +25248,12 @@ msgstr "The item must match the source document line."
 #: cacao_accounting/compras/services.py
 msgid "No se puede convertir la tarifa del documento origen a la UOM de la devolución."
 msgstr "The source document rate cannot be converted to the return UOM."
+
+msgid "La identificación fiscal %(tax_id)s ya está registrada para otro tercero."
+msgstr "Tax ID %(tax_id)s is already registered to another party."
+
+msgid "El grupo \"%(grupo)s\" no existe, no está activo o no corresponde al tercero."
+msgstr "Group \"%(grupo)s\" does not exist, is not active, or does not match the party type."
+
+msgid "La clasificación \"%(clasificacion)s\" debe ser natural o juridical."
+msgstr "Classification \"%(clasificacion)s\" must be natural or juridical."

@@ -1,4 +1,4 @@
-﻿# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 """#1871: una fila vacía en StockEntry no descarta las líneas posteriores."""
@@ -131,7 +131,11 @@ def test_alta_http_conciliacion_persiste_lineas_tras_hueco(app, entorno_contable
     marcador = f"RECON-GAP-{uuid4().hex[:8]}"
     with app.app_context():
         ensure_default_naming_series_for_company("cacao", ["stock_entry"])
-        database.session.add(Warehouse(code="BOD02", name="Bodega dos", company="cacao", is_active=True))
+        existing = database.session.execute(
+            database.select(Warehouse).filter_by(code="BOD02")
+        ).scalar_one_or_none()
+        if existing is None:
+            database.session.add(Warehouse(code="BOD02", name="Bodega dos", company="cacao", is_active=True))
         database.session.commit()
         series_id = database.session.execute(
             database.select(NamingSeries.id).filter_by(entity_type="stock_entry", company="cacao")
@@ -173,5 +177,3 @@ def test_alta_http_conciliacion_persiste_lineas_tras_hueco(app, entorno_contable
         finally:
             database.session.delete(entrada)
             database.session.commit()
-
-
