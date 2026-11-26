@@ -7,23 +7,37 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from flask_login import login_user
 
-from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document, post_stock_entry
+from cacao_accounting.contabilidad.posting_service import (
+    PostingError,
+    _persist_single_allocation,
+    cancel_document,
+    post_stock_entry,
+)
 from cacao_accounting.approval_engine import approved_execution
 from cacao_accounting.internal_control_service import audit_actor
 from cacao_accounting.database import (
     Accounts,
+    Book,
     CompanyDefaultAccount,
+    Currency,
     Entity,
+    ExchangeRate,
     GLEntry,
+    ImportLandedCost,
+    ImportLandedCostItem,
     Item,
+    LandedCostAllocation,
+    PurchaseInvoice,
     StockBin,
     StockEntry,
     StockEntryItem,
+    StockLedgerBookEntry,
     StockLedgerEntry,
     StockValuationLayer,
     User,
@@ -128,6 +142,177 @@ def _postear(app, entrada: StockEntry) -> None:
     with app.test_request_context(f"/inventory/stock-entry/{entrada.id}"):
         login_user(database.session.execute(database.select(User).filter_by(user="admin")).scalar_one())
         post_stock_entry(entrada)
+
+
+def _preparar_libros_multimoneda(app) -> list[tuple[str, str]]:
+    """Configura libros NIO/USD y una tasa histórica para el escenario aislado."""
+    with app.app_context():
+        usd = database.session.execute(database.select(Currency).filter_by(code="USD")).scalar_one_or_none()
+        if usd is None:
+            database.session.add(Currency(code="USD", name="Dólar", decimals=2, active=True, default=False))
+            database.session.flush()
+
+        books = (
+            database.session.execute(
+                database.select(Book).filter_by(entity="cacao", status="activo").order_by(Book.is_primary.desc(), Book.code)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(books) >= 2
+        for book in books:
+            book.currency = "NIO" if book.is_primary else "USD"
+
+        rate = database.session.execute(
+            database.select(ExchangeRate).filter_by(origin="NIO", destination="USD", date=FECHA)
+        ).scalar_one_or_none()
+        if rate is None:
+            rate = ExchangeRate(origin="NIO", destination="USD", date=FECHA, rate=Decimal("1") / Decimal("36"))
+            database.session.add(rate)
+        else:
+            rate.rate = Decimal("1") / Decimal("36")
+        database.session.commit()
+        return [(str(book.id), str(book.currency)) for book in books]
+
+
+def _registrar_stock_ledger_inicial(app, item_code: str, warehouse: str, books: list[tuple[str, str]]) -> None:
+    """Añade el movimiento append-only que respalda el saldo inicial sembrado."""
+    with app.app_context():
+        layer = database.session.execute(
+            database.select(StockValuationLayer).filter_by(
+                company="cacao",
+                item_code=item_code,
+                warehouse=warehouse,
+                voucher_type="seed",
+            )
+        ).scalar_one()
+        movement = StockLedgerEntry(
+            posting_date=FECHA,
+            item_code=item_code,
+            warehouse=warehouse,
+            company="cacao",
+            qty_change=Decimal("100"),
+            qty_after_transaction=Decimal("100"),
+            valuation_rate=Decimal("100"),
+            stock_value_difference=Decimal("10000"),
+            stock_value=Decimal("10000"),
+            voucher_type=layer.voucher_type,
+            voucher_id=layer.voucher_id,
+        )
+        database.session.add(movement)
+        database.session.flush()
+        for ledger_id, currency in books:
+            book_rate = Decimal("1") if currency == "NIO" else Decimal("1") / Decimal("36")
+            database.session.add(
+                StockLedgerBookEntry(
+                    stock_ledger_entry_id=movement.id,
+                    ledger_id=ledger_id,
+                    posting_date=FECHA,
+                    book_currency=currency,
+                    book_amount=(Decimal("10000") * book_rate).quantize(Decimal("0.0001")),
+                    exchange_rate=book_rate,
+                )
+            )
+        database.session.commit()
+
+
+def _crear_landed_cost_capitalizado(
+    app,
+    item_code: str,
+    warehouse: str,
+    books: list[tuple[str, str]],
+    *,
+    split_allocations: bool = False,
+) -> str:
+    """Crea una capitalización USD/NIO con GL balanceado en cada libro activo."""
+    with app.app_context():
+        invoice = PurchaseInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            document_type="purchase_invoice",
+            transaction_currency="USD",
+            base_currency="NIO",
+            exchange_rate=Decimal("36"),
+            docstatus=0,
+        )
+        database.session.add(invoice)
+        database.session.flush()
+        document = ImportLandedCost(
+            company="cacao",
+            purchase_invoice_id=invoice.id,
+            posting_date=FECHA,
+            document_type="import_landed_cost",
+            transaction_currency="USD",
+            base_currency="NIO",
+            exchange_rate=Decimal("36"),
+            docstatus=1,
+        )
+        database.session.add(document)
+        database.session.flush()
+        line_count = 2 if split_allocations else 1
+        line_qty = Decimal("100") / line_count
+        allocated_amount = Decimal("100") / line_count
+        functional_amount = Decimal("3600") / line_count
+        unit_inventory_cost = Decimal("100") + functional_amount / line_qty
+        for _ in range(line_count):
+            line = ImportLandedCostItem(
+                import_landed_cost_id=document.id,
+                item_code=item_code,
+                item_name="Artículo con costo capitalizado",
+                qty=line_qty,
+                uom="UND",
+                rate=Decimal("1"),
+                amount=Decimal("100") / line_count,
+                base_rate=Decimal("36"),
+                base_amount=functional_amount,
+                warehouse=warehouse,
+            )
+            database.session.add(line)
+            database.session.flush()
+            _persist_single_allocation(
+                document=document,
+                allocation=SimpleNamespace(
+                    item_line_id=line.id,
+                    allocated_total=allocated_amount,
+                    base_amount=functional_amount,
+                    final_inventory_cost=line_qty * unit_inventory_cost,
+                    unit_inventory_cost=unit_inventory_cost,
+                    allocated_costs=[],
+                ),
+                items_by_line_id={str(line.id): line},
+                create_valuation_adjustment=True,
+            )
+        database.session.flush()
+
+        inventory = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1109")).scalar_one()
+        offset = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="5201")).scalar_one()
+        for ledger_id, currency in books:
+            book_amount = Decimal("3600") if currency == "NIO" else Decimal("100")
+            for account, debit, credit in (
+                (inventory, book_amount, Decimal("0")),
+                (offset, Decimal("0"), book_amount),
+            ):
+                database.session.add(
+                    GLEntry(
+                        posting_date=FECHA,
+                        company="cacao",
+                        ledger_id=ledger_id,
+                        account_id=account.id,
+                        account_code=account.code,
+                        debit=debit,
+                        credit=credit,
+                        debit_in_account_currency=debit,
+                        credit_in_account_currency=credit,
+                        account_currency=currency,
+                        company_currency=currency,
+                        exchange_rate=Decimal("1"),
+                        voucher_type="import_landed_cost",
+                        voucher_id=document.id,
+                        is_cancelled=False,
+                    )
+                )
+        database.session.commit()
+        return str(document.id)
 
 
 def test_ajuste_de_solo_valor_sin_stock_se_rechaza(entorno_contable_aislado):
@@ -259,3 +444,261 @@ def test_reversion_de_documento_regularizado_no_falla(entorno_contable_aislado):
         ).scalar_one()
         assert bin_final.actual_qty == Decimal("1")
         assert bin_final.stock_value == Decimal("10.0001")
+
+
+@pytest.mark.parametrize("valuation_method", ["fifo", "moving_average"])
+@pytest.mark.parametrize(
+    ("consumed_qty", "expected_qty", "expected_value"),
+    [("40", Decimal("60"), Decimal("8160")), ("100", Decimal("0"), Decimal("0"))],
+)
+def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
+    entorno_contable_aislado,
+    valuation_method,
+    consumed_qty,
+    expected_qty,
+    expected_value,
+):
+    """Un consumo posterior bloquea la cancelación si no se puede repartir el costo por libro."""
+    app = entorno_contable_aislado.app
+    books = _preparar_libros_multimoneda(app)
+    with app.app_context():
+        entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
+        entity.valuation_method = valuation_method
+        database.session.commit()
+    item_code, warehouse = _escenario(app, qty="100", stock_value="10000", layer_value="10000")
+    _registrar_stock_ledger_inicial(app, item_code, warehouse, books)
+    landed_cost_id = _crear_landed_cost_capitalizado(app, item_code, warehouse, books, split_allocations=True)
+
+    with app.app_context():
+        landed_cost = database.session.get(ImportLandedCost, landed_cost_id)
+        assert landed_cost is not None
+        entry = _entrada(
+            item_code,
+            warehouse,
+            "adjustment_negative",
+            consumed_qty,
+            str(Decimal(consumed_qty) * Decimal("136")),
+        )
+        _postear(app, entry)
+        database.session.commit()
+        item_bin = database.session.execute(
+            database.select(StockBin).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+        ).scalar_one()
+        assert item_bin.actual_qty == expected_qty
+        assert item_bin.stock_value == expected_value
+
+        layer_ids_before = set(
+            database.session.execute(
+                database.select(StockValuationLayer.id).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+            )
+            .scalars()
+            .all()
+        )
+        movement_ids_before = set(
+            database.session.execute(
+                database.select(StockLedgerEntry.id).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+            )
+            .scalars()
+            .all()
+        )
+        book_entry_ids_before = set(
+            database.session.execute(
+                database.select(StockLedgerBookEntry.id)
+                .join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
+                .filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+            )
+            .scalars()
+            .all()
+        )
+        original_gl_ids = set(
+            database.session.execute(
+                database.select(GLEntry.id).filter_by(voucher_type="import_landed_cost", voucher_id=landed_cost_id)
+            )
+            .scalars()
+            .all()
+        )
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+
+        with audit_actor(actor.id, actor.name), approved_execution(landed_cost, actor.id):
+            with pytest.raises(PostingError, match="evidencia disponible no permite reconstruir"):
+                cancel_document(
+                    landed_cost,
+                    reason="No se puede distribuir costo consumido por libro",
+                    actor_user_id=actor.id,
+                    cancellation_date=FECHA,
+                )
+        database.session.rollback()
+
+        cancelled_document = database.session.get(ImportLandedCost, landed_cost_id)
+        assert cancelled_document is not None
+        assert cancelled_document.docstatus == 1
+        bin_after = database.session.execute(
+            database.select(StockBin).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+        ).scalar_one()
+        assert (bin_after.actual_qty, bin_after.stock_value) == (expected_qty, expected_value)
+        assert (
+            set(
+                database.session.execute(
+                    database.select(StockValuationLayer.id).filter_by(
+                        company="cacao", item_code=item_code, warehouse=warehouse
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            == layer_ids_before
+        )
+        assert (
+            set(
+                database.session.execute(
+                    database.select(StockLedgerEntry.id).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+                )
+                .scalars()
+                .all()
+            )
+            == movement_ids_before
+        )
+        assert (
+            set(
+                database.session.execute(
+                    database.select(StockLedgerBookEntry.id)
+                    .join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
+                    .filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+                )
+                .scalars()
+                .all()
+            )
+            == book_entry_ids_before
+        )
+        landed_cost_gl = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(voucher_type="import_landed_cost", voucher_id=landed_cost_id)
+            )
+            .scalars()
+            .all()
+        )
+        assert {entry.id for entry in landed_cost_gl if not entry.is_reversal} == original_gl_ids
+        assert all(not entry.is_cancelled for entry in landed_cost_gl)
+        assert all(not entry.is_reversal for entry in landed_cost_gl)
+
+
+def test_cancelar_landed_cost_sin_consumo_reversa_por_libro_y_moneda(entorno_contable_aislado):
+    """Con trazabilidad completa, revierte solo el costo aún disponible por libro."""
+    app = entorno_contable_aislado.app
+    books = _preparar_libros_multimoneda(app)
+    item_code, warehouse = _escenario(app, qty="100", stock_value="10000", layer_value="10000")
+    _registrar_stock_ledger_inicial(app, item_code, warehouse, books)
+    landed_cost_id = _crear_landed_cost_capitalizado(app, item_code, warehouse, books, split_allocations=True)
+
+    with app.app_context():
+        landed_cost = database.session.get(ImportLandedCost, landed_cost_id)
+        assert landed_cost is not None
+        original_layer_ids = set(
+            database.session.execute(
+                database.select(LandedCostAllocation.stock_valuation_layer_id).filter_by(document_id=landed_cost_id)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(original_layer_ids) == 2
+        stock_movements_before = (
+            database.session.execute(
+                database.select(StockLedgerEntry.id).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+            )
+            .scalars()
+            .all()
+        )
+        book_entries_before = (
+            database.session.execute(
+                database.select(StockLedgerBookEntry.id)
+                .join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
+                .filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+            )
+            .scalars()
+            .all()
+        )
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+
+        with audit_actor(actor.id, actor.name), approved_execution(landed_cost, actor.id):
+            cancel_document(
+                landed_cost,
+                reason="Revertir costo capitalizado aún disponible",
+                actor_user_id=actor.id,
+                cancellation_date=FECHA,
+            )
+        database.session.commit()
+
+        assert landed_cost.docstatus == 2
+        item_bin = database.session.execute(
+            database.select(StockBin).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+        ).scalar_one()
+        assert item_bin.actual_qty == Decimal("100")
+        assert item_bin.stock_value == Decimal("10000")
+
+        cost_layers = (
+            database.session.execute(database.select(StockValuationLayer).filter_by(voucher_id=landed_cost_id)).scalars().all()
+        )
+        assert len(cost_layers) == 4
+        reversal_layers = [layer for layer in cost_layers if layer.id not in original_layer_ids]
+        assert len(reversal_layers) == 2
+        assert sum((layer.stock_value_difference for layer in reversal_layers), Decimal("0")) == Decimal("-3600")
+        assert all(layer.remaining_qty == Decimal("100") for layer in reversal_layers)
+        assert {layer.remaining_stock_value for layer in reversal_layers} == {Decimal("10000"), Decimal("11800")}
+        assert sum((layer.stock_value_difference for layer in cost_layers), Decimal("0")) == Decimal("0")
+        assert sum(
+            (layer.stock_value_difference for layer in cost_layers if layer.id in original_layer_ids), Decimal("0")
+        ) == Decimal("3600")
+
+        stock_movements_after = (
+            database.session.execute(
+                database.select(StockLedgerEntry.id).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+            )
+            .scalars()
+            .all()
+        )
+        book_entries_after = (
+            database.session.execute(
+                database.select(StockLedgerBookEntry.id)
+                .join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
+                .filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+            )
+            .scalars()
+            .all()
+        )
+        assert stock_movements_after == stock_movements_before
+        assert book_entries_after == book_entries_before
+
+        gl_entries = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(voucher_type="import_landed_cost", voucher_id=landed_cost_id)
+            )
+            .scalars()
+            .all()
+        )
+        totals_by_book: dict[str, list[Decimal]] = {}
+        for row in gl_entries:
+            totals_by_book.setdefault(str(row.ledger_id), [Decimal("0"), Decimal("0")])
+            totals_by_book[str(row.ledger_id)][0] += row.debit
+            totals_by_book[str(row.ledger_id)][1] += row.credit
+        assert set(totals_by_book) == {ledger_id for ledger_id, _currency in books}
+        for debit, credit in totals_by_book.values():
+            assert debit == credit
+        for ledger_id, currency in books:
+            original_inventory = next(
+                row for row in gl_entries if row.ledger_id == ledger_id and row.account_code == "1109" and not row.is_reversal
+            )
+            reversal_inventory = next(
+                row for row in gl_entries if row.ledger_id == ledger_id and row.account_code == "1109" and row.is_reversal
+            )
+            assert reversal_inventory.reversal_of == original_inventory.id
+            assert reversal_inventory.credit == original_inventory.debit
+            assert original_inventory.debit == (Decimal("3600") if currency == "NIO" else Decimal("100"))
+
+        with audit_actor(actor.id, actor.name), approved_execution(landed_cost, actor.id):
+            with pytest.raises(PostingError, match="documento aprobado"):
+                cancel_document(
+                    landed_cost,
+                    reason="Reintento de cancelación",
+                    actor_user_id=actor.id,
+                    cancellation_date=FECHA,
+                )

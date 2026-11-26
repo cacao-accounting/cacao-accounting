@@ -25257,3 +25257,7 @@ msgstr "Group \"%(grupo)s\" does not exist, is not active, or does not match the
 
 msgid "La clasificación \"%(clasificacion)s\" debe ser natural o juridical."
 msgstr "Classification \"%(clasificacion)s\" must be natural or juridical."
+
+#: cacao_accounting/contabilidad/posting_service.py
+msgid "No se puede anular el costo capitalizado: la evidencia disponible no permite reconstruir su distribución por libro."
+msgstr "The capitalized cost cannot be cancelled: the available evidence does not support reconstructing its allocation by accounting book."

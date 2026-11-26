@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 
 from typing import Any, Iterable, Sequence
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -5575,24 +5575,16 @@ def _cancel_landed_cost_valuations(
         .scalars()
         .all()
     )
-    for allocation in allocations:
-        amount = _decimal_value(allocation.allocated_amount)
-        if amount <= 0 or not allocation.warehouse:
-            continue
-        layer = database.session.get(StockValuationLayer, allocation.stock_valuation_layer_id)
-        if layer is None:
-            raise PostingError(_("El costo capitalizable no tiene capa de valoración para reversar."))
-
-        bin_row = _stock_bin_for(company, allocation.item_code, allocation.warehouse)
-        if bin_row is None:
-            raise PostingError(_("El costo capitalizable no tiene saldo de inventario para reversar."))
+    prepared = _prepare_landed_cost_valuation_reversals(allocations, voucher_type, voucher_id)
+    for allocation, bin_row, functional_amount in prepared:
         _upsert_stock_bin(
             company=company,
             item_code=allocation.item_code,
             warehouse=allocation.warehouse,
             qty_change=Decimal("0"),
             valuation_rate=_decimal_value(bin_row.valuation_rate),
-            value_change=-amount,
+            value_change=-functional_amount,
+            reject_negative_stock_value=True,
         )
         database.session.flush()
         updated_bin = _stock_bin_for(company, allocation.item_code, allocation.warehouse)
@@ -5603,7 +5595,7 @@ def _cancel_landed_cost_valuations(
                 company=company,
                 qty=Decimal("0"),
                 rate=_decimal_value(updated_bin.valuation_rate) if updated_bin else Decimal("0"),
-                stock_value_difference=-amount,
+                stock_value_difference=-functional_amount,
                 remaining_qty=max(_decimal_value(updated_bin.actual_qty) if updated_bin else Decimal("0"), Decimal("0")),
                 remaining_stock_value=max(
                     _decimal_value(updated_bin.stock_value) if updated_bin else Decimal("0"), Decimal("0")
@@ -5613,6 +5605,106 @@ def _cancel_landed_cost_valuations(
                 posting_date=cancellation_date,
             )
         )
+
+
+def _prepare_landed_cost_valuation_reversals(
+    allocations: Sequence[LandedCostAllocation], voucher_type: str, voucher_id: str
+) -> list[tuple[LandedCostAllocation, StockBin, Decimal]]:
+    """Validate and aggregate landed-cost reversals before changing stock values."""
+    prepared: list[tuple[LandedCostAllocation, StockBin, Decimal]] = []
+    value_by_bin: dict[tuple[str, str, str], Decimal] = {}
+    ordered_allocations = sorted(
+        allocations,
+        key=lambda row: (str(row.item_code), str(row.warehouse or ""), str(row.id)),
+    )
+    for allocation in ordered_allocations:
+        if _decimal_value(allocation.allocated_amount) <= 0 or not allocation.warehouse:
+            continue
+        layer = database.session.get(StockValuationLayer, allocation.stock_valuation_layer_id)
+        if layer is None:
+            raise PostingError(_("El costo capitalizable no tiene capa de valoración para reversar."))
+        bin_row = _stock_bin_for(allocation.company, allocation.item_code, allocation.warehouse, lock=True)
+        functional_amount = _decimal_value(layer.stock_value_difference)
+        if not _can_reconstruct_landed_cost_reversal(allocation, layer, bin_row, voucher_type, voucher_id):
+            raise _landed_cost_reversal_not_reconstructible()
+        key = (str(allocation.company), str(allocation.item_code), str(allocation.warehouse))
+        value_by_bin[key] = value_by_bin.get(key, Decimal("0")) + functional_amount
+        prepared.append((allocation, bin_row, functional_amount))
+    _validate_landed_cost_reversal_capacity(prepared, value_by_bin)
+    return prepared
+
+
+def _can_reconstruct_landed_cost_reversal(
+    allocation: LandedCostAllocation,
+    layer: StockValuationLayer,
+    bin_row: StockBin | None,
+    voucher_type: str,
+    voucher_id: str,
+) -> bool:
+    """Check the allocation, stock balance, and valuation history are trustworthy."""
+    if not _landed_cost_layer_matches_allocation(allocation, layer, voucher_type, voucher_id):
+        return False
+    if bin_row is None:
+        return False
+    if _decimal_value(bin_row.actual_qty) <= 0 or _decimal_value(layer.stock_value_difference) <= 0:
+        return False
+    return not _has_later_stock_valuation_layer(layer, voucher_type=voucher_type, voucher_id=voucher_id)
+
+
+def _landed_cost_layer_matches_allocation(
+    allocation: LandedCostAllocation, layer: StockValuationLayer, voucher_type: str, voucher_id: str
+) -> bool:
+    """Ensure a persisted allocation points to its own item and voucher layer."""
+    return (
+        layer.company == allocation.company
+        and layer.item_code == allocation.item_code
+        and layer.warehouse == allocation.warehouse
+        and layer.voucher_type == voucher_type
+        and layer.voucher_id == voucher_id
+    )
+
+
+def _validate_landed_cost_reversal_capacity(
+    prepared: Sequence[tuple[LandedCostAllocation, StockBin, Decimal]],
+    value_by_bin: dict[tuple[str, str, str], Decimal],
+) -> None:
+    """Reject a reversal when available stock value cannot cover all allocations."""
+    for allocation, bin_row, _functional_amount in prepared:
+        key = (str(allocation.company), str(allocation.item_code), str(allocation.warehouse))
+        if _decimal_value(bin_row.stock_value) < value_by_bin[key]:
+            raise _landed_cost_reversal_not_reconstructible()
+
+
+def _landed_cost_reversal_not_reconstructible() -> PostingError:
+    """Return the controlled error used when a book-level reversal is ambiguous."""
+    return PostingError(
+        _(
+            "No se puede anular el costo capitalizado: la evidencia disponible no permite reconstruir "
+            "su distribución por libro."
+        )
+    )
+
+
+def _has_later_stock_valuation_layer(layer: StockValuationLayer, *, voucher_type: str, voucher_id: str) -> bool:
+    """Find later valuation evidence without per-book attribution, excluding sibling allocations."""
+    later_layer_id = database.session.execute(
+        select(StockValuationLayer.id)
+        .where(
+            StockValuationLayer.company == layer.company,
+            StockValuationLayer.item_code == layer.item_code,
+            StockValuationLayer.warehouse == layer.warehouse,
+            or_(
+                StockValuationLayer.voucher_type != voucher_type,
+                StockValuationLayer.voucher_id != voucher_id,
+            ),
+            or_(
+                StockValuationLayer.posting_date > layer.posting_date,
+                and_(StockValuationLayer.posting_date == layer.posting_date, StockValuationLayer.id > layer.id),
+            ),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    return later_layer_id is not None
 
 
 def _emit_cancel_events(document: Any, voucher_id: str, company: str) -> None:
