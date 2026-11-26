@@ -15,8 +15,13 @@ from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
     Entity,
+    ImportLandedCost,
+    ImportLandedCostCharge,
+    ImportLandedCostItem,
+    Item,
     Modules,
     PurchaseInvoice,
+    UOM,
     User,
     UserCompanyAccess,
     database,
@@ -132,6 +137,12 @@ def facturas_por_compania():
             ]
         )
         database.session.flush()
+        database.session.add(UOM(code="UND", name="Unidad"))
+        database.session.flush()
+        database.session.add(
+            Item(code="ART01", name="Artículo importado", item_type="goods", is_stock_item=True, default_uom="UND")
+        )
+        database.session.flush()
         propia = PurchaseInvoice(
             company="cacao",
             document_type="purchase_invoice",
@@ -203,3 +214,35 @@ def test_alta_costo_importado_requiere_login(facturas_por_compania):
 
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
+
+
+@pytest.mark.parametrize("datos_factura", [{}, {"from_invoice": "   "}], ids=["ausente", "blanco"])
+def test_alta_costo_importado_exige_factura_fuente(facturas_por_compania, datos_factura):
+    """#1760: una factura ausente o blanca no crea documento, líneas ni cargos."""
+    application, _ids = facturas_por_compania
+    client = application.test_client()
+    _login(client, "compras_cacao")
+    datos = {
+        "company": "cacao",
+        "posting_date": "2026-10-31",
+        "allocation_method": "by_value",
+        "remarks": "Alta sin factura",
+        "item_item_code_0": "ART01",
+        "item_item_name_0": "Artículo importado",
+        "item_qty_0": "2",
+        "item_uom_0": "UND",
+        "item_rate_0": "10",
+        "charge_concept_0": "Flete",
+        "charge_type_0": "charge",
+        "charge_amount_0": "15",
+        **datos_factura,
+    }
+
+    response = client.post("/buying/import-landed-cost/new", data=datos)
+
+    assert response.status_code == 200
+    assert "Seleccione una factura de compra como origen para los costos de importacion." in response.get_data(as_text=True)
+    with application.app_context():
+        assert database.session.execute(database.select(ImportLandedCost)).scalars().all() == []
+        assert database.session.execute(database.select(ImportLandedCostItem)).scalars().all() == []
+        assert database.session.execute(database.select(ImportLandedCostCharge)).scalars().all() == []

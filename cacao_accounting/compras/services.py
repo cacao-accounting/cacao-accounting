@@ -3721,13 +3721,15 @@ def _create_import_landed_cost_from_request():
 
     company = request.form.get("company", "").strip()
     posting_date = _parse_date(request.form.get("posting_date"))
-    from_invoice_id = request.form.get("from_invoice", "").strip() or None
+    from_invoice_id = request.form.get("from_invoice", "").strip()
     allocation_method = request.form.get("allocation_method", "by_value")
     remarks = request.form.get("remarks", "").strip()
 
     if not company or not posting_date:
         flash(_("Compañía y fecha son obligatorios."), "danger")
         return None
+    if not from_invoice_id:
+        raise ValueError(_("Seleccione una factura de compra como origen para los costos de importacion."))
     try:
         allocation_method = validate_allocation_method(allocation_method)
     except ValueError as exc:
