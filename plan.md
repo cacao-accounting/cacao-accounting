@@ -6,9 +6,9 @@
 
 **Rama de trabajo:** `estabilizacion`, con seguimiento de la rama remota `origin/estabilizacion`.
 
-**Corte de estado:** 25 de noviembre de 2026. Consulta completa del API de GitHub (sin PR): 2.308 issues; 628 abiertos y 1.680 cerrados. Entre los abiertos, 528 `needs-work`, 25 `fix-confirmed`, 14 `needs-review`, 61 `sin-flujo`. Las tablas indican el estado real del issue (open/closed) y su etiqueta de flujo observada al corte. Los issues con etiqueta `fixed` aparecen cerrados en este corte.
+**Corte de estado:** 26 de noviembre de 2026. Consulta completa del API de GitHub (sin PR): 2.075 issues; 597 abiertos y 1.478 cerrados. Entre los abiertos, 507 `needs-work`, 14 `fix-proposed`, 11 `fix-confirmed`, 14 `needs-review` y 51 `sin-flujo`. El plan referencia 556 issues abiertos únicos y ningún issue cerrado; los 41 abiertos restantes no se incorporan porque esta lista es una cola curada, no un inventario completo. El corte anterior contabilizaba PR dentro del total; este los excluye. Las tablas indican el estado real del issue (open/closed) y su etiqueta de flujo observada al corte. Los issues con etiqueta `fixed` aparecen cerrados en este corte.
 
-**Estado de commits (25 de noviembre de 2026):** al consultar GitHub, `HEAD` y `origin/estabilizacion` apuntaban al mismo commit, `167a357d`, sin commits locales por delante. El commit que registra este corte se añade sobre esa base. Los hashes citados en las tablas deben verificarse contra la rama antes de considerarlos integrados.
+**Estado de commits (25 de noviembre de 2026):** al consultar GitHub, `HEAD` y `origin/estabilizacion` apuntaban al mismo commit, `167a357d`, sin commits locales por delante. El commit que registró el corte anterior se añadió sobre esa base; desde entonces `HEAD` local avanzó con trabajo propio y paralelo. Los hashes citados en las tablas deben verificarse contra la rama antes de considerarlos integrados.
 
 ## Alcance de ejecución
 
