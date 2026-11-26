@@ -50,8 +50,6 @@ from cacao_accounting.internal_control_service import (
     stock_valuation_balance_transition,
 )
 from cacao_accounting.inventario.service import (
-    InventoryServiceError,
-    rebuild_stock_valuation_layers,
     update_stock_valuation_layer_balances,
 )
 
@@ -506,18 +504,6 @@ def test_authorized_core_update_allows_all_authorized_parameter_sets(desktop):
             assert layer.remaining_stock_value == Decimal("20")
 
 
-def test_physical_rebuild_is_rejected_without_deleting_layers():
-    """The destructive rebuild no longer exposes a partial-delete path."""
-    app = _build_app(desktop=True)
-    seed = _seed_layer(app)
-
-    with app.app_context():
-        with pytest.raises(InventoryServiceError):
-            rebuild_stock_valuation_layers(seed["company"])
-
-    _assert_persisted_snapshot(app, seed)
-
-
 def test_balance_scope_requires_persisted_layers():
     """An empty valuation scope cannot authorize any derived-balance update."""
     with pytest.raises(ValueError, match="capas persistidas"):
@@ -777,11 +763,16 @@ def test_adjustments_keep_valuation_stock_ledger_and_gl_consistent(app, entorno_
         defaults.inventory_adjustment_account_id = adjustment_account_id
         database.session.commit()
 
-        _post_adjustment(app, entorno_contable, item_code, warehouse, "adjustment_positive", "5", "50")
+        positive = _post_adjustment(app, entorno_contable, item_code, warehouse, "adjustment_positive", "5", "50")
         negative = _post_adjustment(app, entorno_contable, item_code, warehouse, "adjustment_negative", "2", "20")
 
         layers = database.session.execute(database.select(StockValuationLayer).filter_by(item_code=item_code)).scalars().all()
         movements = database.session.execute(database.select(StockLedgerEntry).filter_by(item_code=item_code)).scalars().all()
+        # #1841: retirado el reconstructor físico, cada capa existe porque un asiento vivo la escribió.
+        assert layers and movements, "el flujo vivo debe producir capas y asientos"
+        comprobantes_vivos = {str(positive.id), str(negative.id)}
+        assert {str(layer.voucher_id) for layer in layers} <= comprobantes_vivos
+        assert {str(movement.voucher_id) for movement in movements} == {str(layer.voucher_id) for layer in layers}
         entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=negative.id)).scalars().all()
         assert sum((layer.qty for layer in layers), Decimal("0")) == Decimal("3")
         assert sum((movement.qty_change for movement in movements), Decimal("0")) == Decimal("3")

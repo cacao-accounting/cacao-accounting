@@ -16,10 +16,13 @@ grafo de imports estático:
 - ``cacao_accounting/cli.py`` y ``__main__.py``: invocado por consola.
 - Filtros y globales registrados en ``printing``: los consume Jinja desde
   plantillas guardadas en base de datos.
-- La previsualización de ``rebuild_stock_valuation_layers`` y su cadena privada
-  en ``inventario/service.py``: su rama destructiva está probada en
-  ``test_stock_valuation_layer_append_only.py`` y el rediseño pertenece a #651;
-  retirar la rama ``dry_run`` queda pendiente del fallo del dueño (#1841).
+- La cadena ``rebuild_stock_valuation_layers`` de ``inventario/service.py`` ya no es
+  una exclusión: se retiró por directiva del dueño del 2026-11-26 (vía «retirar» del
+  hallazgo 2 de QA2). El invariante append-only de las capas lo sostienen
+  ``test_valuation_flows_append_layers_without_rewriting_history`` y
+  ``test_adjustments_keep_valuation_stock_ledger_and_gl_consistent``, que construyen
+  la cola con asientos vivos; el rediseño de una herramienta de reconstrucción
+  volvería a abrirse en #651.
 """
 
 from __future__ import annotations
@@ -148,6 +151,19 @@ RETIRADOS_1841 = [
     ("cacao_accounting.compras.purchase_request_comparison_service", "purchase_request_comparison_is_closed"),
     ("cacao_accounting.compras.purchase_request_comparison_service", "supplier_quotation_comparison_rows"),
     ("cacao_accounting.document_flow.repository", "recompute_states_for_source"),
+    # Cadena de reconstruccion fisica retirada por directiva del dueño (26-11, via «retirar»).
+    ("cacao_accounting.inventario.service", "rebuild_stock_valuation_layers"),
+    ("cacao_accounting.inventario.service", "StockRebuildResult"),
+    ("cacao_accounting.inventario.service", "_valuation_group_key"),
+    ("cacao_accounting.inventario.service", "_valuation_bucket"),
+    ("cacao_accounting.inventario.service", "_clone_valuation_layer"),
+    ("cacao_accounting.inventario.service", "_prepare_valuation_groups"),
+    ("cacao_accounting.inventario.service", "_pair_rebuilt_layer"),
+    ("cacao_accounting.inventario.service", "_process_rebuilt_layers"),
+    ("cacao_accounting.inventario.service", "_merge_orphans"),
+    ("cacao_accounting.inventario.service", "_merge_rebuilt_layers"),
+    ("cacao_accounting.inventario.service", "_assign_layer_ids"),
+    ("cacao_accounting.inventario.service", "_take_adjustment_for_qty"),
     ("cacao_accounting.inventario.service", "rebuild_stock_bins"),
     ("cacao_accounting.document_identifiers", "suggest_next_external_number"),
     ("cacao_accounting.audit_trail_service", "log_reverse"),
