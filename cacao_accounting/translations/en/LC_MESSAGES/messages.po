@@ -18606,6 +18606,19 @@ msgstr "Forecast %(forecast)s is not in Draft status."
 msgid "El importe debe ser finito"
 msgstr "The amount must be finite"
 
+#: cacao_accounting/imports/adapters/journal_entry.py
+msgid "Un comprobante contable debe tener al menos dos líneas."
+msgstr "A journal entry must have at least two lines."
+
+#: cacao_accounting/imports/adapters/journal_entry.py
+#, python-format
+msgid "Monto inválido en referencia %(reference)s"
+msgstr "Invalid amount in reference %(reference)s"
+
+#: cacao_accounting/imports/adapters/journal_entry.py
+msgid "La fecha debe usar un formato válido."
+msgstr "The date must use a valid format."
+
 #: cacao_accounting/imports/adapters/purchase_order.py:71 cacao_accounting/imports/adapters/purchase_order.py:118
 #: cacao_accounting/imports/adapters/transaction_documents.py:110 cacao_accounting/imports/adapters/transaction_documents.py:244
 msgid "El precio unitario no puede ser negativo."

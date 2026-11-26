@@ -69,13 +69,16 @@ class JournalEntryAdapter(BaseImportAdapter):
         """Valida importes parseables; el balance por libro lo resuelve el motor."""
         errors: List[str] = []
         if len(document_data) < 2:
-            errors.append("Un comprobante contable debe tener al menos dos líneas.")
+            errors.append(_("Un comprobante contable debe tener al menos dos líneas."))
         for row in document_data:
             try:
                 self._amount(self._value(row, "debito", "debit"))
                 self._amount(self._value(row, "credito", "credit"))
             except (InvalidOperation, ValueError, TypeError):
-                errors.append(f"Monto inválido en referencia {self._value(row, 'document_ref', 'reference')}")
+                errors.append(
+                    _("Monto inválido en referencia %(reference)s")
+                    % {"reference": self._value(row, "document_ref", "reference")}
+                )
         return errors
 
     def _validate_period(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None) -> List[str]:
@@ -85,10 +88,10 @@ class JournalEntryAdapter(BaseImportAdapter):
         try:
             posting_date = parse_import_date(self._value(document_data[0], "fecha", "posting_date"))
         except (ValueError, TypeError):
-            return ["La fecha debe usar un formato válido."]
+            return [_("La fecha debe usar un formato válido.")]
         company_id = (context or {}).get("company_id") or ""
         if not is_period_open(company_id, posting_date):
-            return [f"El periodo contable para la fecha {posting_date} está cerrado o no existe."]
+            return [_("El periodo contable para la fecha %(date)s está cerrado o no existe.") % {"date": posting_date}]
         return []
 
     def _validate_accounting_lines(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None) -> List[str]:
