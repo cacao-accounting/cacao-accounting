@@ -13678,8 +13678,12 @@ msgid "Politica de Reinicio"
 msgstr "Reset Policy"
 
 #: cacao_accounting/contabilidad/services.py
-msgid "La política de reinicio mensual requiere que el prefijo incluya *MM* o *MMM*."
-msgstr "The monthly reset policy requires the prefix to include *MM* or *MMM*."
+msgid ""
+"La política de reinicio mensual requiere que el prefijo incluya un token de mes "
+"(*MM* o *MMM*) y uno de año (*YYYY* o *YY*)."
+msgstr ""
+"The monthly reset policy requires the prefix to include a month token (*MM* or "
+"*MMM*) and a year token (*YYYY* or *YY*)."
 
 #: cacao_accounting/contabilidad/forms.py:193
 msgid "Predeterminada para esta compañía y documento"

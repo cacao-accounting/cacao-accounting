@@ -1383,12 +1383,19 @@ def _get_journal_currency_label(journal, entity) -> str:
 
 
 def validate_monthly_reset_prefix(prefix_template: str | None, reset_policy: str | None) -> None:
-    """Rechaza una política mensual cuyo prefijo no incluya el mes."""
+    """Exige tokens de mes y año para una política de reinicio mensual."""
     if str(reset_policy or "never") != "monthly":
         return
     prefix = str(prefix_template or "")
-    if "*MM*" not in prefix and "*MMM*" not in prefix:
-        raise ValueError(_("La política de reinicio mensual requiere que el prefijo incluya *MM* o *MMM*."))
+    month_tokens = ("*MM*", "*MMM*")
+    year_tokens = ("*YYYY*", "*YY*")
+    if not any(token in prefix for token in month_tokens) or not any(token in prefix for token in year_tokens):
+        raise ValueError(
+            _(
+                "La política de reinicio mensual requiere que el prefijo incluya un token de mes "
+                "(*MM* o *MMM*) y uno de año (*YYYY* o *YY*)."
+            )
+        )
 
 
 def _update_series_sequence(serie, form):
