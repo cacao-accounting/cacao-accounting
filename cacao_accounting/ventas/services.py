@@ -534,13 +534,13 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
 def _release_reservation_for_sales_order(so: SalesOrder) -> None:
     """Libera la reserva de inventario al cancelar una Orden de Venta.
 
-    Usa la misma resolución de bodega que ``_validate_and_reserve_stock_for_sales_order``
-    (incluyendo ``Item.default_warehouse_id``) para que la cancelación libere
-    exactamente la bodega efectiva en que se reservó el inventario.
+    Idempotente: si la orden est? cerrada o ya cancelada, no altera reservas.
+    Evita que una cancelaci?n aprobada tarde (approval engine) consuma reservas
+    de otras ?rdenes tras un cierre que ya liber? el remanente.
     """
-    # #1820: una orden cerrada ya liberó su reserva; volver a restar consumiría
-    # reservas de otras órdenes del mismo ítem/bodeja.
-    if getattr(so, "status", None) == "closed" or getattr(so, "docstatus", 0) == 2:
+    status = str(getattr(so, "status", "") or "").lower()
+    docstatus = int(getattr(so, "docstatus", 0) or 0)
+    if status == "closed" or docstatus == 2 or getattr(so, "cancelled_at", None):
         return
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
