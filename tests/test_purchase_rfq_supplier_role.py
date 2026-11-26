@@ -15,13 +15,23 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
 from flask_login import login_user
 
 from cacao_accounting.compras.services import (
     _create_purchase_quotation_from_request,
     _handle_purchase_quotation_edit_post,
 )
-from cacao_accounting.database import Party, PurchaseQuotation, PurchaseQuotationItem, User, database
+from cacao_accounting.database import (
+    DocumentRelation,
+    Party,
+    PurchaseQuotation,
+    PurchaseQuotationItem,
+    PurchaseRequest,
+    PurchaseRequestItem,
+    User,
+    database,
+)
 
 FECHA = date(2026, 5, 15)
 
@@ -131,51 +141,205 @@ def test_la_edicion_no_muta_la_cabecera_con_un_cliente(app, entorno_contable):
         assert registro.supplier_name == "Proveedor original"
 
 
-def test_edicion_con_cantidad_invalida_no_escapa_como_error(app, entorno_contable):
-    """#1947: una línea inválida se traduce en respuesta controlada y sin mutación."""
-    proveedor_id = _tercero(app, is_supplier=True)
+_CAMPOS_CABECERA_RFQ = (
+    "id",
+    "document_no",
+    "company",
+    "posting_date",
+    "docstatus",
+    "supplier_id",
+    "supplier_name",
+    "remarks",
+    "transaction_currency",
+    "base_currency",
+    "exchange_rate",
+    "total",
+    "base_total",
+    "grand_total",
+)
+_CAMPOS_LINEA_RFQ = (
+    "id",
+    "item_code",
+    "item_name",
+    "description",
+    "qty",
+    "qty_in_base_uom",
+    "uom",
+    "rate",
+    "amount",
+    "base_rate",
+    "base_amount",
+)
+_CAMPOS_RELACION_RFQ = (
+    "id",
+    "source_type",
+    "source_id",
+    "source_item_id",
+    "target_type",
+    "target_id",
+    "target_item_id",
+    "company",
+    "qty",
+    "qty_in_base_uom",
+    "uom",
+    "rate",
+    "amount",
+    "relation_type",
+    "revision",
+    "status",
+    "reversed_at",
+    "reversed_by",
+    "reversal_reason",
+)
+
+
+def _sembrar_rfq_vinculada(app, supplier_id: str) -> str:
+    """Crea una RFQ borrador con solicitud origen, línea y relación activa."""
+    sufijo = uuid4().hex[:8]
     with app.app_context():
-        cotizacion = PurchaseQuotation(
+        solicitud = PurchaseRequest(
             company="cacao",
             posting_date=FECHA,
-            docstatus=0,
-            supplier_id=proveedor_id,
-            supplier_name="Proveedor",
+            document_no=f"REQ-1947-{sufijo}",
+            remarks="Solicitud origen",
+            docstatus=1,
             transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
             total=Decimal("20"),
+            base_total=Decimal("20"),
             grand_total=Decimal("20"),
         )
-        database.session.add(cotizacion)
-        database.session.commit()
-        linea_original = PurchaseQuotationItem(
-            purchase_quotation_id=cotizacion.id,
+        database.session.add(solicitud)
+        database.session.flush()
+        solicitud_linea = PurchaseRequestItem(
+            purchase_request_id=solicitud.id,
             item_code="ART01",
-            item_name="Artículo original",
+            item_name="Artículo origen",
             qty=Decimal("2"),
             qty_in_base_uom=Decimal("2"),
             uom="UND",
             rate=Decimal("10"),
             amount=Decimal("20"),
         )
-        database.session.add(linea_original)
+        cotizacion = PurchaseQuotation(
+            company="cacao",
+            posting_date=FECHA,
+            document_no=f"RFQ-1947-{sufijo}",
+            remarks="Borrador original",
+            docstatus=0,
+            supplier_id=supplier_id,
+            supplier_name="Proveedor original",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            total=Decimal("20"),
+            base_total=Decimal("20"),
+            grand_total=Decimal("20"),
+        )
+        database.session.add_all([solicitud_linea, cotizacion])
+        database.session.flush()
+        cotizacion_linea = PurchaseQuotationItem(
+            purchase_quotation_id=cotizacion.id,
+            item_code="ART01",
+            item_name="Artículo original",
+            description="Especificación original",
+            qty=Decimal("2"),
+            qty_in_base_uom=Decimal("2"),
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("20"),
+            base_rate=Decimal("10"),
+            base_amount=Decimal("20"),
+        )
+        database.session.add(cotizacion_linea)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=solicitud.id,
+                source_item_id=solicitud_linea.id,
+                target_type="purchase_quotation",
+                target_id=cotizacion.id,
+                target_item_id=cotizacion_linea.id,
+                company="cacao",
+                qty=Decimal("2"),
+                qty_in_base_uom=Decimal("2"),
+                uom="UND",
+                rate=Decimal("10"),
+                amount=Decimal("20"),
+                relation_type="quotation",
+                revision=1,
+                status="active",
+            )
+        )
         database.session.commit()
-        cotizacion_id = cotizacion.id
-        linea_id = linea_original.id
-        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
-        datos = _formulario(proveedor_id)
-        datos.update({"item_code_0": "ITEM-X", "qty_0": "abc", "rate_0": "1"})
-        with app.test_request_context("/", method="POST", data=datos):
-            login_user(admin)
-            respuesta = _handle_purchase_quotation_edit_post(cotizacion)
+        return str(cotizacion.id)
 
-    assert respuesta is not None
+
+def _estado_rfq(quotation_id: str) -> dict[str, object]:
+    """Captura cabecera, líneas y relaciones para comparar en sesión fresca."""
+    cotizacion = database.session.get(PurchaseQuotation, quotation_id)
+    assert cotizacion is not None
+    lineas = (
+        database.session.execute(
+            database.select(PurchaseQuotationItem)
+            .filter_by(purchase_quotation_id=quotation_id)
+            .order_by(PurchaseQuotationItem.id)
+        )
+        .scalars()
+        .all()
+    )
+    relaciones = (
+        database.session.execute(
+            database.select(DocumentRelation)
+            .filter_by(target_type="purchase_quotation", target_id=quotation_id)
+            .order_by(DocumentRelation.id)
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "cabecera": {campo: getattr(cotizacion, campo) for campo in _CAMPOS_CABECERA_RFQ},
+        "lineas": [{campo: getattr(linea, campo) for campo in _CAMPOS_LINEA_RFQ} for linea in lineas],
+        "relaciones": [{campo: getattr(relacion, campo) for campo in _CAMPOS_RELACION_RFQ} for relacion in relaciones],
+    }
+
+
+@pytest.mark.parametrize(
+    ("cantidad", "mensaje"),
+    [
+        (None, "El documento requiere al menos una línea."),
+        ("0", "La cantidad del item ART01 debe ser mayor a cero."),
+        ("-1", "La cantidad del item ART01 debe ser mayor a cero."),
+        ("abc", "El campo qty_0 debe ser un número válido."),
+    ],
+    ids=["sin_lineas", "cantidad_cero", "cantidad_negativa", "cantidad_no_numerica"],
+)
+def test_edicion_http_con_linea_invalida_conserva_borrador(app, entorno_contable, authenticated_client, cantidad, mensaje):
+    """#1947: el POST real muestra el error y revierte toda la edición vinculada."""
+    proveedor_id = _tercero(app, is_supplier=True)
+    cotizacion_id = _sembrar_rfq_vinculada(app, proveedor_id)
     with app.app_context():
-        persistida = database.session.get(PurchaseQuotation, cotizacion_id)
-        assert persistida is not None
-        assert persistida.docstatus == 0
-        assert persistida.total == Decimal("20.0000")
-        linea_persistida = database.session.get(PurchaseQuotationItem, linea_id)
-        assert linea_persistida is not None
-        assert linea_persistida.item_code == "ART01"
-        assert linea_persistida.qty == Decimal("2.000000000")
-        assert linea_persistida.amount == Decimal("20.0000")
+        estado_antes = _estado_rfq(cotizacion_id)
+
+    datos = _formulario(proveedor_id)
+    datos.update({"posting_date": "2026-05-16", "remarks": "Edición inválida"})
+    if cantidad is None:
+        for campo in ("item_code_0", "item_name_0", "qty_0", "uom_0"):
+            datos.pop(campo)
+    else:
+        datos.update({"item_code_0": "ART01", "item_name_0": "Artículo inválido", "qty_0": cantidad, "rate_0": "1"})
+
+    endpoint = f"/buying/request-for-quotation/{cotizacion_id}/edit"
+    respuesta = authenticated_client().post(endpoint, data=datos, follow_redirects=True)
+
+    assert respuesta.status_code == 200
+    assert len(respuesta.history) == 1
+    assert respuesta.history[0].status_code == 302
+    assert respuesta.request.path == f"/buying/request-for-quotation/{cotizacion_id}"
+    assert mensaje in respuesta.get_data(as_text=True)
+    assert "Solicitud de cotizacion actualizada correctamente." not in respuesta.get_data(as_text=True)
+    with app.app_context():
+        database.session.remove()
+        assert _estado_rfq(cotizacion_id) == estado_antes
