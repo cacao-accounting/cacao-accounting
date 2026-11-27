@@ -86,6 +86,19 @@ def _validate_tolerance_values(model: str, values: dict[str, Any]) -> None:
             raise ValueError(_("El campo %(field)s excede la precisión admitida.") % {"field": field})
 
 
+def _normalize_stored(field: str, value: Any) -> Any:
+    """Normaliza valores persistidos tolerando legado inválido para permitir corrección."""
+    try:
+        return _normalize(field, value)
+    except (TypeError, ValueError, ArithmeticError):
+        if field in _DECIMAL_FIELDS and value is not None and value != "":
+            try:
+                return coerce_decimal(value, field, max_fractional_digits=4)
+            except (TypeError, ValueError, ArithmeticError):
+                return str(value)
+        return value
+
+
 def _prepare_config_change(
     model: str,
     config: Any,
@@ -97,11 +110,11 @@ def _prepare_config_change(
     _validate_enum_values(model, values)
     _validate_tolerance_values(model, values)
     typed_after = {field: _normalize(field, values.get(field)) for field in fields}
-    typed_before = {field: _normalize(field, getattr(config, field)) for field in fields}
-    if expected_before is not None and typed_before != {
-        field: _normalize(field, expected_before.get(field)) for field in fields
-    }:
-        raise ValueError(_("La operación cambió después de solicitar la revisión."))
+    typed_before = {field: _normalize_stored(field, getattr(config, field)) for field in fields}
+    if expected_before is not None:
+        expected_typed = {field: _normalize_stored(field, expected_before.get(field)) for field in fields}
+        if typed_before != expected_typed:
+            raise ValueError(_("La operación cambió después de solicitar la revisión."))
     changed_fields = [field for field in fields if typed_before[field] != typed_after[field]]
     payload = {
         "model": model,
