@@ -196,7 +196,6 @@ describe("dashboard", function () {
 
     assert.notStrictEqual(firstKey, secondKey);
   });
-});
 
   it("preserves sub-cent stock quantities in the inventory table", function () {
     const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
@@ -204,7 +203,7 @@ describe("dashboard", function () {
     const formatted = dashboard.formatQuantity("0.004");
     const quantityCell = dashboard.tableCells("inventory", {
       item_code: "ITEM-001",
-      item_name: "Artículo fraccionado",
+      item_name: "Art?culo fraccionado",
       warehouse: "Bodega Norte",
       current_qty: "0.004",
     })[2];
@@ -219,3 +218,25 @@ describe("dashboard", function () {
 
     assert.match(dashboard.formatQuantity("0.000000001"), /^0[.,]000000001$/);
   });
+
+  it("falls back safely when currency code is invalid", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+
+    assert.strictEqual(dashboard.formatCurrency(1234.5, "PE NT"), "1234.5");
+    assert.strictEqual(dashboard.formatKpi({ format: "money", value: 10, currency: "pesos" }), "10");
+  });
+
+  it("keeps number formatting resilient to formatter failures", function () {
+    const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
+    const original = Intl.NumberFormat;
+    Intl.NumberFormat = function () {
+      throw new RangeError("boom");
+    };
+    try {
+      assert.strictEqual(dashboard.formatNumber(42), "42");
+      assert.strictEqual(dashboard.formatQuantity(0.004), "0.004");
+    } finally {
+      Intl.NumberFormat = original;
+    }
+  });
+});

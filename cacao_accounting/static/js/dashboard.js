@@ -267,22 +267,37 @@
         return this.formatNumber(kpi.value);
       },
       formatCurrency(value, currency = "USD") {
-        return new Intl.NumberFormat("es-NI", {
-          style: "currency",
-          currency,
-          minimumFractionDigits: 2,
-        }).format(Number(value || 0));
+        const amount = Number(value || 0);
+        try {
+          return new Intl.NumberFormat("es-NI", {
+            style: "currency",
+            currency,
+            minimumFractionDigits: 2,
+          }).format(amount);
+        } catch (err) {
+          return String(amount);
+        }
       },
       formatNumber(value) {
-        return new Intl.NumberFormat("es-NI", { maximumFractionDigits: 2 }).format(Number(value || 0));
+        const amount = Number(value || 0);
+        try {
+          return new Intl.NumberFormat("es-NI", { maximumFractionDigits: 2 }).format(amount);
+        } catch (err) {
+          return String(amount);
+        }
       },
       formatQuantity(value) {
         // StockBin.actual_qty usa Numeric(20, 9): la tabla no debe redondear
         // a cero una existencia positiva ni ocultar fracciones de unidad.
-        return new Intl.NumberFormat("es-NI", {
-          maximumFractionDigits: 9,
-          minimumFractionDigits: 0,
-        }).format(Number(value || 0));
+        const amount = Number(value || 0);
+        try {
+          return new Intl.NumberFormat("es-NI", {
+            maximumFractionDigits: 9,
+            minimumFractionDigits: 0,
+          }).format(amount);
+        } catch (err) {
+          return String(amount);
+        }
       },
       companyCurrency() {
         return this.payload.company?.currency || "USD";
