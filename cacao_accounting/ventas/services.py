@@ -298,6 +298,7 @@ def _sales_exchange_rate(company: str | None, posting_date: Any, transaction_cur
 def _set_sales_document_totals(document: Any, total: Decimal) -> None:
     """Calcula totales funcionales de un documento comercial de ventas."""
     from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+    from cacao_accounting.numbers import coerce_decimal
 
     transaction_currency = getattr(document, "transaction_currency", None)
     if not transaction_currency:
@@ -308,8 +309,10 @@ def _set_sales_document_totals(document: Any, total: Decimal) -> None:
     document.transaction_currency = transaction_currency
     document.base_currency = base_currency_value
     document.exchange_rate = _sales_exchange_rate(document.company, document.posting_date, transaction_currency)
+    total = coerce_decimal(total, "total")
+    exchange_rate = coerce_decimal(document.exchange_rate, "tipo_cambio")
     document.total = total
-    document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))
+    document.base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
     document.grand_total = total
     if hasattr(document, "base_grand_total"):
         document.base_grand_total = document.base_total
