@@ -123,7 +123,7 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
             GLEntry.company == company,
             GLEntry.posting_date >= start,
             GLEntry.posting_date <= end,
-            *effective_gl_scope(),
+            *effective_gl_scope(end),
             GLEntry.is_fiscal_year_closing.is_(False),
         )
     )

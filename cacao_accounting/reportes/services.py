@@ -61,7 +61,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount, source_qty_in_base_uom
 from cacao_accounting.document_flow.payment import _document_active_at_cutoff
-from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, exclude_cancelled_stock_entries, primary_ledger_id
+from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries, primary_ledger_id
 
 
 from cacao_accounting.i18n import _
@@ -614,10 +614,13 @@ def _reconciliation_gl_amount(
     """Calcula el saldo GL filtrando todas las dimensiones contables."""
     if not account_ids:
         return Decimal("0")
-    query = exclude_cancelled_gl_entries(select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0))).where(
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
+    query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
         GLEntry.company == company,
         GLEntry.ledger_id == ledger_id,
         GLEntry.account_id.in_(list(account_ids)),
+        *effective_gl_scope(date_to),
     )
     if date_from is not None:
         query = query.where(GLEntry.posting_date >= date_from)
@@ -2047,7 +2050,10 @@ def _process_payment_entries(
     total_incoming = Decimal("0")
     total_outgoing = Decimal("0")
 
-    payments = select(PaymentEntry).where(PaymentEntry.company == filters.company, PaymentEntry.docstatus == 1)
+    payments = select(PaymentEntry).where(
+        PaymentEntry.company == filters.company,
+        _document_active_at_cutoff(PaymentEntry, filters.date_to),
+    )
     if filters.date_from is not None:
         payments = payments.where(PaymentEntry.posting_date >= filters.date_from)
     if filters.date_to is not None:
@@ -2450,9 +2456,12 @@ def _compute_gl_balance(
     company_currency: str | None,
 ) -> Decimal:
     """Suma el saldo GL de la cuenta en su moneda bancaria."""
-    gl_balance_query = exclude_cancelled_gl_entries(select(GLEntry)).where(
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
+    gl_balance_query = select(GLEntry).where(
         GLEntry.company == company,
         GLEntry.bank_account_id == bank_account_id,
+        *effective_gl_scope(as_of_date),
     )
     ledger_id = primary_ledger_id(company)
     if ledger_id:
@@ -2634,8 +2643,8 @@ def _apply_gl_filters(
     query = _apply_base_filters(query, filters)
     query = _apply_account_filters(query, filters)
     query = _apply_party_filters(query, filters)
-    query = _apply_cancellation_scope(query, filters)
-    query = _apply_status_filter(query, filters)
+    query = _apply_cancellation_scope(query, filters, period_end)
+    query = _apply_status_filter(query, filters, period_end)
     query = _apply_period_filter(query, period_ids, period_start, period_end)
     return query
 
@@ -2693,21 +2702,29 @@ def _apply_party_filters(query: Any, filters: FinancialReportFilters) -> Any:
     return query
 
 
-def _apply_cancellation_scope(query: Any, filters: FinancialReportFilters) -> Any:
+def _apply_cancellation_scope(
+    query: Any,
+    filters: FinancialReportFilters,
+    as_of_date: date | None,
+) -> Any:
     from cacao_accounting.cancellation_scope import effective_gl_scope
 
     if filters.include_cancellations or filters.status == "cancelled":
         return query
-    return query.where(*effective_gl_scope())
+    return query.where(*effective_gl_scope(as_of_date))
 
 
-def _apply_status_filter(query: Any, filters: FinancialReportFilters) -> Any:
+def _apply_status_filter(
+    query: Any,
+    filters: FinancialReportFilters,
+    as_of_date: date | None,
+) -> Any:
     from cacao_accounting.cancellation_scope import cancelled_originals_scope, effective_gl_scope
 
     if filters.status == "cancelled":
-        query = query.where(*cancelled_originals_scope())
+        query = query.where(*cancelled_originals_scope(as_of_date))
     elif filters.status in {"submitted", "posted"}:
-        query = query.where(*effective_gl_scope())
+        query = query.where(*effective_gl_scope(as_of_date))
     return query
 
 
@@ -3121,14 +3138,15 @@ def _build_actual_query(
     period_end: date,
 ) -> Any:
     """Build the query to fetch actual GL amount for a budget line."""
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
     actual_query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
         GLEntry.company == filters.company,
         GLEntry.ledger_id == selected_ledger.id,
         GLEntry.account_id == line.account_id,
         GLEntry.posting_date >= period_start,
         GLEntry.posting_date <= period_end,
-        GLEntry.is_cancelled.is_(False),
-        GLEntry.is_reversal.is_(False),
+        *effective_gl_scope(period_end),
         GLEntry.is_fiscal_year_closing.is_(False),
     )
     if cost_center and cost_center.code:
@@ -3970,10 +3988,16 @@ def get_sales_by_item(filters: OperationalReportFilters) -> PaginatedReport:
 
 def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
     """Margen bruto basado en GL: ingresos menos COGS."""
-    query = exclude_cancelled_gl_entries(
+    from cacao_accounting.cancellation_scope import effective_gl_scope
+
+    query = (
         select(GLEntry, Accounts)
         .join(Accounts, Accounts.id == GLEntry.account_id)
-        .where(GLEntry.company == filters.company, Accounts.entity == filters.company)
+        .where(
+            GLEntry.company == filters.company,
+            Accounts.entity == filters.company,
+            *effective_gl_scope(filters.date_to),
+        )
     )
     # El margen bruto representa la operación del período.  Los asientos de
     # cierre anual neutralizan las cuentas de resultado y por ello no deben

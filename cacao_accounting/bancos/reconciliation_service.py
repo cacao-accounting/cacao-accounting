@@ -26,7 +26,8 @@ from cacao_accounting.database import (
     ReconciliationItem,
     database,
 )
-from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, primary_ledger_id
+from cacao_accounting.cancellation_scope import effective_gl_scope
+from cacao_accounting.ledger_queries import primary_ledger_id
 from cacao_accounting.numbers import coerce_decimal
 
 
@@ -662,7 +663,8 @@ def _bank_gl_entries(transaction: BankTransaction, company: str, date_from: date
     bank_gl_account_id = _bank_gl_account_id(transaction)
     if not bank_gl_account_id:
         return []
-    gl_entries_query = exclude_cancelled_gl_entries(select(GLEntry).filter_by(company=company, account_id=bank_gl_account_id))
+    gl_entries_query = select(GLEntry).filter_by(company=company, account_id=bank_gl_account_id)
+    gl_entries_query = gl_entries_query.where(*effective_gl_scope(date_to))
     ledger_id = primary_ledger_id(company)
     if ledger_id:
         gl_entries_query = gl_entries_query.where(GLEntry.ledger_id == ledger_id)

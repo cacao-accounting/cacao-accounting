@@ -7,12 +7,18 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
-from cacao_accounting.cancellation_scope import effective_gl_scope, ordinary_gl_scope
-from cacao_accounting.database import AccountingPeriod, Accounts, Book, GLEntry, database
+from cacao_accounting.cancellation_scope import cancelled_originals_scope, effective_gl_scope, ordinary_gl_scope
+from cacao_accounting.database import AccountingPeriod, Accounts, Book, DocumentTransition, GLEntry, User, database
+from cacao_accounting.reportes.analytics import _gl_totals
 from cacao_accounting.reportes.services import (
     FinancialReportFilters,
+    OperationalReportFilters,
+    _build_actual_query,
+    _reconciliation_gl_amount,
     get_account_movement_detail,
+    get_gross_margin,
     get_income_statement_report,
     get_trial_balance_report,
 )
@@ -121,6 +127,146 @@ def test_excluye_reversa_adelantada_en_ambos_lados(entorno_contable_aislado):
             )
         )
         assert sum((row.values.get("credit", Decimal("0")) for row in abril.rows), Decimal("0")) == Decimal("0")
+
+
+def test_corte_historico_aplica_fecha_efectiva_de_anulacion(entorno_contable_aislado):
+    """Los reportes conservan los datos heredados hasta la transición efectiva."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        account = Accounts(
+            entity="cacao",
+            code="5398",
+            name="Costo de prueba de anulacion historica",
+            classification="cost",
+            account_type="expense",
+            active=True,
+            enabled=True,
+            group=False,
+        )
+        database.session.add(account)
+        database.session.flush()
+        ledger_id = _libro()
+        original = _entrada(
+            "P2026-05",
+            date(2026, 5, 10),
+            account_id=account.id,
+            account_code=account.code,
+            voucher_id="COSTO-ANULADO-TARDIO",
+            is_cancelled=True,
+        )
+        database.session.add(original)
+        database.session.flush()
+        reversal = _entrada(
+            "P2026-05",
+            date(2026, 5, 20),
+            account_id=account.id,
+            account_code=account.code,
+            voucher_id="COSTO-ANULADO-TARDIO",
+            debit=Decimal("0"),
+            credit=Decimal("10"),
+            is_reversal=True,
+            reversal_of=original.id,
+        )
+        database.session.add(reversal)
+        actor_id = database.session.execute(
+            database.select(User.id).where(User.classification == "admin").limit(1)
+        ).scalar_one()
+        database.session.add(
+            DocumentTransition(
+                source_type=original.voucher_type,
+                source_id=original.voucher_id,
+                transition_type="cancellation",
+                company="cacao",
+                posting_date=date(2026, 5, 20),
+                accounting_period_id="P2026-05",
+                actor_user_id=actor_id,
+                reason="Registro heredado para corte histórico",
+            )
+        )
+        database.session.flush()
+
+        before_cancel = set(
+            database.session.execute(
+                database.select(GLEntry.id).where(
+                    GLEntry.posting_date <= date(2026, 5, 15),
+                    *effective_gl_scope(date(2026, 5, 15)),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        after_cancel = set(
+            database.session.execute(
+                database.select(GLEntry.id).where(
+                    GLEntry.posting_date <= date(2026, 5, 20),
+                    *effective_gl_scope(date(2026, 5, 20)),
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        assert original.id in before_cancel
+        assert reversal.id not in before_cancel
+        assert original.id not in after_cancel
+        assert reversal.id not in after_cancel
+        assert original.id not in set(
+            database.session.execute(database.select(GLEntry.id).where(*cancelled_originals_scope(date(2026, 5, 15))))
+            .scalars()
+            .all()
+        )
+        assert original.id in set(
+            database.session.execute(database.select(GLEntry.id).where(*cancelled_originals_scope(date(2026, 5, 20))))
+            .scalars()
+            .all()
+        )
+
+        before_gross_margin = get_gross_margin(
+            OperationalReportFilters(
+                company="cacao",
+                date_from=date(2026, 5, 1),
+                date_to=date(2026, 5, 15),
+            )
+        )
+        after_gross_margin = get_gross_margin(
+            OperationalReportFilters(
+                company="cacao",
+                date_from=date(2026, 5, 1),
+                date_to=date(2026, 5, 20),
+            )
+        )
+        assert before_gross_margin.totals["cogs"] == Decimal("10")
+        assert after_gross_margin.totals["cogs"] == Decimal("0")
+
+        assert _gl_totals("cacao", date(2026, 5, 1), date(2026, 5, 15), ledger_id)["cost"] == Decimal("10")
+        assert _gl_totals("cacao", date(2026, 5, 1), date(2026, 5, 20), ledger_id)["cost"] == Decimal("0")
+
+        filters = FinancialReportFilters(company="cacao")
+        before_budget = _build_actual_query(
+            filters,
+            database.session.get(Book, ledger_id),
+            SimpleNamespace(account_id=account.id),
+            None,
+            date(2026, 5, 1),
+            date(2026, 5, 15),
+        )
+        after_budget = _build_actual_query(
+            filters,
+            database.session.get(Book, ledger_id),
+            SimpleNamespace(account_id=account.id),
+            None,
+            date(2026, 5, 1),
+            date(2026, 5, 20),
+        )
+        assert database.session.execute(before_budget).scalar_one() == Decimal("10")
+        assert database.session.execute(after_budget).scalar_one() == Decimal("0")
+
+        assert _reconciliation_gl_amount(
+            "cacao", ledger_id, [account.id], date_from=date(2026, 5, 1), date_to=date(2026, 5, 15)
+        ) == Decimal("10")
+        assert _reconciliation_gl_amount(
+            "cacao", ledger_id, [account.id], date_from=date(2026, 5, 1), date_to=date(2026, 5, 20)
+        ) == Decimal("0")
 
 
 def test_reporte_gl_incluye_reversion_interperiodo_en_su_periodo(entorno_contable_aislado):

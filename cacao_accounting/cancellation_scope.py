@@ -10,6 +10,7 @@ originales anulados para reconstruir la anulación completa.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 
@@ -20,14 +21,19 @@ def ordinary_gl_scope() -> tuple[Any, Any]:
     return (GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
 
 
-def cancelled_originals_scope() -> tuple[Any]:
+def cancelled_originals_scope(as_of_date: date | None = None) -> tuple[Any, ...]:
     """Muestra solo los originales anulados (no las contrapartidas técnicas)."""
+    from sqlalchemy import not_
+
     from cacao_accounting.database import GLEntry
 
-    return (GLEntry.is_cancelled.is_(True),)
+    scope = [GLEntry.is_cancelled.is_(True)]
+    if as_of_date is not None:
+        scope.append(not_(_cancellation_after_cutoff(as_of_date)))
+    return tuple(scope)
 
 
-def effective_gl_scope() -> tuple[Any, ...]:
+def effective_gl_scope(as_of_date: date | None = None) -> tuple[Any, ...]:
     """Restricciones GL para reportes: originales vivos y reversiones vigentes.
 
     Excluye originales anulados y conserva las contrapartidas activas cuya
@@ -66,6 +72,25 @@ def effective_gl_scope() -> tuple[Any, ...]:
         ),
     )
     return (
-        or_(GLEntry.is_cancelled.is_(False), reversa_posterior),
+        or_(GLEntry.is_cancelled.is_(False), reversa_posterior, _cancellation_after_cutoff(as_of_date)),
         or_(GLEntry.is_reversal.is_(False), ~reversa_ineficaz),
+    )
+
+
+def _cancellation_after_cutoff(as_of_date: date | None) -> Any:
+    """Keep a cancelled original visible before its recorded effective date."""
+    from sqlalchemy import exists, select
+
+    from cacao_accounting.database import DocumentTransition, GLEntry
+
+    if as_of_date is None:
+        return GLEntry.id.is_(None)
+    return exists(
+        select(DocumentTransition.id).where(
+            DocumentTransition.company == GLEntry.company,
+            DocumentTransition.source_type == GLEntry.voucher_type,
+            DocumentTransition.source_id == GLEntry.voucher_id,
+            DocumentTransition.transition_type == "cancellation",
+            DocumentTransition.posting_date > as_of_date,
+        )
     )
