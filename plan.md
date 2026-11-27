@@ -283,7 +283,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #996 | #1707 | ✅ `e7c46c62`; GitHub: open / fix-proposed | Creación/edición suman impuesto manual; AP y GL concilian; 2 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #1009 | #1707 | ✅ `ca2f732f`; GitHub: open / fix-proposed | Preview/persistencia rechazan base, tasa e importe negativos; 22 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #1011 | #1707 | ✅ `4da61378` + `fe8d2442`; GitHub: open / fix-proposed | Deduplica conceptos en reglas, preview, motor y snapshot; 15+23 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
-| #1015 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Impuestos: validar aplicabilidad al asignar una plantilla |
+| #1015 | #1707 | ✅ `66c49a43`; GitHub: open / fix-proposed | Buying permite purchase/both y selling sales/both; formulario y cálculo validan; 20 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #1016 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Ventas: no mezclar moneda de lista y factura |
 | #1017 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Aprobaciones: validar la acción recibida en el POST |
 | #1022 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Aprobaciones: doctypes válidos quedan sin rama de envío y quedan 'Approved' en borrador para siempre |
