@@ -342,3 +342,9 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
   `/login` respondieron correctamente. Los volúmenes se conservaron.
 - **#2356**: la validación de solapamiento de años fiscales toma un lock por
   compañía también en SQLite y relee con lectura actual en motores externos.
+- **#2316**: la base PostgreSQL aislada sella evidencia v2, rechaza el
+  downgrade y conserva columna y cadena; la regresión se integra a la suite
+  `database`.
+- **#2353**: dos sesiones compiten por el mismo serial en PostgreSQL y MySQL;
+  la actualización condicional deja un solo reclamo. Queda pendiente el posting
+  completo con Stock Ledger/GL.
