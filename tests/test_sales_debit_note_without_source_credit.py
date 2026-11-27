@@ -189,3 +189,169 @@ def test_nota_debito_sin_origen_al_dia_no_bloquea_la_venta(credit_scene):
         database.session.commit()
 
         _validate_credit_limit_and_overdue("cacao", ids["party"], Decimal("10"))
+
+
+def _post_debit_note_no_source(entorno, *, customer_id: str, suffix: str, posting_date: date, amount: str) -> str:
+    from cacao_accounting.approval_engine import approved_execution
+    from cacao_accounting.contabilidad.posting_service import submit_document
+    from cacao_accounting.database import Accounts, Item, SalesInvoice, SalesInvoiceItem, UOM, User
+    from cacao_accounting.internal_control_service import audit_actor
+
+    with entorno.app.app_context():
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        item = database.session.execute(database.select(Item).filter_by(code="ART01")).scalar_one()
+        uom = database.session.execute(database.select(UOM).filter_by(code="UND")).scalar_one()
+        income = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="4101")).scalar_one()
+        note = SalesInvoice(
+            company="cacao",
+            posting_date=posting_date,
+            document_date=posting_date,
+            document_no=f"ND-FUNC-{suffix}",
+            customer_id=customer_id,
+            customer_name="Cliente ND",
+            document_type="sales_debit_note",
+            is_return=False,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            total=Decimal(amount),
+            base_total=Decimal(amount),
+            grand_total=Decimal(amount),
+            base_grand_total=Decimal(amount),
+            outstanding_amount=Decimal(amount),
+            base_outstanding_amount=Decimal(amount),
+        )
+        database.session.add(note)
+        database.session.flush()
+        database.session.add(
+            SalesInvoiceItem(
+                sales_invoice_id=note.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("1"),
+                qty_in_base_uom=Decimal("1"),
+                uom=uom.code,
+                rate=Decimal(amount),
+                amount=Decimal(amount),
+                base_amount=Decimal(amount),
+                income_account_id=income.id,
+            )
+        )
+        database.session.flush()
+        with audit_actor(actor.id, actor.name), approved_execution(note, actor.id):
+            submit_document(note)
+        database.session.commit()
+        return note.id
+
+
+def _create_and_submit_payment(entorno, *, customer_id: str, invoice_id: str, amount: str, posting_date: str) -> str:
+    from cacao_accounting.approval_engine import approved_execution
+    from cacao_accounting.contabilidad.posting_service import submit_document
+    from cacao_accounting.database import PaymentEntry, User
+    from cacao_accounting.document_flow.service import create_target_document
+    from cacao_accounting.internal_control_service import audit_actor
+
+    with entorno.app.app_context():
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        result = create_target_document(
+            {
+                "target_document_type": "payment_entry",
+                "company": "cacao",
+                "posting_date": posting_date,
+                "payment_type": "receive",
+                "party_type": "customer",
+                "party_id": customer_id,
+                "currency": "NIO",
+                "base_currency": "NIO",
+                "exchange_rate": "1",
+                "lines": [
+                    {
+                        "source_document_type": "sales_invoice",
+                        "source_document_id": invoice_id,
+                        "allocated_amount": amount,
+                    }
+                ],
+            }
+        )
+        payment = database.session.get(PaymentEntry, result["target_id"])
+        assert payment is not None
+        with audit_actor(actor.id, actor.name), approved_execution(payment, actor.id):
+            submit_document(payment)
+        database.session.commit()
+        return payment.id
+
+
+def test_nota_debito_sin_origen_vencida_bloquea_y_pago_restaura(entorno_contable_aislado):
+    """#2289: ND sin origen contabilizada real bloquea por vencimiento; pagos/cancelaci?n restauran."""
+    from cacao_accounting.approval_engine import approved_execution
+    from cacao_accounting.contabilidad.posting_service import cancel_document
+    from cacao_accounting.database import PaymentEntry, SalesInvoice, User
+    from cacao_accounting.document_flow.service import compute_outstanding_amount
+    from cacao_accounting.internal_control_service import audit_actor
+
+    entorno = entorno_contable_aislado
+    with entorno.app.app_context():
+        customer = database.session.execute(database.select(Party).filter_by(code="CLI001")).scalar_one()
+        customer_id = customer.id
+        other = Party(
+            code=f"CLIOTR-{uuid4().hex[:6]}",
+            name="Cliente Otro",
+            is_customer=True,
+        )
+        database.session.add(other)
+        database.session.flush()
+        database.session.add(CompanyParty(company="cacao", party_id=other.id, is_active=True, block_overdue=True))
+        database.session.execute(
+            database.update(CompanyParty)
+            .where(CompanyParty.company == "cacao", CompanyParty.party_id == customer_id)
+            .values(block_overdue=True, credit_limit=None)
+        )
+        database.session.commit()
+        other_id = other.id
+
+    note_id = _post_debit_note_no_source(
+        entorno, customer_id=customer_id, suffix=uuid4().hex[:6], posting_date=date(2026, 5, 10), amount="100"
+    )
+
+    with entorno.app.app_context():
+        note = database.session.get(SalesInvoice, note_id)
+        assert note is not None and note.docstatus == 1
+        assert Decimal(str(compute_outstanding_amount(note))) == Decimal("100")
+        with pytest.raises(ValueError, match="facturas vencidas|vencidas|Vencida"):
+            _validate_credit_limit_and_overdue("cacao", customer_id, Decimal("10"))
+        _validate_credit_limit_and_overdue("cacao", other_id, Decimal("10"))
+
+    payment_id = _create_and_submit_payment(
+        entorno, customer_id=customer_id, invoice_id=note_id, amount="40", posting_date="2026-05-11"
+    )
+    with entorno.app.app_context():
+        note = database.session.get(SalesInvoice, note_id)
+        assert Decimal(str(compute_outstanding_amount(note))) == Decimal("60")
+        with pytest.raises(ValueError, match="facturas vencidas|vencidas|Vencida"):
+            _validate_credit_limit_and_overdue("cacao", customer_id, Decimal("10"))
+
+    _create_and_submit_payment(entorno, customer_id=customer_id, invoice_id=note_id, amount="60", posting_date="2026-05-12")
+    with entorno.app.app_context():
+        note = database.session.get(SalesInvoice, note_id)
+        assert Decimal(str(compute_outstanding_amount(note))) == Decimal("0")
+        _validate_credit_limit_and_overdue("cacao", customer_id, Decimal("10"))
+
+    with entorno.app.app_context():
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        payment = database.session.get(PaymentEntry, payment_id)
+        assert payment is not None
+        with audit_actor(actor.id, actor.name), approved_execution(payment, actor.id):
+            cancel_document(
+                payment,
+                reason="Reversi?n prueba #2289",
+                actor_user_id=actor.id,
+                cancellation_date=date(2026, 5, 11),
+            )
+        database.session.commit()
+
+    with entorno.app.app_context():
+        note = database.session.get(SalesInvoice, note_id)
+        assert Decimal(str(compute_outstanding_amount(note))) == Decimal("40")
+        with pytest.raises(ValueError, match="facturas vencidas|vencidas|Vencida"):
+            _validate_credit_limit_and_overdue("cacao", customer_id, Decimal("10"))
+        _validate_credit_limit_and_overdue("otra", customer_id, Decimal("10"))
