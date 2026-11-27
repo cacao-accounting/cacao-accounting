@@ -18,7 +18,17 @@ from sqlalchemy.pool import StaticPool
 from cacao_accounting import create_app
 from cacao_accounting.contabilidad import routes as accounting_routes
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Currency, Entity, ExchangeRate, Modules, User, database
+from cacao_accounting.database import (
+    Currency,
+    Entity,
+    ExchangeRate,
+    ExchangeRevaluation,
+    ExchangeRevaluationItem,
+    GLEntry,
+    Modules,
+    User,
+    database,
+)
 
 
 def _crear_app():
@@ -134,6 +144,89 @@ def test_edicion_sin_colision_se_guarda():
             assert primera is not None
             assert primera.date == date(2026, 1, 12)
             assert primera.rate == Decimal("38.000000000")
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_edicion_rechaza_tasa_usada_por_gl_en_fecha_posterior():
+    """Una tasa permanece inmutable durante su intervalo histórico de vigencia."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            database.session.add(
+                GLEntry(
+                    posting_date=date(2026, 1, 15),
+                    company="cacao",
+                    debit=Decimal("37"),
+                    credit=Decimal("0"),
+                    account_currency="USD",
+                    company_currency="NIO",
+                    exchange_rate=Decimal("37"),
+                    voucher_type="journal_entry",
+                    voucher_id="posted-journal",
+                )
+            )
+            database.session.commit()
+
+        response = _cliente(application).post(
+            f"/accounting/exchange/{ids['segunda']}/edit",
+            data={"origin": "USD", "destination": "NIO", "rate": "38", "date": "2026-01-12"},
+        )
+
+        assert response.status_code == 200
+        assert "No se puede editar una tasa que ya fue utilizada en contabilidad" in response.get_data(as_text=True)
+        with application.app_context():
+            rate = database.session.get(ExchangeRate, ids["segunda"])
+            assert rate is not None
+            assert (rate.date, rate.rate) == (date(2026, 1, 11), Decimal("37.000000000"))
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_edicion_rechaza_tasa_usada_por_revaluacion_posterior():
+    """El snapshot de tasa en una revaluación protege la fila histórica fuente."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            run = ExchangeRevaluation(
+                company="cacao",
+                status="posted",
+                docstatus=1,
+                run_date=date(2026, 1, 15),
+                month=1,
+                year=2026,
+                currency="NIO",
+                document_no="EXR-2026-01",
+            )
+            database.session.add(run)
+            database.session.flush()
+            database.session.add(
+                ExchangeRevaluationItem(
+                    revaluation_id=run.id,
+                    reference_type="sales_invoice",
+                    reference_id="invoice-1",
+                    original_currency_id="USD",
+                    ledger_currency_id="NIO",
+                    closing_rate=Decimal("37"),
+                )
+            )
+            database.session.commit()
+
+        response = _cliente(application).post(
+            f"/accounting/exchange/{ids['segunda']}/edit",
+            data={"origin": "USD", "destination": "NIO", "rate": "38", "date": "2026-01-12"},
+        )
+
+        assert response.status_code == 200
+        assert "No se puede editar una tasa que ya fue utilizada en contabilidad" in response.get_data(as_text=True)
+        with application.app_context():
+            rate = database.session.get(ExchangeRate, ids["segunda"])
+            assert rate is not None
+            assert (rate.date, rate.rate) == (date(2026, 1, 11), Decimal("37.000000000"))
     finally:
         with application.app_context():
             database.session.remove()

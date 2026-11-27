@@ -2803,6 +2803,58 @@ def _exchange_rate_conflicts(origin: str, destination: str, rate_date: object, e
     return database.session.execute(query.limit(1)).scalar_one_or_none() is not None
 
 
+def _exchange_rate_is_used_in_accounting(rate: Any) -> bool:
+    """Detecta snapshots GL o de revaluación que dependen de una tasa histórica."""
+    from cacao_accounting.database import ExchangeRate, ExchangeRevaluation, ExchangeRevaluationItem, GLEntry
+
+    rate_value = Decimal(str(rate.rate))
+    tolerance = Decimal("0.000000001")
+    for origin, destination, expected_rate in (
+        (rate.origin, rate.destination, rate_value),
+        (rate.destination, rate.origin, Decimal("1") / rate_value),
+    ):
+        next_rate_date = database.session.execute(
+            database.select(database.func.min(ExchangeRate.date)).where(
+                ExchangeRate.origin == origin,
+                ExchangeRate.destination == destination,
+                ExchangeRate.date > rate.date,
+            )
+        ).scalar_one()
+        usage_dates = [GLEntry.posting_date >= rate.date]
+        revaluation_dates = [ExchangeRevaluation.run_date >= rate.date]
+        if next_rate_date is not None:
+            usage_dates.append(GLEntry.posting_date < next_rate_date)
+            revaluation_dates.append(ExchangeRevaluation.run_date < next_rate_date)
+
+        gl_usage = database.session.execute(
+            database.select(GLEntry.id)
+            .where(
+                GLEntry.account_currency == origin,
+                GLEntry.company_currency == destination,
+                GLEntry.exchange_rate.between(expected_rate - tolerance, expected_rate + tolerance),
+                *usage_dates,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if gl_usage is not None:
+            return True
+
+        revaluation_usage = database.session.execute(
+            database.select(ExchangeRevaluationItem.id)
+            .join(ExchangeRevaluation, ExchangeRevaluation.id == ExchangeRevaluationItem.revaluation_id)
+            .where(
+                ExchangeRevaluationItem.original_currency_id == origin,
+                ExchangeRevaluationItem.ledger_currency_id == destination,
+                ExchangeRevaluationItem.closing_rate.between(expected_rate - tolerance, expected_rate + tolerance),
+                *revaluation_dates,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if revaluation_usage is not None:
+            return True
+    return False
+
+
 def _handle_exchange_rate_integrity_error(
     error: IntegrityError,
     origin: str,
@@ -2847,29 +2899,7 @@ def editar_tasa_cambio(rate_id):
             flash(rate_error, "danger")
         else:
             assert rate is not None
-            from cacao_accounting.database import ExchangeRevaluation, ExchangeRevaluationItem, GLEntry
-
-            used_by_gl = database.session.execute(
-                database.select(GLEntry.id)
-                .where(
-                    GLEntry.posting_date == registro.date,
-                    GLEntry.account_currency == registro.origin,
-                    GLEntry.company_currency == registro.destination,
-                    GLEntry.exchange_rate.is_not(None),
-                )
-                .limit(1)
-            ).scalar_one_or_none()
-            used_by_revaluation = database.session.execute(
-                database.select(ExchangeRevaluationItem.id)
-                .join(ExchangeRevaluation, ExchangeRevaluation.id == ExchangeRevaluationItem.revaluation_id)
-                .where(
-                    ExchangeRevaluation.run_date == registro.date,
-                    ExchangeRevaluationItem.original_currency_id == registro.origin,
-                    ExchangeRevaluationItem.ledger_currency_id == registro.destination,
-                )
-                .limit(1)
-            ).scalar_one_or_none()
-            if used_by_gl or used_by_revaluation:
+            if _exchange_rate_is_used_in_accounting(registro):
                 flash(
                     _(
                         "No se puede editar una tasa que ya fue utilizada en contabilidad; "
