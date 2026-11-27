@@ -236,3 +236,104 @@ def test_guardar_el_mismo_precio_no_reporta_conflicto(tmp_path):
         assert database.session.get(ItemPrice, price_id).price == Decimal("10.0000")
         database.session.remove()
         database.engine.dispose()
+
+
+def test_listas_predeterminadas_de_companias_distintas_no_se_bloquean(tmp_path):
+    """El lock es por compañía; cada una conserva su propia predeterminada."""
+    app = _app(tmp_path)
+    suffix = uuid4().hex[:6]
+    user_id = f"user-{suffix}"
+    _seed(app, suffix, user_id)
+    second = f"E2{suffix}"
+    with app.app_context():
+        database.session.add_all(
+            [
+                Currency(code=f"C2{suffix}", name="Moneda 2", decimals=2, active=True, default=False),
+                Entity(
+                    code=second,
+                    name="Empresa 2",
+                    company_name=f"Empresa 2 {suffix} SA",
+                    tax_id=f"T2{suffix}",
+                    currency=f"C2{suffix}",
+                    enabled=True,
+                    status="default",
+                ),
+                UserCompanyAccess(user_id=user_id, company_code=second),
+            ]
+        )
+        database.session.commit()
+        database.session.remove()
+    barrier = Barrier(2, timeout=30)
+
+    def create(company: str, currency: str, name: str) -> int:
+        client = _client(app, user_id)
+        barrier.wait(timeout=10)
+        return client.post(
+            "/settings/price-lists",
+            data={
+                "name": name,
+                "company": company,
+                "currency": currency,
+                "is_selling": "y",
+                "is_active": "y",
+                "is_default": "y",
+            },
+        ).status_code
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            statuses = list(
+                workers.map(
+                    lambda args: create(*args),
+                    [
+                        (f"E{suffix}", f"C{suffix}", f"Default E {suffix}"),
+                        (second, f"C2{suffix}", f"Default E2 {suffix}"),
+                    ],
+                )
+            )
+        assert statuses == [302, 302]
+        with app.app_context():
+            for company in (f"E{suffix}", second):
+                defaults = (
+                    database.session.execute(
+                        database.select(PriceList).filter_by(company=company, is_selling=True, is_default=True, is_active=True)
+                    )
+                    .scalars()
+                    .all()
+                )
+                assert len(defaults) == 1
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_lista_predeterminada_genera_precios_de_venta(tmp_path):
+    """La creación de la predeterminada conserva la generación de tarifas."""
+    app = _app(tmp_path)
+    suffix = uuid4().hex[:6]
+    user_id = f"user-{suffix}"
+    _seed(app, suffix, user_id)
+    with app.app_context():
+        item = database.session.execute(database.select(Item).filter_by(code=f"ART{suffix}")).scalar_one()
+        item.standard_rate = Decimal("25")
+        database.session.commit()
+        database.session.remove()
+    client = _client(app, user_id)
+    response = client.post(
+        "/settings/price-lists",
+        data={
+            "name": f"Default {suffix}",
+            "company": f"E{suffix}",
+            "currency": f"C{suffix}",
+            "is_selling": "y",
+            "is_active": "y",
+            "is_default": "y",
+        },
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        prices = database.session.execute(database.select(ItemPrice).filter_by(item_code=f"ART{suffix}")).scalars().all()
+        assert any(price.price == Decimal("25.0000") for price in prices)
+        database.session.remove()
+        database.engine.dispose()
