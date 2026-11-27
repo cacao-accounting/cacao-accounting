@@ -51,5 +51,7 @@ def test_bank_statement_without_reference_allows_same_day_amount(app):
         adapter.persist_document(doc)
         database.session.commit()
 
-        count = database.session.execute(database.select(database.func.count(BankTransaction.id))).scalar()
+        count = database.session.execute(
+            database.select(database.func.count(BankTransaction.id)).filter_by(bank_account_id="ba1")
+        ).scalar()
         assert count == 2

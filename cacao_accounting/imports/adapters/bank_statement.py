@@ -199,7 +199,7 @@ class BankStatementAdapter(BaseImportAdapter):
             deposit = self._optional_amount(row.get("deposit"))
             withdrawal = self._optional_amount(row.get("withdrawal"))
             if (deposit is not None and deposit < 0) or (withdrawal is not None and withdrawal < 0):
-                raise ValueError(_("El monto bancario no puede ser negativo."))
+                raise ValueError(_("El monto bancario en columnas 'deposit'/'withdrawal' no puede ser negativo."))
             row_number = getattr(row, "row_number", position)
             transactions.append(
                 {
@@ -221,6 +221,7 @@ class BankStatementAdapter(BaseImportAdapter):
         """Persist bank transactions to the database."""
         persisted_ids: list[str] = []
         seen_in_batch: set[str] = set()
+        seen_reference_identities: set[tuple[str, str, str, str, str]] = set()
         # La comprobación de duplicados y la inserción deben ejecutarse bajo el
         # mismo lock por cuenta. Dos importaciones concurrentes del mismo
         # extracto esperan su turno; la segunda ya ve la fila confirmada por la
@@ -238,7 +239,11 @@ class BankStatementAdapter(BaseImportAdapter):
         for tx_data in document:
             self._validate_row_account(tx_data)
             reference_number = str(tx_data.get("reference_number") or "")
-            if reference_number and self._has_existing_reference(tx_data, reference_number, seen_in_batch):
+            reference_identity = self._reference_identity(tx_data, reference_number)
+            if reference_number and (
+                reference_identity in seen_reference_identities
+                or self._has_existing_reference(tx_data, reference_number, seen_in_batch)
+            ):
                 raise ValueError(_("La transacción bancaria ya existe en la base de datos."))
             tx = self._build_transaction(tx_data, reference_number)
             if not self._insert_transaction(tx, reference_number):
@@ -247,6 +252,7 @@ class BankStatementAdapter(BaseImportAdapter):
             # Sin referencia, fecha+importe no son identidad segura (#1510).
             if reference_number:
                 seen_in_batch.add(str(tx.id))
+                seen_reference_identities.add(reference_identity)
             persisted_ids.append(str(tx.id))
         self._auto_reconcile(persisted_ids)
 
@@ -266,6 +272,17 @@ class BankStatementAdapter(BaseImportAdapter):
                     "company_id": company_id,
                 }
             )
+
+    @staticmethod
+    def _reference_identity(tx_data: dict[str, Any], reference_number: str) -> tuple[str, str, str, str, str]:
+        """Identidad económica para deduplicación dentro del lote con referencia."""
+        return (
+            str(tx_data.get("bank_account_id") or ""),
+            str(tx_data.get("posting_date") or ""),
+            reference_number,
+            str(tx_data.get("deposit") if tx_data.get("deposit") is not None else ""),
+            str(tx_data.get("withdrawal") if tx_data.get("withdrawal") is not None else ""),
+        )
 
     @staticmethod
     def _has_existing_reference(tx_data: dict[str, Any], reference_number: str, seen_in_batch: set[str]) -> bool:
