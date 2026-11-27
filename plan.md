@@ -280,7 +280,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #761 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | MEDIUM: Apply cancellation and reversal period semantics consistently to all document types |
 | #961 | #1655 | ✅ `18f9d598` + `d69973f5`; GitHub: open / fix-proposed | AR/AP bloquea conversión sin tasa directa/inversa/funcional; 2 passed en SQLite; PostgreSQL pendiente por entorno |
 | #995 | #1707 | ✅ `ca5eb857`; GitHub: open / fix-proposed | Preview y snapshot comparten base acumulada; 13 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
-| #996 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Compras: incluir líneas fiscales manuales en el total |
+| #996 | #1707 | ✅ `e7c46c62`; GitHub: open / fix-proposed | Creación/edición suman impuesto manual; AP y GL concilian; 2 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #1009 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Fiscal: rechazar líneas manuales negativas en el preview |
 | #1011 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Fiscal: no duplicar conceptos en bases acumuladas |
 | #1015 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Impuestos: validar aplicabilidad al asignar una plantilla |
