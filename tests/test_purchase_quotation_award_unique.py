@@ -1,21 +1,31 @@
 # SPDX-License-Identifier: Apache-2.0
-# SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
+# SPDX-FileCopyrightText: 2025 - 2026 William Jos? Moreno Reyes
 
-"""#2140: un comparativo finalizado admite una única adjudicación."""
+"""#2140/#2294: un comparativo finalizado admite una ?nica adjudicaci?n, aislado."""
 
-import pytest
 from datetime import date
 
+import pytest
 from sqlalchemy.exc import IntegrityError
 
-from cacao_accounting.database import Entity, PurchaseQuotation, PurchaseQuotationAward, database
+from cacao_accounting import create_app
+from cacao_accounting.config import configuracion
+from cacao_accounting.database import Currency, Entity, PurchaseQuotation, PurchaseQuotationAward, database
 
-SUFFIX = "2140A"
 
-
-def test_award_unico_por_comparativo(app):
-    """Dos adjudicaciones sobre el mismo comparativo violan la restricción única (#2140)."""
+@pytest.fixture
+def isolated_app():
+    app = create_app(
+        {
+            **configuracion,
+            "TESTING": True,
+            "WTF_CSRF_ENABLED": False,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        }
+    )
     with app.app_context():
+        database.create_all()
+        database.session.add(Currency(code="NIO", name="C?rdoba", decimals=2, active=True, default=True))
         database.session.add(
             Entity(
                 code="A2140",
@@ -24,11 +34,19 @@ def test_award_unico_por_comparativo(app):
                 tax_id="A2140",
                 currency="NIO",
                 enabled=True,
-                status="default",
             )
         )
-        database.session.flush()
-        rfq = PurchaseQuotation(company="A2140", posting_date=date(2026, 5, 15), docstatus=1, document_no=f"RFQ-{SUFFIX}")
+        database.session.commit()
+    yield app
+    with app.app_context():
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_award_unico_por_comparativo(isolated_app):
+    """Dos adjudicaciones sobre el mismo comparativo violan la restricci?n ?nica (#2140)."""
+    with isolated_app.app_context():
+        rfq = PurchaseQuotation(company="A2140", posting_date=date(2026, 5, 15), docstatus=1, document_no="RFQ-2140A")
         database.session.add(rfq)
         database.session.flush()
         database.session.add(PurchaseQuotationAward(purchase_quotation_id=rfq.id, company="A2140", status="finalized"))
