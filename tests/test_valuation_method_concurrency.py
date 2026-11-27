@@ -7,14 +7,13 @@ from __future__ import annotations
 
 import os
 import threading
-import time
 from datetime import date
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import make_url
 
 from cacao_accounting import create_app
@@ -116,21 +115,38 @@ def _metodo_distinto(actual: str | None) -> str:
 
 
 def test_cambio_de_metodo_espera_al_primer_posting(pg_app):
-    """El guard administrativo no cambia el método si el posting gana la carrera (#1881)."""
+    """El guard administrativo no cambia el m?todo si el posting gana la carrera (#1881)."""
     with pg_app.app_context():
         entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
         original = entity.valuation_method or "moving_average"
         nuevo = _metodo_distinto(original)
 
-    bloqueado = threading.Event()
+    posting_locked = threading.Event()
+    guard_at_lock = threading.Event()
     liberar = threading.Event()
     resultado: dict[str, object] = {}
 
+    def _lock_listener(signal: threading.Event | None = None):
+        """Marca cu?ndo la sesi?n emite el SELECT ... FOR UPDATE sobre Entity."""
+
+        def listener(conn, cursor, statement, parameters, context, executemany):
+            del conn, cursor, parameters, context, executemany
+            if "FOR UPDATE" in statement.upper() and "ENTITY" in statement.upper():
+                if signal is not None:
+                    signal.set()
+                else:
+                    resultado["posting_lock"] = True
+
+        return listener
+
     def posting():
         with pg_app.app_context():
+            conexion = database.session.connection()
+            listener = _lock_listener()
+            event.listen(conexion, "before_cursor_execute", listener)
             try:
                 _valuation_method_for_company("cacao")  # SELECT ... FOR UPDATE sobre Entity
-                bloqueado.set()
+                posting_locked.set()
                 liberar.wait(timeout=10)
                 database.session.add(
                     StockLedgerEntry(
@@ -144,32 +160,45 @@ def test_cambio_de_metodo_espera_al_primer_posting(pg_app):
                     )
                 )
                 database.session.commit()
-            except Exception as exc:  # pragma: no cover - diagnóstico de la prueba
+            except Exception as exc:  # pragma: no cover - diagn?stico de la prueba
                 resultado["posting_error"] = repr(exc)
                 database.session.rollback()
+            finally:
+                event.remove(conexion, "before_cursor_execute", listener)
 
     def guard():
         with pg_app.app_context():
+            conexion = database.session.connection()
+            listener = _lock_listener(guard_at_lock)
+            event.listen(conexion, "before_cursor_execute", listener)
             try:
                 update_company_valuation_method("cacao", nuevo)
                 resultado["guard"] = "aplicado"
             except ValueError as exc:
                 resultado["guard"] = "rechazado"
                 resultado["guard_error"] = str(exc)
+            except Exception as exc:  # pragma: no cover - diagn?stico de la prueba
+                resultado["guard"] = "error"
+                resultado["guard_error"] = repr(exc)
             finally:
+                event.remove(conexion, "before_cursor_execute", listener)
                 database.session.remove()
 
     hilo_posting = threading.Thread(target=posting)
     hilo_posting.start()
-    assert bloqueado.wait(timeout=10), "el posting no tomó el lock de la compañía"
+    assert posting_locked.wait(timeout=10), "el posting no tom? el lock de la compa??a"
+    assert resultado.get("posting_lock") is True, "el posting no emiti? SELECT ... FOR UPDATE"
 
     hilo_guard = threading.Thread(target=guard)
     hilo_guard.start()
-    time.sleep(0.5)  # da tiempo a que el guard llegue al SELECT ... FOR UPDATE
+    # Determinista: el evento se dispara al emitirse el SELECT ... FOR UPDATE del guard,
+    # antes de que la sentencia se bloquee; sin el lock la se?al nunca llega.
+    llego_al_lock = guard_at_lock.wait(timeout=10)
     liberar.set()
     hilo_posting.join(timeout=15)
     hilo_guard.join(timeout=15)
 
+    assert llego_al_lock, "el guard no emiti? el SELECT ... FOR UPDATE"
     assert not hilo_posting.is_alive() and not hilo_guard.is_alive()
     assert "posting_error" not in resultado, resultado.get("posting_error")
     assert resultado.get("guard") == "rechazado", resultado
