@@ -2821,11 +2821,15 @@ def _capture_purchase_source_relations(registro: Any, target_type: str) -> list[
     ).scalars()
     return [
         {
+            "id": relation.id,
+            "revision": relation.revision,
+            "relation_type": relation.relation_type,
             "source_type": relation.source_type,
             "source_id": relation.source_id,
             "source_item_id": relation.source_item_id or "",
             "target_item_id": relation.target_item_id or "",
             "qty": _purchase_snapshot_value(relation.qty),
+            "qty_in_base_uom": _purchase_snapshot_value(relation.qty_in_base_uom),
             "uom": relation.uom,
             "rate": _purchase_snapshot_value(relation.rate),
             "amount": _purchase_snapshot_value(relation.amount),

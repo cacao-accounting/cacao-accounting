@@ -766,15 +766,19 @@ def test_edicion_factura_registra_cambio_de_origen_por_linea(app, authenticated_
     assert len(despues["source_relations"]) == 1
     relacion_antes = antes["source_relations"][0]
     relacion_despues = despues["source_relations"][0]
-    for campo in ("qty", "uom", "rate", "amount"):
+    for campo in ("id", "revision", "relation_type", "qty", "qty_in_base_uom", "uom", "rate", "amount"):
         assert campo in relacion_antes
         assert campo in relacion_despues
     assert relacion_antes["source_type"] == "purchase_order"
     assert relacion_antes["source_id"] == ids["orden_a"]
     assert relacion_antes["source_item_id"] == ids["linea_a"]
     assert relacion_antes["target_item_id"] == ids["linea_factura"]
+    assert relacion_antes["relation_type"]
+    assert relacion_antes["qty_in_base_uom"] == "2.000000000"
     assert relacion_despues["source_id"] == ids["orden_b"]
     assert relacion_despues["source_item_id"] == ids["linea_b"]
+    assert relacion_despues["relation_type"] == relacion_antes["relation_type"]
+    assert relacion_despues["qty_in_base_uom"] == "2.000000000"
     assert cambios["source_relations"]["before"] == antes["source_relations"]
     assert cambios["source_relations"]["after"] == despues["source_relations"]
 
