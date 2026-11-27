@@ -1029,18 +1029,28 @@ _SOURCE_MODELS: dict[str, Any] = {
     "stock_entry": StockEntry,
 }
 
+_SOURCE_READ_MODULES: dict[str, tuple[str, ...]] = {
+    "purchase_receipt": ("purchases", "inventory"),
+    "delivery_note": ("sales", "inventory"),
+    "stock_entry": ("inventory",),
+}
+
 
 def stock_entry_source_header(source_type: str | None, source_id: str | None) -> dict[str, str] | None:
     """Devuelve la compañía y moneda del origen para hidratar la cabecera bloqueada.
 
     Solo hidrata cuando el documento existe, declara compañía y moneda
-    transaccional, y la compañía es consultable por el usuario. Sin moneda
-    (datos legacy o importados) la cabecera queda editable para no bloquear
-    un formulario imposible (#1874). Un origen de otra compañía falla cerrado
-    con 403 mediante ``exige_acceso_compania``.
+    transaccional, y el usuario puede consultar el documento origen en su
+    módulo y compañía. Sin moneda (datos legacy o importados) la cabecera
+    queda editable para no bloquear un formulario imposible (#1874). Un origen
+    de otra compañía o sin permiso de lectura del origen falla cerrado
+    con 403 (#1874 QA).
     """
+    from cacao_accounting.decorators import exige_acceso_compania_cualquiera
+
     model = _SOURCE_MODELS.get(source_type or "")
-    if model is None or not source_id:
+    read_modules = _SOURCE_READ_MODULES.get(source_type or "")
+    if model is None or not read_modules or not source_id:
         return None
     source = database.session.get(model, source_id)
     company = getattr(source, "company", None)
@@ -1049,7 +1059,8 @@ def stock_entry_source_header(source_type: str | None, source_id: str | None) ->
     currency = str(getattr(source, "transaction_currency", "") or "").strip()
     if not currency:
         return None
-    exige_acceso_compania("inventory", str(company), "crear")
+    # #1874: requiere lectura del origen antes de exponer su existencia/moneda.
+    exige_acceso_compania_cualquiera(read_modules, str(company), "consultar")
     return {"company": str(company), "currency": currency}
 
 
