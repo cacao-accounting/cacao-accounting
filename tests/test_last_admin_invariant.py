@@ -218,6 +218,8 @@ def test_concurrent_demotions_cannot_remove_all_admins(last_admin_app):
 
     def demote(user_key: str) -> str:
         with app.app_context():
+            # Fija el snapshot consistente antes de competir por el lock.
+            database.session.execute(database.select(User.id).limit(1)).all()
             barrier.wait()
             user_id = ids[user_key]
             _lock_last_admin_users(user_id)
