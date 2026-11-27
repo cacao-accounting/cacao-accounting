@@ -82,7 +82,7 @@ def _active_system_admin_ids(exclude_user_id: str | None = None) -> list[str]:
 
 
 def _company_has_recoverable_admin(company_code: str, *, exclude_user_id: str | None = None) -> bool:
-    """True si la compa??a conserva un admin activo autorizado para recuperar acceso."""
+    """Indica si la compañía conserva un administrador activo con acceso recuperable."""
     admin_ids = _active_system_admin_ids(exclude_user_id=exclude_user_id)
     if not admin_ids:
         return False

@@ -536,7 +536,14 @@
         var reversalDateInput = document.getElementById('reversal_date');
         var guidance = document.getElementById('reversal-period-guidance');
         var originalPostingDate = {{ (registro.date.isoformat() if registro.date else "") | tojson }};
+        var accountingPeriods = {{ reversal_periods | tojson }};
         if (!reversalDateInput || !guidance || !originalPostingDate) return;
+
+        function periodForDate(dateValue) {
+            return accountingPeriods.find(function (period) {
+                return period.start <= dateValue && dateValue <= period.end;
+            }) || null;
+        }
 
         function updateReversalGuidance() {
             var selectedDate = reversalDateInput.value || '';
@@ -544,8 +551,21 @@
                 guidance.textContent = {{ _('Seleccione una fecha en otro período contable para generar el borrador de reversión con la misma serie.') | tojson }};
                 return;
             }
-            var samePeriod = selectedDate.slice(0, 7) === originalPostingDate.slice(0, 7);
-            guidance.textContent = samePeriod
+            var selectedPeriod = periodForDate(selectedDate);
+            var originalPeriod = periodForDate(originalPostingDate);
+            if (!selectedPeriod) {
+                guidance.textContent = {{ _('La fecha elegida no pertenece a un período contable configurado.') | tojson }};
+                return;
+            }
+            if (!selectedPeriod.enabled || selectedPeriod.closed) {
+                guidance.textContent = {{ _('El período contable de la fecha elegida está cerrado o deshabilitado.') | tojson }};
+                return;
+            }
+            if (!originalPeriod) {
+                guidance.textContent = {{ _('No se encontró el período contable del comprobante.') | tojson }};
+                return;
+            }
+            guidance.textContent = selectedPeriod.id === originalPeriod.id
                 ? {{ _('La fecha elegida cae en el mismo período. Debe usar una fecha de otro período para revertir este comprobante.') | tojson }}
                 : {{ _('La fecha elegida cae en un período distinto. Se puede crear el borrador de reversión para el nuevo período contable.') | tojson }};
         }

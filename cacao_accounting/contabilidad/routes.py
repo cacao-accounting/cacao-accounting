@@ -4063,6 +4063,27 @@ def anular_comprobante(identifier: str):
     return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
 
+def _journal_reversal_periods(entity: str) -> list[dict[str, str | bool]]:
+    """Devuelve los rangos de períodos para orientar la fecha de reversión."""
+    from cacao_accounting.database import AccountingPeriod
+
+    periods = database.session.execute(
+        database.select(AccountingPeriod)
+        .where(AccountingPeriod.entity == entity)
+        .order_by(AccountingPeriod.start, AccountingPeriod.end)
+    ).scalars()
+    return [
+        {
+            "id": str(period.id),
+            "start": period.start.isoformat(),
+            "end": period.end.isoformat(),
+            "enabled": bool(period.enabled),
+            "closed": bool(period.is_closed),
+        }
+        for period in periods
+    ]
+
+
 @contabilidad.route("/journal/<identifier>")
 @login_required
 @modulo_activo("accounting")
@@ -4114,7 +4135,6 @@ def ver_comprobante(identifier: str):
     lineas = _build_journal_lineas(lineas_raw, account_labels, cost_center_labels)
     audit_timeline = format_document_timeline("journal_entry", journal.id)
     display_name = journal_display_document_name(journal)
-
     return render_template(
         "contabilidad/journal.html",
         registro=journal,
@@ -4124,6 +4144,7 @@ def ver_comprobante(identifier: str):
         creator_nickname=creator_nickname,
         audit_timeline=audit_timeline,
         display_name=display_name,
+        reversal_periods=_journal_reversal_periods(journal.entity),
         titulo=_("Comprobante Contable") + " - " + APPNAME,
     )
 

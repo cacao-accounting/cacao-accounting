@@ -28239,3 +28239,15 @@ msgstr "The payment withholding certificate is cancelled and cannot be reissued.
 #, python-format
 msgid "La moneda de comparación debe coincidir con la moneda del libro seleccionado (%(currency)s)."
 msgstr "The comparison currency must match the selected ledger currency (%(currency)s)."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/journal.html
+msgid "La fecha elegida no pertenece a un período contable configurado."
+msgstr "The selected date does not belong to a configured accounting period."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/journal.html
+msgid "El período contable de la fecha elegida está cerrado o deshabilitado."
+msgstr "The accounting period for the selected date is closed or disabled."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/journal.html
+msgid "No se encontró el período contable del comprobante."
+msgstr "The journal entry's accounting period could not be found."
