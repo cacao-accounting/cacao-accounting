@@ -305,7 +305,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1149 | #1658 | ⚠️ Implementación pendiente; GitHub: open / needs-work | fix: aplica la frecuencia de diarios recurrentes |
 | #1157 | #1656 | ⚠️ Implementación pendiente; GitHub: open / needs-work | El cierre mensual revaloriza un período distinto |
 | #1164 | #1655 | ✅ `ce82367d`; GitHub: open / fix-proposed | Validaci?n manual e importaciones usan la tasa hist?rica por fecha y bloquean conversiones faltantes; 11 pruebas SQLite; Black/Ruff/Flake8/mypy/pydocstyle/complexipy/Babel OK; Pylint completo mantiene avisos previos, errores/fatales 10/10; sin migraciones; PostgreSQL pendiente por entorno |
-| #1165 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Rechaza monedas inactivas en líneas de diarios |
+| #1165 | #1655 | ✅ `4c6177de`; GitHub: open / fix-proposed | El servidor rechaza monedas de l?nea inexistentes/inactivas; las reversas hist?ricas conservan moneda original; 24 pruebas SQLite; Black/Ruff/Flake8/mypy/pydocstyle/complexipy/Babel OK; Pylint completo mantiene avisos previos; sin migraciones; PostgreSQL pendiente por entorno |
 | #1166 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Permite contabilizar diarios tras aprobación |
 | #1168 | #1709 | ✅ `d6dd2d55`; GitHub: open / fix-proposed | Cierre fiscal aplica alcance GL efectivo por fecha; prueba integrada con reversa real de ExchangeRevaluationService; 9 pruebas relacionadas pasaron en SQLite; controles globales pasan; PostgreSQL no probado; sin migraciones |
 | #1170 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Integra el cierre fiscal con la aprobación Cloud |
