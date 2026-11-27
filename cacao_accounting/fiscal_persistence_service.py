@@ -17,6 +17,7 @@ from cacao_accounting.accounting_engine.common.context import TaxRuleContext
 from cacao_accounting.accounting_engine.common.fiscal import (
     SUPPORTED_TAX_CALCULATION_METHODS,
     affects_inventory_from_treatment,
+    calculate_accumulated_tax_base,
     find_duplicate_rule_id,
 )
 from cacao_accounting.database import Accounts, DocumentTaxLine, DocumentTaxSummary, TaxRule, database
@@ -588,13 +589,13 @@ def _canonical_tax_rule_base(
         base_amount = _restricted_rule_base(tax_rule, line_payload, category_subtotals)
     elif server_subtotal is None:
         base_amount = _decimal_or_none(line_payload.get("base_amount")) or Decimal("0")
-    elif tax_rule.base_mode == "accumulated" and tax_rule.include_concepts:
-        included = _as_list(tax_rule.include_concepts)
-        excluded = _as_list(tax_rule.exclude_concepts)
-        base_amount = server_subtotal
-        if included:
-            base_amount = sum((concept_amounts.get(concept, Decimal("0")) for concept in included), Decimal("0"))
-        base_amount -= sum((concept_amounts.get(concept, Decimal("0")) for concept in excluded), Decimal("0"))
+    elif tax_rule.base_mode == "accumulated":
+        base_amount = calculate_accumulated_tax_base(
+            server_subtotal,
+            concept_amounts,
+            _as_list(tax_rule.include_concepts),
+            _as_list(tax_rule.exclude_concepts),
+        )
     else:
         base_amount = server_subtotal
     if base_amount < 0:

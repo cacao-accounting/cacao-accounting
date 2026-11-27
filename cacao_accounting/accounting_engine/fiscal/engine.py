@@ -17,7 +17,11 @@ from cacao_accounting.accounting_engine.common.context import (
     TaxRuleContext,
 )
 from cacao_accounting.accounting_engine.common.rounding import RoundingManager
-from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment, find_duplicate_rule_id
+from cacao_accounting.accounting_engine.common.fiscal import (
+    affects_inventory_from_treatment,
+    calculate_accumulated_tax_base,
+    find_duplicate_rule_id,
+)
 from cacao_accounting.i18n import _
 
 
@@ -301,14 +305,12 @@ class FiscalEngine:
         if rule.base_mode == "goods":
             return goods_total
         if rule.base_mode == "accumulated":
-            base = Decimal("0")
-            if not rule.include_concepts:
-                return goods_total
-            for concept in rule.include_concepts:
-                base += concept_amounts.get(concept, Decimal("0"))
-            for concept in rule.exclude_concepts:
-                base -= concept_amounts.get(concept, Decimal("0"))
-            return base
+            return calculate_accumulated_tax_base(
+                goods_total,
+                concept_amounts,
+                rule.include_concepts,
+                rule.exclude_concepts,
+            )
         return goods_total
 
     def _calculate_amount(

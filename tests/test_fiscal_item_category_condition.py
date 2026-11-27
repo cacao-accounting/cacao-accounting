@@ -105,6 +105,27 @@ def test_unrestricted_rule_keeps_the_document_base():
     assert line.applies_to_items == ["A", "B"]
 
 
+def test_accumulated_rule_applies_exclusions_without_inclusions():
+    """An accumulated rule starts from goods when it only excludes concepts."""
+    rules = [
+        _rule(rule_id="IVA", concept="iva", rate=Decimal("10"), participates_in_next_base=True),
+        _rule(
+            rule_id="TASA-POSTERIOR",
+            concept="tasa_posterior",
+            rate=Decimal("5"),
+            base_mode="accumulated",
+            exclude_concepts=["iva"],
+            order=2,
+        ),
+    ]
+
+    result = FiscalEngine().calculate(_context([_item("A", "100", "cat-a")], rules))
+
+    assert result.errors == []
+    assert [line.base_amount for line in result.tax_lines] == [Decimal("100"), Decimal("90")]
+    assert [line.amount for line in result.tax_lines] == [Decimal("10"), Decimal("4.5")]
+
+
 def test_item_without_category_does_not_match_a_restricted_rule():
     """Uncategorized items never satisfy a category condition."""
     result = FiscalEngine().calculate(
@@ -272,6 +293,63 @@ def test_snapshot_without_category_totals_keeps_the_engine_base(app, persisted_r
         rows = load_document_fiscal_lines(document_type="payment_entry", document_id=document_id)
         assert len(rows) == 1
         assert rows[0].base_amount == Decimal("100.0000")
+
+
+def test_snapshot_reconstructs_accumulated_exclusion_without_inclusions(app):
+    """Persisted accumulated bases subtract prior excluded concepts from goods."""
+    suffix = uuid4().hex[:6]
+    with app.app_context():
+        iva_rule = create_tax_rule(
+            {
+                "name": f"IVA {suffix}",
+                "concept": "iva",
+                "applies_to": "both",
+                "level": "item",
+                "tax_type": "tax",
+                "calculation_method": "percentage",
+                "rate": "10",
+                "base_mode": "goods",
+                "participates_in_next_base": "on",
+                "recognition_event": "invoice",
+                "is_active": "on",
+            }
+        )
+        accumulated_rule = create_tax_rule(
+            {
+                "name": f"Tasa acumulada {suffix}",
+                "concept": "tasa_posterior",
+                "applies_to": "both",
+                "level": "item",
+                "tax_type": "tax",
+                "calculation_method": "percentage",
+                "rate": "5",
+                "base_mode": "accumulated",
+                "exclude_concepts": "iva",
+                "recognition_event": "invoice",
+                "is_active": "on",
+            }
+        )
+        database.session.flush()
+        document_id = f"INV-{suffix}"
+
+        persist_document_fiscal_snapshot(
+            company="cacao",
+            document_type="sales_invoice",
+            document_id=document_id,
+            currency="NIO",
+            tax_lines=[
+                {"source_rule_id": iva_rule.id, "concept": "iva"},
+                {"source_rule_id": accumulated_rule.id, "concept": "tasa_posterior"},
+            ],
+            tax_summary={"subtotal": "100", "grand_total": "114.5"},
+            server_subtotal=Decimal("100"),
+        )
+        database.session.commit()
+
+        rows = load_document_fiscal_lines(document_type="sales_invoice", document_id=document_id)
+
+        assert [row.base_amount for row in rows] == [Decimal("100.0000"), Decimal("90.0000")]
+        assert [row.amount for row in rows] == [Decimal("10.0000"), Decimal("4.5000")]
 
 
 def test_tax_rule_persists_the_category_without_migrations(app, persisted_rule):
