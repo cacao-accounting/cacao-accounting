@@ -19,6 +19,15 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.18.0\n"
 
+msgid "Matriz incompleta: faltan conversiones para algunas proyecciones manuales."
+msgstr "Incomplete matrix: conversions are missing for some manual projections."
+
+msgid "Los saldos proyectados no incluyen estos importes y no deben interpretarse como completos."
+msgstr "Projected balances exclude these amounts and should not be treated as complete."
+
+msgid "Incompleto"
+msgstr "Incomplete"
+
 #: cacao_accounting/__init__.py:404
 msgid "asignó una tarea"
 msgstr "assigned a task"

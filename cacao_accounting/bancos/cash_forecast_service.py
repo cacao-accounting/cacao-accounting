@@ -329,12 +329,13 @@ def _compute_manual_projections(
     zone: str,
     today_date: date,
     company_currency: str,
-) -> tuple[Decimal, Decimal]:
+) -> tuple[Decimal, Decimal, list[dict]]:
     """Calcula proyecciones manuales de ingreso y egreso para un período."""
     manual_inflow = Decimal("0")
     manual_outflow = Decimal("0")
+    incomplete_entries = []
     for entry in manual_entries:
-        if not (start_date <= entry.estimated_date <= end_date):
+        if not start_date <= entry.estimated_date <= end_date:
             continue
         try:
             amount = coerce_decimal(entry.amount, "monto", positive=True)
@@ -348,15 +349,25 @@ def _compute_manual_projections(
                 "monto convertido",
                 positive=True,
             )
-        except (CashForecastConversionError, ValueError):
-            # Skip only the incomplete manual projection; the rest of the
-            # forecast remains usable.
+        except CashForecastConversionError:
+            incomplete_entries.append(
+                {
+                    "id": entry.id,
+                    "concept": entry.concept,
+                    "type": entry.type,
+                    "amount": amount,
+                    "currency": entry.currency,
+                    "estimated_date": entry.estimated_date,
+                }
+            )
+            continue
+        except ValueError:
             continue
         if entry.type == "Income":
             manual_inflow += base_amt
         else:
             manual_outflow += base_amt
-    return manual_inflow, manual_outflow
+    return manual_inflow, manual_outflow, incomplete_entries
 
 
 def _update_cumulatives(
@@ -455,7 +466,7 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
             end_date,
             company_currency,
         )
-        manual_inflow, manual_outflow = _compute_manual_projections(
+        manual_inflow, manual_outflow, incomplete_manual_entries = _compute_manual_projections(
             manual_entries, start_date, end_date, zone, today_date, company_currency
         )
 
@@ -484,6 +495,8 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
                 "proj_ap": proj_ap,
                 "manual_inflow": manual_inflow,
                 "manual_outflow": manual_outflow,
+                "incomplete_manual_entries": incomplete_manual_entries,
+                "is_incomplete": bool(incomplete_manual_entries),
                 "real_balance": cumulatives["real"],
                 "current_balance": cumulatives["current"],
                 "projected_balance": cumulatives["projected"],
