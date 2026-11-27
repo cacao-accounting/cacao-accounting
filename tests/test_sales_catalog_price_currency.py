@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from cacao_accounting.database import (
     CompanyParty,
+    Currency,
     Item,
     ItemPrice,
     Party,
@@ -187,3 +188,37 @@ def test_guardado_rechaza_precio_origin_y_acepta_conversion(entorno_contable_ais
     assert aceptado.status_code == 302
     with application.app_context():
         assert len(database.session.execute(database.select(SalesRequest)).scalars().all()) == 1
+
+
+def test_guardado_bloquea_precio_de_lista_sin_tasa_vigente(entorno_contable_aislado, monkeypatch):
+    """El formulario no persiste un precio origen cuando falta conversión histórica."""
+    application = entorno_contable_aislado.app
+    with application.app_context():
+        if database.session.get(Currency, "EUR") is None:
+            database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
+            database.session.commit()
+    customer_id, _item_code = _sembrar_lista(entorno_contable_aislado, currency="EUR")
+    with application.app_context():
+        ensure_default_naming_series_for_company("cacao", ["sales_request"])
+    monkeypatch.setattr(sales_services, "is_sales_price_editor", lambda *_args, **_kwargs: False)
+    client = _cliente_http(application)
+
+    response = client.post(
+        "/sales/sales-request/new",
+        data={
+            "company": "cacao",
+            "currency": "NIO",
+            "posting_date": FECHA.isoformat(),
+            "customer_id": customer_id,
+            "item_code_0": "ART01",
+            "item_name_0": "Linea sin tasa",
+            "qty_0": "1",
+            "rate_0": "100",
+            "uom_0": "UND",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "No existe tipo de cambio" in response.get_data(as_text=True)
+    with application.app_context():
+        assert database.session.execute(database.select(SalesRequest)).scalars().all() == []
