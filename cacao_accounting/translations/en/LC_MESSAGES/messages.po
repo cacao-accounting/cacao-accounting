@@ -28222,3 +28222,8 @@ msgstr "The replenishment date cannot be earlier than the expense date."
 #: cacao_accounting/withholding_service.py
 msgid "El certificado de retención del pago está cancelado y no puede reemitirse."
 msgstr "The payment withholding certificate is cancelled and cannot be reissued."
+
+#: cacao_accounting/reportes/services.py
+#, python-format
+msgid "La moneda de comparación debe coincidir con la moneda del libro seleccionado (%(currency)s)."
+msgstr "The comparison currency must match the selected ledger currency (%(currency)s)."

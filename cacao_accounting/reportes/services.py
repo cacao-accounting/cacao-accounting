@@ -966,7 +966,14 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     company_currency = database.session.execute(
         select(Entity.currency).where(Entity.code == filters.company)
     ).scalar_one_or_none()
-    comparison_currency = filters.currency or selected_ledger.currency
+    requested_currency = (filters.currency or "").strip().upper()
+    ledger_currency = (selected_ledger.currency or "").strip().upper()
+    if requested_currency and requested_currency != ledger_currency:
+        raise ValueError(
+            _("La moneda de comparación debe coincidir con la moneda del libro seleccionado (%(currency)s).")
+            % {"currency": ledger_currency}
+        )
+    comparison_currency = ledger_currency
     ledger_needs_conversion = bool(
         selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
     )

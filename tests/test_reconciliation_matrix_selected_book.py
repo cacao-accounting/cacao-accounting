@@ -29,6 +29,7 @@ from cacao_accounting.reportes.services import (
     _ReconciliationContext,
     _reconcile_ar_ap_rows,
     _reconcile_inventory_row,
+    get_reconciliation_matrix,
 )
 
 
@@ -386,3 +387,28 @@ def test_inventory_reconciliation_uses_posting_snapshots_not_later_rates():
     database.session.flush()
     with pytest.raises(ValueError, match="Falta la valoración del libro"):
         _reconcile_inventory_row(context)
+
+
+def test_reconciliation_matrix_rejects_currency_different_from_selected_book(entorno_contable_aislado):
+    """La matriz rechaza una moneda de presentación distinta a la del libro."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        selected_book = database.session.execute(
+            database.select(Book).filter_by(entity="cacao", code="DEFAULT_BOOK")
+        ).scalar_one()
+        ledger_currency = selected_book.currency
+        requested_currency = "USD" if selected_book.currency == "NIO" else "NIO"
+        filters = ReconciliationFilters(
+            company="cacao",
+            ledger=selected_book.id,
+            currency=requested_currency,
+        )
+
+        with pytest.raises(ValueError, match="coincidir con la moneda del libro seleccionado"):
+            get_reconciliation_matrix(filters)
+
+        matching_currency_report = get_reconciliation_matrix(
+            ReconciliationFilters(company="cacao", ledger=selected_book.id, currency=ledger_currency)
+        )
+
+    assert matching_currency_report.ledger_currency == ledger_currency
