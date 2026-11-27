@@ -3,9 +3,14 @@
 
 from __future__ import annotations
 
+import os
 from decimal import Decimal
 
+import pytest
+
 from cacao_accounting.database import SalesOrder, SalesOrderItem, StockBin, database
+
+DESKTOP = os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}
 from cacao_accounting.ventas.services import (
     _release_reservation_for_closed_sales_order,
     _release_reservation_for_sales_order,
@@ -100,6 +105,7 @@ def test_release_is_idempotent_for_closed_order(app, entorno_contable):
         assert Decimal(str(bin_row.reserved_qty)) == before
 
 
+@pytest.mark.skipif(DESKTOP, reason="El flujo de aprobación es una función de Cloud.")
 def test_late_cancellation_approval_after_close_does_not_consume_other_reservations(entorno_contable_aislado):
     """Solicitud+cierre+aprobaci?n tard?a no debe consumir reservas de otras ?rdenes (#1820)."""
     app = entorno_contable_aislado.app

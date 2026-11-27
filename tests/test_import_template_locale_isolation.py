@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import io
+import os
 import threading
 from contextlib import contextmanager
 
@@ -16,6 +17,7 @@ from cacao_accounting.database import Modules, database
 
 # Rutas que dejaron las implementaciones rechazadas: el directorio temporal por
 # petición y el archivo compartido del código anterior a esa corrección.
+DESKTOP = os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}
 PREFIJO_TEMPORAL = "import-template-"
 CAMINO_COMPARTIDO = ("templates", "template_customer.csv")
 
@@ -72,6 +74,7 @@ def _residuo_temporal(instancia) -> list[str]:
     return [p.name for p in instancia.iterdir() if p.name.startswith(PREFIJO_TEMPORAL)]
 
 
+@pytest.mark.skipif(DESKTOP, reason="La importación tabular no está disponible en modo escritorio.")
 def test_cada_descarga_usa_el_idioma_de_su_peticion_sin_dejar_archivos(
     app, entorno_contable, authenticated_client, monkeypatch, instancia_aislada
 ):
@@ -95,6 +98,7 @@ def test_cada_descarga_usa_el_idioma_de_su_peticion_sin_dejar_archivos(
         assert not (instancia_aislada / CAMINO_COMPARTIDO[0] / CAMINO_COMPARTIDO[1]).exists()
 
 
+@pytest.mark.skipif(DESKTOP, reason="La importación tabular no está disponible en modo escritorio.")
 def test_descarga_no_depende_de_que_exista_instance_path(app, entorno_contable, authenticated_client, tmp_path, monkeypatch):
     """Una instalación limpia responde 200 aunque falte el directorio de instancia."""
     with modulo_imports_activado(app):
@@ -109,6 +113,7 @@ def test_descarga_no_depende_de_que_exista_instance_path(app, entorno_contable, 
 
 
 @pytest.mark.parametrize("formato", ["xlsx", "ods"])
+@pytest.mark.skipif(DESKTOP, reason="La importación tabular no está disponible en modo escritorio.")
 def test_plantillas_binarias_se_entregan_completas(app, entorno_contable, authenticated_client, formato, instancia_aislada):
     """El buffer en memoria debe rebobinarse: entregado desde el final sale vacío."""
     with modulo_imports_activado(app):

@@ -11,6 +11,7 @@ otra compañía.
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
@@ -32,6 +33,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company
 
+DESKTOP = os.environ.get("CACAO_ACCOUNTING_DESKTOP", "").strip().lower() in {"1", "true", "yes", "on"}
 FECHA = date(2026, 5, 15)
 
 
@@ -164,6 +166,7 @@ def test_create_target_persiste_pago_con_origen_por_linea(app, entorno_contable,
         assert relation is not None
 
 
+@pytest.mark.skipif(DESKTOP, reason="Desktop es monocompañía.")
 def test_create_target_rechaza_factura_fuente_de_otra_compania(app, entorno_contable, cajero):
     """El permiso de caja no autoriza una factura fuente de otra compañía."""
     with app.app_context():

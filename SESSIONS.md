@@ -284,3 +284,9 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
 - **Verificación**: suite completa SQLite, MySQL y PostgreSQL ejecutadas contra
   los contenedores locales del proyecto; resultados y limitaciones se registran
   en los comentarios del commit correspondiente.
+- **Reserva de caja chica en MySQL**: la segunda solicitud leía los vínculos
+  desde la instantánea REPEATABLE READ anterior al commit de la primera. La
+  consulta usa lectura bloqueante para observar la reserva ya confirmada.
+- **Alcance de Desktop**: las pruebas de aprobaciones, importación tabular y
+  rechazo multicompañía se omiten en modo escritorio porque son funciones de
+  Cloud; la matriz desktop valida los flujos soportados.
