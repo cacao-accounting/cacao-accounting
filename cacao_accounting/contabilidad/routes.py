@@ -1890,8 +1890,9 @@ def nuevo_centro_costo():
                 entity_initial_label=entity_initial_label,
                 parent_initial_label=parent_initial_label,
             )
-        from cacao_accounting.contabilidad.services import _ensure_single_default_cost_center
+        from cacao_accounting.contabilidad.services import _ensure_single_default_cost_center, _lock_cost_center_companies
 
+        _lock_cost_center_companies((entity,))
         DATA = CostCenter(
             entity=entity,
             code=request.form.get("id", None),

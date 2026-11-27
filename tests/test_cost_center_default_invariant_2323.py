@@ -206,3 +206,39 @@ def test_empresas_independientes(app):
         database.session.commit()
         assert _count_defaults(app, codes[0]) == 1
         assert _count_defaults(app, codes[1]) == 1
+
+
+def test_normaliza_main_historico_no_posteable(app):
+    """Si MAIN existe pero no es posteable y no hay otro candidato, se reactiva MAIN (#2323)."""
+    from cacao_accounting.contabilidad.services import _ensure_single_default_cost_center
+
+    code = f"H{uuid4().hex[:7].upper()}"
+    with app.app_context():
+        database.session.add(
+            Entity(code=code, name=code, company_name=code, tax_id=f"T{code}", currency="NIO", status="activo", enabled=True)
+        )
+        database.session.flush()
+        database.session.add(
+            CostCenter(
+                entity=code,
+                code="MAIN",
+                name="Main historico",
+                active=False,
+                enabled=False,
+                default=True,
+                group=True,
+                status="inactivo",
+            )
+        )
+        database.session.commit()
+
+        chosen = _ensure_single_default_cost_center(code)
+        database.session.commit()
+        assert chosen.code == "MAIN"
+        assert bool(chosen.default) is True
+        assert bool(chosen.active) is True
+        assert bool(chosen.enabled) is True
+        assert bool(chosen.group) is False
+        defaults = database.session.execute(database.select(CostCenter).filter_by(entity=code, default=True)).scalars().all()
+        assert len(defaults) == 1
+        assert defaults[0].code == "MAIN"
