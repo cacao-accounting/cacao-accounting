@@ -29,6 +29,7 @@
     <thead>
       <tr>
         <th scope="col">{{ _('Caja') }}</th>
+        <th scope="col">{{ _('Compañía') }}</th>
         <th scope="col">{{ _('Responsable') }}</th>
         <th scope="col">{{ _('Fondo') }}</th>
         <th scope="col">{{ _('Moneda') }}</th>
@@ -46,6 +47,7 @@
           <a class="fw-bold" href="{{ url_for('bancos.caja_chica', pc_id=item.id) }}">{{ item.name }}</a>
           {% if item.is_default %}<span class="badge text-bg-secondary">{{ _('Predeterminada') }}</span>{% endif %}
         </td>
+        <td>{{ item.company or '-' }}</td>
         <td>{{ responsables.get(item.custodian_id) or item.custodian_id or '-' }}</td>
         <td>{{ item.float_amount }}</td>
         <td>{{ item.currency or '-' }}</td>
@@ -63,7 +65,7 @@
       </tr>
       {%- else %}
       <tr>
-        <td colspan="9" class="text-center text-muted">{{ _('No hay cajas chicas registradas.') }}</td>
+        <td colspan="10" class="text-center text-muted">{{ _('No hay cajas chicas registradas.') }}</td>
       </tr>
       {%- endfor %}
     </tbody>

@@ -1377,10 +1377,12 @@ def caja_chica_vale_lista():
     registros = []
     for company in companies:
         registros.extend(petty_cash_vouchers(company))
+    fondos = _petty_cash_fund_labels({registro.petty_cash_id for registro in registros if registro.petty_cash_id})
     titulo = _("Listado de Vales de Caja Chica") + " - " + APPNAME
     return render_template(
         "bancos/caja_chica_vale_lista.html",
         registros=registros,
+        fondos=fondos,
         creatable_companies=_cash_creatable_companies(),
         titulo=titulo,
     )

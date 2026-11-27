@@ -45,8 +45,8 @@
       {% for item in registros -%}
       <tr>
         <td>{{ item.document_no or item.id }}</td>
-        <td>{{ item.company }}</td>
-        <td>{% set fondo = fondos.get(item.petty_cash_id) %}{{ fondo[0] if fondo else item.petty_cash_id }}</td>
+        <td>{{ item.company or '-' }}</td>
+        <td>{% set fondo = fondos.get(item.petty_cash_id) %}{{ (fondo[0] ~ ' (' ~ fondo[1] ~ ')') if fondo else item.petty_cash_id or '-' }}</td>
         <td>{{ item.posting_date or '-' }}</td>
         <td>{{ item.beneficiary or '-' }}</td>
         <td>{{ item.concept }}</td>
