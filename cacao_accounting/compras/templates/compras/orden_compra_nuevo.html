@@ -16,6 +16,7 @@
 </nav>
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
+  {% if edit and registro %}<input type="hidden" name="version" value="{{ registro.version }}">{% endif %}
   {% if from_request_id %}<input type="hidden" name="from_request" value="{{ from_request_id }}">{% endif %}
   {% if from_rfq_id %}<input type="hidden" name="from_rfq" value="{{ from_rfq_id }}">{% endif %}
   {% if from_supplier_quotation_id %}<input type="hidden" name="from_supplier_quotation" value="{{ from_supplier_quotation_id }}">{% endif %}

@@ -23,6 +23,7 @@
 
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
+  {% if edit and registro %}<input type="hidden" name="version" value="{{ registro.version }}">{% endif %}
   {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
   {% if from_receipt_id %}<input type="hidden" name="from_receipt" value="{{ from_receipt_id }}">{% endif %}
   {% if recepcion_origen %}<input type="hidden" name="is_return" value="1">{% endif %}

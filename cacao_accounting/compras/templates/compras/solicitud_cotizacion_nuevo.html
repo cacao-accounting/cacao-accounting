@@ -23,6 +23,7 @@
 
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
+  {% if edit and registro %}<input type="hidden" name="version" value="{{ registro.version }}">{% endif %}
   {% if from_request_id %}<input type="hidden" name="from_request" value="{{ from_request_id }}">{% endif %}
   {% set title = _("Solicitud de Cotización") ~ ((_(" desde ") ~ (solicitud_origen.document_no or solicitud_origen.id)) if solicitud_origen else "") %}
   {{ tf_macros.transaction_form_header(_('Editar Solicitud de Cotización') if edit else title, cancel_url=url_for('compras.compras_solicitud_cotizacion_lista')) }}

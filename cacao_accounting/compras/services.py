@@ -1982,8 +1982,30 @@ def _create_purchase_order_from_request(form: dict):
         return None
 
 
+def _check_optimistic_version(registro: Any) -> str | None:
+    """Rechaza ediciones basadas en una versión obsoleta del documento (#1680)."""
+    raw_version = request.form.get("version")
+    if raw_version in (None, ""):
+        return None
+    try:
+        submitted = int(raw_version)
+    except (TypeError, ValueError):
+        return None
+    current = int(getattr(registro, "version", 0) or 0)
+    if submitted != current:
+        database.session.rollback()
+        flash(
+            _("El documento fue modificado por otro usuario. Recargue la página e intente nuevamente."),
+            "danger",
+        )
+        return "stale"
+    return None
+
+
 def _update_purchase_order_from_request(registro: PurchaseOrder):
     """Actualiza una orden de compra desde el formulario enviado."""
+    if _check_optimistic_version(registro):
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
     has_source = (
         bool(registro.purchase_award_id)
         or database.session.execute(
@@ -2170,6 +2192,8 @@ def _create_purchase_quotation_from_request():
 
 
 def _handle_purchase_quotation_edit_post(registro):
+    if _check_optimistic_version(registro):
+        return redirect(url_for("compras.compras_solicitud_cotizacion", quotation_id=registro.id))
     before_state = _capture_purchase_state(registro)
     try:
         revert_relations_for_target("purchase_quotation", registro.id, reason="draft_edited")
@@ -2339,7 +2363,9 @@ def _set_purchase_receipt_totals(receipt: PurchaseReceipt, total: Decimal) -> No
 def _set_purchase_document_totals(document: Any, total: Decimal) -> None:
     """Recalcula totales transaccionales y funcionales de documentos de compras."""
     from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+    from cacao_accounting.numbers import coerce_decimal
 
+    total = coerce_decimal(total, "total")
     document.total = total
     if hasattr(document, "grand_total"):
         document.grand_total = total
@@ -2350,7 +2376,8 @@ def _set_purchase_document_totals(document: Any, total: Decimal) -> None:
         raise ValueError(_("La compañía requiere una moneda funcional configurada."))
     document.base_currency = base_currency_value
     document.exchange_rate = _purchase_exchange_rate(document.company, document.posting_date, document.transaction_currency)
-    document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))
+    exchange_rate = coerce_decimal(document.exchange_rate, "tipo_cambio")
+    document.base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
 
 
 def _validate_purchase_source_link(document: Any, source_type: str, source_id: str, items: Sequence[Any] | None = None) -> Any:
@@ -3468,6 +3495,8 @@ def _create_purchase_invoice_from_request():
 
 
 def _handle_purchase_invoice_edit_post(registro):
+    if _check_optimistic_version(registro):
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=registro.id))
     try:
         before_state = _capture_purchase_state(registro)
         target_type = PURCHASE_INVOICE

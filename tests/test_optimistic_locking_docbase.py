@@ -65,3 +65,27 @@ def test_docbase_stale_update_raises(app):
         database.session.refresh(final)
         assert final.remarks == "first writer"
         assert final.version == 2
+
+
+def test_purchase_order_edit_rejects_stale_form_version(app):
+    po_id = _seed(app)
+    with app.app_context():
+        po = database.session.get(PurchaseOrder, po_id)
+        po.remarks = "concurrent"
+        database.session.commit()
+        database.session.refresh(po)
+        assert po.version == 2
+
+        stale_po = database.session.get(PurchaseOrder, po_id)
+        # simulate a form submitted with stale version=1 while current is 2
+        with app.test_request_context("/compras/orden-compra/%s/editar" % po_id, method="POST", data={"version": "1"}):
+            from cacao_accounting.compras.services import _check_optimistic_version
+
+            result = _check_optimistic_version(stale_po)
+        assert result == "stale"
+
+        with app.test_request_context("/compras/orden-compra/%s/editar" % po_id, method="POST", data={"version": "2"}):
+            from cacao_accounting.compras.services import _check_optimistic_version
+
+            result_ok = _check_optimistic_version(stale_po)
+        assert result_ok is None
