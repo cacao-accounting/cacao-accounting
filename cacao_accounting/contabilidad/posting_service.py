@@ -3334,8 +3334,32 @@ def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> li
             raise PostingError(_("Un ajuste de solo valor requiere un monto mayor a cero."))
         value = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
         fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
+        batch_id = str(getattr(line, "batch_id", "") or "").strip() or None
+        if batch_id:
+            from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
+
+            batch_value = _decimal_value(
+                database.session.execute(
+                    exclude_cancelled_stock_entries(
+                        select(func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0)).where(
+                            StockLedgerEntry.company == document.company,
+                            StockLedgerEntry.item_code == line.item_code,
+                            StockLedgerEntry.warehouse == source_warehouse,
+                            StockLedgerEntry.batch_id == batch_id,
+                        )
+                    )
+                ).scalar_one()
+            )
+            if value > batch_value:
+                raise PostingError(
+                    _(
+                        "El ajuste de valor no puede reducir el valor del lote %(batch)s por debajo de cero "
+                        "(valor disponible %(available)s, ajuste %(amount)s)."
+                    )
+                    % {"batch": batch_id, "available": batch_value, "amount": value}
+                )
         # El GL consume el costo funcional ya convertido, no el importe
-        # transaccional de la línea (#1879).
+        # transaccional de la l??nea (#1879).
         line._inventory_cost_amount = value
         return _create_stock_movement(
             document=document,
