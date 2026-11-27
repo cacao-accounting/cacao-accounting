@@ -1553,6 +1553,17 @@ def _emit_purchase_invoice_event(document: PurchaseInvoice, company: str) -> Non
     )
 
 
+def _lock_payment_reconciliation_scope(document: PaymentEntry, company: str) -> None:
+    """Serializa el pago con la conciliación automática de sus cuentas bancarias."""
+    from cacao_accounting.default_scope import lock_default_scopes
+
+    bank_scopes = [(company, None)]
+    for account_id in (document.bank_account_id, document.target_bank_account_id):
+        if account_id:
+            bank_scopes.append((company, str(account_id)))
+    lock_default_scopes("bank_auto_reconcile", bank_scopes)
+
+
 def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera GL para cobros, pagos y transferencias internas."""
     from cacao_accounting.approval_engine import assert_execution_authorized
@@ -1565,6 +1576,7 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
 
     company = _company_for(document)
     _validate_payment_bank_account_ownership(company, document)
+    _lock_payment_reconciliation_scope(document, company)
     amount = _decimal_value(document.paid_amount or document.received_amount)
     payment_type = getattr(document, "payment_type", "").lower()
     if amount <= 0:
