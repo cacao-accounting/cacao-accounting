@@ -698,3 +698,70 @@ def test_legacy_sin_moneda_no_se_asigna_a_cuentas_multimoneda(bank_balance_scene
     assert Decimal(str(rows["EUR-UNKNOWN-2262"]["balance"])) == Decimal("0")
     assert rows["EUR-UNKNOWN-2262"]["currency"] == "EUR"
     assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("7200")
+
+
+def test_partidas_directas_incompletas_no_inventan_moneda_bancaria(bank_balance_scene):
+    """Partidas directas sin importes/moneda de origen no se atribuyen por banco."""
+    with bank_balance_scene.app_context():
+        cuenta = database.session.query(Accounts).filter_by(entity="cacao", code="1102").first()
+        cuenta_usd = database.session.query(BankAccount).filter_by(account_no="USD-1607").one()
+        libro = database.session.query(Book).filter_by(entity="cacao").first()
+        database.session.add(Currency(code="EUR", name="Euro", decimals=2, active=True, default=False))
+        banco = Bank(name="Banco EUR incompleto", is_active=True)
+        database.session.add(banco)
+        database.session.flush()
+        cuenta_eur = BankAccount(
+            company="cacao",
+            bank_id=banco.id,
+            account_name="Cuenta EUR incompleta",
+            account_no="EUR-INCOMPLETE-2313",
+            currency="EUR",
+            gl_account_id=cuenta.id,
+            is_active=True,
+        )
+        database.session.add(cuenta_eur)
+        database.session.flush()
+        database.session.add_all(
+            [
+                GLEntry(
+                    posting_date=date(2026, 5, 25),
+                    company="cacao",
+                    account_id=cuenta.id,
+                    bank_account_id=cuenta_usd.id,
+                    ledger_id=libro.id,
+                    debit=Decimal("3600"),
+                    credit=Decimal("0"),
+                    debit_in_account_currency=None,
+                    credit_in_account_currency=None,
+                    account_currency="USD",
+                    company_currency="NIO",
+                    voucher_type="journal_entry",
+                    voucher_id="JE-2313-ACCOUNT-CURRENCY-WITHOUT-AMOUNT",
+                    is_cancelled=False,
+                ),
+                GLEntry(
+                    posting_date=date(2026, 5, 25),
+                    company="cacao",
+                    account_id=cuenta.id,
+                    bank_account_id=cuenta_eur.id,
+                    ledger_id=libro.id,
+                    debit=Decimal("7200"),
+                    credit=Decimal("0"),
+                    debit_in_account_currency=None,
+                    credit_in_account_currency=None,
+                    account_currency=None,
+                    company_currency=None,
+                    voucher_type="journal_entry",
+                    voucher_id="JE-2313-MISSING-CURRENCIES",
+                    is_cancelled=False,
+                ),
+            ]
+        )
+        database.session.commit()
+
+        payload = get_banks_data("cacao", "NIO", None, None)
+
+    rows = {row["account_no"]: row for row in payload["tables"]["account_balances"]}
+    assert Decimal(str(rows["USD-1607"]["balance"])) == Decimal("100")
+    assert Decimal(str(rows["EUR-INCOMPLETE-2313"]["balance"])) == Decimal("0")
+    assert Decimal(str(payload["kpis"]["balance"]["value"])) == Decimal("14400")

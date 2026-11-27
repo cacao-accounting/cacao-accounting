@@ -582,7 +582,17 @@ def _bank_balances(
         .group_by(GLEntry.account_id)
     )
     base_query = _scope_bank_balance_query(base_query, ledger_id)
-    entry_currency = func.coalesce(GLEntry.account_currency, GLEntry.company_currency)
+    entry_currency = case(
+        (
+            GLEntry.debit_in_account_currency.is_not(None) & (GLEntry.debit > 0),
+            GLEntry.account_currency,
+        ),
+        (
+            GLEntry.credit_in_account_currency.is_not(None) & (GLEntry.credit > 0),
+            GLEntry.account_currency,
+        ),
+        else_=GLEntry.company_currency,
+    )
     amount = func.sum(
         func.coalesce(GLEntry.debit_in_account_currency, GLEntry.debit)
         - func.coalesce(GLEntry.credit_in_account_currency, GLEntry.credit)
@@ -651,8 +661,6 @@ def _resolve_bank_balance(
         return Decimal("0")
     currency = account.currency or default_currency
     direct_value = direct.get((account.id, currency))
-    if direct_value is None:
-        direct_value = direct.get((account.id, None))
     if pair_usage.get((account.gl_account_id, currency), 0) != 1:
         return direct_value if direct_value is not None else Decimal("0")
     # A legacy row with no currency remains in the GL total, but cannot be
