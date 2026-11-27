@@ -1900,7 +1900,12 @@ def usuario_companias(user_id: str):
         )
     if form.validate_on_submit():
         selected = set(form.companies.data or [])
-        replace_user_company_access(usuario.id, selected)
+        try:
+            replace_user_company_access(usuario.id, selected)
+        except ValueError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+            return render_template("admin/usuario_companias.html", form=form, usuario=usuario)
         flash(_("Compañías actualizadas correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))
     return render_template("admin/usuario_companias.html", form=form, usuario=usuario)

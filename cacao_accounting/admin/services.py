@@ -73,9 +73,34 @@ ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT = "admin.config_control_presupuestario"
 DEBE_SELECCIONAR_COMPANIA_MSG = "Debe seleccionar una compania."
 
 
+def _active_system_admin_ids(exclude_user_id: str | None = None) -> list[str]:
+    """Devuelve ids de administradores activos del sistema."""
+    query = database.select(User.id).where(User.active.is_(True), _active_admin_filter())
+    if exclude_user_id:
+        query = query.where(User.id != exclude_user_id)
+    return list(database.session.execute(query).scalars().all())
+
+
+def _company_has_recoverable_admin(company_code: str, *, exclude_user_id: str | None = None) -> bool:
+    """True si la compa??a conserva un admin activo autorizado para recuperar acceso."""
+    admin_ids = _active_system_admin_ids(exclude_user_id=exclude_user_id)
+    if not admin_ids:
+        return False
+    return bool(
+        database.session.execute(
+            database.select(UserCompanyAccess.id)
+            .where(
+                UserCompanyAccess.company_code == company_code,
+                UserCompanyAccess.user_id.in_(admin_ids),
+            )
+            .limit(1)
+        ).first()
+    )
+
+
 def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
     """Replace company scope while auditing each revoked assignment."""
-    database.session.execute(database.select(User).where(User.id == user_id).with_for_update()).scalar_one()
+    target = database.session.execute(database.select(User).where(User.id == user_id).with_for_update()).scalar_one()
     existing = {
         assignment.company_code: assignment
         for assignment in database.session.execute(
@@ -84,6 +109,21 @@ def replace_user_company_access(user_id: str, company_codes: set[str]) -> None:
     }
     removed = [assignment for code, assignment in existing.items() if code not in company_codes]
     added = company_codes.difference(existing)
+
+    # #2321: en Cloud, no dejar una compa??a sin admin autorizado para recuperar acceso.
+    if removed and _is_admin_state(
+        target, active=bool(target.active), classification=target.classification, role_ids=_user_role_ids(target)
+    ):
+        for assignment in removed:
+            if not _company_has_recoverable_admin(assignment.company_code, exclude_user_id=user_id):
+                raise ValueError(
+                    _(
+                        "No se puede revocar el acceso a %(company)s porque dejar?a la compa??a sin un administrador "
+                        "autorizado para recuperar el acceso."
+                    )
+                    % {"company": assignment.company_code}
+                )
+
     if removed:
         with user_company_access_transition(*removed):
             for assignment in removed:
