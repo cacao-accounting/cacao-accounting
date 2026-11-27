@@ -711,3 +711,26 @@ def test_ordenes_que_cubren_la_cantidad_cierran_la_solicitud(request_order_scene
         solicitud.status = "closed"
         database.session.commit()
         assert purchase_order_has_closed_source_request(order_id) is True
+
+
+def test_orden_cancelada_reabre_la_cantidad_pendiente(request_order_scene):
+    """Una OC cancelada deja de cubrir la solicitud y el cierre se rechaza."""
+    application, ids = request_order_scene
+    order_id = _agregar_orden(application, ids, "10")
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        assert purchase_request_is_ready_to_close(solicitud) is True
+
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-order/{order_id}/cancel", data={"reason": "Prueba"})
+    assert respuesta.status_code == 302
+
+    with application.app_context():
+        solicitud = database.session.get(PurchaseRequest, ids["request"])
+        assert database.session.get(PurchaseOrder, order_id).docstatus == 2
+        assert purchase_request_is_ready_to_close(solicitud) is False
+        assert purchase_request_line_closure_reasons(solicitud) == {}
+
+    respuesta = _cliente_admin(application).post(f"/buying/purchase-request/{ids['request']}/close")
+    assert respuesta.status_code == 302
+    with application.app_context():
+        assert database.session.get(PurchaseRequest, ids["request"]).status == "open"
