@@ -74,6 +74,8 @@ def admin_app(tmp_path, isolated_admin_registry):
 def _desactivar(app, user_id: str, barrera: Barrier) -> str:
     with app.app_context():
         try:
+            # Fija el snapshot consistente antes de competir por el lock.
+            database.session.execute(database.select(User.id).limit(1)).all()
             barrera.wait(timeout=10)
             admin_services._lock_last_admin_users(user_id)
             usuario = database.session.get(User, user_id, populate_existing=True)

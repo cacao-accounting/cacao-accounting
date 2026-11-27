@@ -44,7 +44,7 @@ def confirmation_attempt_scenario(tmp_path):
     app = create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'confirmation-attempts.sqlite'}",
+            "SQLALCHEMY_DATABASE_URI": _database_uri_for_1839(tmp_path),
             "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 12, "max_overflow": 0},
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
@@ -56,29 +56,34 @@ def confirmation_attempt_scenario(tmp_path):
     token = f"token-{suffix}"
     code = "123456"
 
+    currency_code = f"C{suffix}"
+    company_code = f"a{suffix}"
     with app.app_context():
         database.create_all()
-        database.session.add_all(
-            [
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Modules(module="accounting", default=True, enabled=True),
-                Entity(
-                    code="alpha",
-                    name="Alfa",
-                    company_name=f"Compañía Alfa {suffix}",
-                    tax_id=f"TAX-{suffix}",
-                    currency="NIO",
-                    enabled=True,
-                    status="default",
-                ),
-            ]
+        if database.session.execute(database.select(Currency).filter_by(code=currency_code)).scalar_one_or_none() is None:
+            database.session.add(Currency(code=currency_code, name="Córdoba", decimals=2, active=True, default=False))
+        module = database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one_or_none()
+        if module is None:
+            database.session.add(Modules(module="accounting", default=True, enabled=True))
+        else:
+            module.enabled = True
+        database.session.add(
+            Entity(
+                code=company_code,
+                name="Alfa",
+                company_name=f"Compañía Alfa {suffix}",
+                tax_id=f"TAX-{suffix}",
+                currency=currency_code,
+                enabled=True,
+                status="default",
+            )
         )
         database.session.flush()
         party = Party(code=f"CLI-{suffix}", name="Cliente", is_customer=True, is_active=True)
         database.session.add(party)
         database.session.flush()
         confirmation = BalanceConfirmation(
-            company="alpha",
+            company=company_code,
             document_no=f"BC-{suffix}",
             party_type="customer",
             party_id=party.id,
@@ -98,7 +103,7 @@ def confirmation_attempt_scenario(tmp_path):
         )
         database.session.add(invitation)
         database.session.commit()
-        ids = {"invitation": invitation.id, "token": token}
+        ids = {"invitation": invitation.id, "confirmation": confirmation.id, "token": token}
 
     yield app, ids
 
@@ -363,6 +368,7 @@ def test_sixth_wrong_verification_is_rejected_after_five_attempts(confirmation_a
         assert invitation.failed_attempts == 5
 
 
+@pytest.mark.database
 def test_concurrent_attempts_claim_at_most_five_slots(confirmation_attempt_scenario):
     """Diez reclamos paralelos solo obtienen cinco incrementos tras leer el mismo estado."""
     app, ids = confirmation_attempt_scenario
@@ -458,7 +464,7 @@ def test_confirmacion_sin_responded_at_no_rompe_la_vista(confirmation_attempt_sc
     """Un estado terminal sin fecha de respuesta se muestra sin 500."""
     app, ids = confirmation_attempt_scenario
     with app.app_context():
-        confirmation = database.session.execute(database.select(BalanceConfirmation)).scalar_one()
+        confirmation = database.session.get(BalanceConfirmation, ids["confirmation"])
         confirmation.status = "confirmed"
         confirmation.responded_at = None
         confirmation.respondent_first_name = "Cliente"
@@ -476,7 +482,7 @@ def test_no_se_responde_un_borrador(confirmation_attempt_scenario):
     """Una confirmación nunca enviada no acepta respuestas públicas."""
     app, ids = confirmation_attempt_scenario
     with app.app_context():
-        confirmation = database.session.execute(database.select(BalanceConfirmation)).scalar_one()
+        confirmation = database.session.get(BalanceConfirmation, ids["confirmation"])
         confirmation.status = "draft"
         database.session.commit()
 
@@ -487,7 +493,7 @@ def test_no_se_responde_un_borrador(confirmation_attempt_scenario):
 
     assert respuesta.status_code == 302
     with app.app_context():
-        confirmation = database.session.execute(database.select(BalanceConfirmation)).scalar_one()
+        confirmation = database.session.get(BalanceConfirmation, ids["confirmation"])
         assert confirmation.status == "draft"
 
 

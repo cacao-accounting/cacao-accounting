@@ -5,10 +5,13 @@
 
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from threading import Event
 from uuid import uuid4
+
+import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.compras import purchase_sourcing_service
@@ -26,14 +29,25 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.default_scope import lock_default_scope
 
+pytestmark = pytest.mark.database
+
 
 def test_concurrent_awards_keep_one_finalized_row(tmp_path, monkeypatch):
     """La segunda adjudicación espera el lock y detecta la fila confirmada."""
+    uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if uri.startswith("sqlite"):
+        uri = f"sqlite:///{tmp_path / 'award-race.sqlite'}"
+    elif os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
     app = create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'award-race.sqlite'}",
-            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 4, "max_overflow": 0},
+            "SQLALCHEMY_DATABASE_URI": uri,
+            "SQLALCHEMY_ENGINE_OPTIONS": {
+                **configuracion.get("SQLALCHEMY_ENGINE_OPTIONS", {}),
+                "pool_size": 4,
+                "max_overflow": 0,
+            },
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
             "TESTING": True,
@@ -45,13 +59,13 @@ def test_concurrent_awards_keep_one_finalized_row(tmp_path, monkeypatch):
         database.create_all()
         database.session.add_all(
             [
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Currency(code=f"N{suffix}", name="Córdoba", decimals=2, active=True, default=False),
                 Entity(
                     code=f"A{suffix}",
                     name="Compras",
-                    company_name="Compras SA",
+                    company_name=f"Compras {suffix} SA",
                     tax_id=f"A{suffix}",
-                    currency="NIO",
+                    currency=f"N{suffix}",
                     enabled=True,
                     status="default",
                 ),
