@@ -44,6 +44,14 @@ macros %}
         · {{ _("Cotizaciones participantes: %(count)s", count=offers|length) }}
       </p>
     </div>
+
+  {% if functional_currency %}
+  <div class="alert alert-info small py-2 mb-2">
+    <strong>{{ _("Moneda funcional de comparaci?n") }}:</strong> {{ functional_currency }}.
+    {{ _("La recomendaci?n se calcula por tarifa equivalente en moneda funcional; la tarifa original de la oferta se muestra con su moneda transaccional.") }}
+  </div>
+  {% endif %}
+
     <span
       class="badge text-bg-{% if comparison.status == 'used' %}dark{% elif comparison.status == 'finalized' %}success{% elif comparison.status == 'pending_authorization' %}warning{% else %}secondary{% endif %}"
     >
@@ -183,11 +191,16 @@ macros %}
                 />
                 {% endif %}
                 <span>
-                  <strong>{{ format_money_with_currency(candidate.rate, offer.transaction_currency or offer.base_currency) }}</strong
-                  ><small class="d-block text-muted"
-                    >{{ candidate.line.qty }} {{ candidate.line.uom or ''
-                    }}</small
-                  >
+                  <strong>{{ format_money_with_currency(candidate.rate, candidate.transaction_currency) }}</strong>
+                  <small class="d-block text-muted">{{ candidate.line.qty }} {{ candidate.line.uom or '' }}</small>
+                  {% if candidate.transaction_currency and candidate.base_currency and candidate.transaction_currency != candidate.base_currency %}
+                  <small class="d-block text-muted">
+                    {{ _("Equivalente") }}: {{ format_money_with_currency(candidate.base_rate, candidate.base_currency) }}
+                    {% if candidate.exchange_rate and candidate.exchange_rate > 0 %}
+                    ({{ _("TC") }} {{ candidate.exchange_rate }}{% if candidate.exchange_rate_date %}, {{ candidate.exchange_rate_date }}{% endif %})
+                    {% endif %}
+                  </small>
+                  {% endif %}
                   {% if row.recommended and row.recommended.offer.id == offer.id
                   %}<span class="badge text-bg-success">{{ _("Recomendado") }}</span>{%
                   endif %}

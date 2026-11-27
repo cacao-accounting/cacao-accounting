@@ -28275,3 +28275,15 @@ msgstr "The journal entry's accounting period could not be found."
 #: cacao_accounting/contabilidad/routes.py
 msgid "El rango del año fiscal se superpone con otro año fiscal de la compañía."
 msgstr "The fiscal year range overlaps another fiscal year for this company."
+
+msgid "Moneda funcional de comparaci?n"
+msgstr "Functional comparison currency"
+
+msgid "La recomendaci?n se calcula por tarifa equivalente en moneda funcional; la tarifa original de la oferta se muestra con su moneda transaccional."
+msgstr "The recommendation is calculated using the equivalent rate in the functional currency; the offer's original rate is shown with its transaction currency."
+
+msgid "Equivalente"
+msgstr "Equivalent"
+
+msgid "TC"
+msgstr "ER"

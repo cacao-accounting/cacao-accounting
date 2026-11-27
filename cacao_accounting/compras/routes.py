@@ -1266,6 +1266,9 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
     except ValueError as exc:
         recommendations = []
         recommendations_error = str(exc)
+    from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+
+    functional_currency = company_functional_currency(purchase_request.company) if purchase_request else None
     return render_template(
         "compras/comparativo_solicitud.html",
         comparison=request_comparison,
@@ -1276,6 +1279,7 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         negotiation_rfqs=negotiation_rfqs,
         request_has_lines=request_has_lines,
         recommendations_error=recommendations_error,
+        functional_currency=functional_currency,
         **_purchase_action_permissions(),
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
         titulo=_titulo_comparativo() + " - " + (request_comparison.document_no or request_comparison.id or ""),

@@ -263,11 +263,13 @@ def purchase_request_comparison_recommendations(
         occurrences[key] = occurrence + 1
         required_qty = _line_coverage_qty(item)
         candidates: list[dict[str, Any]] = []
+        base_currency = company_currency(purchase_request.company)
         for offer in offers:
             line = _request_item_offer_line(item, occurrence, offer_items, offer.id)
             offered_qty = _line_coverage_qty(line) if line else Decimal("0")
             if line is None or offered_qty < required_qty:
                 continue
+            tx_currency = offer.transaction_currency or base_currency
             candidates.append(
                 {
                     "offer": offer,
@@ -279,6 +281,10 @@ def purchase_request_comparison_recommendations(
                         purchase_request.company,
                         purchase_request.posting_date,
                     ),
+                    "transaction_currency": tx_currency,
+                    "base_currency": base_currency,
+                    "exchange_rate": Decimal(str(getattr(offer, "exchange_rate", 0) or 0)),
+                    "exchange_rate_date": getattr(offer, "exchange_rate_date", None),
                 }
             )
         candidates.sort(
