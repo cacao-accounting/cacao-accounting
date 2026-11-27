@@ -16865,13 +16865,13 @@ msgstr ""
 "%(label)s cannot be deleted: dependencies exist (%(dependencies)s). "
 "Deactivate the record to preserve traceability."
 
-#: cacao_accounting/contabilidad/routes.py:430
+#: cacao_accounting/contabilidad/routes.py:432
 #, python-format
 msgid ""
-"No se puede eliminar %(label)s: es un maestro protegido. "
+"No se puede eliminar %(type)s %(identifier)s: es un maestro protegido. "
 "Desactive el registro para conservar la trazabilidad."
 msgstr ""
-"%(label)s cannot be deleted: it is a protected master. "
+"%(type)s %(identifier)s cannot be deleted: it is a protected master. "
 "Deactivate the record to preserve traceability."
 
 #: cacao_accounting/contabilidad/routes.py:461

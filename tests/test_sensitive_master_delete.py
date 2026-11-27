@@ -186,3 +186,48 @@ def test_borrado_de_compania_ajena_se_rechaza():
             assert database.session.execute(database.select(Book).filter_by(code="LIBROB")).scalar_one_or_none() is not None
     finally:
         _cerrar_app(application)
+
+
+def _cliente_en_ingles(application):
+    """Autentica un administrador con idioma inglés y devuelve su idioma previo."""
+    with application.app_context():
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        idioma = admin.language
+        admin.language = "en"
+        database.session.commit()
+    return _cliente(application), idioma
+
+
+def _restaura_idioma(application, idioma):
+    """Devuelve el idioma original del administrador de prueba."""
+    with application.app_context():
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        admin.language = idioma
+        database.session.commit()
+
+
+def test_mensaje_de_libro_se_traduce_al_ingles(application):
+    """El tipo de maestro y el mensaje de rechazo salen del catálogo inglés."""
+    client, idioma = _cliente_en_ingles(application)
+    try:
+        respuesta = client.post("/accounting/book/delete/LIBROA", follow_redirects=True)
+        texto = respuesta.get_data(as_text=True)
+        assert "Book LIBROA cannot be deleted: it is a protected master." in texto
+        assert "maestro protegido" not in texto
+    finally:
+        _restaura_idioma(application, idioma)
+
+
+def test_mensaje_de_anio_fiscal_se_traduce_al_ingles(application):
+    """La etiqueta del año fiscal también se traduce en el rechazo."""
+    with application.app_context():
+        exercise = database.session.execute(database.select(FiscalYear).filter_by(name="EJERCICIO-A")).scalar_one()
+        exercise_id = exercise.id
+    client, idioma = _cliente_en_ingles(application)
+    try:
+        respuesta = client.post(f"/accounting/fiscal_year/{exercise_id}/delete", follow_redirects=True)
+        texto = respuesta.get_data(as_text=True)
+        assert "Fiscal Year EJERCICIO-A cannot be deleted: it is a protected master." in texto
+        assert "maestro protegido" not in texto
+    finally:
+        _restaura_idioma(application, idioma)

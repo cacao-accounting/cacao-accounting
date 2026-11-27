@@ -425,11 +425,18 @@ _TPL_PERIODO_CREAR = "contabilidad/periodo_crear.html"
 _TPL_TC_CREAR = "contabilidad/tc_crear.html"
 
 
-def _reject_sensitive_delete(label: str) -> None:
-    """Rechaza el borrado físico de un maestro protegido por control interno."""
+def _reject_sensitive_delete(tipo: str, identificador: str) -> None:
+    """Rechaza el borrado físico de un maestro protegido por control interno.
+
+    ``tipo`` debe provenir del catálogo de traducciones; el identificador es un
+    dato del registro y no necesita traducción.
+    """
     flash(
-        _("No se puede eliminar %(label)s: es un maestro protegido. Desactive el registro para conservar la trazabilidad.")
-        % {"label": label},
+        _(
+            "No se puede eliminar %(type)s %(identifier)s: es un maestro protegido. "
+            "Desactive el registro para conservar la trazabilidad."
+        )
+        % {"type": tipo, "identifier": identificador},
         "danger",
     )
 
@@ -1357,7 +1364,7 @@ def eliminar_libro(id_unidad):
             ],
         ):
             return redirect(url_for(CONTABILIDAD_LIBROS))
-        _reject_sensitive_delete(f"el libro {id_unidad}")
+        _reject_sensitive_delete(_("Libro"), id_unidad)
     return redirect(url_for(CONTABILIDAD_LIBROS))
 
 
@@ -2414,7 +2421,7 @@ def fiscal_year_delete(fy_id):
                 else None
             )
             return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
-        _reject_sensitive_delete(f"el año fiscal {fiscal_year.name}")
+        _reject_sensitive_delete(_("Año fiscal"), fiscal_year.name)
     return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
 
