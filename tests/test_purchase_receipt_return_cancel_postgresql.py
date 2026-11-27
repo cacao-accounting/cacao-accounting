@@ -25,6 +25,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.engine import make_url
 
 from test_purchase_receipt_return_approval import _sembrar_cadena, _sembrar_cuentas
@@ -98,12 +99,17 @@ def _drop(url, name: str) -> None:
     admin = create_engine(url.set(database="postgres"))
     try:
         with admin.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-            conn.execute(
-                text(
-                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                    f"WHERE datname = '{name}' AND pid <> pg_backend_pid()"
+            try:
+                conn.execute(
+                    text(
+                        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                        f"WHERE datname = '{name}' AND pid <> pg_backend_pid()"
+                    )
                 )
-            )
+            except ProgrammingError:
+                # Un rol sin pg_signal_autovacuum_worker no puede terminar todos los
+                # backends; el engine ya hizo dispose y DROP DATABASE no los espera.
+                pass
             conn.execute(text(f'DROP DATABASE IF EXISTS "{name}"'))
     finally:
         admin.dispose()
