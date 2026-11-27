@@ -1309,10 +1309,12 @@ def api_delete_attachment(file_id: str):
     if _wants_form_redirect():
         flash(_("Adjunto eliminado."), "info")
         if not result["file_removed"]:
-            flash(_("El archivo físico quedó pendiente de limpieza."), "warning")
+            flash(_("El archivo f?sico qued? pendiente de limpieza."), "warning")
         return _redirect_after_form_post()
 
-    return jsonify({"success": result["deleted"], **result})
+    safe = {k: v for k, v in result.items() if k != "pending_cleanup"}
+    safe["pending_cleanup_count"] = len(result.get("pending_cleanup") or [])
+    return jsonify({"success": result["deleted"], **safe})
 
 
 @api.route("/api/attachments/<file_id>/metadata", methods=["PATCH", "POST"])

@@ -458,6 +458,7 @@ def audit_action_label(action: str) -> str:
         "delete_attempted": _("intentó eliminar"),
         "update_attempted": _("intentó actualizar"),
         "cleanup_failed": _("falló la limpieza"),
+        "cleanup_resolved": _("limpieza resuelta"),
         "task_created": _("asignó una tarea"),
         "task_status_changed": _("cambió el estado de una tarea"),
         "task_completed": _("completó una tarea"),

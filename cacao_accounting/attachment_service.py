@@ -12,6 +12,7 @@ física ni rediseña el almacenamiento.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import uuid
 import zipfile
@@ -25,6 +26,7 @@ from werkzeug.utils import secure_filename
 
 from cacao_accounting.audit_trail_service import log_attachment_event
 from cacao_accounting.database import (
+    AuditTrail,
     CompanyParty,
     File,
     FileAttachment,
@@ -911,7 +913,96 @@ def delete_attachment(file_id: str, reference_type: str, reference_id: str, user
                 database.session.rollback()
                 log.warning("Could not record attachment cleanup failure: {}", exc)
 
-    return {"deleted": True, "file_removed": not pending, "pending_cleanup": pending}
+    return {
+        "deleted": True,
+        "logical_deleted": True,
+        "file_removed": not pending,
+        "pending_cleanup": pending,
+    }
+
+
+def reconcile_pending_attachment_cleanups(*, actor_id: str | None = None, limit: int = 200) -> dict[str, Any]:
+    """Reintenta limpieza física pendiente registrada por ``cleanup_failed``.
+
+    Recuperación: un operador/admin ejecuta esta reconciliación (servicio interno
+    o tarea programada). Para cada evento ``cleanup_failed`` sin un
+    ``cleanup_resolved`` posterior para el mismo ``document_id`` y ``file_id``,
+    intenta eliminar el archivo físico. Si el archivo ya no existe, se considera
+    resuelto. La respuesta no expone rutas absolutas del filesystem.
+    """
+    _ensure_cloud_mode()
+    if limit < 1:
+        limit = 1
+    failed_events = (
+        database.session.execute(
+            database.select(AuditTrail)
+            .where(AuditTrail.action == "cleanup_failed")
+            .order_by(AuditTrail.timestamp.asc(), AuditTrail.id.asc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+
+    resolved_ids: list[str] = []
+    still_pending = 0
+    seen: set[tuple[str, str]] = set()
+    for event in failed_events:
+        payload = {}
+        try:
+            payload = json.loads(event.after_json or "{}")
+        except (TypeError, ValueError):
+            payload = {}
+        file_id = str(payload.get("file_id") or "")
+        file_path = str(payload.get("file_path") or "")
+        key = (str(event.document_id or ""), file_id or file_path)
+        if not file_path or key in seen:
+            continue
+        seen.add(key)
+
+        already_resolved = database.session.execute(
+            database.select(AuditTrail.id)
+            .where(AuditTrail.action == "cleanup_resolved")
+            .where(AuditTrail.document_id == event.document_id)
+            .where(
+                AuditTrail.after_json.contains(f'"file_id": "{file_id}"')
+                if file_id
+                else AuditTrail.after_json.contains(file_path)
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if already_resolved:
+            continue
+
+        exists = os.path.exists(file_path)
+        removed = (not exists) or _remove_file(file_path)
+        if not removed:
+            still_pending += 1
+            continue
+
+        with _actor_context(actor_id):
+            try:
+                _emit_attachment_audit(
+                    "cleanup_resolved",
+                    str(event.document_type),
+                    str(event.document_id),
+                    after={
+                        "file_id": file_id or None,
+                        "file_name": payload.get("file_name"),
+                        "sha256": payload.get("sha256"),
+                        "result": "resolved",
+                        "already_missing": not exists,
+                    },
+                    result="success",
+                )
+                database.session.commit()
+                resolved_ids.append(file_id or str(event.id))
+            except Exception as exc:
+                database.session.rollback()
+                log.warning("Could not record attachment cleanup resolution: {}", exc)
+                still_pending += 1
+
+    return {"resolved": len(resolved_ids), "pending": still_pending, "resolved_ids": resolved_ids}
 
 
 def update_attachment_metadata(

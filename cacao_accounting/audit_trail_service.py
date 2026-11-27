@@ -43,6 +43,7 @@ ALLOWED_ACTIONS = {
     "delete_attempted",
     "update_attempted",
     "cleanup_failed",
+    "cleanup_resolved",
     "task_created",
     "task_completed",
     "task_cancelled",

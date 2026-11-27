@@ -27172,6 +27172,9 @@ msgstr "attempted to update"
 msgid "falló la limpieza"
 msgstr "cleanup failed"
 
+msgid "limpieza resuelta"
+msgstr "cleanup resolved"
+
 #: cacao_accounting/__init__.py
 msgid "solicitó aprobación"
 msgstr "requested approval"

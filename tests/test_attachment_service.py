@@ -467,7 +467,10 @@ def test_fallo_de_unlink_queda_visible_y_no_reporta_archivo_borrado(attachment_a
         monkeypatch.setattr(service, "_remove_file", lambda path: False)
         outcome = delete_attachment(result["file_id"], "supplier", party_id, user_id=users["admin"])
 
-        assert outcome == {"deleted": True, "file_removed": False, "pending_cleanup": [file_path]}
+        assert outcome["deleted"] is True
+        assert outcome["logical_deleted"] is True
+        assert outcome["file_removed"] is False
+        assert outcome["pending_cleanup"] == [file_path]
         assert database.session.get(File, result["file_id"]) is None
         event = database.session.execute(
             database.select(AuditTrail).filter_by(document_id=party_id, action="cleanup_failed")
