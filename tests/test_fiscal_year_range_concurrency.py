@@ -120,3 +120,139 @@ def test_dos_anios_solapados_no_confirman(tmp_path):
         with app.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_companias_distintas_no_se_bloquean(tmp_path):
+    """Dos compañías pueden crear rangos solapados entre sí."""
+    app = _app(tmp_path)
+    suffix = uuid4().hex[:6].upper()
+    company_a = _seed(app, suffix)
+    company_b = f"G{suffix}"
+    with app.app_context():
+        database.session.add_all(
+            [
+                Currency(code=f"D{suffix}", name="Moneda", decimals=2, active=True, default=False),
+                Entity(
+                    code=company_b,
+                    name=f"Empresa B {suffix}",
+                    company_name=f"Empresa B {suffix} SA",
+                    tax_id=f"U{suffix}",
+                    currency=f"D{suffix}",
+                    enabled=True,
+                    status="default",
+                ),
+            ]
+        )
+        database.session.commit()
+        database.session.remove()
+    barrier = Barrier(2, timeout=30)
+
+    def create(company: str, name: str) -> str:
+        with app.app_context():
+            try:
+                barrier.wait(timeout=10)
+                if _fiscal_year_range_conflicts(company, date(2026, 1, 1), date(2026, 12, 31)):
+                    return "rechazado"
+                database.session.add(
+                    FiscalYear(
+                        entity=company,
+                        name=name,
+                        year_start_date=date(2026, 1, 1),
+                        year_end_date=date(2026, 12, 31),
+                        is_closed=False,
+                    )
+                )
+                database.session.commit()
+                return "creado"
+            except Exception:
+                database.session.rollback()
+                return "error"
+            finally:
+                database.session.remove()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            results = list(workers.map(lambda args: create(*args), ((company_a, f"{suffix}-A"), (company_b, f"{suffix}-B"))))
+        assert results == ["creado", "creado"]
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+def test_rangos_adyacentes_son_validos(tmp_path):
+    """Un rango que empieza al día siguiente no es un solapamiento."""
+    app = _app(tmp_path)
+    suffix = uuid4().hex[:6].upper()
+    company = _seed(app, suffix)
+    with app.app_context():
+        assert _fiscal_year_range_conflicts(company, date(2026, 1, 1), date(2026, 12, 31)) is False
+        database.session.add(
+            FiscalYear(entity=company, name=f"{suffix}-1", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31))
+        )
+        database.session.commit()
+        assert _fiscal_year_range_conflicts(company, date(2027, 1, 1), date(2027, 12, 31)) is False
+        database.session.add(
+            FiscalYear(entity=company, name=f"{suffix}-2", year_start_date=date(2027, 1, 1), year_end_date=date(2027, 12, 31))
+        )
+        database.session.commit()
+        years = database.session.execute(database.select(FiscalYear).filter_by(entity=company)).scalars().all()
+        assert len(years) == 2
+        database.session.remove()
+        database.engine.dispose()
+
+
+def test_ediciones_concurrentes_no_solapan(tmp_path):
+    """Dos ediciones que se expanden al rango ajeno dejan una sola válida."""
+    app = _app(tmp_path)
+    suffix = uuid4().hex[:6].upper()
+    company = _seed(app, suffix)
+    with app.app_context():
+        first = FiscalYear(
+            entity=company,
+            name=f"{suffix}-A",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 2, 28),
+        )
+        second = FiscalYear(
+            entity=company,
+            name=f"{suffix}-B",
+            year_start_date=date(2026, 5, 1),
+            year_end_date=date(2026, 6, 30),
+        )
+        database.session.add_all([first, second])
+        database.session.commit()
+        first_id, second_id = first.id, second.id
+        database.session.remove()
+    barrier = Barrier(2, timeout=30)
+
+    def edit(year_id: str, start: date, end: date) -> str:
+        with app.app_context():
+            try:
+                year = database.session.get(FiscalYear, year_id)
+                barrier.wait(timeout=10)
+                if _fiscal_year_range_conflicts(year.entity, start, end, exclude_fiscal_year_id=year.id):
+                    return "rechazado"
+                year.year_start_date = start
+                year.year_end_date = end
+                database.session.commit()
+                return "editado"
+            except Exception:
+                database.session.rollback()
+                return "error"
+            finally:
+                database.session.remove()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            results = list(
+                workers.map(
+                    lambda args: edit(*args),
+                    ((first_id, date(2026, 1, 1), date(2026, 4, 30)), (second_id, date(2026, 3, 1), date(2026, 6, 30))),
+                )
+            )
+        assert sorted(results) == ["editado", "rechazado"], results
+    finally:
+        with app.app_context():
+            database.session.remove()
+            database.engine.dispose()
