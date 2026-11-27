@@ -275,7 +275,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
 | #2120 | #1709 | ✅ `9f129cc4`; GitHub: open / fix-proposed | Rechaza períodos ausentes/ambiguos, bloquea y revalida el período de reversa; 12 passed, 1 skipped en SQLite; PostgreSQL pendiente por entorno |
-| #546 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | [AUDIT][R2R][Multimoneda] Las tasas de cambio históricas pueden editarse después de ser usadas |
+| #546 | #1655 | ✅ `d3759012`; GitHub: open / fix-proposed | Inmutabilidad de tasas con snapshots GL/revaluación dentro de su vigencia; 8 passed en SQLite; PostgreSQL pendiente por entorno |
 | #758 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | HIGH: Enforce complete source and destination currency data on every posting |
 | #761 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | MEDIUM: Apply cancellation and reversal period semantics consistently to all document types |
 | #961 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | AR/AP acepta tasa unitaria sin conversión válida |
