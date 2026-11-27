@@ -251,3 +251,36 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
 - **Riesgo residual**: el porcentaje usa cero cuando el ingreso es cero. La
   interpretación cuando los ingresos netos son negativos no se especifica en
   los requisitos actuales.
+
+## Refs: estabilización de la suite y del pipeline (2026-11-27)
+
+- **Síntoma**: la rama `estabilizacion` acumulaba 95 fallos locales de pytest, 7
+  funciones por encima de complejidad 20 y el job `databases / engines` quedaba
+  bloqueado en MySQL hasta ser cancelado.
+- **Aislamiento SQLite**: `tests/conftest.py` congela una plantilla del worker
+  (esquema, datos base y usuarios de referencia) y restaura la base con la API
+  `backup` de SQLite antes de cada prueba. También restaura `app.config`, de
+  modo que una prueba no puede dejar `MODO_ESCRITORIO` o módulos alterados para
+  las siguientes.
+- **Regresiones de producto**: la validación de compañías usaba
+  `database.session.get(Entity, code)`, que interpreta el código como clave
+  primaria; se sustituyó por consultas por `Entity.code` en admin, bancos y
+  reportes. El resolutor de precios debe priorizar la UOM específica sobre el
+  umbral genérico también en el desempate de Python.
+- **Cuelgue de MySQL**: durante la recolección, importar `cacao_accounting.__main__`
+  crea la app y ejecuta DDL. El backfill de correo dejaba abierta una
+  transacción de lectura cuando no había filas, reteniendo un metadata lock de
+  `user`; un `ALTER/CREATE` posterior quedaba esperando indefinidamente. El
+  backfill ahora cierra siempre su transacción.
+- **Cadena de auditoría en motores externos**: una limpieza de prueba borraba
+  filas de `audit_trail` sin actualizar `audit_chain_state`, dejando la cabeza
+  apuntando a una fila inexistente y contaminando las pruebas siguientes. La
+  limpieza conserva la evidencia y la compañía referenciada.
+- **Cuelgues de concurrencia**: todas las `Barrier` de pruebas tienen
+  `timeout=30`; un hilo que falla antes de llegar ya no bloquea al
+  `ThreadPoolExecutor` de forma indefinida.
+- **Lint**: se extrajeron helpers para que las funciones de admin, adjuntos,
+  contabilidad, posting y recurrentes queden en complejidad ≤ 20.
+- **Verificación**: suite completa SQLite, MySQL y PostgreSQL ejecutadas contra
+  los contenedores locales del proyecto; resultados y limitaciones se registran
+  en los comentarios del commit correspondiente.
