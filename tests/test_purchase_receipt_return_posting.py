@@ -15,11 +15,15 @@ from decimal import Decimal
 from uuid import uuid4
 
 from cacao_accounting.approval_engine import approved_execution
-from cacao_accounting.contabilidad.posting_service import post_purchase_receipt
+from cacao_accounting.contabilidad.cancellation_service import active_cancellation_dependencies
+from cacao_accounting.contabilidad.posting_service import cancel_document, post_delivery_note, post_purchase_receipt
 from cacao_accounting.database import (
     Accounts,
     Book,
     CompanyDefaultAccount,
+    DeliveryNote,
+    DeliveryNoteItem,
+    Entity,
     GLEntry,
     Item,
     Party,
@@ -281,3 +285,138 @@ def test_posted_purchase_return_preserves_layer_and_reconciles_ledgers(entorno_c
 
         assert sum(layer.qty for layer in (preserved_layer, return_layer)) == Decimal("6")
         assert sum(layer.stock_value_difference for layer in (preserved_layer, return_layer)) == Decimal("60")
+
+
+def test_cancelar_devolucion_fisica_libera_cancelacion_de_recepcion(entorno_contable_aislado):
+    """A cancelled purchase return's append-only layer no longer blocks its receipt."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        _seed_bridge_and_warehouse_account(entorno_contable_aislado)
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        original = _receipt(is_return=False, reversal_of=None, qty="10", amount="100")
+        _post(original, actor)
+        returned = _receipt(is_return=True, reversal_of=original.id, qty="4", amount="40")
+        _post(returned, actor)
+
+        active_dependencies = active_cancellation_dependencies(original, "purchase_receipt", original.id)
+        assert [(row.kind, row.identifier) for row in active_dependencies] == [("consumo de inventario", returned.id)]
+
+        with audit_actor(actor.id, actor.name), approved_execution(returned, actor.id):
+            cancel_document(
+                returned,
+                reason="Anular devolución física",
+                actor_user_id=actor.id,
+                cancellation_date=returned.posting_date,
+            )
+        database.session.commit()
+
+        assert database.session.get(PurchaseReceipt, returned.id).docstatus == 2
+        historical_return_layers = (
+            database.session.execute(
+                database.select(StockValuationLayer).filter_by(voucher_type="purchase_receipt", voucher_id=returned.id)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(historical_return_layers) == 2
+        assert sum((row.qty for row in historical_return_layers), Decimal("0")) == Decimal("0")
+        assert active_cancellation_dependencies(original, "purchase_receipt", original.id) == []
+
+        with audit_actor(actor.id, actor.name), approved_execution(original, actor.id):
+            cancel_document(
+                original,
+                reason="Anular recepción tras devolución anulada",
+                actor_user_id=actor.id,
+                cancellation_date=original.posting_date,
+            )
+        database.session.commit()
+
+        assert database.session.get(PurchaseReceipt, original.id).docstatus == 2
+
+
+def test_cancelar_nota_de_entrega_libera_cancelacion_de_recepcion(entorno_contable_aislado):
+    """A cancelled delivery's append-only layer no longer blocks its receipt."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        _seed_bridge_and_warehouse_account(entorno_contable_aislado)
+        database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one().valuation_method = "fifo"
+        defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
+        cogs_account = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="5101")).scalar_one()
+        defaults.default_cogs = cogs_account.id
+        database.session.commit()
+        actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+
+        original = _receipt(is_return=False, reversal_of=None, qty="10", amount="100")
+        _post(original, actor)
+        note = DeliveryNote(
+            company="cacao",
+            posting_date=date(2026, 5, 25),
+            document_no=f"DN-CANCEL-{uuid4().hex[:8]}",
+            customer_name="Cliente de cancelación",
+            docstatus=1,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(note)
+        database.session.flush()
+        database.session.add(
+            DeliveryNoteItem(
+                delivery_note_id=note.id,
+                item_code=ITEM_CODE,
+                item_name="Artículo de prueba",
+                qty=Decimal("4"),
+                qty_in_base_uom=Decimal("4"),
+                uom=UOM_CODE,
+                rate=Decimal("10"),
+                amount=Decimal("40"),
+                warehouse=WAREHOUSE_CODE,
+            )
+        )
+        database.session.commit()
+        with audit_actor(actor.id, actor.name), approved_execution(note, actor.id):
+            post_delivery_note(note)
+        database.session.commit()
+
+        source_layer = database.session.execute(
+            database.select(StockValuationLayer).filter_by(voucher_type="purchase_receipt", voucher_id=original.id, qty=10)
+        ).scalar_one()
+        consumed_layer = database.session.execute(
+            database.select(StockValuationLayer).filter_by(voucher_type="delivery_note", voucher_id=note.id, qty=-4)
+        ).scalar_one()
+        assert consumed_layer.source_layer_id == source_layer.id
+
+        active_dependencies = active_cancellation_dependencies(original, "purchase_receipt", original.id)
+        assert [(row.kind, row.identifier) for row in active_dependencies] == [("consumo de inventario", note.id)]
+
+        with audit_actor(actor.id, actor.name), approved_execution(note, actor.id):
+            cancel_document(
+                note,
+                reason="Anular nota de entrega",
+                actor_user_id=actor.id,
+                cancellation_date=note.posting_date,
+            )
+        database.session.commit()
+
+        assert database.session.get(DeliveryNote, note.id).docstatus == 2
+        historical_note_layers = (
+            database.session.execute(
+                database.select(StockValuationLayer).filter_by(voucher_type="delivery_note", voucher_id=note.id)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(historical_note_layers) == 2
+        assert sum((row.qty for row in historical_note_layers), Decimal("0")) == Decimal("0")
+        assert active_cancellation_dependencies(original, "purchase_receipt", original.id) == []
+
+        with audit_actor(actor.id, actor.name), approved_execution(original, actor.id):
+            cancel_document(
+                original,
+                reason="Anular recepción tras entrega anulada",
+                actor_user_id=actor.id,
+                cancellation_date=original.posting_date,
+            )
+        database.session.commit()
+
+        assert database.session.get(PurchaseReceipt, original.id).docstatus == 2
