@@ -254,14 +254,15 @@ def test_legacy_non_monthly_template_cannot_be_applied(app, entorno_contable):
             _cleanup_templates([code])
 
 
-def test_two_monthly_templates_apply_on_distinct_dates_in_the_same_period(app, entorno_contable):
-    """La idempotencia es por aplicación, no una única plantilla por período (#1493)."""
-    first = f"MA{uuid4().hex[:6].upper()}"
-    second = f"MB{uuid4().hex[:6].upper()}"
+def test_four_monthly_templates_apply_on_distinct_dates_in_the_same_period(app, entorno_contable):
+    """Four monthly templates can represent weekly applications in one period (#1149/#1493)."""
+    del entorno_contable
+    templates = [(f"M{index}{uuid4().hex[:6].upper()}", day) for index, day in enumerate((5, 10, 15, 20))]
+    codes = [code for code, _ in templates]
     try:
         with app.app_context():
             _, _, admin = _accounts()
-            for code, day in ((first, 5), (second, 20)):
+            for code, day in templates:
                 plantilla = _create_template(code, admin)
                 approve_recurring_template(plantilla.id, admin)
                 apply_recurring_template(
@@ -272,14 +273,17 @@ def test_two_monthly_templates_apply_on_distinct_dates_in_the_same_period(app, e
                     admin,
                     company="cacao",
                 )
-            aplicaciones = database.session.execute(
-                database.select(RecurringJournalApplication).where(
-                    RecurringJournalApplication.accounting_period == "Mayo 2026"
-                )
-            ).scalars()
+            aplicaciones = list(
+                database.session.execute(
+                    database.select(RecurringJournalApplication).where(
+                        RecurringJournalApplication.accounting_period == "Mayo 2026"
+                    )
+                ).scalars()
+            )
             fechas = {aplicacion.application_date for aplicacion in aplicaciones if aplicacion.template_id}
-            assert date(2026, 5, 5) in fechas
-            assert date(2026, 5, 20) in fechas
+
+            assert len(aplicaciones) == 4
+            assert fechas == {date(2026, 5, day) for _, day in templates}
     finally:
         with app.app_context():
-            _cleanup_templates([first, second])
+            _cleanup_templates(codes)

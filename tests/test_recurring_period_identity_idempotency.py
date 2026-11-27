@@ -66,8 +66,8 @@ def _nuevo_periodo() -> AccountingPeriod:
         entity="cacao",
         fiscal_year_id="FY2026",
         name=f"Período {sufijo}",
-        start=date(2026, 5, 1),
-        end=date(2026, 5, 31),
+        start=date(2026, 6, 1),
+        end=date(2026, 6, 30),
         enabled=True,
         is_closed=False,
     )
@@ -107,58 +107,43 @@ def _limpia(codigo: str, periodo_id: str | None = None) -> None:
     database.session.commit()
 
 
-def test_renombrar_periodo_no_duplica_la_aplicacion(app, entorno_contable):
-    """Un período renombrado sigue siendo el mismo para la idempotencia."""
-    del entorno_contable
-    codigo, admin = _nueva_plantilla()
-    periodo_id = None
-    try:
-        with app.app_context():
-            plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one()
-            periodo = _nuevo_periodo()
-            periodo_id = periodo.id
-            nombre_original = periodo.name
-            apply_recurring_template(plantilla.id, "FY2026", nombre_original, date(2026, 5, 31), admin, company="cacao")
-            periodo.name = "Mayo renombrado"
-            database.session.commit()
+def test_renombrar_periodo_no_duplica_la_aplicacion(entorno_contable_aislado):
+    """Un per?odo renombrado sigue siendo el mismo para la idempotencia."""
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        codigo, admin = _nueva_plantilla()
+        plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one()
+        periodo = _nuevo_periodo()
+        nombre_original = periodo.name
+        apply_recurring_template(plantilla.id, "FY2026", nombre_original, date(2026, 6, 30), admin, company="cacao")
+        periodo.name = "Junio renombrado"
+        database.session.commit()
 
-            segunda = apply_recurring_template(
-                plantilla.id, "FY2026", "Mayo renombrado", date(2026, 5, 31), admin, company="cacao"
-            )
+        segunda = apply_recurring_template(
+            plantilla.id, "FY2026", "Junio renombrado", date(2026, 6, 30), admin, company="cacao"
+        )
 
-            aplicaciones = _aplicaciones_de(codigo)
-            assert len(aplicaciones) == 1
-            assert aplicaciones[0].accounting_period_id == periodo.id
-            assert aplicaciones[0].accounting_period == nombre_original
-            assert segunda.id == aplicaciones[0].id
-    finally:
-        with app.app_context():
-            _limpia(codigo, periodo_id)
+        aplicaciones = _aplicaciones_de(codigo)
+        assert len(aplicaciones) == 1
+        assert aplicaciones[0].accounting_period_id == periodo.id
+        assert aplicaciones[0].accounting_period == nombre_original
+        assert segunda.id == aplicaciones[0].id
 
 
-def test_reintento_identico_no_crea_segundo_comprobante(app, entorno_contable):
+def test_reintento_identico_no_crea_segundo_comprobante(entorno_contable_aislado):
     """#1776: reintento idempotente devuelve la aplicaci?n existente."""
-    del entorno_contable
-    codigo, admin = _nueva_plantilla()
-    periodo_id = None
-    try:
-        with app.app_context():
-            plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one()
-            periodo = _nuevo_periodo()
-            periodo_id = periodo.id
-            primera = apply_recurring_template(
-                plantilla.id, "FY2026", periodo.name, date(2026, 5, 31), admin, company="cacao"
-            )
-            segunda = apply_recurring_template(
-                plantilla.id, "FY2026", periodo.name, date(2026, 5, 31), admin, company="cacao"
-            )
-            aplicaciones = _aplicaciones_de(codigo)
-            assert len(aplicaciones) == 1
-            assert segunda.id == primera.id
-            assert aplicaciones[0].journal_id == primera.journal_id
-    finally:
-        with app.app_context():
-            _limpia(codigo, periodo_id)
+    app = entorno_contable_aislado.app
+    with app.app_context():
+        codigo, admin = _nueva_plantilla()
+        plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one()
+        periodo = _nuevo_periodo()
+        primera = apply_recurring_template(plantilla.id, "FY2026", periodo.name, date(2026, 6, 30), admin, company="cacao")
+        segunda = apply_recurring_template(plantilla.id, "FY2026", periodo.name, date(2026, 6, 30), admin, company="cacao")
+        aplicaciones = _aplicaciones_de(codigo)
+
+        assert len(aplicaciones) == 1
+        assert segunda.id == primera.id
+        assert aplicaciones[0].journal_id == primera.journal_id
 
 
 def test_nombre_inequivoco_es_requerido(app, entorno_contable):
@@ -170,7 +155,7 @@ def test_nombre_inequivoco_es_requerido(app, entorno_contable):
             plantilla = database.session.execute(database.select(RecurringJournalTemplate).filter_by(code=codigo)).scalar_one()
             with pytest.raises(RecurringJournalError, match="Periodo no encontrado"):
                 apply_recurring_template(
-                    plantilla.id, "FY2026", "Periodo inexistente", date(2026, 5, 31), admin, company="cacao"
+                    plantilla.id, "FY2026", "Periodo inexistente", date(2026, 6, 30), admin, company="cacao"
                 )
             assert not _aplicaciones_de(codigo)
     finally:
