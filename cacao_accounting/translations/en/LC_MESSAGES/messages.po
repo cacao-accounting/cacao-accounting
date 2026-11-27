@@ -28,6 +28,9 @@ msgstr "Projected balances exclude these amounts and should not be treated as co
 msgid "Incompleto"
 msgstr "Incomplete"
 
+msgid "Anular"
+msgstr "Cancel"
+
 #: cacao_accounting/__init__.py:404
 msgid "asignó una tarea"
 msgstr "assigned a task"

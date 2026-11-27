@@ -1887,12 +1887,12 @@ def caja_chica_reposicion_nueva():
 @modulo_activo("cash")
 @login_required
 def caja_chica_reposicion_estado(r_id):
-    """Solicita o aprueba una reposicion de caja chica."""
+    """Solicita, aprueba o anula una reposición según su estado permitido."""
     reposicion = database.session.get(PettyCashReplenishment, r_id)
     if not reposicion:
         abort(404)
     new_status = request.form.get("status") or ""
-    action = "autorizar" if new_status == "aprobado" else "editar"
+    action = {"aprobado": "autorizar", "cancelado": "anular"}.get(new_status, "editar")
     exige_acceso_compania("cash", reposicion.company or "", action)
     try:
         set_petty_cash_replenishment_status(reposicion, new_status, actor_id=str(current_user.id))

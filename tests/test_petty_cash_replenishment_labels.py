@@ -199,3 +199,15 @@ def test_reposicion_lista_resuelve_cada_fondo_con_su_propia_etiqueta(caja_reposi
     assert "Fondo Caja Chica Puerto" in cuerpo
     assert ids["fondo_norte"] not in cuerpo
     assert ids["fondo_puerto"] not in cuerpo
+
+
+def test_reposicion_lista_ofrece_anulacion_solo_para_borradores(caja_reposicion_lista):
+    """The cancellation action is available only while a replenishment is a draft (#1232)."""
+    application, _ = caja_reposicion_lista
+    client = application.test_client()
+    _iniciar(client)
+
+    response = client.get("/cash_management/petty-cash-replenishment/list")
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True).count('name="status" value="cancelado"') == 1

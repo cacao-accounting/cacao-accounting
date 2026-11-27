@@ -3392,10 +3392,10 @@ class PettyCashReplenishment(database.Model, DocBase):  # type: ignore[name-defi
 
 
 class PettyCashReplenishmentExpense(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Append-only association between a posted petty-cash expense and its replenishment."""
+    """Append-only history linking a posted petty-cash expense to replenishments."""
 
     __tablename__ = "petty_cash_replenishment_expense"
-    __table_args__ = (database.UniqueConstraint("petty_cash_expense_id", name="uq_pcre_expense"),)
+    __table_args__ = (database.Index("ix_pcre_expense", "petty_cash_expense_id"),)
     company = database.Column(
         database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
     )

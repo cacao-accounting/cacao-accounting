@@ -22,6 +22,7 @@ from cacao_accounting.bancos.services import (
     petty_cash_open_vouchers_total,
     petty_cash_pending_replenishment_total,
     petty_cash_replenishment_expenses,
+    set_petty_cash_replenishment_status,
 )
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
@@ -165,6 +166,75 @@ def test_replenishment_appends_link_and_reconciles_derived_pending_balance(petty
         )
 
 
+def test_cancelled_draft_preserves_link_history_and_releases_expense_for_reuse(petty_cash_link_app):
+    """Canceling a draft frees its expense and preserves association evidence (#1232)."""
+    application, ids = petty_cash_link_app
+    with application.app_context():
+        expense = _seed_posted_expense(ids["company"], ids["fund_id"])
+        expense_id = expense.id
+        original_amount = expense.amount
+        original_date = expense.posting_date
+        first = _create_replenishment(ids["company"], ids["fund_id"], expense_id)
+        first_id = first.id
+        first_link = database.session.execute(
+            database.select(PettyCashReplenishmentExpense).filter_by(
+                petty_cash_replenishment_id=first_id,
+                petty_cash_expense_id=expense_id,
+            )
+        ).scalar_one()
+        first_link_id = first_link.id
+
+        cancelled = set_petty_cash_replenishment_status(first, "cancelado")
+        assert cancelled.status == "cancelado"
+        assert cancelled.docstatus == 0
+        assert cancelled.request_date == cancelled.posting_date == date(2026, 10, 20)
+        assert [row.id for row in petty_cash_expenses_available_for_replenishment(ids["fund_id"])] == [expense_id]
+        assert (
+            petty_cash_pending_replenishment_total(database.session.get(PettyCashAccount, ids["fund_id"])) == original_amount
+        )
+
+        second = _create_replenishment(ids["company"], ids["fund_id"], expense_id, request_day=21)
+        links = (
+            database.session.execute(
+                database.select(PettyCashReplenishmentExpense).filter_by(petty_cash_expense_id=expense_id)
+            )
+            .scalars()
+            .all()
+        )
+        links_by_replenishment = {link.petty_cash_replenishment_id: link for link in links}
+        unchanged_expense = database.session.get(PettyCashExpense, expense_id)
+
+        assert second.id != first_id
+        assert len(links) == 2
+        assert links_by_replenishment[first_id].id == first_link_id
+        assert second.id in links_by_replenishment
+        assert unchanged_expense is not None
+        assert (unchanged_expense.amount, unchanged_expense.posting_date, unchanged_expense.docstatus) == (
+            original_amount,
+            original_date,
+            1,
+        )
+        assert not petty_cash_expenses_available_for_replenishment(ids["fund_id"])
+        assert petty_cash_pending_replenishment_total(database.session.get(PettyCashAccount, ids["fund_id"])) == 0
+
+
+def test_submitted_replenishment_cannot_be_cancelled(petty_cash_link_app):
+    """The cancellation transition is limited to drafts and does not free submitted expenses."""
+    application, ids = petty_cash_link_app
+    with application.app_context():
+        expense = _seed_posted_expense(ids["company"], ids["fund_id"])
+        replenishment = _create_replenishment(ids["company"], ids["fund_id"], expense.id)
+        replenishment = set_petty_cash_replenishment_status(replenishment, "solicitado")
+
+        with pytest.raises(ValueError, match="Transici.n de reposici.n no v.lida"):
+            set_petty_cash_replenishment_status(replenishment, "cancelado")
+        database.session.rollback()
+
+        persisted = database.session.get(PettyCashReplenishment, replenishment.id)
+        assert persisted is not None and persisted.status == "solicitado"
+        assert not petty_cash_expenses_available_for_replenishment(ids["fund_id"])
+
+
 def test_legacy_replenishment_foreign_key_remains_readable(petty_cash_link_app):
     """Pre-existing links remain reserved and visible without rewriting legacy expense rows."""
     application, ids = petty_cash_link_app
@@ -190,6 +260,39 @@ def test_legacy_replenishment_foreign_key_remains_readable(petty_cash_link_app):
         with pytest.raises(ValueError, match="después de reponer"):
             cancel_petty_cash_expense(expense)
         database.session.rollback()
+
+
+def test_cancelled_legacy_draft_releases_expense_without_rewriting_legacy_reference(petty_cash_link_app):
+    """Legacy expense links remain intact while a canceled draft no longer reserves them."""
+    application, ids = petty_cash_link_app
+    with application.app_context():
+        expense = _seed_posted_expense(ids["company"], ids["fund_id"])
+        legacy = PettyCashReplenishment(
+            company=ids["company"],
+            petty_cash_id=ids["fund_id"],
+            request_date=date(2026, 10, 20),
+            amount=expense.amount,
+            status="borrador",
+            docstatus=0,
+        )
+        database.session.add(legacy)
+        database.session.flush()
+        expense.replenishment_id = legacy.id
+        database.session.commit()
+
+        cancelled = set_petty_cash_replenishment_status(legacy, "cancelado")
+        assert cancelled.status == "cancelado"
+        assert [row.id for row in petty_cash_expenses_available_for_replenishment(ids["fund_id"])] == [expense.id]
+        second = _create_replenishment(ids["company"], ids["fund_id"], expense.id, request_day=21)
+
+        persisted_expense = database.session.get(PettyCashExpense, expense.id)
+        assert persisted_expense is not None and persisted_expense.replenishment_id == legacy.id
+        assert database.session.execute(
+            database.select(PettyCashReplenishmentExpense).filter_by(
+                petty_cash_replenishment_id=second.id,
+                petty_cash_expense_id=expense.id,
+            )
+        ).scalar_one()
 
 
 def test_replenishment_link_failure_rolls_back_and_allows_retry(petty_cash_link_app):

@@ -456,11 +456,12 @@ def petty_cash_open_vouchers_total(petty_cash: PettyCashAccount, as_of_date=None
 
 
 def _petty_cash_expense_reserved(as_of_date=None):
-    """Condición SQL: el gasto ya fue reservado por una reposición efectiva al corte.
+    """Condición SQL: una reposición activa reserva el gasto al corte.
 
     La asociación append-only no tiene fecha propia; su efecto se reconoce en
-    la fecha de la reposición. Un corte anterior a esa fecha debe seguir
-    mostrando el gasto como pendiente (#1987).
+    la fecha de la reposición. Las solicitudes anuladas conservan la relación
+    histórica, pero liberan el gasto; un corte anterior a la solicitud lo
+    mantiene pendiente (#1987, #1232).
     """
     link_exists = (
         database.select(PettyCashReplenishmentExpense.id)
@@ -468,10 +469,14 @@ def _petty_cash_expense_reserved(as_of_date=None):
             PettyCashReplenishment,
             PettyCashReplenishment.id == PettyCashReplenishmentExpense.petty_cash_replenishment_id,
         )
-        .where(PettyCashReplenishmentExpense.petty_cash_expense_id == PettyCashExpense.id)
+        .where(
+            PettyCashReplenishmentExpense.petty_cash_expense_id == PettyCashExpense.id,
+            PettyCashReplenishment.status != "cancelado",
+        )
     )
     legacy_query = database.select(PettyCashReplenishment.id).where(
-        PettyCashReplenishment.id == PettyCashExpense.replenishment_id
+        PettyCashReplenishment.id == PettyCashExpense.replenishment_id,
+        PettyCashReplenishment.status != "cancelado",
     )
     if as_of_date is not None:
         cutoff = database.func.coalesce(PettyCashReplenishment.posting_date, PettyCashReplenishment.request_date) <= as_of_date
@@ -1263,12 +1268,19 @@ def create_petty_cash_expense_from_voucher(
 
 
 def _petty_cash_replenishment_for_expense(expense: PettyCashExpense) -> PettyCashReplenishment | None:
-    """Resolve a legacy or append-only replenishment association for one expense."""
+    """Resolve an active legacy or append-only replenishment for one expense."""
     if expense.replenishment_id:
-        return database.session.get(PettyCashReplenishment, expense.replenishment_id)
+        legacy = database.session.get(PettyCashReplenishment, expense.replenishment_id)
+        if legacy and legacy.status != "cancelado":
+            return legacy
     replenishment_id = database.session.execute(
         database.select(PettyCashReplenishmentExpense.petty_cash_replenishment_id)
+        .join(
+            PettyCashReplenishment,
+            PettyCashReplenishment.id == PettyCashReplenishmentExpense.petty_cash_replenishment_id,
+        )
         .where(PettyCashReplenishmentExpense.petty_cash_expense_id == expense.id)
+        .where(PettyCashReplenishment.status != "cancelado")
         .limit(1)
     ).scalar_one_or_none()
     return database.session.get(PettyCashReplenishment, replenishment_id) if replenishment_id else None
@@ -1785,17 +1797,30 @@ def create_petty_cash_replenishment(
     )
     associated_ids = set(
         database.session.execute(
-            database.select(PettyCashReplenishmentExpense.petty_cash_expense_id).where(
-                PettyCashReplenishmentExpense.petty_cash_expense_id.in_(ids)
+            database.select(PettyCashReplenishmentExpense.petty_cash_expense_id)
+            .join(
+                PettyCashReplenishment,
+                PettyCashReplenishment.id == PettyCashReplenishmentExpense.petty_cash_replenishment_id,
             )
+            .where(
+                PettyCashReplenishmentExpense.petty_cash_expense_id.in_(ids),
+                PettyCashReplenishment.status != "cancelado",
+            )
+        ).scalars()
+    )
+    legacy_associated_ids = set(
+        database.session.execute(
+            database.select(PettyCashExpense.id)
+            .join(PettyCashReplenishment, PettyCashReplenishment.id == PettyCashExpense.replenishment_id)
+            .where(PettyCashExpense.id.in_(ids), PettyCashReplenishment.status != "cancelado")
         ).scalars()
     )
     if len(expenses) != len(ids) or any(
         expense.company != company
         or expense.petty_cash_id != petty_cash_id
         or expense.docstatus != 1
-        or expense.replenishment_id
         or expense.id in associated_ids
+        or expense.id in legacy_associated_ids
         for expense in expenses
     ):
         database.session.rollback()
@@ -1853,10 +1878,11 @@ def create_petty_cash_replenishment(
 def set_petty_cash_replenishment_status(
     replenishment: PettyCashReplenishment, new_status: str, *, actor_id: str | None = None
 ) -> PettyCashReplenishment:
-    """Avanza una solicitud de reposicion sin contabilizarla prematuramente."""
+    """Avanza o anula una solicitud de reposición sin alterar sus gastos posteados."""
+    _begin_sqlite_write_transaction()
     replenishment = cast(PettyCashReplenishment, _lock_row_for_transition(PettyCashReplenishment, replenishment.id))
     current = replenishment.status or "borrador"
-    transitions = {"borrador": {"solicitado"}, "solicitado": {"aprobado"}}
+    transitions = {"borrador": {"solicitado", "cancelado"}, "solicitado": {"aprobado"}}
     if new_status not in transitions.get(current, set()):
         raise ValueError(
             _("Transición de reposición no válida: %(current)s -> %(new_status)s")
@@ -1864,11 +1890,29 @@ def set_petty_cash_replenishment_status(
         )
     if new_status == "aprobado":
         _authorize_petty_cash_replenishment(replenishment, actor_id)
+    if new_status == "cancelado":
+        database.session.execute(
+            database.select(PettyCashExpense.id)
+            .outerjoin(
+                PettyCashReplenishmentExpense,
+                PettyCashReplenishmentExpense.petty_cash_expense_id == PettyCashExpense.id,
+            )
+            .where(
+                database.or_(
+                    PettyCashExpense.replenishment_id == replenishment.id,
+                    PettyCashReplenishmentExpense.petty_cash_replenishment_id == replenishment.id,
+                )
+            )
+            .order_by(PettyCashExpense.id)
+            .with_for_update()
+        ).scalars().all()
     replenishment.status = new_status
     if new_status == "solicitado":
         replenishment.docstatus = 1
     elif new_status == "aprobado":
         replenishment.approved_by = actor_id
+    elif new_status == "cancelado":
+        replenishment.cancelled_by = actor_id
     database.session.commit()
     return replenishment
 
