@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-"""#1586: el Kardex incorpora la existencia anterior al rango consultado."""
+"""#1586 y #1115: el Kardex incorpora existencia previa al rango consultado."""
 
 from __future__ import annotations
 
@@ -13,7 +13,17 @@ from sqlalchemy.pool import StaticPool
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Currency, Entity, Item, StockLedgerEntry, UOM, Warehouse, database
+from cacao_accounting.database import (
+    AccountingPeriod,
+    Currency,
+    Entity,
+    FiscalYear,
+    Item,
+    StockLedgerEntry,
+    UOM,
+    Warehouse,
+    database,
+)
 from cacao_accounting.reportes.services import KardexFilters, get_kardex
 
 
@@ -66,6 +76,29 @@ def kardex_entorno():
         )
         database.session.flush()
         database.session.add(
+            FiscalYear(
+                id="FY2026",
+                entity="cacao",
+                name="2026",
+                year_start_date=date(2026, 1, 1),
+                year_end_date=date(2026, 12, 31),
+                is_closed=False,
+            )
+        )
+        database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                id="P2026-01",
+                entity="cacao",
+                fiscal_year_id="FY2026",
+                name="Enero 2026",
+                start=date(2026, 1, 1),
+                end=date(2026, 1, 31),
+                enabled=True,
+                is_closed=False,
+            )
+        )
+        database.session.add(
             Item(code="ART-1586", name="Artículo Kardex", item_type="goods", is_stock_item=True, default_uom="UND")
         )
         database.session.add(Warehouse(code="BOD-1586", name="Bodega Kardex", company="cacao"))
@@ -108,3 +141,17 @@ def test_kardex_sin_movimientos_previos_parte_de_cero(kardex_entorno):
         reporte = get_kardex(KardexFilters(company="cacao", date_from=date(2025, 12, 1), date_to=date(2026, 1, 1)))
 
     assert [fila.values["balance_qty"] for fila in reporte.rows] == [Decimal("10")]
+
+
+def test_kardex_acumula_la_existencia_anterior_al_filtrar_por_periodo(kardex_entorno):
+    """El período completo usa la misma apertura histórica que el rango manual."""
+    with kardex_entorno.app_context():
+        reporte = get_kardex(KardexFilters(company="cacao", period_from="P2026-01", period_to="P2026-01"))
+
+    assert len(reporte.rows) == 1
+    fila = reporte.rows[0].values
+    assert fila["posting_date"] == date(2026, 1, 2)
+    assert fila["balance_qty"] == Decimal("15")
+    assert fila["stock_value"] == Decimal("160")
+    assert fila["incoming_qty"] == Decimal("5")
+    assert Decimal(str(reporte.totals["incoming_qty"])) == Decimal("5")
