@@ -98,6 +98,10 @@ def _find_auto_reconcile_rules(
             BankMatchingRule.bank_account_id.is_(None),
         ),
     )
+    if database.session.get_bind().dialect.name != "sqlite":
+        # Lectura actual bajo el lock de alcance: una regla confirmada mientras
+        # la conciliación esperaba no puede quedar oculta por el snapshot.
+        query = query.with_for_update()
     rules = database.session.execute(query.order_by(BankMatchingRule.priority)).scalars().all()
     return [rule for rule in rules if _rule_reference_matches(rule, reference_number)]
 
@@ -157,8 +161,29 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
     if not bank_account:
         raise BankStatementError(_("La cuenta bancaria no existe."))
     company = str(bank_account.company)
+    bank_account_id = str(transaction.bank_account_id)
 
-    rules = _find_auto_reconcile_rules(transaction.bank_account_id, company, transaction.reference_number)
+    # Las reglas y los candidatos deben evaluarse bajo el mismo lock que las
+    # altas de reglas; de lo contrario una regla confirmada durante la espera
+    # puede cambiar el conjunto después de la búsqueda inicial.
+    from cacao_accounting.default_scope import lock_default_scopes
+
+    lock_default_scopes("bank_auto_reconcile", [(company, None), (company, bank_account_id)])
+    transaction = database.session.get(BankTransaction, bank_transaction_id, with_for_update=True, populate_existing=True)
+    if transaction is None:
+        raise BankStatementError(_("La transacción bancaria no existe."))
+    if transaction.is_reconciled:
+        return BankAutoReconciliationResult(
+            bank_transaction_id=bank_transaction_id,
+            reconciled=False,
+            rule_id=None,
+            candidate_reference_type=None,
+            candidate_reference_id=None,
+            allocated_amount=None,
+            reason="already_reconciled",
+        )
+
+    rules = _find_auto_reconcile_rules(bank_account_id, company, transaction.reference_number)
     if not rules:
         return BankAutoReconciliationResult(
             bank_transaction_id=bank_transaction_id,

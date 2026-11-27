@@ -624,17 +624,16 @@ def _payment_reconciliation_candidates(
     amount_tolerance: Decimal,
 ) -> list[BankCandidate]:
     """Genera candidatos de entradas de pago compatibles con la transacción."""
-    payments = (
-        database.session.execute(
-            select(PaymentEntry)
-            .filter_by(company=company)
-            .where(PaymentEntry.posting_date >= date_from)
-            .where(PaymentEntry.posting_date <= date_to)
-            .where(PaymentEntry.docstatus == 1)
-        )
-        .scalars()
-        .all()
+    payments_query = (
+        select(PaymentEntry)
+        .filter_by(company=company)
+        .where(PaymentEntry.posting_date >= date_from)
+        .where(PaymentEntry.posting_date <= date_to)
+        .where(PaymentEntry.docstatus == 1)
     )
+    if database.session.get_bind().dialect.name != "sqlite":
+        payments_query = payments_query.with_for_update()
+    payments = database.session.execute(payments_query).scalars().all()
     candidates: list[BankCandidate] = []
     for payment in payments:
         if not _payment_belongs_to_bank(payment, transaction.bank_account_id):
@@ -673,13 +672,10 @@ def _bank_gl_entries(transaction: BankTransaction, company: str, date_from: date
     ledger_id = primary_ledger_id(company)
     if ledger_id:
         gl_entries_query = gl_entries_query.where(GLEntry.ledger_id == ledger_id)
-    return (
-        database.session.execute(
-            gl_entries_query.where(GLEntry.posting_date >= date_from).where(GLEntry.posting_date <= date_to)
-        )
-        .scalars()
-        .all()
-    )
+    gl_entries_query = gl_entries_query.where(GLEntry.posting_date >= date_from).where(GLEntry.posting_date <= date_to)
+    if database.session.get_bind().dialect.name != "sqlite":
+        gl_entries_query = gl_entries_query.with_for_update()
+    return database.session.execute(gl_entries_query).scalars().all()
 
 
 def _gl_reconciliation_candidates(

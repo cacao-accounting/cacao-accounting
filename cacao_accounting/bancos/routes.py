@@ -729,6 +729,12 @@ def bancos_reglas_matching():
         except (TypeError, ValueError):
             flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
             return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
+        from cacao_accounting.default_scope import lock_default_scopes
+
+        lock_default_scopes(
+            "bank_auto_reconcile",
+            [(company, None), (company, bank_account_id)] if bank_account_id else [(company, None)],
+        )
         rule = BankMatchingRule(
             company=company,
             bank_account_id=bank_account_id,
