@@ -6,6 +6,7 @@
       companies: [],
       messages: {
         dashboardLoadError: "No se pudo cargar el dashboard.",
+        dashboardLoading: "Cargando dashboard...",
       },
       titles: {
         accounting: "Resumen financiero",

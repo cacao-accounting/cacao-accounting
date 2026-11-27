@@ -160,6 +160,25 @@ describe("dashboard", function () {
     assert.strictEqual(dashboard.error, "");
   });
 
+  it("exposes loading state for a pending request and clears it on success", async function () {
+    globalThis.dashboardConfig = { messages: { dashboardLoading: "Cargando dashboard..." } };
+    const pendingRequest = deferred();
+    const dashboard = loadDashboard(() => pendingRequest.promise);
+    dashboard.filters.company = "COMP";
+
+    dashboard.fetchData();
+
+    assert.strictEqual(dashboard.loading, true);
+    assert.strictEqual(dashboard.error, "");
+    assert.deepStrictEqual(dashboard.payload, { sections: {} });
+
+    pendingRequest.resolve(response({ sections: { version: "ok" } }));
+    await flushPromises();
+
+    assert.strictEqual(dashboard.loading, false);
+    assert.strictEqual(dashboard.payload.sections.version, "ok");
+  });
+
   it("uses the warehouse to distinguish repeated inventory item rows", function () {
     const dashboard = loadDashboard(() => Promise.resolve(response({ sections: {} })));
 

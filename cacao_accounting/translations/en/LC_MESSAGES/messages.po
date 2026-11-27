@@ -7110,6 +7110,10 @@ msgstr "The dashboard loads with the selected company and period."
 msgid "Tabla principal de la sección del dashboard"
 msgstr "Main dashboard section table"
 
+#: cacao_accounting/app/templates/app.html:45
+msgid "Cargando dashboard..."
+msgstr "Loading dashboard..."
+
 #: cacao_accounting/app/templates/app.html:125
 msgid "No se pudo cargar el dashboard."
 msgstr "The dashboard could not be loaded."
