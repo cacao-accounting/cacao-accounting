@@ -702,8 +702,28 @@ def _clear_default_petty_cash(company: str) -> None:
     database.session.flush()
 
 
+def _petty_cash_has_open_vouchers(petty_cash_id: str) -> bool:
+    """Indica si existen vales no liquidados ni cancelados para la caja."""
+    open_statuses = {"borrador", "entregado"}
+    voucher = database.session.execute(
+        database.select(PettyCashVoucher.id)
+        .filter(
+            PettyCashVoucher.petty_cash_id == petty_cash_id,
+            PettyCashVoucher.status != "anulado",
+            database.or_(
+                PettyCashVoucher.voucher_status.in_(open_statuses),
+                database.and_(PettyCashVoucher.voucher_status.is_(None), PettyCashVoucher.expense_id.is_(None)),
+            ),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    return voucher is not None
+
+
 def toggle_petty_cash_active(petty_cash: PettyCashAccount) -> None:
     """Alterna el estado activo/inactivo de una caja chica (append-only, sin borrado)."""
+    if petty_cash.is_active and _petty_cash_has_open_vouchers(str(petty_cash.id)):
+        raise ValueError(_("No se puede desactivar una caja chica con vales entregados o pendientes de liquidación."))
     petty_cash.is_active = not petty_cash.is_active
     database.session.commit()
 

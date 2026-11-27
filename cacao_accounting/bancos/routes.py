@@ -1336,7 +1336,12 @@ def caja_chica_alternar(pc_id):
     if not registro:
         abort(404)
     exige_acceso_compania("cash", registro.company, "editar")
-    toggle_petty_cash_active(registro)
+    try:
+        toggle_petty_cash_active(registro)
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(url_for(BANCOS_CAJA_CHICA_ENDPOINT, pc_id=registro.id))
     flash(_("Estado de la caja chica actualizado."), "success")
     return redirect(url_for(BANCOS_CAJA_CHICA_ENDPOINT, pc_id=registro.id))
 
