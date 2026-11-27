@@ -146,7 +146,7 @@ from cacao_accounting.ventas.services import (
     _handle_sales_invoice_edit_post,
     _cancel_linked_delivery_note,
     _validate_credit_limit_and_overdue,
-    _validate_reversal_of,
+    _validate_sales_reversal_submission,
     is_sales_price_editor,
     sales_order_is_ready_to_close,
     sales_order_line_closure_reasons,
@@ -2705,20 +2705,7 @@ def ventas_factura_venta_submit(invoice_id: str):
         _validate_sales_invoice_line_amounts(registro, items)
         warnings = _validate_invoice_prices_against_source(registro)
         if registro.document_type in ("sales_credit_note", "sales_return", "sales_debit_note") and registro.reversal_of:
-            note_amount = (
-                Decimal(str(registro.grand_total or "0"))
-                if registro.document_type in ("sales_credit_note", "sales_return")
-                else None
-            )
-            _validate_reversal_of(
-                registro.reversal_of,
-                registro.customer_id,
-                registro.company,
-                note_amount=note_amount,
-                document_type=registro.document_type,
-                posting_date=registro.posting_date,
-                lock_source=True,
-            )
+            _validate_sales_reversal_submission(registro, lock_source=True)
         from cacao_accounting.inventario.service import validate_batch_serial_draft
 
         validate_batch_serial_draft(items)

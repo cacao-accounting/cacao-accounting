@@ -2296,6 +2296,68 @@ def _sales_invoice_source(invoice: SalesInvoice, reversal_of: str | None) -> Sal
     return source
 
 
+def _sales_invoice_has_source_flow(invoice: SalesInvoice, source_type: str, source_id: str) -> bool:
+    """Return whether an order or delivery note belongs to an invoice's active flow."""
+    if source_type == "sales_order":
+        if invoice.sales_order_id == source_id:
+            return True
+        if invoice.delivery_note_id:
+            delivery = database.session.get(DeliveryNote, invoice.delivery_note_id)
+            if delivery is not None and delivery.sales_order_id == source_id:
+                return True
+    elif source_type == "delivery_note":
+        if invoice.delivery_note_id == source_id:
+            return True
+        delivery = database.session.get(DeliveryNote, source_id)
+        if delivery is not None and invoice.sales_order_id and delivery.sales_order_id == invoice.sales_order_id:
+            return True
+    else:
+        return False
+
+    relation_id = database.session.execute(
+        database.select(DocumentRelation.id)
+        .where(
+            DocumentRelation.source_type == source_type,
+            DocumentRelation.source_id == source_id,
+            DocumentRelation.target_type == "sales_invoice",
+            DocumentRelation.target_id == invoice.id,
+            DocumentRelation.status == "active",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    return relation_id is not None
+
+
+def _validate_sales_reversal_source_links(
+    invoice: SalesInvoice,
+    order_id: str | None,
+    delivery_note_id: str | None,
+) -> None:
+    """Reject note links that do not belong to the invoice being reversed."""
+    if order_id:
+        order = database.session.get(SalesOrder, order_id)
+        if order is None or not _sales_invoice_has_source_flow(invoice, "sales_order", order_id):
+            raise ValueError(_("La orden indicada no pertenece al flujo de la factura origen."))
+    if delivery_note_id:
+        delivery = database.session.get(DeliveryNote, delivery_note_id)
+        if delivery is None or not _sales_invoice_has_source_flow(invoice, "delivery_note", delivery_note_id):
+            raise ValueError(_("La nota de entrega indicada no pertenece al flujo de la factura origen."))
+        if order_id and delivery.sales_order_id != order_id:
+            raise ValueError(_("La nota de entrega no pertenece a la orden de venta indicada."))
+
+
+def _validate_sales_reversal_document(note: SalesInvoice) -> None:
+    """Validate the reversal invoice currency and source links for a saved note."""
+    if not note.reversal_of:
+        return
+    source = database.session.get(SalesInvoice, note.reversal_of)
+    if source is None:
+        return
+    if effective_currency(note) != effective_currency(source):
+        raise ValueError(_("La nota y la factura origen deben usar la misma moneda."))
+    _validate_sales_reversal_source_links(source, note.sales_order_id, note.delivery_note_id)
+
+
 def _prepare_sales_invoice_creation() -> dict[str, Any]:
     """Resuelve origen, tipo documental y permisos para una factura de venta."""
     document_type = request.form.get("document_type") or "sales_invoice"
@@ -2313,17 +2375,25 @@ def _prepare_sales_invoice_creation() -> dict[str, Any]:
     else:
         source_model = SalesInvoice
     source_document = database.session.get(source_model, source_id) if source_id else None
+    reversal_invoice = database.session.get(SalesInvoice, reversal_of) if reversal_of else None
     source_company = getattr(source_document, "company", None) or source_company
     exige_acceso_compania("sales", source_company, "crear")
     _validated_customer(request.form.get("customer_id") or None, request.form.get("company") or source_company)
     if reversal_of:
-        _validate_reversal_of(reversal_of, request.form.get("customer_id"), request.form.get("company"))
+        _validate_reversal_of(
+            reversal_of,
+            request.form.get("customer_id"),
+            request.form.get("company"),
+        )
+        if reversal_invoice is not None:
+            _validate_sales_reversal_source_links(reversal_invoice, from_order_id, from_note_id)
     return {
         "document_type": document_type,
         "posting_date": posting_date,
         "reversal_of": reversal_of,
         "from_order_id": from_order_id,
         "from_note_id": from_note_id,
+        "reversal_invoice": reversal_invoice,
     }
 
 
@@ -2347,21 +2417,23 @@ def _build_sales_invoice_from_context(context: dict[str, Any]) -> SalesInvoice:
     )
 
 
-def _validate_sales_invoice_reversal_result(
-    reversal_of: str | None,
-    invoice: SalesInvoice,
-    grand_total: Decimal,
-) -> None:
-    """Valida el importe final cuando la factura es una reversión."""
-    if reversal_of:
-        _validate_reversal_of(
-            reversal_of,
-            invoice.customer_id,
-            invoice.company,
-            note_amount=grand_total,
-            document_type=invoice.document_type,
-            posting_date=invoice.posting_date,
-        )
+def _validate_sales_reversal_submission(note: SalesInvoice, *, lock_source: bool = False) -> None:
+    """Validate a sales note's reversal flow, currency and remaining balance."""
+    if not note.reversal_of:
+        return
+    _validate_sales_reversal_document(note)
+    note_amount = (
+        Decimal(str(note.grand_total or "0")) if note.document_type in {"sales_credit_note", "sales_return"} else None
+    )
+    _validate_reversal_of(
+        note.reversal_of,
+        note.customer_id,
+        note.company,
+        note_amount=note_amount,
+        document_type=note.document_type,
+        posting_date=note.posting_date,
+        lock_source=lock_source,
+    )
 
 
 def _create_sales_invoice_from_form():
@@ -2388,8 +2460,9 @@ def _create_sales_invoice_from_form():
         grand_total = calculate_document_total_with_taxes(
             factura, total, items, request.form.get("tax_summary_payload"), request.form.get("tax_lines_payload")
         )
-        _set_sales_invoice_totals(factura, total, grand_total, source)
-        _validate_sales_invoice_reversal_result(context["reversal_of"], factura, grand_total)
+        currency_source = context["reversal_invoice"] or source
+        _set_sales_invoice_totals(factura, total, grand_total, currency_source)
+        _validate_sales_reversal_submission(factura)
         _persist_sales_invoice_fiscal_snapshot(factura)
         database.session.commit()
         flash(_("Factura de venta creada correctamente."), "success")
@@ -2498,7 +2571,11 @@ def _handle_sales_invoice_edit_post(registro):
         if registro.reversal_of and (
             before_state.get("customer_id") != registro.customer_id or before_state.get("company") != registro.company
         ):
-            _validate_reversal_of(registro.reversal_of, registro.customer_id, registro.company)
+            _validate_reversal_of(
+                registro.reversal_of,
+                registro.customer_id,
+                registro.company,
+            )
         for item in database.session.execute(
             database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)
         ).scalars():
@@ -2509,23 +2586,16 @@ def _handle_sales_invoice_edit_post(registro):
         items = (
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
         )
-        source = None
-        source = _validate_sales_invoice_source_links(registro, items)
-        if source is None and registro.reversal_of:
+        if registro.reversal_of:
             source = database.session.get(SalesInvoice, registro.reversal_of)
+        else:
+            source = _validate_sales_invoice_source_links(registro, items)
         grand_total = calculate_document_total_with_taxes(
             registro, total, items, request.form.get("tax_summary_payload"), request.form.get("tax_lines_payload")
         )
         _set_sales_invoice_totals(registro, total, grand_total, source)
         if registro.reversal_of:
-            _validate_reversal_of(
-                registro.reversal_of,
-                registro.customer_id,
-                registro.company,
-                note_amount=grand_total,
-                document_type=registro.document_type,
-                posting_date=registro.posting_date,
-            )
+            _validate_sales_reversal_submission(registro)
         warnings = _validate_invoice_prices_against_source(registro, raise_on_violation=False)
         _persist_sales_invoice_fiscal_snapshot(registro)
         after_state = _capture_sales_state(registro)

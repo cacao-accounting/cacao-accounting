@@ -13059,6 +13059,12 @@ msgstr "The selected purchase order is not part of the source invoice flow."
 msgid "La recepción indicada no pertenece al flujo de la factura origen."
 msgstr "The selected receipt is not part of the source invoice flow."
 
+msgid "La nota de entrega indicada no pertenece al flujo de la factura origen."
+msgstr "The selected delivery note is not part of the source invoice flow."
+
+msgid "La nota y la factura origen deben usar la misma moneda."
+msgstr "The note and source invoice must use the same currency."
+
 #: cacao_accounting/compras/services.py:2755
 #: cacao_accounting/compras/services.py:2895
 msgid "El tipo de nota de crédito no es válido."
