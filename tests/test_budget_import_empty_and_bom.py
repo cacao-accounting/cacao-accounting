@@ -98,3 +98,20 @@ def test_validate_import_acepta_csv_con_bom(app, entorno_contable):
         assert lote.rows_read == 1
         assert lote.rows_inserted == 1
         _limpiar(budget_id)
+
+
+def test_validate_import_rechaza_csv_sin_encabezado_no_crea_lote(app, entorno_contable):
+    """#1627 QA: fila sin encabezado no deja lote persistible en sesión."""
+    del entorno_contable
+    contenido = b"1101,ADM,10\n"
+    with app.app_context():
+        budget_id = _presupuesto()
+        antes = database.session.execute(database.select(database.func.count(BudgetImport.id))).scalar_one()
+
+        with pytest.raises(BudgetError):
+            BudgetImportService().validate_import(budget_id, "sin-header.csv", contenido, _usuario())
+
+        database.session.rollback()
+        despues = database.session.execute(database.select(database.func.count(BudgetImport.id))).scalar_one()
+        assert despues == antes
+        _limpiar(budget_id)

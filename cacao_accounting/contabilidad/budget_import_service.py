@@ -268,9 +268,9 @@ class BudgetImportService:
         if not rows:
             raise BudgetError(_("El archivo no contiene filas de datos."))
 
-        import_batch = self._create_import_batch(budget_id, filename, len(rows), user_id)
         caches = self._build_caches(budget)
         self._validate_headers(rows, caches["period_names"])
+        import_batch = self._create_import_batch(budget_id, filename, len(rows), user_id)
 
         existing_lines = self._get_existing_line_combos(budget_id)
         errors, validated_lines_count = self._process_import_rows(rows, import_batch.id, caches, existing_lines)
