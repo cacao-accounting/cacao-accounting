@@ -339,4 +339,22 @@ def _consumed_stock_dependencies(document: Any, source_type: str, source_id: str
             StockValuationLayer.voucher_id != source_id,
         )
     ).scalars()
-    return [CancellationDependency("consumo de inventario", str(row.voucher_id), str(row.voucher_type)) for row in consumed]
+    return [
+        CancellationDependency("consumo de inventario", str(row.voucher_id), str(row.voucher_type))
+        for row in consumed
+        if _stock_consumption_is_active(row.voucher_type, row.voucher_id)
+    ]
+
+
+def _stock_consumption_is_active(voucher_type: str, voucher_id: str) -> bool:
+    """Fail closed when the consumer cannot be resolved; ignore drafts/cancelled vouchers."""
+    from cacao_accounting.document_flow.registry import get_document_type
+
+    try:
+        document_type = get_document_type(voucher_type)
+    except ValueError:
+        return True
+    consumer = database.session.get(document_type.header_model, voucher_id)
+    if consumer is None:
+        return True
+    return getattr(consumer, "docstatus", None) not in (0, 2)
