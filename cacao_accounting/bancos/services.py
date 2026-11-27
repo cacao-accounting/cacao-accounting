@@ -287,6 +287,10 @@ def _validate_bank_account_references(
             raise IdentifierConfigurationError(
                 _("Seleccione una cuenta contable de tipo banco, activa y habilitada, para la compañía indicada.")
             )
+        if account.currency != currency:
+            raise IdentifierConfigurationError(
+                _("La moneda de la cuenta bancaria debe coincidir con la moneda de su cuenta contable GL.")
+            )
 
 
 def _ensure_bank_account_counter_mapping(bank_account: BankAccount) -> None:

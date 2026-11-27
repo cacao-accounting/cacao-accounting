@@ -2442,8 +2442,15 @@ def _transfer_payment_amount(payment: PaymentEntry, bank_account_id: str) -> Dec
     return _decimal_value(payment.paid_amount)
 
 
-def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | None) -> Decimal:
-    gl_balance_query = exclude_cancelled_gl_entries(select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0))).where(
+def _compute_gl_balance(
+    company: str,
+    bank_account_id: str,
+    as_of_date: date | None,
+    bank_currency: str,
+    company_currency: str | None,
+) -> Decimal:
+    """Suma el saldo GL de la cuenta en su moneda bancaria."""
+    gl_balance_query = exclude_cancelled_gl_entries(select(GLEntry)).where(
         GLEntry.company == company,
         GLEntry.bank_account_id == bank_account_id,
     )
@@ -2452,7 +2459,27 @@ def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | N
         gl_balance_query = gl_balance_query.where(GLEntry.ledger_id == ledger_id)
     if as_of_date is not None:
         gl_balance_query = gl_balance_query.where(GLEntry.posting_date <= as_of_date)
-    return _decimal_value(database.session.execute(gl_balance_query).scalar_one())
+    balance = Decimal("0")
+    entries = database.session.execute(gl_balance_query).scalars()
+    for entry in entries:
+        account_currency = entry.account_currency
+        debit_in_account_currency = entry.debit_in_account_currency
+        credit_in_account_currency = entry.credit_in_account_currency
+        if account_currency == bank_currency and (
+            debit_in_account_currency is not None or credit_in_account_currency is not None
+        ):
+            balance += _decimal_value(debit_in_account_currency) - _decimal_value(credit_in_account_currency)
+            continue
+
+        company_amount = _decimal_value(entry.debit) - _decimal_value(entry.credit)
+        source_currency = entry.company_currency or company_currency
+        if source_currency == bank_currency:
+            balance += company_amount
+        else:
+            if not source_currency:
+                raise ValueError(_("La entrada GL no tiene moneda funcional para convertir el saldo bancario."))
+            balance += _convert_to_ledger_currency(company_amount, source_currency, bank_currency, entry.posting_date)
+    return balance
 
 
 def _bank_balance_totals(
@@ -2470,6 +2497,8 @@ def _bank_balance_totals(
 
 def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
     """Devuelve resumen de saldos bancarios por cuenta."""
+    company_record = database.session.get(Entity, filters.company)
+    company_currency = company_record.currency if company_record else None
     bank_accounts_query = select(BankAccount).where(BankAccount.company == filters.company)
     if filters.bank_account_id:
         bank_accounts_query = bank_accounts_query.where(BankAccount.id == filters.bank_account_id)
@@ -2477,7 +2506,10 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
 
     rows: list[ReportRow] = []
     for bank_account in bank_accounts:
-        balance = _compute_gl_balance(filters.company, bank_account.id, filters.as_of_date)
+        bank_currency = bank_account.currency or company_currency
+        if not bank_currency:
+            raise ValueError(_("La cuenta bancaria no tiene una moneda configurada."))
+        balance = _compute_gl_balance(filters.company, bank_account.id, filters.as_of_date, bank_currency, company_currency)
         receipts, payments = _compute_account_receipts_and_payments(bank_account.id, filters.company, filters.as_of_date)
 
         rows.append(
@@ -2485,7 +2517,7 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
                 values={
                     "bank_account": bank_account.account_name,
                     "account_no": bank_account.account_no,
-                    "currency": bank_account.currency,
+                    "currency": bank_currency,
                     "receipts_amount": receipts,
                     "payments_amount": payments,
                     "ending_balance": balance,

@@ -57,6 +57,7 @@ def _crear_app():
                 Modules(module="admin", default=False, enabled=True),
                 Modules(module="cash", default=False, enabled=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Currency(code="USD", name="Dólar", decimals=2, active=True, default=False),
                 Currency(code="OFF", name="Moneda inactiva", decimals=2, active=False, default=False),
                 Bank(name="Banco activo", is_active=True),
                 Bank(name="Banco inactivo", is_active=False),
@@ -92,6 +93,7 @@ def _crear_app():
                     code="110101",
                     name="Banco activo",
                     account_type="bank",
+                    currency="NIO",
                     active=True,
                     enabled=True,
                     group=False,
@@ -306,6 +308,26 @@ def test_la_guardia_detecta_desactivacion_concurrente():
                     currency="NIO",
                     gl_account_id=ids["gl_active"],
                 )
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
+@pytest.mark.parametrize("currency", ["USD", None])
+def test_rechaza_moneda_distinta_o_ausente_de_la_cuenta_gl(currency):
+    """La moneda bancaria debe coincidir con la moneda configurada en GL."""
+    from cacao_accounting.bancos.services import IdentifierConfigurationError, _validate_bank_account_references
+
+    application, ids = _crear_app()
+    try:
+        with application.app_context(), pytest.raises(IdentifierConfigurationError, match="debe coincidir"):
+            _validate_bank_account_references(
+                company="cacao",
+                bank_id=ids["bank_active"],
+                currency=currency,
+                gl_account_id=ids["gl_active"],
+            )
     finally:
         with application.app_context():
             database.session.remove()

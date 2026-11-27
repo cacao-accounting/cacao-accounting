@@ -8365,6 +8365,14 @@ msgstr "A bank transaction cannot have two directions."
 msgid "La entrada GL no tiene moneda funcional para convertirla."
 msgstr "The GL entry has no functional currency to convert it."
 
+#: cacao_accounting/reportes/services.py
+msgid "La entrada GL no tiene moneda funcional para convertir el saldo bancario."
+msgstr "The GL entry has no functional currency to convert the bank balance."
+
+#: cacao_accounting/reportes/services.py
+msgid "La cuenta bancaria no tiene una moneda configurada."
+msgstr "The bank account has no configured currency."
+
 #: cacao_accounting/bancos/reconciliation_service.py:212
 #, python-format
 msgid ""
@@ -8869,6 +8877,10 @@ msgid ""
 "La moneda de la caja chica debe coincidir con la moneda de su cuenta "
 "contable."
 msgstr "The petty cash currency must match its accounting account currency."
+
+#: cacao_accounting/bancos/services.py
+msgid "La moneda de la cuenta bancaria debe coincidir con la moneda de su cuenta contable GL."
+msgstr "The bank account currency must match its GL account currency."
 
 #: cacao_accounting/bancos/services.py:482
 msgid "El responsable seleccionado no existe."
