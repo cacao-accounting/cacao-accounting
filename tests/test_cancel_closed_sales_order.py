@@ -18,6 +18,7 @@ from cacao_accounting.database import (
     StockBin,
     UOM,
     User,
+    UserCompanyAccess,
     Warehouse,
     database,
 )
@@ -32,11 +33,25 @@ def test_cancel_orden_cerrada_es_rechazada(app):
         database.session.add(order)
         database.session.commit()
         order_id = order.id
-        with app.test_request_context(f"/sales/sales-order/{order_id}/cancel", method="POST"):
-            login_user(database.session.execute(database.select(User).filter_by(user="admin")).scalar_one())
-            with pytest.raises(HTTPException) as exc_info:
-                ventas_orden_venta_cancel(order_id)
-        assert exc_info.value.code == 400
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        acceso = database.session.execute(
+            database.select(UserCompanyAccess).filter_by(user_id=admin.id, company_code="cacao")
+        ).scalar_one_or_none()
+        nuevo_acceso = None
+        if acceso is None:
+            nuevo_acceso = UserCompanyAccess(user_id=admin.id, company_code="cacao")
+            database.session.add(nuevo_acceso)
+            database.session.commit()
+        try:
+            with app.test_request_context(f"/sales/sales-order/{order_id}/cancel", method="POST"):
+                login_user(admin)
+                with pytest.raises(HTTPException) as exc_info:
+                    ventas_orden_venta_cancel(order_id)
+            assert exc_info.value.code == 400
+        finally:
+            if nuevo_acceso is not None:
+                database.session.delete(nuevo_acceso)
+                database.session.commit()
 
 
 def test_release_reservation_no_libera_orden_cerrada(app):
