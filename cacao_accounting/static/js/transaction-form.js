@@ -588,6 +588,7 @@
             discount_percentage: 0,
             discount_amount: 0,
             amount: 0,
+            warehouse: '',
             weight: '',
             weight_uom: '',
             volume: '',
@@ -961,6 +962,7 @@
             serial_no: line.serial_no || '',
             source_warehouse: line.source_warehouse || '',
             target_warehouse: line.target_warehouse || '',
+            warehouse: line.warehouse || '',
           };
         },
 
@@ -1739,6 +1741,7 @@
             line.discount_amount = toNumber(row.discount_amount);
             line.discount_percentage = 0;
           }
+          if (row.warehouse !== undefined) line.warehouse = row.warehouse;
           if (row.source_warehouse !== undefined) line.source_warehouse = row.source_warehouse;
           if (row.target_warehouse !== undefined) line.target_warehouse = row.target_warehouse;
           if (row.description !== undefined) {
