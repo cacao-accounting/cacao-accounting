@@ -274,7 +274,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 
 | Issue | Coordinación | Acción y estado | Resultado requerido |
 |---|---|---|---|
-| #2120 | #1709 | ❌ QA1 rechaza; QA2 aprueba alcance nominal; GitHub: open / needs-work | Barrido fiscal nominal cubierto, pero `IdentifierConfigurationError` por período ausente/ambiguo se interpreta como abierto y omite la guarda de `void`; revisar fail-closed y cierre concurrente |
+| #2120 | #1709 | ✅ `9f129cc4`; GitHub: open / fix-proposed | Rechaza períodos ausentes/ambiguos, bloquea y revalida el período de reversa; 12 passed, 1 skipped en SQLite; PostgreSQL pendiente por entorno |
 | #546 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | [AUDIT][R2R][Multimoneda] Las tasas de cambio históricas pueden editarse después de ser usadas |
 | #758 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | HIGH: Enforce complete source and destination currency data on every posting |
 | #761 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | MEDIUM: Apply cancellation and reversal period semantics consistently to all document types |
