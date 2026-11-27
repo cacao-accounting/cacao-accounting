@@ -14,7 +14,14 @@ import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Party, PartyGroup, database
+from cacao_accounting.database import (
+    Modules,
+    Party,
+    PartyGroup,
+    User,
+    UserCompanyAccess,
+    database,
+)
 from cacao_accounting.party_management import locked_party_group, apply_party_group
 
 pytestmark = pytest.mark.database
@@ -36,6 +43,7 @@ def _app(tmp_path, name):
                 "max_overflow": 0,
             },
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
             "TESTING": True,
             "SECRET_KEY": "test-2271",
         }
@@ -188,8 +196,8 @@ def test_apply_party_group_rejects_incompatible_type(tmp_path):
     app = _app(tmp_path, "2271-compat.sqlite")
     with app.app_context():
         database.create_all()
-        group = PartyGroup(group_type="supplier", name="Sup", is_active=True)
-        party = Party(code="C1", name="Cliente", is_customer=True, is_supplier=False)
+        group = PartyGroup(group_type="supplier", name=f"Sup-{uuid4().hex[:6]}", is_active=True)
+        party = Party(code=f"C{uuid4().hex[:6]}", name="Cliente", is_customer=True, is_supplier=False)
         database.session.add_all([group, party])
         database.session.commit()
         with pytest.raises(ValueError):
@@ -197,4 +205,81 @@ def test_apply_party_group_rejects_incompatible_type(tmp_path):
         database.session.rollback()
         refreshed = database.session.get(Party, party.id)
         assert refreshed.party_group_id is None
+        database.session.remove()
+
+
+def test_ruta_administrativa_y_asignacion_no_dejan_estado_incompatible(tmp_path):
+    """El POST real y una asignación concurrente no conviven en estado inválido."""
+    app = _app(tmp_path, "2271-route.sqlite")
+    suffix = uuid4().hex[:8]
+    with app.app_context():
+        database.create_all()
+        module = database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none()
+        if module is None:
+            database.session.add(Modules(module="admin", default=False, enabled=True))
+        else:
+            module.enabled = True
+        user = User(
+            id=f"adm-{suffix}",
+            user=f"adm_{suffix}",
+            name="Admin",
+            password=b"unused",
+            classification="admin",
+            active=True,
+        )
+        group = PartyGroup(group_type="customer", name=f"GR-{suffix}", is_active=True)
+        party = Party(code=f"PR-{suffix}", name="Cliente", is_customer=True, is_supplier=False)
+        database.session.add_all([user, group, party])
+        database.session.commit()
+        group_id, party_id, user_id = group.id, party.id, user.id
+        database.session.remove()
+
+    lock_held = Barrier(2, timeout=20)
+    release_assignment = Barrier(2, timeout=20)
+
+    def assign_customer() -> str:
+        with app.app_context():
+            try:
+                locked_party_group(group_id)
+                lock_held.wait()
+                release_assignment.wait()
+                p = database.session.get(Party, party_id)
+                apply_party_group(p, group_id, role="customer")
+                database.session.commit()
+                return "asignada"
+            except Exception:
+                database.session.rollback()
+                return "rechazada"
+            finally:
+                database.session.remove()
+
+    def change_group() -> int:
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session["_user_id"] = user_id
+            session["_auth_version"] = 0
+            session["_fresh"] = True
+        lock_held.wait()
+        response = client.post(
+            f"/settings/party-groups/{group_id}/edit",
+            data={"group_type": "supplier", "name": f"GR-{suffix}", "is_active": "on"},
+        )
+        return response.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fut_assign = ex.submit(assign_customer)
+        fut_change = ex.submit(change_group)
+        release_assignment.wait()
+        assignment = fut_assign.result(timeout=20)
+        status = fut_change.result(timeout=20)
+
+    assert status in {200, 302}
+    with app.app_context():
+        group = database.session.get(PartyGroup, group_id)
+        party = database.session.get(Party, party_id)
+        if group.group_type == "supplier":
+            assert party.party_group_id is None
+        else:
+            assert group.group_type == "customer"
+        assert assignment in {"asignada", "rechazada"}
         database.session.remove()
