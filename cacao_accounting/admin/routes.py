@@ -1137,10 +1137,16 @@ def precios_item():
         if reference_error:
             flash(reference_error, "danger")
             return redirect(url_for("admin.precios_item"))
+        # Serializa escrituras por lista de precios para reducir carreras (SQLite single-writer;
+        # PostgreSQL/otros con FOR UPDATE). Sin migraciones no se agrega constraint única.
+        database.session.execute(
+            database.select(PriceList.id).filter_by(id=price_list.id).with_for_update()
+        ).scalar_one_or_none()
         duplicate_error = _duplicate_item_price_error(
             request.form.get("price_list_id") or "", item_code, uom, min_qty, valid_from, valid_upto
         )
         if duplicate_error:
+            database.session.rollback()
             flash(duplicate_error, "danger")
             return redirect(url_for("admin.precios_item"))
         item_price = ItemPrice(
@@ -1209,6 +1215,9 @@ def actualizar_precio_item(item_price_id: str):
     if not price_value.is_finite():
         flash(_("El precio debe ser finito."), "danger")
         return redirect(url_for("admin.precios_item"))
+    database.session.execute(
+        database.select(PriceList.id).filter_by(id=item_price.price_list_id).with_for_update()
+    ).scalar_one_or_none()
     duplicate_error = _duplicate_item_price_error(
         item_price.price_list_id,
         item_price.item_code,
@@ -1219,6 +1228,7 @@ def actualizar_precio_item(item_price_id: str):
         exclude_id=item_price.id,
     )
     if duplicate_error:
+        database.session.rollback()
         flash(duplicate_error, "danger")
         return redirect(url_for("admin.precios_item"))
     item_price.price = price_value
