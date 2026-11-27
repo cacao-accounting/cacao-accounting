@@ -45,8 +45,12 @@ from cacao_accounting.database import (
     PurchaseInvoiceItem,
     Reconciliation,
     ReconciliationItem,
+    DocumentTaxLine,
+    DocumentTaxSummary,
     SalesInvoice,
     SalesInvoiceItem,
+    Tax,
+    TaxTemplateItem,
     SerialNumber,
     StockBin,
     StockEntry,
@@ -873,20 +877,100 @@ def _reconcile_purchase_tax_amount(filters: ReconciliationFilters, as_of_date: d
     )
 
 
+def _tax_invoice_scope(model: Any, context: _ReconciliationContext) -> list[Any]:
+    """Return the document and date filters shared by tax reconciliation queries."""
+    return [
+        model.company == context.filters.company,
+        _document_active_at_cutoff(model, context.as_of_date),
+        model.posting_date <= context.as_of_date,
+        model.tax_total != 0,
+    ]
+
+
+def _reconciliation_tax_accounts_for_model(context: _ReconciliationContext, model: Any, default_account_attr: str) -> set[str]:
+    """Resolve tax accounts from invoice snapshots, then legacy template fallback."""
+    company = context.filters.company
+    scope = _tax_invoice_scope(model, context)
+    eligible_documents = select(model.id).where(*scope)
+    snapshot_line_exists = (
+        select(DocumentTaxLine.id)
+        .join(DocumentTaxSummary, DocumentTaxSummary.id == DocumentTaxLine.document_tax_summary_id)
+        .where(DocumentTaxSummary.company == company, DocumentTaxSummary.document_id == model.id)
+        .exists()
+    )
+    account_ids: set[str] = set()
+    needs_default = False
+
+    snapshot_rows = database.session.execute(
+        select(DocumentTaxLine.account_id)
+        .join(DocumentTaxSummary, DocumentTaxSummary.id == DocumentTaxLine.document_tax_summary_id)
+        .where(
+            DocumentTaxSummary.company == company,
+            DocumentTaxSummary.document_id.in_(eligible_documents),
+            DocumentTaxLine.amount != 0,
+            DocumentTaxLine.included_in_price.is_(False),
+        )
+    ).scalars()
+    for account_id in snapshot_rows:
+        if account_id:
+            account_ids.add(str(account_id))
+        else:
+            needs_default = True
+
+    legacy_templates = select(model.tax_template_id).where(*scope, ~snapshot_line_exists, model.tax_template_id.is_not(None))
+    legacy_rows = database.session.execute(
+        select(Tax.account_id)
+        .join(TaxTemplateItem, TaxTemplateItem.tax_id == Tax.id)
+        .where(
+            TaxTemplateItem.tax_template_id.in_(legacy_templates),
+            TaxTemplateItem.is_inclusive.is_(False),
+        )
+    ).scalars()
+    legacy_line_count = 0
+    for account_id in legacy_rows:
+        legacy_line_count += 1
+        if account_id:
+            account_ids.add(str(account_id))
+        else:
+            needs_default = True
+
+    legacy_documents = select(model.id).where(*scope, ~snapshot_line_exists)
+    if legacy_line_count == 0 and database.session.execute(legacy_documents.limit(1)).first():
+        needs_default = True
+
+    if needs_default:
+        defaults = context.defaults
+        default_id = getattr(defaults, default_account_attr, None) if defaults else None
+        if (
+            default_id
+            and database.session.execute(
+                select(Accounts.id).where(Accounts.id == default_id, Accounts.entity == company)
+            ).scalar_one_or_none()
+        ):
+            account_ids.add(str(default_id))
+    return account_ids
+
+
+def _reconciliation_tax_account_ids(context: _ReconciliationContext) -> list[str]:
+    """Return distinct, company-scoped tax accounts effective for invoices at cutoff."""
+    account_ids = _reconciliation_tax_accounts_for_model(context, SalesInvoice, "default_sales_tax_account_id")
+    account_ids.update(_reconciliation_tax_accounts_for_model(context, PurchaseInvoice, "default_purchase_tax_account_id"))
+    if not account_ids:
+        return []
+    return list(
+        database.session.execute(
+            select(Accounts.id).where(Accounts.entity == context.filters.company, Accounts.id.in_(account_ids))
+        ).scalars()
+    )
+
+
 def _reconcile_tax_row(context: _ReconciliationContext) -> ReportRow:
     """Construye la fila de conciliación de impuestos netos."""
     filters = context.filters
-    defaults = context.defaults
     as_of_date = context.as_of_date
-    sales_tax_account = (
-        str(defaults.default_sales_tax_account_id) if defaults and defaults.default_sales_tax_account_id else None
-    )
-    purchase_tax_account = (
-        str(defaults.default_purchase_tax_account_id) if defaults and defaults.default_purchase_tax_account_id else None
-    )
     sales_tax = _reconcile_sales_tax_amount(filters, as_of_date)
     purchase_tax = _reconcile_purchase_tax_amount(filters, as_of_date)
-    tax_accounts = [account for account in (sales_tax_account, purchase_tax_account) if account]
+    tax_accounts = _reconciliation_tax_account_ids(context)
     return _reconciliation_row(
         "Tax",
         tax_accounts,

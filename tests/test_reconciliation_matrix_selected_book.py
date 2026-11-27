@@ -12,11 +12,18 @@ from cacao_accounting.database import (
     Accounts,
     Book,
     CompanyDefaultAccount,
+    DocumentTaxLine,
+    DocumentTaxSummary,
     Entity,
     ExchangeRate,
     GLEntry,
     Item,
     Party,
+    PurchaseInvoice,
+    SalesInvoice,
+    Tax,
+    TaxTemplate,
+    TaxTemplateItem,
     StockLedgerBookEntry,
     StockLedgerEntry,
     UOM,
@@ -29,6 +36,7 @@ from cacao_accounting.reportes.services import (
     _ReconciliationContext,
     _reconcile_ar_ap_rows,
     _reconcile_inventory_row,
+    _reconcile_tax_row,
     get_reconciliation_matrix,
 )
 
@@ -413,3 +421,251 @@ def test_reconciliation_matrix_rejects_currency_different_from_selected_book(ent
 
     assert matching_currency_report.ledger_currency == ledger_currency
     assert all(row.values["currency"] == ledger_currency for row in matching_currency_report.rows)
+
+
+def test_tax_reconciliation_uses_invoice_accounts_and_historical_snapshot(entorno_contable_aislado):
+    """Tax GL scope follows invoice snapshots, fallback, book, and cutoff."""
+    scenario = entorno_contable_aislado
+    application = scenario.app
+    cutoff = date(2026, 10, 31)
+    suffix = uuid4().hex[:8].upper()
+    with application.app_context():
+        company = "cacao"
+        ledger = database.session.execute(database.select(Book).filter_by(entity=company, code="DEFAULT_BOOK")).scalar_one()
+        secondary_ledger = database.session.execute(database.select(Book).filter_by(entity=company, code="NIIF")).scalar_one()
+        defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company=company)).scalar_one()
+
+        def account(code: str, account_type: str = "tax") -> Accounts:
+            return Accounts(
+                entity=company,
+                code=f"TAX-{suffix}-{code}",
+                name=f"Cuenta fiscal {code} {suffix}",
+                classification="asset" if account_type == "tax_asset" else "liability",
+                account_type="tax" if account_type == "tax_asset" else account_type,
+                group=False,
+                active=True,
+                enabled=True,
+            )
+
+        sales_default = account("SALES-DEFAULT")
+        purchase_default = account("PURCHASE-DEFAULT", "tax_asset")
+        historical_sales_account = account("SALES-OLD")
+        second_sales_account = account("SALES-SECOND")
+        changed_sales_account = account("SALES-CHANGED")
+        future_sales_account = account("SALES-FUTURE")
+        database.session.add_all(
+            [
+                sales_default,
+                purchase_default,
+                historical_sales_account,
+                second_sales_account,
+                changed_sales_account,
+                future_sales_account,
+            ]
+        )
+        database.session.flush()
+        defaults.default_sales_tax_account_id = sales_default.id
+        defaults.default_purchase_tax_account_id = purchase_default.id
+
+        first_tax = Tax(
+            name=f"IVA anterior {suffix}",
+            tax_type="percentage",
+            applies_to="sales",
+            account_id=historical_sales_account.id,
+            is_active=True,
+        )
+        second_tax = Tax(
+            name=f"Impuesto adicional {suffix}",
+            tax_type="percentage",
+            applies_to="sales",
+            account_id=second_sales_account.id,
+            is_active=True,
+        )
+        fallback_tax = Tax(
+            name=f"IVA de compras {suffix}",
+            tax_type="percentage",
+            applies_to="purchase",
+            account_id=None,
+            is_active=True,
+        )
+        sales_template = TaxTemplate(name=f"Ventas {suffix}", company=company, template_type="selling")
+        purchase_template = TaxTemplate(name=f"Compras {suffix}", company=company, template_type="buying")
+        database.session.add_all([first_tax, second_tax, fallback_tax, sales_template, purchase_template])
+        database.session.flush()
+        database.session.add_all(
+            [
+                TaxTemplateItem(
+                    tax_template_id=sales_template.id,
+                    tax_id=first_tax.id,
+                    sequence=1,
+                    calculation_base="net_document",
+                    behavior="additive",
+                    is_inclusive=False,
+                ),
+                TaxTemplateItem(
+                    tax_template_id=sales_template.id,
+                    tax_id=second_tax.id,
+                    sequence=2,
+                    calculation_base="net_document",
+                    behavior="additive",
+                    is_inclusive=False,
+                ),
+                TaxTemplateItem(
+                    tax_template_id=purchase_template.id,
+                    tax_id=fallback_tax.id,
+                    sequence=1,
+                    calculation_base="net_document",
+                    behavior="additive",
+                    is_inclusive=False,
+                ),
+            ]
+        )
+        sales_invoice = SalesInvoice(
+            company=company,
+            posting_date=cutoff,
+            docstatus=1,
+            document_type="sales_invoice",
+            tax_template_id=sales_template.id,
+            total=Decimal("100"),
+            base_total=Decimal("100"),
+            tax_total=Decimal("20"),
+            grand_total=Decimal("120"),
+            base_grand_total=Decimal("120"),
+        )
+        purchase_invoice = PurchaseInvoice(
+            company=company,
+            posting_date=cutoff,
+            docstatus=1,
+            document_type="purchase_invoice",
+            tax_template_id=purchase_template.id,
+            total=Decimal("100"),
+            base_total=Decimal("100"),
+            tax_total=Decimal("10"),
+            grand_total=Decimal("110"),
+            base_grand_total=Decimal("110"),
+        )
+        future_invoice = SalesInvoice(
+            company=company,
+            posting_date=date(2026, 11, 1),
+            docstatus=1,
+            document_type="sales_invoice",
+            tax_template_id=sales_template.id,
+            total=Decimal("200"),
+            base_total=Decimal("200"),
+            tax_total=Decimal("40"),
+            grand_total=Decimal("240"),
+            base_grand_total=Decimal("240"),
+        )
+        database.session.add_all([sales_invoice, purchase_invoice, future_invoice])
+        database.session.flush()
+
+        sales_summary = DocumentTaxSummary(
+            company=company,
+            document_type="sales_invoice",
+            document_id=sales_invoice.id,
+            currency="NIO",
+            subtotal=Decimal("100"),
+            document_tax_total=Decimal("20"),
+            grand_total=Decimal("120"),
+        )
+        purchase_summary = DocumentTaxSummary(
+            company=company,
+            document_type="purchase_invoice",
+            document_id=purchase_invoice.id,
+            currency="NIO",
+            subtotal=Decimal("100"),
+            document_tax_total=Decimal("10"),
+            grand_total=Decimal("110"),
+        )
+        future_summary = DocumentTaxSummary(
+            company=company,
+            document_type="sales_invoice",
+            document_id=future_invoice.id,
+            currency="NIO",
+            subtotal=Decimal("200"),
+            document_tax_total=Decimal("40"),
+            grand_total=Decimal("240"),
+        )
+        database.session.add_all([sales_summary, purchase_summary, future_summary])
+        database.session.flush()
+        database.session.add_all(
+            [
+                DocumentTaxLine(
+                    document_tax_summary_id=sales_summary.id,
+                    line_index=1,
+                    concept="IVA",
+                    tax_type="tax",
+                    amount=Decimal("15"),
+                    account_id=historical_sales_account.id,
+                ),
+                DocumentTaxLine(
+                    document_tax_summary_id=sales_summary.id,
+                    line_index=2,
+                    concept="Impuesto adicional",
+                    tax_type="tax",
+                    amount=Decimal("5"),
+                    account_id=second_sales_account.id,
+                ),
+                DocumentTaxLine(
+                    document_tax_summary_id=purchase_summary.id,
+                    line_index=1,
+                    concept="IVA compras",
+                    tax_type="tax",
+                    amount=Decimal("10"),
+                    account_id=None,
+                ),
+                DocumentTaxLine(
+                    document_tax_summary_id=future_summary.id,
+                    line_index=1,
+                    concept="IVA futuro",
+                    tax_type="tax",
+                    amount=Decimal("40"),
+                    account_id=future_sales_account.id,
+                ),
+            ]
+        )
+
+        def gl(account_id: str, debit: Decimal, credit: Decimal, voucher_id: str, book_id: str | None = None):
+            database.session.add(
+                GLEntry(
+                    company=company,
+                    ledger_id=book_id or ledger.id,
+                    account_id=account_id,
+                    posting_date=cutoff if voucher_id != future_invoice.id else date(2026, 11, 1),
+                    debit=debit,
+                    credit=credit,
+                    company_currency="NIO",
+                    voucher_type="sales_invoice" if voucher_id != purchase_invoice.id else "purchase_invoice",
+                    voucher_id=voucher_id,
+                )
+            )
+
+        gl(historical_sales_account.id, Decimal("0"), Decimal("15"), sales_invoice.id)
+        gl(second_sales_account.id, Decimal("0"), Decimal("5"), sales_invoice.id)
+        gl(purchase_default.id, Decimal("10"), Decimal("0"), purchase_invoice.id)
+        gl(future_sales_account.id, Decimal("0"), Decimal("40"), future_invoice.id)
+        gl(sales_default.id, Decimal("0"), Decimal("99"), "OTHER-SALES")
+        gl(changed_sales_account.id, Decimal("0"), Decimal("77"), "OTHER-CHANGED")
+        gl(historical_sales_account.id, Decimal("0"), Decimal("500"), "OTHER-BOOK", secondary_ledger.id)
+
+        # The configured account changed after posting; the stored document snapshot remains authoritative.
+        first_tax.account_id = changed_sales_account.id
+        database.session.flush()
+        context = _ReconciliationContext(
+            filters=ReconciliationFilters(company=company, ledger=ledger.id, as_of_date=cutoff),
+            ledger=ledger,
+            comparison_currency="NIO",
+            as_of_date=cutoff,
+            company_currency="NIO",
+            defaults=defaults,
+            ledger_needs_conversion=False,
+        )
+        row = _reconcile_tax_row(context)
+
+        assert row.values["account_ids"] == ",".join(
+            sorted([historical_sales_account.id, second_sales_account.id, purchase_default.id])
+        )
+        assert row.values["subledger_amount"] == Decimal("-10.0000")
+        assert row.values["gl_control_amount"] == Decimal("-10.0000")
+        assert row.values["difference"] == Decimal("0.0000")
+        assert row.values["status"] == "reconciled"
