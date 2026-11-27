@@ -6,6 +6,7 @@
 from typing import Any, cast
 
 from decimal import Decimal
+from datetime import date
 
 from cacao_accounting.exceptions import flash_error
 from cacao_accounting.cache import invalidate_cache
@@ -159,6 +160,27 @@ def _accounting_entity_choices(action: str = "consultar") -> list[tuple[str, str
 
     entities = database.session.execute(_accounting_company_scope(database.select(Entity), Entity.code, action)).scalars()
     return [("", "")] + [(entity.code, entity.name) for entity in entities]
+
+
+def _fiscal_year_range_conflicts(
+    entity: str,
+    start_date: date,
+    end_date: date,
+    *,
+    exclude_fiscal_year_id: str | None = None,
+) -> bool:
+    """Return whether an inclusive fiscal-year range overlaps another year."""
+    from cacao_accounting.database import Entity, FiscalYear
+
+    database.session.execute(database.select(Entity.code).where(Entity.code == entity).with_for_update()).scalar_one()
+    query = database.select(FiscalYear.id).where(
+        FiscalYear.entity == entity,
+        FiscalYear.year_start_date <= end_date,
+        FiscalYear.year_end_date >= start_date,
+    )
+    if exclude_fiscal_year_id is not None:
+        query = query.where(FiscalYear.id != exclude_fiscal_year_id)
+    return database.session.execute(query.limit(1)).scalar_one_or_none() is not None
 
 
 def _resolve_catalog_company(requested: str | None) -> tuple[str, Any]:
@@ -2431,6 +2453,13 @@ def fiscal_year_new():
             is_closed=bool(formulario.cerrado.data),
         )
         exige_acceso_compania("accounting", DATA.entity, "crear")
+        if _fiscal_year_range_conflicts(DATA.entity, DATA.year_start_date, DATA.year_end_date):
+            flash(_("El rango del año fiscal se superpone con otro año fiscal de la compañía."), "danger")
+            return render_template(
+                CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE,
+                titulo=TITULO,
+                form=formulario,
+            )
         database.session.add(DATA)
         database.session.commit()
         return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
@@ -2493,12 +2522,20 @@ def fiscal_year_edit(fy_id):
             flash(_("No se pueden modificar las fechas de un año con cierre contable realizado."), "danger")
             return redirect(url_for("contabilidad.fiscal_year_edit", fy_id=fy_id))
 
-        fiscal_year.name = request.form.get("id", fiscal_year.name)
-        fiscal_year.year_start_date = formulario.inicio.data
-        fiscal_year.year_end_date = formulario.fin.data
-        fiscal_year.is_closed = bool(formulario.cerrado.data)
-        database.session.commit()
-        return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
+        if _fiscal_year_range_conflicts(
+            fiscal_year.entity,
+            formulario.inicio.data,
+            formulario.fin.data,
+            exclude_fiscal_year_id=fiscal_year.id,
+        ):
+            flash(_("El rango del año fiscal se superpone con otro año fiscal de la compañía."), "danger")
+        else:
+            fiscal_year.name = request.form.get("id", fiscal_year.name)
+            fiscal_year.year_start_date = formulario.inicio.data
+            fiscal_year.year_end_date = formulario.fin.data
+            fiscal_year.is_closed = bool(formulario.cerrado.data)
+            database.session.commit()
+            return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
     return render_template(
         CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE,

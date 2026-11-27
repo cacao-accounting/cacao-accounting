@@ -105,3 +105,105 @@ def test_editar_anio_cerrado_financieramente_no_cambia_fechas(app, authenticated
                 if saved is not None:
                     database.session.delete(saved)
                     database.session.commit()
+
+
+def test_crear_anio_fiscal_rechaza_superposicion_y_permite_rangos_adyacentes(app, authenticated_client, entorno_contable):
+    """Creation rejects inclusive overlaps but allows consecutive calendar days."""
+    del entorno_contable
+    prefix = uuid4().hex[:10]
+    base_name = f"FY-BASE-{prefix}"
+    overlap_name = f"FY-OVERLAP-{prefix}"
+    adjacent_name = f"FY-ADJACENT-{prefix}"
+    created_names = [base_name, overlap_name, adjacent_name]
+    try:
+        with app.app_context():
+            database.session.add(
+                FiscalYear(
+                    entity="cacao",
+                    name=base_name,
+                    year_start_date=date(2040, 1, 1),
+                    year_end_date=date(2040, 12, 31),
+                )
+            )
+            database.session.commit()
+
+        overlap_response = authenticated_client("admin").post(
+            "/accounting/fiscal_year/new",
+            data={
+                "id": overlap_name,
+                "entidad": "cacao",
+                "inicio": "2040-07-01",
+                "fin": "2041-06-30",
+            },
+        )
+        assert overlap_response.status_code == 200
+
+        adjacent_response = authenticated_client("admin").post(
+            "/accounting/fiscal_year/new",
+            data={
+                "id": adjacent_name,
+                "entidad": "cacao",
+                "inicio": "2041-01-01",
+                "fin": "2041-12-31",
+            },
+        )
+        assert adjacent_response.status_code == 302
+
+        with app.app_context():
+            saved = (
+                database.session.execute(database.select(FiscalYear).where(FiscalYear.name.in_([overlap_name, adjacent_name])))
+                .scalars()
+                .all()
+            )
+            assert {year.name for year in saved} == {adjacent_name}
+    finally:
+        with app.app_context():
+            database.session.execute(database.delete(FiscalYear).where(FiscalYear.name.in_(created_names)))
+            database.session.commit()
+
+
+def test_editar_anio_fiscal_rechaza_superposicion_inclusiva(app, authenticated_client, entorno_contable):
+    """Editing cannot make the last date overlap the next fiscal year start."""
+    del entorno_contable
+    prefix = uuid4().hex[:10]
+    first_name = f"FY-FIRST-{prefix}"
+    next_name = f"FY-NEXT-{prefix}"
+    fiscal_year_id = None
+    try:
+        with app.app_context():
+            fiscal_year = FiscalYear(
+                entity="cacao",
+                name=first_name,
+                year_start_date=date(2042, 1, 1),
+                year_end_date=date(2042, 12, 30),
+            )
+            next_year = FiscalYear(
+                entity="cacao",
+                name=next_name,
+                year_start_date=date(2042, 12, 31),
+                year_end_date=date(2043, 12, 30),
+            )
+            database.session.add_all([fiscal_year, next_year])
+            database.session.commit()
+            fiscal_year_id = fiscal_year.id
+
+        response = authenticated_client("admin").post(
+            f"/accounting/fiscal_year/{fiscal_year_id}/edit",
+            data={
+                "id": first_name,
+                "entidad": "cacao",
+                "inicio": "2042-01-01",
+                "fin": "2042-12-31",
+            },
+        )
+        assert response.status_code == 200
+
+        with app.app_context():
+            saved = database.session.get(FiscalYear, fiscal_year_id)
+            assert saved is not None
+            assert saved.year_start_date == date(2042, 1, 1)
+            assert saved.year_end_date == date(2042, 12, 30)
+    finally:
+        with app.app_context():
+            database.session.execute(database.delete(FiscalYear).where(FiscalYear.name.in_([first_name, next_name])))
+            database.session.commit()
