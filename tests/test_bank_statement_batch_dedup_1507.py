@@ -12,6 +12,18 @@ from cacao_accounting.database import Bank, BankAccount, Currency, Entity, datab
 from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
 
 
+def test_reference_identity_normalizes_decimal_scale():
+    base = {
+        "bank_account_id": "ba1",
+        "posting_date": "2026-01-01",
+        "reference_number": "REF",
+        "deposit": Decimal("50.0"),
+        "withdrawal": None,
+    }
+    other = {**base, "deposit": Decimal("50.00")}
+    assert BankStatementAdapter._reference_identity(base, "REF") == BankStatementAdapter._reference_identity(other, "REF")
+
+
 def test_bank_statement_duplicate_reference_in_same_batch_rejected(app):
     with app.app_context():
         if database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none() is None:

@@ -274,14 +274,26 @@ class BankStatementAdapter(BaseImportAdapter):
             )
 
     @staticmethod
+    def _amount_identity(value: Any) -> str:
+        """Normaliza montos a identidad canónica para comparar equivalencia decimal."""
+        if value is None or value == "":
+            return ""
+        try:
+            amount = coerce_decimal(value, _("monto"), max_fractional_digits=4)
+        except (TypeError, ValueError, ArithmeticError, InvalidOperation):
+            return str(value)
+        normalized = amount.normalize()
+        return format(normalized, "f")
+
+    @staticmethod
     def _reference_identity(tx_data: dict[str, Any], reference_number: str) -> tuple[str, str, str, str, str]:
         """Identidad económica para deduplicación dentro del lote con referencia."""
         return (
             str(tx_data.get("bank_account_id") or ""),
             str(tx_data.get("posting_date") or ""),
             reference_number,
-            str(tx_data.get("deposit") if tx_data.get("deposit") is not None else ""),
-            str(tx_data.get("withdrawal") if tx_data.get("withdrawal") is not None else ""),
+            BankStatementAdapter._amount_identity(tx_data.get("deposit")),
+            BankStatementAdapter._amount_identity(tx_data.get("withdrawal")),
         )
 
     @staticmethod
