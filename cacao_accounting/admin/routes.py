@@ -1344,13 +1344,18 @@ def actualizar_precio_item(item_price_id: str):
         return redirect(url_for("admin.precios_item"))
     # Transición atómica por versión: en SQLite FOR UPDATE no bloquea la fila y
     # dos POST con el mismo expected_price podrían perder una actualización.
-    updated = database.session.execute(
-        database.update(ItemPrice).where(ItemPrice.id == item_price.id, ItemPrice.price == expected).values(price=price_value)
-    )
-    if getattr(updated, "rowcount", 0) != 1:
-        database.session.rollback()
-        flash(_("El precio cambió mientras editaba. Recargue la lista antes de guardar."), "danger")
-        return redirect(url_for("admin.precios_item"))
+    # MySQL no informa filas encontradas cuando el UPDATE no cambia el valor,
+    # así que guardar el mismo precio no debe interpretarse como conflicto.
+    if price_value != expected:
+        updated = database.session.execute(
+            database.update(ItemPrice)
+            .where(ItemPrice.id == item_price.id, ItemPrice.price == expected)
+            .values(price=price_value)
+        )
+        if getattr(updated, "rowcount", 0) != 1:
+            database.session.rollback()
+            flash(_("El precio cambió mientras editaba. Recargue la lista antes de guardar."), "danger")
+            return redirect(url_for("admin.precios_item"))
     try:
         database.session.commit()
     except IntegrityError:

@@ -212,3 +212,27 @@ def test_dos_listas_predeterminadas_concurrentes_dejan_una_sola(tmp_path):
         with app.app_context():
             database.session.remove()
             database.engine.dispose()
+
+
+def test_guardar_el_mismo_precio_no_reporta_conflicto(tmp_path):
+    """MySQL no informa filas encontradas; el mismo precio debe guardarse sin error."""
+    app = _app(tmp_path)
+    suffix = uuid4().hex[:6]
+    user_id = f"user-{suffix}"
+    price_id = _seed(app, suffix, user_id)
+    client = _client(app, user_id)
+
+    response = client.post(
+        f"/settings/item-prices/{price_id}",
+        data={"price": "10", "expected_price": "10"},
+        follow_redirects=True,
+    )
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "actualizado correctamente" in html
+    assert "El precio cambió mientras editaba" not in html
+    with app.app_context():
+        assert database.session.get(ItemPrice, price_id).price == Decimal("10.0000")
+        database.session.remove()
+        database.engine.dispose()
