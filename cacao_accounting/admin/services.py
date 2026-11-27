@@ -219,6 +219,16 @@ def _ensure_write_intent() -> None:
 def _lock_last_admin_users(target_user_id: str | None = None) -> None:
     """Serializa la transición que podría dejar el sistema sin administradores."""
     _ensure_write_intent()
+    admin_role_id = _active_admin_role_id()
+    if admin_role_id:
+        # MySQL REPEATABLE READ puede conservar el snapshot de RolesUser; se
+        # bloquean y releen las asignaciones admin antes de decidir.
+        database.session.execute(
+            database.select(RolesUser.id)
+            .where(RolesUser.role_id == admin_role_id, RolesUser.active.is_(True))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).scalars().all()
     # Orden determinista: primero todas las filas admin activas por id y luego
     # la fila objetivo. Adquirir la objetivo primero permitía interbloqueos
     # entre dos sesiones que cambian administradores distintos (#1767).
@@ -260,10 +270,20 @@ def _commit_last_admin_transition() -> bool:
 
 def _active_admin_count(exclude_user_id: str | None = None) -> int:
     """Cuenta administradores con una lectura actual bajo motores Cloud."""
-    consulta = database.select(User.id).where(
-        User.active.is_(True),
-        _active_admin_filter(),
-    )
+    admin_role_id = _active_admin_role_id()
+    role_user_ids: set[str] = set()
+    if admin_role_id:
+        role_query = database.select(RolesUser.user_id).where(
+            RolesUser.role_id == admin_role_id,
+            RolesUser.active.is_(True),
+        )
+        if database.engine.dialect.name != "sqlite":
+            role_query = role_query.with_for_update()
+        role_user_ids = set(database.session.execute(role_query.execution_options(populate_existing=True)).scalars().all())
+    conditions = [User.classification == "admin"]
+    if role_user_ids:
+        conditions.append(User.id.in_(role_user_ids))
+    consulta = database.select(User.id).where(User.active.is_(True), database.or_(*conditions))
     if exclude_user_id:
         consulta = consulta.where(User.id != exclude_user_id)
     if database.engine.dialect.name != "sqlite":

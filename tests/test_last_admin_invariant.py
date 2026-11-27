@@ -70,9 +70,11 @@ def last_admin_app(tmp_path, isolated_admin_registry):
             database.create_all()
             if database.session.execute(database.select(Modules).filter_by(module="admin")).scalar_one_or_none() is None:
                 database.session.add(Modules(module="admin", default=False, enabled=True))
-            admin_role = Roles(name=f"admin-{suffix}", note="admin")
-            database.session.add(admin_role)
-            database.session.flush()
+            admin_role = database.session.execute(database.select(Roles).filter_by(name="admin")).scalar_one_or_none()
+            if admin_role is None:
+                admin_role = Roles(name="admin", note="admin")
+                database.session.add(admin_role)
+                database.session.flush()
             for label in ("a", "b"):
                 user_id = f"admin-{label}-{suffix}"
                 user = User(
@@ -95,7 +97,6 @@ def last_admin_app(tmp_path, isolated_admin_registry):
         with app.app_context():
             database.session.execute(database.delete(RolesUser).where(RolesUser.user_id.in_([ids["a"], ids["b"]])))
             database.session.execute(database.delete(User).where(User.id.in_([ids["a"], ids["b"]])))
-            database.session.execute(database.delete(Roles).where(Roles.id == ids["admin_role"]))
             database.session.commit()
             database.session.remove()
             database.engine.dispose()
@@ -321,3 +322,48 @@ def test_commit_deadlock_se_trata_como_rechazo(last_admin_app, monkeypatch):
 
     with app.app_context():
         assert _commit_last_admin_transition() is False
+
+
+def test_concurrent_role_removals_keep_one_role_admin(last_admin_app):
+    """Dos retiradas de rol con clasificación system no dejan sin rol admin."""
+    app, ids = last_admin_app
+    with app.app_context():
+        for key in ("a", "b"):
+            database.session.get(User, ids[key]).classification = "system"
+        database.session.commit()
+    barrier = Barrier(WORKERS, timeout=30)
+
+    def remove_role(user_key: str) -> str:
+        with app.app_context():
+            database.session.execute(database.select(User.id).limit(1)).all()
+            barrier.wait(timeout=10)
+            user_id = ids[user_key]
+            _lock_last_admin_users(user_id)
+            user = database.session.get(User, user_id)
+            if _would_leave_no_admin(user, active=True, classification="system", role_ids=set()):
+                database.session.rollback()
+                return "rejected"
+            database.session.execute(
+                database.update(RolesUser)
+                .where(RolesUser.user_id == user_id, RolesUser.role_id == ids["admin_role"])
+                .values(active=False)
+            )
+            database.session.commit()
+            return "ok"
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        results = list(pool.map(remove_role, ["a", "b"]))
+    assert sorted(results) == ["ok", "rejected"], results
+    with app.app_context():
+        active_roles = (
+            database.session.execute(
+                database.select(RolesUser).where(
+                    RolesUser.role_id == ids["admin_role"],
+                    RolesUser.active.is_(True),
+                    RolesUser.user_id.in_([ids["a"], ids["b"]]),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(active_roles) == 1
