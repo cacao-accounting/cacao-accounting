@@ -425,17 +425,20 @@ def _allocation_amounts_by_receipt_item(
     document: PurchaseReceipt,
     receipt_item_ids: list[str],
     invoice_item_ids: set[str] | None,
-) -> dict[str, list[tuple[Decimal, date | None]]]:
-    """Return each allocation with the posting date of its source invoice.
+) -> tuple[dict[str, list[tuple[Decimal, date | None]]], set[str]]:
+    """Return candidate allocations and receipt items with any active allocation.
 
-    La fecha de la factura es necesaria para decidir si la asignación ya
-    existía cuando se contabilizó la recepción previa. Una factura posterior a
-    esa recepción no pudo generar el crédito GL que se quiere descontar.
+    The second value distinguishes "no active allocations exist" (legacy fallback
+    allowed) from "allocations exist but none are candidate-relevant" (#2277).
     """
     from cacao_accounting.database import PurchaseInvoiceReceiptAllocation
 
     query = (
-        select(PurchaseInvoiceReceiptAllocation, PurchaseInvoice.posting_date)
+        select(
+            PurchaseInvoiceReceiptAllocation,
+            PurchaseInvoice.posting_date,
+            PurchaseInvoiceItem.id.label("invoice_item_id"),
+        )
         .join(PurchaseInvoiceItem, PurchaseInvoiceReceiptAllocation.invoice_item_id == PurchaseInvoiceItem.id)
         .join(PurchaseInvoice, PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id)
         .where(
@@ -444,14 +447,15 @@ def _allocation_amounts_by_receipt_item(
             PurchaseInvoiceReceiptAllocation.receipt_item_id.in_(receipt_item_ids),
         )
     )
-    if invoice_item_ids is not None:
-        query = query.where(PurchaseInvoiceReceiptAllocation.invoice_item_id.in_(invoice_item_ids))
-    result: dict[str, list[tuple[Decimal, date | None]]] = {}
-    for allocation, invoice_date in database.session.execute(query):
-        result.setdefault(str(allocation.receipt_item_id), []).append(
-            (_decimal_value(allocation.invoice_amount), invoice_date)
-        )
-    return result
+    candidate_rows: dict[str, list[tuple[Decimal, date | None]]] = {}
+    allocated_items: set[str] = set()
+    for allocation, invoice_date, alloc_invoice_item_id in database.session.execute(query):
+        receipt_item_id = str(allocation.receipt_item_id)
+        allocated_items.add(receipt_item_id)
+        if invoice_item_ids is not None and str(alloc_invoice_item_id) not in invoice_item_ids:
+            continue
+        candidate_rows.setdefault(receipt_item_id, []).append((_decimal_value(allocation.invoice_amount), invoice_date))
+    return candidate_rows, allocated_items
 
 
 def _subtract_late_receipt_reclassifications(
@@ -480,14 +484,14 @@ def _subtract_late_receipt_reclassifications(
             .scalars()
             .all()
         )
-    allocated_amounts = (
+    allocated_amounts, allocated_items = (
         _allocation_amounts_by_receipt_item(
             document,
             [item.id for item in receipt_items],
             invoice_item_ids,
         )
         if receipt_items
-        else {}
+        else ({}, set())
     )
     receipt_by_id = {receipt.id: receipt for receipt in prior_receipts_list}
 
@@ -501,15 +505,20 @@ def _subtract_late_receipt_reclassifications(
         invoice_date = posting_dates.get(item_code)
         if prior_receipt is None or invoice_date is None or prior_receipt.posting_date < invoice_date:
             continue
-        rows = allocated_amounts.get(str(item.id), [])
+        receipt_item_id = str(item.id)
+        rows = allocated_amounts.get(receipt_item_id, [])
         if rows:
             as_of = prior_receipt.posting_date
             reclassified = sum(
                 (amount for amount, source_date in rows if as_of is None or source_date is None or source_date <= as_of),
                 Decimal("0"),
             )
+        elif receipt_item_id in allocated_items:
+            # #2277: active allocations exist but none are candidate-relevant;
+            # do not treat this as missing evidence and do not apply legacy fallback.
+            reclassified = Decimal("0")
         else:
-            # Sin evidencia de asignación se conserva la reconstrucción legacy.
+            # Sin evidencia de asignaci?n se conserva la reconstrucci?n legacy.
             reclassified = min(_line_amount(item), available)
         reclassified = min(reclassified, available)
         if reclassified <= 0:

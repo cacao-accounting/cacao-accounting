@@ -736,3 +736,59 @@ def test_ciclo_temporal_reconcilia_reclasificacion_con_gl(entorno_contable_aisla
 
         pendiente = _late_two_way_invoice_amounts(database.session.get(PurchaseReceipt, ids["receipts"][1]))
         assert pendiente[ids["item"]] == gasto_2[next(iter(gasto_2))]
+
+
+def test_asignacion_solo_no_candidata_no_activa_fallback_legacy(app, entorno_contable):
+    """#2277: asignaciones activas no candidatas no deben disparar fallback legacy."""
+    suffix = uuid4().hex[:8]
+    supplier_id = _supplier_id(app)
+    with app.app_context():
+        code = f"ART-NC-{suffix}"
+        _sembrar_articulos(suffix, [code])
+        receipts, item_ids = _sembrar_recepciones(suffix, [(code, "100")])
+        candidate_invoice_items = _sembrar_factura(suffix, [code], supplier_id)
+        other_invoice_items = _sembrar_factura(f"OTRA-{suffix}", [code], supplier_id)
+        database.session.add(_asignacion(other_invoice_items[code], item_ids[code], "100"))
+        database.session.commit()
+
+        amounts = {code: Decimal("100")}
+        posting_dates = {code: date(2026, 5, 1)}
+
+        _subtract_late_receipt_reclassifications(
+            receipts[0],
+            amounts,
+            posting_dates,
+            receipts,
+            invoice_item_ids={candidate_invoice_items[code]},
+        )
+
+        # Hay evidencia activa en la recepci?n, pero pertenece a otra factura:
+        # no se aplica fallback legacy ni se descuenta como candidata.
+        assert amounts == {code: Decimal("100")}
+
+
+def test_asignacion_cancelada_no_bloquea_fallback_legacy(app, entorno_contable):
+    """#2277: asignaciones canceladas no cuentan como evidencia activa."""
+    suffix = uuid4().hex[:8]
+    supplier_id = _supplier_id(app)
+    with app.app_context():
+        code = f"ART-CAN-{suffix}"
+        _sembrar_articulos(suffix, [code])
+        receipts, item_ids = _sembrar_recepciones(suffix, [(code, "60")])
+        candidate_invoice_items = _sembrar_factura(suffix, [code], supplier_id)
+        database.session.add(_asignacion(candidate_invoice_items[code], item_ids[code], "60", status="cancelled"))
+        database.session.commit()
+
+        amounts = {code: Decimal("100")}
+        posting_dates = {code: date(2026, 5, 1)}
+
+        _subtract_late_receipt_reclassifications(
+            receipts[0],
+            amounts,
+            posting_dates,
+            receipts,
+            invoice_item_ids={candidate_invoice_items[code]},
+        )
+
+        # Sin asignaciones activas, conserva reconstrucci?n legacy.
+        assert amounts == {code: Decimal("40")}
