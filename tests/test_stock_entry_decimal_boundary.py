@@ -21,6 +21,12 @@ from cacao_accounting.document_identifiers import ensure_default_naming_series_f
         ("stock_reconciliation", "target_valuation_rate_0", "NaN"),
         ("stock_reconciliation", "target_stock_value_0", "abc"),
         ("adjustment_positive", "amount_0", "Infinity"),
+        ("material_receipt", "qty_0", "-1"),
+        ("material_receipt", "rate_0", "-1"),
+        ("adjustment_positive", "amount_0", "-1"),
+        ("stock_reconciliation", "counted_qty_0", "-1"),
+        ("stock_reconciliation", "target_valuation_rate_0", "-1"),
+        ("stock_reconciliation", "target_stock_value_0", "-1"),
     ],
 )
 def test_stock_entry_decimal_fields_return_validation_and_rollback(

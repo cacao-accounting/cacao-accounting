@@ -576,15 +576,26 @@ def _save_warehouse_company_rows(warehouse_code: str, rows: list[dict[str, str]]
         )
 
 
-def _form_decimal(field_name: str, default: str = "0") -> Decimal:
+def _form_decimal(
+    field_name: str,
+    default: str = "0",
+    *,
+    non_negative: bool = False,
+    positive: bool = False,
+) -> Decimal:
     """Convierte un valor de formulario a Decimal finito o lanza un error de validación."""
     value = request.form.get(field_name)
-    return coerce_decimal(value if value not in (None, "") else default, field_name)
+    return coerce_decimal(
+        value if value not in (None, "") else default,
+        field_name,
+        non_negative=non_negative,
+        positive=positive,
+    )
 
 
 def _line_amount(index: int) -> Decimal:
     """Calcula el monto de una línea con datos confiables del servidor."""
-    return _form_decimal(f"qty_{index}", "1") * _form_decimal(f"rate_{index}", "0")
+    return _form_decimal(f"qty_{index}", "1", non_negative=True) * _form_decimal(f"rate_{index}", "0", non_negative=True)
 
 
 def _create_line_relation(
@@ -635,11 +646,11 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
     """Create one stock movement line and its source relation."""
     _validate_stock_entry_warehouses(entry)
     line_cost_center, line_project, line_remarks = _stock_entry_line_detail(entry, index)
-    qty = _form_decimal(f"qty_{index}", "1")
-    rate = _form_decimal(f"rate_{index}", "0")
+    qty = _form_decimal(f"qty_{index}", "1", non_negative=True)
+    rate = _form_decimal(f"rate_{index}", "0", non_negative=True)
     amount = _line_amount(index)
     if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative"}:
-        amount = _form_decimal(f"amount_{index}", "0")
+        amount = _form_decimal(f"amount_{index}", "0", non_negative=True)
     default_uom = _item_default_uom(item_code)
     uom = request.form.get(f"uom_{index}") or default_uom
     if not uom:
@@ -766,7 +777,7 @@ def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: st
     if not default_uom:
         raise ValueError(_("El item %(item_code)s requiere una UOM base configurada.") % {"item_code": item_code})
     raw_counted_qty = request.form.get(f"counted_qty_{index}")
-    counted_qty = _form_decimal(f"counted_qty_{index}", str(current_qty))
+    counted_qty = _form_decimal(f"counted_qty_{index}", str(current_qty), non_negative=True)
     entered_counted_qty = counted_qty
     current_qty_in_uom = current_qty
     if uom != default_uom:
@@ -779,8 +790,8 @@ def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: st
                 _("No se pudo convertir %(qty)s %(uom)s a %(default_uom)s para el item %(item_code)s.")
                 % {"qty": counted_qty, "uom": uom, "default_uom": default_uom, "item_code": item_code}
             ) from exc
-    target_rate = _form_decimal(f"target_valuation_rate_{index}", str(current_rate))
-    target_value = _form_decimal(f"target_stock_value_{index}", str(counted_qty * target_rate))
+    target_rate = _form_decimal(f"target_valuation_rate_{index}", str(current_rate), non_negative=True)
+    target_value = _form_decimal(f"target_stock_value_{index}", str(counted_qty * target_rate), non_negative=True)
     qty_difference = counted_qty - current_qty
     raw_qty_difference = (
         entered_counted_qty if raw_counted_qty not in (None, "") else current_qty_in_uom
