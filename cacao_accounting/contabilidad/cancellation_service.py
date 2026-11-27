@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 
 from cacao_accounting.database import (
     AccountingPeriod,
@@ -18,6 +18,8 @@ from cacao_accounting.database import (
     ComprobanteContable,
     DocumentRelation,
     DocumentTransition,
+    ImportLandedCost,
+    LandedCostAllocation,
     PaymentEntry,
     PaymentReference,
     ReconciliationItem,
@@ -253,6 +255,9 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
             CancellationDependency("certificado de retencion", str(row.id), "withholding_certificate") for row in certificates
         )
 
+    if isinstance(document, ImportLandedCost):
+        dependencies.extend(_landed_cost_consumption_dependencies(document, source_types, source_id))
+
     dependencies.extend(_consumed_stock_dependencies(document, source_type, source_id))
     return dependencies
 
@@ -385,3 +390,48 @@ def _stock_consumption_is_active(voucher_type: str, voucher_id: str) -> bool:
     if consumer is None:
         return True
     return getattr(consumer, "docstatus", None) not in (0, 2)
+
+
+def _landed_cost_consumption_dependencies(
+    document: ImportLandedCost,
+    source_types: set[str],
+    source_id: str,
+) -> list[CancellationDependency]:
+    """Block landed-cost cancellation when later active outflows consumed stock."""
+    allocations = database.session.execute(
+        select(LandedCostAllocation).where(
+            LandedCostAllocation.company == _document_company(document),
+            LandedCostAllocation.document_type.in_(source_types),
+            LandedCostAllocation.document_id == source_id,
+        )
+    ).scalars()
+    dependencies: list[CancellationDependency] = []
+    seen: set[tuple[str, str]] = set()
+    for allocation in allocations:
+        allocated_layer = database.session.get(StockValuationLayer, allocation.stock_valuation_layer_id)
+        if allocated_layer is None:
+            continue
+        later_consumption = database.session.execute(
+            select(StockValuationLayer)
+            .where(
+                StockValuationLayer.company == allocation.company,
+                StockValuationLayer.item_code == allocation.item_code,
+                StockValuationLayer.warehouse == allocation.warehouse,
+                StockValuationLayer.qty < 0,
+                or_(
+                    StockValuationLayer.posting_date > allocated_layer.posting_date,
+                    and_(
+                        StockValuationLayer.posting_date == allocated_layer.posting_date,
+                        StockValuationLayer.id > allocated_layer.id,
+                    ),
+                ),
+            )
+            .order_by(StockValuationLayer.posting_date, StockValuationLayer.id)
+        ).scalars()
+        for layer in later_consumption:
+            key = (str(layer.voucher_type), str(layer.voucher_id))
+            if key in seen or not _stock_consumption_is_active(*key):
+                continue
+            seen.add(key)
+            dependencies.append(CancellationDependency("consumo de inventario", key[1], key[0]))
+    return dependencies

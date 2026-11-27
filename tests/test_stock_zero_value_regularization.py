@@ -19,6 +19,7 @@ from cacao_accounting.contabilidad.posting_service import (
     cancel_document,
     post_stock_entry,
 )
+from cacao_accounting.contabilidad.cancellation_service import active_cancellation_dependencies
 from cacao_accounting.approval_engine import approved_execution
 from cacao_accounting.internal_control_service import audit_actor
 from cacao_accounting.database import (
@@ -501,6 +502,10 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
         ).scalar_one()
         assert item_bin.actual_qty == expected_qty
         assert item_bin.stock_value == expected_value
+        dependencies = active_cancellation_dependencies(landed_cost, "import_landed_cost", landed_cost.id)
+        assert [(dependency.kind, dependency.identifier) for dependency in dependencies] == [
+            ("consumo de inventario", entry.id)
+        ]
 
         layer_ids_before = set(
             database.session.execute(
@@ -544,7 +549,7 @@ def test_cancelar_landed_cost_con_consumo_bloquea_atomico(
         actor = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
 
         with audit_actor(actor.id, actor.name), approved_execution(landed_cost, actor.id):
-            with pytest.raises(PostingError, match="evidencia disponible no permite reconstruir"):
+            with pytest.raises(PostingError, match="efectos activos"):
                 cancel_document(
                     landed_cost,
                     reason="No se puede distribuir costo consumido por libro",
