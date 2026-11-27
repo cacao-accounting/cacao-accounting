@@ -16,16 +16,19 @@ MODULOS = (RAIZ / "cacao_accounting" / "database" / "helpers.py", RAIZ / "cacao_
 # Un acento sustituido por ``?`` convierte el msgid en una clave nueva: el catálogo
 # devuelve el español y el usuario angloparlante ve el mojibake sin ningún error.
 MENSAJES_ESQUEMA = {
-    "Revisión destino (por defecto: head).": "Target revision (default: head).",
-    "Revisión específica a aplicar.": "Specific revision to apply.",
-    "Inserta datos de ejemplo después de crear la base.": "Insert example data after creating the database.",
-    "La base de datos existente será reemplazada.": "The existing database will be replaced.",
-    "Se están usando usuario y contraseña predeterminados para el setup inicial.": (
-        "Default username and password are being used for initial setup."
-    ),
-    "La base de datos no está inicializada; ejecute primero 'cacaoctl db init'.": (
-        "The database is not initialized; run 'cacaoctl db init' first."
-    ),
+    'Revisión destino (por defecto: head).': 'Target revision (default: head).',
+    'Revisión específica a aplicar.': 'Specific revision to apply.',
+    'Inserta datos de ejemplo después de crear la base.': 'Insert example data after creating the database.',
+    'La base de datos existente será reemplazada.': 'The existing database will be replaced.',
+    'Se están usando usuario y contraseña predeterminados para el setup inicial.': 'Default username and password are being used for initial setup.',
+    "La base de datos no está inicializada; ejecute primero 'cacaoctl db init'.": "The database is not initialized; run 'cacaoctl db init' first.",
+    'La base de datos tiene un esquema parcial o inconsistente; restaure un respaldo o inicialice una base nueva.': 'The database has a partial or inconsistent schema; restore a backup or initialize a new database.',
+    "La base de datos no tiene historial Alembic; ejecute 'cacaoctl db migrate' para registrar la revisión compatible.": "The database has no Alembic history; run 'cacaoctl db migrate' to register the compatible revision.",
+    "La base de datos requiere migraciones; ejecute 'cacaoctl db migrate' antes de servir.": "The database requires migrations; run 'cacaoctl db migrate' before serving.",
+    'El estado del esquema de base de datos no es compatible: %(status)s': 'The database schema state is not compatible: %(status)s',
+    'No hay migraciones pendientes.': 'No pending migrations.',
+    'Migraciones aplicadas correctamente.': 'Migrations applied successfully.',
+    'No fue posible aplicar las migraciones: %(error)s': 'Could not apply migrations: %(error)s',
 }
 MOJIBAKE = re.compile(r"[A-Za-z]\?[A-Za-z]")
 
