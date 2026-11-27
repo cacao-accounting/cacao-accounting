@@ -1741,6 +1741,13 @@
           }
           if (row.source_warehouse !== undefined) line.source_warehouse = row.source_warehouse;
           if (row.target_warehouse !== undefined) line.target_warehouse = row.target_warehouse;
+          if (row.description !== undefined) {
+            const desc = String(row.description || '').trim();
+            if (desc) {
+              line.item_name = desc;
+              line.description = desc;
+            }
+          }
 
           // Journal Entry specific mapping for debit/credit into value/rate
           if (this.importModal.doctype === "journal_entry") {
@@ -1748,7 +1755,7 @@
           }
 
           if (line.item_code) {
-            this.syncLineFromItem(line, true);
+            this.syncLineFromItem(line, Boolean(line.item_name));
           }
           this.calcAmount(line);
           this.lines.push(line);

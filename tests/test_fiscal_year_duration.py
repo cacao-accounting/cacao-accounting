@@ -113,7 +113,8 @@ def test_fiscal_year_form_allows_short_years(app, authenticated_client, entorno_
     """The CRUD accepts the approved three- and six-month fiscal years."""
     del entorno_contable
     name = f"FY-SHORT-{uuid4().hex[:8]}"
-    end = date(2026, end_month, calendar.monthrange(2026, end_month)[1])
+    start = date(2097, 1, 1)
+    end = date(2097, end_month, calendar.monthrange(2097, end_month)[1])
 
     try:
         response = authenticated_client("admin").post(
@@ -121,14 +122,14 @@ def test_fiscal_year_form_allows_short_years(app, authenticated_client, entorno_
             data={
                 "id": name,
                 "entidad": "cacao",
-                "inicio": "2026-01-01",
+                "inicio": start.isoformat(),
                 "fin": end.isoformat(),
             },
         )
-        assert response.status_code == 302
+        assert response.status_code == 302, response.get_data(as_text=True)[-1200:]
         with app.app_context():
             fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(name=name)).scalar_one()
-            assert fiscal_year.year_start_date == date(2026, 1, 1)
+            assert fiscal_year.year_start_date == start
             assert fiscal_year.year_end_date == end
     finally:
         _cleanup_fiscal_year(app, name)
