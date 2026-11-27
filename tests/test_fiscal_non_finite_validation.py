@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import cacao_accounting.fiscal_preview_service as fiscal_preview_module
 from cacao_accounting import create_app
 from cacao_accounting.accounting_engine.common.context import (
     CalculationContext,
@@ -120,6 +121,38 @@ def test_preview_and_persistence_reject_negative_manual_tax_values(fiscal_app, f
         assert preview_result["summary"]["grand_total"] == "100"
         with pytest.raises(ValueError, match="fiscales manuales no pueden contener importes negativos"):
             calculate_document_total_with_taxes(document, Decimal("100"), [], tax_lines_payload=[line])
+
+
+def test_preview_deduplicates_included_and_excluded_concepts(monkeypatch):
+    """The full preview applies each included concept once."""
+    monkeypatch.setattr(fiscal_preview_module, "build_tax_rule_contexts", lambda **_kwargs: [])
+    monkeypatch.setattr(fiscal_preview_module, "_company_country", lambda _company: None)
+    result = fiscal_preview(
+        {
+            "document_type": "sales_invoice",
+            "company": "alpha",
+            "posting_date": "2026-05-10",
+            "currency": "NIO",
+            "lines": [{"qty": 1, "rate": 100}],
+            "tax_lines": [
+                {
+                    "source_rule_id": "MANUAL-TASA",
+                    "manual": True,
+                    "concept": "tasa_posterior",
+                    "type": "tax",
+                    "calculation_method": "percentage",
+                    "rate": "10",
+                    "amount": "0",
+                    "base_mode": "accumulated",
+                    "include_concepts": ["goods", "goods"],
+                }
+            ],
+        }
+    )
+
+    assert result["errors"] == []
+    assert [line["base_amount"] for line in result["tax_lines"]] == ["100"]
+    assert [line["amount"] for line in result["tax_lines"]] == ["10.00"]
 
 
 @pytest.mark.parametrize("value", NON_FINITE)
