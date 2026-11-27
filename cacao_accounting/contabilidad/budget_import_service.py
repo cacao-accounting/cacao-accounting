@@ -217,8 +217,20 @@ class BudgetImportService:
         row_values: list[str] = []
         for cell in row.getElementsByType(table_cell_class):
             repeat = self._ods_cell_repeat(cell)
-            row_values.extend([extract_text(cell)] * repeat)
+            row_values.extend([self._ods_cell_value(cell, extract_text)] * repeat)
         return row_values
+
+    @staticmethod
+    def _ods_cell_value(cell, extract_text) -> str:
+        text = extract_text(cell)
+        if str(text).strip() != "":
+            return str(text)
+        office_ns = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        for attr in ("value", "date-value", "time-value", "boolean-value", "string-value"):
+            value = cell.getAttrNS(office_ns, attr)
+            if value not in (None, ""):
+                return str(value)
+        return str(text)
 
     def _ods_cell_repeat(self, cell) -> int:
         repeat = cell.getAttribute("numbercolumnsrepeated")

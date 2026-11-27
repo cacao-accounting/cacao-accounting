@@ -8,6 +8,9 @@ from typing import Any
 
 import openpyxl
 from openpyxl.utils.datetime import from_excel
+from openpyxl.worksheet.formula import ArrayFormula, DataTableFormula
+
+from cacao_accounting.i18n import _
 from cacao_accounting.imports.readers.base import BaseReader, TabularBook, is_import_date_column
 from cacao_accounting.imports.readers.limits import (
     ReadBudget,
@@ -38,7 +41,7 @@ class XLSXReader(BaseReader):
             rows = []
             for row in rows_iter:
                 values = [
-                    _normalize_date_serial(value, wb.epoch) if index in date_columns else value
+                    _reject_formula_value(_normalize_date_serial(value, wb.epoch) if index in date_columns else value)
                     for index, value in enumerate(row)
                 ]
                 budget.consume_row(len(values))
@@ -47,6 +50,15 @@ class XLSXReader(BaseReader):
             return TabularBook(columns=columns, rows=rows, source_format="xlsx")
         finally:
             wb.close()
+
+
+def _reject_formula_value(value: Any) -> Any:
+    """Rechaza fórmulas, incluidas matrices/data-table, antes de normalizar."""
+    if isinstance(value, str) and value.startswith("="):
+        raise ValueError(_("El archivo contiene fórmulas. Reemplace las celdas por valores fijos."))
+    if isinstance(value, (ArrayFormula, DataTableFormula)):
+        raise ValueError(_("El archivo contiene fórmulas. Reemplace las celdas por valores fijos."))
+    return value
 
 
 def _normalize_date_serial(value: Any, epoch: datetime) -> Any:

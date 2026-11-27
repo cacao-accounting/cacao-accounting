@@ -259,26 +259,43 @@ class ExchangeRateImportService:
     def _parse_ods(self, file_content: bytes) -> List[Dict[str, str]]:
         """Parsea un archivo ODS."""
         from odf.opendocument import load
-        from odf.table import Table, TableRow, TableCell
+        from odf.table import Table, TableCell, TableRow
         from odf.teletype import extractText
 
         doc = load(io.BytesIO(file_content))
         tables = doc.getElementsByType(Table)
         if not tables:
             return []
-        rows = []
-        for row in tables[0].getElementsByType(TableRow):
-            row_values: list[str] = []
-            for cell in row.getElementsByType(TableCell):
-                repeat_attr = cell.getAttribute("numbercolumnsrepeated")
-                try:
-                    repeat = int(repeat_attr) if repeat_attr else 1
-                except (ValueError, TypeError):
-                    repeat = 1
-                text = extractText(cell)
-                row_values.extend([text] * repeat)
-            rows.append(row_values)
+        rows = [self._ods_row_values(row, TableCell, extractText) for row in tables[0].getElementsByType(TableRow)]
         return self._matrix_to_dicts(rows)
+
+    @staticmethod
+    def _ods_row_values(row, table_cell_class, extract_text) -> list[str]:
+        row_values: list[str] = []
+        for cell in row.getElementsByType(table_cell_class):
+            repeat = ExchangeRateImportService._ods_cell_repeat(cell)
+            row_values.extend([ExchangeRateImportService._ods_cell_value(cell, extract_text)] * repeat)
+        return row_values
+
+    @staticmethod
+    def _ods_cell_repeat(cell) -> int:
+        repeat_attr = cell.getAttribute("numbercolumnsrepeated")
+        try:
+            return int(repeat_attr) if repeat_attr else 1
+        except (ValueError, TypeError):
+            return 1
+
+    @staticmethod
+    def _ods_cell_value(cell, extract_text) -> str:
+        text = extract_text(cell)
+        if str(text).strip() != "":
+            return str(text)
+        office_ns = "urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+        for attr in ("value", "date-value", "time-value", "boolean-value", "string-value"):
+            value = cell.getAttrNS(office_ns, attr)
+            if value not in (None, ""):
+                return str(value)
+        return str(text)
 
     def _matrix_to_dicts(self, values_iter) -> List[Dict[str, Any]]:
         """Convierte una matriz (primera fila = encabezados) a lista de diccionarios.

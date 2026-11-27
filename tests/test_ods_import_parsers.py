@@ -77,3 +77,36 @@ def test_presupuesto_parsea_celdas_repetidas_ods():
 
     assert filas and filas[0]["Cuenta"] == "1101"
     assert filas[0]["Descripción"] == "1101"
+
+
+def _ods_typed_bytes() -> bytes:
+    from odf.opendocument import OpenDocumentSpreadsheet
+    from odf.table import Table, TableCell, TableRow
+    from odf.text import P
+
+    doc = OpenDocumentSpreadsheet()
+    t = Table(name="T")
+    r1 = TableRow()
+    for h in ["Moneda Origen", "Moneda Destino", "Fecha", "Tasa"]:
+        c = TableCell(valuetype="string")
+        c.addElement(P(text=h))
+        r1.addElement(c)
+    t.addElement(r1)
+    r2 = TableRow()
+    for v in ["USD", "NIO"]:
+        c = TableCell(valuetype="string")
+        c.addElement(P(text=v))
+        r2.addElement(c)
+    r2.addElement(TableCell(valuetype="date", datevalue="2026-05-15"))
+    r2.addElement(TableCell(valuetype="float", value="36.5"))
+    t.addElement(r2)
+    doc.spreadsheet.addElement(t)
+    out = io.BytesIO()
+    doc.save(out)
+    return out.getvalue()
+
+
+def test_tasas_parsea_ods_tipos_office_value():
+    """#1625 QA: lee celdas tipadas sin text:p."""
+    filas = ExchangeRateImportService()._parse_ods(_ods_typed_bytes())
+    assert filas == [{"Moneda Origen": "USD", "Moneda Destino": "NIO", "Fecha": "2026-05-15", "Tasa": "36.5"}]

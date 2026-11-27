@@ -10,7 +10,6 @@ from zipfile import ZipFile
 
 import openpyxl
 
-from cacao_accounting.imports.adapters.customer import CustomerAdapter
 from cacao_accounting.imports.readers.xlsx_reader import XLSXReader
 
 
@@ -33,15 +32,34 @@ def _xlsx_con_formula_cacheada(tmp_path):
     return ruta
 
 
-def test_reader_expone_la_formula_y_no_el_valor_cacheado(tmp_path):
-    """data_only=False conserva la fórmula para que la validación la rechace."""
+def test_reader_rechaza_formula_con_cache(tmp_path):
+    """#1623: la fórmula no se aplana a su valor en caché."""
     ruta = _xlsx_con_formula_cacheada(tmp_path)
     cacheado = openpyxl.load_workbook(ruta, data_only=True).active["A2"].value
     assert cacheado == 999
 
-    libro = XLSXReader().read(str(ruta))
+    try:
+        XLSXReader().read(str(ruta))
+    except ValueError as exc:
+        assert "fórmulas" in str(exc).lower() or "formulas" in str(exc).lower()
+    else:
+        raise AssertionError("Se esperaba rechazo de fórmula")
 
-    assert libro.rows[0][0] == "=SUM(1,1)"
-    fila = dict(zip(libro.columns, libro.rows[0]))
-    errores = CustomerAdapter().validate_row(fila)
-    assert any("Fórmula detectada" in error for error in errores)
+
+def test_reader_rechaza_array_formula(tmp_path):
+    """#1623 QA: rechaza ArrayFormula sin depender de string '='."""
+    from openpyxl.worksheet.formula import ArrayFormula
+
+    ruta = tmp_path / "array.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["nombre"])
+    ws["A2"] = ArrayFormula(ref="A2", text="1+1")
+    wb.save(ruta)
+
+    try:
+        XLSXReader().read(str(ruta))
+    except ValueError as exc:
+        assert "fórmulas" in str(exc).lower() or "formulas" in str(exc).lower()
+    else:
+        raise AssertionError("Se esperaba rechazo de ArrayFormula")
