@@ -116,6 +116,8 @@ def _metodo_distinto(actual: str | None) -> str:
 
 def test_cambio_de_metodo_espera_al_primer_posting(pg_app):
     """El guard administrativo no cambia el m?todo si el posting gana la carrera (#1881)."""
+    import time
+
     with pg_app.app_context():
         entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
         original = entity.valuation_method or "moving_average"
@@ -142,6 +144,7 @@ def test_cambio_de_metodo_espera_al_primer_posting(pg_app):
     def posting():
         with pg_app.app_context():
             conexion = database.session.connection()
+            resultado["posting_pid"] = conexion.execute(text("SELECT pg_backend_pid()")).scalar_one()
             listener = _lock_listener()
             event.listen(conexion, "before_cursor_execute", listener)
             try:
@@ -169,6 +172,7 @@ def test_cambio_de_metodo_espera_al_primer_posting(pg_app):
     def guard():
         with pg_app.app_context():
             conexion = database.session.connection()
+            resultado["guard_pid"] = conexion.execute(text("SELECT pg_backend_pid()")).scalar_one()
             listener = _lock_listener(guard_at_lock)
             event.listen(conexion, "before_cursor_execute", listener)
             try:
@@ -184,21 +188,58 @@ def test_cambio_de_metodo_espera_al_primer_posting(pg_app):
                 event.remove(conexion, "before_cursor_execute", listener)
                 database.session.remove()
 
-    hilo_posting = threading.Thread(target=posting)
-    hilo_posting.start()
-    assert posting_locked.wait(timeout=10), "el posting no tom? el lock de la compa??a"
-    assert resultado.get("posting_lock") is True, "el posting no emiti? SELECT ... FOR UPDATE"
+    def _guard_esperando_lock(monitor, guard_pid: int, posting_pid: int) -> bool:
+        """Confirma en PostgreSQL que el guard est? bloqueado por el posting."""
+        row = (
+            monitor.execute(
+                text(
+                    "SELECT wait_event_type, state, pg_blocking_pids(pid) AS blockers "
+                    "FROM pg_stat_activity WHERE pid = :pid"
+                ),
+                {"pid": guard_pid},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            return False
+        blockers = [int(b) for b in (row["blockers"] or [])]
+        return row["wait_event_type"] == "Lock" and row["state"] == "active" and posting_pid in blockers
 
-    hilo_guard = threading.Thread(target=guard)
-    hilo_guard.start()
-    # Determinista: el evento se dispara al emitirse el SELECT ... FOR UPDATE del guard,
-    # antes de que la sentencia se bloquee; sin el lock la se?al nunca llega.
-    llego_al_lock = guard_at_lock.wait(timeout=10)
-    liberar.set()
-    hilo_posting.join(timeout=15)
-    hilo_guard.join(timeout=15)
+    monitor_engine = create_engine(pg_app.config["SQLALCHEMY_DATABASE_URI"])
+    try:
+        hilo_posting = threading.Thread(target=posting)
+        hilo_posting.start()
+        assert posting_locked.wait(timeout=10), "el posting no tom? el lock de la compa??a"
+        assert resultado.get("posting_lock") is True, "el posting no emiti? SELECT ... FOR UPDATE"
 
-    assert llego_al_lock, "el guard no emiti? el SELECT ... FOR UPDATE"
+        hilo_guard = threading.Thread(target=guard)
+        hilo_guard.start()
+        assert guard_at_lock.wait(timeout=10), "el guard no emiti? el SELECT ... FOR UPDATE"
+
+        contendiendo = False
+        limite = time.monotonic() + 10
+        while time.monotonic() < limite:
+            guard_pid = resultado.get("guard_pid")
+            posting_pid = resultado.get("posting_pid")
+            if guard_pid and posting_pid:
+                with monitor_engine.connect() as monitor:
+                    if _guard_esperando_lock(monitor, int(guard_pid), int(posting_pid)):
+                        contendiendo = True
+                        break
+            time.sleep(0.05)
+
+        # Evidencia determinista: el guard debe estar esperando el lock del posting.
+        # Si se retira FOR UPDATE del guard, nunca queda bloqueado; si se retira del
+        # posting, no hay bloqueo real que demostrar. En ambos casos la prueba falla.
+        assert contendiendo, "el guard no qued? bloqueado esperando el lock del posting"
+        liberar.set()
+        hilo_posting.join(timeout=15)
+        hilo_guard.join(timeout=15)
+    finally:
+        liberar.set()
+        monitor_engine.dispose()
+
     assert not hilo_posting.is_alive() and not hilo_guard.is_alive()
     assert "posting_error" not in resultado, resultado.get("posting_error")
     assert resultado.get("guard") == "rechazado", resultado
