@@ -1089,6 +1089,21 @@ def inventario_entrada_editar(entry_id: str):
     return _render_stock_entry_edit_form(registro, items_disponibles, uoms_disponibles, formulario)
 
 
+def _stock_entry_has_pending_cancellation(entry_id: str) -> bool:
+    from cacao_accounting.database import ApprovalRequest
+
+    return (
+        database.session.execute(
+            database.select(ApprovalRequest.id).where(
+                ApprovalRequest.document_type == "cancel_stock_entry",
+                ApprovalRequest.document_id == entry_id,
+                ApprovalRequest.status.startswith("Pending"),
+            )
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
 @inventario.route("/stock-entry/<entry_id>/duplicate", methods=["POST"])
 @modulo_activo("inventory")
 @login_required
@@ -1102,6 +1117,9 @@ def inventario_entrada_duplicar(entry_id: str):
         abort(400)
     if origen.purpose not in STOCK_ENTRY_PURPOSES:
         abort(404)
+    # #1897: no duplicar mientras la anulaci?n est? pendiente; validar en POST por carrera.
+    if _stock_entry_has_pending_cancellation(origen.id):
+        abort(409)
 
     duplicado = StockEntry(
         purpose=origen.purpose,

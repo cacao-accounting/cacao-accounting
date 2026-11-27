@@ -20,7 +20,8 @@
   <i class="bi bi-pencil-square me-1"></i>{{ _('Editar') }}
 </a>
 {% endif %}
-{% if registro.docstatus in [0, 1] %}
+{% set _status_info = document_status_info('stock_entry', registro) %}
+{% if registro.docstatus in [0, 1] and _status_info.code != 'pending_cancellation' %}
 <form method="post" action="{{ url_for('inventario.inventario_entrada_duplicar', entry_id=registro.id) }}"
   class="d-inline">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -45,7 +46,7 @@
 {{ dv_macros.detail_header(
     registro.document_no or registro.id,
     _('Movimiento de Inventario'),
-    document_status_info('stock_entry', registro),
+    _status_info,
     buttons,
     [
       (_('Número'), registro.document_no),
