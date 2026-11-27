@@ -550,7 +550,7 @@ def lista_plantillas_impuesto():
         company = (request.form.get("company") or "").strip() or None
         currency = (request.form.get("currency") or "").strip() or None
         if company:
-            entity = database.session.get(Entity, company)
+            entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
             if not entity or not bool(getattr(entity, "enabled", False)):
                 flash(_("La compa??a seleccionada no es v?lida."), "danger")
                 return redirect(url_for("admin.lista_plantillas_impuesto"))
@@ -888,7 +888,7 @@ def _add_dimension_value_from_request() -> Any:
         flash(_("El tipo de dimensi?n seleccionado no es v?lido."), "danger")
         return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
     if company:
-        entity = database.session.get(Entity, company)
+        entity = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
         if not entity or not bool(getattr(entity, "enabled", False)):
             flash(_("La compa??a seleccionada no es v?lida."), "danger")
             return redirect(url_for(ADMIN_LISTA_DIMENSIONES))

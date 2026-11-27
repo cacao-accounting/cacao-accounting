@@ -2599,7 +2599,7 @@ def _bank_balance_totals(
 
 def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
     """Devuelve resumen de saldos bancarios por cuenta."""
-    company_record = database.session.get(Entity, filters.company)
+    company_record = database.session.execute(select(Entity).filter_by(code=filters.company)).scalar_one_or_none()
     company_currency = company_record.currency if company_record else None
     bank_accounts_query = select(BankAccount).where(BankAccount.company == filters.company)
     if filters.bank_account_id:

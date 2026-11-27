@@ -863,7 +863,7 @@ def _add_transfer_draft_labels(payload: dict[str, Any]) -> None:
 
     company = str(payload.get("company") or "")
     if company:
-        entidad = database.session.get(Entity, company)
+        entidad = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
         payload["company_label"] = str((entidad.name if entidad is not None else "") or company)
     serie_id = str(payload.get("naming_series_id") or "")
     if serie_id:
