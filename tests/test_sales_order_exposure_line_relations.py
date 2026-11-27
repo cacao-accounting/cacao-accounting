@@ -188,6 +188,85 @@ def test_validacion_previa_descuenta_factura_actual_por_linea(app, entorno_conta
         _validate_credit_limit_and_overdue("cacao", cliente_id, Decimal("100"), factura)
 
 
+def test_validacion_previa_descuenta_factura_actual_en_varias_ordenes(app, entorno_contable):
+    """Una factura consolidada resta de cada orden solo su importe atribuible."""
+    suffix = uuid4().hex[:8]
+    with app.app_context():
+        cliente = Party(code=f"MULTI-{suffix}", name="Cliente multiorden", is_customer=True, is_active=True)
+        database.session.add(cliente)
+        database.session.flush()
+        ordenes = [
+            SalesOrder(
+                company="cacao",
+                posting_date=FECHA,
+                docstatus=1,
+                document_no=f"SO-MULTI-{suffix}-{indice}",
+                customer_id=cliente.id,
+                customer_name=cliente.name,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+                grand_total=Decimal("300"),
+                base_total=Decimal("300"),
+                status="open",
+            )
+            for indice in (1, 2)
+        ]
+        database.session.add_all(ordenes)
+        database.session.flush()
+        factura = SalesInvoice(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=0,
+            document_no=f"SI-MULTI-{suffix}",
+            customer_id=cliente.id,
+            customer_name=cliente.name,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            document_type="sales_invoice",
+            is_return=False,
+            grand_total=Decimal("150"),
+            base_total=Decimal("150"),
+        )
+        database.session.add(factura)
+        database.session.flush()
+        database.session.add(
+            SalesInvoice(
+                company="cacao",
+                posting_date=FECHA,
+                docstatus=1,
+                document_no=f"SI-PREVIA-{suffix}",
+                customer_id=cliente.id,
+                customer_name=cliente.name,
+                transaction_currency="NIO",
+                base_currency="NIO",
+                exchange_rate=Decimal("1"),
+                document_type="sales_invoice",
+                is_return=False,
+                grand_total=Decimal("250"),
+                base_total=Decimal("250"),
+                sales_order_id=ordenes[0].id,
+            )
+        )
+        database.session.add(CompanyParty(company="cacao", party_id=cliente.id, is_active=True, credit_limit=Decimal("375")))
+        database.session.commit()
+        ids = {
+            "cliente": cliente.id,
+            "orden_1": ordenes[0].id,
+            "orden_2": ordenes[1].id,
+            "factura": factura.id,
+        }
+
+    _relacion(app, ids["orden_1"], ids["factura"], "100")
+    _relacion(app, ids["orden_2"], ids["factura"], "50")
+    with app.app_context():
+        factura = database.session.get(SalesInvoice, ids["factura"])
+        assert _approved_customer_order_exposure("cacao", ids["cliente"], factura) == Decimal("250")
+        with pytest.raises(ValueError, match="mite de cr"):
+            _validate_credit_limit_and_overdue("cacao", ids["cliente"], Decimal("150"), factura)
+
+
 @pytest.mark.parametrize("por_entrega", [False, True])
 def test_validacion_previa_cabecera_o_entrega_no_duplica(app, entorno_contable, por_entrega):
     cliente_id, _order_id, invoice_id = _documentos(app, docstatus=0, por_cabecera=not por_entrega, por_entrega=por_entrega)
