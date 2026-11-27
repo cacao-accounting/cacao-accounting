@@ -265,9 +265,33 @@ def apply_recurring_template(
         .first()
     )
 
-    if existing and existing.status in {"pending", "applied"}:
-        # #1776: reintento idempotente tras fallo parcial; no crear duplicado.
+    if existing and existing.status == "applied":
         return existing
+    if existing and existing.status == "pending":
+        # #1776: reintento idempotente: recuperar aplicaci?n pendiente.
+        from cacao_accounting.contabilidad.journal_service import JournalValidationError, get_journal, submit_journal
+
+        journal = get_journal(existing.journal_id) if existing.journal_id else None
+        if journal is None:
+            raise RecurringJournalError(
+                _("La aplicaci?n recurrente pendiente no tiene comprobante recuperable; requiere revisi?n manual.")
+            )
+        if journal.status == "draft":
+            try:
+                submit_journal(journal.id, commit=False, user_id=user_id)
+            except JournalValidationError as exc:
+                raise RecurringJournalError(str(exc)) from exc
+            database.session.commit()
+            return existing
+        if journal.status == "submitted":
+            existing.status = "applied"
+            database.session.add(existing)
+            database.session.commit()
+            return existing
+        raise RecurringJournalError(
+            _("La aplicaci?n recurrente pendiente tiene un comprobante en estado %(status)s; requiere revisi?n manual.")
+            % {"status": journal.status}
+        )
 
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
     if not items:
