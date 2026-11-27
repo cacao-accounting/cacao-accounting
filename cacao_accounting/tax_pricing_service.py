@@ -222,10 +222,25 @@ def resolve_item_price_record(
     )
     if uom:
         query = query.where((ItemPrice.uom.is_(None)) | (ItemPrice.uom == uom))
-    price = database.session.execute(query).scalars().first()
-    if price is not None:
-        try:
-            coerce_decimal(price.price, "precio", non_negative=True, max_fractional_digits=4)
-        except ValueError:
-            return None
-    return price
+    candidates = [price for price in database.session.execute(query).scalars().all() if _is_valid_item_price(price)]
+    if not candidates:
+        return None
+    return min(candidates, key=_item_price_sort_key)
+
+
+def _is_valid_item_price(price: ItemPrice) -> bool:
+    """Valida que el precio almacenado sea utilizable por el resolutor."""
+    try:
+        coerce_decimal(price.price, "precio", non_negative=True, max_fractional_digits=4)
+    except ValueError:
+        return False
+    return True
+
+
+def _item_price_sort_key(price: ItemPrice) -> tuple:
+    """Orden determinista para empates de criterios efectivos."""
+    min_qty_missing = price.min_qty is None
+    min_qty = -Decimal(str(price.min_qty or 0))
+    valid_from_missing = price.valid_from is None
+    valid_from = -(price.valid_from.toordinal() if price.valid_from else 0)
+    return (min_qty_missing, min_qty, valid_from_missing, valid_from, str(price.id or ""))

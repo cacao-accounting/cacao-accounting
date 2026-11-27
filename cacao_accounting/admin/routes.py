@@ -1060,6 +1060,35 @@ def _validated_item_price_references(item_code: str, uom: str | None) -> str | N
     return None
 
 
+def _item_price_criteria_match(candidate: Any, min_qty: Any, valid_from: Any, valid_upto: Any) -> bool:
+    """Compara criterios efectivos con igualdad exacta para valores NULL."""
+    return candidate.min_qty == min_qty and candidate.valid_from == valid_from and candidate.valid_upto == valid_upto
+
+
+def _duplicate_item_price_error(
+    price_list_id: str,
+    item_code: str,
+    uom: str | None,
+    min_qty: Any,
+    valid_from: Any,
+    valid_upto: Any,
+    *,
+    exclude_id: str | None = None,
+) -> str | None:
+    """Rechaza tarifas contradictorias con criterios idénticos."""
+    query = database.select(ItemPrice).filter_by(price_list_id=price_list_id, item_code=item_code)
+    if uom is None:
+        query = query.where(ItemPrice.uom.is_(None))
+    else:
+        query = query.filter_by(uom=uom)
+    if exclude_id:
+        query = query.where(ItemPrice.id != exclude_id)
+    for candidate in database.session.execute(query).scalars().all():
+        if _item_price_criteria_match(candidate, min_qty, valid_from, valid_upto):
+            return _("Ya existe una tarifa con los mismos criterios para este artículo.")
+    return None
+
+
 @admin.route("/settings/item-prices", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -1088,6 +1117,12 @@ def precios_item():
         if reference_error:
             flash(reference_error, "danger")
             return redirect(url_for("admin.precios_item"))
+        duplicate_error = _duplicate_item_price_error(
+            request.form.get("price_list_id") or "", item_code, uom, min_qty, valid_from, valid_upto
+        )
+        if duplicate_error:
+            flash(duplicate_error, "danger")
+            return redirect(url_for("admin.precios_item"))
         item_price = ItemPrice(
             item_code=item_code,
             price_list_id=request.form.get("price_list_id") or "",
@@ -1102,7 +1137,7 @@ def precios_item():
             database.session.commit()
         except IntegrityError:
             database.session.rollback()
-            flash(_("El artículo o la unidad de medida ya no está disponible."), "danger")
+            flash(_("Ya existe una tarifa con los mismos criterios para este artículo."), "danger")
             return redirect(url_for("admin.precios_item"))
         flash(_("Precio de item creado correctamente."), "success")
         return redirect(url_for("admin.precios_item"))
@@ -1154,6 +1189,18 @@ def actualizar_precio_item(item_price_id: str):
     if not price_value.is_finite():
         flash(_("El precio debe ser finito."), "danger")
         return redirect(url_for("admin.precios_item"))
+    duplicate_error = _duplicate_item_price_error(
+        item_price.price_list_id,
+        item_price.item_code,
+        item_price.uom,
+        min_qty,
+        valid_from,
+        valid_upto,
+        exclude_id=item_price.id,
+    )
+    if duplicate_error:
+        flash(duplicate_error, "danger")
+        return redirect(url_for("admin.precios_item"))
     item_price.price = price_value
     item_price.min_qty = min_qty
     item_price.valid_from = valid_from
@@ -1162,7 +1209,7 @@ def actualizar_precio_item(item_price_id: str):
         database.session.commit()
     except IntegrityError:
         database.session.rollback()
-        flash(_("El artículo o la unidad de medida ya no está disponible."), "danger")
+        flash(_("Ya existe una tarifa con los mismos criterios para este artículo."), "danger")
         return redirect(url_for("admin.precios_item"))
     flash(_("Precio de item actualizado correctamente."), "success")
     return redirect(url_for("admin.precios_item"))
