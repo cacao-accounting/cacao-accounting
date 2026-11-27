@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
-from cacao_accounting.database import Accounts, Book, Modules, PettyCashAccount, database
+from cacao_accounting.database import Accounts, Book, Modules, PettyCashAccount, PettyCashReconciliation, database
 
 
 @pytest.fixture
@@ -25,14 +25,43 @@ def cash_module(app):
     yield app
 
 
-def _disable_active_books(company: str = "cacao") -> None:
-    books = database.session.execute(select(Book).filter_by(entity=company, status="activo")).scalars().all()
-    for book in books:
-        book.status = "suspendido"
-    database.session.commit()
+@pytest.fixture
+def isolated_no_active_book(app, cash_module):
+    """Desactiva libros activos de cacao y restaura estado al finalizar."""
+    del cash_module
+    created: dict[str, list[str]] = {"funds": [], "accounts": [], "recs": []}
+    with app.app_context():
+        books = database.session.execute(select(Book).filter_by(entity="cacao")).scalars().all()
+        snapshot = [(book.id, book.status) for book in books]
+        for book in books:
+            if book.status == "activo":
+                book.status = "suspendido"
+        database.session.commit()
+    try:
+        yield created
+    finally:
+        with app.app_context():
+            for rec_id in created["recs"]:
+                rec = database.session.get(PettyCashReconciliation, rec_id)
+                if rec is not None:
+                    database.session.delete(rec)
+            for fund_id in created["funds"]:
+                fund = database.session.get(PettyCashAccount, fund_id)
+                if fund is not None:
+                    database.session.delete(fund)
+            database.session.commit()
+            for account_id in created["accounts"]:
+                account = database.session.get(Accounts, account_id)
+                if account is not None:
+                    database.session.delete(account)
+            for book_id, status in snapshot:
+                book = database.session.get(Book, book_id)
+                if book is not None:
+                    book.status = status
+            database.session.commit()
 
 
-def _create_fund(*, company: str = "cacao") -> PettyCashAccount:
+def _create_fund(created: dict[str, list[str]], *, company: str = "cacao") -> PettyCashAccount:
     suffix = uuid4().hex[:8]
     account = Accounts(
         entity=company,
@@ -55,15 +84,15 @@ def _create_fund(*, company: str = "cacao") -> PettyCashAccount:
     )
     database.session.add(fund)
     database.session.commit()
+    created["accounts"].append(account.id)
+    created["funds"].append(fund.id)
     return fund
 
 
-def test_lista_caja_chica_sin_libro_activo_no_falla(cash_module, authenticated_client):
-    app = cash_module
+def test_lista_caja_chica_sin_libro_activo_no_falla(app, authenticated_client, isolated_no_active_book):
     client = authenticated_client("admin")
     with app.app_context():
-        _create_fund()
-        _disable_active_books("cacao")
+        _create_fund(isolated_no_active_book)
 
     resp = client.get("/cash_management/petty-cash/list")
     assert resp.status_code == 200
@@ -72,13 +101,11 @@ def test_lista_caja_chica_sin_libro_activo_no_falla(cash_module, authenticated_c
     assert "Internal Server Error" not in body
 
 
-def test_detalle_caja_chica_sin_libro_activo_no_falla(cash_module, authenticated_client):
-    app = cash_module
+def test_detalle_caja_chica_sin_libro_activo_no_falla(app, authenticated_client, isolated_no_active_book):
     client = authenticated_client("admin")
     with app.app_context():
-        fund = _create_fund()
+        fund = _create_fund(isolated_no_active_book)
         fund_id = fund.id
-        _disable_active_books("cacao")
 
     resp = client.get(f"/cash_management/petty-cash/{fund_id}")
     assert resp.status_code == 200
@@ -87,14 +114,12 @@ def test_detalle_caja_chica_sin_libro_activo_no_falla(cash_module, authenticated
     assert "Internal Server Error" not in body
 
 
-def test_crear_conciliacion_sin_libro_activo_rechaza_controlado(cash_module, authenticated_client):
-    app = cash_module
+def test_crear_conciliacion_sin_libro_activo_rechaza_controlado(app, authenticated_client, isolated_no_active_book):
     client = authenticated_client("admin")
     with app.app_context():
-        fund = _create_fund()
+        fund = _create_fund(isolated_no_active_book)
         fund_id = fund.id
         company = fund.company
-        _disable_active_books(company)
 
     resp = client.post(
         "/cash_management/petty-cash-reconciliation/new",
@@ -111,19 +136,14 @@ def test_crear_conciliacion_sin_libro_activo_rechaza_controlado(cash_module, aut
     body = resp.get_data(as_text=True).lower()
     assert "libro contable activo" in body or "no existe un libro" in body
     with app.app_context():
-        from cacao_accounting.database import PettyCashReconciliation
-
         count = database.session.execute(select(PettyCashReconciliation).filter_by(petty_cash_id=fund_id)).scalars().all()
         assert count == []
 
 
-def test_editar_conciliacion_sin_libro_activo_rechaza_controlado(cash_module, authenticated_client):
-    app = cash_module
+def test_editar_conciliacion_sin_libro_activo_rechaza_controlado(app, authenticated_client, isolated_no_active_book):
     client = authenticated_client("admin")
     with app.app_context():
-        fund = _create_fund()
-        from cacao_accounting.database import PettyCashReconciliation
-
+        fund = _create_fund(isolated_no_active_book)
         rec = PettyCashReconciliation(
             company=fund.company,
             petty_cash_id=fund.id,
@@ -141,9 +161,8 @@ def test_editar_conciliacion_sin_libro_activo_rechaza_controlado(cash_module, au
         )
         database.session.add(rec)
         database.session.commit()
+        isolated_no_active_book["recs"].append(rec.id)
         rec_id = rec.id
-        company = fund.company
-        _disable_active_books(company)
 
     resp = client.post(
         f"/cash_management/petty-cash-reconciliation/{rec_id}/edit",
@@ -158,8 +177,6 @@ def test_editar_conciliacion_sin_libro_activo_rechaza_controlado(cash_module, au
     body = resp.get_data(as_text=True).lower()
     assert "libro contable activo" in body or "no existe un libro" in body
     with app.app_context():
-        from cacao_accounting.database import PettyCashReconciliation
-
         saved = database.session.get(PettyCashReconciliation, rec_id)
         assert saved is not None
         assert Decimal(str(saved.counted_cash)) == Decimal("100.00")
