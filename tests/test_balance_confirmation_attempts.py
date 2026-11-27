@@ -593,19 +593,37 @@ def confirmation_1839_scenario(tmp_path):
         yield app, ids
     finally:
         with app.app_context():
+            uri = str(app.config.get("SQLALCHEMY_DATABASE_URI", ""))
+            is_memory = uri == "sqlite://" or ":memory:" in uri
             try:
-                database.session.execute(
-                    database.delete(BalanceConfirmationInvitation).where(BalanceConfirmationInvitation.id == ids["invitation"])
-                )
-                database.session.execute(
-                    database.delete(BalanceConfirmation).where(BalanceConfirmation.id == ids["confirmation"])
-                )
-                database.session.execute(database.delete(Party).where(Party.id == ids["party"]))
-                database.session.commit()
-                database.session.execute(database.delete(Entity).where(Entity.code == ids["entity"]))
-                database.session.commit()
+                if not is_memory:
+                    database.session.execute(
+                        database.delete(BalanceConfirmationInvitation).where(
+                            BalanceConfirmationInvitation.id == ids["invitation"]
+                        )
+                    )
+                    database.session.execute(
+                        database.delete(BalanceConfirmation).where(BalanceConfirmation.id == ids["confirmation"])
+                    )
+                    database.session.commit()
+                    for model, key in ((Entity, "entity"), (Party, "party")):
+                        try:
+                            column = model.id if key == "party" else model.code
+                            database.session.execute(database.delete(model).where(column == ids[key]))
+                            database.session.commit()
+                        except Exception:
+                            database.session.rollback()
+
+                    remaining = {
+                        "invitation": database.session.get(BalanceConfirmationInvitation, ids["invitation"]),
+                        "confirmation": database.session.get(BalanceConfirmation, ids["confirmation"]),
+                    }
+                    leftovers = [name for name, row in remaining.items() if row is not None]
+                    if leftovers:
+                        raise AssertionError(f"Limpieza incompleta de fixture 1839: {', '.join(leftovers)}")
             except Exception:
                 database.session.rollback()
+                raise
             finally:
                 database.session.remove()
                 database.engine.dispose()
