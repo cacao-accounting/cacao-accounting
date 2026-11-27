@@ -1368,13 +1368,15 @@ def _petty_cash_ledger_balance_in_fund_currency(
 def petty_cash_ledger_balance_in_fund_currency(petty_cash: PettyCashAccount, as_of_date: date | None = None) -> Decimal | None:
     """Devuelve el saldo GL expresado en la moneda del fondo.
 
-    Sin tasa disponible devuelve ``None`` para que la presentación muestre el
-    faltante en lugar de restar importes de monedas distintas (#1886).
+    Sin tasa disponible o sin libro activo protagonista devuelve ``None`` para
+    que la presentaci?n informe el faltante en lugar de fallar o inventar saldo.
     """
-    ledger_balance = petty_cash_ledger_balance(petty_cash, as_of_date)
+    from cacao_accounting.ledger_queries import PrimaryLedgerUnavailableError
+
     try:
+        ledger_balance = petty_cash_ledger_balance(petty_cash, as_of_date)
         return _petty_cash_ledger_balance_in_fund_currency(petty_cash, ledger_balance, as_of_date)
-    except PostingError:
+    except (PostingError, PrimaryLedgerUnavailableError):
         return None
 
 

@@ -1659,7 +1659,7 @@ def caja_chica_conciliacion_nueva():
                 counted_cash=_form_decimal("counted_cash", "0"),
                 explanation=request.form.get("explanation") or None,
             )
-        except ValueError as exc:
+        except (PostingError, ValueError) as exc:
             flash(_(str(exc)), "danger")
         else:
             flash(_("Conciliación de caja chica creada."), "success")
@@ -1693,7 +1693,7 @@ def caja_chica_conciliacion_editar(r_id):
                 counted_cash=_form_decimal("counted_cash", "0"),
                 explanation=request.form.get("explanation") or None,
             )
-        except (ValueError, InvalidOperation) as exc:
+        except (PostingError, ValueError, InvalidOperation) as exc:
             flash(_(str(exc)), "danger")
         else:
             flash(_("Conciliación de caja chica actualizada."), "success")
