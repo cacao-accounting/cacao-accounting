@@ -19,6 +19,8 @@ from cacao_accounting.accounting_engine.common.fiscal import (
     affects_inventory_from_treatment,
     calculate_accumulated_tax_base,
     find_duplicate_rule_id,
+    has_negative_tax_amounts,
+    negative_manual_tax_amount_message,
 )
 from cacao_accounting.database import Accounts, DocumentTaxLine, DocumentTaxSummary, TaxRule, database
 from cacao_accounting.i18n import _
@@ -563,8 +565,8 @@ def _canonical_tax_line_payload(
     rate = _decimal_or_none(line_payload.get("rate")) or Decimal("0")
     amount = _decimal_or_none(line_payload.get("amount")) or Decimal("0")
     calculation_method = _validated_tax_calculation_method(line_payload.get("calculation_method"))
-    if base_amount < 0 or rate < 0 or amount < 0:
-        raise ValueError(_("Las líneas fiscales manuales no pueden contener importes negativos."))
+    if has_negative_tax_amounts(base_amount, rate, amount):
+        raise ValueError(negative_manual_tax_amount_message())
     return {
         **line_payload,
         "source_rule_id": rule_id or f"MANUAL-{line_payload.get('concept') or 'LINE'}",

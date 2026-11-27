@@ -16,7 +16,12 @@ from cacao_accounting.accounting_engine.common.context import (
     ItemContext,
     TaxRuleContext,
 )
-from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment, find_duplicate_rule_id
+from cacao_accounting.accounting_engine.common.fiscal import (
+    affects_inventory_from_treatment,
+    find_duplicate_rule_id,
+    has_negative_tax_amounts,
+    negative_manual_tax_amount_message,
+)
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts, resolve_item_category_ids
 
@@ -258,6 +263,14 @@ def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
     item_contexts = _build_item_contexts(lines_payload)
     subtotal = sum((item.net_amount for item in item_contexts), Decimal("0"))
 
+    manual_tax_error = _manual_tax_line_validation_error(payload.get("tax_lines"))
+    if manual_tax_error:
+        return {
+            "tax_lines": [],
+            "summary": {"subtotal": str(subtotal), "grand_total": str(subtotal)},
+            "errors": [manual_tax_error],
+        }
+
     tax_rules = _build_tax_rules(
         payload=payload,
         profile=profile,
@@ -409,6 +422,24 @@ def _build_tax_rules(
     return []
 
 
+def _manual_tax_line_validation_error(payload_lines: Any) -> str | None:
+    """Return a controlled preview error for a negative manual tax amount."""
+    if not isinstance(payload_lines, list):
+        return None
+    for raw_line in payload_lines:
+        if not _is_manual_tax_line(raw_line):
+            continue
+        line = raw_line if isinstance(raw_line, dict) else {}
+        values = (
+            _decimal_value(line.get("base_amount"), default="0"),
+            _decimal_value(line.get("rate"), default="0"),
+            _decimal_value(line.get("amount"), default="0"),
+        )
+        if has_negative_tax_amounts(*values):
+            return negative_manual_tax_amount_message()
+    return None
+
+
 def _manual_tax_rules_from_payload(payload_lines: Any, recognition_event: str, *, start_order: int) -> list[TaxRuleContext]:
     """Extrae líneas manuales sin duplicar reglas canónicas reenviadas por el cliente."""
     if not isinstance(payload_lines, list):
@@ -423,14 +454,19 @@ def _manual_tax_rules_from_payload(payload_lines: Any, recognition_event: str, *
 def _tax_rule_context_from_payload(raw_line: Any, recognition_event: str, order: int) -> TaxRuleContext:
     """Convierte una línea JSON a `TaxRuleContext`."""
     item = raw_line if isinstance(raw_line, dict) else {}
+    rate = _decimal_value(item.get("rate"), default="0")
+    amount = _decimal_value(item.get("amount"), default="0")
+    base_amount = _decimal_value(item.get("base_amount"), default="0")
+    if _is_manual_tax_line(item) and has_negative_tax_amounts(base_amount, rate, amount):
+        raise ValueError(negative_manual_tax_amount_message())
     return TaxRuleContext(
         rule_id=str(item.get("source_rule_id") or item.get("rule_id") or f"MANUAL-{order:03}"),
         name=str(item.get("concept") or item.get("name") or f"rule_{order}"),
         concept=str(item.get("concept") or item.get("name") or f"rule_{order}"),
         tax_type=str(item.get("type") or item.get("tax_type") or "tax"),
         calculation_method=str(item.get("calculation_method") or "percentage"),
-        rate=_decimal_value(item.get("rate"), default="0"),
-        amount=_decimal_value(item.get("amount"), default="0"),
+        rate=rate,
+        amount=amount,
         base_mode=str(item.get("base_mode") or "goods"),
         include_concepts=_as_list(item.get("include_concepts")),
         exclude_concepts=_as_list(item.get("exclude_concepts")),

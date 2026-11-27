@@ -29,7 +29,7 @@ from cacao_accounting.fiscal_persistence_service import (
     _to_decimal,
     calculate_document_total_with_taxes,
 )
-from cacao_accounting.fiscal_preview_service import _decimal_value as preview_decimal
+from cacao_accounting.fiscal_preview_service import _decimal_value as preview_decimal, fiscal_preview
 from cacao_accounting.tax_rule_service import TaxRuleServiceError
 from cacao_accounting.tax_rule_service import _decimal_value as rule_decimal
 
@@ -86,6 +86,40 @@ def test_manual_tax_line_rejects_non_finite_amounts(fiscal_app, value):
     with fiscal_app.app_context():
         with pytest.raises(ValueError):
             calculate_document_total_with_taxes(document, Decimal("100"), [], tax_lines_payload=payload)
+
+
+@pytest.mark.parametrize("field", ["base_amount", "rate", "amount"])
+def test_preview_and_persistence_reject_negative_manual_tax_values(fiscal_app, field):
+    """Preview and persistence reject negative manual tax values with one validation rule."""
+    document = SimpleNamespace(company="alpha", tax_template_id=None, document_type="sales_invoice")
+    line = {
+        "manual": True,
+        "source_rule_id": "MANUAL-IVA",
+        "concept": "iva",
+        "type": "tax",
+        "calculation_method": "fixed",
+        "base_amount": "0",
+        "rate": "0",
+        "amount": "0",
+        "affects_document_total": True,
+    }
+    line[field] = "-5"
+    preview_payload = {
+        "document_type": "sales_invoice",
+        "company": "alpha",
+        "posting_date": "2026-05-10",
+        "currency": "NIO",
+        "lines": [{"qty": 1, "rate": 100}],
+        "tax_lines": [line],
+    }
+
+    with fiscal_app.app_context():
+        preview_result = fiscal_preview(preview_payload)
+        assert len(preview_result["errors"]) == 1
+        assert "fiscales manuales no pueden contener importes negativos" in preview_result["errors"][0]
+        assert preview_result["summary"]["grand_total"] == "100"
+        with pytest.raises(ValueError, match="fiscales manuales no pueden contener importes negativos"):
+            calculate_document_total_with_taxes(document, Decimal("100"), [], tax_lines_payload=[line])
 
 
 @pytest.mark.parametrize("value", NON_FINITE)
