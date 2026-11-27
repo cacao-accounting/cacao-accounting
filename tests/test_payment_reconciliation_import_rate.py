@@ -96,6 +96,22 @@ def test_tasa_declarada_alta_no_rechaza_una_asignacion_valida(entorno_contable_a
     assert errors == []
 
 
+def test_el_endpoint_rechaza_una_fecha_de_aplicacion_invalida(app, entorno_contable, authenticated_client):
+    """La prevalidación HTTP no acepta una fecha de aplicación malformada."""
+    del entorno_contable
+    response = authenticated_client("admin").post(
+        "/api/line-import/validate",
+        json={
+            "doctype": "payment_reconciliation",
+            "context": {"company_id": "cacao", "allocation_date": "no-es-fecha", "filters": {}},
+            "rows": [{}],
+        },
+    )
+
+    assert response.status_code == 400, response.get_data(as_text=True)
+    assert "fecha de aplicación no es válida" in response.get_json()["errors"][0]["message"]
+
+
 def test_el_formulario_envia_la_fecha_de_aplicacion_al_prevalidador():
     """La importación usa la misma fecha de aplicación que el POST real."""
     template = (

@@ -8454,6 +8454,10 @@ msgstr "The target document belongs to another company."
 msgid "El documento destino no existe."
 msgstr "The target document does not exist."
 
+#: cacao_accounting/api/line_import.py:432
+msgid "La fecha de aplicación no es válida."
+msgstr "The allocation date is invalid."
+
 #: cacao_accounting/bancos/routes.py:189
 msgid "La fecha de conciliación no es una fecha válida (ISO 8601)."
 msgstr "The reconciliation date is not a valid date (ISO 8601)."
