@@ -1272,15 +1272,17 @@ def actualizar_precio_item(item_price_id: str):
         flash(_("El precio debe ser finito."), "danger")
         return redirect(url_for("admin.precios_item"))
     expected_price = request.form.get("expected_price")
-    if expected_price:
-        try:
-            expected = Decimal(expected_price)
-        except (InvalidOperation, ValueError):
-            flash(_("La versión del precio enviada no es válida."), "danger")
-            return redirect(url_for("admin.precios_item"))
-        if expected != item_price.price:
-            flash(_("El precio cambió mientras editaba. Recargue la lista antes de guardar."), "danger")
-            return redirect(url_for("admin.precios_item"))
+    if not expected_price or not expected_price.strip():
+        flash(_("La versión del precio enviada no es válida."), "danger")
+        return redirect(url_for("admin.precios_item"))
+    try:
+        expected = Decimal(expected_price)
+    except (InvalidOperation, ValueError):
+        flash(_("La versión del precio enviada no es válida."), "danger")
+        return redirect(url_for("admin.precios_item"))
+    if not expected.is_finite() or expected != item_price.price:
+        flash(_("El precio cambió mientras editaba. Recargue la lista antes de guardar."), "danger")
+        return redirect(url_for("admin.precios_item"))
     database.session.execute(
         database.select(PriceList.id).filter_by(id=item_price.price_list_id).with_for_update()
     ).scalar_one_or_none()

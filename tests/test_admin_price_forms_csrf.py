@@ -250,7 +250,7 @@ def test_item_price_update_form_sends_its_own_csrf_token(csrf_price_forms):
     assert page.status_code == 200
     token = _form_token(page.get_data(as_text=True), url)
 
-    data = {"price": "18.75", "min_qty": "0"}
+    data = {"price": "18.75", "expected_price": "10", "min_qty": "0"}
     assert client.post(url, data=data).status_code == 400
 
     accepted = client.post(url, data={**data, "csrf_token": token})
@@ -323,6 +323,7 @@ def test_item_price_update_rejects_invalid_decimal_without_mutating(csrf_price_f
     token = _form_token(page.get_data(as_text=True), url)
     data = {
         "price": "18.75",
+        "expected_price": "10",
         "min_qty": "2",
         "valid_from": "2026-05-01",
         "valid_upto": "2026-05-31",
@@ -471,3 +472,24 @@ def test_edicion_completa_si_actualiza_criterios(csrf_price_forms):
             for temporal in temporales:
                 database.session.delete(temporal)
             database.session.commit()
+
+
+@pytest.mark.parametrize("valor_version", [None, "", "   ", "no-numero", "NaN", "Infinity"])
+def test_edicion_rapida_exige_version_valida(csrf_price_forms, valor_version):
+    """Sin versión esperada válida no se guarda el precio: la guarda falla cerrado."""
+    app, client, (_item_code, _price_list_id, item_price_id) = csrf_price_forms
+    url = f"/settings/item-prices/{item_price_id}"
+    page = client.get("/settings/item-prices")
+    token = _form_token(page.get_data(as_text=True), url)
+    antes = _item_price_snapshot(app, item_price_id)
+    data = {"price": "18.75", "csrf_token": token}
+    if valor_version is not None:
+        data["expected_price"] = valor_version
+
+    respuesta = client.post(url, data=data, follow_redirects=True)
+
+    assert respuesta.status_code == 200
+    assert respuesta.history[0].status_code == 302
+    html = respuesta.get_data(as_text=True)
+    assert "versión del precio enviada no es válida" in html or "precio cambió mientras editaba" in html
+    assert _item_price_snapshot(app, item_price_id) == antes
