@@ -17,7 +17,7 @@ from cacao_accounting.contabilidad.journal_service import (
     create_journal_draft,
     submit_journal,
 )
-from cacao_accounting.database import ExchangeRate, GLEntry, User, database
+from cacao_accounting.database import Currency, ExchangeRate, GLEntry, User, database
 
 
 def _payload(credit_currency: str = "NIO") -> dict[str, object]:
@@ -75,8 +75,14 @@ def test_manual_journal_balances_with_historical_rate_for_line(app, entorno_cont
 def test_manual_journal_rejects_missing_historical_conversion(app, entorno_contable):
     """An unavailable conversion blocks the draft instead of assuming rate one."""
     del entorno_contable
-    with app.app_context(), pytest.raises(JournalValidationError, match="tipo de cambio registrado"):
-        create_journal_draft(_payload("EUR"), user_id=_admin_id(), assign_identifier=False)
+    with app.app_context():
+        database.session.add(Currency(code="EUT", name="Test euro", decimals=2, active=True))
+        database.session.flush()
+        try:
+            with pytest.raises(JournalValidationError, match="tipo de cambio registrado"):
+                create_journal_draft(_payload("EUT"), user_id=_admin_id(), assign_identifier=False)
+        finally:
+            database.session.rollback()
 
 
 def test_line_import_validation_uses_the_journal_posting_date(app, entorno_contable):

@@ -16,7 +16,15 @@ from cacao_accounting.contabilidad.journal_service import (
     duplicate_journal_as_reversal_draft,
     submit_journal,
 )
-from cacao_accounting.database import AccountingPeriod, Accounts, ComprobanteContable, GLEntry, User, database
+from cacao_accounting.database import (
+    AccountingPeriod,
+    Accounts,
+    ComprobanteContable,
+    Currency,
+    GLEntry,
+    User,
+    database,
+)
 
 
 def _periodo_junio() -> None:
@@ -47,8 +55,8 @@ def _payload() -> dict[str, object]:
         "base_currency": "NIO",
         "exchange_rate": "1",
         "lines": [
-            {"order": 1, "account": "1101", "debit": "100", "credit": ""},
-            {"order": 2, "account": "4101", "debit": "", "credit": "100"},
+            {"order": 1, "account": "1101", "debit": "100", "credit": "", "currency": "USD"},
+            {"order": 2, "account": "4101", "debit": "", "credit": "3650", "currency": "NIO"},
         ],
     }
 
@@ -64,7 +72,7 @@ def _gl(journal_id: str) -> list[tuple[str, str, object, object, bool]]:
 
 
 def test_reversion_historica_permite_cuenta_desactivada(entorno_contable_aislado):
-    """La reversa se crea y postea sin alterar el asiento original."""
+    """A reversal can use the original inactive account and currency."""
     app = entorno_contable_aislado.app
     with app.app_context():
         _periodo_junio()
@@ -82,6 +90,8 @@ def test_reversion_historica_permite_cuenta_desactivada(entorno_contable_aislado
 
         cuenta = database.session.get(Accounts, cuentas["1101"])
         cuenta.active = False
+        moneda_usd = database.session.execute(select(Currency).where(Currency.code == "USD")).scalar_one()
+        moneda_usd.active = False
         database.session.commit()
 
         reversa = duplicate_journal_as_reversal_draft(

@@ -965,6 +965,7 @@ def _validate_journal_line(
     account_cache: dict[str, Accounts | None],
     *,
     allow_inactive_account: bool = False,
+    allow_inactive_currency: bool = False,
 ) -> None:
     """Valida una linea individual del comprobante.
 
@@ -981,6 +982,8 @@ def _validate_journal_line(
         raise JournalValidationError(_("Una linea no puede tener debe y haber positivos al mismo tiempo."))
     if line.debit == 0 and line.credit == 0:
         raise JournalValidationError(_("Cada linea debe tener un importe en debe o en haber."))
+    if line.currency:
+        _validate_journal_line_currency(line.currency, allow_inactive=allow_inactive_currency)
     if line.exchange_rate is not None and line.exchange_rate <= 0:
         raise JournalValidationError(_("El tipo de cambio de la línea debe ser mayor que cero."))
     if line.reference_exchange_rate is not None and line.reference_exchange_rate <= 0:
@@ -997,6 +1000,15 @@ def _validate_journal_line(
         raise JournalValidationError(_("La cuenta contable debe estar activa, habilitada y ser una cuenta hoja."))
     if account.account_type == "expense" and not line.cost_center:
         raise JournalValidationError(_("Las cuentas de gasto requieren centro de costo."))
+
+
+def _validate_journal_line_currency(currency_code: str, *, allow_inactive: bool = False) -> None:
+    """Reject unknown or inactive line currencies on new manual journals."""
+    currency = database.session.execute(select(Currency).where(Currency.code == currency_code)).scalar_one_or_none()
+    if currency is None:
+        raise JournalValidationError(_("La moneda de la l\u00ednea no existe."))
+    if not bool(currency.active) and not allow_inactive:
+        raise JournalValidationError(_("La moneda de la l\u00ednea est\u00e1 inactiva."))
 
 
 def _validate_journal_line_dimensions(company: str, line: JournalLineInput) -> None:
@@ -1026,7 +1038,13 @@ def _validate_balanced_lines(data: JournalDraftInput, *, allow_inactive_accounts
         select(Entity.currency).where(Entity.code == data.company)
     ).scalar_one_or_none()
     for line in data.lines:
-        _validate_journal_line(data.company, line, account_cache, allow_inactive_account=allow_inactive_accounts)
+        _validate_journal_line(
+            data.company,
+            line,
+            account_cache,
+            allow_inactive_account=allow_inactive_accounts,
+            allow_inactive_currency=allow_inactive_accounts,
+        )
         effective_rate = _journal_line_company_rate(line, data, company_currency)
         debit, credit = totals.get(line.book, (Decimal("0"), Decimal("0")))
         totals[line.book] = debit + line.debit * effective_rate, credit + line.credit * effective_rate

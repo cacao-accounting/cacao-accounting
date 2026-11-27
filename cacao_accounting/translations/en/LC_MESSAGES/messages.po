@@ -15868,6 +15868,12 @@ msgstr "The accounting entry is not balanced per book."
 msgid "El comprobante requiere monedas para validar su balance."
 msgstr "The journal entry requires currencies to validate its balance."
 
+msgid "La moneda de la línea no existe."
+msgstr "The line currency does not exist."
+
+msgid "La moneda de la línea está inactiva."
+msgstr "The line currency is inactive."
+
 #: cacao_accounting/contabilidad/journal_service.py:1064
 msgid "Las cuentas AP/AR requieren tercero del tipo correspondiente."
 msgstr "AP/AR accounts require a party of the corresponding type."
