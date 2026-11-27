@@ -1290,11 +1290,16 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
         release = Event()
         calls: list[int] = []
         calls_lock = Lock()
+        worker_pids: dict[str, int] = {}
+        pids_lock = Lock()
 
         def lock_observable(model, record_id):
             with calls_lock:
                 calls.append(1)
                 number = len(calls)
+            pid = database.session.connection().exec_driver_sql("SELECT pg_backend_pid()").scalar()
+            with pids_lock:
+                worker_pids[f"worker_{number}"] = int(pid)
             locked = original_lock(model, record_id)
             if number == 1:
                 first_locked.set()
@@ -1312,23 +1317,31 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
                 blocked = False
                 deadline = time.monotonic() + 10
                 while time.monotonic() < deadline:
-                    with monitor_engine.connect() as conn:
-                        rows = (
-                            conn.execute(
-                                text(
-                                    "SELECT wait_event_type, state, pg_blocking_pids(pid) AS blockers "
-                                    "FROM pg_stat_activity WHERE pid <> pg_backend_pid()"
+                    with pids_lock:
+                        first_pid = worker_pids.get("worker_1")
+                        second_pid = worker_pids.get("worker_2")
+                    if first_pid and second_pid:
+                        with monitor_engine.connect() as conn:
+                            row = (
+                                conn.execute(
+                                    text(
+                                        "SELECT wait_event_type, pg_blocking_pids(pid) AS blockers "
+                                        "FROM pg_stat_activity WHERE pid = :pid"
+                                    ),
+                                    {"pid": second_pid},
                                 )
+                                .mappings()
+                                .first()
                             )
-                            .mappings()
-                            .all()
-                        )
-                    if any(row.get("wait_event_type") == "Lock" and (row.get("blockers") or []) for row in rows):
-                        blocked = True
-                        break
+                        blockers = list((row or {}).get("blockers") or [])
+                        if row and row.get("wait_event_type") == "Lock" and first_pid in blockers:
+                            blocked = True
+                            break
                     time.sleep(0.05)
 
-                assert blocked, "El segundo ajuste no mostr? contenci?n de lock en PostgreSQL"
+                assert blocked, (
+                    "El segundo ajuste no mostr? contenci?n de lock real contra el primer worker en PostgreSQL"
+                )
                 release.set()
                 results = [first.result(timeout=30), second.result(timeout=30)]
         finally:
