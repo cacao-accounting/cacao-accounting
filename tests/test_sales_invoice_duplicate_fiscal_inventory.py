@@ -1105,13 +1105,15 @@ def test_duplicado_contabiliza_snapshot_copiado_sin_reemplazo_y_con_tasa(entorno
         origen_id = origen.id
 
     cliente_http = _cliente(entorno_contable_aislado)
-    assert cliente_http.post(f"/sales/sales-invoice/{origen_id}/duplicate").status_code == 302
+    respuesta_duplicacion = cliente_http.post(f"/sales/sales-invoice/{origen_id}/duplicate")
+    assert respuesta_duplicacion.status_code == 302
+    copia_id = respuesta_duplicacion.headers["Location"].rsplit("/", maxsplit=1)[-1]
 
     with app.app_context():
-        copia = database.session.execute(
-            database.select(SalesInvoice).where(SalesInvoice.id != origen_id, SalesInvoice.docstatus == 0)
-        ).scalar_one()
-        copia_id = copia.id
+        copia = database.session.get(SalesInvoice, copia_id)
+        assert copia is not None
+        assert copia.id != origen_id
+        assert copia.docstatus == 0
         assert copia.transaction_currency == "USD"
         assert copia.base_currency == "NIO"
         assert copia.exchange_rate == tasa
