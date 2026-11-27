@@ -1806,6 +1806,10 @@ def create_petty_cash_replenishment(
                 PettyCashReplenishmentExpense.petty_cash_expense_id.in_(ids),
                 PettyCashReplenishment.status != "cancelado",
             )
+            # MySQL REPEATABLE READ conserva la instantánea inicial; la lectura
+            # bloqueante vuelve a ver el vínculo confirmado por la otra
+            # solicitud que acaba de liberar el lock del gasto.
+            .with_for_update()
         ).scalars()
     )
     legacy_associated_ids = set(
@@ -1813,6 +1817,7 @@ def create_petty_cash_replenishment(
             database.select(PettyCashExpense.id)
             .join(PettyCashReplenishment, PettyCashReplenishment.id == PettyCashExpense.replenishment_id)
             .where(PettyCashExpense.id.in_(ids), PettyCashReplenishment.status != "cancelado")
+            .with_for_update()
         ).scalars()
     )
     if len(expenses) != len(ids) or any(
