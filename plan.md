@@ -276,7 +276,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 |---|---|---|---|
 | #2120 | #1709 | ✅ `9f129cc4`; GitHub: open / fix-proposed | Rechaza períodos ausentes/ambiguos, bloquea y revalida el período de reversa; 12 passed, 1 skipped en SQLite; PostgreSQL pendiente por entorno |
 | #546 | #1655 | ✅ `d3759012`; GitHub: open / fix-proposed | Inmutabilidad de tasas con snapshots GL/revaluación dentro de su vigencia; 8 passed en SQLite; PostgreSQL pendiente por entorno |
-| #758 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | HIGH: Enforce complete source and destination currency data on every posting |
+| #758 | #1655 | ✅ `3fab3b73` + `99295f23`; GitHub: open / fix-proposed | Snapshots explícitos y guardas por libro; 53 passed en SQLite; sin migración legacy; PostgreSQL pendiente por entorno |
 | #761 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | MEDIUM: Apply cancellation and reversal period semantics consistently to all document types |
 | #961 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | AR/AP acepta tasa unitaria sin conversión válida |
 | #995 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Fiscal: aplicar exclusiones sin lista de inclusión |
