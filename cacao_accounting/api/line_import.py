@@ -219,6 +219,11 @@ def _xlsx_archive_is_safe(path: str) -> tuple[bool, str | None]:
             forbidden = ("vbaProject", "externalLink", "embeddings/", "connections.xml")
             if any(any(token in item.filename for token in forbidden) for item in entries):
                 return False, _("El archivo contiene macros, enlaces o contenido embebido no permitido.")
+            names = {item.filename.replace("\\", "/") for item in entries}
+            # #1400: un ZIP válido que no sea OOXML hace que openpyxl lance
+            # KeyError al buscar [Content_Types].xml; se rechaza como formato.
+            if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
+                return False, _("El archivo XLSX está dañado o no es válido.")
     except (OSError, zipfile.BadZipFile):
         return False, _("El archivo XLSX está dañado o no es válido.")
     return True, None
@@ -229,6 +234,10 @@ def _select_xlsx_worksheet(workbook: Any) -> tuple[Any | None, list[dict[str, An
     if len(workbook.worksheets) > 10:
         return None, [{"row": None, "field": "file", "message": _("El archivo contiene demasiadas hojas.")}]
     named = [sheet for sheet in workbook.worksheets if _normalize_header(sheet.title) in {"lineas", "lines"}]
+    # #1401: dos hojas de líneas obligan a rechazar el archivo; importar solo la
+    # primera descartaría filas sin avisar.
+    if len(named) > 1:
+        return None, [{"row": None, "field": "sheet", "message": _("Debe existir una única hoja de líneas importable.")}]
     if named:
         return named[0], []
     if len(workbook.worksheets) == 1:
@@ -380,7 +389,16 @@ def parse_xlsx_lines() -> ResponseReturnValue:
         if errors:
             return jsonify({"valid": False, "rows": [], "errors": errors})
         return jsonify({"valid": True, "rows": rows, "errors": []})
-    except (OSError, ValueError, zipfile.BadZipFile) as exc:
+    except (zipfile.BadZipFile, KeyError):
+        # #1400: openpyxl lanza KeyError cuando el OOXML no contiene las partes
+        # obligatorias; la ruta responde 400 accionable en lugar de 500.
+        return (
+            jsonify(
+                {"valid": False, "errors": [{"field": "file", "message": _("El archivo XLSX está dañado o no es válido.")}]}
+            ),
+            400,
+        )
+    except (OSError, ValueError) as exc:
         return jsonify({"valid": False, "errors": [{"field": "file", "message": str(exc)}]}), 400
     finally:
         try:
