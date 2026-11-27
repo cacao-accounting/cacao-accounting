@@ -979,18 +979,6 @@ def _msg_cantidad_item(item_code: str) -> str:
     return _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}
 
 
-def _validated_supplier(supplier_id: str | None) -> Party | None:
-    """Carga el proveedor y exige el rol cuando se informa un tercero."""
-    if not supplier_id:
-        return None
-    supplier = database.session.get(Party, supplier_id)
-    if supplier is None:
-        raise ValueError(_("El tercero no existe."))
-    if not supplier.is_supplier:
-        raise ValueError(_("El tercero seleccionado no está habilitado como proveedor."))
-    return supplier
-
-
 def _msg_item_inexistente(item_code: str) -> str:
     """Mensaje para item inexistente."""
     return _("El item %(item_code)s no existe.") % {"item_code": item_code}
@@ -2147,12 +2135,12 @@ def _create_purchase_quotation_from_request():
     """Crea una solicitud de cotización a partir del formulario enviado."""
     try:
         supplier_id = request.form.get("supplier_id") or None
-        supplier = _validated_supplier(supplier_id)
         posting_date = _parse_date(request.form.get("posting_date"))
         from_request_id = _purchase_quotation_origin_id()
         source = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
         company, transaction_currency = _validate_purchase_flow_header(source)
         exige_acceso_compania("purchases", company, "crear")
+        supplier = _validated_purchase_supplier(supplier_id, company)
         cotizacion = PurchaseQuotation(
             supplier_id=supplier_id,
             supplier_name=supplier.name if supplier else None,
@@ -2199,10 +2187,10 @@ def _handle_purchase_quotation_edit_post(registro):
         revert_relations_for_target("purchase_quotation", registro.id, reason="draft_edited")
         refresh_source_caches_for_target("purchase_quotation", registro.id)
         supplier_id = request.form.get("supplier_id") or None
-        supplier = _validated_supplier(supplier_id)
+        requested_company = request.form.get("company") or registro.company
+        supplier = _validated_purchase_supplier(supplier_id, requested_company)
         registro.supplier_id = supplier_id
         registro.supplier_name = supplier.name if supplier else None
-        requested_company = request.form.get("company") or registro.company
         source_relation = database.session.execute(
             database.select(DocumentRelation)
             .where(

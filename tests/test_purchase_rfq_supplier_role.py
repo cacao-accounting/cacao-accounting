@@ -16,6 +16,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from flask import get_flashed_messages
 from flask_login import login_user
 
 from cacao_accounting.compras.services import (
@@ -23,6 +24,7 @@ from cacao_accounting.compras.services import (
     _handle_purchase_quotation_edit_post,
 )
 from cacao_accounting.database import (
+    CompanyParty,
     DocumentRelation,
     Party,
     PurchaseQuotation,
@@ -52,8 +54,8 @@ def _formulario(supplier_id: str | None) -> dict[str, str]:
     return datos
 
 
-def _tercero(app, *, is_supplier: bool) -> str:
-    """Crea un tercero con el rol indicado y devuelve su identificador."""
+def _tercero(app, *, is_supplier: bool, activo: bool = True, miembro: bool = True) -> str:
+    """Crea un tercero con el rol, vigencia y vínculo indicados."""
     suffix = uuid4().hex[:8]
     with app.app_context():
         party = Party(
@@ -61,9 +63,12 @@ def _tercero(app, *, is_supplier: bool) -> str:
             name=f"Tercero {suffix}",
             is_supplier=is_supplier,
             is_customer=not is_supplier,
-            is_active=True,
+            is_active=activo,
         )
         database.session.add(party)
+        database.session.flush()
+        if is_supplier and miembro:
+            database.session.add(CompanyParty(company="cacao", party_id=party.id, is_active=True))
         database.session.commit()
         return str(party.id)
 
@@ -343,3 +348,98 @@ def test_edicion_http_con_linea_invalida_conserva_borrador(app, entorno_contable
     with app.app_context():
         database.session.remove()
         assert _estado_rfq(cotizacion_id) == estado_antes
+
+
+@pytest.mark.parametrize(
+    ("caso", "mensaje"),
+    [
+        ("inactivo", "no está habilitado como proveedor"),
+        ("sin_vinculo", "no está habilitado para la compañía"),
+        ("vinculo_inactivo", "no está habilitado para la compañía"),
+    ],
+)
+def test_alta_rfq_rechaza_proveedor_no_vigente(app, entorno_contable, caso, mensaje):
+    """#2319: el proveedor informado debe estar activo y vinculado a la compañía."""
+    if caso == "inactivo":
+        proveedor_id = _tercero(app, is_supplier=True, activo=False)
+    elif caso == "sin_vinculo":
+        proveedor_id = _tercero(app, is_supplier=True, miembro=False)
+    else:
+        proveedor_id = _tercero(app, is_supplier=True)
+        with app.app_context():
+            vinculo = database.session.execute(
+                database.select(CompanyParty).filter_by(party_id=proveedor_id, company="cacao")
+            ).scalar_one()
+            vinculo.is_active = False
+            database.session.commit()
+    with app.app_context():
+        antes = database.session.execute(database.select(database.func.count()).select_from(PurchaseQuotation)).scalar_one()
+
+    with app.app_context(), app.test_request_context("/", method="POST", data=_formulario(proveedor_id)):
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        login_user(admin)
+        assert _create_purchase_quotation_from_request() is None
+        assert mensaje in " ".join(str(item) for item in get_flashed_messages())
+
+    with app.app_context():
+        despues = database.session.execute(database.select(database.func.count()).select_from(PurchaseQuotation)).scalar_one()
+        assert despues == antes
+
+
+@pytest.mark.parametrize("caso", ["inactivo", "vinculo_inactivo"])
+def test_edicion_rfq_no_cambia_proveedor_no_vigente(app, entorno_contable, caso):
+    """#2319: la edición no sustituye un proveedor válido por uno no vigente."""
+    proveedor_id = _tercero(app, is_supplier=True)
+    candidato_id = _tercero(app, is_supplier=True)
+    with app.app_context():
+        if caso == "inactivo":
+            database.session.get(Party, candidato_id).is_active = False
+        else:
+            vinculo = database.session.execute(
+                database.select(CompanyParty).filter_by(party_id=candidato_id, company="cacao")
+            ).scalar_one()
+            vinculo.is_active = False
+        cotizacion = PurchaseQuotation(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=0,
+            supplier_id=proveedor_id,
+            supplier_name="Proveedor original",
+            transaction_currency="NIO",
+        )
+        database.session.add(cotizacion)
+        database.session.commit()
+        cotizacion_id = cotizacion.id
+        admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+        with app.test_request_context("/", method="POST", data=_formulario(candidato_id)):
+            login_user(admin)
+            assert _handle_purchase_quotation_edit_post(cotizacion) is not None
+
+        registro = database.session.get(PurchaseQuotation, cotizacion_id)
+        assert registro is not None
+        assert registro.supplier_id == proveedor_id
+        assert registro.supplier_name == "Proveedor original"
+
+
+def test_historico_rfq_sigue_consultable_si_proveedor_se_desactiva(app, entorno_contable):
+    """La lectura histórica no depende de la vigencia actual del proveedor."""
+    proveedor_id = _tercero(app, is_supplier=True)
+    with app.app_context():
+        cotizacion = PurchaseQuotation(
+            company="cacao",
+            posting_date=FECHA,
+            docstatus=1,
+            supplier_id=proveedor_id,
+            supplier_name="Proveedor historico",
+            transaction_currency="NIO",
+        )
+        database.session.add(cotizacion)
+        database.session.commit()
+        cotizacion_id = cotizacion.id
+        database.session.get(Party, proveedor_id).is_active = False
+        database.session.commit()
+        database.session.remove()
+
+        leida = database.session.get(PurchaseQuotation, cotizacion_id)
+        assert leida is not None
+        assert leida.supplier_id == proveedor_id
