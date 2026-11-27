@@ -2653,7 +2653,8 @@ def _stock_bin_for(company: str, item_code: str, warehouse: str, *, lock: bool =
     """Fetch a stock bin, optionally locking it for a valuation transition."""
     statement = select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
     if lock:
-        statement = statement.with_for_update()
+        # #1868: refrescar fila ya cargada para no validar sobre identity map obsoleto.
+        statement = statement.with_for_update().execution_options(populate_existing=True)
     return database.session.execute(statement).scalars().first()
 
 
@@ -4167,6 +4168,19 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
     if qty_change > 0 and value_change > 0:
         valuation_rate = value_change / qty_change
     posting_date = cancellation_date
+    # #1868: revalidar contra bin refrescado bajo lock antes de mutar.
+    if qty_change < 0:
+        bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse, lock=True)
+        current_qty = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
+        item = database.session.get(Item, movement.item_code)
+        if item is None:
+            item = database.session.execute(select(Item).filter_by(code=movement.item_code)).scalar_one_or_none()
+        allow_negative = bool(getattr(item, "allow_negative_stock", False)) if item else False
+        if not allow_negative and current_qty + qty_change < 0:
+            raise PostingError(
+                _("La reversa de stock dejar?a el bin con cantidad negativa para %(item)s en %(wh)s.")
+                % {"item": movement.item_code, "wh": movement.warehouse}
+            )
     qty_after, stock_value_after = _upsert_stock_bin(
         company=movement.company,
         item_code=movement.item_code,
