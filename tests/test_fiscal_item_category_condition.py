@@ -374,6 +374,88 @@ def test_snapshot_reconstructs_accumulated_exclusion_without_inclusions(app):
         assert [row.amount for row in rows] == [Decimal("10.0000"), Decimal("4.5000")]
 
 
+def test_snapshot_acumula_lineas_repetidas_del_mismo_concepto(app):
+    """La base acumulada usa la suma de todas las líneas canónicas del concepto."""
+    suffix = uuid4().hex[:6]
+    with app.app_context():
+        reglas = [
+            create_tax_rule(
+                {
+                    "name": f"Tasa fija A {suffix}",
+                    "company": "cacao",
+                    "concept": "tasa_fija",
+                    "applies_to": "both",
+                    "level": "transaction",
+                    "tax_type": "tax",
+                    "calculation_method": "fixed",
+                    "rate": "0",
+                    "amount": "10",
+                    "base_mode": "goods",
+                    "participates_in_next_base": "on",
+                    "recognition_event": "invoice",
+                    "sequence": "10",
+                    "is_active": "on",
+                }
+            ),
+            create_tax_rule(
+                {
+                    "name": f"Tasa fija B {suffix}",
+                    "company": "cacao",
+                    "concept": "tasa_fija",
+                    "applies_to": "both",
+                    "level": "transaction",
+                    "tax_type": "tax",
+                    "calculation_method": "fixed",
+                    "rate": "0",
+                    "amount": "8",
+                    "base_mode": "goods",
+                    "participates_in_next_base": "on",
+                    "recognition_event": "invoice",
+                    "sequence": "20",
+                    "is_active": "on",
+                }
+            ),
+            create_tax_rule(
+                {
+                    "name": f"Tasa posterior {suffix}",
+                    "company": "cacao",
+                    "concept": "tasa_posterior",
+                    "applies_to": "both",
+                    "level": "transaction",
+                    "tax_type": "tax",
+                    "calculation_method": "percentage",
+                    "rate": "10",
+                    "amount": "0",
+                    "base_mode": "accumulated",
+                    "include_concepts": "tasa_fija",
+                    "recognition_event": "invoice",
+                    "sequence": "30",
+                    "is_active": "on",
+                }
+            ),
+        ]
+        database.session.flush()
+        document_id = f"INV-REPEATED-CONCEPT-{suffix}"
+
+        persist_document_fiscal_snapshot(
+            company="cacao",
+            document_type="sales_invoice",
+            document_id=document_id,
+            currency="NIO",
+            tax_lines=[{"source_rule_id": rule.id, "concept": rule.concept} for rule in reglas],
+            tax_summary={"subtotal": "100", "grand_total": "119.80"},
+            server_subtotal=Decimal("100"),
+        )
+        database.session.commit()
+
+        rows = load_document_fiscal_lines(document_type="sales_invoice", document_id=document_id)
+        summary_total = sum((row.amount for row in rows), Decimal("0")) + Decimal("100")
+
+        assert [row.amount for row in rows] == [Decimal("10.0000"), Decimal("8.0000"), Decimal("1.8000")]
+        assert rows[2].base_amount == Decimal("18.0000")
+        assert summary_total == Decimal("119.8000")
+
+
 def test_tax_rule_normalizes_concepts_and_snapshot_handles_legacy_duplicates(app):
     """Rule saves deduplicate concepts and snapshots safely handle legacy repeats."""
     suffix = uuid4().hex[:6]
