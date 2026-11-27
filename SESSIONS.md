@@ -290,3 +290,34 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
 - **Alcance de Desktop**: las pruebas de aprobaciones, importación tabular y
   rechazo multicompañía se omiten en modo escritorio porque son funciones de
   Cloud; la matriz desktop valida los flujos soportados.
+
+## Refs: desbloqueo con motores reales (2026-11-27)
+
+- **#2271**: `Session.get(..., with_for_update=True)` podía reutilizar el
+  identity map sin emitir el lock en PostgreSQL. La carga ahora usa SELECT FOR
+  UPDATE con `populate_existing`; la carrera pasa en SQLite, PostgreSQL 16.16 y
+  MySQL 8.4.13.
+- **#2295**: confirmado en MySQL REPEATABLE READ. La comprobación de duplicado
+  de mapeos usaba una lectura de instantánea posterior al lock; la regresión
+  falla sin `with_for_update` y pasa con la lectura actual.
+- **#2297**: no se reprodujo duplicidad. `_award_consumed_base_quantity` ya usa
+  lectura bloqueante y rechaza la cantidad consumida por la orden manual; no se
+  cambió producción.
+- **#2320**: la carrera de último admin se ejecutó con snapshot previo al lock
+  en PostgreSQL y MySQL; tres pruebas pasan en ambos motores.
+- **#2329**: confirmado en SQLite. La edición rápida perdía una actualización
+  con dos POST del mismo `expected_price`; ahora usa UPDATE condicionado por
+  versión y la regresión pasa en SQLite, PostgreSQL y MySQL.
+- **#2302**: la creación de listas predeterminadas toma un lock por compañía y
+  ámbito de venta; la prueba concurrente deja una sola predeterminada en los
+  tres motores.
+- **#2298/#2334**: la confirmación pública concurrente y el teardown se
+  ejecutaron contra PostgreSQL real; la suite completa del archivo pasa.
+- **#2339**: las carreras de caja chica pasan en PostgreSQL real.
+- **#2293**: la carrera de adjudicaciones pasa en PostgreSQL y MySQL; queda
+  pendiente cubrir apertura/cierre de ronda.
+- **#2316**: el downgrade de hash v2 se rechazó en una base PostgreSQL aislada,
+  conservando columna y cadena.
+- **Pendiente de decisión**: #2299 (alcance del lock de crédito), #2306
+  (instante que gobierna la conciliación automática), #2308 (traslados entre
+  compañías), #2311 (devoluciones concurrentes) y #2346 (Compose real).
