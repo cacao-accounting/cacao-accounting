@@ -7,15 +7,17 @@ from __future__ import annotations
 
 import io
 
+import pytest
 from odf.opendocument import OpenDocumentSpreadsheet
 from odf.table import Table, TableCell, TableRow
 from odf.text import P
 
 from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
 from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportService
+from cacao_accounting.imports.readers.limits import ImportReadLimitError
 
 
-def _ods_bytes(rows: list[list[str]], repeat_first_data_cell: bool = False) -> bytes:
+def _ods_bytes(rows: list[list[str]], repeat_first_data_cell: bool = False, repeat_count: int = 2) -> bytes:
     documento = OpenDocumentSpreadsheet()
     tabla = Table(name="Datos")
     for row_index, values in enumerate(rows):
@@ -24,7 +26,7 @@ def _ods_bytes(rows: list[list[str]], repeat_first_data_cell: bool = False) -> b
             repetir = repeat_first_data_cell and row_index == 1 and cell_index == 0
             atributos = {"valuetype": "string"}
             if repetir:
-                atributos["numbercolumnsrepeated"] = "2"
+                atributos["numbercolumnsrepeated"] = str(repeat_count)
             celda = TableCell(**atributos)
             celda.addElement(P(text=str(value)))
             fila.addElement(celda)
@@ -77,6 +79,36 @@ def test_presupuesto_parsea_celdas_repetidas_ods():
 
     assert filas and filas[0]["Cuenta"] == "1101"
     assert filas[0]["Descripción"] == "1101"
+
+
+def test_presupuesto_rechaza_columnas_repetidas_excesivas():
+    """Una repetición ODS enorme falla antes de expandir la fila (#1373)."""
+    contenido = _ods_bytes(
+        [
+            ["Cuenta", "Descripción", "Mayo 2026"],
+            ["1101", "Caja", "10"],
+        ],
+        repeat_first_data_cell=True,
+        repeat_count=100_000,
+    )
+
+    with pytest.raises(ImportReadLimitError):
+        BudgetImportService()._parse_ods(contenido)
+
+
+def test_tasas_rechaza_columnas_repetidas_excesivas():
+    """El parser de tasas aplica el mismo límite de expansión (#1373)."""
+    contenido = _ods_bytes(
+        [
+            ["Moneda Origen", "Moneda Destino", "Fecha", "Tasa"],
+            ["USD", "NIO", "2026-05-15", "36.5"],
+        ],
+        repeat_first_data_cell=True,
+        repeat_count=100_000,
+    )
+
+    with pytest.raises(ImportReadLimitError):
+        ExchangeRateImportService()._parse_ods(contenido)
 
 
 def _ods_typed_bytes() -> bytes:

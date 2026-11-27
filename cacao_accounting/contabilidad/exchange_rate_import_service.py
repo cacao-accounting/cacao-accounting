@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.database import Currency, ExchangeRate, database
+from cacao_accounting.imports.readers.limits import MAX_IMPORT_COLUMNS, ImportReadLimitError
 
 
 from cacao_accounting.i18n import _
@@ -274,6 +275,9 @@ class ExchangeRateImportService:
         row_values: list[str] = []
         for cell in row.getElementsByType(table_cell_class):
             repeat = ExchangeRateImportService._ods_cell_repeat(cell)
+            # #1373: la repetición declarada no puede expandir la fila sin límite.
+            if repeat < 1 or len(row_values) + repeat > MAX_IMPORT_COLUMNS:
+                raise ImportReadLimitError()
             row_values.extend([ExchangeRateImportService._ods_cell_value(cell, extract_text)] * repeat)
         return row_values
 

@@ -29,6 +29,7 @@ from cacao_accounting.database import (
     Unit,
     database,
 )
+from cacao_accounting.imports.readers.limits import MAX_IMPORT_COLUMNS, ImportReadLimitError
 
 from cacao_accounting.i18n import _
 
@@ -217,6 +218,10 @@ class BudgetImportService:
         row_values: list[str] = []
         for cell in row.getElementsByType(table_cell_class):
             repeat = self._ods_cell_repeat(cell)
+            # #1373: una repetición declarada no se expande más allá del ancho
+            # máximo compartido por los lectores tabulares.
+            if repeat < 1 or len(row_values) + repeat > MAX_IMPORT_COLUMNS:
+                raise ImportReadLimitError()
             row_values.extend([self._ods_cell_value(cell, extract_text)] * repeat)
         return row_values
 
