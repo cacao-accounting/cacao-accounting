@@ -4223,22 +4223,23 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
 def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
     """Reject reversals that leave a bin with forbidden negative stock.
 
-    Valida el resultado final por artículo y bodeja: un prefijo intermedio
+    Valida el resultado final por art?culo y bodega: un prefijo intermedio
     negativo puede ser restaurado por movimientos posteriores del mismo
-    documento (#1857).
+    documento (#1857). Bloquea el bin para serializar con otras reversas
+    concurrentes (#1868).
     """
     projected: dict[tuple[str, str, str], Decimal] = {}
     items: dict[tuple[str, str, str], Any] = {}
     for movement in movements:
         key = (str(movement.company), str(movement.item_code), str(movement.warehouse))
         if key not in projected:
-            bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse)
+            bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse, lock=True)
             projected[key] = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
             item = database.session.get(Item, movement.item_code)
             if item is None:
                 item = database.session.execute(select(Item).filter_by(code=movement.item_code)).scalar_one_or_none()
             if item is None:
-                raise PostingError(_("El artículo %(item_code)s no existe.") % {"item_code": movement.item_code})
+                raise PostingError(_("El art?culo %(item_code)s no existe.") % {"item_code": movement.item_code})
             items[key] = item
         projected[key] -= _decimal_value(movement.qty_change)
     for key, value in projected.items():
@@ -4247,7 +4248,7 @@ def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> 
             raise PostingError(
                 _(
                     "No se puede cancelar el movimiento de %(item_name)s: "
-                    "la bodega %(warehouse)s quedaría con stock negativo."
+                    "la bodega %(warehouse)s quedar?a con stock negativo."
                 )
                 % {"item_name": item.name, "warehouse": key[2]}
             )
@@ -5553,6 +5554,9 @@ def _cancel_stock_movements_if_needed(
     _validate_stock_reversal_capacity(original_movements)
     stock_reversals: list[StockLedgerEntry] = []
     for movement in _reversal_order(original_movements):
+        # Revalidar capacidad con lock justo antes de mutar: otra reversa pudo
+        # consumir el stock entre la validaci?n inicial y este punto (#1868).
+        _validate_stock_reversal_capacity([movement])
         stock_reversals.append(_create_stock_reversal(document, movement, cancellation_date))
         movement.is_cancelled = True
     database.session.add_all(stock_reversals)
