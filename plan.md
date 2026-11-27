@@ -319,7 +319,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1223 | #1655 | ✅ Implementado en 91bc47a3; GitHub: open / fix-proposed | Valida los enlaces de origen de notas de compra |
 | #1224 | #1655 | ✅ Implementado en db753644; GitHub: open / fix-proposed | Valida los orígenes de las notas de venta |
 | #1232 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Libera gastos de reposiciones canceladas |
-| #1233 | #1655 | ? Implementado en `50b2666c`; GitHub: open / fix-proposed | Marca como incompleta la matriz y enumera proyecciones sin conversi?n; 6 pruebas focalizadas; Black/Ruff/Flake8/mypy/pydocstyle/Bandit/complexipy OK; sin migraciones |
+| #1233 | #1655 | ✅ Implementado en `50b2666c`; GitHub: open / fix-proposed | Marca como incompleta la matriz y enumera proyecciones sin conversión; 6 pruebas focalizadas; Black/Ruff/Flake8/mypy/pydocstyle/Bandit/complexipy OK; Pylint 9.58/10 (avisos previos); sin migraciones |
 | #1234 | Consumidor | ⚠️ Implementación pendiente; GitHub: open / needs-work | Proyecta cobros y pagos según vencimiento |
 | #1235 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Valida moneda en matriz de conciliación |
 | #1236 | #1707 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Incluye las cuentas fiscales configuradas en conciliación |
