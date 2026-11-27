@@ -18,10 +18,8 @@ from cacao_accounting.database import (
     ComprobanteContable,
     DocumentRelation,
     DocumentTransition,
-    LandedCostAllocation,
     PaymentEntry,
     PaymentReference,
-    PurchaseInvoice,
     ReconciliationItem,
     StockValuationLayer,
     User,
@@ -253,17 +251,6 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
         ).scalars()
         dependencies.extend(
             CancellationDependency("certificado de retencion", str(row.id), "withholding_certificate") for row in certificates
-        )
-
-    if isinstance(document, PurchaseInvoice):
-        allocations = database.session.execute(
-            select(LandedCostAllocation.id).where(
-                LandedCostAllocation.document_type.in_(source_types),
-                LandedCostAllocation.document_id == source_id,
-            )
-        ).scalars()
-        dependencies.extend(
-            CancellationDependency("costo capitalizable", str(row), "landed_cost_allocation") for row in allocations
         )
 
     dependencies.extend(_consumed_stock_dependencies(document, source_type, source_id))
