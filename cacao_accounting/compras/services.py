@@ -3423,7 +3423,13 @@ def _finalize_purchase_invoice(factura: PurchaseInvoice, total: Decimal, context
     factura.exchange_rate = fx_rate
     base_total, _base = _compute_base_amounts(total, fx_rate)
     items = _active_invoice_items(factura.id)
-    grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
+    grand_total = calculate_document_total_with_taxes(
+        factura,
+        total,
+        items,
+        request.form.get("tax_summary_payload"),
+        request.form.get("tax_lines_payload"),
+    )
     base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
     factura.base_total = base_total
     factura.grand_total = grand_total
@@ -3513,7 +3519,13 @@ def _handle_purchase_invoice_edit_post(registro):
         fx_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
         registro.exchange_rate = fx_rate
         base_total, _base = _compute_base_amounts(total, fx_rate)
-        grand_total = calculate_document_total_with_taxes(registro, total, items, request.form.get("tax_summary_payload"))
+        grand_total = calculate_document_total_with_taxes(
+            registro,
+            total,
+            items,
+            request.form.get("tax_summary_payload"),
+            request.form.get("tax_lines_payload"),
+        )
         base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
         registro.total = total
         registro.base_total = base_total
