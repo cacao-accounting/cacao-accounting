@@ -348,3 +348,34 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
 - **#2353**: dos sesiones compiten por el mismo serial en PostgreSQL y MySQL;
   la actualización condicional deja un solo reclamo. Queda pendiente el posting
   completo con Stock Ledger/GL.
+
+## Refs: estabilización CI tras la carrera de MySQL (2026-11-27)
+
+- **Regresión detectada en CI** — run `46074032610` del PR #1660: `66638454`
+  renombró `_isolated_url` e hizo obligatorio el `sufijo` de `_seed`, y los cinco
+  módulos de lock que importan esos helpers fallaron al importar. pytest
+  interrumpió la colección completa (`Interrupted: 5 errors during collection`)
+  y los tres trabajos `databases / engines`, `databases / cache-isolation` y
+  `python / test (3.13, desktop)` terminaron en exit code 2 sin ejecutar pruebas.
+- **`46e6ebcd`** — `_identificadores(sufijo=None)` centraliza los códigos: sin
+  sufijo devuelve el escenario histórico (`cacao`, NIO, libro FISCAL, BOD01,
+  ART01, usuario admin) que los casos de lock dan por sentado sobre sus bases
+  desechables; con sufijo conserva el aislamiento por compañía y códigos que
+  exige la base compartida de MySQL. `_isolated_url()` vuelve como envoltorio de
+  `_preparar("postgresql")` y `_seed` añade el código del libro a su resultado.
+- **`tests/test_concurrency_seed_contract.py`** — fija el contrato sobre SQLite:
+  códigos históricos, plan contable completo para postear (nueve tipos de cuenta,
+  defaults de compañía y cuenta de inventario por bodega) y convivencia de dos
+  siembras con sufijo en una misma base. Verificada su capacidad de detección
+  alterando un código: la prueba falla con diferencia explícita.
+- **Motores reales locales** — PostgreSQL 16 (`:5433`) y MySQL 8.4 (`:3307`) con
+  `CHECK_DATABASE=true`: pasan los cuatro casos de lock, la variante
+  `[postgresql]` de #2311 y la variante `[mysql]` de #2311; colección completa de
+  4560 pruebas sin errores. Redis no estuvo disponible en el entorno, así que el
+  paso real de `-m cache` queda a criterio del CI.
+- **Controles** — black 127, ruff, flake8, mypy y complexipy (máx. 9) sin
+  hallazgos. #2311 se mantiene en `fix-proposed` y requiere nuevas revisiones
+  QA1 → QA2 que incluyan `46e6ebcd`.
+- **Pendiente** — `46e6ebcd` ya está en `origin/estabilizacion` (el entorno
+  empuja cada commit, como en los anteriores de la rama); queda la corrida de CI
+  y las revisiones QA sobre esta versión. No se cerró el issue.
