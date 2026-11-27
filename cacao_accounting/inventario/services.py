@@ -73,7 +73,7 @@ from cacao_accounting.inventario.service import (
     validate_stock_reconciliation_line_keys,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 logger = logging.getLogger(__name__)
 
@@ -859,17 +859,37 @@ def _infer_stock_entry_purpose(path: str) -> str | None:
     return None
 
 
+STOCK_ENTRY_PURPOSE_LABELS: dict[str, Any] = {
+    "material_receipt": _l("Recepción de Material"),
+    "material_issue": _l("Salida de Material"),
+    "material_transfer": _l("Transferencia"),
+    "stock_reconciliation": _l("Conciliación de Inventario"),
+    "adjustment_positive": _l("Ajuste Positivo"),
+    "adjustment_negative": _l("Ajuste Negativo"),
+}
+
+_STOCK_ENTRY_NEW_TITLES: dict[str, str] = {
+    "material_receipt": "Nueva Recepción de Material",
+    "material_issue": "Nueva Salida de Material",
+    "material_transfer": "Nueva Transferencia de Material",
+    "stock_reconciliation": "Nueva Conciliación de Inventario",
+    "adjustment_positive": "Nuevo Ajuste Positivo de Inventario",
+    "adjustment_negative": "Nuevo Ajuste Negativo de Inventario",
+}
+
+
+def stock_entry_purpose_label(purpose: str | None) -> str:
+    """Devuelve etiqueta traducible para el propósito de StockEntry (#1875)."""
+    code = str(purpose or "").strip()
+    label = STOCK_ENTRY_PURPOSE_LABELS.get(code)
+    if label is not None:
+        return str(label)
+    return code
+
+
 def _stock_entry_title(purpose: str | None) -> str:
     """Build a human friendly title for the stock entry creation page."""
-    labels: dict[str, str] = {
-        "material_receipt": "Nueva Recepción de Material",
-        "material_issue": "Nueva Salida de Material",
-        "material_transfer": "Nueva Transferencia de Material",
-        "stock_reconciliation": "Nueva Conciliación de Inventario",
-        "adjustment_positive": "Nuevo Ajuste Positivo de Inventario",
-        "adjustment_negative": "Nuevo Ajuste Negativo de Inventario",
-    }
-    return labels.get(purpose or "", "Nueva Entrada de Almacén") + " - " + APPNAME
+    return _STOCK_ENTRY_NEW_TITLES.get(purpose or "", "Nueva Entrada de Almacén") + " - " + APPNAME
 
 
 def _validate_stock_entry_dimensions(

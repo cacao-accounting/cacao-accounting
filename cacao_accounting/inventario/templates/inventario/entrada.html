@@ -49,7 +49,7 @@
     buttons,
     [
       (_('Número'), registro.document_no),
-      (_('Propósito'), registro.purpose),
+      (_('Propósito'), stock_entry_purpose_label(registro.purpose)),
       (_('Compañía'), registro.company),
       (_('Fecha'), registro.posting_date),
       (_('Bodega Origen'), registro.from_warehouse),

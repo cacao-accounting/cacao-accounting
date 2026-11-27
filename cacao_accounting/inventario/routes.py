@@ -88,6 +88,7 @@ from cacao_accounting.inventario.services import (
     _save_warehouse_company_rows,
     _infer_stock_entry_purpose,
     _stock_entry_title,
+    stock_entry_purpose_label,
     _handle_stock_entry_new_post,
     _source_context,
     stock_entry_source_header,
@@ -102,6 +103,12 @@ from cacao_accounting.i18n import _
 logger = logging.getLogger(__name__)
 
 inventario = Blueprint("inventario", __name__, template_folder="templates")
+
+
+@inventario.app_context_processor
+def _inventario_template_helpers():
+    """Helpers de plantilla para inventario (#1875)."""
+    return {"stock_entry_purpose_label": stock_entry_purpose_label}
 
 
 def _stock_entry_item_choices() -> list[dict[str, Any]]:

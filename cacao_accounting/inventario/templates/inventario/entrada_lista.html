@@ -40,7 +40,7 @@
       {% for item in consulta.items -%}
       <tr>
         <td><a href="{{ url_for('inventario.inventario_entrada', entry_id=item.id) }}">{{ item.document_no or item.id }}</a></td>
-        <td>{{ item.purpose }}</td>
+        <td>{{ stock_entry_purpose_label(item.purpose) }}</td>
         <td>{{ macros.document_status_for("stock_entry", item) }}</td>
         <td>{{ item.posting_date or "" }}</td>
         <td>{{ format_money_with_currency(item.total_amount, document_currency_code(item)) }}</td>
