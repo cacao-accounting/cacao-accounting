@@ -27765,6 +27765,9 @@ msgstr "A business unit's company cannot be changed after creation."
 msgid "La compañía de un proyecto no puede cambiarse después de crearlo."
 msgstr "A project's company cannot be changed after creation."
 
+msgid "No se puede cancelar la recepción porque tiene devoluciones activas."
+msgstr "The receipt cannot be cancelled because it has active returns."
+
 #~ msgid "Debe indicar el motivo de la anulacion."
 #~ msgstr "You must provide the reason for the cancellation."
 

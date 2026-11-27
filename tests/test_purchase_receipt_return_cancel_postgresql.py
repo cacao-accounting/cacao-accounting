@@ -283,6 +283,23 @@ def test_devolucion_y_cancelacion_no_confirmar_ambas():
                 assert stock, "la cancelación debe revertir el Stock Ledger"
             else:
                 assert len(allocations) == 1
+                # El perdedor no puede reintentar y crear una segunda allocation.
+                try:
+                    create_purchase_receipt_return_allocations(return_id)
+                    database.session.commit()
+                except Exception:
+                    database.session.rollback()
+                allocations_after = (
+                    database.session.execute(
+                        database.select(PurchaseReceiptReturnAllocation).where(
+                            PurchaseReceiptReturnAllocation.company == "cacao",
+                            PurchaseReceiptReturnAllocation.status == "active",
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                assert len(allocations_after) == 1
             database.session.remove()
     finally:
         _drop(url, name)

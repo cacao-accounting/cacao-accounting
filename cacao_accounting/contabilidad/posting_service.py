@@ -5330,6 +5330,20 @@ def _cancel_document(
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError(_("Solo se puede cancelar un documento aprobado."))
 
+    if type(document).__name__ == "PurchaseReceipt":
+        from cacao_accounting.database import PurchaseReceiptItem, PurchaseReceiptReturnAllocation
+
+        active_return = database.session.execute(
+            database.select(PurchaseReceiptReturnAllocation.id).where(
+                PurchaseReceiptReturnAllocation.original_receipt_item_id.in_(
+                    database.select(PurchaseReceiptItem.id).where(PurchaseReceiptItem.purchase_receipt_id == document.id)
+                ),
+                PurchaseReceiptReturnAllocation.status == "active",
+            )
+        ).first()
+        if active_return is not None:
+            raise PostingError(_("No se puede cancelar la recepción porque tiene devoluciones activas."))
+
     if getattr(document, "is_fiscal_year_closing", False):
         return _cancel_fiscal_year_closing_document(
             document,
