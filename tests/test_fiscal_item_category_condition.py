@@ -23,9 +23,10 @@ from cacao_accounting.accounting_engine.common.context import (
     TaxRuleContext,
 )
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
-from cacao_accounting.database import Item, ItemCategory, TaxRule, UOM, database
+from cacao_accounting.database import Item, ItemCategory, SalesInvoice, TaxRule, UOM, database
 from cacao_accounting.fiscal_persistence_service import (
     build_tax_rule_contexts_from_snapshot,
+    calculate_document_total_with_taxes,
     load_document_fiscal_lines,
     persist_document_fiscal_snapshot,
 )
@@ -392,7 +393,8 @@ def test_snapshot_acumula_lineas_repetidas_del_mismo_concepto(app):
                     "amount": "10",
                     "base_mode": "goods",
                     "participates_in_next_base": "on",
-                    "recognition_event": "invoice",
+                    "recognition_event": "sales_invoice_confirmed",
+                    "affects_document_total": "on",
                     "sequence": "10",
                     "is_active": "on",
                 }
@@ -410,7 +412,8 @@ def test_snapshot_acumula_lineas_repetidas_del_mismo_concepto(app):
                     "amount": "8",
                     "base_mode": "goods",
                     "participates_in_next_base": "on",
-                    "recognition_event": "invoice",
+                    "recognition_event": "sales_invoice_confirmed",
+                    "affects_document_total": "on",
                     "sequence": "20",
                     "is_active": "on",
                 }
@@ -428,7 +431,8 @@ def test_snapshot_acumula_lineas_repetidas_del_mismo_concepto(app):
                     "amount": "0",
                     "base_mode": "accumulated",
                     "include_concepts": "tasa_fija",
-                    "recognition_event": "invoice",
+                    "recognition_event": "sales_invoice_confirmed",
+                    "affects_document_total": "on",
                     "sequence": "30",
                     "is_active": "on",
                 }
@@ -436,15 +440,25 @@ def test_snapshot_acumula_lineas_repetidas_del_mismo_concepto(app):
         ]
         database.session.flush()
         document_id = f"INV-REPEATED-CONCEPT-{suffix}"
+        line_payload = [{"rule_id": rule.id} for rule in reglas]
+        document = SalesInvoice(company="cacao")
+        total = calculate_document_total_with_taxes(
+            document,
+            Decimal("100"),
+            items=[],
+            summary_payload=None,
+            tax_lines_payload=line_payload,
+        )
 
         persist_document_fiscal_snapshot(
             company="cacao",
             document_type="sales_invoice",
             document_id=document_id,
             currency="NIO",
-            tax_lines=[{"source_rule_id": rule.id, "concept": rule.concept} for rule in reglas],
-            tax_summary={"subtotal": "100", "grand_total": "119.80"},
+            tax_lines=line_payload,
+            tax_summary={},
             server_subtotal=Decimal("100"),
+            server_total=total,
         )
         database.session.commit()
 
@@ -453,7 +467,8 @@ def test_snapshot_acumula_lineas_repetidas_del_mismo_concepto(app):
 
         assert [row.amount for row in rows] == [Decimal("10.0000"), Decimal("8.0000"), Decimal("1.8000")]
         assert rows[2].base_amount == Decimal("18.0000")
-        assert summary_total == Decimal("119.8000")
+        assert total == Decimal("119.80")
+        assert summary_total == total
 
 
 def test_tax_rule_normalizes_concepts_and_snapshot_handles_legacy_duplicates(app):
