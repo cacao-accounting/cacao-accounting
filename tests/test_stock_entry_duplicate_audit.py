@@ -18,6 +18,9 @@ from cacao_accounting.database import (
     AccountingPeriod,
     AuditTrail,
     Currency,
+    DeliveryNote,
+    DeliveryNoteItem,
+    DocumentRelation,
     Entity,
     FiscalYear,
     GLEntry,
@@ -105,15 +108,44 @@ def _seed_entry(app) -> dict[str, str]:
         )
         database.session.add(entry)
         database.session.flush()
+        line = StockEntryItem(
+            stock_entry_id=entry.id,
+            item_code="ART01",
+            qty=Decimal("2"),
+            uom="UND",
+            qty_in_base_uom=Decimal("2"),
+            basic_rate=Decimal("10"),
+            amount=Decimal("20"),
+        )
+        database.session.add(line)
+        database.session.flush()
+        dn = DeliveryNote(
+            company="cacao",
+            posting_date=date(2026, 5, 15),
+            docstatus=0,
+            status="draft",
+            document_no=f"DN-{sufijo}",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+        )
+        database.session.add(dn)
+        database.session.flush()
+        dn_item = DeliveryNoteItem(delivery_note_id=dn.id, item_code="ART01", qty=Decimal("2"), uom="UND")
+        database.session.add(dn_item)
+        database.session.flush()
         database.session.add(
-            StockEntryItem(
-                stock_entry_id=entry.id,
-                item_code="ART01",
+            DocumentRelation(
+                source_type="delivery_note",
+                source_id=dn.id,
+                source_item_id=dn_item.id,
+                target_type="stock_entry",
+                target_id=entry.id,
+                target_item_id=line.id,
                 qty=Decimal("2"),
-                uom="UND",
-                qty_in_base_uom=Decimal("2"),
-                basic_rate=Decimal("10"),
-                amount=Decimal("20"),
+                status="active",
+                company="cacao",
+                relation_type="delivery_note_to_stock_entry",
             )
         )
         database.session.commit()
@@ -162,13 +194,25 @@ def test_duplicar_stock_entry_deja_un_created_visible_en_ambos_modos(isolated_ap
             .all()
         )
         assert len(eventos) == 1
-        assert eventos[0].actor_user_id is not None
+        assert eventos[0].actor_user_id in {"admin-1854", "admin1854"}
+        actor_nombre = eventos[0].actor_name or ""
+        assert "Admin" in actor_nombre or "admin1854" in actor_nombre or "admin-1854" in actor_nombre
         assert origen["document_no"] in (eventos[0].comment or "")
 
         lineas = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=duplicado.id)).scalars().all()
         assert len(lineas) == 1
         assert lineas[0].item_code == "ART01" and lineas[0].amount == Decimal("20.0000")
 
+        assert (
+            not database.session.execute(
+                select(DocumentRelation.id).where(
+                    DocumentRelation.target_type == "stock_entry",
+                    DocumentRelation.target_id == duplicado.id,
+                )
+            )
+            .scalars()
+            .all()
+        )
         assert (
             not database.session.execute(
                 select(StockLedgerEntry.id).where(
@@ -190,6 +234,16 @@ def test_duplicar_stock_entry_deja_un_created_visible_en_ambos_modos(isolated_ap
         creados = [fila["event"] for fila in timeline if fila["event"].action == "created"]
         assert len(creados) == 1
         assert origen["document_no"] in (creados[0].comment or "")
+
+    client = isolated_app.test_client()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = "admin-1854"
+        sess["_fresh"] = True
+    resp = client.get(f"/inventory/stock-entry/{duplicado.id}")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "Historial del documento" in html
+    assert origen["document_no"] in html
 
 
 def test_duplicacion_fallida_no_persiste_documento_ni_eventos(isolated_app, monkeypatch):
