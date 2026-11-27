@@ -425,6 +425,15 @@ _TPL_PERIODO_CREAR = "contabilidad/periodo_crear.html"
 _TPL_TC_CREAR = "contabilidad/tc_crear.html"
 
 
+def _reject_sensitive_delete(label: str) -> None:
+    """Rechaza el borrado físico de un maestro protegido por control interno."""
+    flash(
+        _("No se puede eliminar %(label)s: es un maestro protegido. Desactive el registro para conservar la trazabilidad.")
+        % {"label": label},
+        "danger",
+    )
+
+
 def _reject_delete_with_dependencies(label: str, checks: list[tuple[str, Any]]) -> bool:
     """Bloquea eliminaciones cuando existe cualquier registro dependiente."""
     dependencies = [name for name, query in checks if database.session.execute(query.limit(1)).first()]
@@ -1312,6 +1321,7 @@ def eliminar_libro(id_unidad):
 
     libro = database.session.execute(database.select(Book).filter_by(code=id_unidad)).scalar_one_or_none()
     if libro:
+        exige_acceso_compania("accounting", libro.entity, "eliminar")
         from cacao_accounting.database import (
             Budget,
             ComprobanteContable,
@@ -1347,8 +1357,7 @@ def eliminar_libro(id_unidad):
             ],
         ):
             return redirect(url_for(CONTABILIDAD_LIBROS))
-        database.session.delete(libro)
-        database.session.commit()
+        _reject_sensitive_delete(f"el libro {id_unidad}")
     return redirect(url_for(CONTABILIDAD_LIBROS))
 
 
@@ -2405,8 +2414,7 @@ def fiscal_year_delete(fy_id):
                 else None
             )
             return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
-        database.session.delete(fiscal_year)
-        database.session.commit()
+        _reject_sensitive_delete(f"el año fiscal {fiscal_year.name}")
     return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
 
 
