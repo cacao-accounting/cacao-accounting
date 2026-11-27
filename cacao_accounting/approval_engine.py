@@ -156,6 +156,7 @@ def _cancel_payment_or_stock(
     """Cancel a payment or stock entry, applying payment-specific hooks."""
     from cacao_accounting.audit_trail_service import log_cancel
     from cacao_accounting.contabilidad.posting import cancel_document
+    from cacao_accounting.document_flow import refresh_source_caches_for_target, revert_relations_for_target
 
     cancel_document(
         document,
@@ -165,6 +166,10 @@ def _cancel_payment_or_stock(
         requested_at=requested_at,
     )  # type: ignore[misc]
     log_cancel(document)
+    target_type = getattr(document, "document_type", None) or doctype
+    revert_relations_for_target(target_type, document.id)
+    refresh_source_caches_for_target(target_type, document.id)
+    _refresh_reversal_cache(document, target_type)
 
 
 def _deterministic_default(obj: Any) -> str:
