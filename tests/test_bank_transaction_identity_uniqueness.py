@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import csv
 import os
-import sqlite3
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
@@ -401,89 +400,6 @@ def test_identity_conflict_detection_ignores_other_integrity_errors():
     assert _is_bank_identity_conflict(postgres_error)
     assert _is_bank_identity_conflict(mysql_error)
     assert not _is_bank_identity_conflict(unrelated_error)
-
-
-def _legacy_bank_database(path, identities: tuple[str, ...]) -> None:
-    """Crea una base previa al fix, sin restricción única en identity_key."""
-    connection = sqlite3.connect(path)
-    connection.executescript("""
-        CREATE TABLE bank_transaction (
-            id VARCHAR(26) PRIMARY KEY,
-            identity_key VARCHAR(64) NOT NULL
-        );
-        """)
-    connection.executemany(
-        "INSERT INTO bank_transaction (id, identity_key) VALUES (?, ?)",
-        [(f"LEGACY-{index}", identity) for index, identity in enumerate(identities, start=1)],
-    )
-    connection.commit()
-    connection.close()
-
-
-def _legacy_indexes(path) -> dict[str, str]:
-    """Devuelve los índices declarados en la base previa."""
-    connection = sqlite3.connect(path)
-    indexes = {
-        row[0]: row[1]
-        for row in connection.execute("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL")
-    }
-    connection.close()
-    return indexes
-
-
-def test_startup_installs_the_unique_guard_on_an_existing_database(tmp_path):
-    """Una base previa recibe el índice único al arrancar."""
-    database_path = tmp_path / "legacy-bank-unique.sqlite"
-    _legacy_bank_database(database_path, ("IDENTITY-A", "IDENTITY-B"))
-
-    app = create_app(
-        {
-            **configuracion,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
-            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-            "WTF_CSRF_ENABLED": False,
-            "TESTING": True,
-            "MODO_ESCRITORIO": False,
-        }
-    )
-    try:
-        indexes = _legacy_indexes(database_path)
-        assert "uq_bank_transaction_identity" in indexes
-
-        connection = sqlite3.connect(database_path)
-        with pytest.raises(sqlite3.IntegrityError):
-            connection.execute("INSERT INTO bank_transaction (id, identity_key) VALUES ('LEGACY-3', 'IDENTITY-A')")
-        connection.rollback()
-        assert connection.execute("SELECT COUNT(*) FROM bank_transaction").fetchone()[0] == 2
-        connection.close()
-    finally:
-        with app.app_context():
-            database.session.remove()
-            database.engine.dispose()
-
-
-def test_startup_refuses_duplicate_identities_and_preserves_the_rows(tmp_path):
-    """Si la base previa ya tiene duplicados, el arranque falla sin borrar evidencia."""
-    database_path = tmp_path / "legacy-bank-duplicates.sqlite"
-    _legacy_bank_database(database_path, ("IDENTITY-A", "IDENTITY-A"))
-
-    with pytest.raises(RuntimeError, match="unicidad de movimientos bancarios"):
-        create_app(
-            {
-                **configuracion,
-                "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
-                "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-                "WTF_CSRF_ENABLED": False,
-                "TESTING": True,
-                "MODO_ESCRITORIO": False,
-            }
-        )
-
-    connection = sqlite3.connect(database_path)
-    assert connection.execute("SELECT COUNT(*) FROM bank_transaction").fetchone()[0] == 2
-    indexes = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
-    connection.close()
-    assert "uq_bank_transaction_identity" not in indexes
 
 
 @pytest.mark.database

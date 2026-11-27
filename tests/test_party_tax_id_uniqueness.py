@@ -9,7 +9,6 @@ la unicidad y las bases existentes se auditan sin fusionar duplicados.
 
 from __future__ import annotations
 
-import sqlite3
 from uuid import uuid4
 
 import pytest
@@ -128,52 +127,6 @@ def test_import_persist_rechecks_and_does_not_duplicate(tax_id_scenario):
         ).scalar_one()
 
     assert count == 1
-
-
-def test_existing_database_backfills_unique_keys_without_merging(tmp_path):
-    """Legacy duplicates keep NULL keys and are reported; unique ids get keys."""
-    database_path = tmp_path / "legacy-party.sqlite"
-    connection = sqlite3.connect(database_path)
-    connection.executescript("""
-        CREATE TABLE party (
-            id VARCHAR(26) PRIMARY KEY,
-            code VARCHAR(50) NOT NULL,
-            name VARCHAR(150) NOT NULL,
-            tax_id VARCHAR(50),
-            modified DATETIME
-        );
-        INSERT INTO party VALUES ('01A', 'A', 'Tercero A', 'J-100', NULL);
-        INSERT INTO party VALUES ('01B', 'B', 'Tercero B', 'j100', NULL);
-        INSERT INTO party VALUES ('01C', 'C', 'Tercero C', 'RUC-200', NULL);
-        """)
-    connection.commit()
-    connection.close()
-
-    app = create_app(
-        {
-            **configuracion,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{database_path}",
-            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-            "WTF_CSRF_ENABLED": False,
-            "TESTING": True,
-            "MODO_ESCRITORIO": False,
-        }
-    )
-
-    connection = sqlite3.connect(database_path)
-    rows = dict(connection.execute("SELECT id, tax_id_key FROM party").fetchall())
-    indexes = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL")}
-    connection.close()
-
-    assert rows["01A"] is None
-    assert rows["01B"] is None
-    assert rows["01C"] == "RUC200"
-    assert "uq_party_tax_id_key" in indexes
-
-    with app.app_context():
-        assert database.session.execute(database.select(database.func.count(Party.id))).scalar_one() == 3
-        database.session.remove()
-        database.engine.dispose()
 
 
 def test_legacy_duplicate_without_key_still_blocks_new_imports(tax_id_scenario):

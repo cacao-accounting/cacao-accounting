@@ -17,13 +17,12 @@ from decimal import Decimal
 from threading import Event, local
 from uuid import uuid4
 
-from sqlalchemy import func, inspect as sa_inspect
+from sqlalchemy import func
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Currency,
-    DocumentFlowLock,
     DocumentRelation,
     Entity,
     Item,
@@ -36,7 +35,6 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
-from cacao_accounting.database.helpers import _ensure_document_flow_lock_table
 from cacao_accounting.document_flow import service
 from cacao_accounting.document_flow.service import DocumentFlowError, create_document_relation
 
@@ -211,21 +209,6 @@ def test_concurrent_relations_cannot_overconsume_source_line(tmp_path, monkeypat
         ).scalar_one()
         assert Decimal(str(consumed)) == Decimal("3")
         database.session.remove()
-
-
-def test_existing_database_receives_document_flow_lock_table(tmp_path):
-    """A legacy database without the lock table gets it at startup/ensure time."""
-    app = _build_app(f"sqlite:///{tmp_path / 'legacy-document-flow.sqlite'}")
-
-    with app.app_context():
-        DocumentFlowLock.__table__.drop(bind=database.engine)
-        assert not sa_inspect(database.engine).has_table(DocumentFlowLock.__tablename__)
-
-        _ensure_document_flow_lock_table()
-
-        assert sa_inspect(database.engine).has_table(DocumentFlowLock.__tablename__)
-        database.session.remove()
-        database.engine.dispose()
 
 
 def test_creacion_de_relacion_bloquea_documento_origen_y_destino(tmp_path, monkeypatch):

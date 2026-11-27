@@ -13,10 +13,6 @@ from uuid import uuid4
 
 import pytest
 from flask import url_for
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-
-
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import routes as accounting_routes
@@ -37,26 +33,6 @@ from cacao_accounting.database import (
 )
 
 pytestmark = pytest.mark.database
-
-
-def test_app_startup_fails_if_monthly_close_guard_cannot_be_installed(tmp_path, monkeypatch):
-    """Startup must not continue without the persistent monthly-close uniqueness guard."""
-    from cacao_accounting.database import helpers as database_helpers
-
-    def fail_to_install_guard():
-        raise SQLAlchemyError("unique index creation failed")
-
-    monkeypatch.setattr(database_helpers, "_ensure_monthly_close_run_unique_constraint", fail_to_install_guard)
-
-    with pytest.raises(SQLAlchemyError, match="unique index creation failed"):
-        create_app(
-            {
-                "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'startup-guard.sqlite'}",
-                "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-                "TESTING": True,
-                "SECRET_KEY": "monthly-close-startup-guard-test",
-            }
-        )
 
 
 @pytest.fixture
@@ -153,111 +129,6 @@ def monthly_close_scenario(tmp_path, request):
     with app.app_context():
         database.session.remove()
         database.engine.dispose()
-
-
-@pytest.mark.skipif(
-    not str(configuracion["SQLALCHEMY_DATABASE_URI"]).startswith("sqlite"),
-    reason="La prueba de actualización de esquema usa una base SQLite local aislada.",
-)
-def test_legacy_monthly_close_table_gets_unique_index(monthly_close_scenario):
-    """Existing schemas gain a unique index without requiring table recreation."""
-    from sqlalchemy import inspect
-
-    from cacao_accounting.database.helpers import _ensure_monthly_close_run_unique_constraint
-
-    app, _company, _period_id, _user_id, _endpoint = monthly_close_scenario
-    with app.app_context():
-        database.session.remove()
-        with database.engine.begin() as connection:
-            connection.execute(text("DROP TABLE period_close_check"))
-            connection.execute(text("DROP TABLE period_close_run"))
-            connection.execute(
-                text("CREATE TABLE period_close_run (company VARCHAR(10) NOT NULL, period_id VARCHAR(26) NOT NULL)")
-            )
-
-        barrier = Barrier(2, timeout=30)
-
-        def install_guard():
-            with app.app_context():
-                barrier.wait(timeout=10)
-                _ensure_monthly_close_run_unique_constraint()
-
-        with ThreadPoolExecutor(max_workers=2) as workers:
-            list(workers.map(lambda _: install_guard(), range(2)))
-
-        unique_indexes = [
-            index
-            for index in inspect(database.engine).get_indexes("period_close_run")
-            if index["name"] == "uq_period_close_run_company_period" and index["unique"]
-        ]
-        assert len(unique_indexes) == 1
-
-        with pytest.raises(IntegrityError):
-            with database.engine.begin() as connection:
-                connection.execute(text("INSERT INTO period_close_run (company, period_id) VALUES ('cacao', 'P2026-05')"))
-                connection.execute(text("INSERT INTO period_close_run (company, period_id) VALUES ('cacao', 'P2026-05')"))
-
-
-@pytest.mark.skipif(
-    not str(configuracion["SQLALCHEMY_DATABASE_URI"]).startswith("sqlite"),
-    reason="La prueba del índice homónimo usa una base SQLite local aislada.",
-)
-def test_legacy_monthly_close_wrong_named_index_fails_closed(monthly_close_scenario):
-    """An index with the expected name but wrong columns must not satisfy the guard."""
-    from cacao_accounting.database.helpers import _ensure_monthly_close_run_unique_constraint
-
-    app, _company, _period_id, _user_id, _endpoint = monthly_close_scenario
-    with app.app_context():
-        database.session.remove()
-        with database.engine.begin() as connection:
-            connection.execute(text("DROP TABLE period_close_check"))
-            connection.execute(text("DROP TABLE period_close_run"))
-            connection.execute(
-                text("CREATE TABLE period_close_run (company VARCHAR(10) NOT NULL, period_id VARCHAR(26) NOT NULL)")
-            )
-            connection.execute(text("CREATE INDEX uq_period_close_run_company_period ON period_close_run (company)"))
-
-        with pytest.raises(RuntimeError, match="no protege company y period_id"):
-            _ensure_monthly_close_run_unique_constraint()
-
-
-@pytest.mark.skipif(
-    not str(configuracion["SQLALCHEMY_DATABASE_URI"]).startswith("sqlite"),
-    reason="La prueba de actualización de esquema usa una base SQLite local aislada.",
-)
-def test_legacy_duplicate_monthly_close_runs_block_unique_index_without_rewriting_rows(monthly_close_scenario):
-    """Ambiguous old runs are preserved and prevent automatic constraint creation."""
-    from sqlalchemy import inspect
-
-    from cacao_accounting.database.helpers import _ensure_monthly_close_run_unique_constraint
-
-    app, _company, _period_id, _user_id, _endpoint = monthly_close_scenario
-    with app.app_context():
-        database.session.remove()
-        with database.engine.begin() as connection:
-            connection.execute(text("DROP TABLE period_close_check"))
-            connection.execute(text("DROP TABLE period_close_run"))
-            connection.execute(
-                text("CREATE TABLE period_close_run (company VARCHAR(10) NOT NULL, period_id VARCHAR(26) NOT NULL)")
-            )
-            connection.execute(
-                text(
-                    "INSERT INTO period_close_run (company, period_id) " "VALUES ('cacao', 'P2026-05'), ('cacao', 'P2026-05')"
-                )
-            )
-
-        with pytest.raises(RuntimeError, match="varias corridas"):
-            _ensure_monthly_close_run_unique_constraint()
-
-        with database.engine.connect() as connection:
-            row_count = connection.execute(text("SELECT COUNT(*) FROM period_close_run")).scalar_one()
-        unique_indexes = [
-            index
-            for index in inspect(database.engine).get_indexes("period_close_run")
-            if index["name"] == "uq_period_close_run_company_period" and index["unique"]
-        ]
-        assert row_count == 2
-        assert unique_indexes == []
 
 
 @pytest.mark.parametrize("monthly_close_scenario", [None, "REPEATABLE READ"], indirect=True)

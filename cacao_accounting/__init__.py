@@ -585,31 +585,7 @@ def create_app(ajustes: dict | None = None) -> Flask:
     registrar_rutas_predeterminadas(app=cacao_app)
 
     with cacao_app.app_context():
-        from cacao_accounting.database.helpers import (
-            _ensure_bank_transaction_identity_unique,
-            _ensure_cacao_config_key_unique,
-            _ensure_document_flow_lock_table,
-            _ensure_monthly_close_run_unique_constraint,
-            _ensure_party_tax_id_key_column,
-            _ensure_purchase_invoice_supplier_key,
-            _ensure_roles_user_unique,
-            _ensure_user_auth_version_column,
-            _ensure_user_email_identity_column,
-        )
-
-        _ensure_user_email_identity_column()
-        _ensure_monthly_close_run_unique_constraint()
-        _ensure_bank_transaction_identity_unique()
-        _ensure_cacao_config_key_unique()
-        _ensure_document_flow_lock_table()
-        _ensure_roles_user_unique()
-        _ensure_party_tax_id_key_column()
-        _ensure_purchase_invoice_supplier_key()
-        _ensure_user_auth_version_column()
         try:
-            from cacao_accounting.database.helpers import _ensure_file_sha256_column
-
-            _ensure_file_sha256_column()
             recover_crashed_batches()
         except SQLAlchemyError as e:
             log.error("Error al recuperar lotes de importación: {}", e)

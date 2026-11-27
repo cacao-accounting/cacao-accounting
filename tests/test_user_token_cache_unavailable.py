@@ -7,11 +7,8 @@ from __future__ import annotations
 
 import hashlib
 
-from sqlalchemy import inspect as sa_inspect, text
-
 from cacao_accounting import cache as cache_module
 from cacao_accounting.database import User, database
-from cacao_accounting.database.helpers import _ensure_user_api_token_hash_column
 
 
 class _CacheNoDisponible(Exception):
@@ -151,28 +148,3 @@ def test_tokens_del_mismo_segundo_son_distintos_y_revocan_el_anterior(app, refer
         assert usuario.token_matches(segundo_token) is True
         assert _identity_for_api_token(primer_token) is None
         assert _identity_for_api_token(segundo_token).id == usuario.id
-
-
-def test_helper_agrega_columna_sin_backfill(entorno_contable_aislado):
-    """Esquemas previos reciben la columna, pero no se inventan huellas antiguas."""
-    application = entorno_contable_aislado.app
-    with application.app_context():
-        inspector = sa_inspect(database.engine)
-        for index in inspector.get_indexes("user"):
-            if "api_token_hash" in index["column_names"]:
-                database.session.execute(text(f'DROP INDEX "{index["name"]}"'))
-        database.session.execute(text("ALTER TABLE user DROP COLUMN api_token_hash"))
-        database.session.commit()
-
-        assert "api_token_hash" not in {column["name"] for column in sa_inspect(database.engine).get_columns("user")}
-
-        _ensure_user_api_token_hash_column()
-
-        assert "api_token_hash" in {column["name"] for column in sa_inspect(database.engine).get_columns("user")}
-        usuarios = database.session.execute(database.select(User)).scalars().all()
-        assert all(usuario.api_token_hash is None for usuario in usuarios)
-
-        admin = next(usuario for usuario in usuarios if usuario.user == "admin")
-        admin.token = "token-posterior-al-helper"
-        database.session.commit()
-        assert admin.token_matches("token-posterior-al-helper") is True

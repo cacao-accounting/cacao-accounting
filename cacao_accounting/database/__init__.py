@@ -1851,9 +1851,7 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     # El lote es una dimension de primer nivel del almacen: al valorar una
     # salida que selecciona un lote especifico se consumen solo las capas de
     # entrada creadas para ese lote, no la cola FIFO global del articulo.
-    # En esquemas pre-existentes la columna se suple idempotentemente en el
-    # arranque (helpers._ensure_stock_valuation_layer_batch_column) y las capas
-    # historicas obtienen su batch por derivacion desde el StockLedgerEntry.
+    # En esquemas nuevos create_all() crea la columna directamente desde el modelo.
     batch_id = database.Column(
         database.String(26),
         database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),

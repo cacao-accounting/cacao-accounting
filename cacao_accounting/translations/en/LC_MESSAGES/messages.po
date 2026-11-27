@@ -20263,25 +20263,6 @@ msgstr "The selected parent record does not exist."
 msgid "No se permiten ciclos en la jerarquía (RN-003)."
 msgstr "Cycles in the hierarchy are not allowed (RN-003)."
 
-#: cacao_accounting/database/helpers.py:993
-#, python-format
-msgid ""
-"No se puede aplicar la unicidad de cierres mensuales: hay varias corridas "
-"para compañía %(company)s y período %(period)s. Los registros existentes se "
-"conservaron."
-msgstr ""
-"Monthly close uniqueness cannot be applied: multiple runs exist for company "
-"%(company)s and period %(period)s. Existing records were preserved."
-
-#: cacao_accounting/database/helpers.py:1070
-#, python-format
-msgid ""
-"No se puede aplicar la unicidad de movimientos bancarios: la identidad "
-"%(identity)s se repite. Los registros existentes se conservaron."
-msgstr ""
-"Bank movement uniqueness cannot be applied: identity %(identity)s is "
-"repeated. Existing records were preserved."
-
 #: cacao_accounting/datos/dev/__init__.py:203
 msgid "El usuario administrador de demostración no existe."
 msgstr "The demo administrator user does not exist."
