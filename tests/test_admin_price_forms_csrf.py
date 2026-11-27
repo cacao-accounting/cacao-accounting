@@ -222,6 +222,7 @@ def test_item_price_creation_form_sends_its_own_csrf_token(csrf_price_forms):
     assert page.status_code == 200
     token = _form_token(page.get_data(as_text=True), marker='name="item_code"')
 
+    # min_qty=2 evita colision con la tarifa fixture (min_qty=0) bajo regla #1687.
     data = {"price_list_id": price_list_id, "item_code": item_code, "price": "12.50", "min_qty": "2"}
     assert client.post("/settings/item-prices", data=data).status_code == 400
 
@@ -233,6 +234,7 @@ def test_item_price_creation_form_sends_its_own_csrf_token(csrf_price_forms):
             database.select(ItemPrice).where(
                 ItemPrice.item_code == item_code,
                 ItemPrice.price_list_id == price_list_id,
+                ItemPrice.min_qty == Decimal("2"),
                 ItemPrice.price == Decimal("12.50"),
             )
         ).scalar_one_or_none()
