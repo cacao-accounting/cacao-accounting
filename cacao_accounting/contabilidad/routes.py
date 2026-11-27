@@ -171,7 +171,10 @@ def _fiscal_year_range_conflicts(
 ) -> bool:
     """Return whether an inclusive fiscal-year range overlaps another year."""
     from cacao_accounting.database import Entity, FiscalYear
+    from cacao_accounting.default_scope import lock_default_scope
 
+    # Serializa por compañía también en SQLite, donde FOR UPDATE no aplica.
+    lock_default_scope("fiscal_year_range", entity)
     database.session.execute(database.select(Entity.code).where(Entity.code == entity).with_for_update()).scalar_one()
     query = database.select(FiscalYear.id).where(
         FiscalYear.entity == entity,
@@ -180,6 +183,8 @@ def _fiscal_year_range_conflicts(
     )
     if exclude_fiscal_year_id is not None:
         query = query.where(FiscalYear.id != exclude_fiscal_year_id)
+    if database.session.get_bind().dialect.name != "sqlite":
+        query = query.with_for_update()
     return database.session.execute(query.limit(1)).scalar_one_or_none() is not None
 
 
