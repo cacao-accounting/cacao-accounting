@@ -3,6 +3,7 @@
 
 """Modulo administrativo."""
 
+from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 from typing import Any
 
@@ -1250,21 +1251,36 @@ def actualizar_precio_item(item_price_id: str):
     if not price_list:
         abort(404)
     _require_price_list_company_access(price_list)
+    # La fila se recarga bajo lock: los formularios abiertos antes de otro cambio
+    # no deben reescribir precio ni criterios con valores desfasados.
+    database.session.expire(item_price)
+    item_price = database.session.execute(
+        database.select(ItemPrice).filter_by(id=item_price_id).with_for_update()
+    ).scalar_one_or_none()
+    if item_price is None:
+        abort(404)
     reference_error = _validated_item_price_references(item_price.item_code, item_price.uom)
     if reference_error:
         flash(reference_error, "danger")
         return redirect(url_for("admin.precios_item"))
     try:
         price_value = _decimal_form("price", non_negative=True, max_fractional_digits=4)
-        min_qty = _decimal_form("min_qty", "0")
-        valid_from = _date_form("valid_from")
-        valid_upto = _date_form("valid_upto")
     except ValueError as exc:
         flash(_(str(exc)), "danger")
         return redirect(url_for("admin.precios_item"))
     if not price_value.is_finite():
         flash(_("El precio debe ser finito."), "danger")
         return redirect(url_for("admin.precios_item"))
+    expected_price = request.form.get("expected_price")
+    if expected_price:
+        try:
+            expected = Decimal(expected_price)
+        except (InvalidOperation, ValueError):
+            flash(_("La versión del precio enviada no es válida."), "danger")
+            return redirect(url_for("admin.precios_item"))
+        if expected != item_price.price:
+            flash(_("El precio cambió mientras editaba. Recargue la lista antes de guardar."), "danger")
+            return redirect(url_for("admin.precios_item"))
     database.session.execute(
         database.select(PriceList.id).filter_by(id=item_price.price_list_id).with_for_update()
     ).scalar_one_or_none()
@@ -1272,9 +1288,9 @@ def actualizar_precio_item(item_price_id: str):
         item_price.price_list_id,
         item_price.item_code,
         item_price.uom,
-        min_qty,
-        valid_from,
-        valid_upto,
+        item_price.min_qty,
+        item_price.valid_from,
+        item_price.valid_upto,
         exclude_id=item_price.id,
     )
     if duplicate_error:
@@ -1282,9 +1298,6 @@ def actualizar_precio_item(item_price_id: str):
         flash(duplicate_error, "danger")
         return redirect(url_for("admin.precios_item"))
     item_price.price = price_value
-    item_price.min_qty = min_qty
-    item_price.valid_from = valid_from
-    item_price.valid_upto = valid_upto
     try:
         database.session.commit()
     except IntegrityError:

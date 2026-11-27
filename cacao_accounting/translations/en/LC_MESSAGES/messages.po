@@ -2690,6 +2690,14 @@ msgstr "The selected unit of measure is not active."
 msgid "El precio debe ser finito."
 msgstr "Price must be finite."
 
+#: cacao_accounting/admin/routes.py:1218
+msgid "La versión del precio enviada no es válida."
+msgstr "The submitted price version is invalid."
+
+#: cacao_accounting/admin/routes.py:1221
+msgid "El precio cambió mientras editaba. Recargue la lista antes de guardar."
+msgstr "The price changed while you were editing. Reload the list before saving."
+
 #: cacao_accounting/admin/routes.py:1035 cacao_accounting/admin/routes.py:1095
 msgid "El artículo o la unidad de medida ya no está disponible."
 msgstr "The item or unit of measure is no longer available."

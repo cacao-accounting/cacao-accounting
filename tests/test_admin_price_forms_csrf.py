@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -221,7 +222,7 @@ def test_item_price_creation_form_sends_its_own_csrf_token(csrf_price_forms):
     assert page.status_code == 200
     token = _form_token(page.get_data(as_text=True), marker='name="item_code"')
 
-    data = {"price_list_id": price_list_id, "item_code": item_code, "price": "12.50", "min_qty": "0"}
+    data = {"price_list_id": price_list_id, "item_code": item_code, "price": "12.50", "min_qty": "2"}
     assert client.post("/settings/item-prices", data=data).status_code == 400
 
     accepted = client.post("/settings/item-prices", data={**data, "csrf_token": token})
@@ -309,8 +310,11 @@ def test_item_price_creation_rejects_invalid_decimal_or_date_without_persisting(
     assert despues == antes
 
 
-@pytest.mark.parametrize(("field", "value", "messages"), _INVALID_ITEM_PRICE_VALUES)
-def test_item_price_update_rejects_invalid_decimal_or_date_without_mutating(csrf_price_forms, field, value, messages):
+_INVALID_QUICK_PRICE_VALUES = tuple(entry for entry in _INVALID_ITEM_PRICE_VALUES if entry[0] == "price")
+
+
+@pytest.mark.parametrize(("field", "value", "messages"), _INVALID_QUICK_PRICE_VALUES)
+def test_item_price_update_rejects_invalid_decimal_without_mutating(csrf_price_forms, field, value, messages):
     """La edición HTTP real no aplica cambios parciales cuando un campo es inválido."""
     app, client, (_item_code, _price_list_id, item_price_id) = csrf_price_forms
     url = f"/settings/item-prices/{item_price_id}"
@@ -337,3 +341,133 @@ def test_item_price_update_rejects_invalid_decimal_or_date_without_mutating(csrf
     html = respuesta.get_data(as_text=True)
     assert any(mensaje in html for mensaje in messages)
     assert _item_price_snapshot(app, item_price_id) == antes
+
+
+def _prepara_tarifa_con_criterios(app, item_price_id):
+    """Fija criterios no editables para comprobar que el POST rápido los conserva."""
+    with app.app_context():
+        item_price = database.session.get(ItemPrice, item_price_id)
+        item_price.min_qty = Decimal("5")
+        item_price.valid_from = date(2026, 1, 1)
+        item_price.valid_upto = date(2026, 12, 31)
+        database.session.commit()
+
+
+def _criterios(app, item_price_id):
+    """Lee precio y criterios vigentes de una tarifa."""
+    with app.app_context():
+        database.session.expire_all()
+        item_price = database.session.get(ItemPrice, item_price_id)
+        return (item_price.price, item_price.min_qty, item_price.valid_from, item_price.valid_upto)
+
+
+def test_edicion_rapida_preserva_criterios_ausentes(csrf_price_forms):
+    """Si el POST rápido omite cantidad y vigencias, se conservan las persistidas."""
+    app, client, (_item_code, _price_list_id, item_price_id) = csrf_price_forms
+    _prepara_tarifa_con_criterios(app, item_price_id)
+    url = f"/settings/item-prices/{item_price_id}"
+    page = client.get("/settings/item-prices")
+    token = _form_token(page.get_data(as_text=True), url)
+
+    respuesta = client.post(url, data={"price": "18.75", "expected_price": "10", "csrf_token": token})
+
+    assert respuesta.status_code == 302
+    assert _criterios(app, item_price_id) == (Decimal("18.75"), Decimal("5"), date(2026, 1, 1), date(2026, 12, 31))
+
+
+def test_edicion_rapida_ignora_criterios_obsoletos(csrf_price_forms):
+    """Los campos ocultos desfasados no reescriben cantidad ni vigencias."""
+    app, client, (_item_code, _price_list_id, item_price_id) = csrf_price_forms
+    _prepara_tarifa_con_criterios(app, item_price_id)
+    url = f"/settings/item-prices/{item_price_id}"
+    page = client.get("/settings/item-prices")
+    token = _form_token(page.get_data(as_text=True), url)
+
+    respuesta = client.post(
+        url,
+        data={
+            "price": "20",
+            "expected_price": "10",
+            "min_qty": "999",
+            "valid_from": "2020-01-01",
+            "valid_upto": "2020-12-31",
+            "csrf_token": token,
+        },
+    )
+
+    assert respuesta.status_code == 302
+    assert _criterios(app, item_price_id) == (Decimal("20"), Decimal("5"), date(2026, 1, 1), date(2026, 12, 31))
+
+
+def test_edicion_rapida_rechaza_precio_desfasado(csrf_price_forms):
+    """Dos formularios abiertos antes del cambio no sobrescriben el precio."""
+    app, client, (_item_code, _price_list_id, item_price_id) = csrf_price_forms
+    _prepara_tarifa_con_criterios(app, item_price_id)
+    url = f"/settings/item-prices/{item_price_id}"
+    page = client.get("/settings/item-prices")
+    token = _form_token(page.get_data(as_text=True), url)
+
+    primera = client.post(url, data={"price": "18.75", "expected_price": "10", "csrf_token": token})
+    segunda = client.post(
+        url,
+        data={"price": "99", "expected_price": "10", "csrf_token": token},
+        follow_redirects=True,
+    )
+
+    assert primera.status_code == 302
+    assert segunda.status_code == 200
+    assert segunda.history[0].status_code == 302
+    assert "El precio cambió mientras editaba" in segunda.get_data(as_text=True)
+    assert _criterios(app, item_price_id) == (Decimal("18.75"), Decimal("5"), date(2026, 1, 1), date(2026, 12, 31))
+
+
+def test_edicion_completa_si_actualiza_criterios(csrf_price_forms):
+    """El formulario completo conserva su vía explícita para crear tarifas con vigencias."""
+    app, client, (item_code, price_list_id, item_price_id) = csrf_price_forms
+    page = client.get("/settings/item-prices")
+    token = _form_token(page.get_data(as_text=True), marker='name="item_code"')
+
+    respuesta = client.post(
+        "/settings/item-prices",
+        data={
+            "price_list_id": price_list_id,
+            "item_code": item_code,
+            "uom": "UND",
+            "price": "30",
+            "min_qty": "7",
+            "valid_from": "2026-03-01",
+            "valid_upto": "2026-09-30",
+            "csrf_token": token,
+        },
+    )
+
+    assert respuesta.status_code == 302
+    try:
+        with app.app_context():
+            creada = database.session.execute(
+                database.select(ItemPrice).where(
+                    ItemPrice.item_code == item_code,
+                    ItemPrice.price == Decimal("30"),
+                    ItemPrice.min_qty == Decimal("7"),
+                    ItemPrice.valid_from == date(2026, 3, 1),
+                    ItemPrice.valid_upto == date(2026, 9, 30),
+                )
+            ).scalar_one_or_none()
+            assert creada is not None
+            assert creada.id != item_price_id
+    finally:
+        with app.app_context():
+            database.session.rollback()
+            temporales = (
+                database.session.execute(
+                    database.select(ItemPrice).where(
+                        ItemPrice.price_list_id == price_list_id,
+                        ItemPrice.id != item_price_id,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for temporal in temporales:
+                database.session.delete(temporal)
+            database.session.commit()
