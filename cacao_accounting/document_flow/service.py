@@ -221,6 +221,10 @@ def _line_payload(source_type: str, source_id: str, item: Any, target_type: str 
         "uom": getattr(item, "uom", "") or "",
         "rate": _to_json_number(rate),
         "amount": _to_json_number(amount),
+        # #1895: preserve traceability identity when reusing stock entry lines.
+        "batch_id": getattr(item, "batch_id", None),
+        "serial_no": getattr(item, "serial_no", None),
+        "expiry_date": item.expiry_date.isoformat() if getattr(item, "expiry_date", None) else None,
     }
 
 
