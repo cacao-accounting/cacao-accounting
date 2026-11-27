@@ -231,7 +231,27 @@ def ensure_default_naming_series_for_company(company: str, entity_types: list[st
             "petty_cash_replenishment",
         ]
     for entity_type in entity_types:
-        _pick_naming_series(entity_type=entity_type, company=company, naming_series_id=None)
+        lock_default_scope("naming_series", entity_type, company)
+        existing = _locked_default_series(entity_type, company)
+        if existing:
+            continue
+        reusable = (
+            database.session.execute(
+                database.select(NamingSeries)
+                .filter_by(entity_type=entity_type, company=company, is_active=True)
+                .order_by(NamingSeries.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            .scalars()
+            .first()
+        )
+        if reusable is not None:
+            reusable.is_default = True
+            _ensure_series_sequence(reusable)
+            database.session.flush()
+            continue
+        _create_default_series(entity_type, company)
 
 
 def ensure_global_naming_series(entity_types: list[str] | None = None) -> None:
@@ -245,16 +265,32 @@ def ensure_global_naming_series(entity_types: list[str] | None = None) -> None:
         entity_types = ["customer", "supplier", "item"]
     for entity_type in entity_types:
         lock_default_scope("naming_series", entity_type, None)
-        existing = database.session.execute(
-            database.select(NamingSeries)
-            .filter_by(entity_type=entity_type, company=None, is_default=True)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        ).scalar_one_or_none()
+        existing = _locked_default_series(entity_type, None)
         if existing:
             continue
 
         code = _default_entity_code(entity_type)
+        reusable = (
+            database.session.execute(
+                database.select(NamingSeries)
+                .filter_by(
+                    entity_type=entity_type,
+                    company=None,
+                    name=f"Global-{code}",
+                    is_active=True,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            .scalars()
+            .first()
+        )
+        if reusable is not None:
+            reusable.is_default = True
+            _ensure_series_sequence(reusable)
+            database.session.flush()
+            continue
+
         padding = 6 if entity_type == "item" else 5
         prefix_template = f"{code}-"
 
@@ -355,6 +391,64 @@ def _default_entity_code(entity_type: str) -> str:
     return map_codes.get(entity_type, entity_type[:3].upper())
 
 
+def _locked_default_series(entity_type: str, company: str | None) -> NamingSeries | None:
+    """Devuelve una sola serie predeterminada y normaliza duplicados heredados.
+
+    La consulta bloquea todas las filas predeterminadas del ámbito. Si existen
+    duplicados de versiones anteriores, conserva la primera por identificador
+    y retira el flag a las demás para que las siguientes lecturas no fallen con
+    ``MultipleResultsFound``.
+    """
+    rows = list(
+        database.session.execute(
+            database.select(NamingSeries)
+            .filter_by(entity_type=entity_type, company=company, is_default=True)
+            .order_by(NamingSeries.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        return None
+    keeper = rows[0]
+    changed = False
+    for row in rows[1:]:
+        row.is_default = False
+        changed = True
+    if changed:
+        database.session.flush()
+    return keeper
+
+
+def _ensure_series_sequence(series: NamingSeries) -> None:
+    """Asegura que una serie reutilizable tenga al menos una secuencia mapeada."""
+    mapping = (
+        database.session.execute(database.select(SeriesSequenceMap).filter_by(naming_series_id=series.id)).scalars().first()
+    )
+    if mapping is not None:
+        return
+    sequence = Sequence(
+        name=f"{series.name} sequence",
+        current_value=0,
+        increment=1,
+        padding=6 if series.entity_type == "item" else 5,
+        reset_policy="never",
+    )
+    database.session.add(sequence)
+    database.session.flush()
+    database.session.add(
+        SeriesSequenceMap(
+            naming_series_id=series.id,
+            sequence_id=sequence.id,
+            priority=0,
+            condition=None,
+        )
+    )
+    database.session.flush()
+
+
 def _create_default_series(entity_type: str, company: str | None) -> NamingSeries:
     """Crea una serie y secuencia por defecto para compania + doctype.
 
@@ -362,12 +456,7 @@ def _create_default_series(entity_type: str, company: str | None) -> NamingSerie
     ya que es la primera y unica para esta combinacion.
     """
     lock_default_scope("naming_series", entity_type, company)
-    existing = database.session.execute(
-        database.select(NamingSeries)
-        .filter_by(entity_type=entity_type, company=company, is_default=True)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    ).scalar_one_or_none()
+    existing = _locked_default_series(entity_type, company)
     if existing:
         if existing.is_active:
             return existing
