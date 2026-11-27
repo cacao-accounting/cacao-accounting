@@ -24,6 +24,7 @@ from cacao_accounting.database import (
     Item,
     Modules,
     PurchaseQuotation,
+    PurchaseQuotationAward,
     PurchaseQuotationAwardItem,
     PurchaseQuotationItem,
     SupplierQuotation,
@@ -121,6 +122,7 @@ def _crear_escenario(tmp_path):
 
 @pytest.fixture
 def escenario_tarifas(tmp_path):
+    """Provide isolated offers in USD and NIO for award comparisons."""
     application, ids = _crear_escenario(tmp_path)
     yield application, ids
     with application.app_context():
@@ -158,3 +160,20 @@ def test_oferta_nio_recomendada_no_exige_justificacion(escenario_tarifas):
         linea = database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalar_one()
         assert linea.manual_override is False
         assert linea.override_reason is None
+
+
+def test_adjudicacion_multimoneda_falla_sin_tasa_y_no_persiste_award(escenario_tarifas):
+    """Una oferta extranjera sin tasa no puede compararse ni dejar una adjudicación parcial."""
+    application, ids = escenario_tarifas
+    with application.app_context():
+        rfq = database.session.get(PurchaseQuotation, ids["rfq"])
+        oferta_usd = database.session.get(SupplierQuotation, ids["USD-OFFER"])
+        assert rfq is not None and oferta_usd is not None
+        oferta_usd.exchange_rate = None
+        database.session.flush()
+
+        with pytest.raises(PurchaseSourcingError, match="tipo de cambio para comparar"):
+            create_purchase_quotation_award(rfq, {ids["rfq_item"]: ids["USD-OFFER"]}, "admin")
+
+        assert database.session.execute(database.select(PurchaseQuotationAward.id)).scalars().all() == []
+        assert database.session.execute(database.select(PurchaseQuotationAwardItem.id)).scalars().all() == []
