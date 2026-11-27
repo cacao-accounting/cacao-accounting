@@ -236,10 +236,10 @@ def test_parent_cannot_change_company_while_children_remain(
         ("project", "/accounting/project", "project_child", "project_foreign"),
     ],
 )
-def test_leaf_can_move_company_and_use_destination_parent(
+def test_leaf_cannot_move_company_even_with_destination_parent(
     authenticated_client, hierarchy_company_scenario, node_type, path, child_key, parent_key
 ):
-    """A leaf remains editable when moved to a company and parent it can access."""
+    """La compañía propietaria es inmutable después de crear la hoja."""
     app, codes, ids = hierarchy_company_scenario
     data = {
         "id": codes[child_key],
@@ -252,13 +252,15 @@ def test_leaf_can_move_company_and_use_destination_parent(
 
     response = authenticated_client().post(f"{path}/{ids[child_key]}/edit", data=data)
 
-    assert response.status_code == 302
+    assert response.status_code == 200
+    assert "no puede cambiarse después" in response.get_data(as_text=True)
     with app.app_context():
         model = Unit if node_type == "unit" else Project
         child = database.session.execute(database.select(model).filter_by(code=codes[child_key])).scalar_one()
-        assert child.entity == "alpha"
-        assert child.name == "Hijo trasladado"
-        assert child.parent_id == ids[parent_key]
+        assert child.entity == "cacao"
+        expected_name = "Unidad hija" if node_type == "unit" else "Proyecto hijo"
+        assert child.name == expected_name
+        assert child.parent_id != ids[parent_key]
 
 
 @pytest.mark.parametrize(
