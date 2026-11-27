@@ -2161,7 +2161,14 @@ def _post_bank_difference_adjustment(
         bank_entry,
         str(bank_account.company),
     )
-    transaction.is_reconciled = True
+    from cacao_accounting.internal_control_service import bank_reconciliation_transition
+
+    try:
+        with bank_reconciliation_transition(transaction):
+            transaction.is_reconciled = True
+            database.session.flush()
+    except ValueError as exc:
+        raise BankReconciliationError(str(exc)) from exc
 
 
 def _validate_numbering_config_series(bank_account: BankAccount, payment_type: str, naming_series_id: str | None) -> None:
