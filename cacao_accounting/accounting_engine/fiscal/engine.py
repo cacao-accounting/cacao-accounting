@@ -126,6 +126,7 @@ class FiscalEngine:
 
         # Concept amounts for cascading
         concept_amounts: Dict[str, Decimal] = {"goods": goods_total}
+        included_bases: dict[tuple[Any, ...], Decimal] = {}
 
         step_counter = 1
 
@@ -133,6 +134,9 @@ class FiscalEngine:
             try:
                 rule_goods_total = _restricted_goods_total(rule, context.items, goods_total)
                 base_amount = self._calculate_base(rule, concept_amounts, rule_goods_total)
+                if rule.included_in_price:
+                    base_key = self._included_base_key(rule)
+                    base_amount = included_bases.setdefault(base_key, base_amount)
                 amount = self._calculate_amount(rule, base_amount, sorted_rules)
 
                 # Use rounding manager
@@ -302,8 +306,10 @@ class FiscalEngine:
         }
 
     def _calculate_base(self, rule: TaxRuleContext, concept_amounts: Dict[str, Decimal], goods_total: Decimal) -> Decimal:
-        if rule.base_mode == "goods":
+        if rule.allowed_item_categories:
             return goods_total
+        if rule.base_mode == "goods":
+            return concept_amounts.get("goods", goods_total)
         if rule.base_mode == "accumulated":
             return calculate_accumulated_tax_base(
                 goods_total,
@@ -312,6 +318,16 @@ class FiscalEngine:
                 rule.exclude_concepts,
             )
         return goods_total
+
+    @staticmethod
+    def _included_base_key(rule: TaxRuleContext) -> tuple[Any, ...]:
+        """Identify included rules that decompose the same configured base."""
+        return (
+            rule.base_mode,
+            tuple(rule.include_concepts),
+            tuple(rule.exclude_concepts),
+            tuple(rule.allowed_item_categories),
+        )
 
     def _calculate_amount(
         self, rule: TaxRuleContext, base_amount: Decimal, all_rules: Optional[list[TaxRuleContext]] = None

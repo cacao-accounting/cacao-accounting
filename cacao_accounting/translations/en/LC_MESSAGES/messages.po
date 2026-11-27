@@ -1964,6 +1964,10 @@ msgstr "Filter not available for this type of selection."
 msgid "La tasa debe ser finita."
 msgstr "Tax rate must be finite."
 
+#: cacao_accounting/tax_pricing_service.py
+msgid "La tasa inclusiva configurada produce una base nula o negativa."
+msgstr "The configured inclusive tax rate produces a zero or negative base."
+
 #: cacao_accounting/tax_pricing_service.py:163
 msgid "La plantilla de impuestos no existe o esta inactiva."
 msgstr "The tax template does not exist or is inactive."

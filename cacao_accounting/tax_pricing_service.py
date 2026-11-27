@@ -103,6 +103,7 @@ def _calculate_template_item_tax(
     running_total,
     inclusive_rate_total=Decimal("0"),
     inclusive_fixed_total=Decimal("0"),
+    sequential_inclusive_amount=None,
 ):
     """Calculate one template tax, extracting percentage taxes included in price."""
     tax = database.session.get(Tax, template_item.tax_id)
@@ -111,7 +112,9 @@ def _calculate_template_item_tax(
     calculation_base = template_item.calculation_base or "net_document"
     taxable_base = running_total if calculation_base == "previous_total" else base_amount
     rate = _finite_tax_rate(tax)
-    if tax.tax_type == "fixed":
+    if sequential_inclusive_amount is not None:
+        amount = sequential_inclusive_amount
+    elif tax.tax_type == "fixed":
         amount = rate
     elif template_item.is_inclusive:
         # ``taxable_base`` is the price displayed to the user, which already
@@ -121,6 +124,9 @@ def _calculate_template_item_tax(
         # price are first removed because they are not part of the percentage
         # tax base (e.g. 125 = 100 + fixed 10 + IVA 15).
         amount = (taxable_base - inclusive_fixed_total) * rate / (Decimal("100") + inclusive_rate_total)
+    elif calculation_base == "net_document" and (inclusive_rate_total or inclusive_fixed_total):
+        net_base = (taxable_base - inclusive_fixed_total) / (Decimal("1") + inclusive_rate_total / Decimal("100"))
+        amount = net_base * rate / Decimal("100")
     else:
         amount = taxable_base * rate / Decimal("100")
     amount = amount.quantize(Decimal("0.0001"))
@@ -153,6 +159,34 @@ def _inclusive_tax_bases(items: list[TaxTemplateItem]) -> tuple[dict[str, Decima
         elif tax.tax_type == "fixed":
             inclusive_fixed_by_base[calculation_base] = inclusive_fixed_by_base.get(calculation_base, Decimal("0")) + rate
     return inclusive_rates_by_base, inclusive_fixed_by_base
+
+
+def _previous_total_inclusive_amounts(items: list[TaxTemplateItem], displayed_total: Decimal) -> dict[str, Decimal]:
+    """Reconstruct sequential inclusive taxes from the displayed total backwards."""
+    included: list[tuple[TaxTemplateItem, Tax]] = []
+    for template_item in items:
+        if not template_item.is_inclusive or (template_item.calculation_base or "net_document") != "previous_total":
+            continue
+        tax = database.session.get(Tax, template_item.tax_id)
+        if tax and tax.is_active:
+            included.append((template_item, tax))
+
+    remaining_total = displayed_total
+    amounts: dict[str, Decimal] = {}
+    for template_item, tax in reversed(included):
+        rate = _finite_tax_rate(tax)
+        if tax.tax_type == "fixed":
+            amount = rate
+            remaining_total -= amount
+        else:
+            factor = Decimal("1") + rate / Decimal("100")
+            if factor <= 0:
+                raise TaxPricingError(_("La tasa inclusiva configurada produce una base nula o negativa."))
+            previous_total = remaining_total / factor
+            amount = previous_total * rate / Decimal("100")
+            remaining_total = previous_total
+        amounts[str(template_item.id)] = amount.quantize(Decimal("0.0001"))
+    return amounts
 
 
 def _apply_tax_result(result: TaxLineResult, totals: _TaxTotals) -> None:
@@ -191,6 +225,7 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
         if tax and tax.is_active:
             validate_tax_template_applicability(template.template_type, tax.applies_to)
     inclusive_rates_by_base, inclusive_fixed_by_base = _inclusive_tax_bases(items)
+    sequential_inclusive_amounts = _previous_total_inclusive_amounts(items, base_amount)
     for template_item in items:
         calculation_base = template_item.calculation_base or "net_document"
         result = _calculate_template_item_tax(
@@ -199,6 +234,7 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
             totals.running_total,
             inclusive_rates_by_base.get(calculation_base, Decimal("0")),
             inclusive_fixed_by_base.get(calculation_base, Decimal("0")),
+            sequential_inclusive_amounts.get(str(template_item.id)),
         )
         if not result:
             continue
