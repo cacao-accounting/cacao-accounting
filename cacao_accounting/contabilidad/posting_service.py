@@ -930,8 +930,30 @@ def _add_entries(entries: list[GLEntry]) -> list[GLEntry]:
             validate_gl_account_usage(entry.account_id, entry.voucher_type)
         except DefaultAccountError as exc:
             raise PostingError(str(exc)) from exc
+    _lock_bank_candidate_scopes(entries)
     database.session.add_all(entries)
     return entries
+
+
+def _lock_bank_candidate_scopes(entries: list[GLEntry]) -> None:
+    """Serializa altas GL que pueden convertirse en candidatos bancarios."""
+    from cacao_accounting.database import BankAccount
+    from cacao_accounting.default_scope import lock_default_scopes
+
+    account_ids = {str(entry.account_id) for entry in entries if entry.account_id}
+    scopes: set[tuple[str, str]] = set()
+    for entry in entries:
+        if entry.company and getattr(entry, "bank_account_id", None):
+            scopes.add((str(entry.company), str(entry.bank_account_id)))
+    if account_ids:
+        bank_accounts = database.session.execute(
+            database.select(BankAccount).where(BankAccount.gl_account_id.in_(account_ids))
+        ).scalars()
+        for bank_account in bank_accounts:
+            if bank_account.company:
+                scopes.add((str(bank_account.company), str(bank_account.id)))
+    if scopes:
+        lock_default_scopes("bank_auto_reconcile", list(scopes))
 
 
 def _post_with_calculation_engine_payload(document: Any, ledger_code: str | None = None) -> EnginePostingResult | None:
