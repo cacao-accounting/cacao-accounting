@@ -17,7 +17,9 @@ from cacao_accounting.database import (
     FiscalYear,
     CashForecast,
     CashForecastEntry,
+    CompanyParty,
     Entity,
+    PaymentTerms,
 )
 from cacao_accounting.cancellation_scope import effective_gl_scope
 from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
@@ -256,11 +258,16 @@ def _sum_invoice_amount(
     start_date: date,
     end_date: date,
     company_currency: str = "NIO",
+    due_dates: dict[str, date] | None = None,
 ) -> Decimal:
     """Suma saldos pendientes usando la fecha de vencimiento del documento."""
     total = Decimal("0")
     for invoice in invoices:
-        flow_date = getattr(invoice, "due_date", None) or invoice.posting_date
+        flow_date = (
+            getattr(invoice, "due_date", None) or (due_dates or {}).get(invoice.id) or getattr(invoice, "posting_date", None)
+        )
+        if flow_date is None:
+            continue
         if not start_date <= flow_date <= end_date:
             continue
         forecast = _invoice_forecast_amount(invoice, company_currency, flow_date)
@@ -273,6 +280,36 @@ def _sum_invoice_amount(
             amount = -Decimal(str(amount))
         total += Decimal(str(amount))
     return total
+
+
+def _load_invoice_due_dates(company: str, invoices: list) -> dict[str, date]:
+    """Deriva vencimientos por factura usando los términos activos del tercero."""
+    party_ids = {
+        party_id
+        for invoice in invoices
+        if (party_id := getattr(invoice, "customer_id", None) or getattr(invoice, "supplier_id", None))
+    }
+    if not party_ids:
+        return {}
+
+    due_days_by_party: dict[str, int | None] = dict(
+        database.session.execute(
+            database.select(CompanyParty.party_id, PaymentTerms.due_days)
+            .join(PaymentTerms, PaymentTerms.id == CompanyParty.payment_terms_id, isouter=True)
+            .where(
+                CompanyParty.company == company,
+                CompanyParty.is_active.is_(True),
+                CompanyParty.party_id.in_(party_ids),
+            )
+        ).all()
+    )
+    due_dates: dict[str, date] = {}
+    for invoice in invoices:
+        if getattr(invoice, "due_date", None) or not invoice.posting_date:
+            continue
+        party_id = getattr(invoice, "customer_id", None) or getattr(invoice, "supplier_id", None)
+        due_dates[invoice.id] = invoice.posting_date + timedelta(days=due_days_by_party.get(party_id, 0) or 0)
+    return due_dates
 
 
 def _forecast_base_amount(outstanding: Decimal, invoice, company_currency: str, flow_date: date) -> Decimal:
@@ -308,16 +345,17 @@ def _compute_ar_ap_projections(
     start_date: date,
     end_date: date,
     company_currency: str,
+    due_dates: dict[str, date],
 ) -> tuple[Decimal, Decimal]:
     """Calcula proyecciones AR/AP según la zona temporal."""
     if zone == "Current":
-        ar_total = _sum_invoice_amount(ar_invoices, _EPOCH_DATE, end_date, company_currency)
-        ap_total = _sum_invoice_amount(ap_invoices, _EPOCH_DATE, end_date, company_currency)
+        ar_total = _sum_invoice_amount(ar_invoices, _EPOCH_DATE, end_date, company_currency, due_dates)
+        ap_total = _sum_invoice_amount(ap_invoices, _EPOCH_DATE, end_date, company_currency, due_dates)
         return ar_total, ap_total
     if zone == "Projected":
         return (
-            _sum_invoice_amount(ar_invoices, start_date, end_date, company_currency),
-            _sum_invoice_amount(ap_invoices, start_date, end_date, company_currency),
+            _sum_invoice_amount(ar_invoices, start_date, end_date, company_currency, due_dates),
+            _sum_invoice_amount(ap_invoices, start_date, end_date, company_currency, due_dates),
         )
     return Decimal("0"), Decimal("0")
 
@@ -444,6 +482,7 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         )
         .all()
     )
+    invoice_due_dates = _load_invoice_due_dates(company, [*ar_invoices, *ap_invoices])
 
     cumulatives: dict[str, Decimal] = {"real": init_balance, "current": init_balance, "projected": init_balance}
     matrix = []
@@ -465,6 +504,7 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
             start_date,
             end_date,
             company_currency,
+            invoice_due_dates,
         )
         manual_inflow, manual_outflow, incomplete_manual_entries = _compute_manual_projections(
             manual_entries, start_date, end_date, zone, today_date, company_currency
