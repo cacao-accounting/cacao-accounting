@@ -19,11 +19,17 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.18.0\n"
 
-msgid "Matriz incompleta: faltan conversiones para algunas proyecciones manuales."
-msgstr "Incomplete matrix: conversions are missing for some manual projections."
+msgid ""
+"Matriz incompleta: faltan conversiones para algunas proyecciones manuales."
+msgstr ""
+"Incomplete matrix: conversions are missing for some manual projections."
 
-msgid "Los saldos proyectados no incluyen estos importes y no deben interpretarse como completos."
-msgstr "Projected balances exclude these amounts and should not be treated as complete."
+msgid ""
+"Los saldos proyectados no incluyen estos importes y no deben interpretarse "
+"como completos."
+msgstr ""
+"Projected balances exclude these amounts and should not be treated as "
+"complete."
 
 msgid "Incompleto"
 msgstr "Incomplete"
@@ -2708,7 +2714,8 @@ msgstr "The submitted price version is invalid."
 
 #: cacao_accounting/admin/routes.py:1221
 msgid "El precio cambió mientras editaba. Recargue la lista antes de guardar."
-msgstr "The price changed while you were editing. Reload the list before saving."
+msgstr ""
+"The price changed while you were editing. Reload the list before saving."
 
 #: cacao_accounting/admin/routes.py:1035 cacao_accounting/admin/routes.py:1095
 msgid "El artículo o la unidad de medida ya no está disponible."
@@ -8382,7 +8389,8 @@ msgid "La entrada GL no tiene moneda funcional para convertirla."
 msgstr "The GL entry has no functional currency to convert it."
 
 #: cacao_accounting/reportes/services.py
-msgid "La entrada GL no tiene moneda funcional para convertir el saldo bancario."
+msgid ""
+"La entrada GL no tiene moneda funcional para convertir el saldo bancario."
 msgstr "The GL entry has no functional currency to convert the bank balance."
 
 #: cacao_accounting/reportes/services.py
@@ -8895,7 +8903,9 @@ msgid ""
 msgstr "The petty cash currency must match its accounting account currency."
 
 #: cacao_accounting/bancos/services.py
-msgid "La moneda de la cuenta bancaria debe coincidir con la moneda de su cuenta contable GL."
+msgid ""
+"La moneda de la cuenta bancaria debe coincidir con la moneda de su cuenta "
+"contable GL."
 msgstr "The bank account currency must match its GL account currency."
 
 #: cacao_accounting/bancos/services.py:482
@@ -13071,7 +13081,8 @@ msgstr "The selected purchase order is not part of the source invoice flow."
 msgid "La recepción indicada no pertenece al flujo de la factura origen."
 msgstr "The selected receipt is not part of the source invoice flow."
 
-msgid "La nota de entrega indicada no pertenece al flujo de la factura origen."
+msgid ""
+"La nota de entrega indicada no pertenece al flujo de la factura origen."
 msgstr "The selected delivery note is not part of the source invoice flow."
 
 msgid "La nota y la factura origen deben usar la misma moneda."
@@ -17172,7 +17183,8 @@ msgid "No se puede abrir un año con cierre contable realizado."
 msgstr "A year with an accounting close performed cannot be opened."
 
 #: cacao_accounting/contabilidad/routes.py
-msgid "No se pueden modificar las fechas de un año con cierre contable realizado."
+msgid ""
+"No se pueden modificar las fechas de un año con cierre contable realizado."
 msgstr "The dates of a fiscally closed year cannot be changed."
 
 #: cacao_accounting/contabilidad/routes.py:2301
@@ -27686,6 +27698,73 @@ msgstr "No pending migrations."
 msgid "La fecha de la reposición no puede ser anterior a la fecha del gasto."
 msgstr "The replenishment date cannot be earlier than the expense date."
 
+#: cacao_accounting/withholding_service.py
+msgid ""
+"El certificado de retención del pago está cancelado y no puede reemitirse."
+msgstr ""
+"The payment withholding certificate is cancelled and cannot be reissued."
+
+#: cacao_accounting/reportes/services.py
+#, python-format
+msgid ""
+"La moneda de comparación debe coincidir con la moneda del libro seleccionado"
+" (%(currency)s)."
+msgstr ""
+"The comparison currency must match the selected ledger currency "
+"(%(currency)s)."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/journal.html
+msgid "La fecha elegida no pertenece a un período contable configurado."
+msgstr "The selected date does not belong to a configured accounting period."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/journal.html
+msgid "El período contable de la fecha elegida está cerrado o deshabilitado."
+msgstr "The accounting period for the selected date is closed or disabled."
+
+#: cacao_accounting/contabilidad/templates/contabilidad/journal.html
+msgid "No se encontró el período contable del comprobante."
+msgstr "The journal entry's accounting period could not be found."
+
+#: cacao_accounting/contabilidad/routes.py
+msgid ""
+"El rango del año fiscal se superpone con otro año fiscal de la compañía."
+msgstr "The fiscal year range overlaps another fiscal year for this company."
+
+msgid "Moneda funcional de comparaci?n"
+msgstr "Functional comparison currency"
+
+msgid ""
+"La recomendaci?n se calcula por tarifa equivalente en moneda funcional; la "
+"tarifa original de la oferta se muestra con su moneda transaccional."
+msgstr ""
+"The recommendation is calculated using the equivalent rate in the functional"
+" currency; the offer's original rate is shown with its transaction currency."
+
+msgid "Equivalente"
+msgstr "Equivalent"
+
+msgid "TC"
+msgstr "ER"
+
+msgid "Ciclo jer?rquico detectado en"
+msgstr "Hierarchical cycle detected at"
+
+msgid "Revise la configuraci?n de la jerarqu?a."
+msgstr "Review the hierarchy configuration."
+
+msgid "Padre no encontrado"
+msgstr "Parent not found"
+
+msgid "Ciclo jer?rquico"
+msgstr "Hierarchical cycle"
+
+msgid ""
+"La compañía de una unidad de negocio no puede cambiarse después de crearla."
+msgstr "A business unit's company cannot be changed after creation."
+
+msgid "La compañía de un proyecto no puede cambiarse después de crearlo."
+msgstr "A project's company cannot be changed after creation."
+
 #~ msgid "Debe indicar el motivo de la anulacion."
 #~ msgstr "You must provide the reason for the cancellation."
 
@@ -28277,52 +28356,3 @@ msgstr "The replenishment date cannot be earlier than the expense date."
 
 #~ msgid "Último movimiento"
 #~ msgstr "Last movement"
-
-#: cacao_accounting/withholding_service.py
-msgid "El certificado de retención del pago está cancelado y no puede reemitirse."
-msgstr "The payment withholding certificate is cancelled and cannot be reissued."
-
-#: cacao_accounting/reportes/services.py
-#, python-format
-msgid "La moneda de comparación debe coincidir con la moneda del libro seleccionado (%(currency)s)."
-msgstr "The comparison currency must match the selected ledger currency (%(currency)s)."
-
-#: cacao_accounting/contabilidad/templates/contabilidad/journal.html
-msgid "La fecha elegida no pertenece a un período contable configurado."
-msgstr "The selected date does not belong to a configured accounting period."
-
-#: cacao_accounting/contabilidad/templates/contabilidad/journal.html
-msgid "El período contable de la fecha elegida está cerrado o deshabilitado."
-msgstr "The accounting period for the selected date is closed or disabled."
-
-#: cacao_accounting/contabilidad/templates/contabilidad/journal.html
-msgid "No se encontró el período contable del comprobante."
-msgstr "The journal entry's accounting period could not be found."
-
-#: cacao_accounting/contabilidad/routes.py
-msgid "El rango del año fiscal se superpone con otro año fiscal de la compañía."
-msgstr "The fiscal year range overlaps another fiscal year for this company."
-
-msgid "Moneda funcional de comparaci?n"
-msgstr "Functional comparison currency"
-
-msgid "La recomendaci?n se calcula por tarifa equivalente en moneda funcional; la tarifa original de la oferta se muestra con su moneda transaccional."
-msgstr "The recommendation is calculated using the equivalent rate in the functional currency; the offer's original rate is shown with its transaction currency."
-
-msgid "Equivalente"
-msgstr "Equivalent"
-
-msgid "TC"
-msgstr "ER"
-
-msgid "Ciclo jer?rquico detectado en"
-msgstr "Hierarchical cycle detected at"
-
-msgid "Revise la configuraci?n de la jerarqu?a."
-msgstr "Review the hierarchy configuration."
-
-msgid "Padre no encontrado"
-msgstr "Parent not found"
-
-msgid "Ciclo jer?rquico"
-msgstr "Hierarchical cycle"

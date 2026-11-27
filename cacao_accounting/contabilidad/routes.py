@@ -1242,6 +1242,8 @@ def editar_unidad(id_unidad):
         try:
             exige_acceso_compania("accounting", formulario.entidad.data or "")
             _validate_active_entity_submission(formulario.entidad.data)
+            if formulario.entidad.data != registro.entity:
+                raise ValueError(_("La compañía de una unidad de negocio no puede cambiarse después de crearla."))
             parent_id = formulario.parent_id.data or None
             check_hierarchy_cycle(
                 Unit,

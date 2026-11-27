@@ -678,6 +678,8 @@ def _validate_project_edit_form(formulario: Any, proyecto: Any) -> tuple[str | N
     """
     entity = request.form.get("entidad", proyecto.entity)
     _validate_active_entity_submission(entity)
+    if entity != proyecto.entity:
+        raise ValueError(_("La compañía de un proyecto no puede cambiarse después de crearlo."))
     parent_id = request.form.get("parent_id") or None
     check_hierarchy_cycle(Project, proyecto.id, parent_id, entity=entity, current_entity=proyecto.entity)
 
@@ -733,7 +735,8 @@ def _update_project_from_form(
 ) -> None:
     """Actualiza un proyecto editado con los valores enviados por formulario."""
     proyecto.name = request.form.get("nombre", proyecto.name)
-    proyecto.entity = request.form.get("entidad", proyecto.entity)
+    # La compañía propietaria es inmutable; para operar en otra se crea un
+    # registro nuevo y se preservan las referencias históricas.
     proyecto.start = formulario.inicio.data
     proyecto.end = formulario.fin.data
     proyecto.budget = Decimal(str(budget_amount or 0))
