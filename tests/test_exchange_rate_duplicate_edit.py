@@ -233,6 +233,53 @@ def test_edicion_rechaza_tasa_usada_por_revaluacion_posterior():
             database.engine.dispose()
 
 
+def test_edicion_rechaza_tasa_usada_por_revaluacion_sin_run_date():
+    """La fecha de posting conserva el uso histórico cuando run_date es nulo."""
+    application, ids = _crear_app()
+    try:
+        with application.app_context():
+            run = ExchangeRevaluation(
+                company="cacao",
+                status="posted",
+                docstatus=1,
+                run_date=None,
+                posting_date=date(2026, 1, 15),
+                month=1,
+                year=2026,
+                currency="NIO",
+                document_no="EXR-LEGACY-2026-01",
+            )
+            database.session.add(run)
+            database.session.flush()
+            database.session.add(
+                ExchangeRevaluationItem(
+                    revaluation_id=run.id,
+                    reference_type="sales_invoice",
+                    reference_id="invoice-legacy",
+                    original_currency_id="USD",
+                    ledger_currency_id="NIO",
+                    closing_rate=Decimal("37"),
+                )
+            )
+            database.session.commit()
+
+        response = _cliente(application).post(
+            f"/accounting/exchange/{ids['segunda']}/edit",
+            data={"origin": "USD", "destination": "NIO", "rate": "38", "date": "2026-01-12"},
+        )
+
+        assert response.status_code == 200
+        assert "No se puede editar una tasa que ya fue utilizada en contabilidad" in response.get_data(as_text=True)
+        with application.app_context():
+            rate = database.session.get(ExchangeRate, ids["segunda"])
+            assert rate is not None
+            assert (rate.date, rate.rate) == (date(2026, 1, 11), Decimal("37.000000000"))
+    finally:
+        with application.app_context():
+            database.session.remove()
+            database.engine.dispose()
+
+
 def test_edicion_maneja_conflicto_ganado_tras_precheck(monkeypatch):
     """A stale precheck is resolved by the database constraint and returns the form."""
     application, ids = _crear_app()

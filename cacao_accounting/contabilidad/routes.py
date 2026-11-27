@@ -2821,10 +2821,11 @@ def _exchange_rate_is_used_in_accounting(rate: Any) -> bool:
             )
         ).scalar_one()
         usage_dates = [GLEntry.posting_date >= rate.date]
-        revaluation_dates = [ExchangeRevaluation.run_date >= rate.date]
+        effective_revaluation_date = database.func.coalesce(ExchangeRevaluation.run_date, ExchangeRevaluation.posting_date)
+        revaluation_dates = [effective_revaluation_date >= rate.date]
         if next_rate_date is not None:
             usage_dates.append(GLEntry.posting_date < next_rate_date)
-            revaluation_dates.append(ExchangeRevaluation.run_date < next_rate_date)
+            revaluation_dates.append(effective_revaluation_date < next_rate_date)
 
         gl_usage = database.session.execute(
             database.select(GLEntry.id)
