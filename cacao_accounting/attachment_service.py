@@ -921,6 +921,66 @@ def delete_attachment(file_id: str, reference_type: str, reference_id: str, user
     }
 
 
+def _cleanup_event_payload(event: AuditTrail) -> dict[str, Any]:
+    """Decodifica el payload JSON de un evento de limpieza sin propagar errores."""
+    try:
+        payload = json.loads(event.after_json or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _cleanup_event_already_resolved(event: AuditTrail, file_id: str, file_path: str) -> bool:
+    """Indica si existe un ``cleanup_resolved`` posterior para el mismo archivo."""
+    condition = (
+        AuditTrail.after_json.contains(f'"file_id": "{file_id}"') if file_id else AuditTrail.after_json.contains(file_path)
+    )
+    return (
+        database.session.execute(
+            database.select(AuditTrail.id)
+            .where(AuditTrail.action == "cleanup_resolved")
+            .where(AuditTrail.document_id == event.document_id)
+            .where(condition)
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def _resolve_cleanup_event(
+    event: AuditTrail,
+    payload: dict[str, Any],
+    file_id: str,
+    file_path: str,
+    actor_id: str | None,
+) -> bool:
+    """Elimina el archivo pendiente y registra la resolución; devuelve si tuvo éxito."""
+    exists = os.path.exists(file_path)
+    if exists and not _remove_file(file_path):
+        return False
+    with _actor_context(actor_id):
+        try:
+            _emit_attachment_audit(
+                "cleanup_resolved",
+                str(event.document_type),
+                str(event.document_id),
+                after={
+                    "file_id": file_id or None,
+                    "file_name": payload.get("file_name"),
+                    "sha256": payload.get("sha256"),
+                    "result": "resolved",
+                    "already_missing": not exists,
+                },
+                result="success",
+            )
+            database.session.commit()
+        except Exception as exc:
+            database.session.rollback()
+            log.warning("Could not record attachment cleanup resolution: {}", exc)
+            return False
+    return True
+
+
 def reconcile_pending_attachment_cleanups(*, actor_id: str | None = None, limit: int = 200) -> dict[str, Any]:
     """Reintenta limpieza física pendiente registrada por ``cleanup_failed``.
 
@@ -948,59 +1008,19 @@ def reconcile_pending_attachment_cleanups(*, actor_id: str | None = None, limit:
     still_pending = 0
     seen: set[tuple[str, str]] = set()
     for event in failed_events:
-        payload = {}
-        try:
-            payload = json.loads(event.after_json or "{}")
-        except (TypeError, ValueError):
-            payload = {}
+        payload = _cleanup_event_payload(event)
         file_id = str(payload.get("file_id") or "")
         file_path = str(payload.get("file_path") or "")
         key = (str(event.document_id or ""), file_id or file_path)
         if not file_path or key in seen:
             continue
         seen.add(key)
-
-        already_resolved = database.session.execute(
-            database.select(AuditTrail.id)
-            .where(AuditTrail.action == "cleanup_resolved")
-            .where(AuditTrail.document_id == event.document_id)
-            .where(
-                AuditTrail.after_json.contains(f'"file_id": "{file_id}"')
-                if file_id
-                else AuditTrail.after_json.contains(file_path)
-            )
-            .limit(1)
-        ).scalar_one_or_none()
-        if already_resolved:
+        if _cleanup_event_already_resolved(event, file_id, file_path):
             continue
-
-        exists = os.path.exists(file_path)
-        removed = (not exists) or _remove_file(file_path)
-        if not removed:
+        if _resolve_cleanup_event(event, payload, file_id, file_path, actor_id):
+            resolved_ids.append(file_id or str(event.id))
+        else:
             still_pending += 1
-            continue
-
-        with _actor_context(actor_id):
-            try:
-                _emit_attachment_audit(
-                    "cleanup_resolved",
-                    str(event.document_type),
-                    str(event.document_id),
-                    after={
-                        "file_id": file_id or None,
-                        "file_name": payload.get("file_name"),
-                        "sha256": payload.get("sha256"),
-                        "result": "resolved",
-                        "already_missing": not exists,
-                    },
-                    result="success",
-                )
-                database.session.commit()
-                resolved_ids.append(file_id or str(event.id))
-            except Exception as exc:
-                database.session.rollback()
-                log.warning("Could not record attachment cleanup resolution: {}", exc)
-                still_pending += 1
 
     return {"resolved": len(resolved_ids), "pending": still_pending, "resolved_ids": resolved_ids}
 

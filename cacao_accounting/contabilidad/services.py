@@ -469,6 +469,55 @@ def _cost_center_has_children(entity: str, center_code: str) -> bool:
     return child is not None
 
 
+def _choose_default_cost_center(centers: list[Any], preferred_id: str | None) -> Any | None:
+    """Selecciona el centro predeterminado entre los candidatos postables."""
+    active_postable = [cc for cc in centers if bool(cc.active) and bool(cc.enabled) and not bool(cc.group)]
+    defaults = [cc for cc in centers if bool(cc.default)]
+    chosen = None
+    if preferred_id:
+        chosen = next((cc for cc in active_postable if cc.id == preferred_id), None)
+    if chosen is None and len(defaults) == 1 and defaults[0] in active_postable:
+        chosen = defaults[0]
+    if chosen is None:
+        chosen = next((cc for cc in active_postable if cc.code == "MAIN"), None)
+    if chosen is None and active_postable:
+        chosen = active_postable[0]
+    return chosen
+
+
+def _ensure_main_cost_center(entity: str, centers: list[Any]) -> Any:
+    """Reactiva o crea el centro MAIN histórico y lo deja como único predeterminado."""
+    from cacao_accounting.database import CostCenter
+
+    existing_main = next((cc for cc in centers if cc.code == "MAIN"), None)
+    if existing_main is not None:
+        if _cost_center_has_children(entity, "MAIN"):
+            raise ValueError(_("El centro de costo MAIN hist?rico no es utilizable como predeterminado y tiene hijos."))
+        existing_main.active = True
+        existing_main.enabled = True
+        existing_main.group = False
+        existing_main.default = True
+        existing_main.status = "activo"
+        chosen = existing_main
+    else:
+        chosen = CostCenter(
+            entity=entity,
+            code="MAIN",
+            name="Principal",
+            active=True,
+            enabled=True,
+            default=True,
+            group=False,
+            status="activo",
+        )
+        database.session.add(chosen)
+        database.session.flush()
+    for cc in centers:
+        if cc.id != chosen.id and bool(cc.default):
+            cc.default = False
+    return chosen
+
+
 def _ensure_single_default_cost_center(entity: str, *, preferred_id: str | None = None) -> Any:
     """Garantiza exactamente un centro de costo predeterminado por compa??a."""
     from cacao_accounting.database import CostCenter
@@ -486,49 +535,9 @@ def _ensure_single_default_cost_center(entity: str, *, preferred_id: str | None 
         .all()
     )
 
-    active_postable = [cc for cc in centers if bool(cc.active) and bool(cc.enabled) and not bool(cc.group)]
-    defaults = [cc for cc in centers if bool(cc.default)]
-
-    chosen = None
-    if preferred_id:
-        chosen = next((cc for cc in active_postable if cc.id == preferred_id), None)
-    if chosen is None and len(defaults) == 1 and defaults[0] in active_postable:
-        chosen = defaults[0]
+    chosen = _choose_default_cost_center(centers, preferred_id)
     if chosen is None:
-        for cc in active_postable:
-            if cc.code == "MAIN":
-                chosen = cc
-                break
-    if chosen is None and active_postable:
-        chosen = active_postable[0]
-    if chosen is None:
-        existing_main = next((cc for cc in centers if cc.code == "MAIN"), None)
-        if existing_main is not None:
-            if _cost_center_has_children(entity, "MAIN"):
-                raise ValueError(_("El centro de costo MAIN hist?rico no es utilizable como predeterminado y tiene hijos."))
-            existing_main.active = True
-            existing_main.enabled = True
-            existing_main.group = False
-            existing_main.default = True
-            existing_main.status = "activo"
-            chosen = existing_main
-        else:
-            chosen = CostCenter(
-                entity=entity,
-                code="MAIN",
-                name="Principal",
-                active=True,
-                enabled=True,
-                default=True,
-                group=False,
-                status="activo",
-            )
-            database.session.add(chosen)
-            database.session.flush()
-        for cc in centers:
-            if cc.id != chosen.id and bool(cc.default):
-                cc.default = False
-        return chosen
+        return _ensure_main_cost_center(entity, centers)
 
     for cc in centers:
         desired = cc.id == chosen.id

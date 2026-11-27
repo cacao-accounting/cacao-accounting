@@ -581,54 +581,50 @@ def lista_plantillas_impuesto():
     return render_template("admin/tax_templates.html", templates=templates, titulo=_("Plantillas de Impuestos"))
 
 
-@admin.route("/settings/tax-templates/<template_id>/items", methods=["GET", "POST"])
-@login_required
-@modulo_activo("admin")
-def items_plantilla_impuesto(template_id: str):
-    """Administra lineas de una plantilla de impuestos."""
-    _require_system_admin()
-    template = database.session.get(TaxTemplate, template_id)
-    if not template:
-        abort(404)
-    if request.method == "POST":
-        try:
-            sequence = int(request.form.get("sequence") or 10)
-        except (TypeError, ValueError):
-            flash(_("La secuencia debe ser un número entero."), "danger")
-            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
-        tax_id = (request.form.get("tax_id") or "").strip()
-        tax = database.session.get(Tax, tax_id) if tax_id else None
-        if not tax or not tax.is_active:
-            flash(_("Selecciona un impuesto activo."), "danger")
-            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
-        try:
-            validate_tax_template_applicability(template.template_type, tax.applies_to)
-        except TaxPricingError as exc:
-            flash(str(exc), "danger")
-            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
-        item = TaxTemplateItem(
-            tax_template_id=template.id,
-            tax_id=tax.id,
-            sequence=sequence,
-            calculation_base=request.form.get("calculation_base") or "net_document",
-            behavior=request.form.get("behavior") or "additive",
-            is_inclusive=bool(request.form.get("is_inclusive")),
-        )
-        if item.calculation_base not in {"net_document", "previous_total"}:
-            flash(_("La base de c?lculo del impuesto no es v?lida."), "danger")
-            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
-        if item.behavior not in {"additive", "deductive"}:
-            flash(_("El comportamiento del impuesto no es v?lido."), "danger")
-            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
-        database.session.add(item)
-        try:
-            database.session.commit()
-        except IntegrityError:
-            database.session.rollback()
-            flash(_("No se pudo agregar la l?nea de impuesto. Verifique las referencias seleccionadas."), "danger")
-            return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
-        flash(_("Linea de impuesto agregada correctamente."), "success")
+def _create_tax_template_item_from_post(template: TaxTemplate):
+    """Valida y persiste una línea de plantilla de impuestos desde el formulario."""
+    try:
+        sequence = int(request.form.get("sequence") or 10)
+    except (TypeError, ValueError):
+        flash(_("La secuencia debe ser un número entero."), "danger")
         return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    tax_id = (request.form.get("tax_id") or "").strip()
+    tax = database.session.get(Tax, tax_id) if tax_id else None
+    if not tax or not tax.is_active:
+        flash(_("Selecciona un impuesto activo."), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    try:
+        validate_tax_template_applicability(template.template_type, tax.applies_to)
+    except TaxPricingError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    item = TaxTemplateItem(
+        tax_template_id=template.id,
+        tax_id=tax.id,
+        sequence=sequence,
+        calculation_base=request.form.get("calculation_base") or "net_document",
+        behavior=request.form.get("behavior") or "additive",
+        is_inclusive=bool(request.form.get("is_inclusive")),
+    )
+    if item.calculation_base not in {"net_document", "previous_total"}:
+        flash(_("La base de c?lculo del impuesto no es v?lida."), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    if item.behavior not in {"additive", "deductive"}:
+        flash(_("El comportamiento del impuesto no es v?lido."), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    database.session.add(item)
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("No se pudo agregar la l?nea de impuesto. Verifique las referencias seleccionadas."), "danger")
+        return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+    flash(_("Linea de impuesto agregada correctamente."), "success")
+    return redirect(url_for("admin.items_plantilla_impuesto", template_id=template.id))
+
+
+def _tax_template_item_context(template: TaxTemplate) -> dict[str, Any]:
+    """Construye las listas y etiquetas fiscales para la vista de líneas."""
     items = (
         database.session.execute(
             database.select(TaxTemplateItem).filter_by(tax_template_id=template.id).order_by(TaxTemplateItem.sequence)
@@ -652,13 +648,21 @@ def items_plantilla_impuesto(template_id: str):
     if referenced_tax_ids:
         referenced = database.session.execute(database.select(Tax).where(Tax.id.in_(referenced_tax_ids))).scalars().all()
         tax_labels.update({tax.id: tax.name for tax in referenced if tax.id not in tax_labels})
-    return render_template(
-        "admin/tax_template_items.html",
-        template=template,
-        items=items,
-        taxes=taxes,
-        tax_labels=tax_labels,
-    )
+    return {"template": template, "items": items, "taxes": taxes, "tax_labels": tax_labels}
+
+
+@admin.route("/settings/tax-templates/<template_id>/items", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def items_plantilla_impuesto(template_id: str):
+    """Administra lineas de una plantilla de impuestos."""
+    _require_system_admin()
+    template = database.session.get(TaxTemplate, template_id)
+    if not template:
+        abort(404)
+    if request.method == "POST":
+        return _create_tax_template_item_from_post(template)
+    return render_template("admin/tax_template_items.html", **_tax_template_item_context(template))
 
 
 def _tax_rule_form_state(rule: Any, form: Any) -> SimpleNamespace:
@@ -782,6 +786,60 @@ def lista_grupos_terceros():
     return render_template("admin/party_groups.html", groups=groups, group_type=group_type)
 
 
+def _party_group_update_error(group: PartyGroup, submitted_type: str) -> str | None:
+    """Valida el tipo solicitado para un grupo de terceros."""
+    if submitted_type not in _PARTY_GROUP_TYPES:
+        return _("El tipo de grupo de terceros debe ser cliente o proveedor.")
+    if _party_group_type_change_blocked(group, submitted_type):
+        # #1724: el FK conservar? el grupo y dejar? terceros con un rol
+        # incompatible; se exige reasignarlos antes de cambiar el tipo.
+        return _(
+            "No se puede cambiar el tipo del grupo mientras existan terceros asignados "
+            "incompatibles con el nuevo tipo. Reasigne esas relaciones primero."
+        )
+    return None
+
+
+def _apply_party_group_form(group: PartyGroup, submitted_type: str) -> None:
+    """Aplica los campos editables del formulario al grupo de terceros."""
+    group.group_type = submitted_type
+    group.name = request.form.get("name") or ""
+    group.description = request.form.get("description") or None
+    group.is_active = request.form.get("is_active") is not None
+
+
+def _update_party_group_from_post(group: PartyGroup) -> str | None:
+    """Procesa el POST de edición y devuelve el tipo al que redirigir, si aplica."""
+    from cacao_accounting.party_management import _lock_party_group_for_write
+
+    try:
+        _lock_party_group_for_write(group.id)
+        locked_group = database.session.get(PartyGroup, group.id, with_for_update=True)
+        if not locked_group:
+            abort(404)
+    except ValueError as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return None
+
+    submitted_type = request.form.get("group_type") or locked_group.group_type
+    if not submitted_type:
+        return None
+    error = _party_group_update_error(locked_group, submitted_type)
+    if error:
+        flash(error, "danger")
+        return None
+    _apply_party_group_form(locked_group, submitted_type)
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+        return None
+    flash(_("Tipo de tercero actualizado correctamente."), "success")
+    return locked_group.group_type
+
+
 @admin.route("/settings/party-groups/<group_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -792,46 +850,10 @@ def editar_grupo_tercero(group_id: str):
     if not group:
         abort(404)
     if request.method == "POST":
-        from cacao_accounting.party_management import _lock_party_group_for_write
-
-        try:
-            _lock_party_group_for_write(group_id)
-            group = database.session.get(PartyGroup, group_id, with_for_update=True)
-            if not group:
-                abort(404)
-        except ValueError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
-            group = database.session.get(PartyGroup, group_id) or group
-            submitted_type = ""
-        else:
-            submitted_type = request.form.get("group_type") or group.group_type
-        if submitted_type:
-            if submitted_type not in _PARTY_GROUP_TYPES:
-                flash(_("El tipo de grupo de terceros debe ser cliente o proveedor."), "danger")
-            elif _party_group_type_change_blocked(group, submitted_type):
-                # #1724: el FK conservar? el grupo y dejar? terceros con un rol
-                # incompatible; se exige reasignarlos antes de cambiar el tipo.
-                flash(
-                    _(
-                        "No se puede cambiar el tipo del grupo mientras existan terceros asignados "
-                        "incompatibles con el nuevo tipo. Reasigne esas relaciones primero."
-                    ),
-                    "danger",
-                )
-            else:
-                group.group_type = submitted_type
-                group.name = request.form.get("name") or ""
-                group.description = request.form.get("description") or None
-                group.is_active = request.form.get("is_active") is not None
-                try:
-                    database.session.commit()
-                except IntegrityError:
-                    database.session.rollback()
-                    flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
-                else:
-                    flash(_("Tipo de tercero actualizado correctamente."), "success")
-                    return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
+        redirect_type = _update_party_group_from_post(group)
+        if redirect_type is not None:
+            return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=redirect_type))
+        group = database.session.get(PartyGroup, group_id) or group
 
     groups = (
         database.session.execute(database.select(PartyGroup).order_by(PartyGroup.group_type, PartyGroup.name)).scalars().all()

@@ -4259,37 +4259,53 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
     )
 
 
-def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
-    """Reject reversals that leave a bin or batch with forbidden negative stock.
+def _stock_reversal_item(item_code: str) -> Item:
+    """Resuelve el artículo de un movimiento o falla con error de dominio."""
+    item = database.session.get(Item, item_code)
+    if item is None:
+        item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    if item is None:
+        raise PostingError(_("El art?culo %(item_code)s no existe.") % {"item_code": item_code})
+    return item
 
-    Valida el resultado final por art?culo/bodega y por lote cuando aplica.
-    Bloquea el bin para serializar con otras reversas concurrentes (#1868).
-    """
+
+def _project_stock_reversal_bins(
+    movements: Sequence[StockLedgerEntry],
+) -> tuple[dict[tuple[str, str, str], Decimal], dict[tuple[str, str, str], Item]]:
+    """Proyecta la cantidad final por artículo/bodega y conserva el artículo."""
     projected: dict[tuple[str, str, str], Decimal] = {}
-    batch_projected: dict[tuple[str, str, str, str], Decimal] = {}
-    items: dict[tuple[str, str, str], Any] = {}
+    items: dict[tuple[str, str, str], Item] = {}
     for movement in movements:
         key = (str(movement.company), str(movement.item_code), str(movement.warehouse))
         if key not in projected:
             bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse, lock=True)
             projected[key] = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
-            item = database.session.get(Item, movement.item_code)
-            if item is None:
-                item = database.session.execute(select(Item).filter_by(code=movement.item_code)).scalar_one_or_none()
-            if item is None:
-                raise PostingError(_("El art?culo %(item_code)s no existe.") % {"item_code": movement.item_code})
-            items[key] = item
+            items[key] = _stock_reversal_item(movement.item_code)
         projected[key] -= _decimal_value(movement.qty_change)
+    return projected, items
 
+
+def _project_stock_reversal_batches(
+    movements: Sequence[StockLedgerEntry],
+) -> dict[tuple[str, str, str, str], Decimal]:
+    """Proyecta la cantidad final por lote cuando el movimiento lo referencia."""
+    from cacao_accounting.inventario.service import get_batch_qty
+
+    batch_projected: dict[tuple[str, str, str, str], Decimal] = {}
+    for movement in movements:
         batch_id = getattr(movement, "batch_id", None)
-        if batch_id:
-            bkey = (*key, str(batch_id))
-            if bkey not in batch_projected:
-                from cacao_accounting.inventario.service import get_batch_qty
+        if not batch_id:
+            continue
+        key = (str(movement.company), str(movement.item_code), str(movement.warehouse))
+        bkey = (*key, str(batch_id))
+        if bkey not in batch_projected:
+            batch_projected[bkey] = _decimal_value(get_batch_qty(str(batch_id), key[2], company=key[0]))
+        batch_projected[bkey] -= _decimal_value(movement.qty_change)
+    return batch_projected
 
-                batch_projected[bkey] = _decimal_value(get_batch_qty(str(batch_id), key[2], company=key[0]))
-            batch_projected[bkey] -= _decimal_value(movement.qty_change)
 
+def _reject_negative_stock(projected: dict[tuple[str, str, str], Decimal], items: dict[tuple[str, str, str], Item]) -> None:
+    """Bloquea una reversa que dejaría stock negativo en una bodega."""
     for key, value in projected.items():
         item = items[key]
         if value < 0 and not item.allow_negative_stock:
@@ -4301,6 +4317,12 @@ def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> 
                 % {"item_name": item.name, "warehouse": key[2]}
             )
 
+
+def _reject_negative_batch_stock(
+    batch_projected: dict[tuple[str, str, str, str], Decimal],
+    items: dict[tuple[str, str, str], Item],
+) -> None:
+    """Bloquea una reversa que dejaría stock negativo en un lote."""
     for bkey, value in batch_projected.items():
         company, item_code, warehouse, batch_id = bkey
         item = items[(company, item_code, warehouse)]
@@ -4312,6 +4334,18 @@ def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> 
                 )
                 % {"item_name": item.name, "batch": batch_id, "warehouse": warehouse}
             )
+
+
+def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
+    """Reject reversals that leave a bin or batch with forbidden negative stock.
+
+    Valida el resultado final por art?culo/bodega y por lote cuando aplica.
+    Bloquea el bin para serializar con otras reversas concurrentes (#1868).
+    """
+    projected, items = _project_stock_reversal_bins(movements)
+    batch_projected = _project_stock_reversal_batches(movements)
+    _reject_negative_stock(projected, items)
+    _reject_negative_batch_stock(batch_projected, items)
 
 
 def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id, ledger_code):

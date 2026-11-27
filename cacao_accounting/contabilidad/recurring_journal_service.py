@@ -229,15 +229,12 @@ def _resuelve_periodo_aplicacion(company: str, fiscal_year: str, period_name: st
     return periodos[0]
 
 
-def apply_recurring_template(
+def _recurring_template_for_application(
     template_id: str,
-    fiscal_year: str,
-    period_name: str,
-    application_date: date,
     user_id: str,
-    company: str | None = None,
-) -> RecurringJournalApplication:
-    """Aplica una plantilla recurrente a un periodo específico."""
+    company: str | None,
+) -> RecurringJournalTemplate:
+    """Carga y valida la plantilla que se desea aplicar."""
     template = database.session.get(RecurringJournalTemplate, template_id, with_for_update=True)
     if not template:
         raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
@@ -247,13 +244,16 @@ def apply_recurring_template(
     if template.status != "approved":
         raise RecurringJournalError(_("Solo se pueden aplicar plantillas aprobadas."))
     normalize_recurring_frequency(template.frequency)
-    if not template.start_date <= application_date <= template.end_date:
-        raise RecurringJournalError(_("La fecha de aplicación está fuera de la vigencia de la plantilla."))
+    return template
 
-    periodo = _resuelve_periodo_aplicacion(template.company, fiscal_year, period_name)
 
-    # La identidad de la aplicación es el id del período, no su nombre editable (#1815).
-    existing = (
+def _find_recurring_application(
+    template: RecurringJournalTemplate,
+    fiscal_year: str,
+    periodo: AccountingPeriod,
+) -> RecurringJournalApplication | None:
+    """Busca la aplicación existente para la identidad del período."""
+    return (
         database.session.query(RecurringJournalApplication)
         .filter_by(
             company=template.company,
@@ -265,46 +265,65 @@ def apply_recurring_template(
         .first()
     )
 
-    if existing and existing.status == "applied":
-        return existing
-    if existing and existing.status == "pending":
-        # #1776: reintento idempotente: recuperar aplicaci?n pendiente.
-        from cacao_accounting.contabilidad.journal_service import JournalValidationError, get_journal, submit_journal
 
-        journal = get_journal(existing.journal_id) if existing.journal_id else None
-        if journal is None:
-            raise RecurringJournalError(
-                _("La aplicaci?n recurrente pendiente no tiene comprobante recuperable; requiere revisi?n manual.")
-            )
-        if journal.status == "draft":
-            try:
-                submit_journal(journal.id, commit=False, user_id=user_id)
-            except JournalValidationError as exc:
-                raise RecurringJournalError(str(exc)) from exc
-            database.session.commit()
-            return existing
-        if journal.status == "submitted":
-            existing.status = "applied"
-            database.session.add(existing)
-            database.session.commit()
-            return existing
+def _resume_pending_recurring_application(
+    existing: RecurringJournalApplication,
+    user_id: str,
+) -> RecurringJournalApplication:
+    """Recupera o finaliza una aplicación pendiente de un intento anterior."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, get_journal, submit_journal
+
+    journal = get_journal(existing.journal_id) if existing.journal_id else None
+    if journal is None:
         raise RecurringJournalError(
-            _("La aplicaci?n recurrente pendiente tiene un comprobante en estado %(status)s; requiere revisi?n manual.")
-            % {"status": journal.status}
+            _("La aplicaci?n recurrente pendiente no tiene comprobante recuperable; requiere revisi?n manual.")
         )
+    if journal.status == "draft":
+        try:
+            submit_journal(journal.id, commit=False, user_id=user_id)
+        except JournalValidationError as exc:
+            raise RecurringJournalError(str(exc)) from exc
+        database.session.commit()
+        return existing
+    if journal.status == "submitted":
+        existing.status = "applied"
+        database.session.add(existing)
+        database.session.commit()
+        return existing
+    raise RecurringJournalError(
+        _("La aplicaci?n recurrente pendiente tiene un comprobante en estado %(status)s; requiere revisi?n manual.")
+        % {"status": journal.status}
+    )
 
+
+def _recurring_application_items(template: RecurringJournalTemplate) -> list[RecurringJournalItem]:
+    """Devuelve las líneas persistidas y validables de la plantilla."""
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
     if not items:
         raise RecurringJournalError(_("La plantilla aprobada no tiene líneas contables."))
     _validate_persisted_template_lines(items)
+    return items
 
+
+def _recurring_application_currency(template: RecurringJournalTemplate) -> tuple[str | None, str | None, Book | None]:
+    """Resuelve moneda base, moneda de transacción y libro primario de la plantilla."""
     base_currency = database.session.execute(select(Entity.currency).filter_by(code=template.company)).scalar_one_or_none()
     transaction_currency = template.currency or base_currency
     primary_book = _book_for_reference(template.company, template.ledger_id)
     if primary_book is None or primary_book.entity != template.company:
         raise RecurringJournalError(_("La plantilla recurrente referencia un libro inexistente."))
+    return base_currency, transaction_currency, primary_book
 
-    # Generar ComprobanteContable
+
+def _create_recurring_journal(
+    template: RecurringJournalTemplate,
+    application_date: date,
+    user_id: str,
+    primary_book: Book,
+    base_currency: str | None,
+    transaction_currency: str | None,
+) -> ComprobanteContable:
+    """Crea el comprobante borrador que materializa la plantilla."""
     journal = ComprobanteContable(
         entity=template.company,
         book=primary_book.code,
@@ -327,8 +346,15 @@ def apply_recurring_template(
 
     _assign_identifier_if_needed(journal, template.naming_series_id)
     log_create(journal)
+    return journal
 
-    # Generar líneas
+
+def _add_recurring_journal_lines(
+    journal: ComprobanteContable,
+    items: list[RecurringJournalItem],
+    template: RecurringJournalTemplate,
+) -> None:
+    """Agrega al comprobante las líneas de la plantilla, en orden estable."""
     for idx, item in enumerate(items, start=1):
         line = ComprobanteContableDetalle(
             entity=template.company,
@@ -346,6 +372,42 @@ def apply_recurring_template(
             voucher_type="journal_entry",
         )
         database.session.add(line)
+
+
+def apply_recurring_template(
+    template_id: str,
+    fiscal_year: str,
+    period_name: str,
+    application_date: date,
+    user_id: str,
+    company: str | None = None,
+) -> RecurringJournalApplication:
+    """Aplica una plantilla recurrente a un periodo específico."""
+    template = _recurring_template_for_application(template_id, user_id, company)
+    if not template.start_date <= application_date <= template.end_date:
+        raise RecurringJournalError(_("La fecha de aplicación está fuera de la vigencia de la plantilla."))
+
+    periodo = _resuelve_periodo_aplicacion(template.company, fiscal_year, period_name)
+
+    # La identidad de la aplicación es el id del período, no su nombre editable (#1815).
+    existing = _find_recurring_application(template, fiscal_year, periodo)
+    if existing and existing.status == "applied":
+        return existing
+    if existing and existing.status == "pending":
+        # #1776: reintento idempotente: recuperar aplicaci?n pendiente.
+        return _resume_pending_recurring_application(existing, user_id)
+
+    items = _recurring_application_items(template)
+    base_currency, transaction_currency, primary_book = _recurring_application_currency(template)
+    journal = _create_recurring_journal(
+        template,
+        application_date,
+        user_id,
+        primary_book,
+        base_currency,
+        transaction_currency,
+    )
+    _add_recurring_journal_lines(journal, items, template)
 
     # Registrar aplicación
     application = RecurringJournalApplication(
