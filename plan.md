@@ -277,7 +277,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #2120 | #1709 | ✅ `9f129cc4`; GitHub: open / fix-proposed | Rechaza períodos ausentes/ambiguos, bloquea y revalida el período de reversa; 12 passed, 1 skipped en SQLite; PostgreSQL pendiente por entorno |
 | #546 | #1655 | ✅ `d3759012` + `4012a719`; GitHub: open / fix-proposed | Inmutabilidad de tasas dentro de vigencia directa/inversa; revaluaciones usan coalesce(run_date, posting_date); 9 passed en SQLite; PostgreSQL pendiente por entorno |
 | #758 | #1655 | ✅ `3fab3b73` + `99295f23`; GitHub: open / fix-proposed | Snapshots explícitos y guardas por libro; 53 passed en SQLite; sin migración legacy; PostgreSQL pendiente por entorno |
-| #761 | #1708 | ⚠️ Parcial; GitHub: open / needs-work | `3cacfb3d` exige misma fecha de contabilización para anular; según decisión confirmada no hay migraciones. Pendiente completar paridad de anulaciones/reversiones operativas y reportes bajo la política aprobada del issue |
+| #761 | #1708 | ✅ `cff773cd`; GitHub: open / fix-proposed | La guía usa rangos AccountingPeriod; anulación conserva fecha exacta y las reversiones su fecha efectiva; 8 pruebas de matriz y 2 regresiones finales pasaron en SQLite; Black/Ruff/Flake8/mypy/pydocstyle/Bandit globales pasan; complexipy nuevo 0/8, exceso preexistente en `editar_centro_costo`; sin migraciones |
 | #961 | #1655 | ✅ `18f9d598` + `d69973f5`; GitHub: open / fix-proposed | AR/AP bloquea conversión sin tasa directa/inversa/funcional; 2 passed en SQLite; PostgreSQL pendiente por entorno |
 | #995 | #1707 | ✅ `ca5eb857`; GitHub: open / fix-proposed | Preview y snapshot comparten base acumulada; 13 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
 | #996 | #1707 | ✅ `e7c46c62`; GitHub: open / fix-proposed | Creación/edición suman impuesto manual; AP y GL concilian; 2 passed en SQLite; sin migraciones; PostgreSQL pendiente por entorno |
@@ -307,7 +307,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1164 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Valida el balance de diarios con tasas por línea |
 | #1165 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Rechaza monedas inactivas en líneas de diarios |
 | #1166 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Permite contabilizar diarios tras aprobación |
-| #1168 | #1709 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Incluye reversiones del año en el cierre fiscal |
+| #1168 | #1709 | ✅ `d6dd2d55`; GitHub: open / fix-proposed | Cierre fiscal aplica alcance GL efectivo por fecha; prueba integrada con reversa real de ExchangeRevaluationService; 9 pruebas relacionadas pasaron en SQLite; controles globales pasan; PostgreSQL no probado; sin migraciones |
 | #1170 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Integra el cierre fiscal con la aprobación Cloud |
 | #1171 | #1656 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Protege las fechas de años cerrados financieramente |
 | #1172 | #1656 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Impide años fiscales con rangos superpuestos |
@@ -397,7 +397,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1569 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | El neteo de anticipos sobreestima el importe en otras monedas |
 | #1577 | #1656 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Evita reiniciar secuencias al volver a un periodo previo |
 | #1580 | #1656 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Valida el prefijo al registrar números externos |
-| #1582 | #1709 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Incluye reversiones en métricas analíticas GL |
+| #1582 | #1709 | ✅ `d6dd2d55`; GitHub: open / fix-proposed | Analítica y dashboard incluyen reversas interperíodo; cobertura de ingreso/costo/gasto/margen y get_accounting_data; 9 pruebas relacionadas pasaron en SQLite; controles globales pasan; PostgreSQL no probado; sin migraciones |
 | #1589 | #1709 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Calcula saldo inicial en detalle bancario |
 | #1594 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Alinea motivo de excepción con recomendación por moneda |
 | #1596 | #1709 | ⚠️ Implementación pendiente; GitHub: open / needs-work | La conciliación de caja chica no reconstruye el estado al corte |
