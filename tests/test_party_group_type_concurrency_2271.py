@@ -8,20 +8,33 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from uuid import uuid4
 
+import os
+
 import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Party, PartyGroup, database
-from cacao_accounting.party_management import _lock_party_group_for_write, apply_party_group
+from cacao_accounting.party_management import locked_party_group, apply_party_group
+
+pytestmark = pytest.mark.database
 
 
 def _app(tmp_path, name):
+    uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if uri.startswith("sqlite"):
+        uri = f"sqlite:///{tmp_path / name}"
+    elif os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true y una base dedicada.")
     return create_app(
         {
             **configuracion,
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / name}",
-            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_size": 4, "max_overflow": 0},
+            "SQLALCHEMY_DATABASE_URI": uri,
+            "SQLALCHEMY_ENGINE_OPTIONS": {
+                **configuracion.get("SQLALCHEMY_ENGINE_OPTIONS", {}),
+                "pool_size": 4,
+                "max_overflow": 0,
+            },
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "TESTING": True,
             "SECRET_KEY": "test-2271",
@@ -48,7 +61,7 @@ def test_assignment_serializes_with_group_type_change(tmp_path):
     def assign_customer() -> str:
         with app.app_context():
             try:
-                _lock_party_group_for_write(group_id)
+                locked_party_group(group_id)
                 assign_locked.wait()
                 p = database.session.get(Party, party_id)
                 apply_party_group(p, group_id, role="customer")
@@ -66,8 +79,7 @@ def test_assignment_serializes_with_group_type_change(tmp_path):
         assign_locked.wait()
         with app.app_context():
             try:
-                _lock_party_group_for_write(group_id)
-                g = database.session.get(PartyGroup, group_id, with_for_update=True)
+                g = locked_party_group(group_id)
                 incompatible = database.session.execute(
                     database.select(Party.id).where(
                         Party.party_group_id == g.id,
@@ -121,8 +133,7 @@ def test_type_change_serializes_before_incompatible_assignment(tmp_path):
     def change_to_supplier() -> str:
         with app.app_context():
             try:
-                _lock_party_group_for_write(group_id)
-                g = database.session.get(PartyGroup, group_id, with_for_update=True)
+                g = locked_party_group(group_id)
                 incompatible = database.session.execute(
                     database.select(Party.id).where(
                         Party.party_group_id == g.id,

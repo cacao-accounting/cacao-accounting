@@ -228,6 +228,22 @@ def _lock_party_group_for_write(group_id: str) -> None:
         connection.exec_driver_sql(f"PRAGMA busy_timeout={original_timeout}")
 
 
+def locked_party_group(group_id: str) -> PartyGroup | None:
+    """Carga el grupo emitiendo un SELECT FOR UPDATE que refresca el identity map.
+
+    ``Session.get(..., with_for_update=True)`` puede devolver una instancia ya
+    cargada sin emitir el bloqueo. La ruta administrativa y la asignación deben
+    validar el tipo vigente bajo el mismo ancla compartida.
+    """
+    _lock_party_group_for_write(group_id)
+    return database.session.execute(
+        database.select(PartyGroup)
+        .where(PartyGroup.id == group_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
+
+
 def validate_party_group(group_id: str | None, role: str, *, lock: bool = False) -> PartyGroup | None:
     """Valida que el grupo exista, este activo y corresponda al rol del tercero."""
     if not group_id:
@@ -235,8 +251,9 @@ def validate_party_group(group_id: str | None, role: str, *, lock: bool = False)
     if role not in ("customer", "supplier"):
         raise ValueError(_("El rol debe ser 'customer' o 'supplier'."))
     if lock:
-        _lock_party_group_for_write(group_id)
-    group = database.session.get(PartyGroup, group_id, with_for_update=lock)
+        group = locked_party_group(group_id)
+    else:
+        group = database.session.get(PartyGroup, group_id)
     if not group:
         raise ValueError(_("El tipo seleccionado no existe."))
     if group.group_type != role:
