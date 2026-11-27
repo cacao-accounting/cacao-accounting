@@ -20,6 +20,7 @@ from cacao_accounting.database import (
     DeliveryNoteItem,
     DocumentRelation,
     Entity,
+    FiscalYear,
     Item,
     Modules,
     SalesInvoice,
@@ -88,9 +89,20 @@ def sales_duplicate_scene():
             ]
         )
         database.session.flush()
+        sales_year = FiscalYear(
+            entity="cacao",
+            name="AF2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+            financial_closed=False,
+        )
+        database.session.add(sales_year)
+        database.session.flush()
         database.session.add(
             AccountingPeriod(
                 entity="cacao",
+                fiscal_year_id=sales_year.id,
                 name="Mayo 2026",
                 enabled=True,
                 is_closed=False,

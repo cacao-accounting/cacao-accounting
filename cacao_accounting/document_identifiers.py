@@ -105,7 +105,13 @@ def validate_accounting_period(
 
 
 def resolve_accounting_period(company: str, posting_date: date) -> AccountingPeriod:
-    """Resuelve el único período que cubre una fecha para la compañía."""
+    """Resuelve el único período que cubre una fecha para la compañía.
+
+    El período debe tener un año fiscal asociado, de la misma compañía, que
+    cubra todo el rango del período (#1287). Sin ese vínculo la evidencia GL
+    quedaría con ``fiscal_year_id`` nulo y la anulación posterior no podría
+    resolver el período original.
+    """
     periods = (
         database.session.execute(
             database.select(AccountingPeriod)
@@ -121,7 +127,16 @@ def resolve_accounting_period(company: str, posting_date: date) -> AccountingPer
         raise IdentifierConfigurationError(_("No existe un periodo contable configurado para la fecha indicada."))
     if len(periods) > 1:
         raise IdentifierConfigurationError(_("La fecha corresponde a más de un periodo contable."))
-    return periods[0]
+    period = periods[0]
+    fiscal_year = database.session.get(FiscalYear, period.fiscal_year_id) if period.fiscal_year_id else None
+    if (
+        fiscal_year is None
+        or fiscal_year.entity != company
+        or fiscal_year.year_start_date > period.start
+        or fiscal_year.year_end_date < period.end
+    ):
+        raise IdentifierConfigurationError(_("El periodo contable no tiene un año fiscal válido para la compañía."))
+    return period
 
 
 def enforce_single_default_series(entity_type: str, company: str | None, exclude_id: str | None = None) -> None:

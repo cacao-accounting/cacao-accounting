@@ -32,6 +32,7 @@ from cacao_accounting.database import (
     CostCenter,
     Currency,
     Entity,
+    FiscalYear,
     Modules,
     PettyCashAccount,
     PettyCashExpense,
@@ -115,15 +116,28 @@ def caja_dimensiones():
                     default=True,
                     is_primary=True,
                 ),
-                AccountingPeriod(
-                    entity="cacao",
-                    name="PERIODO-CACAO",
-                    start=date(2026, 10, 1),
-                    end=date(2026, 10, 31),
-                    enabled=True,
-                    is_closed=False,
-                ),
             ]
+        )
+        cacao_year = FiscalYear(
+            entity="cacao",
+            name="AF2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+            financial_closed=False,
+        )
+        database.session.add(cacao_year)
+        database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                entity="cacao",
+                fiscal_year_id=cacao_year.id,
+                name="PERIODO-CACAO",
+                start=date(2026, 10, 1),
+                end=date(2026, 10, 31),
+                enabled=True,
+                is_closed=False,
+            )
         )
         database.session.flush()
         caja = Accounts(

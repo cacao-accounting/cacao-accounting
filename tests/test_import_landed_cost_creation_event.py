@@ -8,7 +8,15 @@ from urllib.parse import urlparse
 
 import pytest
 
-from cacao_accounting.database import AccountingPeriod, AuditTrail, ImportLandedCost, PurchaseInvoice, User, database
+from cacao_accounting.database import (
+    AccountingPeriod,
+    AuditTrail,
+    FiscalYear,
+    ImportLandedCost,
+    PurchaseInvoice,
+    User,
+    database,
+)
 
 
 def test_create_import_landed_cost_persists_creation_event(app, client, reference_users):
@@ -21,8 +29,30 @@ def test_create_import_landed_cost_persists_creation_event(app, client, referenc
             posting_date=date(2026, 10, 31),
             docstatus=1,
         )
+        fiscal_year = (
+            database.session.execute(
+                database.select(FiscalYear)
+                .filter_by(entity="cacao")
+                .where(FiscalYear.year_start_date <= date(2026, 10, 1))
+                .where(FiscalYear.year_end_date >= date(2026, 10, 31))
+            )
+            .scalars()
+            .first()
+        )
+        if fiscal_year is None:
+            fiscal_year = FiscalYear(
+                entity="cacao",
+                name="AF-1751-2026",
+                year_start_date=date(2026, 1, 1),
+                year_end_date=date(2026, 12, 31),
+                is_closed=False,
+                financial_closed=False,
+            )
+            database.session.add(fiscal_year)
+            database.session.flush()
         period = AccountingPeriod(
             entity="cacao",
+            fiscal_year_id=fiscal_year.id,
             name="2026-10",
             enabled=True,
             is_closed=False,

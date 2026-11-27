@@ -43,6 +43,7 @@ def app_ctx():
             Currency,
             Entity,
             AccountingPeriod,
+            FiscalYear,
             PurchaseMatchingConfig,
             database,
         )
@@ -66,9 +67,20 @@ def app_ctx():
             )
         )
         database.session.flush()
+        cacao_year = FiscalYear(
+            entity="cacao",
+            name="AF2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+            financial_closed=False,
+        )
+        database.session.add(cacao_year)
+        database.session.flush()
         database.session.add(
             AccountingPeriod(
                 entity="cacao",
+                fiscal_year_id=cacao_year.id,
                 name="2026-05",
                 status="open",
                 enabled=True,
@@ -828,13 +840,24 @@ def test_collect_currency_sources_skips_unknown_and_empty_sources(app_ctx):
 def test_posting_rejects_company_without_functional_currency(app_ctx):
     """Posting rechaza una compania sin moneda funcional configurada."""
     from cacao_accounting.contabilidad.posting_service import PostingError, _document_contexts
-    from cacao_accounting.database import AccountingPeriod, Entity, StockEntry, database
+    from cacao_accounting.database import AccountingPeriod, Entity, FiscalYear, StockEntry, database
 
     database.session.add(Entity(code="sin-moneda", name="Sin moneda", company_name="Sin moneda", tax_id="J0002"))
+    database.session.flush()
+    sin_moneda_year = FiscalYear(
+        entity="sin-moneda",
+        name="AF2026",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+        is_closed=False,
+        financial_closed=False,
+    )
+    database.session.add(sin_moneda_year)
     database.session.flush()
     database.session.add(
         AccountingPeriod(
             entity="sin-moneda",
+            fiscal_year_id=sin_moneda_year.id,
             name="2026-05",
             status="open",
             enabled=True,

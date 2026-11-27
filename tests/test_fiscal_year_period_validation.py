@@ -61,13 +61,30 @@ def empresa_con_año_cerrado():
                     is_closed=True,
                     financial_closed=False,
                 ),
+                FiscalYear(
+                    entity="cacao",
+                    name=f"AF{HOY.year}",
+                    year_start_date=date(HOY.year, 1, 1),
+                    year_end_date=date(HOY.year, 12, 31),
+                    is_closed=False,
+                    financial_closed=False,
+                ),
             ]
         )
         database.session.flush()
+        from sqlalchemy import select
+
+        año_cerrado_id = database.session.execute(
+            select(FiscalYear.id).filter_by(entity="cacao", name=f"AF{AÑO_CERRADO}")
+        ).scalar_one()
+        año_actual_id = database.session.execute(
+            select(FiscalYear.id).filter_by(entity="cacao", name=f"AF{HOY.year}")
+        ).scalar_one()
         database.session.add_all(
             [
                 AccountingPeriod(
                     entity="cacao",
+                    fiscal_year_id=año_cerrado_id,
                     name=f"{AÑO_CERRADO}-ANUAL",
                     start=date(AÑO_CERRADO, 1, 1),
                     end=date(AÑO_CERRADO, 12, 31),
@@ -77,6 +94,7 @@ def empresa_con_año_cerrado():
                 ),
                 AccountingPeriod(
                     entity="cacao",
+                    fiscal_year_id=año_actual_id,
                     name=f"{HOY.year}-01-05",
                     start=date(HOY.year, 1, 1),
                     end=date(HOY.year, 6, 9),
@@ -86,6 +104,7 @@ def empresa_con_año_cerrado():
                 ),
                 AccountingPeriod(
                     entity="cacao",
+                    fiscal_year_id=año_actual_id,
                     name=f"{HOY.year}-06-CERRADO",
                     start=date(HOY.year, 6, 10),
                     end=date(HOY.year, 6, 20),
@@ -95,6 +114,7 @@ def empresa_con_año_cerrado():
                 ),
                 AccountingPeriod(
                     entity="cacao",
+                    fiscal_year_id=año_actual_id,
                     name=f"{HOY.year}-07-12",
                     start=date(HOY.year, 6, 21),
                     end=date(HOY.year, 12, 31),

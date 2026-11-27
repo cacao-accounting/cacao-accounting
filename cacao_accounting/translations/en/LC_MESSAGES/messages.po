@@ -1048,6 +1048,10 @@ msgstr "There is no accounting period configured for the specified date."
 msgid "La fecha corresponde a más de un periodo contable."
 msgstr "The date matches more than one accounting period."
 
+#: cacao_accounting/document_identifiers.py:138
+msgid "El periodo contable no tiene un año fiscal válido para la compañía."
+msgstr "The accounting period does not have a valid fiscal year for the company."
+
 #: cacao_accounting/contabilidad/services.py:230
 msgid ""
 "El rango del período se superpone con otro período de la misma compañía."

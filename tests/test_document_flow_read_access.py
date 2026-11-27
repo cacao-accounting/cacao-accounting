@@ -23,6 +23,7 @@ from cacao_accounting.database import (
     DocumentLineFlowState,
     DocumentRelation,
     Entity,
+    FiscalYear,
     Item,
     Modules,
     Party,
@@ -565,9 +566,20 @@ def test_create_target_accepts_own_source_line_and_persists_relation(document_fl
     _login(client, "vendedor")
     with app.app_context():
         ensure_default_naming_series_for_company("cacao", ["sales_order"])
+        flow_year = FiscalYear(
+            entity="cacao",
+            name="AF2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+            financial_closed=False,
+        )
+        database.session.add(flow_year)
+        database.session.flush()
         database.session.add(
             AccountingPeriod(
                 entity="cacao",
+                fiscal_year_id=flow_year.id,
                 name="2026",
                 status="Open",
                 enabled=True,
@@ -628,9 +640,20 @@ def test_create_target_rejects_invalid_customer_before_persisting(document_flow_
         database.session.flush()
         database.session.add(CompanyParty(company="cacao", party_id=proveedor.id, is_active=True))
         ensure_default_naming_series_for_company("cacao", ["sales_order"])
+        flow_year = FiscalYear(
+            entity="cacao",
+            name="AF2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+            financial_closed=False,
+        )
+        database.session.add(flow_year)
+        database.session.flush()
         database.session.add(
             AccountingPeriod(
                 entity="cacao",
+                fiscal_year_id=flow_year.id,
                 name="2026-2056",
                 status="Open",
                 enabled=True,
