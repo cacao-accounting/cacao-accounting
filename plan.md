@@ -317,7 +317,7 @@ Ejecutar estas tareas junto con los lotes de la fase consumidora. La columna de 
 | #1221 | #1708 | ✅ Entregado en `51fea1db`; GitHub: open / fix-proposed | Bloquea cancelación de devolución con nota física activa; anulación previa de la nota en la misma fecha y preservación de AP/GL; 4 pruebas SQLite; Black/Ruff/Flake8/mypy/pydocstyle/complexipy OK; Pylint 9.90/10 con avisos baseline; PostgreSQL pendiente por entorno; sin migraciones |
 | #1222 | #1708 | ✅ Entregado en `54644aee`; GitHub: open / fix-proposed | Cancela asignaciones propias de la nota comercial, conserva evidencia append-only, revierte AP/GL en fecha original y libera capacidad para una nueva nota; 11 pruebas SQLite; Black/Ruff/Flake8/mypy/pydocstyle OK; Pylint baseline; complexipy nuevo código 3 (función preexistente en posting_service: 25); PostgreSQL pendiente por entorno; sin migraciones |
 | #1223 | #1655 | ✅ Implementado en 91bc47a3; GitHub: open / fix-proposed | Valida los enlaces de origen de notas de compra |
-| #1224 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Valida los orígenes de las notas de venta |
+| #1224 | #1655 | ✅ Implementado en db753644; GitHub: open / fix-proposed | Valida los orígenes de las notas de venta |
 | #1232 | #1708 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Libera gastos de reposiciones canceladas |
 | #1233 | #1655 | ⚠️ Implementación pendiente; GitHub: open / needs-work | Muestra proyecciones manuales sin tasa de cambio |
 | #1234 | Consumidor | ⚠️ Implementación pendiente; GitHub: open / needs-work | Proyecta cobros y pagos según vencimiento |
