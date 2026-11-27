@@ -3311,13 +3311,137 @@ def _backfill_invoice_for_physical_return(source_receipt, source_ids: dict[str, 
     return from_invoice, source_invoice
 
 
-def _apply_note_source_defaults(document_type: str, source_invoice, from_order: Any, from_receipt: Any) -> dict[str, Any]:
+def _purchase_invoice_uses_receipt(invoice: PurchaseInvoice, receipt: PurchaseReceipt) -> bool:
+    """Return whether a posted receipt belongs to an invoice's active flow."""
+    if invoice.purchase_receipt_id == receipt.id:
+        return True
+    if receipt.is_return:
+        return _invoice_for_physical_return(receipt.id) == invoice.id
+    relation_id = database.session.execute(
+        database.select(DocumentRelation.id)
+        .where(
+            DocumentRelation.source_type == "purchase_receipt",
+            DocumentRelation.source_id == receipt.id,
+            DocumentRelation.target_type == "purchase_invoice",
+            DocumentRelation.target_id == invoice.id,
+            DocumentRelation.status == "active",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if relation_id is not None:
+        return True
+    allocation_id = database.session.execute(
+        database.select(PurchaseInvoiceReceiptAllocation.id)
+        .join(PurchaseInvoiceItem, PurchaseInvoiceItem.id == PurchaseInvoiceReceiptAllocation.invoice_item_id)
+        .join(PurchaseReceiptItem, PurchaseReceiptItem.id == PurchaseInvoiceReceiptAllocation.receipt_item_id)
+        .where(
+            PurchaseInvoiceItem.purchase_invoice_id == invoice.id,
+            PurchaseReceiptItem.purchase_receipt_id == receipt.id,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+            PurchaseInvoiceItem.is_superseded.is_(False),
+            PurchaseReceiptItem.is_superseded.is_(False),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    return allocation_id is not None
+
+
+def _purchase_invoice_uses_order(
+    invoice: PurchaseInvoice,
+    order: PurchaseOrder,
+    receipt: PurchaseReceipt | None,
+) -> bool:
+    """Return whether an order is directly or through an allocated receipt linked to an invoice."""
+    if invoice.purchase_order_id == order.id:
+        return True
+    if receipt is not None and receipt.purchase_order_id == order.id and _purchase_invoice_uses_receipt(invoice, receipt):
+        return True
+    if invoice.purchase_receipt_id:
+        invoice_receipt = database.session.get(PurchaseReceipt, invoice.purchase_receipt_id)
+        if invoice_receipt is not None and invoice_receipt.purchase_order_id == order.id:
+            return True
+    relation_id = database.session.execute(
+        database.select(DocumentRelation.id)
+        .where(
+            DocumentRelation.source_type == "purchase_order",
+            DocumentRelation.source_id == order.id,
+            DocumentRelation.target_type == "purchase_invoice",
+            DocumentRelation.target_id == invoice.id,
+            DocumentRelation.status == "active",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if relation_id is not None:
+        return True
+    allocation_id = database.session.execute(
+        database.select(PurchaseInvoiceReceiptAllocation.id)
+        .join(PurchaseInvoiceItem, PurchaseInvoiceItem.id == PurchaseInvoiceReceiptAllocation.invoice_item_id)
+        .join(PurchaseReceiptItem, PurchaseReceiptItem.id == PurchaseInvoiceReceiptAllocation.receipt_item_id)
+        .join(PurchaseReceipt, PurchaseReceipt.id == PurchaseReceiptItem.purchase_receipt_id)
+        .where(
+            PurchaseInvoiceItem.purchase_invoice_id == invoice.id,
+            PurchaseReceipt.purchase_order_id == order.id,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+            PurchaseInvoiceItem.is_superseded.is_(False),
+            PurchaseReceiptItem.is_superseded.is_(False),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    return allocation_id is not None
+
+
+def _validate_purchase_note_source_links(
+    invoice: PurchaseInvoice,
+    order: PurchaseOrder | None,
+    receipt: PurchaseReceipt | None,
+    *,
+    order_id: str | None,
+    receipt_id: str | None,
+) -> None:
+    """Reject note source links outside the invoice's active purchase flow."""
+    invalid_order = order_id and (
+        order is None
+        or order.docstatus != 1
+        or order.company != invoice.company
+        or (order.supplier_id and order.supplier_id != invoice.supplier_id)
+        or not _purchase_invoice_uses_order(invoice, order, receipt)
+    )
+    if invalid_order:
+        raise ValueError(_("La orden indicada no pertenece al flujo de la factura origen."))
+    invalid_receipt = receipt_id and (
+        receipt is None
+        or receipt.docstatus != 1
+        or receipt.company != invoice.company
+        or (receipt.supplier_id and receipt.supplier_id != invoice.supplier_id)
+        or not _purchase_invoice_uses_receipt(invoice, receipt)
+    )
+    if invalid_receipt:
+        raise ValueError(_("La recepción indicada no pertenece al flujo de la factura origen."))
+
+
+def _apply_note_source_defaults(
+    document_type: str,
+    source_invoice: PurchaseInvoice | None,
+    source_order: PurchaseOrder | None,
+    source_receipt: PurchaseReceipt | None,
+    from_order: Any,
+    from_receipt: Any,
+) -> dict[str, Any]:
     """Approve note types only with an approved source invoice, and inherit its order/receipt."""
     if source_invoice is None and document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE):
         raise ValueError(_("La nota de compra requiere una factura origen aprobada."))
     if source_invoice is not None and document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE):
         from_order = from_order or source_invoice.purchase_order_id
         from_receipt = from_receipt or source_invoice.purchase_receipt_id
+        source_order = source_order or (database.session.get(PurchaseOrder, from_order) if from_order else None)
+        source_receipt = source_receipt or (database.session.get(PurchaseReceipt, from_receipt) if from_receipt else None)
+        _validate_purchase_note_source_links(
+            source_invoice,
+            source_order,
+            source_receipt,
+            order_id=from_order,
+            receipt_id=from_receipt,
+        )
     return {"from_order": from_order, "from_receipt": from_receipt}
 
 
@@ -3331,7 +3455,14 @@ def _purchase_invoice_source_context() -> dict[str, Any]:
     source_order, source_receipt, source_invoice = _purchase_invoice_sources(source_ids)
     if document_type == PURCHASE_CREDIT_NOTE and source_invoice is None and source_receipt is not None:
         from_invoice, source_invoice = _backfill_invoice_for_physical_return(source_receipt, source_ids)
-    note_sources = _apply_note_source_defaults(document_type, source_invoice, from_order, from_receipt)
+    note_sources = _apply_note_source_defaults(
+        document_type,
+        source_invoice,
+        source_order,
+        source_receipt,
+        from_order,
+        from_receipt,
+    )
     from_order = note_sources["from_order"]
     from_receipt = note_sources["from_receipt"]
     return {
@@ -3341,7 +3472,9 @@ def _purchase_invoice_source_context() -> dict[str, Any]:
         "from_receipt": from_receipt,
         "from_invoice": from_invoice,
         "document_type": document_type,
-        "source": source_order or source_receipt or source_invoice,
+        "source": (
+            source_invoice if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) else source_order or source_receipt
+        ),
     }
 
 
