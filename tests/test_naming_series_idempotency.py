@@ -77,7 +77,7 @@ def test_serie_de_compania_no_default_se_marca_default(entorno_contable_aislado)
 
 
 def test_defaults_globales_duplicados_se_normalizan(entorno_contable_aislado):
-    """Los duplicados heredados no rompen el bootstrap ni quedan dos defaults."""
+    """Los duplicados heredados conservan el menor id y quedan idempotentes."""
     app = entorno_contable_aislado.app
     with app.app_context():
         if database.engine.dialect.name != "sqlite":
@@ -86,12 +86,19 @@ def test_defaults_globales_duplicados_se_normalizan(entorno_contable_aislado):
         suffix = uuid4().hex[:6]
         entity_type = f"test_dup_{suffix}"
         code = entity_type[:3].upper()
+        # Los ULID de dos altas en el mismo milisegundo no están ordenados por
+        # creación; el contrato normaliza por identificador, así que se fijan
+        # ids conocidos para no depender del orden aleatorio del generador.
+        first_id = f"01TESTNS{suffix.upper()}0000000000001"
+        second_id = f"01TESTNS{suffix.upper()}0000000000002"
         first = _series(entity_type, code, None, is_default=True)
+        first.id = first_id
         second = _series(entity_type, code, None, is_default=True)
+        second.id = second_id
         database.session.add_all([first, second])
         database.session.commit()
-        first_id = first.id
 
+        ensure_global_naming_series([entity_type])
         ensure_global_naming_series([entity_type])
 
         rows = (
