@@ -11,7 +11,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import date
 from decimal import Decimal
-from threading import Event
+from threading import Event, Lock
 from uuid import uuid4
 
 import pytest
@@ -1133,7 +1133,7 @@ def test_concurrent_petty_cash_setup_creates_one_default(replenishment_app):
         assert len(defaults) == 1
 
 
-def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_app):
+def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_app, monkeypatch):
     """Two independent adjustments publish one journal and retain its pointer."""
     application, ids = replenishment_app
     with application.app_context():
@@ -1252,15 +1252,14 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
 
     from threading import Barrier
 
-    start = Barrier(2)
-
-    def post_adjustment() -> str:
+    def post_adjustment(barrier: Barrier | None = None) -> str:
         """Run the complete journal posting flow in an independent session."""
         with application.app_context():
             try:
                 reconciliation = database.session.get(PettyCashReconciliation, reconciliation_id)
                 assert reconciliation is not None
-                start.wait(timeout=5)
+                if barrier is not None:
+                    barrier.wait(timeout=5)
                 try:
                     journal = post_petty_cash_reconciliation_adjustment(
                         reconciliation,
@@ -1274,9 +1273,44 @@ def test_concurrent_reconciliation_adjustment_posts_one_journal(replenishment_ap
             finally:
                 database.session.remove()
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [executor.submit(post_adjustment) for _ in range(2)]
-        results = [future.result(timeout=30) for future in futures]
+    if database.engine.dialect.name == "sqlite":
+        start = Barrier(2)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(post_adjustment, start) for _ in range(2)]
+            results = [future.result(timeout=30) for future in futures]
+    else:
+        from cacao_accounting.bancos import services
+
+        original_lock = services._lock_row_for_transition
+        first_locked = Event()
+        second_started = Event()
+        release = Event()
+        calls: list[int] = []
+        calls_lock = Lock()
+
+        def lock_observable(model, record_id):
+            with calls_lock:
+                calls.append(1)
+                number = len(calls)
+            if number == 1:
+                locked = original_lock(model, record_id)
+                first_locked.set()
+                assert release.wait(timeout=10)
+                return locked
+            second_started.set()
+            return original_lock(model, record_id)
+
+        monkeypatch.setattr(services, "_lock_row_for_transition", lock_observable)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first = executor.submit(post_adjustment)
+            assert first_locked.wait(timeout=10)
+            second = executor.submit(post_adjustment)
+            try:
+                assert second_started.wait(timeout=10)
+                assert second.done() is False, "El segundo ajuste no esperó el lock"
+            finally:
+                release.set()
+            results = [first.result(timeout=30), second.result(timeout=30)]
 
     assert sum(result.startswith("posted:") for result in results) == 1, results
     with application.app_context():
