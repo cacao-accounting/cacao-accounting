@@ -350,11 +350,14 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 row.get("cantidad"),
                 row.get("uom"),
                 row.get("numero_serie"),
+                row.get("bodega"),
             )
         )
 
-    def _validate_row_serial(self, item_code: Any, quantity: Any, uom: Any, serial_no: Any) -> list[str]:
-        """Valida serie obligatoria, unicidad de articulo y una unidad por linea."""
+    def _validate_row_serial(
+        self, item_code: Any, quantity: Any, uom: Any, serial_no: Any, warehouse: Any = None
+    ) -> list[str]:
+        """Valida serie, cantidad base, duplicados y estado contextual."""
         if not self.config.include_batch_serial or not item_code:
             return []
         item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
@@ -372,7 +375,28 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         existing = database.session.execute(database.select(SerialNumber).filter_by(serial_no=cleaned)).scalar_one_or_none()
         if existing is not None and existing.item_code != item.code:
             return [_("El numero de serie '%(serial)s' ya esta registrado para otro articulo.") % {"serial": cleaned}]
-        return []
+        return self._validate_existing_serial_state(existing, warehouse)
+
+    def _serial_outgoing(self) -> bool:
+        return self.config.entity_type == "delivery_note"
+
+    def _validate_existing_serial_state(self, existing: Any, warehouse: Any) -> list[str]:
+        if existing is None:
+            return []
+        if self._serial_outgoing():
+            if existing.serial_status != "available":
+                return [_("El serial '%(serial)s' no esta disponible para salida.") % {"serial": existing.serial_no}]
+            if warehouse and existing.warehouse and str(existing.warehouse) != str(warehouse):
+                return [_("El serial '%(serial)s' no se encuentra en la bodega de salida.") % {"serial": existing.serial_no}]
+            return []
+        if existing.serial_status == "cancelled":
+            return []
+        if existing.serial_status == "delivered" and self.config.entity_type in {"purchase_receipt"}:
+            return []
+        return [
+            _("El serial '%(serial)s' ya existe y no puede reingresarse en este tipo de documento.")
+            % {"serial": existing.serial_no}
+        ]
 
     def validate_document(self, document_data: list[dict[str, Any]], context: dict[str, Any] | None = None) -> list[str]:
         """Valida fecha, período, origen, bodega, tercero y moneda del documento."""
@@ -406,13 +430,30 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 errors.append(
                     _("El tercero debe existir, estar activo, tener el rol requerido y estar habilitado para la compañía.")
                 )
+        seen_serials: set[str] = set()
         for row in document_data:
             self._validate_document_row(row, company_id, errors, posting_date)
+            self._validate_duplicate_serial(row, seen_serials, errors)
         try:
             self._currency_and_rate(first_row, source, company_id, posting_date)
         except ValueError as exc:
             errors.append(str(exc))
         return errors
+
+    def _validate_duplicate_serial(self, row: dict[str, Any], seen_serials: set[str], errors: list[str]) -> None:
+        if not self.config.include_batch_serial:
+            return
+        serial_no = str(row.get("numero_serie") or "").strip()
+        item_code = row.get("producto")
+        item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
+        if not serial_no or item is None or not item.has_serial_no:
+            return
+        if serial_no in seen_serials:
+            errors.append(
+                _("El numero de serie '%(serial)s' esta duplicado en el documento importado.") % {"serial": serial_no}
+            )
+            return
+        seen_serials.add(serial_no)
 
     def _validate_row_batch(self, item_code: Any, batch_no: Any, posting_date: date | None = None) -> list[str]:
         """Valida que el lote de la fila exista en el maestro y aplique al item."""

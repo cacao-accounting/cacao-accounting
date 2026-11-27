@@ -99,3 +99,27 @@ def test_borrador_serializado_exige_una_unidad(app, entorno_contable):
 
         with pytest.raises(ValueError, match="exactamente una unidad"):
             validate_batch_serial_draft([linea])
+
+
+def test_importacion_rechaza_serial_no_disponible_para_salida(app, entorno_contable):
+    """#1629 QA: salida no puede importar serial ya entregado."""
+    del entorno_contable
+    with app.app_context():
+        item_code = _item_serializado()
+        serie = f"SERIE-{uuid4().hex[:8]}"
+        database.session.add(SerialNumber(item_code=item_code, serial_no=serie, serial_status="delivered", warehouse="BOD01"))
+        database.session.commit()
+        errores = DeliveryNoteAdapter().validate_document([_fila(item_code, "1", serie)], {"company_id": "cacao"})
+        assert any("disponible para salida" in e for e in errores)
+
+
+def test_importacion_rechaza_serial_duplicado_en_documento(app, entorno_contable):
+    """#1629 QA: detecta duplicado intra-documento antes de persistir."""
+    del entorno_contable
+    with app.app_context():
+        item_code = _item_serializado()
+        serie = f"SERIE-{uuid4().hex[:8]}"
+        filas = [_fila(item_code, "1", serie), _fila(item_code, "1", serie)]
+        filas[1]["document_ref"] = filas[0]["document_ref"]
+        errores = DeliveryNoteAdapter().validate_document(filas, {"company_id": "cacao"})
+        assert any("duplicado" in e.lower() for e in errores)
