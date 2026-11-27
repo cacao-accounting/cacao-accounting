@@ -1453,8 +1453,9 @@ def api_delivery_note_items(note_id: str):
 @api.route("/api/inventory/stock-entry/<entry_id>/items")
 @login_required
 def api_stock_entry_items(entry_id: str):
-    """Devuelve las líneas de un movimiento de inventario en formato JSON."""
-    items = _source_items_or_abort("stock_entry", entry_id)
+    """Devuelve las l??neas de un movimiento de inventario en formato JSON."""
+    # #1894: reuse stock_entry->stock_entry must expose pending qty, not full source qty.
+    items = _source_items_or_abort("stock_entry", entry_id, default_target_type="stock_entry")
     return jsonify({"entry_id": entry_id, "items": items})
 
 
@@ -1926,11 +1927,12 @@ def api_document_flow_tree():
     )
 
 
-def _source_items_or_abort(source_type: str, source_id: str):
+def _source_items_or_abort(source_type: str, source_id: str, *, default_target_type: str | None = None):
     """Get source items or abort with error status."""
     try:
         _require_document_read_access(source_type, source_id)
-        return get_source_items(source_type, source_id, request.args.get("target_type"))
+        target_type = request.args.get("target_type") or default_target_type
+        return get_source_items(source_type, source_id, target_type)
     except DocumentFlowError as exc:
         abort(exc.status_code)
 
