@@ -599,7 +599,14 @@ def _load_credit_note_and_source(
 
 def _physical_return_items_by_code(note: PurchaseInvoice) -> dict[str, list[Any]]:
     """Index the physical return lines, requiring a posted return when applicable."""
-    return_receipt = database.session.get(PurchaseReceipt, note.purchase_receipt_id) if note.purchase_receipt_id else None
+    # La cancelación de la devolución bloquea su documento; esta lectura
+    # bloqueante impide confirmar la nota contra una devolución que dejó de
+    # estar aprobada entre la validación y el commit (#2355).
+    return_receipt = (
+        database.session.get(PurchaseReceipt, note.purchase_receipt_id, with_for_update=True, populate_existing=True)
+        if note.purchase_receipt_id
+        else None
+    )
     if note.credit_note_type != "physical_return":
         return {}
     if return_receipt is None or not return_receipt.is_return or return_receipt.docstatus != 1:
