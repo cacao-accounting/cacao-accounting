@@ -1168,6 +1168,10 @@ def _backfill_user_email_identity(User) -> None:
         with user_email_identity_backfill(*user_ids):
             database.session.execute(update_statement, updates)
         database.session.commit()
+    # La consulta de filas pendientes abre una transacción de lectura en
+    # MySQL; si no hay filas, debe cerrarse igual para no retener el metadata
+    # lock de ``user`` mientras create_app ejecuta DDL posterior.
+    database.session.commit()
 
 
 def _ensure_purchase_line_version_columns() -> None:
