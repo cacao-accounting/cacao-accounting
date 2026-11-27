@@ -59,3 +59,49 @@ def test_editar_anio_fiscal_invertido_conserva_rango_original(app, authenticated
         assert guardado.year_end_date == date(2026, 12, 31)
         database.session.delete(guardado)
         database.session.commit()
+
+
+def test_editar_anio_cerrado_financieramente_no_cambia_fechas(app, authenticated_client, entorno_contable):
+    """A fiscally closed year keeps its historical date range after an edit POST."""
+    del entorno_contable
+    fiscal_year_id = None
+    try:
+        with app.app_context():
+            fiscal_year = FiscalYear(
+                entity="cacao",
+                name=f"FY-CERRADO-{uuid4().hex[:10]}",
+                year_start_date=date(2026, 1, 1),
+                year_end_date=date(2026, 12, 31),
+                is_closed=True,
+                financial_closed=True,
+            )
+            database.session.add(fiscal_year)
+            database.session.commit()
+            fiscal_year_id = fiscal_year.id
+            fiscal_year_name = fiscal_year.name
+
+        response = authenticated_client("admin").post(
+            f"/accounting/fiscal_year/{fiscal_year_id}/edit",
+            data={
+                "id": fiscal_year_name,
+                "entidad": "cacao",
+                "inicio": "2025-01-01",
+                "fin": "2025-12-31",
+                "cerrado": "y",
+            },
+        )
+
+        assert response.status_code == 302
+        with app.app_context():
+            saved = database.session.get(FiscalYear, fiscal_year_id)
+            assert saved is not None
+            assert saved.year_start_date == date(2026, 1, 1)
+            assert saved.year_end_date == date(2026, 12, 31)
+            assert saved.financial_closed is True
+    finally:
+        if fiscal_year_id:
+            with app.app_context():
+                saved = database.session.get(FiscalYear, fiscal_year_id)
+                if saved is not None:
+                    database.session.delete(saved)
+                    database.session.commit()

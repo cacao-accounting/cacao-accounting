@@ -2487,6 +2487,12 @@ def fiscal_year_edit(fy_id):
             flash(_("No se puede abrir un año con cierre contable realizado."), "danger")
             return redirect(url_for("contabilidad.fiscal_year_edit", fy_id=fy_id))
 
+        if fiscal_year.financial_closed and (
+            formulario.inicio.data != fiscal_year.year_start_date or formulario.fin.data != fiscal_year.year_end_date
+        ):
+            flash(_("No se pueden modificar las fechas de un año con cierre contable realizado."), "danger")
+            return redirect(url_for("contabilidad.fiscal_year_edit", fy_id=fy_id))
+
         fiscal_year.name = request.form.get("id", fiscal_year.name)
         fiscal_year.year_start_date = formulario.inicio.data
         fiscal_year.year_end_date = formulario.fin.data

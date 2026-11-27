@@ -17144,6 +17144,10 @@ msgstr "The company of the fiscal year cannot be changed."
 msgid "No se puede abrir un año con cierre contable realizado."
 msgstr "A year with an accounting close performed cannot be opened."
 
+#: cacao_accounting/contabilidad/routes.py
+msgid "No se pueden modificar las fechas de un año con cierre contable realizado."
+msgstr "The dates of a fiscally closed year cannot be changed."
+
 #: cacao_accounting/contabilidad/routes.py:2301
 msgid "El año fiscal indicado no existe."
 msgstr "The indicated fiscal year does not exist."
