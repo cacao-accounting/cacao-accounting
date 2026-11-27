@@ -17,12 +17,21 @@ import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
+from cacao_accounting.approval_engine import ApprovalEngine
 from cacao_accounting.database import (
+    ApprovalMatrix,
+    ApprovalRequest,
+    CacaoConfig,
     CompanyParty,
     Currency,
     Entity,
     Party,
+    Item,
     SalesOrder,
+    SalesOrderItem,
+    UOM,
+    User,
+    UserCompanyAccess,
     database,
 )
 from cacao_accounting.ventas.services import _validate_credit_limit_and_overdue
@@ -63,6 +72,7 @@ def _seed(app, suffix: str) -> tuple[str, str, list[str]]:
         database.session.add_all(
             [
                 Currency(code=f"C{suffix}", name="Moneda", decimals=2, active=True, default=False),
+                UOM(code=f"U{suffix}", name="Unidad", is_active=True),
                 Entity(
                     code=company,
                     name=f"Empresa {suffix}",
@@ -99,10 +109,126 @@ def _seed(app, suffix: str) -> tuple[str, str, list[str]]:
             for index in (1, 2)
         ]
         database.session.add_all(orders)
+        database.session.flush()
+        item = Item(
+            code=f"IT{suffix}",
+            name="Artículo",
+            item_type="service",
+            is_stock_item=False,
+            is_sale_item=True,
+            is_purchase_item=False,
+            default_uom=f"U{suffix}",
+            is_active=True,
+        )
+        database.session.add(item)
+        database.session.flush()
+        database.session.add_all(
+            [
+                SalesOrderItem(
+                    sales_order_id=order.id,
+                    item_code=item.code,
+                    item_name=item.name,
+                    qty=Decimal("1"),
+                    qty_in_base_uom=Decimal("1"),
+                    uom=f"U{suffix}",
+                    rate=Decimal("60"),
+                    amount=Decimal("60"),
+                )
+                for order in orders
+            ]
+        )
         database.session.commit()
         result = (company, customer.id, [order.id for order in orders])
         database.session.remove()
         return result
+
+
+def test_aprobaciones_diferidas_no_superan_el_limite(tmp_path):
+    """El flujo real de ApprovalEngine respeta el lock de crédito."""
+    app = _app(tmp_path)
+    with app.app_context():
+        if database.session.get_bind().dialect.name == "sqlite":
+            pytest.skip("El flujo de aprobación diferida se valida en motores externos.")
+        database.session.remove()
+    suffix = uuid4().hex[:6].upper()
+    company, customer_id, order_ids = _seed(app, suffix)
+    admin_id = f"adm-{suffix}"
+    requester_id = f"req-{suffix}"
+    with app.app_context():
+        database.session.add_all(
+            [
+                User(
+                    id=admin_id,
+                    user=f"admin_{suffix}",
+                    name="Admin",
+                    password=b"x",
+                    classification="admin",
+                    active=True,
+                    company=company,
+                ),
+                User(
+                    id=requester_id,
+                    user=f"requester_{suffix}",
+                    name="Solicitante",
+                    password=b"x",
+                    classification="user",
+                    active=True,
+                    company=company,
+                ),
+                UserCompanyAccess(user_id=admin_id, company_code=company),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                CacaoConfig(key=f"approval_engine_enabled_{company}", value="true"),
+                ApprovalMatrix(
+                    company_id=company,
+                    document_type="sales_order",
+                    user_id=admin_id,
+                    min_amount=Decimal("0"),
+                    max_amount=None,
+                    approval_level=1,
+                    enabled=True,
+                ),
+            ]
+        )
+        database.session.commit()
+        requester = database.session.get(User, requester_id)
+        for order_id in order_ids:
+            order = database.session.get(SalesOrder, order_id)
+            assert ApprovalEngine.request_approval(order, actor=requester) is not None
+            database.session.commit()
+        database.session.remove()
+
+    barrier = Barrier(2, timeout=30)
+
+    def approve(order_id: str) -> str:
+        with app.app_context():
+            try:
+                barrier.wait(timeout=10)
+                order = database.session.get(SalesOrder, order_id)
+                request = database.session.execute(
+                    database.select(ApprovalRequest).filter_by(document_id=order_id, status="Pending Approval")
+                ).scalar_one()
+                admin = database.session.get(User, admin_id)
+                ApprovalEngine.approve(order, admin, request=request)
+                database.session.commit()
+                return "aprobada"
+            except ValueError:
+                database.session.rollback()
+                return "rechazada"
+            finally:
+                database.session.remove()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        results = list(workers.map(approve, order_ids))
+    assert sorted(results) == ["aprobada", "rechazada"], results
+    with app.app_context():
+        approved = (
+            database.session.execute(database.select(SalesOrder).filter_by(company=company, docstatus=1)).scalars().all()
+        )
+        assert len(approved) == 1
 
 
 def test_dos_aprobaciones_no_superan_el_limite(tmp_path):
