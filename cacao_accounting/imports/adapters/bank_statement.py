@@ -243,7 +243,10 @@ class BankStatementAdapter(BaseImportAdapter):
             tx = self._build_transaction(tx_data, reference_number)
             if not self._insert_transaction(tx, reference_number):
                 continue
-            seen_in_batch.add(str(tx.id))
+            # Solo deduplicar por identidad economica cuando hay referencia bancaria estable.
+            # Sin referencia, fecha+importe no son identidad segura (#1510).
+            if reference_number:
+                seen_in_batch.add(str(tx.id))
             persisted_ids.append(str(tx.id))
         self._auto_reconcile(persisted_ids)
 
