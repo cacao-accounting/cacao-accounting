@@ -792,32 +792,47 @@ def editar_grupo_tercero(group_id: str):
     if not group:
         abort(404)
     if request.method == "POST":
-        submitted_type = request.form.get("group_type") or group.group_type
-        if submitted_type not in _PARTY_GROUP_TYPES:
-            flash(_("El tipo de grupo de terceros debe ser cliente o proveedor."), "danger")
-        elif _party_group_type_change_blocked(group, submitted_type):
-            # #1724: el FK conservaría el grupo y dejaría terceros con un rol
-            # incompatible; se exige reasignarlos antes de cambiar el tipo.
-            flash(
-                _(
-                    "No se puede cambiar el tipo del grupo mientras existan terceros asignados "
-                    "incompatibles con el nuevo tipo. Reasigne esas relaciones primero."
-                ),
-                "danger",
-            )
+        from cacao_accounting.party_management import _lock_party_group_for_write
+
+        try:
+            _lock_party_group_for_write(group_id)
+            group = database.session.get(PartyGroup, group_id, with_for_update=True)
+            if not group:
+                abort(404)
+        except ValueError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+            group = database.session.get(PartyGroup, group_id) or group
+            submitted_type = ""
         else:
-            group.group_type = submitted_type
-            group.name = request.form.get("name") or ""
-            group.description = request.form.get("description") or None
-            group.is_active = request.form.get("is_active") is not None
-            try:
-                database.session.commit()
-            except IntegrityError:
-                database.session.rollback()
-                flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+            submitted_type = request.form.get("group_type") or group.group_type
+        if submitted_type:
+            if submitted_type not in _PARTY_GROUP_TYPES:
+                flash(_("El tipo de grupo de terceros debe ser cliente o proveedor."), "danger")
+            elif _party_group_type_change_blocked(group, submitted_type):
+                # #1724: el FK conservar? el grupo y dejar? terceros con un rol
+                # incompatible; se exige reasignarlos antes de cambiar el tipo.
+                flash(
+                    _(
+                        "No se puede cambiar el tipo del grupo mientras existan terceros asignados "
+                        "incompatibles con el nuevo tipo. Reasigne esas relaciones primero."
+                    ),
+                    "danger",
+                )
             else:
-                flash(_("Tipo de tercero actualizado correctamente."), "success")
-                return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
+                group.group_type = submitted_type
+                group.name = request.form.get("name") or ""
+                group.description = request.form.get("description") or None
+                group.is_active = request.form.get("is_active") is not None
+                try:
+                    database.session.commit()
+                except IntegrityError:
+                    database.session.rollback()
+                    flash(_("Ya existe un tipo de tercero con ese nombre."), "danger")
+                else:
+                    flash(_("Tipo de tercero actualizado correctamente."), "success")
+                    return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
+
     groups = (
         database.session.execute(database.select(PartyGroup).order_by(PartyGroup.group_type, PartyGroup.name)).scalars().all()
     )

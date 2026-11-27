@@ -5,13 +5,14 @@
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import date
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Any, Iterable, Mapping
 
 from email_validator import EmailNotValidError, validate_email
 from sqlalchemy import select
-from typing import Any, Iterable
+from sqlalchemy.exc import OperationalError
 
 from cacao_accounting.database import (
     Address,
@@ -208,25 +209,46 @@ def normalize_person_type(value: str | None) -> str | None:
     return text or None
 
 
-def validate_party_group(group_id: str | None, role: str) -> PartyGroup | None:
+def _lock_party_group_for_write(group_id: str) -> None:
+    """Serializa cambios/asignaciones del grupo en SQLite; PG usa FOR UPDATE."""
+    if database.engine.dialect.name != "sqlite":
+        return
+    connection = database.session.connection()
+    original_timeout = int(connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one())
+    connection.exec_driver_sql("PRAGMA busy_timeout=1000")
+    try:
+        connection.exec_driver_sql("UPDATE party_group SET id = id WHERE id = ?", (group_id,))
+    except OperationalError as exc:
+        error_code = getattr(exc.orig, "sqlite_errorcode", None)
+        if error_code is None or error_code & 0xFF not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+            raise
+        database.session.rollback()
+        raise ValueError(_("El grupo de terceros est? siendo modificado. Intente nuevamente.")) from exc
+    finally:
+        connection.exec_driver_sql(f"PRAGMA busy_timeout={original_timeout}")
+
+
+def validate_party_group(group_id: str | None, role: str, *, lock: bool = False) -> PartyGroup | None:
     """Valida que el grupo exista, este activo y corresponda al rol del tercero."""
     if not group_id:
         return None
     if role not in ("customer", "supplier"):
         raise ValueError(_("El rol debe ser 'customer' o 'supplier'."))
-    group = database.session.get(PartyGroup, group_id)
+    if lock:
+        _lock_party_group_for_write(group_id)
+    group = database.session.get(PartyGroup, group_id, with_for_update=lock)
     if not group:
         raise ValueError(_("El tipo seleccionado no existe."))
     if group.group_type != role:
         raise ValueError(_("El tipo seleccionado no corresponde al tercero."))
     if not group.is_active:
-        raise ValueError(_("El tipo seleccionado no está activo."))
+        raise ValueError(_("El tipo seleccionado no est? activo."))
     return group
 
 
 def apply_party_group(party: Party, group_id: str | None, role: str) -> None:
     """Asigna el grupo segun el rol (customer/supplier)."""
-    group = validate_party_group(group_id, role)
+    group = validate_party_group(group_id, role, lock=True)
     party.party_group_id = group.id if group else None
 
 
