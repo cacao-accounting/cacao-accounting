@@ -21,6 +21,7 @@ from cacao_accounting.accounting_engine.common.fiscal import (
     find_duplicate_rule_id,
     has_negative_tax_amounts,
     negative_manual_tax_amount_message,
+    unique_concepts,
 )
 from cacao_accounting.database import Accounts, DocumentTaxLine, DocumentTaxSummary, TaxRule, database
 from cacao_accounting.i18n import _
@@ -499,8 +500,8 @@ def _document_tax_context_from_row(
         rate=_to_decimal(row.rate),
         amount=_to_decimal(row.amount),
         base_mode=str(snapshot.get("base_mode") or "goods"),
-        include_concepts=_as_list(snapshot.get("include_concepts")),
-        exclude_concepts=_as_list(snapshot.get("exclude_concepts")),
+        include_concepts=unique_concepts(_as_list(snapshot.get("include_concepts"))),
+        exclude_concepts=unique_concepts(_as_list(snapshot.get("exclude_concepts"))),
         allowed_item_categories=_as_list(snapshot.get("allowed_item_categories")),
         participates_in_next_base=bool(snapshot.get("participates_in_next_base", False)),
         order=int(snapshot.get("sequence") or snapshot.get("order") or row.line_index),
@@ -595,8 +596,8 @@ def _canonical_tax_rule_base(
         base_amount = calculate_accumulated_tax_base(
             server_subtotal,
             concept_amounts,
-            _as_list(tax_rule.include_concepts),
-            _as_list(tax_rule.exclude_concepts),
+            unique_concepts(_as_list(tax_rule.include_concepts)),
+            unique_concepts(_as_list(tax_rule.exclude_concepts)),
         )
     else:
         base_amount = server_subtotal
@@ -755,8 +756,8 @@ def _tax_rule_snapshot(tax_rule: TaxRule) -> dict[str, Any]:
         "rate": str(tax_rule.rate or "0"),
         "amount": str(tax_rule.amount or "0"),
         "base_mode": tax_rule.base_mode,
-        "include_concepts": _as_list(tax_rule.include_concepts),
-        "exclude_concepts": _as_list(tax_rule.exclude_concepts),
+        "include_concepts": unique_concepts(_as_list(tax_rule.include_concepts)),
+        "exclude_concepts": unique_concepts(_as_list(tax_rule.exclude_concepts)),
         "allowed_item_categories": _as_list(tax_rule.allowed_item_categories),
         "sequence": int(tax_rule.sequence or 0),
         "accounting_treatment": tax_rule.accounting_treatment,

@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import or_, select
 
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
-from cacao_accounting.accounting_engine.common.fiscal import SUPPORTED_TAX_CALCULATION_METHODS
+from cacao_accounting.accounting_engine.common.fiscal import SUPPORTED_TAX_CALCULATION_METHODS, unique_concepts
 from cacao_accounting.accounting_engine.landed_cost.engine import VALID_ALLOCATION_METHODS
 from cacao_accounting.database import Accounts, Currency, Entity, Item, ItemCategory, TaxRule, database
 
@@ -254,8 +254,8 @@ def _to_context(rule: TaxRule) -> TaxRuleContext:
         rate=_decimal_value(rule.rate, default="0"),
         amount=_decimal_value(rule.amount, default="0"),
         base_mode=rule.base_mode,
-        include_concepts=_csv_to_list(rule.include_concepts),
-        exclude_concepts=_csv_to_list(rule.exclude_concepts),
+        include_concepts=unique_concepts(_csv_to_list(rule.include_concepts)),
+        exclude_concepts=unique_concepts(_csv_to_list(rule.exclude_concepts)),
         participates_in_next_base=bool(rule.participates_in_next_base),
         order=int(rule.sequence or 0),
         accounting_treatment=rule.accounting_treatment,
@@ -281,7 +281,7 @@ def _clean_text(value: str | None) -> str | None:
 
 def _normalized_csv(value: str | None) -> str | None:
     """Normaliza texto CSV para persistencia estable."""
-    values = _csv_to_list(value)
+    values = unique_concepts(_csv_to_list(value))
     return ", ".join(values) if values else None
 
 

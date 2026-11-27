@@ -21,6 +21,7 @@ from cacao_accounting.accounting_engine.common.fiscal import (
     find_duplicate_rule_id,
     has_negative_tax_amounts,
     negative_manual_tax_amount_message,
+    unique_concepts,
 )
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts, resolve_item_category_ids
@@ -468,8 +469,8 @@ def _tax_rule_context_from_payload(raw_line: Any, recognition_event: str, order:
         rate=rate,
         amount=amount,
         base_mode=str(item.get("base_mode") or "goods"),
-        include_concepts=_as_list(item.get("include_concepts")),
-        exclude_concepts=_as_list(item.get("exclude_concepts")),
+        include_concepts=unique_concepts(_as_list(item.get("include_concepts"))),
+        exclude_concepts=unique_concepts(_as_list(item.get("exclude_concepts"))),
         order=order,
         accounting_treatment=str(item.get("accounting_treatment") or "separate_tax_account"),
         recognition_event=recognition_event,

@@ -38,11 +38,19 @@ def calculate_accumulated_tax_base(
     exclude_concepts: Sequence[str],
 ) -> Decimal:
     """Resolve an accumulated tax base, applying exclusions even without inclusions."""
-    if include_concepts:
-        base = sum((concept_amounts.get(concept, Decimal("0")) for concept in include_concepts), Decimal("0"))
+    unique_inclusions = unique_concepts(include_concepts)
+    unique_exclusions = unique_concepts(exclude_concepts)
+    if unique_inclusions:
+        base = sum(
+            (
+                concept_amounts.get(concept, default_base if concept == "goods" else Decimal("0"))
+                for concept in unique_inclusions
+            ),
+            Decimal("0"),
+        )
     else:
         base = default_base
-    excluded_amount = sum((concept_amounts.get(concept, Decimal("0")) for concept in exclude_concepts), Decimal("0"))
+    excluded_amount = sum((concept_amounts.get(concept, Decimal("0")) for concept in unique_exclusions), Decimal("0"))
     return base - excluded_amount
 
 
@@ -54,3 +62,15 @@ def has_negative_tax_amounts(*values: Decimal) -> bool:
 def negative_manual_tax_amount_message() -> str:
     """Return the shared validation message for negative manual tax values."""
     return _("Las l\u00edneas fiscales manuales no pueden contener importes negativos.")
+
+
+def unique_concepts(values: Iterable[str]) -> list[str]:
+    """Normalize concept names and keep only their first occurrence."""
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        concept = str(value).strip()
+        if concept and concept not in seen:
+            unique.append(concept)
+            seen.add(concept)
+    return unique
