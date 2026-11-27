@@ -7,7 +7,7 @@ import calendar
 from datetime import date, timedelta
 from decimal import Decimal
 from sqlalchemy import func, tuple_
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError
 from cacao_accounting.database import (
     database,
     Accounts,
@@ -243,19 +243,10 @@ def _compute_real_movements(
 
 
 def _invoice_forecast_amount(invoice, company_currency: str, flow_date: date) -> tuple[Decimal, Decimal] | None:
-    """Resolve an invoice balance, tolerating only the documented legacy fallbacks."""
+    """Resolve an invoice balance from its canonical subledger state."""
     try:
-        if getattr(invoice, "__table__", None) is None:
-            return _legacy_forecast_amount(invoice, company_currency, flow_date)
         outstanding = compute_outstanding_amount(invoice)
         return outstanding, _forecast_base_amount(outstanding, invoice, company_currency, flow_date)
-    except OperationalError as exc:
-        if not _is_missing_document_relation_table(exc):
-            raise
-        try:
-            return _legacy_forecast_amount(invoice, company_currency, flow_date)
-        except CashForecastConversionError:
-            return None
     except CashForecastConversionError:
         # An incomplete document must not make every other cash-flow projection
         # unavailable. It remains excluded until its FX data is completed.
@@ -286,15 +277,6 @@ def _sum_invoice_amount(
     return total
 
 
-def _legacy_forecast_amount(invoice, company_currency: str, flow_date: date) -> tuple[Decimal, Decimal]:
-    """Return legacy cached balances when canonical relation data is unavailable."""
-    legacy_outstanding = Decimal(str(getattr(invoice, "outstanding_amount", None) or 0))
-    legacy_base = getattr(invoice, "base_outstanding_amount", None)
-    if legacy_base is not None:
-        return legacy_outstanding, Decimal(str(legacy_base))
-    return legacy_outstanding, _forecast_base_amount(legacy_outstanding, invoice, company_currency, flow_date)
-
-
 def _forecast_base_amount(outstanding: Decimal, invoice, company_currency: str, flow_date: date) -> Decimal:
     """Convert a canonical outstanding amount to company currency for forecast use."""
     transaction_currency = getattr(invoice, "transaction_currency", None)
@@ -319,12 +301,6 @@ def _forecast_base_amount(outstanding: Decimal, invoice, company_currency: str, 
             }
         )
     return outstanding * Decimal(str(raw_exchange_rate))
-
-
-def _is_missing_document_relation_table(exc: OperationalError) -> bool:
-    """Return whether a legacy schema lacks only the canonical relation table."""
-    detail = str(exc).lower()
-    return "document_relation" in detail and ("no such table" in detail or "does not exist" in detail)
 
 
 def _compute_ar_ap_projections(
