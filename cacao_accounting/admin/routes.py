@@ -810,11 +810,10 @@ def _apply_party_group_form(group: PartyGroup, submitted_type: str) -> None:
 
 def _update_party_group_from_post(group: PartyGroup) -> str | None:
     """Procesa el POST de edición y devuelve el tipo al que redirigir, si aplica."""
-    from cacao_accounting.party_management import _lock_party_group_for_write
+    from cacao_accounting.party_management import locked_party_group
 
     try:
-        _lock_party_group_for_write(group.id)
-        locked_group = database.session.get(PartyGroup, group.id, with_for_update=True)
+        locked_group = locked_party_group(group.id)
         if not locked_group:
             abort(404)
     except ValueError as exc:
@@ -1114,6 +1113,13 @@ def lista_precios():
         if price_list.is_default and not price_list.is_active:
             flash(_("Una lista inactiva no puede ser predeterminada."), "danger")
             return redirect(url_for("admin.lista_precios"))
+        if price_list.is_default and price_list.is_selling:
+            from cacao_accounting.default_scope import lock_default_scope
+
+            # Serializa la sustitución de la lista predeterminada por compañía.
+            # Sin el lock, dos altas concurrentes pueden desmarcarse entre sí
+            # sobre snapshots distintos y dejar dos predeterminadas activas.
+            lock_default_scope("price_list_default", company, "selling")
         database.session.add(price_list)
         database.session.flush()
         if price_list.is_default and price_list.is_selling:
@@ -1336,7 +1342,15 @@ def actualizar_precio_item(item_price_id: str):
         database.session.rollback()
         flash(duplicate_error, "danger")
         return redirect(url_for("admin.precios_item"))
-    item_price.price = price_value
+    # Transición atómica por versión: en SQLite FOR UPDATE no bloquea la fila y
+    # dos POST con el mismo expected_price podrían perder una actualización.
+    updated = database.session.execute(
+        database.update(ItemPrice).where(ItemPrice.id == item_price.id, ItemPrice.price == expected).values(price=price_value)
+    )
+    if getattr(updated, "rowcount", 0) != 1:
+        database.session.rollback()
+        flash(_("El precio cambió mientras editaba. Recargue la lista antes de guardar."), "danger")
+        return redirect(url_for("admin.precios_item"))
     try:
         database.session.commit()
     except IntegrityError:
