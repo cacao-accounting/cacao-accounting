@@ -724,12 +724,16 @@ def _update_project_from_form(
         proyecto.capitalization_account_id = None
 
 
-def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequence[Any], list[str]]:
-    """Obtiene plantillas aplicables y sus aplicaciones para un periodo de cierre."""
+def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequence[Any], list[str], list[str]]:
+    """Obtiene plantillas, aplicaciones completadas y aplicaciones recuperables.
+
+    Una aplicación ``pending`` no cuenta como completada: debe volver a enviarse
+    en el reintento para que se recupere su comprobante y llegue a GL.
+    """
     from cacao_accounting.database import RecurringJournalApplication, RecurringJournalTemplate
 
     if not period:
-        return (), []
+        return (), [], []
 
     templates = (
         database.session.execute(
@@ -753,8 +757,9 @@ def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequenc
         .filter(RecurringJournalApplication.status.in_(["pending", "applied"]))
         .all()
     )
-    applied_ids = [app.template_id for app in applied_apps]
-    return templates, applied_ids
+    applied_ids = [app.template_id for app in applied_apps if app.status == "applied"]
+    pending_ids = [app.template_id for app in applied_apps if app.status == "pending"]
+    return templates, applied_ids, pending_ids
 
 
 def _get_period_close_checks(close_run: Any) -> list[Any]:

@@ -210,7 +210,7 @@
             {% if template.id in applied_ids %}
             <span class="badge text-bg-success">{{ _('Aplicada') }}</span>
             {% else %}
-            <span class="badge text-bg-warning">{{ _('Pendiente') }}</span>
+            <span class="badge {% if template.id in pending_ids %}text-bg-info{% else %}text-bg-warning{% endif %}">{{ _('Pendiente') }}</span>
             {% endif %}
           </td>
         </tr>

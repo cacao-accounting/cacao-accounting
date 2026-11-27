@@ -3609,7 +3609,7 @@ def ver_cierre_mensual(identifier: str):
         return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
 
     period = database.session.get(AccountingPeriod, close_run.period_id)
-    templates, applied_ids = _get_templates_and_applied_ids(close_run, period)
+    templates, applied_ids, pending_ids = _get_templates_and_applied_ids(close_run, period)
     checks = _get_period_close_checks(close_run)
     for check in checks:
         check.source_links = []
@@ -3654,6 +3654,7 @@ def ver_cierre_mensual(identifier: str):
         selected_period=period,
         templates=templates,
         applied_ids=applied_ids,
+        pending_ids=pending_ids,
         checks=checks,
     )
 
