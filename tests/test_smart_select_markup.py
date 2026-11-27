@@ -24,3 +24,15 @@ def test_markup_smart_select_expone_roles_aria_y_acciones(app):
     assert ':aria-selected="index === highlightedIndex"' in html
     assert '@mousemove="highlightedIndex = index"' in html
     assert '@click="selectOption(option)"' in html
+
+
+def test_party_company_settings_inline_smart_select_usa_click_y_aria():
+    """#1976: bloques inline de party company settings no usan mousedown y exponen ARIA."""
+    from pathlib import Path
+
+    tpl = Path("cacao_accounting/templates/party_company_settings_form.html").read_text(encoding="utf-8")
+    assert '@mousedown.prevent="selectOption(option)"' not in tpl
+    assert tpl.count('@click="selectOption(option)"') >= 5
+    assert 'role="option"' in tpl
+    assert 'role="listbox"' in tpl
+    assert 'aria-autocomplete="list"' in tpl
