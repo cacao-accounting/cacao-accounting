@@ -785,7 +785,8 @@ def _reconcile_inventory_row(context: _ReconciliationContext) -> ReportRow:
 def _reconciliation_inventory_book_amount(context: _ReconciliationContext) -> Decimal:  # pylint: disable=not-callable
     """Read stock valuation snapshots for the selected book and cutoff."""
     stock_query = exclude_cancelled_stock_entries(
-        select(func.count(StockLedgerEntry.id))  # pylint: disable=not-callable
+        select(func.count(StockLedgerEntry.id)),  # pylint: disable=not-callable
+        context.as_of_date,
     ).where(  # pylint: disable=not-callable
         StockLedgerEntry.company == context.filters.company,
         StockLedgerEntry.posting_date <= context.as_of_date,
@@ -795,7 +796,8 @@ def _reconciliation_inventory_book_amount(context: _ReconciliationContext) -> De
         select(
             func.coalesce(func.sum(StockLedgerBookEntry.book_amount), 0),
             func.count(func.distinct(StockLedgerBookEntry.stock_ledger_entry_id)),  # pylint: disable=not-callable
-        ).join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id)
+        ).join(StockLedgerEntry, StockLedgerEntry.id == StockLedgerBookEntry.stock_ledger_entry_id),
+        context.as_of_date,
     ).where(
         StockLedgerEntry.company == context.filters.company,
         StockLedgerEntry.posting_date <= context.as_of_date,
@@ -1181,7 +1183,8 @@ def _kardex_opening_balance(
             StockLedgerEntry.warehouse,
             func.sum(StockLedgerEntry.qty_change),
             func.sum(StockLedgerEntry.stock_value_difference),
-        ).filter_by(company=filters.company)
+        ).filter_by(company=filters.company),
+        window_start - timedelta(days=1),
     )
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
@@ -1199,7 +1202,10 @@ def _kardex_opening_balance(
 def get_kardex(filters: KardexFilters) -> PaginatedReport:
     """Devuelve Kardex desde StockLedgerEntry."""
     window_start, window_end = _report_window(filters)
-    query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
+    query = exclude_cancelled_stock_entries(
+        select(StockLedgerEntry).filter_by(company=filters.company),
+        window_end,
+    )
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
@@ -1276,7 +1282,10 @@ def get_inventory_existence(filters: KardexFilters) -> PaginatedReport:
     """Devuelve existencias de inventario a una fecha clave desde stock ledger."""
     _, window_end = _report_window(filters)
     as_of_date = filters.date_to or filters.date_from or window_end
-    query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
+    query = exclude_cancelled_stock_entries(
+        select(StockLedgerEntry).filter_by(company=filters.company),
+        as_of_date,
+    )
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
@@ -1597,7 +1606,7 @@ def get_inventory_turnover(filters: OperationalReportFilters) -> PaginatedReport
     """Calcula rotación por artículo/almacén como salidas sobre stock promedio reconstruido de forma cronológica."""
     if not filters.date_from or not filters.date_to or filters.date_to < filters.date_from:
         raise ValueError(_("date_from y date_to válidos son obligatorios para calcular rotación"))
-    query = exclude_cancelled_stock_entries(select(StockLedgerEntry)).where(
+    query = exclude_cancelled_stock_entries(select(StockLedgerEntry), filters.date_to).where(
         StockLedgerEntry.company == filters.company,
         StockLedgerEntry.posting_date <= filters.date_to,
     )
