@@ -89,6 +89,7 @@ from cacao_accounting.document_identifiers import (
     IdentifierConfigurationError,
     PAYMENT_TYPE_TO_ENTITY_TYPE,
     assign_document_identifier,
+    parse_posting_date,
 )
 
 from cacao_accounting.decorators import exige_acceso_compania
@@ -435,18 +436,37 @@ def petty_cash_open_vouchers_total(petty_cash: PettyCashAccount, as_of_date=None
     return Decimal(str(result or 0))
 
 
+def _petty_cash_expense_reserved(as_of_date=None):
+    """Condición SQL: el gasto ya fue reservado por una reposición efectiva al corte.
+
+    La asociación append-only no tiene fecha propia; su efecto se reconoce en
+    la fecha de la reposición. Un corte anterior a esa fecha debe seguir
+    mostrando el gasto como pendiente (#1987).
+    """
+    link_exists = (
+        database.select(PettyCashReplenishmentExpense.id)
+        .join(
+            PettyCashReplenishment,
+            PettyCashReplenishment.id == PettyCashReplenishmentExpense.petty_cash_replenishment_id,
+        )
+        .where(PettyCashReplenishmentExpense.petty_cash_expense_id == PettyCashExpense.id)
+    )
+    legacy_query = database.select(PettyCashReplenishment.id).where(
+        PettyCashReplenishment.id == PettyCashExpense.replenishment_id
+    )
+    if as_of_date is not None:
+        cutoff = database.func.coalesce(PettyCashReplenishment.posting_date, PettyCashReplenishment.request_date) <= as_of_date
+        link_exists = link_exists.where(cutoff)
+        legacy_query = legacy_query.where(cutoff)
+    return database.or_(link_exists.exists(), legacy_query.exists())
+
+
 def petty_cash_pending_replenishment_total(petty_cash: PettyCashAccount, as_of_date=None) -> Decimal:
     """Calcula los gastos posteados aun no incluidos en una reposicion."""
-    associated_expense = (
-        database.select(PettyCashReplenishmentExpense.id)
-        .where(PettyCashReplenishmentExpense.petty_cash_expense_id == PettyCashExpense.id)
-        .exists()
-    )
     query = database.select(database.func.coalesce(database.func.sum(PettyCashExpense.amount), 0)).filter(
         PettyCashExpense.petty_cash_id == petty_cash.id,
         PettyCashExpense.docstatus == 1,
-        PettyCashExpense.replenishment_id.is_(None),
-        ~associated_expense,
+        ~_petty_cash_expense_reserved(as_of_date),
     )
     if as_of_date is not None:
         query = query.filter(PettyCashExpense.posting_date <= as_of_date)
@@ -1674,16 +1694,10 @@ def petty_cash_expenses_available_for_replenishment(petty_cash_id: str, as_of_da
     """
     if not _petty_cash_fund_in_cash_scope(petty_cash_id):
         return []
-    associated_expense = (
-        database.select(PettyCashReplenishmentExpense.id)
-        .where(PettyCashReplenishmentExpense.petty_cash_expense_id == PettyCashExpense.id)
-        .exists()
-    )
     query = database.select(PettyCashExpense).where(
         PettyCashExpense.petty_cash_id == petty_cash_id,
         PettyCashExpense.docstatus == 1,
-        PettyCashExpense.replenishment_id.is_(None),
-        ~associated_expense,
+        ~_petty_cash_expense_reserved(as_of_date),
     )
     if as_of_date is not None:
         query = query.filter(PettyCashExpense.posting_date <= as_of_date)
@@ -1717,6 +1731,7 @@ def create_petty_cash_replenishment(
     ids = list(dict.fromkeys(str(item) for item in expense_ids if item))
     if not ids:
         raise ValueError(_("Seleccione al menos un gasto para reponer."))
+    request_date = parse_posting_date(request_date)
     _begin_sqlite_write_transaction()
     expenses = list(
         database.session.execute(
@@ -1744,6 +1759,9 @@ def create_petty_cash_replenishment(
     ):
         database.session.rollback()
         raise ValueError(_("Uno o mas gastos no estan disponibles para reposición."))
+    if any(expense.posting_date and expense.posting_date > request_date for expense in expenses):
+        database.session.rollback()
+        raise ValueError(_("La fecha de la reposición no puede ser anterior a la fecha del gasto."))
     amount = sum((Decimal(str(expense.amount or 0)) for expense in expenses), Decimal("0"))
     fund = _validate_petty_cash_fund(petty_cash_id, company)
     replenishment = PettyCashReplenishment(

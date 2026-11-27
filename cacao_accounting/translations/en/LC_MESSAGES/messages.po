@@ -27603,6 +27603,9 @@ msgstr "The database schema state is not compatible: %(status)s"
 msgid "No hay migraciones pendientes."
 msgstr "No pending migrations."
 
+msgid "La fecha de la reposición no puede ser anterior a la fecha del gasto."
+msgstr "The replenishment date cannot be earlier than the expense date."
+
 #~ msgid "Debe indicar el motivo de la anulacion."
 #~ msgstr "You must provide the reason for the cancellation."
 

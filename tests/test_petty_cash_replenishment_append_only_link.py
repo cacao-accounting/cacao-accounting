@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting import create_app
 from cacao_accounting.bancos.services import (
+    _petty_cash_reconciliation_derived_values,
     cancel_petty_cash_expense,
     create_petty_cash_replenishment,
     petty_cash_expenses_available_for_replenishment,
@@ -24,6 +25,7 @@ from cacao_accounting.bancos.services import (
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Accounts,
+    Book,
     Currency,
     Entity,
     PettyCashAccount,
@@ -384,3 +386,57 @@ def test_replenishment_link_rejects_update_and_delete_in_both_modes(petty_cash_l
         database.session.rollback()
         persisted = database.session.get(PettyCashReplenishmentExpense, link_id)
         assert persisted is not None and persisted.company == ids["company"]
+
+
+def test_corte_anterior_conserva_el_gasto_como_pendiente(petty_cash_link_app):
+    """Un corte previo a la reposicion no descuenta el gasto reservado despues (#1987)."""
+    application, ids = petty_cash_link_app
+    with application.app_context():
+        expense = _seed_posted_expense(ids["company"], ids["fund_id"])
+        expense_id = expense.id
+        fund = database.session.get(PettyCashAccount, ids["fund_id"])
+        _create_replenishment(ids["company"], fund.id, expense_id, request_day=20)
+
+        assert petty_cash_pending_replenishment_total(fund, date(2026, 10, 19)) == Decimal("85.00")
+        assert [row.id for row in petty_cash_expenses_available_for_replenishment(fund.id, date(2026, 10, 19))] == [expense_id]
+        assert petty_cash_pending_replenishment_total(fund, date(2026, 10, 20)) == Decimal("0")
+        assert petty_cash_expenses_available_for_replenishment(fund.id, date(2026, 10, 20)) == []
+        assert petty_cash_pending_replenishment_total(fund, date(2026, 10, 21)) == Decimal("0")
+
+        database.session.add(
+            Book(
+                entity=ids["company"],
+                code="DEFAULT_BOOK",
+                name="Libro principal",
+                status="activo",
+                currency="NIO",
+                default=True,
+                is_primary=True,
+            )
+        )
+        database.session.commit()
+        derived = _petty_cash_reconciliation_derived_values(fund, date(2026, 10, 19))
+        assert derived["pending_expenses"] == Decimal("85.00")
+
+
+def test_reposicion_anterior_al_gasto_se_rechaza_sin_reserva(petty_cash_link_app):
+    """Una reposicion fechada antes del gasto no crea solicitud ni vinculo parcial (#1987)."""
+    application, ids = petty_cash_link_app
+    with application.app_context():
+        expense = _seed_posted_expense(ids["company"], ids["fund_id"])
+        fund = database.session.get(PettyCashAccount, ids["fund_id"])
+        with pytest.raises(ValueError, match="anterior"):
+            _create_replenishment(ids["company"], fund.id, expense.id, request_day=18)
+        database.session.rollback()
+
+        assert database.session.get(PettyCashExpense, expense.id).replenishment_id is None
+        assert (
+            database.session.execute(
+                database.select(database.func.count(PettyCashReplenishment.id)).filter_by(company=ids["company"])
+            ).scalar_one()
+            == 0
+        )
+        assert (
+            database.session.execute(database.select(database.func.count(PettyCashReplenishmentExpense.id))).scalar_one() == 0
+        )
+        assert [row.id for row in petty_cash_expenses_available_for_replenishment(fund.id)] == [expense.id]
