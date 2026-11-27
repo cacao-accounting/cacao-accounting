@@ -14,6 +14,7 @@ import pytest
 from cacao_accounting.database import (
     DimensionType,
     DimensionValue,
+    Entity,
     Modules,
     Tax,
     TaxTemplate,
@@ -181,4 +182,51 @@ def test_dimension_value_rechaza_tipo_y_compania_invalidos(app, authenticated_cl
     assert "compa??a seleccionada no es v?lida" in _msg(resp).lower() or "compa" in _msg(resp).lower()
     with app.app_context():
         row = database.session.execute(database.select(DimensionValue).filter_by(value=bad_company_value)).scalar_one_or_none()
+        assert row is None
+
+
+def test_tax_template_rechaza_company_deshabilitada(app, authenticated_client, modulo_admin_activo):
+    client = authenticated_client("admin")
+    with app.app_context():
+        code = f"D{uuid4().hex[:6].upper()}"
+        database.session.add(
+            Entity(code=code, name=code, company_name=code, tax_id=f"T{code}", currency="NIO", enabled=False, status="activo")
+        )
+        database.session.commit()
+
+    name = f"Tpl disabled {uuid4().hex[:8]}"
+    resp = client.post(
+        "/settings/tax-templates",
+        data={"name": name, "company": code, "template_type": "selling", "currency": ""},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert "compa??a seleccionada no es v?lida" in _msg(resp).lower() or "compa" in _msg(resp).lower()
+    with app.app_context():
+        row = database.session.execute(database.select(TaxTemplate).filter_by(name=name)).scalar_one_or_none()
+        assert row is None
+
+
+def test_dimension_value_rechaza_company_deshabilitada(app, authenticated_client, modulo_admin_activo):
+    client = authenticated_client("admin")
+    with app.app_context():
+        dt = DimensionType(name=f"DT2-{uuid4().hex[:8]}", is_active=True)
+        code = f"E{uuid4().hex[:6].upper()}"
+        database.session.add(dt)
+        database.session.add(
+            Entity(code=code, name=code, company_name=code, tax_id=f"T{code}", currency="NIO", enabled=False, status="activo")
+        )
+        database.session.commit()
+        dt_id = dt.id
+
+    value = f"VALDIS-{uuid4().hex[:8]}"
+    resp = client.post(
+        "/settings/dimensions",
+        data={"action": "add_value", "dimension_type_id": dt_id, "value": value, "company": code},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert "compa??a seleccionada no es v?lida" in _msg(resp).lower() or "compa" in _msg(resp).lower()
+    with app.app_context():
+        row = database.session.execute(database.select(DimensionValue).filter_by(value=value)).scalar_one_or_none()
         assert row is None
