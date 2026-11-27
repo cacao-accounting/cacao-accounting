@@ -146,6 +146,29 @@ def test_posting_concurrente_del_mismo_serial():
             )
             assert len({row.voucher_id for row in stock_rows}) == 1
             assert len({row.voucher_id for row in gl_rows}) == 1
+            # El perdedor no puede reintentar después del rollback.
+            rejected_id = entries[results.index("rejected")]
+            entry = database.session.get(StockEntry, rejected_id)
+            with audit_actor(admin_id, "Admin"), approved_execution(entry, admin_id):
+                try:
+                    post_stock_entry(entry, ledger_code="FISCAL")
+                    database.session.commit()
+                except Exception:
+                    database.session.rollback()
+            stock_after = (
+                database.session.execute(database.select(StockLedgerEntry).where(StockLedgerEntry.voucher_id.in_(entries)))
+                .scalars()
+                .all()
+            )
+            gl_after = (
+                database.session.execute(
+                    database.select(GLEntry).where(GLEntry.voucher_id.in_(entries), GLEntry.is_cancelled.is_(False))
+                )
+                .scalars()
+                .all()
+            )
+            assert len({row.voucher_id for row in stock_after}) == 1
+            assert len({row.voucher_id for row in gl_after}) == 1
             database.session.remove()
     finally:
         _drop(url, name)
