@@ -2641,6 +2641,26 @@ def _cancel_linked_delivery_note(
     )
 
 
+def lock_credit_scope(company: str | None, customer_id: str | None) -> None:
+    """Serializa la exposición crediticia por compañía y cliente.
+
+    Debe invocarse antes de cualquier lock documental para conservar un orden
+    determinista entre envíos directos y aprobaciones diferidas.
+    """
+    if not company or not customer_id:
+        return
+    from cacao_accounting.database import CompanyParty
+    from cacao_accounting.default_scope import lock_default_scope
+
+    company_party = database.session.execute(
+        database.select(CompanyParty).filter_by(company=company, party_id=customer_id)
+    ).scalar_one_or_none()
+    if company_party is None:
+        return
+    if company_party.credit_limit is not None or company_party.block_overdue:
+        lock_default_scope("credit_limit", company, customer_id)
+
+
 def _validate_credit_limit_and_overdue(
     company: str, customer_id: str | None, current_doc_total: Decimal, current_document: Any | None = None
 ) -> None:
@@ -2657,6 +2677,14 @@ def _validate_credit_limit_and_overdue(
 
     if not company_party:
         return
+
+    if company_party.credit_limit is not None or company_party.block_overdue:
+        lock_credit_scope(company, customer_id)
+        database.session.expire(company_party)
+        party_query = database.select(CompanyParty).filter_by(company=company, party_id=customer_id)
+        if database.session.get_bind().dialect.name != "sqlite":
+            party_query = party_query.with_for_update()
+        company_party = database.session.execute(party_query).scalar_one()
 
     invoices = _approved_customer_invoices(company, customer_id)
     if company_party.block_overdue:
@@ -2720,6 +2748,10 @@ def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInv
         )
         .where(or_(SalesInvoice.document_type != "sales_debit_note", ~linked_reversal))
     )
+    if database.session.get_bind().dialect.name != "sqlite":
+        # MySQL REPEATABLE READ puede conservar el snapshot previo al lock de
+        # crédito; la lectura bloqueante ve las facturas recién aprobadas.
+        query = query.with_for_update()
     return list(database.session.execute(query).scalars().all())
 
 
@@ -2870,14 +2902,15 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
     Closed orders no longer reserve customer credit, even when their approved
     deliveries or invoices have not covered their full monetary amount.
     """
-    orders = database.session.execute(
-        database.select(SalesOrder).where(
-            SalesOrder.company == company,
-            SalesOrder.customer_id == customer_id,
-            SalesOrder.docstatus == 1,
-            SalesOrder.status != "closed",
-        )
-    ).scalars()
+    orders_query = database.select(SalesOrder).where(
+        SalesOrder.company == company,
+        SalesOrder.customer_id == customer_id,
+        SalesOrder.docstatus == 1,
+        SalesOrder.status != "closed",
+    )
+    if database.session.get_bind().dialect.name != "sqlite":
+        orders_query = orders_query.with_for_update()
+    orders = database.session.execute(orders_query).scalars()
     exposure = Decimal("0")
     current_amounts = _current_document_order_amounts(current_document)
     for order in orders:

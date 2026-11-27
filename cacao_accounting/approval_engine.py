@@ -1014,6 +1014,19 @@ class ApprovalEngine:
         if request is None and not cls.is_enabled(company_id) and cls._pending_request(document) is None:
             return True
 
+        if doctype in {
+            "sales_order",
+            "sales_invoice",
+            "sales_return",
+            "sales_credit_note",
+            "sales_debit_note",
+        } and not getattr(document, "is_return", False):
+            from cacao_accounting.ventas.services import lock_credit_scope
+
+            # El lock de crédito precede al lock de la solicitud de aprobación
+            # para conservar el mismo orden que el envío directo.
+            lock_credit_scope(company_id, getattr(document, "customer_id", None))
+
         amount = cls.get_document_amount(document)
 
         req = cls._request_for_approve(document, user, doctype, request)
