@@ -30,6 +30,7 @@ from cacao_accounting.contabilidad import balance_confirmation_bp
 from cacao_accounting.database import (
     BalanceConfirmation,
     BalanceConfirmationInvitation,
+    AuditTrail,
     Currency,
     Entity,
     Modules,
@@ -606,17 +607,18 @@ def confirmation_1839_scenario(tmp_path):
                         database.delete(BalanceConfirmation).where(BalanceConfirmation.id == ids["confirmation"])
                     )
                     database.session.commit()
-                    for model, key in ((Entity, "entity"), (Party, "party")):
-                        try:
-                            column = model.id if key == "party" else model.code
-                            database.session.execute(database.delete(model).where(column == ids[key]))
-                            database.session.commit()
-                        except Exception:
-                            database.session.rollback()
+                    database.session.execute(AuditTrail.__table__.delete().where(AuditTrail.company == ids["entity"]))
+                    database.session.execute(database.delete(Party).where(Party.id == ids["party"]))
+                    database.session.execute(database.delete(Entity).where(Entity.code == ids["entity"]))
+                    database.session.commit()
 
                     remaining = {
                         "invitation": database.session.get(BalanceConfirmationInvitation, ids["invitation"]),
                         "confirmation": database.session.get(BalanceConfirmation, ids["confirmation"]),
+                        "party": database.session.get(Party, ids["party"]),
+                        "entity": database.session.execute(
+                            database.select(Entity).where(Entity.code == ids["entity"])
+                        ).scalar_one_or_none(),
                     }
                     leftovers = [name for name, row in remaining.items() if row is not None]
                     if leftovers:
