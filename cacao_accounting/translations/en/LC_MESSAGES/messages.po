@@ -13053,6 +13053,12 @@ msgstr ""
 msgid "La nota de compra requiere una factura origen aprobada."
 msgstr "The purchase note requires an approved source invoice."
 
+msgid "La orden indicada no pertenece al flujo de la factura origen."
+msgstr "The selected purchase order is not part of the source invoice flow."
+
+msgid "La recepción indicada no pertenece al flujo de la factura origen."
+msgstr "The selected receipt is not part of the source invoice flow."
+
 #: cacao_accounting/compras/services.py:2755
 #: cacao_accounting/compras/services.py:2895
 msgid "El tipo de nota de crédito no es válido."
@@ -28290,3 +28296,15 @@ msgstr "Equivalent"
 
 msgid "TC"
 msgstr "ER"
+
+msgid "Ciclo jer?rquico detectado en"
+msgstr "Hierarchical cycle detected at"
+
+msgid "Revise la configuraci?n de la jerarqu?a."
+msgstr "Review the hierarchy configuration."
+
+msgid "Padre no encontrado"
+msgstr "Parent not found"
+
+msgid "Ciclo jer?rquico"
+msgstr "Hierarchical cycle"

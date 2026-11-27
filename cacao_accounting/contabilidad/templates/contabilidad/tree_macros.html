@@ -74,11 +74,20 @@
 {# #}
 {% macro render_tree(roots, all_nodes, parent_key='parent', id_key='id', icon='bi-folder') %}
 
-  {%- macro _tree_node(_node, _all, _pk, _ik, _icon) -%}
+  {%- macro _tree_node(_node, _all, _pk, _ik, _icon, _seen) -%}
     {%- set nid = _node[_ik] -%}
+    {%- if nid in _seen.ids -%}
+    <li class="ca-tree-cycle">
+      <span class="text-warning small">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+        {{ _('Ciclo jer?rquico detectado en') }} <strong>{{ _node.code }}</strong>. {{ _('Revise la configuraci?n de la jerarqu?a.') }}
+      </span>
+    </li>
+    {%- else -%}
+    {%- set _ = _seen.ids.append(nid) -%}
     {%- set kids = _all | selectattr(_pk, 'equalto', nid) | list -%}
     {%- set has_kids = kids | length > 0 -%}
-    {# sonicloud:exclude ItemTagNotWithinContainerTagCheck — este macro se invoca dentro de <ul> en render_tree #}
+    {# sonicloud:exclude ItemTagNotWithinContainerTagCheck ? este macro se invoca dentro de <ul> en render_tree #}
     <li x-data="{ open: true }" @tree-toggle.window="open = $event.detail.open">
       <span @click="{% if has_kids %}open = !open{% endif %}" style="cursor:pointer;" class="d-inline-flex align-items-center gap-1">
         {% if has_kids %}
@@ -96,16 +105,48 @@
       {% if has_kids %}
       <ul x-show="open">
         {%- for child in kids -%}
-          {{ _tree_node(child, _all, _pk, _ik, _icon) }}
+          {{ _tree_node(child, _all, _pk, _ik, _icon, _seen) }}
         {%- endfor -%}
       </ul>
       {% endif %}
     </li>
+    {%- endif -%}
   {%- endmacro -%}
 
+  {%- set _all_ids = all_nodes | map(attribute=id_key) | list -%}
+  {%- set _orphan_roots = namespace(items=[]) -%}
+  {%- for _n in all_nodes -%}
+    {%- set _pid = _n[parent_key] -%}
+    {%- if _pid and _pid not in _all_ids -%}
+      {%- set _ = _orphan_roots.items.append(_n) -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- set _seen = namespace(ids=[]) -%}
   <ul class="ca-tree">
     {%- for root in roots -%}
-      {{ _tree_node(root, all_nodes, parent_key, id_key, icon) }}
+      {{ _tree_node(root, all_nodes, parent_key, id_key, icon, _seen) }}
+    {%- endfor -%}
+    {%- for orphan in _orphan_roots.items -%}
+      {%- if orphan[id_key] not in _seen.ids -%}
+      <li class="ca-tree-orphan">
+        <span class="text-warning small d-inline-flex align-items-center gap-1">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          <a href="{{ orphan.url }}"><strong>{{ orphan.code }}</strong>&nbsp;{{ orphan.name }}</a>
+          <span class="badge text-bg-warning" style="font-size:.65rem;">{{ _('Padre no encontrado') }}</span>
+        </span>
+      </li>
+      {%- endif -%}
+    {%- endfor -%}
+    {%- for _n in all_nodes -%}
+      {%- if _n[id_key] not in _seen.ids -%}
+      <li class="ca-tree-cycle">
+        <span class="text-warning small d-inline-flex align-items-center gap-1">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          <a href="{{ _n.url }}"><strong>{{ _n.code }}</strong>&nbsp;{{ _n.name }}</a>
+          <span class="badge text-bg-warning" style="font-size:.65rem;">{{ _('Ciclo jer?rquico') }}</span>
+        </span>
+      </li>
+      {%- endif -%}
     {%- endfor -%}
   </ul>
 {% endmacro %}
