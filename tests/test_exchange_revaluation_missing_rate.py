@@ -19,6 +19,7 @@ import calendar
 import os
 from datetime import date
 from decimal import Decimal
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -40,6 +41,7 @@ from cacao_accounting.database import (
     Entity,
     ExchangeRate,
     ExchangeRevaluation,
+    ExchangeRevaluationItem,
     FiscalYear,
     GLEntry,
     Modules,
@@ -384,3 +386,70 @@ def test_ruta_de_cierre_registra_fallo_por_tasa_faltante(business_app):
         assert control.check_status == "failed"
         assert "Falta tasa de cierre para EUR -> NIO" in control.message
         assert database.session.execute(database.select(ExchangeRevaluation).filter_by(company=company)).scalars().all() == []
+
+
+def _authenticate_client(client: Any, user_id: str) -> None:
+    """Authenticate the test client with the company user."""
+    with client.session_transaction() as session:
+        session["_user_id"] = user_id
+        session["_fresh"] = True
+
+
+def _create_split_month_close(company: str, first_period_id: str) -> tuple[str, str, date]:
+    """Create an authenticated monthly close linked to the second half of a month."""
+    first_period = database.session.get(AccountingPeriod, first_period_id)
+    assert first_period is not None
+    month_end = first_period.end
+    first_period.end = date(month_end.year, month_end.month, 15)
+    second_period = AccountingPeriod(
+        entity=company,
+        fiscal_year_id=first_period.fiscal_year_id,
+        name="Segundo período del mes",
+        start=date(month_end.year, month_end.month, 16),
+        end=month_end,
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(second_period)
+    database.session.flush()
+    close_run = PeriodCloseRun(company=company, period_id=second_period.id, run_status="open")
+    database.session.add(close_run)
+    database.session.commit()
+    return str(close_run.id), str(second_period.id), month_end
+
+
+def test_ruta_de_cierre_revaloriza_el_periodo_exacto_en_mes_dividido(request):
+    """El cierre usa su período y su fecha al compartir mes con otro período abierto."""
+    company = f"R{uuid4().hex[:9]}"
+    with request.getfixturevalue("business_app").app_context():
+        company, first_period_id, libro_eur_id, banco_gl_id, _ganancia_gl_id = _sembrar_libro_secundario_en_euros(
+            company, con_tasa_eur_nio=True
+        )
+        user_id = database.session.execute(database.select(User.id).filter_by(company=company)).scalar_one()
+        close_run_id, second_period_id, month_end = _create_split_month_close(company, first_period_id)
+
+        client = request.getfixturevalue("business_app").test_client()
+        _authenticate_client(client, str(user_id))
+        response = client.post(f"/accounting/period-close/monthly/{close_run_id}/exchange-revaluation")
+
+        assert response.status_code == 302
+        run = database.session.execute(database.select(ExchangeRevaluation).filter_by(company=company)).scalar_one()
+        assert run.status == "posted"
+        assert run.run_date == month_end
+        assert run.total_gain == Decimal("800.0000")
+        line = database.session.execute(database.select(ExchangeRevaluationItem).filter_by(revaluation_id=run.id)).scalar_one()
+        assert line.new_rate == Decimal("1.10")
+
+        entries = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(company=company, voucher_id=run.id, is_cancelled=False)
+            )
+            .scalars()
+            .all()
+        )
+        assert entries
+        assert {entry.accounting_period_id for entry in entries} == {second_period_id}
+        assert {entry.posting_date for entry in entries} == {month_end}
+        assert {entry.ledger_id for entry in entries} == {libro_eur_id}
+        assert {entry.exchange_rate for entry in entries} == {Decimal("1.10")}
+        assert any(entry.account_id == banco_gl_id for entry in entries)

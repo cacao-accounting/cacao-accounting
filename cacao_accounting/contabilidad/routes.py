@@ -3690,8 +3690,7 @@ def ejecutar_revalorizacion_cierre(identifier: str) -> "Any":
     try:
         run = ExchangeRevaluationService().run(
             company=close_run.company,
-            year=period.end.year,
-            month=period.end.month,
+            period_id=str(period.id),
             user_id=str(current_user.id),
         )
     except ExchangeRevaluationError as exc:
