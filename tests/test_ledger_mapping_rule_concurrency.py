@@ -192,6 +192,47 @@ def test_concurrent_mapping_rules_keep_one_target_sqlite(tmp_path):
             database.engine.dispose()
 
 
+@pytest.mark.database
+def test_concurrent_mapping_rules_mysql_stale_snapshot():
+    """MySQL REPEATABLE READ no puede reutilizar el snapshot previo al lock."""
+    configured_uri = str(configuracion["SQLALCHEMY_DATABASE_URI"])
+    if not configured_uri.startswith("mysql"):
+        pytest.skip("Este caso requiere MySQL/InnoDB bajo REPEATABLE READ.")
+    if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
+
+    app = _create_app(configured_uri)
+    ids = _seed_identidad(app)
+    barrier = Barrier(2, timeout=30)
+
+    def create(target_account_id: str) -> str:
+        with app.app_context():
+            try:
+                # Fija el snapshot consistente antes de competir por el lock.
+                database.session.execute(database.select(Currency.id).limit(1)).scalar_one_or_none()
+                barrier.wait(timeout=10)
+                create_ledger_mapping_rule(
+                    source_book=ids["source_book"],
+                    target_book=ids["target_book"],
+                    source_account_id=ids["source_account"],
+                    target_account_id=target_account_id,
+                )
+                return "created"
+            except LedgerMappingError:
+                database.session.rollback()
+                return "rejected"
+            finally:
+                database.session.remove()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            results = list(workers.map(create, ids["targets"]))
+        assert sorted(results) == ["created", "rejected"], results
+        _assert_una_regla_activa(app, ids)
+    finally:
+        _limpiar(app, ids)
+
+
 def _confirmar_espera_por_lock(app, pid: int, timeout: float) -> str:
     """Confirma en pg_stat_activity que la sesión indicada espera por un lock."""
     limite = monotonic() + timeout
