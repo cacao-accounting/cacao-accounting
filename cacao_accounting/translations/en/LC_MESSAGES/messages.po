@@ -28201,3 +28201,7 @@ msgstr "The replenishment date cannot be earlier than the expense date."
 
 #~ msgid "Último movimiento"
 #~ msgstr "Last movement"
+
+#: cacao_accounting/withholding_service.py
+msgid "El certificado de retención del pago está cancelado y no puede reemitirse."
+msgstr "The payment withholding certificate is cancelled and cannot be reissued."
