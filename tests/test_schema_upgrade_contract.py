@@ -74,6 +74,21 @@ def test_db_migrate_rejects_partial_schema(tmp_path, monkeypatch):
     assert "parcial" in result.output.lower() or "respaldo" in result.output.lower()
 
 
+def test_db_migrate_rejects_bootstrap_incomplete(tmp_path, monkeypatch):
+    app = _app(tmp_path, "bootstrap_incomplete.sqlite")
+    with app.app_context():
+        database.create_all()
+        # Esquema completo sin historial alembic y sin bootstrap completo.
+        estado = estado_esquema_base_datos()
+        assert estado["status"] == "bootstrap_incomplete"
+        database.session.remove()
+        database.engine.dispose()
+    monkeypatch.setattr(cli, "_obtener_aplicacion", lambda: app)
+    result = CliRunner().invoke(cli.db_migrate)
+    assert result.exit_code != 0
+    assert "parcial" in result.output.lower() or "respaldo" in result.output.lower()
+
+
 def test_verify_rejects_outdated_schema_without_migrating(tmp_path):
     app = _app(tmp_path, "outdated.sqlite")
     with app.app_context():

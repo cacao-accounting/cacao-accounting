@@ -285,7 +285,7 @@ def db_migrate(head: str, revision: str | None) -> None:
             status = str(estado["status"])
             if status == "empty":
                 raise RuntimeError(_("La base de datos no está inicializada; ejecute primero 'cacaoctl db init'."))
-            if status == "partial":
+            if status in {"partial", "bootstrap_incomplete"}:
                 raise RuntimeError(
                     _(
                         "La base de datos tiene un esquema parcial o inconsistente; "
