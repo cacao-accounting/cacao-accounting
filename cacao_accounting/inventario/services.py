@@ -1283,6 +1283,43 @@ def _submitted_material_line_signature(entry: StockEntry, index: int, row: dict[
     )
 
 
+def _persisted_stock_entry_origin_signature(entry: StockEntry) -> list[tuple[str, ...]]:
+    """Origen documental persistido por línea, incluido el vínculo nulo (#1865)."""
+    rows = database.session.execute(
+        database.select(
+            StockEntryItem.item_code,
+            DocumentRelation.source_type,
+            DocumentRelation.source_id,
+            DocumentRelation.source_item_id,
+        )
+        .outerjoin(
+            DocumentRelation,
+            database.and_(
+                DocumentRelation.target_type == "stock_entry",
+                DocumentRelation.target_id == entry.id,
+                DocumentRelation.target_item_id == StockEntryItem.id,
+            ),
+        )
+        .where(StockEntryItem.stock_entry_id == entry.id)
+        .distinct()
+    ).all()
+    return sorted(tuple(str(value or "") for value in row) for row in rows)
+
+
+def _submitted_stock_entry_origin_signature() -> list[tuple[str, ...]]:
+    """Origen documental enviado por el formulario de líneas (#1865)."""
+    return sorted(
+        (
+            row["item_code"].strip(),
+            row["source_type"].strip(),
+            row["source_id"].strip(),
+            row["source_item_id"].strip(),
+        )
+        for row in _submitted_stock_entry_lines()
+        if row["item_code"].strip()
+    )
+
+
 def _submitted_stock_entry_line_signatures(entry: StockEntry) -> list[tuple] | None:
     """Firma de las líneas enviadas; ``None`` si no puede compararse con seguridad."""
     if entry.purpose == "stock_reconciliation":
@@ -1308,7 +1345,12 @@ def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
     if relation_exists:
         # #1865: una edición de solo cabecera es válida si conserva exactamente
         # las líneas y cantidades vinculadas. Solo se rechaza un cambio real.
-        if _submitted_stock_entry_line_signatures(registro) != _persisted_stock_entry_line_signatures(registro):
+        origin_changed = registro.purpose != "stock_reconciliation" and (
+            _submitted_stock_entry_origin_signature() != _persisted_stock_entry_origin_signature(registro)
+        )
+        if origin_changed or _submitted_stock_entry_line_signatures(registro) != _persisted_stock_entry_line_signatures(
+            registro
+        ):
             raise ValueError(_("Los vínculos documentales son inmutables; registre una relación nueva."))
         return
 

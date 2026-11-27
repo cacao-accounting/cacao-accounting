@@ -65,7 +65,14 @@ def _seed_linked_entry(app, relation_status: str = "active") -> dict[str, str]:
         )
         database.session.add(relation)
         database.session.commit()
-        return {"entry": entry.id, "line": line.id, "relation": relation.id}
+        return {
+            "entry": entry.id,
+            "line": line.id,
+            "relation": relation.id,
+            "source_type": relation.source_type,
+            "source_id": relation.source_id,
+            "source_item_id": relation.source_item_id,
+        }
 
 
 def _post_edit(app, monkeypatch, entry_id: str, form_data: dict[str, str]):
@@ -77,7 +84,7 @@ def _post_edit(app, monkeypatch, entry_id: str, form_data: dict[str, str]):
         return response, list(get_flashed_messages())
 
 
-def _header_form(**extra: str) -> dict[str, str]:
+def _header_form(ids: dict[str, str], **extra: str) -> dict[str, str]:
     """Formulario con las líneas persistidas sin cambios."""
     form = {
         "purpose": "material_receipt",
@@ -90,23 +97,30 @@ def _header_form(**extra: str) -> dict[str, str]:
         "uom_0": "UND",
         "rate_0": "10",
         "amount_0": "20",
+        "source_type_0": ids["source_type"],
+        "source_id_0": ids["source_id"],
+        "source_item_id_0": ids["source_item_id"],
     }
     form.update(extra)
     return form
 
 
 @pytest.mark.parametrize("relation_status", ["active", "closed"])
-@pytest.mark.parametrize("edit", ["change_quantity", "remove_line", "change_warehouse"])
+@pytest.mark.parametrize("edit", ["change_quantity", "remove_line", "change_warehouse", "change_source", "remove_source"])
 def test_linked_stock_entry_rejects_line_edit_without_mutating_evidence(
     app, entorno_contable, monkeypatch, relation_status, edit
 ):
     """Cambiar líneas, cantidades o almacenes revierte todo sin perder evidencia."""
     ids = _seed_linked_entry(app, relation_status)
-    form_data = _header_form()
+    form_data = _header_form(ids)
     if edit == "change_quantity":
         form_data.update({"qty_0": "3", "amount_0": "30"})
     elif edit == "remove_line":
         form_data.pop("item_code_0")
+    elif edit == "change_source":
+        form_data["source_item_id_0"] = "otra-linea-origen"
+    elif edit == "remove_source":
+        form_data.pop("source_item_id_0")
     else:
         form_data["from_warehouse"] = "BOD01"
 
@@ -140,7 +154,7 @@ def test_linked_stock_entry_allows_header_only_edit(app, entorno_contable, monke
     """Cambiar solo campos de cabecera conserva la relación y no borra líneas."""
     ids = _seed_linked_entry(app, "active")
 
-    response, messages = _post_edit(app, monkeypatch, ids["entry"], _header_form())
+    response, messages = _post_edit(app, monkeypatch, ids["entry"], _header_form(ids))
 
     assert response is not None
     assert not any("inmutables" in message for message in messages)
