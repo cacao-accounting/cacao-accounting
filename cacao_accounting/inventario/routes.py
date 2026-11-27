@@ -920,7 +920,7 @@ def inventario_entrada_nuevo():
         abort(404)
     formulario.purpose.data = purpose or formulario.purpose.data
     source_api_url, source_label = _source_context(request.args.get("source_type"), request.args.get("source_id"))
-    titulo = _stock_entry_title(_infer_stock_entry_purpose(request.path))
+    titulo = _stock_entry_title(purpose)
     transaction_config = {
         "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",

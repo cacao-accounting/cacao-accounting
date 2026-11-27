@@ -10,7 +10,7 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventarios") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{ _("Nueva Conciliación de Inventario") }}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ titulo or _("Nueva Conciliación de Inventario") }}</li>
   </ol>
 </nav>
 
@@ -20,7 +20,7 @@
 
   <div class="ca-journal-toolbar mb-3">
     <div>
-      <h4 class="mb-1">{{ _("Nueva Conciliación de Inventario") }}</h4>
+      <h4 class="mb-1">{{ titulo or _("Nueva Conciliación de Inventario") }}</h4>
       <p class="text-muted mb-0">{{ _("Borrador") }}</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
