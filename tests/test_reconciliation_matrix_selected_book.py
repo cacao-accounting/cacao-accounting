@@ -390,7 +390,7 @@ def test_inventory_reconciliation_uses_posting_snapshots_not_later_rates():
 
 
 def test_reconciliation_matrix_rejects_currency_different_from_selected_book(entorno_contable_aislado):
-    """La matriz rechaza una moneda de presentación distinta a la del libro."""
+    """La matriz rechaza otra moneda y normaliza la moneda del libro (#1235)."""
     app = entorno_contable_aislado.app
     with app.app_context():
         selected_book = database.session.execute(
@@ -401,14 +401,15 @@ def test_reconciliation_matrix_rejects_currency_different_from_selected_book(ent
         filters = ReconciliationFilters(
             company="cacao",
             ledger=selected_book.id,
-            currency=requested_currency,
+            currency=f" {requested_currency.lower()} ",
         )
 
         with pytest.raises(ValueError, match="coincidir con la moneda del libro seleccionado"):
             get_reconciliation_matrix(filters)
 
         matching_currency_report = get_reconciliation_matrix(
-            ReconciliationFilters(company="cacao", ledger=selected_book.id, currency=ledger_currency)
+            ReconciliationFilters(company="cacao", ledger=selected_book.id, currency=f" {ledger_currency.lower()} ")
         )
 
     assert matching_currency_report.ledger_currency == ledger_currency
+    assert all(row.values["currency"] == ledger_currency for row in matching_currency_report.rows)
