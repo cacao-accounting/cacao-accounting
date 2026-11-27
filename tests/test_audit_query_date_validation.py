@@ -96,3 +96,41 @@ def test_analytics_rechaza_rango_invertido(app, monkeypatch, funcion, kwargs):
 
     assert exc.value.code == ErrorCode.INVALID_PARAMETER
     assert "fecha inicial" in exc.value.message
+
+
+def test_compare_periods_permite_solapamiento_y_expone_fechas(app, monkeypatch):
+    """#1969 QA2: solapamiento permitido; provenance conserva las cuatro fechas."""
+    modulo_obj = importlib.import_module("cacao_accounting.query_tools.handlers.analytics")
+    monkeypatch.setattr(modulo_obj, "validate_permission", lambda *a, **k: None)
+    monkeypatch.setattr(
+        modulo_obj,
+        "compare_periods",
+        lambda *a, **k: {
+            "metric": "income",
+            "base_period": {"date_from": "2026-01-01", "date_to": "2026-03-31", "value": 10},
+            "comparison_period": {"date_from": "2026-03-01", "date_to": "2026-04-30", "value": 8},
+            "variance": 2,
+            "variance_percentage": 25.0,
+            "complete": True,
+        },
+    )
+
+    with app.app_context():
+        result = modulo_obj.compare_periods_tool.handler(
+            context=_contexto(),
+            company_id="cacao",
+            metric="income",
+            base_date_from="2026-01-01",
+            base_date_to="2026-03-31",
+            compare_date_from="2026-03-01",
+            compare_date_to="2026-04-30",
+        )
+
+    assert result["provenance"]["filters"] == {
+        "metric": "income",
+        "base_date_from": "2026-01-01",
+        "base_date_to": "2026-03-31",
+        "compare_date_from": "2026-03-01",
+        "compare_date_to": "2026-04-30",
+    }
+    assert result["complete"] is True
