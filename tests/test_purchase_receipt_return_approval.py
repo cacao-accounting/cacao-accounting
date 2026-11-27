@@ -58,13 +58,13 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _sembrar_cuentas(escenario) -> None:
+def _sembrar_cuentas(escenario, *, company: str = "cacao", warehouse_code: str | None = None) -> None:
     """Prepara las cuentas puente y de inventario que exige el posteo."""
-    defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
-    bridge = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="2103")).scalar_one_or_none()
+    defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company=company)).scalar_one()
+    bridge = database.session.execute(database.select(Accounts).filter_by(entity=company, code="2103")).scalar_one_or_none()
     if bridge is None:
         bridge = Accounts(
-            entity="cacao",
+            entity=company,
             code="2103",
             name="Puente de compras",
             classification="liability",
@@ -73,16 +73,19 @@ def _sembrar_cuentas(escenario) -> None:
         database.session.add(bridge)
         database.session.flush()
     defaults.bridge_account_id = bridge.id
-    inventario = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="1109")).scalar_one()
-    almacen = database.session.execute(database.select(Warehouse).limit(1)).scalar_one()
+    inventario = database.session.execute(database.select(Accounts).filter_by(entity=company, code="1109")).scalar_one()
+    almacen_sentencia = database.select(Warehouse)
+    if warehouse_code is not None:
+        almacen_sentencia = almacen_sentencia.where(Warehouse.code == warehouse_code)
+    almacen = database.session.execute(almacen_sentencia.limit(1)).scalar_one()
     mapping = database.session.execute(
-        database.select(WarehouseCompanyAccount).filter_by(warehouse_code=almacen.code, company="cacao")
+        database.select(WarehouseCompanyAccount).filter_by(warehouse_code=almacen.code, company=company)
     ).scalar_one_or_none()
     if mapping is None:
         database.session.add(
             WarehouseCompanyAccount(
                 warehouse_code=almacen.code,
-                company="cacao",
+                company=company,
                 inventory_account_id=inventario.id,
             )
         )
@@ -91,23 +94,41 @@ def _sembrar_cuentas(escenario) -> None:
     database.session.commit()
 
 
-def _sembrar_cadena(devolucion_qty: Decimal, qty_recibida: Decimal = Decimal("4")) -> dict[str, object]:
+def _sembrar_cadena(
+    devolucion_qty: Decimal,
+    qty_recibida: Decimal = Decimal("4"),
+    *,
+    company: str = "cacao",
+    currency: str = "NIO",
+    supplier_id: str | None = None,
+    item_id: str | None = None,
+    uom_id: str | None = None,
+    warehouse_id: str | None = None,
+    admin_id: str | None = None,
+) -> dict[str, object]:
     """Crea OC, recepción posteada y devolución borrador sin relaciones de línea."""
     sufijo = uuid4().hex[:8]
-    supplier = database.session.execute(database.select(Party).limit(1)).scalar_one()
-    item = database.session.execute(database.select(Item).limit(1)).scalar_one()
-    uom = database.session.execute(database.select(UOM).limit(1)).scalar_one()
-    almacen = database.session.execute(database.select(Warehouse).limit(1)).scalar_one()
+
+    def _uno(modelo, campo, valor):
+        sentencia = database.select(modelo)
+        if valor is not None:
+            sentencia = sentencia.where(campo == valor)
+        return database.session.execute(sentencia.limit(1)).scalar_one()
+
+    supplier = _uno(Party, Party.id, supplier_id)
+    item = _uno(Item, Item.id, item_id)
+    uom = _uno(UOM, UOM.id, uom_id)
+    almacen = _uno(Warehouse, Warehouse.id, warehouse_id)
     fecha = date(2026, 5, 12)
 
     orden = PurchaseOrder(
-        company="cacao",
+        company=company,
         posting_date=fecha,
         docstatus=1,
         document_no=f"PO-RET-{sufijo}",
         supplier_id=supplier.id,
-        transaction_currency="NIO",
-        base_currency="NIO",
+        transaction_currency=currency,
+        base_currency=currency,
         exchange_rate=Decimal("1"),
     )
     database.session.add(orden)
@@ -125,15 +146,15 @@ def _sembrar_cadena(devolucion_qty: Decimal, qty_recibida: Decimal = Decimal("4"
     database.session.flush()
 
     original = PurchaseReceipt(
-        company="cacao",
+        company=company,
         posting_date=fecha,
         docstatus=1,
         document_no=f"PR-RET-{sufijo}",
         purchase_order_id=orden.id,
         supplier_id=supplier.id,
         supplier_name=supplier.name,
-        transaction_currency="NIO",
-        base_currency="NIO",
+        transaction_currency=currency,
+        base_currency=currency,
         exchange_rate=Decimal("1"),
     )
     database.session.add(original)
@@ -154,7 +175,7 @@ def _sembrar_cadena(devolucion_qty: Decimal, qty_recibida: Decimal = Decimal("4"
     database.session.flush()
     database.session.add(
         DocumentRelation(
-            company="cacao",
+            company=company,
             source_type="purchase_order",
             source_id=orden.id,
             source_item_id=orden_item.id,
@@ -170,13 +191,18 @@ def _sembrar_cadena(devolucion_qty: Decimal, qty_recibida: Decimal = Decimal("4"
     )
     database.session.commit()
 
-    admin = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
+    admin_sentencia = database.select(User)
+    if admin_id is not None:
+        admin_sentencia = admin_sentencia.where(User.id == admin_id)
+    else:
+        admin_sentencia = admin_sentencia.where(User.user == "admin")
+    admin = database.session.execute(admin_sentencia.limit(1)).scalar_one()
     with audit_actor(admin.id, admin.name), approved_execution(original, admin.id):
         post_purchase_receipt(original)
     database.session.commit()
 
     devolucion = PurchaseReceipt(
-        company="cacao",
+        company=company,
         posting_date=fecha,
         docstatus=0,
         document_no=f"PRT-RET-{sufijo}",
@@ -185,8 +211,8 @@ def _sembrar_cadena(devolucion_qty: Decimal, qty_recibida: Decimal = Decimal("4"
         supplier_name=supplier.name,
         is_return=True,
         reversal_of=original.id,
-        transaction_currency="NIO",
-        base_currency="NIO",
+        transaction_currency=currency,
+        base_currency=currency,
         exchange_rate=Decimal("1"),
         total=devolucion_qty * Decimal("10"),
         base_total=devolucion_qty * Decimal("10"),

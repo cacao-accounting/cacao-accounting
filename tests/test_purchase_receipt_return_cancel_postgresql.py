@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 William José Moreno Reyes
 
-"""#2311: devolución concurrente con cancelación de la recepción en PostgreSQL."""
+"""#2311: devolución concurrente con cancelación de la recepción confirmada.
+
+La carrera se ejerce en PostgreSQL (Tier 1) sobre una base desechable y en MySQL
+(Tier 2) sobre la base de pruebas configurada, con compañía y códigos únicos.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +14,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
 from threading import Barrier
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -31,6 +34,7 @@ from cacao_accounting.database import (
     Book,
     CompanyDefaultAccount,
     Currency,
+    DocumentTransition,
     Entity,
     FiscalYear,
     Item,
@@ -49,19 +53,27 @@ from cacao_accounting.internal_control_service import audit_actor
 pytestmark = pytest.mark.database
 
 
-def _isolated_url():
-    raw = str(configuracion["SQLALCHEMY_DATABASE_URI"])
-    url = make_url(raw)
-    if not url.drivername.startswith("postgresql"):
-        pytest.skip("Este escenario requiere PostgreSQL.")
+def _preparar(motor: str) -> tuple[object, str | None, str]:
+    """Resuelve la URI del motor y un sufijo único para el escenario."""
+    url = make_url(str(configuracion["SQLALCHEMY_DATABASE_URI"]))
     if os.environ.get("CHECK_DATABASE", "").strip().lower() not in {"1", "true", "yes", "on"}:
         pytest.skip("Los motores externos requieren CHECK_DATABASE=true.")
-    name = f"return_{uuid4().hex[:10]}"
-    admin = create_engine(url.set(database="postgres"))
-    with admin.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-        conn.execute(text(f'CREATE DATABASE "{name}"'))
-    admin.dispose()
-    return url.set(database=name), name
+    if motor == "postgresql":
+        if not url.drivername.startswith("postgresql"):
+            pytest.skip("Esta variante requiere PostgreSQL.")
+        name = f"return_{uuid4().hex[:10]}"
+        admin = create_engine(url.set(database="postgres"))
+        with admin.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.execute(text(f'CREATE DATABASE "{name}"'))
+        admin.dispose()
+        return url.set(database=name), name, uuid4().hex[:6].upper()
+    if motor == "mysql":
+        if not url.drivername.startswith("mysql"):
+            pytest.skip("Esta variante requiere MySQL.")
+        # El usuario de CI solo tiene privilegios sobre la base configurada:
+        # el aislamiento se logra con compañía y códigos únicos por ejecución.
+        return url, None, uuid4().hex[:6].upper()
+    raise ValueError(f"Motor no soportado: {motor}")
 
 
 def _drop(url, name: str) -> None:
@@ -79,30 +91,38 @@ def _drop(url, name: str) -> None:
         admin.dispose()
 
 
-def _seed(app) -> None:
+def _seed(app, sufijo: str) -> dict[str, str]:
+    """Siembra una compañía aislada con el plan contable completo del caso."""
+    company = f"R{sufijo}"
+    currency = f"C{sufijo}"
+    uom_code = f"U{sufijo}"
+    warehouse_code = f"W{sufijo}"
+    supplier_code = f"PRV{sufijo}"
+    user_id = f"adm-{sufijo}"
     with app.app_context():
         database.create_all()
         database.session.add_all(
             [
-                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Currency(code=currency, name=f"Moneda {sufijo}", decimals=2, active=True, default=True),
                 Entity(
-                    code="cacao",
-                    name="Cacao",
-                    company_name="Cacao SA",
-                    tax_id="J0001",
-                    currency="NIO",
+                    code=company,
+                    name=f"Cacao {sufijo}",
+                    company_name=f"Cacao {sufijo} SA",
+                    tax_id=f"J{sufijo}",
+                    currency=currency,
                     enabled=True,
                     status="default",
                 ),
             ]
         )
         database.session.flush()
-        book = Book(code="FISCAL", name="Fiscal", entity="cacao", currency="NIO", status="activo", is_primary=True)
-        database.session.add(book)
+        database.session.add(
+            Book(code=f"L{sufijo}", name="Fiscal", entity=company, currency=currency, status="activo", is_primary=True)
+        )
         database.session.add(
             FiscalYear(
-                id="FY2026",
-                entity="cacao",
+                id=f"FY{sufijo}",
+                entity=company,
                 name="2026",
                 year_start_date=date(2026, 1, 1),
                 year_end_date=date(2026, 12, 31),
@@ -112,9 +132,9 @@ def _seed(app) -> None:
         database.session.flush()
         database.session.add(
             AccountingPeriod(
-                id="P2026-05",
-                entity="cacao",
-                fiscal_year_id="FY2026",
+                id=f"P{sufijo}",
+                entity=company,
+                fiscal_year_id=f"FY{sufijo}",
                 name="Mayo 2026",
                 start=date(2026, 5, 1),
                 end=date(2026, 5, 31),
@@ -136,7 +156,7 @@ def _seed(app) -> None:
             ("5201", "Gastos", "expense", "expense"),
         ):
             account = Accounts(
-                entity="cacao",
+                entity=company,
                 code=code,
                 name=name,
                 classification=classification,
@@ -150,7 +170,7 @@ def _seed(app) -> None:
         database.session.flush()
         database.session.add(
             CompanyDefaultAccount(
-                company="cacao",
+                company=company,
                 default_receivable=accounts["1105"].id,
                 default_payable=accounts["2101"].id,
                 default_cash=accounts["1101"].id,
@@ -160,54 +180,83 @@ def _seed(app) -> None:
                 bridge_account_id=accounts["2103"].id,
             )
         )
-        uom = UOM(code="UND", name="Unidad", is_active=True)
-        warehouse = Warehouse(code="BOD01", name="Bodega", company="cacao")
-        supplier = Party(code="PRV001", name="Proveedor", is_supplier=True, is_active=True)
+        uom = UOM(code=uom_code, name="Unidad", is_active=True)
+        warehouse = Warehouse(code=warehouse_code, name="Bodega", company=company)
+        supplier = Party(code=supplier_code, name="Proveedor", is_supplier=True, is_active=True)
         user = User(
-            id="admin-2311",
-            user="admin",
+            id=user_id,
+            user=f"admin-{sufijo}",
             name="Admin",
             password=b"x",
             classification="admin",
             active=True,
-            company="cacao",
+            company=company,
         )
         database.session.add_all([uom, warehouse, supplier, user])
         database.session.flush()
-        item = Item(code="ART01", name="Artículo", item_type="goods", is_stock_item=True, default_uom="UND")
+        item = Item(
+            code=f"IT{sufijo}",
+            name="Artículo",
+            item_type="goods",
+            is_stock_item=True,
+            default_uom=uom_code,
+        )
         database.session.add(item)
         database.session.flush()
         database.session.add(
-            WarehouseCompanyAccount(warehouse_code=warehouse.code, company="cacao", inventory_account_id=accounts["1109"].id)
+            WarehouseCompanyAccount(
+                warehouse_code=warehouse.code,
+                company=company,
+                inventory_account_id=accounts["1109"].id,
+            )
         )
         database.session.commit()
+        resultado = {
+            "company": company,
+            "currency": currency,
+            "warehouse_code": warehouse_code,
+            "warehouse_id": warehouse.id,
+            "supplier_id": supplier.id,
+            "item_id": item.id,
+            "uom_id": uom.id,
+            "admin_id": user.id,
+        }
         database.session.remove()
+    return resultado
 
 
-def test_devolucion_y_cancelacion_no_confirmar_ambas():
+@pytest.mark.parametrize("motor", ["postgresql", "mysql"])
+def test_devolucion_y_cancelacion_no_confirmar_ambas(motor: str) -> None:
     """La devolución y la cancelación compiten por la recepción posteada."""
-    url, name = _isolated_url()
+    url, name, sufijo = _preparar(motor)
     try:
         app = create_app(
             {
                 **configuracion,
                 "SQLALCHEMY_DATABASE_URI": url.render_as_string(hide_password=False),
                 "TESTING": True,
-                "SECRET_KEY": "test-2311-cancel",
+                "SECRET_KEY": "test-2311",
                 "WTF_CSRF_ENABLED": False,
                 "MODO_ESCRITORIO": False,
             }
         )
-        _seed(app)
+        semilla = _seed(app, sufijo)
+        company = semilla["company"]
         with app.app_context():
-            _sembrar_cuentas(SimpleNamespace(app=app))
-            datos = _sembrar_cadena(Decimal("3"))
-            original = datos["original"]
-            devolucion = datos["devolucion"]
-            admin = datos["admin"]
-            original_id = str(original.id)
-            return_id = str(devolucion.id)
-            admin_id = str(admin.id)
+            _sembrar_cuentas(app, company=company, warehouse_code=semilla["warehouse_code"])
+            datos = _sembrar_cadena(
+                Decimal("3"),
+                company=company,
+                currency=semilla["currency"],
+                supplier_id=semilla["supplier_id"],
+                item_id=semilla["item_id"],
+                uom_id=semilla["uom_id"],
+                warehouse_id=semilla["warehouse_id"],
+                admin_id=semilla["admin_id"],
+            )
+            original_id = str(datos["original"].id)
+            return_id = str(datos["devolucion"].id)
+            admin_id = str(datos["admin"].id)
             database.session.remove()
 
         barrier = Barrier(2, timeout=30)
@@ -254,8 +303,36 @@ def test_devolucion_y_cancelacion_no_confirmar_ambas():
             allocations = (
                 database.session.execute(
                     database.select(PurchaseReceiptReturnAllocation).where(
-                        PurchaseReceiptReturnAllocation.company == "cacao",
+                        PurchaseReceiptReturnAllocation.company == company,
                         PurchaseReceiptReturnAllocation.status == "active",
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            gl = (
+                database.session.execute(
+                    database.select(GLEntry).filter_by(
+                        company=company, voucher_type="purchase_receipt", voucher_id=original_id, is_cancelled=True
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            stock = (
+                database.session.execute(
+                    database.select(StockLedgerEntry).filter_by(voucher_id=original_id, is_cancelled=True)
+                )
+                .scalars()
+                .all()
+            )
+            transiciones = (
+                database.session.execute(
+                    database.select(DocumentTransition).where(
+                        DocumentTransition.company == company,
+                        DocumentTransition.source_type == "purchase_receipt",
+                        DocumentTransition.source_id == original_id,
+                        DocumentTransition.transition_type == "cancellation",
                     )
                 )
                 .scalars()
@@ -263,26 +340,15 @@ def test_devolucion_y_cancelacion_no_confirmar_ambas():
             )
             if source.docstatus == 2:
                 assert allocations == []
-                gl = (
-                    database.session.execute(
-                        database.select(GLEntry).filter_by(
-                            company="cacao", voucher_type="purchase_receipt", voucher_id=original_id, is_cancelled=True
-                        )
-                    )
-                    .scalars()
-                    .all()
-                )
-                stock = (
-                    database.session.execute(
-                        database.select(StockLedgerEntry).filter_by(voucher_id=original_id, is_cancelled=True)
-                    )
-                    .scalars()
-                    .all()
-                )
                 assert gl, "la cancelación debe dejar contrapartidas GL"
                 assert stock, "la cancelación debe revertir el Stock Ledger"
+                assert transiciones, "la cancelación debe quedar trazada"
             else:
+                assert source.docstatus == 1
                 assert len(allocations) == 1
+                assert gl == [], "la cancelación rechazada no debe dejar GL parcial"
+                assert stock == [], "la cancelación rechazada no debe dejar Stock Ledger parcial"
+                assert transiciones == [], "la cancelación rechazada no debe dejar transición parcial"
                 # El perdedor no puede reintentar y crear una segunda allocation.
                 try:
                     create_purchase_receipt_return_allocations(return_id)
@@ -292,7 +358,7 @@ def test_devolucion_y_cancelacion_no_confirmar_ambas():
                 allocations_after = (
                     database.session.execute(
                         database.select(PurchaseReceiptReturnAllocation).where(
-                            PurchaseReceiptReturnAllocation.company == "cacao",
+                            PurchaseReceiptReturnAllocation.company == company,
                             PurchaseReceiptReturnAllocation.status == "active",
                         )
                     )
@@ -302,4 +368,5 @@ def test_devolucion_y_cancelacion_no_confirmar_ambas():
                 assert len(allocations_after) == 1
             database.session.remove()
     finally:
-        _drop(url, name)
+        if name is not None:
+            _drop(url, name)
