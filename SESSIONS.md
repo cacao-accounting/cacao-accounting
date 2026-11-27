@@ -321,3 +321,24 @@ git show fbef114431e603a89599c3c3c3de7e1a1cf5143e:SESSIONS.md
 - **Pendiente de decisión**: #2299 (alcance del lock de crédito), #2306
   (instante que gobierna la conciliación automática), #2308 (traslados entre
   compañías), #2311 (devoluciones concurrentes) y #2346 (Compose real).
+
+## Refs: concurrencia y límites con motores reales (2026-11-27)
+
+- **#2299**: el lock de crédito es por `(compañía, cliente)` y se adquiere antes
+  de la solicitud de aprobación y de los locks documentales. La exposición se
+  recalcula con lecturas actuales; dos documentos de 60 con límite 100 dejan una
+  sola aprobación en PostgreSQL y MySQL.
+- **#2306**: la conciliación automática serializa altas de reglas y ejecución
+  por compañía/cuenta. Reglas, pagos, GL y saldos se releen bajo lock; una regla
+  confirmada durante la espera deja la transacción pendiente si vuelve ambiguo
+  el candidato.
+- **#2308**: la compañía de Unit y Project es inmutable. El backend rechaza el
+  traslado y conserva referencias históricas; para otra compañía se crea un
+  registro nuevo.
+- **#2311**: dos devoluciones de 3 contra una recepción de 4 se ejecutan en
+  PostgreSQL y MySQL reales; exactamente una asigna cantidades.
+- **#2346**: Compose construyó y levantó app, PostgreSQL 16.16 y Redis 7 con
+  contraseña que incluye caracteres reservados; healthchecks, migraciones y
+  `/login` respondieron correctamente. Los volúmenes se conservaron.
+- **#2356**: la validación de solapamiento de años fiscales toma un lock por
+  compañía también en SQLite y relee con lectura actual en motores externos.
