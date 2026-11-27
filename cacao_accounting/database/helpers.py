@@ -142,6 +142,33 @@ def _cabecera_alembic() -> tuple[str, ...]:
     return tuple(result)
 
 
+def _clasificar_estado_esquema(
+    *,
+    tablas_core: set[str],
+    tablas_existentes: set[str],
+    esquema_completo: bool,
+    tabla_alembic: bool,
+    revisiones: tuple[str, ...],
+    heads: tuple[str, ...],
+    bootstrap_incompleto: bool,
+) -> str:
+    """Resuelve el estado del esquema con retornos tempranos (#1898)."""
+    tablas_presentes = tablas_core & tablas_existentes
+    if not tablas_presentes and not tabla_alembic:
+        return "empty"
+    if not tablas_core.issubset(tablas_existentes):
+        return "partial"
+    if not esquema_completo and not tabla_alembic:
+        return "partial"
+    if esquema_completo and not tabla_alembic:
+        return "bootstrap_incomplete" if bootstrap_incompleto else "unversioned"
+    if not revisiones or not esquema_completo:
+        return "partial"
+    if set(revisiones) != set(heads):
+        return "outdated"
+    return "current" if not bootstrap_incompleto else "bootstrap_incomplete"
+
+
 def estado_esquema_base_datos() -> dict[str, object]:
     """Clasifica el estado del esquema para comandos de base de datos.
 
@@ -177,27 +204,17 @@ def estado_esquema_base_datos() -> dict[str, object]:
     tablas_existentes = set(inspector.get_table_names())
     tablas_modelo = set(cast(Any, database.Model).metadata.tables.keys())
     esquema_completo = bool(tablas_modelo) and tablas_modelo.issubset(tablas_existentes)
-    bootstrap_incompleto = bool(tablas_presentes == tablas_core and not usuarios and config_count == 0)
-    revisiones_set = set(str(r) for r in revisiones)
-    heads_set = set(str(h) for h in heads)
-    if not tablas_presentes and not tabla_alembic:
-        estado = "empty"
-    elif tablas_presentes and not tablas_core.issubset(tablas_existentes):
-        estado = "partial"
-    elif tablas_presentes == tablas_core and not esquema_completo and not tabla_alembic:
-        estado = "partial"
-    elif esquema_completo and not tabla_alembic:
-        estado = "bootstrap_incomplete" if bootstrap_incompleto else "unversioned"
-    elif tabla_alembic and not revisiones:
-        estado = "partial"
-    elif tabla_alembic and not esquema_completo:
-        estado = "partial"
-    elif tabla_alembic and revisiones_set != heads_set:
-        estado = "outdated"
-    elif tabla_alembic:
-        estado = "current" if not bootstrap_incompleto else "bootstrap_incomplete"
-    else:
-        estado = "partial"
+    bootstrap_incompleto = bool(tablas_presentes == tablas_core and not datos_base_completos())
+    bootstrap_iniciado = _bootstrap_iniciado(usuarios, config_count) if tablas_presentes else False
+    estado = _clasificar_estado_esquema(
+        tablas_core=tablas_core,
+        tablas_existentes=tablas_existentes,
+        esquema_completo=esquema_completo,
+        tabla_alembic=tabla_alembic,
+        revisiones=revisiones,
+        heads=heads,
+        bootstrap_incompleto=bootstrap_incompleto,
+    )
 
     return {
         "status": estado,
@@ -207,6 +224,7 @@ def estado_esquema_base_datos() -> dict[str, object]:
         "heads": list(heads),
         "users": usuarios,
         "config_count": config_count,
+        "bootstrap_started": bootstrap_iniciado,
     }
 
 
@@ -267,6 +285,57 @@ def usuarios_creados():
         return False
 
 
+def datos_base_completos() -> bool:
+    """Verifica que el seed base requerido esté completo (#1848).
+
+    La existencia de ``User`` no demuestra que el bootstrap terminó: un fallo
+    intermedio deja módulos, roles, administrador o monedas incompletos. Esta
+    verificación es la señal explícita que usa la máquina de estados del
+    esquema para no declarar inicializada una base parcial.
+    """
+    from cacao_accounting.auth.roles import ROLES_PREDETERMINADOS
+    from cacao_accounting.database import CacaoConfig, Currency, Modules, Roles, User
+    from cacao_accounting.modulos import MODULOS_STANDAR
+    from cacao_accounting.setup.catalogs import SETUP_SEED_CURRENCY_CODES
+
+    try:
+        setup_completo = (
+            database.session.execute(database.select(CacaoConfig.id).filter_by(key="SETUP_COMPLETE")).first() is not None
+        )
+        if setup_completo:
+            # Bases existentes: el marcador de fin de bootstrap ya se escribió.
+            return True
+        modulos = set(database.session.execute(database.select(Modules.module)).scalars())
+        roles = set(database.session.execute(database.select(Roles.name)).scalars())
+        monedas = set(database.session.execute(database.select(Currency.code)).scalars())
+        administrador = database.session.execute(database.select(User.id).filter_by(classification="admin")).first()
+    except (OperationalError, ProgrammingError, InterfaceError, InternalError):
+        database.session.rollback()
+        return False
+    return (
+        {modulo["modulo"] for modulo in MODULOS_STANDAR} <= modulos
+        and {rol["name"] for rol in ROLES_PREDETERMINADOS} <= roles
+        and set(SETUP_SEED_CURRENCY_CODES) <= monedas
+        and administrador is not None
+    )
+
+
+def _bootstrap_iniciado(usuarios: bool, config_count: int) -> bool:
+    """Indica si la base ya tiene algún dato de seed (aunque esté incompleto)."""
+    if usuarios or config_count:
+        return True
+    from cacao_accounting.database import Currency, Modules, Roles
+
+    try:
+        for modelo in (Modules, Roles, Currency):
+            if database.session.execute(database.select(modelo.id).limit(1)).first() is not None:
+                return True
+    except (OperationalError, ProgrammingError, InterfaceError, InternalError):
+        database.session.rollback()
+        return False
+    return False
+
+
 def _asegurar_tabla_alembic() -> None:
     """Marca el esquema actual en Alembic cuando la base ya existe."""
     if _tabla_existe("alembic_version"):
@@ -308,7 +377,15 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             return bool(status in {"current", "outdated", "unversioned"})
 
         if status == "bootstrap_incomplete":
-            log.info("Esquema detectado sin bootstrap completo; completando inicialización.")
+            if estado.get("bootstrap_started"):
+                # #1848/#1898: una base parcial no se completa mutando
+                # silenciosamente el catálogo; la recuperación es explícita.
+                log.error(
+                    "Bootstrap base incompleto: faltan módulos, roles, administrador o monedas. "
+                    "Restaure un respaldo o reinicialice con 'cacaoctl db init --force'."
+                )
+                return False
+            # Esquema creado sin ningún dato de seed: inicialización segura.
             try:
                 if with_examples:
                     base_data(user, passwd, carga_rapida=False)

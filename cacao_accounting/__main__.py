@@ -49,12 +49,15 @@ def inicializar_si_hace_falta(app, *, esperar_segundos: int = 15) -> bool:
         cacao_user, cacao_passwd = resolver_credenciales_iniciales()
         if cacao_user == "cacao" and cacao_passwd == "cacao":
             log.warning("Se están usando usuario y contraseña predeterminados para el setup inicial.")
-        inicia_base_de_datos(app=app, user=cacao_user, passwd=cacao_passwd, with_examples=False)
+        iniciada = inicia_base_de_datos(app=app, user=cacao_user, passwd=cacao_passwd, with_examples=False)
     except ValueError as exc:
         log.critical(str(exc))
         raise SystemExit(1) from exc
     except ProgrammingError:
         log.warning("No se pudo iniciar Cacao Accounting.")
+        return False
+    if not iniciada:
+        log.critical("El bootstrap de la base de datos no se completó; el servidor no se inicia.")
         return False
     return True
 
