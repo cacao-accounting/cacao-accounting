@@ -1031,7 +1031,9 @@ def _validate_open_item_reference(
 ) -> None:
     """Resolve an optional AP/AR reference without applying it during import."""
     reference_type = _normalize_reference_type(row.get("reference_type"))
-    reference_document = str(row.get("reference_document") or row.get("reference_name") or "").strip()
+    reference_document = str(
+        row.get("reference_document") or row.get("reference_name") or row.get("reference_id") or ""
+    ).strip()
     if not reference_type and not reference_document:
         return
     if not reference_type or not reference_document:
