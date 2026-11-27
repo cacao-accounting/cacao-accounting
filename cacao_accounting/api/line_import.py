@@ -11,7 +11,7 @@ import os
 import tempfile
 import unicodedata
 import zipfile
-from typing import Any, cast
+from typing import Any, Iterable, cast
 
 from flask import Blueprint, jsonify, request
 from flask.typing import ResponseReturnValue
@@ -254,28 +254,20 @@ def _xlsx_column_mapping(schema: dict[str, Any]) -> dict[str, str]:
     return column_by_header
 
 
-def _xlsx_header_has_data(rows: list[tuple[Any, ...]], index: int) -> bool:
+def _xlsx_header_has_data(row: tuple[Any, ...], index: int) -> bool:
     """Return whether an unlabeled spreadsheet column contains data."""
-    return any(index < len(row) and row[index].value not in (None, "") for row in rows[1:])
+    return index < len(row) and row[index].value not in (None, "")
 
 
 def _map_xlsx_headers(
-    normalized_headers: list[str], rows: list[tuple[Any, ...]], column_by_header: dict[str, str]
+    normalized_headers: list[str], column_by_header: dict[str, str]
 ) -> tuple[list[str | None], set[str], list[dict[str, Any]]]:
-    """Map spreadsheet headers while collecting unknown and duplicate-column errors."""
+    """Map spreadsheet headers and collect unknown and duplicate-column errors."""
     mapped: list[str | None] = []
     seen: set[str] = set()
     errors: list[dict[str, Any]] = []
-    for index, header in enumerate(normalized_headers):
+    for header in normalized_headers:
         if not header:
-            if _xlsx_header_has_data(rows, index):
-                errors.append(
-                    {
-                        "row": 1,
-                        "field": f"column_{index + 1}",
-                        "message": _("La columna tiene datos pero no tiene encabezado."),
-                    }
-                )
             mapped.append(None)
             continue
         key = column_by_header.get(header)
@@ -315,15 +307,39 @@ def _canonical_xlsx_row(
     return item
 
 
+def _xlsx_unlabeled_data_errors(row: tuple[Any, ...], unlabeled: set[int], errors: list[dict[str, Any]]) -> None:
+    """Reporta columnas sin encabezado que contienen datos, sin releer la hoja."""
+    for index in sorted(unlabeled):
+        if _xlsx_header_has_data(row, index):
+            errors.append(
+                {
+                    "row": 1,
+                    "field": f"column_{index + 1}",
+                    "message": _("La columna tiene datos pero no tiene encabezado."),
+                }
+            )
+            unlabeled.discard(index)
+
+
 def _canonical_xlsx_rows(
-    rows: list[tuple[Any, ...]], mapped: list[str | None], errors: list[dict[str, Any]]
+    rows: Iterable[tuple[Any, ...]], mapped: list[str | None], errors: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """Convert populated XLSX rows and enforce the import row limit."""
+    """Convierte filas de forma incremental y corta al superar el máximo.
+
+    ``rows`` es el iterador del libro abierto: no se materializa la hoja
+    completa, por lo que una dimensión inflada o un archivo con muchas filas
+    reales no consume memoria más allá del máximo permitido (#1206/#1373).
+    """
     canonical_rows: list[dict[str, Any]] = []
-    for excel_row, row in enumerate(rows[1:], start=2):
+    unlabeled = {index for index, key in enumerate(mapped) if key is None}
+    for excel_row, row in enumerate(rows, start=2):
         values = [cell.value for cell in row]
         if not any(value not in (None, "") for value in values):
             continue
+        if len(row) > 100:
+            errors.append({"row": excel_row, "field": "file", "message": _("El archivo contiene demasiadas columnas.")})
+            break
+        _xlsx_unlabeled_data_errors(row, unlabeled, errors)
         if len(canonical_rows) >= 500:
             errors.append({"row": excel_row, "field": "file", "message": _("Límite máximo de 500 líneas excedido.")})
             break
@@ -345,24 +361,31 @@ def _xlsx_rows(path: str, schema: dict[str, Any]) -> tuple[list[dict[str, Any]],
 
 
 def _read_xlsx_workbook(workbook, schema: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Extrae filas canónicas de un libro XLSX ya abierto."""
+    """Extrae filas canónicas de un libro XLSX ya abierto.
+
+    La lectura es incremental: se reinicia la dimensión declarada (no es
+    confiable) y solo se consumen las filas necesarias hasta el límite
+    (#1206/#1373), sin materializar la hoja completa.
+    """
     worksheet, structure_errors = _select_xlsx_worksheet(workbook)
     if structure_errors or worksheet is None:
         return [], structure_errors
-    rows = list(worksheet.iter_rows())
-    if not rows:
+    if hasattr(worksheet, "reset_dimensions"):
+        worksheet.reset_dimensions()
+    rows_iter = iter(worksheet.iter_rows())
+    header_cells = next(rows_iter, None)
+    if header_cells is None:
         return [], [{"row": None, "field": "sheet", "message": _("La hoja no contiene encabezados.")}]
-    header_cells = rows[0]
     normalized_headers = [_normalize_header(cell.value) for cell in header_cells]
     if len(normalized_headers) > 100:
         return [], [{"row": 1, "field": "header", "message": _("El archivo contiene demasiadas columnas.")}]
     column_by_header = _xlsx_column_mapping(schema)
-    mapped, seen, errors = _map_xlsx_headers(normalized_headers, rows, column_by_header)
+    mapped, seen, errors = _map_xlsx_headers(normalized_headers, column_by_header)
     required = {str(column["key"]) for column in schema.get("columns", []) if column.get("required")}
     missing = required - seen
     for key in sorted(missing):
         errors.append({"row": 1, "field": key, "message": _("Campo requerido faltante.")})
-    return _canonical_xlsx_rows(rows, mapped, errors), errors
+    return _canonical_xlsx_rows(rows_iter, mapped, errors), errors
 
 
 @line_import_bp.route("/api/line-import/parse-xlsx", methods=["POST"])
